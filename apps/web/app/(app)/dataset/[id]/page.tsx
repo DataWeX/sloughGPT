@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
 import dynamicNext from '@/vite/next-compat/dynamic'
@@ -41,7 +42,11 @@ import { DatasetQualityCard } from '@/components/dataset/DatasetQualityCard'
 import { DatasetInsightsCard } from '@/components/dataset/DatasetInsightsCard'
 import { formatBytes } from '@/lib/format-bytes'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
-import { useToastStore } from '@/lib/toast-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const DatasetImportDialog = dynamicNext(
   () => import('@/components/DatasetImportDialog').then((m) => m.DatasetImportDialog),
@@ -51,7 +56,6 @@ const DatasetImportDialog = dynamicNext(
 export default function DatasetDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
   const datasetId = decodeURIComponent((params.id as string) || '')
 
   const [dataset, setDataset] = useState<Dataset | null>(null)
@@ -81,11 +85,11 @@ export default function DatasetDetailPage() {
       const d = await datasetController.get(datasetId)
       setDataset(d)
     } catch {
-      addToast('Could not load dataset', 'error')
+      notify.toast('Could not load dataset', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [datasetId, addToast])
+  }, [datasetId])
 
   const fetchStats = useCallback(async () => {
     if (!datasetId) return
@@ -125,10 +129,10 @@ export default function DatasetDetailPage() {
     setSnapshotting(true)
     try {
       await datasetController.createVersion(dataset.id)
-      addToast('Snapshot created', 'success')
+      notify.toast('Snapshot created', { type: 'success' })
       fetchVersions()
     } catch {
-      addToast('Could not snapshot', 'error')
+      notify.toast('Could not snapshot', { type: 'error' })
     } finally {
       setSnapshotting(false)
     }
@@ -138,10 +142,10 @@ export default function DatasetDetailPage() {
     if (!dataset || !restoreTarget) return
     try {
       const res = await datasetController.restoreVersion(dataset.id, restoreTarget)
-      addToast(res.message || 'Version restored', 'success')
+      notify.toast(res.message || 'Version restored', { type: 'success' })
       fetchVersions()
     } catch {
-      addToast('Could not restore', 'error')
+      notify.toast('Could not restore', { type: 'error' })
     } finally {
       setRestoreTarget(null)
     }
@@ -180,10 +184,10 @@ export default function DatasetDetailPage() {
     try {
       await datasetController.update(dataset.id, { name: renameText.trim() })
       setDataset((prev) => (prev ? { ...prev, name: renameText.trim() } : prev))
-      addToast('Renamed', 'success')
+      notify.toast('Renamed', { type: 'success' })
       setRenaming(false)
     } catch {
-      addToast('Could not rename', 'error')
+      notify.toast('Could not rename', { type: 'error' })
     }
   }
 
@@ -191,10 +195,10 @@ export default function DatasetDetailPage() {
     if (!dataset) return
     try {
       await datasetController.delete(dataset.id)
-      addToast(`Deleted "${dataset.name}"`, 'info')
+      notify.toast(`Deleted "${dataset.name}"`, { type: 'info' })
       router.push('/datasets')
     } catch {
-      addToast('Could not delete', 'error')
+      notify.toast('Could not delete', { type: 'error' })
     } finally {
       setShowDelete(false)
     }
@@ -205,9 +209,9 @@ export default function DatasetDetailPage() {
     try {
       const blob = await datasetController.export(dataset.id)
       downloadBlob(blob, `${dataset.name || dataset.id}.jsonl`)
-      addToast('Exported', 'success')
+      notify.toast('Exported', { type: 'success' })
     } catch {
-      addToast('Could not export', 'error')
+      notify.toast('Could not export', { type: 'error' })
     }
   }
 
@@ -225,7 +229,7 @@ export default function DatasetDetailPage() {
         }
       })
       if (rows.length === 0) {
-        addToast('Empty dataset', 'error')
+        notify.toast('Empty dataset', { type: 'error' })
         return
       }
       const headers = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
@@ -243,9 +247,9 @@ export default function DatasetDetailPage() {
         ),
       ].join('\n')
       downloadBlob(new Blob([csv], { type: 'text/csv' }), `${dataset.name || dataset.id}.csv`)
-      addToast('Exported as CSV', 'success')
+      notify.toast('Exported as CSV', { type: 'success' })
     } catch {
-      addToast('Could not csv export', 'error')
+      notify.toast('Could not csv export', { type: 'error' })
     }
   }
 
@@ -259,9 +263,9 @@ export default function DatasetDetailPage() {
         convertPrompt.trim() || 'You are a helpful assistant.',
       )
       setConvertResult(res)
-      addToast('Converted to chat format', 'success')
+      notify.toast('Converted to chat format', { type: 'success' })
     } catch {
-      addToast('Could not conversion', 'error')
+      notify.toast('Could not conversion', { type: 'error' })
     } finally {
       setConverting(false)
     }

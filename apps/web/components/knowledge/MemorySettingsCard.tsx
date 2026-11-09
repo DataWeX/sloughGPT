@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@sloughgpt/strui'
@@ -6,11 +7,14 @@ import { Button } from '@sloughgpt/strui'
 import { Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { memoryController, type MemoryConfigResult } from '@/lib/memory-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function MemorySettingsCard() {
-  const addToast = useToastStore(s => s.addToast)
   const [config, setConfig] = useState<MemoryConfigResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
@@ -20,11 +24,11 @@ export function MemorySettingsCard() {
       const c = await memoryController.getConfig()
       setConfig(c)
     } catch {
-      addToast('Could not load memory config', 'error')
+      notify.toast('Could not load memory config', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -33,23 +37,25 @@ export function MemorySettingsCard() {
         const c = await memoryController.getConfig()
         if (active) setConfig(c)
       } catch {
-        if (active) addToast('Could not load memory config', 'error')
+        if (active) notify.toast('Could not load memory config', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }
     }
     void load()
-    return () => { active = false }
-  }, [addToast])
+    return () => {
+      active = false
+    }
+  }, [])
 
   const handleToggle = async (enabled: boolean) => {
     setToggling(true)
     try {
       const updated = await memoryController.setEnabled(enabled)
       setConfig(updated)
-      addToast(enabled ? 'Auto-memory enabled' : 'Auto-memory disabled', 'success')
+      notify.toast(enabled ? 'Auto-memory enabled' : 'Auto-memory disabled', { type: 'success' })
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Could not update memory settings'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not update memory settings'), { type: 'error' })
     } finally {
       setToggling(false)
     }
@@ -106,14 +112,19 @@ export function MemorySettingsCard() {
             <p className="font-mono text-xs">{config.consolidation_threshold}</p>
           </div>
         </div>
-        <div className="text-xs text-muted-foreground">
-          Store: {config.store_path}
-        </div>
+        <div className="text-xs text-muted-foreground">Store: {config.store_path}</div>
         <Button
           size="sm"
           variant="outline"
           className="h-7 text-xs"
-          onClick={() => memoryController.consolidate().then(() => addToast('Consolidation triggered', 'success')).catch(e => addToast(extractErrorMessage(e, 'Could not consolidation'), 'error'))}
+          onClick={() =>
+            memoryController
+              .consolidate()
+              .then(() => notify.toast('Consolidation triggered', { type: 'success' }))
+              .catch((e) =>
+                notify.toast(extractErrorMessage(e, 'Could not consolidation'), { type: 'error' }),
+              )
+          }
         >
           Run Consolidation Now
         </Button>

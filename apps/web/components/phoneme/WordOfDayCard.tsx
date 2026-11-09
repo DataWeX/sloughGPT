@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
@@ -9,7 +10,11 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface WordOfDay {
   word: string
@@ -262,7 +267,6 @@ export default function WordOfDayCard() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ score: number; phonemes: string[] } | null>(null)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const handleScore = useCallback(async () => {
     if (!state.word || !attempt.trim()) return
@@ -275,7 +279,7 @@ export default function WordOfDayCard() {
       if (passed) {
         setState((prev) => ({ ...prev, practiced: true }))
         saveWordOfDay({ date: getToday(), word: state.word, practiced: true })
-        addToast('Word of the day completed!', 'success')
+        notify.toast('Word of the day completed!', { type: 'success' })
       }
 
       addToHistory({
@@ -287,11 +291,11 @@ export default function WordOfDayCard() {
         spokenPhonemes: res.spoken_phonemes,
       })
     } catch {
-      addToast('Scoring failed', 'error')
+      notify.toast('Scoring failed', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [state.word, attempt, addToHistory, addToast])
+  }, [state.word, attempt, addToHistory])
 
   const handleNewWord = useCallback(() => {
     const word = getWordOfDay()

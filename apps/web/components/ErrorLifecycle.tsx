@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * ErrorLifecycle — consolidated error handler.
@@ -17,11 +18,15 @@
 
 import { useEffect, useRef } from 'react'
 import { useErrorStore } from '@/lib/error-store'
-import { useToastStore } from '@/lib/toast-store'
 import { reportError } from '@/lib/error-reporter'
 import { logger } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
 import { chatDB } from '@/lib/db'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const _log = logger.child('error-lifecycle')
 
@@ -110,7 +115,6 @@ function extractStackInfo(error: ErrorEvent | PromiseRejectionEvent): {
 
 export function ErrorLifecycle() {
   const addError = useErrorStore((s) => s.addError)
-  const addToast = useToastStore((s) => s.addToast)
   const initialized = useRef(false)
 
   useEffect(() => {
@@ -162,7 +166,7 @@ export function ErrorLifecycle() {
       if (event.defaultPrevented) return
 
       if (isNonFatal(message)) {
-        addToast(message, 'info')
+        notify.toast(message, { type: 'info' })
         event.preventDefault()
         return
       }
@@ -195,7 +199,7 @@ export function ErrorLifecycle() {
             : 'Unhandled Promise Rejection'
 
       if (isNonFatal(message)) {
-        addToast(message, 'info')
+        notify.toast(message, { type: 'info' })
         event.preventDefault()
         return
       }
@@ -244,7 +248,7 @@ export function ErrorLifecycle() {
       window.removeEventListener('error', handleError)
       window.removeEventListener('unhandledrejection', handleRejection)
     }
-  }, [addError, addToast])
+  }, [addError])
 
   return null
 }

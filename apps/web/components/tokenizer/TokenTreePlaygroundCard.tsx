@@ -1,11 +1,11 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Textarea, Button, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenizerController, type TokenizeResult } from '@/lib/tokenizer-controller'
 import { tokenTreeController, type EncodeResult } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 const displayToken = (token: string) => token.replace('</w>', '').trim() || token
 
@@ -18,7 +18,6 @@ export function TokenTreePlaygroundCard() {
   const [text, setText] = useState('the quick brown fox jumps over the lazy dog')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<PlaygroundResult | null>(null)
-  const addToast = useToastStore(s => s.addToast)
 
   const handleCompare = async () => {
     const term = text.trim()
@@ -34,7 +33,7 @@ export function TokenTreePlaygroundCard() {
       tree: treeRes.status === 'fulfilled' ? treeRes.value : null,
     })
     if (baseRes.status === 'rejected' && treeRes.status === 'rejected') {
-      addToast('Both tokenizers failed. Is the tokenizer trained?', 'error')
+      notify.toast('Both tokenizers failed. Is the tokenizer trained?', { type: 'error' })
     }
     setRunning(false)
   }
@@ -65,14 +64,16 @@ export function TokenTreePlaygroundCard() {
           </label>
           <Textarea
             value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={(e) => setText(e.target.value)}
             rows={2}
             placeholder="Compare how both tokenizers split the same text"
             aria-label="Text to compare"
           />
           <div>
             <Button size="sm" onClick={handleCompare} disabled={running || !text.trim()}>
-              {running ? 'Comparing...' : (
+              {running ? (
+                'Comparing...'
+              ) : (
                 <>
                   <IconRefresh className="h-4 w-4 mr-1" />
                   Compare tokenizers

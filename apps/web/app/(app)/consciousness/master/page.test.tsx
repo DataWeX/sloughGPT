@@ -40,7 +40,9 @@ vi.mock('@/hooks/useLocale', () => ({
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
@@ -95,8 +97,16 @@ describe('ConsciousnessMasterDashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockController.healthCheck.mockResolvedValue({ score: 85, health_score: 85 } as any)
-    mockController.getStatus.mockResolvedValue({ level: 2, enabled: true, episode_count: 10, beliefs: { competence: 0.7, helpfulness: 0.8 } } as any)
-    mockController.evaluate.mockResolvedValue({ overall_score: 75, diagnostics: ['Good coherence'] } as any)
+    mockController.getStatus.mockResolvedValue({
+      level: 2,
+      enabled: true,
+      episode_count: 10,
+      beliefs: { competence: 0.7, helpfulness: 0.8 },
+    } as any)
+    mockController.evaluate.mockResolvedValue({
+      overall_score: 75,
+      diagnostics: ['Good coherence'],
+    } as any)
     mockController.getEpisodeHistory.mockResolvedValue({ episodes: mockEpisodes } as any)
     mockController.getQualiaHistory.mockResolvedValue({ history: [] } as any)
     mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] } as any)
@@ -152,7 +162,9 @@ describe('ConsciousnessMasterDashboardPage', () => {
   it('displays diagnostics section', async () => {
     render(<ConsciousnessMasterDashboardPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_master.diagnostics_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_master.diagnostics_title').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 

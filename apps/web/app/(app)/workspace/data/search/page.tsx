@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
@@ -11,8 +12,12 @@ import { SearchResultsCard } from '@/components/workspace-search/SearchResultsCa
 import { SearchEmptyState } from '@/components/workspace-search/SearchEmptyState'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { SEARCH_STORES } from '@/lib/search-stores'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface SearchHit {
   id: string
@@ -35,7 +40,6 @@ export default function WorkspaceSearchPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore((s) => s.addToast)
   // Deep link: /workspace/data/search?q=... seeds the query (palette jumps).
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
@@ -58,12 +62,12 @@ export default function WorkspaceSearchPage() {
           setPartial(res.partial ?? [])
         }
       } catch {
-        addToast('Search failed', 'error')
+        notify.toast('Search failed', { type: 'error' })
       } finally {
         setLoading(false)
       }
     },
-    [currentWorkspace?.id, addToast],
+    [currentWorkspace?.id],
   )
 
   useEffect(() => {

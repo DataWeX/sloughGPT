@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -27,7 +28,6 @@ import {
   Slider,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -95,7 +95,6 @@ interface FullStatus {
 }
 
 export default function ConsciousnessSettingsPage() {
-  const addToast = useToastStore((s) => s.addToast)
   const { t } = useLocale()
   const { executeBatch, loading: batchLoading } = useConsciousnessBatch()
   const [config, setConfig] = useState<ConfigStatus | null>(null)
@@ -135,9 +134,9 @@ export default function ConsciousnessSettingsPage() {
     try {
       await consciousnessController.updateConfig({ level: newLevel })
       setConfig((prev) => (prev ? { ...prev, level: newLevel, enabled: newLevel > 0 } : prev))
-      addToast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, 'success')
+      notify.toast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
@@ -150,10 +149,10 @@ export default function ConsciousnessSettingsPage() {
     setSeeding(true)
     try {
       await consciousnessController.seedData({ count: seedCount })
-      addToast(`Seeded ${seedCount} episodes`, 'success')
+      notify.toast(`Seeded ${seedCount} episodes`, { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }
@@ -162,30 +161,30 @@ export default function ConsciousnessSettingsPage() {
   const handleClearEpisodes = async () => {
     try {
       await consciousnessController.clearEpisodes()
-      addToast('Episodes cleared', 'success')
+      notify.toast('Episodes cleared', { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
   const handleClearBeliefs = async () => {
     try {
       await consciousnessController.resetBeliefs()
-      addToast('Beliefs reset to defaults', 'success')
+      notify.toast('Beliefs reset to defaults', { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
   const handleResetPersonality = async () => {
     try {
       await consciousnessController.resetPersonality()
-      addToast('Personality reset to defaults', 'success')
+      notify.toast('Personality reset to defaults', { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
@@ -460,7 +459,7 @@ export default function ConsciousnessSettingsPage() {
                     { type: 'seed', payload: { count: seedCount } },
                     { type: 'reflect', payload: {} },
                   ])
-                  addToast('Batch: seeded and reflected', 'success')
+                  notify.toast('Batch: seeded and reflected', { type: 'success' })
                   fetchStatus()
                 }}
                 disabled={batchLoading}
@@ -476,7 +475,7 @@ export default function ConsciousnessSettingsPage() {
                     { type: 'config', payload: { clear_episodes: true } },
                     { type: 'config', payload: { reset_beliefs: true } },
                   ])
-                  addToast('Batch: cleared episodes and beliefs', 'success')
+                  notify.toast('Batch: cleared episodes and beliefs', { type: 'success' })
                   fetchStatus()
                 }}
                 disabled={batchLoading}

@@ -3,19 +3,23 @@ import { render, screen } from '@testing-library/react'
 import PhonemeTypingMode from './PhonemeTypingMode'
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: (selector: (state: unknown) => unknown) => selector({
-    addToHistory: vi.fn(),
-  }),
+  usePhonemeStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToHistory: vi.fn(),
+    }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 vi.mock('@/lib/phoneme-controller', () => ({
-  toIPA: vi.fn((phonemes: string[]) => phonemes.map(p => `[${p}]`)),
+  toIPA: vi.fn((phonemes: string[]) => phonemes.map((p) => `[${p}]`)),
 }))
 
 vi.mock('@/components/phoneme/PhonemeReference', () => ({

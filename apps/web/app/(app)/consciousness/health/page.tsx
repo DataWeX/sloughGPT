@@ -1,13 +1,18 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { Card, CardContent, CardHeader, CardTitle, Skeleton, Switch } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface HealthData {
   status: string
@@ -83,7 +88,6 @@ function saveHistory(history: Array<{ timestamp: number; score: number }>) {
 }
 
 export default function ConsciousnessHealthPage() {
-  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [health, setHealth] = useState<HealthData | null>(null)
@@ -130,11 +134,11 @@ export default function ConsciousnessHealthPage() {
       }
       setLastUpdated(Date.now() / 1000)
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     setHistory(loadHistory())

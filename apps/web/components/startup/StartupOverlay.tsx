@@ -1,9 +1,9 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useEffect, useState } from 'react'
 import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
 import { ManMark } from '@/components/brand/ManMark'
-import { useBannerStore } from '@/lib/banner-store'
 import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 import { logStateEvent } from '@/lib/state-events'
 import { cn } from '@/lib/utils'
@@ -99,7 +99,7 @@ export function StartupOverlay() {
         message: `overlay_timeout no progress for ${STALL_TIMEOUT_MS}ms key=${progressKey}`,
         data: { progress_key: progressKey, timeout_ms: STALL_TIMEOUT_MS },
       })
-      useBannerStore.getState().showBanner({
+      notify.banner({
         key: 'backend-connection',
         tone: 'warning',
         title: 'Backend not responding',

@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect } from 'react'
@@ -30,7 +31,6 @@ import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
 import { AdapterHealthCard } from '@/components/adapters/AdapterHealthCard'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { useToastStore } from '@/lib/toast-store'
 
 export default function AdaptersPage() {
   const router = useRouter()
@@ -38,7 +38,6 @@ export default function AdaptersPage() {
   const [adapters, setAdapters] = useState<UserAdapterInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
   const [aggregating, setAggregating] = useState(false)
   const [aggregateResult, setAggregateResult] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)
@@ -53,7 +52,7 @@ export default function AdaptersPage() {
       setStats(listRes.stats)
       setAdapters(listRes.adapters ?? [])
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Could not refresh adapters'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not refresh adapters'), { type: 'error' })
     }
   }
 
@@ -120,9 +119,9 @@ export default function AdaptersPage() {
       await loraEvalController.runEval('data/user_adapters/best_aggregated.npz')
       const evalResults = await loraEvalController.getHistory(10)
       setEvalHistory(evalResults)
-      addToast('Evaluation complete', 'success')
+      notify.toast('Evaluation complete', { type: 'success' })
     } catch {
-      addToast('Could not eval', 'error')
+      notify.toast('Could not eval', { type: 'error' })
     } finally {
       setRunningEval(false)
     }
@@ -340,9 +339,9 @@ export default function AdaptersPage() {
                   try {
                     await userAdaptersController.reset(userId)
                     await refreshData()
-                    addToast(`Adapter for ${userId} reset`, 'success')
+                    notify.toast(`Adapter for ${userId} reset`, { type: 'success' })
                   } catch {
-                    addToast('Could not reset adapter', 'error')
+                    notify.toast('Could not reset adapter', { type: 'error' })
                   }
                 }
               }}

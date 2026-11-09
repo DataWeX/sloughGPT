@@ -11,7 +11,9 @@ vi.mock('@/lib/token-tree-controller', () => ({
   tokenTreeController: { train: mocks.mockTrain },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.mockAddToast, banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
     selector({ addToast: mocks.mockAddToast }),
 }))
@@ -24,46 +26,53 @@ vi.mock('@sloughgpt/strui', () => ({
   Textarea: (props: any) => <textarea {...props} />,
   Input: (props: any) => <input {...props} />,
   Button: ({ children, onClick, disabled }: any) => (
-    <button onClick={onClick} disabled={disabled}>{children}</button>
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
   ),
   IconRefresh: () => <span />,
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
 
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 vi.mock('@/components/composed/StatusBanner', () => ({
@@ -109,12 +118,14 @@ describe('TokenTreeTrainCard', () => {
     fireEvent.change(screen.getByLabelText('Token tree min frequency'), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: /Train token tree/i }))
 
-    await waitFor(() => expect(mocks.mockTrain).toHaveBeenCalledWith({
-      texts: ['line one', 'line two'],
-      vocab_size: 64,
-      embed_dim: 8,
-      min_frequency: 1,
-    }))
+    await waitFor(() =>
+      expect(mocks.mockTrain).toHaveBeenCalledWith({
+        texts: ['line one', 'line two'],
+        vocab_size: 64,
+        embed_dim: 8,
+        min_frequency: 1,
+      }),
+    )
     expect(onTrained).toHaveBeenCalled()
   })
 
@@ -129,11 +140,13 @@ describe('TokenTreeTrainCard', () => {
     render(<TokenTreeTrainCard />)
     fireEvent.click(screen.getByRole('button', { name: /Train token tree/i }))
 
-    await waitFor(() => expect(mocks.mockTrain).toHaveBeenCalledWith({
-      vocab_size: 512,
-      embed_dim: 16,
-      min_frequency: 2,
-    }))
+    await waitFor(() =>
+      expect(mocks.mockTrain).toHaveBeenCalledWith({
+        vocab_size: 512,
+        embed_dim: 16,
+        min_frequency: 2,
+      }),
+    )
   })
 
   it('shows the result banner after a successful train', async () => {
@@ -156,7 +169,7 @@ describe('TokenTreeTrainCard', () => {
     render(<TokenTreeTrainCard />)
     fireEvent.click(screen.getByRole('button', { name: /Train token tree/i }))
 
-    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('boom', 'error'))
+    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('boom', { type: 'error' }))
     await waitFor(() => {
       expect(screen.getByText(/Training failed/)).toBeDefined()
     })
@@ -164,7 +177,11 @@ describe('TokenTreeTrainCard', () => {
 
   it('disables the button while training', async () => {
     let resolveTrain!: (v: { status: string }) => void
-    mocks.mockTrain.mockReturnValue(new Promise(r => { resolveTrain = r }))
+    mocks.mockTrain.mockReturnValue(
+      new Promise((r) => {
+        resolveTrain = r
+      }),
+    )
     render(<TokenTreeTrainCard />)
     fireEvent.click(screen.getByRole('button', { name: /Train token tree/i }))
 
@@ -172,6 +189,8 @@ describe('TokenTreeTrainCard', () => {
     expect((button as HTMLButtonElement).disabled).toBe(true)
 
     resolveTrain({ status: 'trained' })
-    await waitFor(() => expect(screen.getByRole('button', { name: /Train token tree/i })).toBeDefined())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Train token tree/i })).toBeDefined(),
+    )
   })
 })

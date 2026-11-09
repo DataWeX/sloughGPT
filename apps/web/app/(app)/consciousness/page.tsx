@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -16,7 +17,6 @@ import {
   Slider,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { addGlobalError } from '@/lib/error-store'
 
@@ -74,7 +74,6 @@ const LEVEL_DESCRIPTIONS = [
 ]
 
 export default function ConsciousnessPage() {
-  const addToast = useToastStore((state) => state.addToast)
   const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -125,10 +124,10 @@ export default function ConsciousnessPage() {
     setLevel(newLevel)
     try {
       await consciousnessController.updateConfig({ level: newLevel })
-      addToast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, 'success')
+      notify.toast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
       setLevel(status?.level ?? 0)
     }
   }
@@ -140,7 +139,7 @@ export default function ConsciousnessPage() {
       const data = await consciousnessController.reflect()
       setReflection(data.reflection ?? 'No reflection generated')
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setReflecting(false)
     }
@@ -150,11 +149,11 @@ export default function ConsciousnessPage() {
     setTraining(true)
     try {
       await consciousnessController.startTraining({ model_path: '' })
-      addToast('Consciousness LoRA training finished', 'success')
+      notify.toast('Consciousness LoRA training finished', { type: 'success' })
       fetchStatus()
       fetchEval()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setTraining(false)
     }
@@ -164,11 +163,11 @@ export default function ConsciousnessPage() {
     setSeeding(true)
     try {
       await consciousnessController.seedData({ count: 10 })
-      addToast('Seeded 10 training pairs', 'success')
+      notify.toast('Seeded 10 training pairs', { type: 'success' })
       fetchStatus()
       fetchEpisodes()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }
@@ -186,9 +185,9 @@ export default function ConsciousnessPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      addToast('Exported consciousness status', 'success')
+      notify.toast('Exported consciousness status', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 

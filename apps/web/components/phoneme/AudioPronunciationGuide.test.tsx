@@ -2,10 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import AudioPronunciationGuide from './AudioPronunciationGuide'
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 vi.mock('@/lib/phoneme-controller', () => ({

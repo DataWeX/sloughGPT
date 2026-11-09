@@ -1,11 +1,10 @@
 'use client'
+import { notify, useToastStore } from '@/lib/notify'
 
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { inferStateKind, type StateEventKind } from '@/lib/event-kinds'
-import { useBannerStore } from '@/lib/banner-store'
-import { useToastStore } from '@/lib/toast-store'
 
 export type { StateEventKind }
 export { inferStateKind, isStateEventKind } from '@/lib/event-kinds'
@@ -142,7 +141,7 @@ function fanOut(error: AppError, fp: string, opts: { banner?: boolean; toast?: b
     opts.banner ??
     (error.severity === 'error' && (error.surface === 'page' || error.surface === 'global'))
   if (wantsBanner) {
-    useBannerStore.getState().showBanner({
+    notify.banner({
       tone: 'destructive',
       title: error.title,
       message: error.source ? `via ${error.source}` : undefined,
@@ -151,7 +150,7 @@ function fanOut(error: AppError, fp: string, opts: { banner?: boolean; toast?: b
   }
 
   if (opts.toast) {
-    useToastStore.getState().addToast(error.title, 'error')
+    notify.toast(error.title, { type: 'error' })
   }
 
   if (typeof window !== 'undefined') {

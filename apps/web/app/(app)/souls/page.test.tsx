@@ -22,7 +22,9 @@ vi.mock('@/lib/souls-controller', () => ({
     listCheckpoints: vi.fn(),
   },
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (sel: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
     sel({ addToast: vi.fn() }),
 }))

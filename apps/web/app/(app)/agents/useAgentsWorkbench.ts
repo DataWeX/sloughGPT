@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the Agents page.
@@ -21,15 +22,18 @@ import {
   type AgentRun,
 } from '@/lib/agents-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
-import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
 import { logger } from '@/lib/dev-log'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function useAgentsWorkbench() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -92,10 +96,10 @@ export function useAgentsWorkbench() {
       const data = await agentsController.list()
       setAgents(data)
     } catch {
-      addToast('Could not load agents', 'error')
+      notify.toast('Could not load agents', { type: 'error' })
     }
     setLoading(false)
-  }, [addToast])
+  }, [])
 
   useRefreshShortcut(fetchAgents)
 
@@ -109,10 +113,10 @@ export function useAgentsWorkbench() {
       const res = await agentsController.listRuns(20)
       setRuns(res.runs || [])
     } catch {
-      addToast('Could not load run history', 'error')
+      notify.toast('Could not load run history', { type: 'error' })
     }
     setRunsLoading(false)
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchRuns()
@@ -138,7 +142,7 @@ export function useAgentsWorkbench() {
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = () => {
-    if (agents.length === 0) return addToast('No agents to export', 'error')
+    if (agents.length === 0) return notify.toast('No agents to export', { type: 'error' })
     const data = agents.map((a) => ({
       name: a.name,
       description: a.description,
@@ -146,7 +150,7 @@ export function useAgentsWorkbench() {
       tools: a.tools,
     }))
     downloadJson(data, `agents-${todayDateString()}.json`)
-    addToast(`Exported ${agents.length} agents`, 'success')
+    notify.toast(`Exported ${agents.length} agents`, { type: 'success' })
   }
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,10 +176,10 @@ export function useAgentsWorkbench() {
             /* skip individual failures */
           }
         }
-        addToast(`Imported ${count} agents`, 'success')
+        notify.toast(`Imported ${count} agents`, { type: 'success' })
         await fetchAgents()
       } catch {
-        addToast('Invalid agent file', 'error')
+        notify.toast('Invalid agent file', { type: 'error' })
       }
     }
     reader.readAsText(file)
@@ -230,10 +234,10 @@ export function useAgentsWorkbench() {
         tools: newTools,
       })
       setAgents((prev) => prev.map((a) => (a.id === tempId ? created : a)))
-      addToast('Agent created', 'success')
+      notify.toast('Agent created', { type: 'success' })
     } catch {
       setAgents((prev) => prev.filter((a) => a.id !== tempId))
-      addToast('Could not create agent', 'error')
+      notify.toast('Could not create agent', { type: 'error' })
     }
     setCreating(false)
   }
@@ -297,10 +301,10 @@ export function useAgentsWorkbench() {
         instructions: trimmedInstructions,
         tools: editTools,
       })
-      addToast('Agent updated', 'success')
+      notify.toast('Agent updated', { type: 'success' })
     } catch {
       if (oldAgent) setAgents((prev) => prev.map((a) => (a.id === id ? oldAgent : a)))
-      addToast('Could not update', 'error')
+      notify.toast('Could not update', { type: 'error' })
     }
   }
 
@@ -310,24 +314,27 @@ export function useAgentsWorkbench() {
     setAgents((prev) => prev.filter((a) => a.id !== id))
     try {
       await agentsController.delete(id)
-      addToast('Agent deleted', 'success', undefined, () => {
-        setAgents((prev) => [deleted, ...prev])
-        agentsController
-          .create({
-            name: deleted.name,
-            description: deleted.description,
-            instructions: deleted.instructions,
-            tools: deleted.tools,
-          })
-          .catch((e) => {
-            logger.warning('Could not restore agent', { exception: String(e) })
-            addToast('Could not restore agent', 'error')
-            fetchAgents()
-          })
+      notify.toast('Agent deleted', {
+        type: 'success',
+        onUndo: () => {
+          setAgents((prev) => [deleted, ...prev])
+          agentsController
+            .create({
+              name: deleted.name,
+              description: deleted.description,
+              instructions: deleted.instructions,
+              tools: deleted.tools,
+            })
+            .catch((e) => {
+              logger.warning('Could not restore agent', { exception: String(e) })
+              addToast('Could not restore agent', 'error')
+              fetchAgents()
+            })
+        },
       })
     } catch {
       setAgents((prev) => [deleted, ...prev])
-      addToast('Could not delete agent', 'error')
+      notify.toast('Could not delete agent', { type: 'error' })
     }
   }
 
@@ -356,17 +363,17 @@ export function useAgentsWorkbench() {
     setSelectedIds(new Set())
     try {
       await Promise.all(Array.from(deletedIds).map((id) => agentsController.delete(id)))
-      addToast(`Deleted ${deletedIds.size} agents`, 'success')
+      notify.toast(`Deleted ${deletedIds.size} agents`, { type: 'success' })
     } catch {
       setAgents((prev) => [...deletedAgents, ...prev])
-      addToast('Could not delete some agents', 'error')
+      notify.toast('Could not delete some agents', { type: 'error' })
     }
   }
 
   const handleBulkExport = () => {
     const selected = agents.filter((a) => selectedIds.has(a.id))
     downloadJson(selected, `agents-export-${todayDateString()}.json`)
-    addToast(`Exported ${selected.length} agents`, 'success')
+    notify.toast(`Exported ${selected.length} agents`, { type: 'success' })
     setSelectedIds(new Set())
   }
 
@@ -439,14 +446,14 @@ export function useAgentsWorkbench() {
           setOrchResponse(response)
           setOrchPhase('COMPLETE')
           setOrchRunning(false)
-          addToast('Orchestration complete', 'success')
+          notify.toast('Orchestration complete', { type: 'success' })
           fetchRuns()
         },
         onError: (error) => {
           setOrchError(error)
           setOrchPhase('ERROR')
           setOrchRunning(false)
-          addToast(error, 'error')
+          notify.toast(error, { type: 'error' })
           fetchRuns()
         },
       },
@@ -473,10 +480,10 @@ export function useAgentsWorkbench() {
         instructions: agent.instructions,
         tools: [...agent.tools],
       })
-      addToast(`Cloned "${agent.name}"`, 'success')
+      notify.toast(`Cloned "${agent.name}"`, { type: 'success' })
       await fetchAgents()
     } catch {
-      addToast('Could not clone agent', 'error')
+      notify.toast('Could not clone agent', { type: 'error' })
     }
   }
 

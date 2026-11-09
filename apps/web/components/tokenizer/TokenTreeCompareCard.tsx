@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -21,7 +22,6 @@ import {
   type CompareResult,
   type SavedTree,
 } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 interface TokenTreeCompareCardProps {
   refreshKey?: number
@@ -61,7 +61,6 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
   const [comparing, setComparing] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [result, setResult] = useState<CompareResult | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
 
   const load = useCallback(async () => {
     try {
@@ -85,7 +84,9 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       const res = await tokenTreeController.compare(a, b, 10)
       setResult(res)
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not compare token trees', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not compare token trees', {
+        type: 'error',
+      })
     } finally {
       setComparing(false)
     }

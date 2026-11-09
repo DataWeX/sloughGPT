@@ -8,7 +8,9 @@ const { mockAddToast, mockGenerate } = vi.hoisted(() => ({
   mockGenerate: vi.fn().mockResolvedValue({ image: 'data:image/png;base64,abc' }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: { getState: () => ({ addToast: mockAddToast }) },
 }))
 
@@ -214,10 +216,9 @@ describe('useChatMode', () => {
       act(() => {
         result.current.handleSend()
       })
-      expect(mockAddToast).toHaveBeenCalledWith(
-        'Upload a file first, then ask your question',
-        'info',
-      )
+      expect(mockAddToast).toHaveBeenCalledWith('Upload a file first, then ask your question', {
+        type: 'info',
+      })
       expect(chat.sendMessage).not.toHaveBeenCalled()
     })
 

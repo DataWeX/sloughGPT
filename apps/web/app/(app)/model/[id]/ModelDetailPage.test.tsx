@@ -78,7 +78,9 @@ vi.mock('@/lib/http-client', () => ({
   apiDelete: vi.fn(),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
 }))
 
@@ -182,7 +184,9 @@ describe('ModelDetailPage', () => {
     await waitFor(() => expect(screen.getByText('Load model')).toBeDefined())
     fireEvent.click(screen.getByText('Load model'))
     await waitFor(() => expect(mockModelLoad).toHaveBeenCalledWith('gpt2'))
-    expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Model ready'), 'success')
+    expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Model ready'), {
+      type: 'success',
+    })
   })
 
   it('unloads model on Remove click', async () => {

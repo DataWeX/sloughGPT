@@ -1,17 +1,26 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Textarea, Input, Button, Chip } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Textarea,
+  Input,
+  Button,
+  Chip,
+} from '@sloughgpt/strui'
 import { IconChevronRight, IconChevronLeft } from '@sloughgpt/strui'
 import { tokenTreeController, type EncodeResult } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 const parseIds = (input: string): number[] =>
   input
     .split(/[,\s]+/)
-    .filter(part => part.length > 0)
-    .map(part => parseInt(part, 10))
-    .filter(id => Number.isFinite(id))
+    .filter((part) => part.length > 0)
+    .map((part) => parseInt(part, 10))
+    .filter((id) => Number.isFinite(id))
 
 const displayToken = (token: string) => token.replace('</w>', '').trim() || token
 
@@ -22,7 +31,6 @@ export function TokenTreeCodecCard() {
   const [idsInput, setIdsInput] = useState('')
   const [decodeText, setDecodeText] = useState('')
   const [decoding, setDecoding] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
 
   const handleEncode = async () => {
     const term = text.trim()
@@ -34,7 +42,7 @@ export function TokenTreeCodecCard() {
       setIdsInput(result.ids.join(', '))
       setDecodeText('')
     } catch {
-      addToast('Could not encode text', 'error')
+      notify.toast('Could not encode text', { type: 'error' })
     } finally {
       setEncoding(false)
     }
@@ -43,7 +51,7 @@ export function TokenTreeCodecCard() {
   const handleDecode = async () => {
     const ids = parseIds(idsInput)
     if (ids.length === 0) {
-      addToast('Enter at least one token id', 'error')
+      notify.toast('Enter at least one token id', { type: 'error' })
       return
     }
     setDecoding(true)
@@ -51,7 +59,7 @@ export function TokenTreeCodecCard() {
       const result = await tokenTreeController.decode(ids)
       setDecodeText(result.text)
     } catch {
-      addToast('Could not decode ids', 'error')
+      notify.toast('Could not decode ids', { type: 'error' })
     } finally {
       setDecoding(false)
     }
@@ -69,14 +77,16 @@ export function TokenTreeCodecCard() {
           </label>
           <Textarea
             value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={(e) => setText(e.target.value)}
             rows={2}
             placeholder="Text to tree-walk encode"
             aria-label="Text to encode"
           />
           <div>
             <Button size="sm" onClick={handleEncode} disabled={encoding || !text.trim()}>
-              {encoding ? 'Encoding...' : (
+              {encoding ? (
+                'Encoding...'
+              ) : (
                 <>
                   <IconChevronRight className="h-4 w-4 mr-1" />
                   Encode
@@ -107,8 +117,8 @@ export function TokenTreeCodecCard() {
           <div className="flex items-center gap-2">
             <Input
               value={idsInput}
-              onChange={e => setIdsInput(e.target.value)}
-              onKeyDown={e => {
+              onChange={(e) => setIdsInput(e.target.value)}
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') handleDecode()
               }}
               placeholder="Comma-separated token ids, e.g. 3, 12"
@@ -116,7 +126,9 @@ export function TokenTreeCodecCard() {
               aria-label="Token ids to decode"
             />
             <Button size="sm" onClick={handleDecode} disabled={decoding}>
-              {decoding ? 'Decoding...' : (
+              {decoding ? (
+                'Decoding...'
+              ) : (
                 <>
                   <IconChevronLeft className="h-4 w-4 mr-1" />
                   Decode
@@ -134,8 +146,8 @@ export function TokenTreeCodecCard() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Encode walks the trained merge tree top-down; decode maps token ids back to text. Ids from an encode are
-          pre-filled below so you can verify the round trip in one click.
+          Encode walks the trained merge tree top-down; decode maps token ids back to text. Ids from
+          an encode are pre-filled below so you can verify the round trip in one click.
         </p>
       </CardContent>
     </Card>

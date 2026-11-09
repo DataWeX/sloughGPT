@@ -1,4 +1,5 @@
 'use client'
+import { notify, useToastStore, useBannerStore } from '@/lib/notify'
 
 import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
@@ -20,9 +21,7 @@ import { NotificationDock } from '@/components/NotificationDock'
 import { loadProcessSnapshot } from '@/lib/process-notifications'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
-import { useToastStore } from '@/lib/toast-store'
 import { useAppStore } from '@/lib/store'
-import { useBannerStore } from '@/lib/banner-store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
@@ -116,7 +115,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
       if (detail?.message) {
-        useToastStore.getState().addToast(detail.message, detail.type || 'info')
+        notify.toast(detail.message, { type: detail.type || 'info' })
       }
     }
     window.addEventListener('show-toast', handler)
@@ -163,7 +162,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       const { bannerGraceMs } = useAppStore.getState().settings
       let id: string | null = null
       const raise = () => {
-        id = useBannerStore.getState().showBanner({
+        id = notify.banner({
           key: 'backend-connection',
           tone: 'destructive',
           title: 'Backend unreachable',
@@ -215,7 +214,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       connectionDropRef.current = false
       return
     }
-    const greenId = useBannerStore.getState().showBanner({
+    const greenId = notify.banner({
       key: 'backend-connection',
       tone: 'success',
       title: 'Backend reconnected',

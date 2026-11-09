@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,6 @@ import {
   Badge,
   Skeleton,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { addGlobalError } from '@/lib/error-store'
 import { MolePluginPanel } from '@/components/mole/MolePluginPanel'
@@ -44,7 +44,6 @@ export default function PluginsCloudPage() {
   const [submitting, setSubmitting] = useState(false)
   const [provider, setProvider] = useState('local')
   const [datasetId, setDatasetId] = useState('')
-  const addToast = useToastStore((s) => s.addToast)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -68,17 +67,17 @@ export default function PluginsCloudPage() {
 
   const startJob = async () => {
     if (!datasetId) {
-      addToast('Dataset required', 'error')
+      notify.toast('Dataset required', { type: 'error' })
       return
     }
     setSubmitting(true)
     try {
       await apiPost('/cloud-training/submit', { provider, dataset_id: datasetId })
-      addToast('Job submitted', 'success')
+      notify.toast('Job submitted', { type: 'success' })
       setDatasetId('')
       loadData()
     } catch (err) {
-      addToast('Failed to submit', 'error')
+      notify.toast('Failed to submit', { type: 'error' })
     } finally {
       setSubmitting(false)
     }
@@ -88,20 +87,20 @@ export default function PluginsCloudPage() {
     const action = plugin.enabled ? 'disable' : 'enable'
     try {
       await apiPost(`/plugins/${plugin.name}/${action}`)
-      addToast(`Plugin ${action}d`, 'success')
+      notify.toast(`Plugin ${action}d`, { type: 'success' })
       loadData()
     } catch {
-      addToast(`Failed to ${action} plugin`, 'error')
+      notify.toast(`Failed to ${action} plugin`, { type: 'error' })
     }
   }
 
   const reloadPlugins = async () => {
     try {
       await apiPost('/plugins/reload')
-      addToast('Plugins reloaded', 'success')
+      notify.toast('Plugins reloaded', { type: 'success' })
       loadData()
     } catch {
-      addToast('Failed to reload plugins', 'error')
+      notify.toast('Failed to reload plugins', { type: 'error' })
     }
   }
 

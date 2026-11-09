@@ -3,23 +3,25 @@ import { render, screen } from '@testing-library/react'
 import PhonemeQuizAdvanced from './PhonemeQuizAdvanced'
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: (selector: (state: unknown) => unknown) => selector({
-    addToHistory: vi.fn(),
-  }),
+  usePhonemeStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToHistory: vi.fn(),
+    }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 vi.mock('@/lib/phoneme-controller', () => ({
   phonemeController: { encode: vi.fn() },
-  PHONEME_LANGUAGES: [
-    { value: 'en', label: 'English' },
-  ],
-  toIPA: vi.fn((phonemes: string[]) => phonemes.map(p => `[${p}]`)),
+  PHONEME_LANGUAGES: [{ value: 'en', label: 'English' }],
+  toIPA: vi.fn((phonemes: string[]) => phonemes.map((p) => `[${p}]`)),
 }))
 
 describe('PhonemeQuizAdvanced', () => {

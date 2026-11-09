@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the Souls workspace.
@@ -10,7 +11,6 @@
  */
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { type Tab, type ModeInfo } from './souls-format'
 
@@ -47,8 +47,6 @@ export function useSoulsWorkbench() {
   const [detailSoul, setDetailSoul] = useState<Soul | null>(null)
   const [compareSoul, setCompareSoul] = useState<Soul | null>(null)
   const [checkpointDetail, setCheckpointDetail] = useState<Checkpoint | null>(null)
-
-  const addToast = useToastStore((s) => s.addToast)
 
   // ── Data Loading ──
   const loadData = useCallback(async () => {
@@ -88,9 +86,9 @@ export function useSoulsWorkbench() {
     try {
       await soulsController.switch(name)
       setCurrentSoul(name)
-      addToast(`Switched to ${name}`, 'success')
+      notify.toast(`Switched to ${name}`, { type: 'success' })
     } catch {
-      addToast('Could not switch soul', 'error')
+      notify.toast('Could not switch soul', { type: 'error' })
     } finally {
       setSwitching(null)
     }
@@ -101,10 +99,10 @@ export function useSoulsWorkbench() {
     setLoadingCheckpoint(name)
     try {
       await soulsController.loadCheckpoint(name)
-      addToast(`Loaded checkpoint: ${name}`, 'success')
+      notify.toast(`Loaded checkpoint: ${name}`, { type: 'success' })
       await handleRefresh()
     } catch {
-      addToast('Could not load checkpoint', 'error')
+      notify.toast('Could not load checkpoint', { type: 'error' })
     } finally {
       setLoadingCheckpoint(null)
     }
@@ -113,10 +111,10 @@ export function useSoulsWorkbench() {
   const handleDeleteCheckpoint = async (name: string) => {
     try {
       await soulsController.deleteCheckpoint(name)
-      addToast(`Deleted checkpoint: ${name}`, 'success')
+      notify.toast(`Deleted checkpoint: ${name}`, { type: 'success' })
       setCheckpoints((prev) => prev.filter((cp) => cp.name !== name))
     } catch {
-      addToast('Could not delete checkpoint', 'error')
+      notify.toast('Could not delete checkpoint', { type: 'error' })
     }
     setDeleteTarget(null)
   }
@@ -130,9 +128,9 @@ export function useSoulsWorkbench() {
       a.download = `${name}.soul`
       a.click()
       URL.revokeObjectURL(url)
-      addToast(`Downloaded ${name}`, 'success')
+      notify.toast(`Downloaded ${name}`, { type: 'success' })
     } catch {
-      addToast('Could not download', 'error')
+      notify.toast('Could not download', { type: 'error' })
     }
   }
 
@@ -141,7 +139,7 @@ export function useSoulsWorkbench() {
       const info = await soulsController.checkpointInfo(name)
       if (info) setCheckpointDetail(info)
     } catch {
-      addToast('Could not load checkpoint info', 'error')
+      notify.toast('Could not load checkpoint info', { type: 'error' })
     }
   }
 
@@ -156,7 +154,7 @@ export function useSoulsWorkbench() {
       setEditedWeights(JSON.parse(JSON.stringify(w)))
       setModes(m)
     } catch {
-      addToast('Could not load trait weights', 'error')
+      notify.toast('Could not load trait weights', { type: 'error' })
     }
   }
 
@@ -173,9 +171,9 @@ export function useSoulsWorkbench() {
     try {
       await soulsController.saveTraitWeights(editedWeights)
       setTraitWeights(JSON.parse(JSON.stringify(editedWeights)))
-      addToast('Trait weights saved', 'success')
+      notify.toast('Trait weights saved', { type: 'success' })
     } catch {
-      addToast('Could not save trait weights', 'error')
+      notify.toast('Could not save trait weights', { type: 'error' })
     } finally {
       setSavingWeights(false)
     }
@@ -188,7 +186,7 @@ export function useSoulsWorkbench() {
     try {
       setSnapshots(await soulsController.listWeightSnapshots())
     } catch {
-      addToast('Could not load snapshots', 'error')
+      notify.toast('Could not load snapshots', { type: 'error' })
     }
   }
 
@@ -198,9 +196,9 @@ export function useSoulsWorkbench() {
       await soulsController.saveWeightSnapshot(newSnapshotName)
       setNewSnapshotName('')
       await handleLoadSnapshots()
-      addToast('Snapshot saved', 'success')
+      notify.toast('Snapshot saved', { type: 'success' })
     } catch {
-      addToast('Could not save snapshot', 'error')
+      notify.toast('Could not save snapshot', { type: 'error' })
     }
   }
 
@@ -208,9 +206,9 @@ export function useSoulsWorkbench() {
     try {
       await soulsController.loadWeightSnapshot(name)
       await handleLoadWeights()
-      addToast('Snapshot loaded', 'success')
+      notify.toast('Snapshot loaded', { type: 'success' })
     } catch {
-      addToast('Could not load snapshot', 'error')
+      notify.toast('Could not load snapshot', { type: 'error' })
     }
   }
 
@@ -218,9 +216,9 @@ export function useSoulsWorkbench() {
     try {
       await soulsController.deleteWeightSnapshot(name)
       await handleLoadSnapshots()
-      addToast('Snapshot deleted', 'success')
+      notify.toast('Snapshot deleted', { type: 'success' })
     } catch {
-      addToast('Could not delete snapshot', 'error')
+      notify.toast('Could not delete snapshot', { type: 'error' })
     }
     setDeleteTarget(null)
   }

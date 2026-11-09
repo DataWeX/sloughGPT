@@ -22,7 +22,9 @@ vi.mock('@/hooks/useLocale', () => ({
   })),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: vi.fn(() => ({
     addToast: vi.fn(),
   })),
@@ -70,7 +72,9 @@ describe('ConsciousnessPersonalityPage', () => {
     vi.clearAllMocks()
     vi.mocked(consciousnessController.getPersonality).mockResolvedValue(mockPersonality as any)
     vi.mocked(consciousnessController.getPersonalityPresets).mockResolvedValue(mockPresets as any)
-    vi.mocked(consciousnessController.getPersonalityConflicts).mockResolvedValue(mockConflicts as any)
+    vi.mocked(consciousnessController.getPersonalityConflicts).mockResolvedValue(
+      mockConflicts as any,
+    )
     vi.mocked(consciousnessController.getPersonalityHistory).mockResolvedValue(mockHistory as any)
   })
 
@@ -84,7 +88,9 @@ describe('ConsciousnessPersonalityPage', () => {
   it('shows personality overview', async () => {
     render(<ConsciousnessPersonalityPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_personality.overview_title').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_personality.overview_title').length,
+      ).toBeGreaterThan(0)
       expect(screen.getAllByText('Friendly').length).toBeGreaterThan(0)
     })
   })
@@ -101,7 +107,9 @@ describe('ConsciousnessPersonalityPage', () => {
   it('shows presets grid', async () => {
     render(<ConsciousnessPersonalityPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_personality.presets_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_personality.presets_title').length).toBeGreaterThan(
+        0,
+      )
       expect(screen.getAllByText('Default').length).toBeGreaterThan(0)
       expect(screen.getAllByText('Formal').length).toBeGreaterThan(0)
       expect(screen.getAllByText('Creative').length).toBeGreaterThan(0)
@@ -111,7 +119,9 @@ describe('ConsciousnessPersonalityPage', () => {
   it('has save/reset buttons', async () => {
     render(<ConsciousnessPersonalityPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_personality.reset_defaults').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_personality.reset_defaults').length,
+      ).toBeGreaterThan(0)
     })
   })
 })

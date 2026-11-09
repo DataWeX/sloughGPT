@@ -1,13 +1,18 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { memo, useState, useCallback } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { trainingJobsController } from '@/lib/training-controller'
 import type { TrainingJob } from '@/lib/training-controller'
 import { formatToastError } from '@/lib/error-utils'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface TrainingHistoryProps {
   jobs: TrainingJob[]
@@ -47,7 +52,6 @@ export const TrainingHistory = memo(function TrainingHistory({
   onRecovered,
 }: TrainingHistoryProps) {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
   const [resuming, setResuming] = useState<string | null>(null)
 
   const handleResume = useCallback(
@@ -56,15 +60,15 @@ export const TrainingHistory = memo(function TrainingHistory({
       setResuming(jobId)
       try {
         const result = await trainingJobsController.recover(jobId)
-        addToast(result.message || 'Resume started', 'success')
+        notify.toast(result.message || 'Resume started', { type: 'success' })
         onRecovered?.(result)
       } catch (e) {
-        addToast(formatToastError(e, 'Could not resume job'), 'error')
+        notify.toast(formatToastError(e, 'Could not resume job'), { type: 'error' })
       } finally {
         setResuming(null)
       }
     },
-    [addToast, onRecovered],
+    [onRecovered],
   )
 
   return (

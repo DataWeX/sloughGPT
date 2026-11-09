@@ -1,10 +1,15 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type RecordState = 'idle' | 'recording' | 'stopped'
 
@@ -26,7 +31,6 @@ export default function PronunciationRecording() {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animFrameRef = useRef<number | null>(null)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const cleanup = useCallback(() => {
     if (timerRef.current) {
@@ -100,9 +104,9 @@ export default function PronunciationRecording() {
         setDuration((d) => d + 100)
       }, 100)
     } catch {
-      addToast('Microphone access denied', 'error')
+      notify.toast('Microphone access denied', { type: 'error' })
     }
-  }, [duration, updateLevel, addToast])
+  }, [duration, updateLevel])
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {

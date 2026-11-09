@@ -1,9 +1,9 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState } from 'react'
 import { Button, cn } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
-import { useToastStore } from '@/lib/toast-store'
 import type { MoleReport } from './types'
 
 interface RunMoleButtonProps {
@@ -19,7 +19,6 @@ interface RunMoleButtonProps {
 export function RunMoleButton({ onCompleted, className }: RunMoleButtonProps) {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
 
   const run = async () => {
     if (running) return
@@ -32,7 +31,7 @@ export function RunMoleButton({ onCompleted, className }: RunMoleButtonProps) {
         // No retries — a timed-out run must never fire a second sweep.
         { skipCircuitBreaker: true },
       )
-      addToast('Mole check complete', 'success')
+      notify.toast('Mole check complete', { type: 'success' })
       if (res?.report) onCompleted?.(res.report)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Mole check failed')
@@ -52,11 +51,7 @@ export function RunMoleButton({ onCompleted, className }: RunMoleButtonProps) {
         Run check
       </Button>
       {error ? (
-        <span
-          role="alert"
-          data-testid="run-mole-error"
-          className="text-xs text-destructive"
-        >
+        <span role="alert" data-testid="run-mole-error" className="text-xs text-destructive">
           {error}
         </span>
       ) : null}

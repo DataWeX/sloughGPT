@@ -1,11 +1,12 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from '@/vite/next-compat/navigation'
+import Link from '@/vite/next-compat/link'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
@@ -23,8 +24,11 @@ import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
-  const addToast = useToastStore((s) => s.addToast)
   const initialLoadDone = useRef(false)
+  // Typed adapter: this page threads `addToast` into hooks/props that take
+  // the legacy (message, type?) shape — one place, over the notify facade.
+  const addToast = (message: string, type?: string) =>
+    notify.toast(message, { type: type as 'success' | 'error' | 'info' })
   const session = useTrainingSession()
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()

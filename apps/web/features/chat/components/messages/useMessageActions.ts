@@ -1,8 +1,8 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
@@ -46,7 +46,7 @@ export function useMessageActions(
   onThumbsUp?: (messageId: string) => void,
   onThumbsDown?: (messageId: string) => void,
   onSaveToKnowledge?: (messageId: string, content: string) => void,
-  temperature: number = 0.7
+  temperature: number = 0.7,
 ): UseMessageActionsReturn {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
@@ -60,7 +60,11 @@ export function useMessageActions(
   const [retryTemperature, setRetryTemperature] = useState(temperature)
   const [localReactions, setLocalReactions] = useState<Record<string, number>>({})
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const addToast = useToastStore(s => s.addToast) as (message: string, type?: string) => void
+  const addToast = useCallback(
+    (message: string, type?: string) =>
+      notify.toast(message, { type: type as 'success' | 'error' | 'info' }),
+    [],
+  )
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement>(null!)
@@ -68,7 +72,7 @@ export function useMessageActions(
   const retryOptionsRef = useRef<HTMLDivElement>(null!)
 
   useEffect(() => {
-    getReactions(messageId).then(reactions => {
+    getReactions(messageId).then((reactions) => {
       const counts: Record<string, number> = {}
       for (const [emoji, users] of Object.entries(reactions)) {
         counts[emoji] = users.length
@@ -101,14 +105,17 @@ export function useMessageActions(
   }, [])
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(content).then(() => {
-      setCopied(true)
-      onCopy?.(content)
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-      copiedTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
-    }).catch(() => {
-      addToast('Failed to copy', 'error')
-    })
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        setCopied(true)
+        onCopy?.(content)
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+        copiedTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
+      })
+      .catch(() => {
+        addToast('Failed to copy', 'error')
+      })
   }, [content, onCopy, addToast])
 
   const handleThumbsUp = useCallback(() => {
@@ -149,23 +156,48 @@ export function useMessageActions(
     setSpeaking(true)
   }, [content, speaking])
 
-  const handleToggleReaction = useCallback(async (emoji: string) => {
-    await toggleReaction(messageId, emoji)
-    const reactions = await getReactions(messageId)
-    const counts: Record<string, number> = {}
-    for (const [e, users] of Object.entries(reactions)) {
-      counts[e] = users.length
-    }
-    setLocalReactions(counts)
-  }, [messageId])
+  const handleToggleReaction = useCallback(
+    async (emoji: string) => {
+      await toggleReaction(messageId, emoji)
+      const reactions = await getReactions(messageId)
+      const counts: Record<string, number> = {}
+      for (const [e, users] of Object.entries(reactions)) {
+        counts[e] = users.length
+      }
+      setLocalReactions(counts)
+    },
+    [messageId],
+  )
 
   return {
-    copied, thumbsUp, thumbsDown, celebrate, speaking, savedToKnowledge,
-    showEmojiPicker, showTranslateMenu, showRetryOptions, retryTemperature,
-    localReactions, showDeleteConfirm, addToast,
-    copiedTimerRef, celebrateTimerRef, emojiPickerRef, translateMenuRef, retryOptionsRef,
-    handleCopy, handleThumbsUp, handleThumbsDown, handleSaveToKnowledge, handleSpeak,
-    handleToggleReaction, setRetryTemperature, setShowRetryOptions,
-    setShowTranslateMenu, setShowEmojiPicker, setShowDeleteConfirm,
+    copied,
+    thumbsUp,
+    thumbsDown,
+    celebrate,
+    speaking,
+    savedToKnowledge,
+    showEmojiPicker,
+    showTranslateMenu,
+    showRetryOptions,
+    retryTemperature,
+    localReactions,
+    showDeleteConfirm,
+    addToast,
+    copiedTimerRef,
+    celebrateTimerRef,
+    emojiPickerRef,
+    translateMenuRef,
+    retryOptionsRef,
+    handleCopy,
+    handleThumbsUp,
+    handleThumbsDown,
+    handleSaveToKnowledge,
+    handleSpeak,
+    handleToggleReaction,
+    setRetryTemperature,
+    setShowRetryOptions,
+    setShowTranslateMenu,
+    setShowEmojiPicker,
+    setShowDeleteConfirm,
   }
 }

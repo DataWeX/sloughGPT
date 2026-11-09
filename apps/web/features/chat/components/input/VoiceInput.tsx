@@ -1,9 +1,9 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { multimodalController } from '@/lib/controllers'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { VoiceWaveform } from './VoiceWaveform'
 
@@ -74,7 +74,6 @@ export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: 
   const [isListening, setIsListening] = useState(false)
   const [isBrowserSupported, setIsBrowserSupported] = useState(false)
   const [isServerSupported, setIsServerSupported] = useState(false)
-  const addToast = useToastStore((s) => s.addToast)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
@@ -106,10 +105,13 @@ export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: 
     recognition.onerror = (e: Event) => {
       setIsListening(false)
       const err = (e as { error?: string }).error
-      if (err === 'not-allowed') addToast('Microphone access denied by browser', 'error')
-      else if (err === 'no-speech') addToast('No speech detected — try again', 'info')
-      else if (err === 'network') addToast('Speech recognition network error', 'error')
-      else if (err && err !== 'aborted') addToast(`Voice input error: ${err}`, 'error')
+      if (err === 'not-allowed')
+        notify.toast('Microphone access denied by browser', { type: 'error' })
+      else if (err === 'no-speech') notify.toast('No speech detected — try again', { type: 'info' })
+      else if (err === 'network')
+        notify.toast('Speech recognition network error', { type: 'error' })
+      else if (err && err !== 'aborted')
+        notify.toast(`Voice input error: ${err}`, { type: 'error' })
     }
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -152,12 +154,12 @@ export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: 
         } catch (err) {
           const msg = extractErrorMessage(err)
           if (msg.includes('501') || msg.includes('not available')) {
-            addToast(
+            notify.toast(
               'Speech recognition not available — use Chrome or Edge for browser voice input',
-              'error',
+              { type: 'error' },
             )
           } else {
-            addToast('Could not audio transcription', 'error')
+            notify.toast('Could not audio transcription', { type: 'error' })
           }
           logger.error('Could not audio transcription', { exception: String(err) })
         }
@@ -171,9 +173,11 @@ export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: 
     } catch (err) {
       const msg = extractErrorMessage(err)
       if (msg.includes('NotAllowedError') || msg.includes('Permission denied')) {
-        addToast('Microphone access denied — allow microphone in browser settings', 'error')
+        notify.toast('Microphone access denied — allow microphone in browser settings', {
+          type: 'error',
+        })
       } else {
-        addToast('Could not access microphone', 'error')
+        notify.toast('Could not access microphone', { type: 'error' })
       }
       logger.error('Could not microphone access', { exception: String(err) })
     }

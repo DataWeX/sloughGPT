@@ -6,7 +6,9 @@ vi.mock('@/lib/http-client', () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (m: string, t?: string) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))
@@ -53,7 +55,10 @@ describe('RunMoleButton', () => {
   it('is disabled and busy while the run is in flight', async () => {
     let resolve: (v: unknown) => void = () => {}
     post.mockImplementation(
-      () => new Promise((r) => { resolve = r as (v: unknown) => void }) as never,
+      () =>
+        new Promise((r) => {
+          resolve = r as (v: unknown) => void
+        }) as never,
     )
     render(<RunMoleButton />)
     const button = screen.getByTestId('run-mole-button')

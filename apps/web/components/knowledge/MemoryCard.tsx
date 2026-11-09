@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import {
@@ -31,7 +32,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson } from '@/lib/download-utils'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
@@ -41,6 +41,11 @@ import { MemoryStatsGrid } from './MemoryStatsGrid'
 import { MemoryItemList } from './MemoryItemList'
 import { MemoryMaintenancePanel } from './MemoryMaintenancePanel'
 import { ArchiveDialog } from './ArchiveDialog'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 /**
  * Self-contained card exposing the auto-memory layer on the Knowledge page.
@@ -48,7 +53,6 @@ import { ArchiveDialog } from './ArchiveDialog'
  * and a confirmed clear-all. Wired to `memoryController` (`/memory/*`).
  */
 export const MemoryCard = memo(function MemoryCard() {
-  const addToast = useToastStore((s) => s.addToast)
   const {
     stats,
     items,
@@ -121,69 +125,65 @@ export const MemoryCard = memo(function MemoryCard() {
     try {
       const result = await memoryController.store(newContent, newTopic.trim() || 'manual')
       if (result.stored) {
-        addToast('Saved to memory', 'success')
+        notify.toast('Saved to memory', { type: 'success' })
         setNewContent('')
         setShowAdd(false)
         await fetchData()
       } else {
-        addToast('Already remembered (or memory is disabled)', 'error')
+        notify.toast('Already remembered (or memory is disabled)', { type: 'error' })
       }
     } catch {
-      addToast('Could not store memory', 'error')
+      notify.toast('Could not store memory', { type: 'error' })
     } finally {
       setAdding(false)
     }
-  }, [newContent, newTopic, addToast, fetchData])
+  }, [newContent, newTopic, fetchData])
 
-  const handleCopy = useCallback(
-    async (text: string) => {
-      try {
-        await navigator.clipboard.writeText(text)
-        addToast('Memory fact copied', 'success')
-      } catch {
-        addToast('Could not copy fact', 'error')
-      }
-    },
-    [addToast],
-  )
+  const handleCopy = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      notify.toast('Memory fact copied', { type: 'success' })
+    } catch {
+      notify.toast('Could not copy fact', { type: 'error' })
+    }
+  }, [])
 
   const handleClear = useCallback(async () => {
     setClearing(true)
     try {
       const result = await memoryController.clear()
-      addToast(`Cleared ${result.cleared} memory items`, 'success')
+      notify.toast(`Cleared ${result.cleared} memory items`, { type: 'success' })
       setPendingClear(false)
       setSearch('')
       setSearchResults(null)
       setSearched(false)
       await fetchData()
     } catch {
-      addToast('Could not clear memory', 'error')
+      notify.toast('Could not clear memory', { type: 'error' })
     } finally {
       setClearing(false)
     }
-  }, [addToast, fetchData, setSearch, setSearchResults, setSearched])
+  }, [fetchData, setSearch, setSearchResults, setSearched])
 
   const handleDeleteItem = useCallback(async () => {
     if (!pendingDelete) return
     setDeleting(true)
     try {
       const result = await memoryController.delete(pendingDelete.id)
-      addToast(
-        result.deleted > 0 ? 'Memory item deleted' : 'Memory item not found',
-        result.deleted > 0 ? 'success' : 'error',
-      )
+      notify.toast(result.deleted > 0 ? 'Memory item deleted' : 'Memory item not found', {
+        type: result.deleted > 0 ? 'success' : 'error',
+      })
       setPendingDelete(null)
       if (searchResults !== null) {
         setSearchResults(searchResults.filter((i) => i.id !== pendingDelete.id))
       }
       await fetchData()
     } catch {
-      addToast('Could not delete memory item', 'error')
+      notify.toast('Could not delete memory item', { type: 'error' })
     } finally {
       setDeleting(false)
     }
-  }, [pendingDelete, searchResults, addToast, fetchData, setSearchResults])
+  }, [pendingDelete, searchResults, fetchData, setSearchResults])
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -201,7 +201,7 @@ export const MemoryCard = memo(function MemoryCard() {
   const handleExportSelected = useCallback(() => {
     const selected = items.filter((i) => selectedIds.has(i.id))
     if (selected.length === 0) {
-      addToast('Nothing selected to export', 'error')
+      notify.toast('Nothing selected to export', { type: 'error' })
       return
     }
     const data = selected.map((i) => ({
@@ -210,8 +210,8 @@ export const MemoryCard = memo(function MemoryCard() {
       source: i.source || 'api',
     }))
     downloadJson(data, `memory-export-selected-${todayDateString()}.json`)
-    addToast(`Exported ${selected.length} memory item(s)`, 'success')
-  }, [items, selectedIds, addToast])
+    notify.toast(`Exported ${selected.length} memory item(s)`, { type: 'success' })
+  }, [items, selectedIds])
 
   const handleBatchDelete = useCallback(async () => {
     if (selectedIds.size === 0) return
@@ -227,10 +227,9 @@ export const MemoryCard = memo(function MemoryCard() {
           /* continue deleting the rest */
         }
       }
-      addToast(
-        deleted > 0 ? `Deleted ${deleted} memory item(s)` : 'Selected items not found',
-        deleted > 0 ? 'success' : 'error',
-      )
+      notify.toast(deleted > 0 ? `Deleted ${deleted} memory item(s)` : 'Selected items not found', {
+        type: deleted > 0 ? 'success' : 'error',
+      })
       setPendingBatchDelete(false)
       setSelectedIds(new Set())
       if (searchResults !== null) {
@@ -238,11 +237,11 @@ export const MemoryCard = memo(function MemoryCard() {
       }
       await fetchData()
     } catch {
-      addToast('Could not delete memory items', 'error')
+      notify.toast('Could not delete memory items', { type: 'error' })
     } finally {
       setDeleting(false)
     }
-  }, [selectedIds, searchResults, addToast, fetchData, setSearchResults])
+  }, [selectedIds, searchResults, fetchData, setSearchResults])
 
   const startEdit = useCallback((itemToEdit: MemoryItem) => {
     setEditingItem(itemToEdit)
@@ -262,7 +261,7 @@ export const MemoryCard = memo(function MemoryCard() {
         editImportance,
       )
       if (result.updated > 0) {
-        addToast('Memory item updated', 'success')
+        notify.toast('Memory item updated', { type: 'success' })
         setEditingItem(null)
         if (searchResults !== null) {
           setSearchResults(
@@ -280,12 +279,12 @@ export const MemoryCard = memo(function MemoryCard() {
         }
         await fetchData()
       } else if (result.duplicate) {
-        addToast('That fact already exists in memory', 'error')
+        notify.toast('That fact already exists in memory', { type: 'error' })
       } else {
-        addToast('Memory item not found', 'error')
+        notify.toast('Memory item not found', { type: 'error' })
       }
     } catch {
-      addToast('Could not update memory item', 'error')
+      notify.toast('Could not update memory item', { type: 'error' })
     } finally {
       setSavingEdit(false)
     }
@@ -295,7 +294,6 @@ export const MemoryCard = memo(function MemoryCard() {
     editTopic,
     editImportance,
     searchResults,
-    addToast,
     fetchData,
     setSearchResults,
   ])
@@ -305,23 +303,23 @@ export const MemoryCard = memo(function MemoryCard() {
       setToggling(true)
       try {
         const result = await memoryController.setEnabled(next)
-        addToast(
+        notify.toast(
           result.enabled
             ? 'Memory is on — the AI will keep learning from conversations'
             : 'Memory is off — the AI will stop storing new facts',
-          'success',
+          { type: 'success' },
         )
         setSearch('')
         setSearchResults(null)
         setSearched(false)
         await fetchData()
       } catch {
-        addToast('Could not update memory setting', 'error')
+        notify.toast('Could not update memory setting', { type: 'error' })
       } finally {
         setToggling(false)
       }
     },
-    [addToast, fetchData, setSearch, setSearchResults, setSearched],
+    [fetchData, setSearch, setSearchResults, setSearched],
   )
 
   const toggleSelectAll = useCallback(() => {

@@ -9,7 +9,9 @@ vi.mock('recharts', () => ({
   YAxis: () => null,
   CartesianGrid: () => null,
   Tooltip: () => null,
-  ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
+  ResponsiveContainer: ({ children }: any) => (
+    <div data-testid="responsive-container">{children}</div>
+  ),
 }))
 
 vi.mock('@/lib/phoneme-controller', () => ({
@@ -24,20 +26,42 @@ vi.mock('@/lib/phoneme-controller', () => ({
 }))
 
 const mockHistory = [
-  { id: '1', target: 'hello', spoken: 'helo', score: 0.9, language: 'en', targetPhonemes: ['HH', 'EH', 'L', 'OW'], spokenPhonemes: ['HH', 'EH', 'L', 'OW'], timestamp: Date.now() - 1000 },
-  { id: '2', target: 'cat', spoken: 'kat', score: 0.7, language: 'en', targetPhonemes: ['K', 'AE', 'T'], spokenPhonemes: ['K', 'AA', 'T'], timestamp: Date.now() },
+  {
+    id: '1',
+    target: 'hello',
+    spoken: 'helo',
+    score: 0.9,
+    language: 'en',
+    targetPhonemes: ['HH', 'EH', 'L', 'OW'],
+    spokenPhonemes: ['HH', 'EH', 'L', 'OW'],
+    timestamp: Date.now() - 1000,
+  },
+  {
+    id: '2',
+    target: 'cat',
+    spoken: 'kat',
+    score: 0.7,
+    language: 'en',
+    targetPhonemes: ['K', 'AE', 'T'],
+    spokenPhonemes: ['K', 'AA', 'T'],
+    timestamp: Date.now(),
+  },
 ]
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: vi.fn((selector: any) => selector({
-    history: mockHistory,
-    clearHistory: vi.fn(),
-    exportHistory: vi.fn(() => '[]'),
-    importHistory: vi.fn(),
-  })),
+  usePhonemeStore: vi.fn((selector: any) =>
+    selector({
+      history: mockHistory,
+      clearHistory: vi.fn(),
+      exportHistory: vi.fn(() => '[]'),
+      importHistory: vi.fn(),
+    }),
+  ),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: vi.fn((selector: any) => selector({ addToast: vi.fn() })),
 }))
 
@@ -52,10 +76,20 @@ vi.mock('@sloughgpt/strui', () => ({
   CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
   CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
   Button: ({ children, onClick, variant, size, className, ...props }: any) => (
-    <button onClick={onClick} className={className} data-variant={variant} {...props}>{children}</button>
+    <button onClick={onClick} className={className} data-variant={variant} {...props}>
+      {children}
+    </button>
   ),
-  Badge: ({ children, variant, className }: any) => <span className={className} data-variant={variant}>{children}</span>,
-  Select: ({ children, value, onValueChange }: any) => <select value={value} onChange={e => onValueChange(e.target.value)}>{children}</select>,
+  Badge: ({ children, variant, className }: any) => (
+    <span className={className} data-variant={variant}>
+      {children}
+    </span>
+  ),
+  Select: ({ children, value, onValueChange }: any) => (
+    <select value={value} onChange={(e) => onValueChange(e.target.value)}>
+      {children}
+    </select>
+  ),
   SelectTrigger: ({ children }: any) => <>{children}</>,
   SelectValue: () => null,
   SelectContent: ({ children }: any) => <>{children}</>,
@@ -70,7 +104,9 @@ vi.mock('@sloughgpt/strui', () => ({
 }))
 
 describe('HistoryCard', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders without crashing', () => {
     render(<HistoryCard />)

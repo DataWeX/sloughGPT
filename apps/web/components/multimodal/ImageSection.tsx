@@ -1,7 +1,17 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
+import {
+  cn,
+  ActionCard,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Textarea,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { SectionLabel } from '@/components/composed/SectionLabel'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -9,7 +19,11 @@ import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
-import { useToastStore } from '@/lib/toast-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface GalleryImage {
   id: string
@@ -31,7 +45,6 @@ export function ImageSection() {
   const [generating, setGenerating] = useState(false)
   const [lastGenerated, setLastGenerated] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
-  const addToast = useToastStore(s => s.addToast)
 
   const fetchData = useCallback(async () => {
     try {
@@ -42,11 +55,11 @@ export function ImageSection() {
       setGallery(galleryRes?.images ?? [])
       setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
     } catch {
-      addToast('Could not load image data', 'error')
+      notify.toast('Could not load image data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -58,16 +71,20 @@ export function ImageSection() {
         ])
         if (active) {
           setGallery(galleryRes?.images ?? [])
-          setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+          setStyles(
+            (stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })),
+          )
         }
       } catch {
-        if (active) addToast('Could not load image data', 'error')
+        if (active) notify.toast('Could not load image data', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
 
   const handleGenerate = async () => {
@@ -76,7 +93,10 @@ export function ImageSection() {
     setGenError(null)
     setLastGenerated(null)
     try {
-      const data = await apiPost<{ detail?: string; image?: string }>('/images/generate', { prompt, style: selectedStyle })
+      const data = await apiPost<{ detail?: string; image?: string }>('/images/generate', {
+        prompt,
+        style: selectedStyle,
+      })
       if (data.detail) {
         setGenError(data.detail)
         return
@@ -94,7 +114,9 @@ export function ImageSection() {
     <>
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
         <SectionLabel>Image Gallery</SectionLabel>
-        <span className="text-xs text-muted-foreground">{loading ? 'Loading' : `${gallery.length} images generated`}</span>
+        <span className="text-xs text-muted-foreground">
+          {loading ? 'Loading' : `${gallery.length} images generated`}
+        </span>
       </div>
 
       <ActionCard
@@ -106,35 +128,36 @@ export function ImageSection() {
         }
         contentClassName="space-y-3"
       >
-          <Textarea
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-            placeholder="Describe the image you want to generate..."
-            rows={2}
-          />
-          <div className="flex flex-wrap gap-2">
-            {styles.map(s => (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setSelectedStyle(s.key)}
-                className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', selectedStyle === s.key
-                    ? 'bg-primary/15 text-primary border border-primary/30'
-                    : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted')}
-              >
-                {s.name}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            <Button size="sm" onClick={handleGenerate} disabled={generating || !prompt.trim()}>
-              {generating ? 'Generating...' : 'Generate'}
-            </Button>
-            {lastGenerated && (
-              <span className="text-xs text-success">Generated</span>
-            )}
-          </div>
-          {genError && <StatusBanner variant="error" message={genError} dismissible={false} />}
+        <Textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Describe the image you want to generate..."
+          rows={2}
+        />
+        <div className="flex flex-wrap gap-2">
+          {styles.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setSelectedStyle(s.key)}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+                selectedStyle === s.key
+                  ? 'bg-primary/15 text-primary border border-primary/30'
+                  : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted',
+              )}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={handleGenerate} disabled={generating || !prompt.trim()}>
+            {generating ? 'Generating...' : 'Generate'}
+          </Button>
+          {lastGenerated && <span className="text-xs text-success">Generated</span>}
+        </div>
+        {genError && <StatusBanner variant="error" message={genError} dismissible={false} />}
       </ActionCard>
 
       {lastGenerated && (
@@ -143,7 +166,12 @@ export function ImageSection() {
             <CardTitle className="text-base">Last Generated</CardTitle>
           </CardHeader>
           <CardContent>
-            <img src={lastGenerated} alt="Generated" loading="lazy" className="w-full max-w-md rounded-md border border-border/60" />
+            <img
+              src={lastGenerated}
+              alt="Generated"
+              loading="lazy"
+              className="w-full max-w-md rounded-md border border-border/60"
+            />
           </CardContent>
         </Card>
       )}
@@ -157,8 +185,11 @@ export function ImageSection() {
             <p className="text-sm text-muted-foreground">No images generated yet.</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {gallery.map(img => (
-                <div key={img.id} className="rounded-md border border-border/60 overflow-hidden hover:border-border transition-colors">
+              {gallery.map((img) => (
+                <div
+                  key={img.id}
+                  className="rounded-md border border-border/60 overflow-hidden hover:border-border transition-colors"
+                >
                   <img
                     src={`${PUBLIC_API_URL}${img.path}`}
                     alt={img.id}

@@ -1,3 +1,4 @@
+import { useToastStore } from '@/lib/notify'
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -64,7 +65,6 @@ const mockAddToast = vi.fn()
 
 import { useTrainingSession } from './useTrainingSession'
 import { appShellStore } from '@/lib/app-shell'
-import { useToastStore } from '@/lib/toast-store'
 
 class MockEventSource {
   onmessage: ((e: MessageEvent) => void) | null = null
@@ -75,7 +75,7 @@ class MockEventSource {
   static OPEN = 1
   static CLOSED = 2
   constructor(public url: string) {
-    (globalThis as any).__lastES = this
+    ;(globalThis as any).__lastES = this
   }
   dispatchMessage(data: string) {
     this.onmessage?.(new MessageEvent('message', { data }))

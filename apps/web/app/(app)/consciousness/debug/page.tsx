@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -16,10 +17,14 @@ import {
   Skeleton,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { IconCode, IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface BusEvent {
   id: string
@@ -97,7 +102,6 @@ function formatJson(data: unknown): string {
 }
 
 export default function ConsciousnessDebugPage() {
-  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
 
   const [autoRefresh, setAutoRefresh] = useState(false)
@@ -204,13 +208,13 @@ export default function ConsciousnessDebugPage() {
       timestamp: Date.now(),
     }
     setEvents((prev) => [newEvent, ...prev].slice(0, 50))
-    addToast(t('consciousness_debug.toast_subscribed'), 'success')
-  }, [eventInput, addToast, t])
+    notify.toast(t('consciousness_debug.toast_subscribed'), { type: 'success' })
+  }, [eventInput, t])
 
   const clearEvents = useCallback(() => {
     setEvents([])
-    addToast(t('consciousness_debug.toast_events_cleared'), 'success')
-  }, [addToast, t])
+    notify.toast(t('consciousness_debug.toast_events_cleared'), { type: 'success' })
+  }, [t])
 
   const handleConsoleExecute = useCallback(async () => {
     if (!consoleInput.trim()) return
@@ -284,22 +288,22 @@ export default function ConsciousnessDebugPage() {
     try {
       const res = await authFetch('/consciousness/reset', { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      addToast(t('consciousness_debug.toast_reset'), 'success')
+      notify.toast(t('consciousness_debug.toast_reset'), { type: 'success' })
       fetchAllStates()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [fetchAllStates, addToast, t])
+  }, [fetchAllStates, t])
 
   const handleSeed = useCallback(async () => {
     try {
       await consciousnessController.seedData({ count: 5 })
-      addToast(t('consciousness_debug.toast_seeded'), 'success')
+      notify.toast(t('consciousness_debug.toast_seeded'), { type: 'success' })
       fetchAllStates()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [fetchAllStates, addToast, t])
+  }, [fetchAllStates, t])
 
   const handleExportLog = useCallback(() => {
     const log = {
@@ -318,8 +322,8 @@ export default function ConsciousnessDebugPage() {
     a.download = `consciousness-debug-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast(t('consciousness_debug.toast_exported'), 'success')
-  }, [events, consoleOutput, stateData, healthData, evalData, lastError, addToast, t])
+    notify.toast(t('consciousness_debug.toast_exported'), { type: 'success' })
+  }, [events, consoleOutput, stateData, healthData, evalData, lastError, t])
 
   const handleClearAll = useCallback(() => {
     setStateData({})
@@ -328,8 +332,8 @@ export default function ConsciousnessDebugPage() {
     setHealthData(null)
     setEvalData(null)
     setLastError(null)
-    addToast(t('consciousness_debug.toast_cleared'), 'success')
-  }, [addToast, t])
+    notify.toast(t('consciousness_debug.toast_cleared'), { type: 'success' })
+  }, [t])
 
   useEffect(() => {
     aliveRef.current = true

@@ -75,11 +75,18 @@ vi.mock('@/lib/backend-retry', () => ({ probeBackendAndRevalidate: vi.fn() }))
 vi.mock('@/lib/api-monitor-store', () => ({
   useApiMonitor: (sel?: any) => (sel ? sel({ status: 'connected' }) : { status: 'connected' }),
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: Object.assign((sel?: any) => (sel ? sel({ toasts: [] }) : { toasts: [] }), {
-    getState: () => ({ toasts: [] }),
-  }),
-}))
+vi.mock('@/lib/notify', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/notify')>()
+  return {
+    ...actual,
+    // Banner side stays REAL (single shared slot between AppLayout's writes and
+    // GlobalBanner's reads); only the toast surface is stubbed.
+    notify: { ...actual.notify, toast: vi.fn() },
+    useToastStore: Object.assign((sel?: any) => (sel ? sel({ toasts: [] }) : { toasts: [] }), {
+      getState: () => ({ toasts: [] }),
+    }),
+  }
+})
 vi.mock('@/lib/store', () => ({
   useAppStore: Object.assign((sel?: any) => (sel ? sel({ settings: {} }) : { settings: {} }), {
     getState: () => ({ settings: {} }),
@@ -157,9 +164,7 @@ describe('journey: boot with interrupted job -> notify -> Recover', () => {
 
     await waitFor(() => expect(mockRecover).toHaveBeenCalledWith('job-42'))
     // Dispatched confirmation renders (state change is server's to confirm).
-    expect(
-      await screen.findByText(/dispatched/i),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/dispatched/i)).toBeInTheDocument()
   })
 
   it('an empty snapshot renders no dock at all', async () => {
@@ -168,9 +173,7 @@ describe('journey: boot with interrupted job -> notify -> Recover', () => {
     render(<AppLayout>content</AppLayout>)
 
     await waitFor(() => expect(mockApiGet).toHaveBeenCalledWith('/recovery/events'))
-    expect(
-      screen.queryByLabelText('Process notifications'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Process notifications')).not.toBeInTheDocument()
   })
 
   it('a snapshot outage never blocks the layout from rendering', async () => {
@@ -180,8 +183,6 @@ describe('journey: boot with interrupted job -> notify -> Recover', () => {
 
     await waitFor(() => expect(mockApiGet).toHaveBeenCalled())
     expect(screen.getByTestId('status-bar')).toBeInTheDocument()
-    expect(
-      screen.queryByLabelText('Process notifications'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Process notifications')).not.toBeInTheDocument()
   })
 })

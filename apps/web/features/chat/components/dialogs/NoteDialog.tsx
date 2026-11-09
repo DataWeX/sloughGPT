@@ -1,9 +1,16 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useRef, memo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogPortal,
+  DialogOverlay,
+} from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 
 interface NoteDialogProps {
   open: boolean
@@ -13,10 +20,15 @@ interface NoteDialogProps {
   onDelete?: () => void
 }
 
-export const NoteDialog = memo(function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteDialogProps) {
+export const NoteDialog = memo(function NoteDialog({
+  open,
+  onOpenChange,
+  note,
+  onSave,
+  onDelete,
+}: NoteDialogProps) {
   const [draft, setDraft] = useState(note)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
     setDraft(note)
@@ -30,13 +42,13 @@ export const NoteDialog = memo(function NoteDialog({ open, onOpenChange, note, o
 
   const handleSave = () => {
     onSave(draft.trim())
-    addToast('Note saved', 'success')
+    notify.toast('Note saved', { type: 'success' })
     onOpenChange(false)
   }
 
   const handleDelete = () => {
     onDelete?.()
-    addToast('Note deleted', 'success')
+    notify.toast('Note deleted', { type: 'success' })
     onOpenChange(false)
   }
 
@@ -77,14 +89,23 @@ export const NoteDialog = memo(function NoteDialog({ open, onOpenChange, note, o
             <div className="flex items-center justify-between gap-2">
               <div>
                 {note && onDelete && (
-                  <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDelete}
+                    className="text-destructive hover:text-destructive"
+                  >
                     Delete note
                   </Button>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
-                <Button size="sm" onClick={handleSave}>Save</Button>
+                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSave}>
+                  Save
+                </Button>
               </div>
             </div>
           </div>

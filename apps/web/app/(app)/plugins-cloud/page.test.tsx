@@ -4,14 +4,16 @@ import userEvent from '@testing-library/user-event'
 
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
-const mockAddToast = vi.fn()
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
 
 vi.mock('@/lib/http-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 
@@ -167,7 +169,7 @@ describe('PluginsCloudPage', () => {
       provider: 'local',
       dataset_id: 'my-dataset',
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Job submitted', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Job submitted', { type: 'success' })
   })
 
   it('shows error toast when job submission fails', async () => {
@@ -180,7 +182,7 @@ describe('PluginsCloudPage', () => {
     const input = screen.getByPlaceholderText('e.g. my-dataset')
     await user.type(input, 'my-dataset')
     await user.click(screen.getByText('Submit Job'))
-    expect(mockAddToast).toHaveBeenCalledWith('Failed to submit', 'error')
+    expect(mockAddToast).toHaveBeenCalledWith('Failed to submit', { type: 'error' })
   })
 
   it('disables submit button when dataset ID is empty', async () => {

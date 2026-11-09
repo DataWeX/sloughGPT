@@ -18,32 +18,55 @@ vi.mock('@/lib/vector-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+    selector({ addToast: vi.fn() }),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: (...a: any[]) => a.join(' '),
-    Button: ({ children, onClick, disabled, variant }: any) => <button onClick={onClick} disabled={disabled} data-variant={variant}>{children}</button>,
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Button: ({ children, onClick, disabled, variant }: any) => (
+      <button onClick={onClick} disabled={disabled} data-variant={variant}>
+        {children}
+      </button>
+    ),
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
-    Input: ({ value, onChange, placeholder, onKeyDown }: any) => <input value={value} onChange={onChange} placeholder={placeholder} onKeyDown={onKeyDown} />,
-    StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    Input: ({ value, onChange, placeholder, onKeyDown }: any) => (
+      <input value={value} onChange={onChange} placeholder={placeholder} onKeyDown={onKeyDown} />
+    ),
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={`stat-${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span data-testid="icon-refresh" />,
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -70,12 +93,16 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title, subtitle }: any) => (
-    <div data-testid="page-container"><h1>{title}</h1><p>{subtitle}</p>{children}</div>
+    <div data-testid="page-container">
+      <h1>{title}</h1>
+      <p>{subtitle}</p>
+      {children}
+    </div>
   ),
 }))
 
@@ -130,7 +157,10 @@ describe('VectorPage', () => {
 
   it('searches vector store', async () => {
     mockGetStats.mockResolvedValue({ provider: 'in_memory', count: 5 })
-    mockSearch.mockResolvedValue({ results: [{ text: 'found', score: 0.95, id: '1' }], elapsed_ms: 3 })
+    mockSearch.mockResolvedValue({
+      results: [{ text: 'found', score: 0.95, id: '1' }],
+      elapsed_ms: 3,
+    })
     render(<VectorPage />)
     await screen.findByText('Active')
 

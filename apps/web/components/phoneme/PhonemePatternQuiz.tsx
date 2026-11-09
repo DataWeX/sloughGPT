@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@sloughgpt/strui'
@@ -8,9 +9,13 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import PhonemeSkeleton from './PhonemeSkeleton'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const PATTERNS = [
   { pattern: 'CVC', label: 'Consonant-Vowel-Consonant', examples: ['cat', 'dog', 'run'] },
@@ -73,7 +78,6 @@ export default function PhonemePatternQuiz() {
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const generateQuestion = useCallback(async () => {
     const patternPool = PATTERNS[Math.floor(Math.random() * PATTERNS.length)]
@@ -98,9 +102,9 @@ export default function PhonemePatternQuiz() {
       })
       setGameState('playing')
     } catch {
-      addToast('Failed to encode word', 'error')
+      notify.toast('Failed to encode word', { type: 'error' })
     }
-  }, [language, addToast])
+  }, [language])
 
   const startGame = useCallback(() => {
     setScore(0)
@@ -132,14 +136,14 @@ export default function PhonemePatternQuiz() {
         language,
       })
 
-      addToast(
+      notify.toast(
         isCorrect
           ? `Correct! ${question.word} is ${question.correctPattern}`
           : `The pattern was ${question.correctPattern}`,
-        isCorrect ? 'success' : 'error',
+        { type: isCorrect ? 'success' : 'error' },
       )
     },
-    [question, language, addToHistory, addToast],
+    [question, language, addToHistory],
   )
 
   return (

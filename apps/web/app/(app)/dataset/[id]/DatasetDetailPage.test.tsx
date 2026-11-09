@@ -182,7 +182,9 @@ vi.mock('@/lib/dataset-controller', () => ({
     convertToMessages: mockConvertToMessages,
   },
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 vi.mock('@/components/DatasetPreview', () => ({ DatasetPreview: () => null }))
@@ -486,7 +488,7 @@ describe('DatasetDetailPage', () => {
       screen.getByRole('button', { name: /Convert to chat format/ }).click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not conversion', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not conversion', { type: 'error' })
     })
     await waitFor(() => {
       expect(screen.queryByText('Open converted dataset')).toBeFalsy()

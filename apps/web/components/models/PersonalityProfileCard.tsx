@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
@@ -8,7 +9,6 @@ import { IconPlus } from '@sloughgpt/strui'
 import SoulVisualizer from '@/components/souls/SoulVisualizer'
 import TraitEditor from '@/components/souls/TraitEditor'
 import { soulsController } from '@/lib/souls-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { formatMonthDay } from '@/lib/time-format'
 
@@ -31,7 +31,6 @@ export default function PersonalityProfileCard({
   onTraitsSaved,
   onTraitsChanged,
 }: PersonalityProfileCardProps) {
-  const addToast = useToastStore((s) => s.addToast)
   const [editingTraits, setEditingTraits] = useState(false)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [snapshotName, setSnapshotName] = useState('')
@@ -41,7 +40,7 @@ export default function PersonalityProfileCard({
       const list = await soulsController.listWeightSnapshots()
       setSnapshots(list)
     } catch {
-      addToast('Could not load weight snapshots', 'info')
+      notify.toast('Could not load weight snapshots', { type: 'info' })
     }
   }
 
@@ -51,20 +50,20 @@ export default function PersonalityProfileCard({
     try {
       await soulsController.saveWeightSnapshot(name)
       setSnapshotName('')
-      addToast(`Saved "${name}"`, 'success')
+      notify.toast(`Saved "${name}"`, { type: 'success' })
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not save'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not save'), { type: 'error' })
     }
   }
 
   const handleLoadSnapshot = async (name: string) => {
     try {
       const count = await soulsController.loadWeightSnapshot(name)
-      addToast(`Loaded "${name}" (${count} traits)`, 'success')
+      notify.toast(`Loaded "${name}" (${count} traits)`, { type: 'success' })
       await onTraitsChanged()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not load'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not load'), { type: 'error' })
     }
   }
 
@@ -72,10 +71,10 @@ export default function PersonalityProfileCard({
     if (!confirm(`Delete snapshot "${name}"? This cannot be undone.`)) return
     try {
       await soulsController.deleteWeightSnapshot(name)
-      addToast(`Deleted "${name}"`, 'success')
+      notify.toast(`Deleted "${name}"`, { type: 'success' })
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not delete'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not delete'), { type: 'error' })
     }
   }
 

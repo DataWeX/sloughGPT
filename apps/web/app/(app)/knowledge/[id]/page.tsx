@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -8,7 +9,6 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
 import { knowledgeController, type KnowledgeItem } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { formatDate } from '@/lib/conversations-utils'
 import {
   ArrowLeft,
@@ -22,6 +22,11 @@ import {
   BarChart3,
   Lightbulb,
 } from 'lucide-react'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const TOPIC_COLORS: Record<string, string> = {
   personal: 'bg-info/15 text-info dark:bg-info/15 text-info',
@@ -37,7 +42,6 @@ export default function KnowledgeDetailPage() {
   const params = useParams()
   const router = useRouter()
   const itemId = params.id as string
-  const addToast = useToastStore((s) => s.addToast)
 
   const [item, setItem] = useState<KnowledgeItem | null>(null)
   const [loading, setLoading] = useState(true)
@@ -59,15 +63,15 @@ export default function KnowledgeDetailPage() {
         if (found) {
           setItem(found)
         } else {
-          addToast('Knowledge item not found', 'error')
+          notify.toast('Knowledge item not found', { type: 'error' })
         }
       }
     } catch {
-      addToast('Failed to load knowledge item', 'error')
+      notify.toast('Failed to load knowledge item', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [itemId, addToast])
+  }, [itemId])
 
   useEffect(() => {
     fetchItem()
@@ -83,9 +87,9 @@ export default function KnowledgeDetailPage() {
       })
       setItem({ ...item, content: editContent, topic: editTopic })
       setEditing(false)
-      addToast('Updated', 'success')
+      notify.toast('Updated', { type: 'success' })
     } catch {
-      addToast('Update failed', 'error')
+      notify.toast('Update failed', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -95,10 +99,10 @@ export default function KnowledgeDetailPage() {
     if (!item) return
     try {
       await knowledgeController.delete(item.id)
-      addToast('Deleted', 'success')
+      notify.toast('Deleted', { type: 'success' })
       router.push('/knowledge')
     } catch {
-      addToast('Delete failed', 'error')
+      notify.toast('Delete failed', { type: 'error' })
     }
   }
 

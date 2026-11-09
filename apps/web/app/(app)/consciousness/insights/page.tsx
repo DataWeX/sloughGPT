@@ -1,15 +1,27 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { IconSparkle, IconRefresh, IconDownload } from '@/components/icons/NavIcons'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Insight {
   id: string
@@ -24,10 +36,11 @@ interface Insight {
 const QUALIA_DIMS = ['valence', 'arousal', 'novelty', 'coherence'] as const
 const BELIEF_DIMS = ['competence', 'helpfulness', 'creativity', 'accuracy', 'empathy'] as const
 
-function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)) }
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v))
+}
 
 export default function ConsciousnessInsightsPage() {
-  const addToast = useToastStore(state => state.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -41,13 +54,14 @@ export default function ConsciousnessInsightsPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [epResult, healthResult, evalResult, personalityResult, statsResult] = await Promise.allSettled([
-        consciousnessController.getEpisodeHistory(100),
-        consciousnessController.healthCheck(),
-        consciousnessController.evaluate(),
-        consciousnessController.getPersonality(),
-        (await import('@/lib/http-client')).apiGet('/consciousness/stats') as any,
-      ])
+      const [epResult, healthResult, evalResult, personalityResult, statsResult] =
+        await Promise.allSettled([
+          consciousnessController.getEpisodeHistory(100),
+          consciousnessController.healthCheck(),
+          consciousnessController.evaluate(),
+          consciousnessController.getPersonality(),
+          (await import('@/lib/http-client')).apiGet('/consciousness/stats') as any,
+        ])
 
       if (epResult.status === 'fulfilled') {
         setEpisodes((epResult.value as any)?.episodes ?? [])
@@ -65,14 +79,16 @@ export default function ConsciousnessInsightsPage() {
         setStatsData(statsResult.value)
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [addToast])
+  }, [])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true)
@@ -85,8 +101,11 @@ export default function ConsciousnessInsightsPage() {
     if (episodes.length >= 2) {
       const growths = episodes.map((e: any) => e.growth_delta)
       const half = Math.floor(growths.length / 2)
-      const firstHalf = growths.slice(0, half).reduce((a: number, b: number) => a + b, 0) / (half || 1)
-      const secondHalf = growths.slice(half).reduce((a: number, b: number) => a + b, 0) / ((growths.length - half) || 1)
+      const firstHalf =
+        growths.slice(0, half).reduce((a: number, b: number) => a + b, 0) / (half || 1)
+      const secondHalf =
+        growths.slice(half).reduce((a: number, b: number) => a + b, 0) /
+        (growths.length - half || 1)
       const improving = secondHalf > firstHalf + 0.005
       const declining = secondHalf < firstHalf - 0.005
       const trend = improving ? 'improving' : declining ? 'declining' : 'stable'
@@ -98,13 +117,13 @@ export default function ConsciousnessInsightsPage() {
         description: improving
           ? t('consciousness_insights.growth_improving')
           : declining
-          ? t('consciousness_insights.growth_declining')
-          : t('consciousness_insights.growth_stable'),
+            ? t('consciousness_insights.growth_declining')
+            : t('consciousness_insights.growth_stable'),
         suggestion: improving
           ? t('consciousness_insights.growth_improving_suggest')
           : declining
-          ? t('consciousness_insights.growth_declining_suggest')
-          : t('consciousness_insights.growth_stable_suggest'),
+            ? t('consciousness_insights.growth_declining_suggest')
+            : t('consciousness_insights.growth_stable_suggest'),
         detail: `${t('consciousness_insights.growth_first_half')}: ${(firstHalf * 100).toFixed(2)}% → ${t('consciousness_insights.growth_second_half')}: ${(secondHalf * 100).toFixed(2)}%`,
         score: improving ? 90 : declining ? 40 : 70,
       })
@@ -119,12 +138,14 @@ export default function ConsciousnessInsightsPage() {
         id: 'qualia-balance',
         title: t('consciousness_insights.qualia_balance'),
         severity: dormantDims.length > 2 ? 'warning' : 'success',
-        description: dormantDims.length > 0
-          ? `${t('consciousness_insights.qualia_dormant')}: ${dormantDims.join(', ')}`
-          : t('consciousness_insights.qualia_all_active'),
-        suggestion: dormantDims.length > 0
-          ? t('consciousness_insights.qualia_suggest')
-          : t('consciousness_insights.qualia_maintain'),
+        description:
+          dormantDims.length > 0
+            ? `${t('consciousness_insights.qualia_dormant')}: ${dormantDims.join(', ')}`
+            : t('consciousness_insights.qualia_all_active'),
+        suggestion:
+          dormantDims.length > 0
+            ? t('consciousness_insights.qualia_suggest')
+            : t('consciousness_insights.qualia_maintain'),
         detail: `${t('consciousness_insights.qualia_active')}: ${activeDims.join(', ') || '—'} | ${t('consciousness_insights.qualia_dormant')}: ${dormantDims.join(', ') || '—'}`,
         score: dormantDims.length > 2 ? 45 : 85,
       })
@@ -132,8 +153,14 @@ export default function ConsciousnessInsightsPage() {
 
     if (healthData) {
       const beliefs = healthData.qualia ?? {}
-      const avgBelief = BELIEF_DIMS.reduce((sum: number, d: string) => sum + (beliefs[d] ?? 0.5), 0) / BELIEF_DIMS.length
-      const variance = BELIEF_DIMS.reduce((sum: number, d: string) => sum + Math.pow((beliefs[d] ?? 0.5) - avgBelief, 2), 0) / BELIEF_DIMS.length
+      const avgBelief =
+        BELIEF_DIMS.reduce((sum: number, d: string) => sum + (beliefs[d] ?? 0.5), 0) /
+        BELIEF_DIMS.length
+      const variance =
+        BELIEF_DIMS.reduce(
+          (sum: number, d: string) => sum + Math.pow((beliefs[d] ?? 0.5) - avgBelief, 2),
+          0,
+        ) / BELIEF_DIMS.length
       const stable = variance < 0.02
 
       insights.push({
@@ -203,29 +230,31 @@ export default function ConsciousnessInsightsPage() {
         id: 'episode-diversity',
         title: t('consciousness_insights.episode_diversity'),
         severity: diversity > 0.7 ? 'success' : diversity > 0.4 ? 'info' : 'warning',
-        description: diversity > 0.7
-          ? t('consciousness_insights.diversity_high')
-          : diversity > 0.4
-          ? t('consciousness_insights.diversity_moderate')
-          : t('consciousness_insights.diversity_low'),
-        suggestion: diversity < 0.7
-          ? t('consciousness_insights.diversity_suggest')
-          : t('consciousness_insights.diversity_maintain'),
+        description:
+          diversity > 0.7
+            ? t('consciousness_insights.diversity_high')
+            : diversity > 0.4
+              ? t('consciousness_insights.diversity_moderate')
+              : t('consciousness_insights.diversity_low'),
+        suggestion:
+          diversity < 0.7
+            ? t('consciousness_insights.diversity_suggest')
+            : t('consciousness_insights.diversity_maintain'),
         detail: `${t('consciousness_insights.diversity_unique')}: ${unique}/${inputs.length} (${(diversity * 100).toFixed(0)}%)`,
         score: clamp(diversity * 100, 0, 100),
       })
     }
 
-    const lowScoreInsights = insights.filter(i => i.score < 60)
+    const lowScoreInsights = insights.filter((i) => i.score < 60)
     if (lowScoreInsights.length > 0) {
       insights.push({
         id: 'recommendation',
         title: t('consciousness_insights.recommendation'),
         severity: lowScoreInsights.length > 2 ? 'warning' : 'info',
         description: t('consciousness_insights.recommendation_desc'),
-        suggestion: lowScoreInsights.map(i => i.suggestion).join('; '),
-        detail: lowScoreInsights.map(i => `${i.title}: ${i.score}/100`).join(' | '),
-        score: Math.max(...lowScoreInsights.map(i => i.score)),
+        suggestion: lowScoreInsights.map((i) => i.suggestion).join('; '),
+        detail: lowScoreInsights.map((i) => `${i.title}: ${i.score}/100`).join(' | '),
+        score: Math.max(...lowScoreInsights.map((i) => i.score)),
       })
     }
 
@@ -250,11 +279,11 @@ export default function ConsciousnessInsightsPage() {
       a.download = `consciousness-insights-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast(t('consciousness_insights.toast_exported'), 'success')
+      notify.toast(t('consciousness_insights.toast_exported'), { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [episodes, healthData, evalData, personalityData, statsData, computedInsights, addToast, t])
+  }, [episodes, healthData, evalData, personalityData, statsData, computedInsights, t])
 
   const overallScore = useMemo(() => {
     if (computedInsights.length === 0) return 0
@@ -265,9 +294,15 @@ export default function ConsciousnessInsightsPage() {
     if (episodes.length < 4) return 'stable'
     const growths = episodes.map((e: any) => e.growth_delta)
     const half = Math.floor(growths.length / 2)
-    const firstHalf = growths.slice(0, half).reduce((a: number, b: number) => a + b, 0) / (half || 1)
-    const secondHalf = growths.slice(half).reduce((a: number, b: number) => a + b, 0) / ((growths.length - half) || 1)
-    return secondHalf > firstHalf + 0.005 ? 'up' : secondHalf < firstHalf - 0.005 ? 'down' : 'stable'
+    const firstHalf =
+      growths.slice(0, half).reduce((a: number, b: number) => a + b, 0) / (half || 1)
+    const secondHalf =
+      growths.slice(half).reduce((a: number, b: number) => a + b, 0) / (growths.length - half || 1)
+    return secondHalf > firstHalf + 0.005
+      ? 'up'
+      : secondHalf < firstHalf - 0.005
+        ? 'down'
+        : 'stable'
   }, [episodes])
 
   if (loading) {
@@ -298,14 +333,30 @@ export default function ConsciousnessInsightsPage() {
           <div className="flex items-center gap-3">
             <Card className="px-4 py-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{t('consciousness_insights.overall_score')}</span>
-                <span className={`text-2xl font-bold ${
-                  overallScore > 70 ? 'text-success' : overallScore > 40 ? 'text-warning' : 'text-destructive'
-                }`}>{overallScore}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t('consciousness_insights.overall_score')}
+                </span>
+                <span
+                  className={`text-2xl font-bold ${
+                    overallScore > 70
+                      ? 'text-success'
+                      : overallScore > 40
+                        ? 'text-warning'
+                        : 'text-destructive'
+                  }`}
+                >
+                  {overallScore}
+                </span>
                 <span className="text-xs text-muted-foreground">/100</span>
-                <span className={`text-xs ${
-                  scoreTrend === 'up' ? 'text-success' : scoreTrend === 'down' ? 'text-destructive' : 'text-muted-foreground'
-                }`}>
+                <span
+                  className={`text-xs ${
+                    scoreTrend === 'up'
+                      ? 'text-success'
+                      : scoreTrend === 'down'
+                        ? 'text-destructive'
+                        : 'text-muted-foreground'
+                  }`}
+                >
                   {scoreTrend === 'up' ? '↑' : scoreTrend === 'down' ? '↓' : '→'}
                 </span>
               </div>
@@ -324,7 +375,7 @@ export default function ConsciousnessInsightsPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {computedInsights.map(insight => (
+          {computedInsights.map((insight) => (
             <Card
               key={insight.id}
               className="cursor-pointer transition-colors hover:bg-muted/50"
@@ -338,7 +389,13 @@ export default function ConsciousnessInsightsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
-                      variant={insight.severity === 'success' ? 'default' : insight.severity === 'warning' ? 'outline' : 'secondary'}
+                      variant={
+                        insight.severity === 'success'
+                          ? 'default'
+                          : insight.severity === 'warning'
+                            ? 'outline'
+                            : 'secondary'
+                      }
                       className="text-[10px]"
                     >
                       {insight.severity}

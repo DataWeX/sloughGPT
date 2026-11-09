@@ -54,7 +54,9 @@ const mockProfile = {
 
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://localhost:8000' }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => typeof mockAddToast) =>
     selector({ addToast: mockAddToast }),
 }))
@@ -286,7 +288,7 @@ describe('PersonalityPage', () => {
       }),
     )
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Personality saved', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Personality saved', { type: 'success' })
     })
   })
 
@@ -298,7 +300,9 @@ describe('PersonalityPage', () => {
     })
     expect(consciousnessController.resetPersonality).toHaveBeenCalled()
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Personality reset to defaults', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Personality reset to defaults', {
+        type: 'success',
+      })
     })
   })
 
@@ -350,7 +354,7 @@ describe('PersonalityPage', () => {
       }),
     )
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Persona saved', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Persona saved', { type: 'success' })
     })
   })
 
@@ -362,7 +366,7 @@ describe('PersonalityPage', () => {
     })
     expect(consciousnessController.activatePersona).toHaveBeenCalledWith('p1')
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Persona activated', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Persona activated', { type: 'success' })
     })
   })
 
@@ -375,7 +379,7 @@ describe('PersonalityPage', () => {
     })
     expect(consciousnessController.deletePersona).toHaveBeenCalledWith('p1')
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Persona deleted', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Persona deleted', { type: 'success' })
     })
   })
 

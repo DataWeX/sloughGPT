@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
@@ -29,7 +30,6 @@ import { TokenTreeMergesCard } from '@/components/tokenizer/TokenTreeMergesCard'
 import { TokenTreeVocabCard } from '@/components/tokenizer/TokenTreeVocabCard'
 import { TokenTreeTrainCard } from '@/components/tokenizer/TokenTreeTrainCard'
 import { TokenTreePersistenceCard } from '@/components/tokenizer/TokenTreePersistenceCard'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'play' | 'vocab' | 'train'
@@ -53,7 +53,6 @@ export default function TokenizerPage() {
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
-  const addToast = useToastStore((s) => s.addToast)
   const loadStats = useCallback(() => {
     setLoading(true)
     setLoadError(null)
@@ -83,7 +82,7 @@ export default function TokenizerPage() {
       const res = await tokenizerController.tokenize(inputText)
       setTokenResult(res)
     } catch {
-      addToast('Could not tokenize', 'error')
+      notify.toast('Could not tokenize', { type: 'error' })
     } finally {
       setTokenizing(false)
     }
@@ -95,7 +94,7 @@ export default function TokenizerPage() {
       setVocabTotal(res.total)
       setVocabOffset(offset)
     } catch {
-      addToast('Could not load vocabulary', 'error')
+      notify.toast('Could not load vocabulary', { type: 'error' })
     }
   }
   const handleLoadSamples = async () => {
@@ -103,7 +102,7 @@ export default function TokenizerPage() {
       const res = await tokenizerController.getSamples()
       setSamples(res.samples)
     } catch {
-      addToast('Could not load samples', 'error')
+      notify.toast('Could not load samples', { type: 'error' })
     }
   }
   const handleTrain = async () => {

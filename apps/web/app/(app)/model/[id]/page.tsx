@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -7,7 +8,6 @@ import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } fro
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
-import { useToastStore } from '@/lib/toast-store'
 import { modelDisplayName } from '@/lib/inference-display'
 import {
   ArrowLeft,
@@ -21,6 +21,11 @@ import {
   Settings,
   ExternalLink,
 } from 'lucide-react'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface ModelDetail {
   model_id: string
@@ -56,7 +61,6 @@ export default function ModelDetailPage() {
   const params = useParams()
   const router = useRouter()
   const modelId = params.id as string
-  const addToast = useToastStore((s) => s.addToast)
 
   const [model, setModel] = useState<ModelDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -67,11 +71,11 @@ export default function ModelDetailPage() {
       const data = await apiGet<ModelDetail>(`/registry/models/${modelId}`)
       setModel(data)
     } catch {
-      addToast('Failed to load model details', 'error')
+      notify.toast('Failed to load model details', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [modelId, addToast])
+  }, [modelId])
 
   useEffect(() => {
     fetchModel()

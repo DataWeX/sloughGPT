@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
@@ -16,7 +17,6 @@ import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { ImagesPanel } from '@/components/images/ImagesPanel'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function FilesPage() {
@@ -32,7 +32,6 @@ export default function FilesPage() {
   const [previewFile, setPreviewFile] = useState<FileDetail | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const addToast = useToastStore((s) => s.addToast)
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -63,7 +62,7 @@ export default function FilesPage() {
       setUploadMsg(`Uploaded ${data.filename ?? file.name}`)
       await fetchFiles()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not upload', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not upload', { type: 'error' })
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -75,7 +74,7 @@ export default function FilesPage() {
       await filesController.delete(id)
       await fetchFiles()
     } catch {
-      addToast('Could not delete file', 'error')
+      notify.toast('Could not delete file', { type: 'error' })
     }
   }
 
@@ -85,7 +84,7 @@ export default function FilesPage() {
       await filesController.ingest(id)
       await fetchFiles()
     } catch {
-      addToast('Could not index file', 'error')
+      notify.toast('Could not index file', { type: 'error' })
     } finally {
       setIngesting(null)
     }
@@ -99,7 +98,7 @@ export default function FilesPage() {
     try {
       setFiles(await filesController.search(searchQuery))
     } catch {
-      addToast('Could not search files', 'error')
+      notify.toast('Could not search files', { type: 'error' })
     }
   }
 
@@ -127,9 +126,9 @@ export default function FilesPage() {
       await filesController.deleteBatch(Array.from(selected))
       setSelected(new Set())
       await fetchFiles()
-      addToast(`Deleted ${selected.size} files`, 'success')
+      notify.toast(`Deleted ${selected.size} files`, { type: 'success' })
     } catch {
-      addToast('Could not batch delete', 'error')
+      notify.toast('Could not batch delete', { type: 'error' })
     } finally {
       setBatchDeleting(false)
     }
@@ -151,7 +150,7 @@ export default function FilesPage() {
       const detail = await filesController.getDetail(file.id)
       setPreviewFile(detail)
     } catch {
-      addToast('Could not load file preview', 'error')
+      notify.toast('Could not load file preview', { type: 'error' })
     } finally {
       setPreviewLoading(false)
     }

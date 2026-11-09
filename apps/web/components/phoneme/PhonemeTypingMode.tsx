@@ -1,12 +1,17 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { toIPA } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeReference from './PhonemeReference'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const PHONEMES = [
   'IY',
@@ -64,7 +69,6 @@ export default function PhonemeTypingMode() {
   const [total, setTotal] = useState(0)
   const [showRef, setShowRef] = useState(false)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const generateChallenge = useCallback(() => {
     const count = 3 + Math.floor(Math.random() * 3)
@@ -106,11 +110,10 @@ export default function PhonemeTypingMode() {
       language: 'en',
     })
 
-    addToast(
-      isCorrect ? 'Correct!' : `Expected: ${challenge.phonemes.join(' ')}`,
-      isCorrect ? 'success' : 'error',
-    )
-  }, [challenge, userInput, addToHistory, addToast])
+    notify.toast(isCorrect ? 'Correct!' : `Expected: ${challenge.phonemes.join(' ')}`, {
+      type: isCorrect ? 'success' : 'error',
+    })
+  }, [challenge, userInput, addToHistory])
 
   const insertPhoneme = useCallback((phoneme: string) => {
     setUserInput((prev) => (prev ? `${prev} ${phoneme}` : phoneme))

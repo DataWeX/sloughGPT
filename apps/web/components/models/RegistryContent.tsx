@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -21,8 +22,12 @@ import {
   type RegistryStats,
 } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
-import { useToastStore } from '@/lib/toast-store'
 import { formatLocaleDate } from '@/lib/time-format'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export default function RegistryContent() {
   const [models, setModels] = useState<RegisteredModel[]>([])
@@ -31,17 +36,16 @@ export default function RegistryContent() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
 
   const fetchData = useCallback(async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
         registryController.list().catch((e) => {
-          addToast('Could not load models', 'error')
+          notify.toast('Could not load models', { type: 'error' })
           return []
         }),
         registryController.stats().catch((e) => {
-          addToast('Could not load registry stats', 'error')
+          notify.toast('Could not load registry stats', { type: 'error' })
           return null
         }),
         registryController.best().catch(() => null),
@@ -50,11 +54,11 @@ export default function RegistryContent() {
       setStats(statsRes)
       setBestModel(bestRes)
     } catch {
-      addToast('Could not load registry data', 'error')
+      notify.toast('Could not load registry data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -62,11 +66,11 @@ export default function RegistryContent() {
       try {
         const [modelsRes, statsRes, bestRes] = await Promise.all([
           registryController.list().catch((e) => {
-            addToast('Could not load models', 'error')
+            notify.toast('Could not load models', { type: 'error' })
             return []
           }),
           registryController.stats().catch((e) => {
-            addToast('Could not load registry stats', 'error')
+            notify.toast('Could not load registry stats', { type: 'error' })
             return null
           }),
           registryController.best().catch(() => null),
@@ -77,7 +81,7 @@ export default function RegistryContent() {
           setBestModel(bestRes)
         }
       } catch {
-        if (active) addToast('Could not load registry data', 'error')
+        if (active) notify.toast('Could not load registry data', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }

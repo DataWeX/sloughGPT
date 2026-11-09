@@ -13,7 +13,12 @@ vi.mock('@/lib/http-client', () => ({
 }))
 
 vi.mock('@/lib/auth', () => ({
-  useAuthStore: (selector?: (s: { currentWorkspace: { id: string } | null; switchWorkspace: (id: string) => void }) => unknown) => {
+  useAuthStore: (
+    selector?: (s: {
+      currentWorkspace: { id: string } | null
+      switchWorkspace: (id: string) => void
+    }) => unknown,
+  ) => {
     const state = {
       currentWorkspace: { id: 'ws-1' },
       switchWorkspace: vi.fn(),
@@ -22,7 +27,9 @@ vi.mock('@/lib/auth', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))
@@ -50,17 +57,33 @@ describe('MembersPage', () => {
 
   const mockMembers = {
     data: [
-      { user_id: 'u1', username: 'alice', email: 'alice@test.com', role: 'admin', joined_at: '2024-01-01T00:00:00Z' },
-      { user_id: 'u2', username: 'bob', email: 'bob@test.com', role: 'member', joined_at: '2024-02-01T00:00:00Z' },
-      { user_id: 'u3', username: 'carol', email: 'carol@test.com', role: 'viewer', joined_at: '2024-03-01T00:00:00Z' },
+      {
+        user_id: 'u1',
+        username: 'alice',
+        email: 'alice@test.com',
+        role: 'admin',
+        joined_at: '2024-01-01T00:00:00Z',
+      },
+      {
+        user_id: 'u2',
+        username: 'bob',
+        email: 'bob@test.com',
+        role: 'member',
+        joined_at: '2024-02-01T00:00:00Z',
+      },
+      {
+        user_id: 'u3',
+        username: 'carol',
+        email: 'carol@test.com',
+        role: 'viewer',
+        joined_at: '2024-03-01T00:00:00Z',
+      },
     ],
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApiGet
-      .mockResolvedValueOnce(mockWorkspaces)
-      .mockResolvedValue({ data: [] })
+    mockApiGet.mockResolvedValueOnce(mockWorkspaces).mockResolvedValue({ data: [] })
     mockApiPost.mockResolvedValue({})
     mockApiDelete.mockResolvedValue({})
   })

@@ -123,7 +123,9 @@ vi.mock('@/lib/feedback-conversations-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 
@@ -549,7 +551,7 @@ describe('FeedbackPage — workflow actions', () => {
       await act(async () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0])
       })
-      expect(mockAddToast).toHaveBeenCalledWith('Aggregation triggered', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Aggregation triggered', { type: 'success' })
     }
   })
 
@@ -572,7 +574,7 @@ describe('FeedbackPage — workflow actions', () => {
       await act(async () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0])
       })
-      expect(mockAddToast).toHaveBeenCalledWith('aggregation', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('aggregation', { type: 'error' })
     }
   })
 })

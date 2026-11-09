@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
@@ -21,9 +22,13 @@ import {
   IconCheckCircle,
 } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface MessageActionsProps {
   content: string
@@ -141,7 +146,6 @@ export const MessageActions = memo(function MessageActions({
       cancelled = true
     }
   }, [messageId])
-  const addToast = useToastStore((s) => s.addToast)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -207,11 +211,11 @@ export const MessageActions = memo(function MessageActions({
     try {
       await knowledgeController.add(content.slice(0, 500), 'chat-saved', true)
       setSavedToKnowledge(true)
-      addToast('Saved to knowledge', 'success')
+      notify.toast('Saved to knowledge', { type: 'success' })
     } catch {
-      addToast('Failed to save to knowledge', 'error')
+      notify.toast('Failed to save to knowledge', { type: 'error' })
     }
-  }, [content, savedToKnowledge, addToast])
+  }, [content, savedToKnowledge])
 
   const handleToggleReaction = useCallback(
     (emoji: string) => {

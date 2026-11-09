@@ -3,22 +3,24 @@ import { render, screen } from '@testing-library/react'
 import CustomWordList from './CustomWordList'
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: (selector: (state: unknown) => unknown) => selector({
-    history: [],
-  }),
+  usePhonemeStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      history: [],
+    }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 vi.mock('@/lib/phoneme-controller', () => ({
   phonemeController: { encode: vi.fn() },
-  PHONEME_LANGUAGES: [
-    { value: 'en', label: 'English' },
-  ],
+  PHONEME_LANGUAGES: [{ value: 'en', label: 'English' }],
 }))
 
 describe('CustomWordList', () => {

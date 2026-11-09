@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the Knowledge page.
@@ -13,7 +14,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
-import { useToastStore } from '@/lib/toast-store'
 import {
   knowledgeController,
   type KnowledgeItem,
@@ -34,10 +34,14 @@ import { knowledgeSchema } from '@/lib/validation-schemas'
 import { logger } from '@/lib/dev-log'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { SEARCH_DEBOUNCE_MS } from './knowledge-format'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function useKnowledgeWorkbench() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
   const [items, setItems] = useState<KnowledgeItem[]>([])
   const [stats, setStats] = useState<KnowledgeStats | null>(null)
   const [topics, setTopics] = useState<TopicCount[]>([])
@@ -97,11 +101,11 @@ export function useKnowledgeWorkbench() {
       setTopics(topicsResult.topics || [])
       if (adapterResult) setAdapterStatus(adapterResult)
     } catch {
-      addToast('Could not load knowledge', 'error')
+      notify.toast('Could not load knowledge', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useRefreshShortcut(fetchData)
 
@@ -115,7 +119,7 @@ export function useKnowledgeWorkbench() {
       setRagStats(s)
       setRagDocs(docs.documents || [])
     } catch {
-      addToast('Could not load deep memory data', 'error')
+      notify.toast('Could not load deep memory data', { type: 'error' })
     }
   }, [])
 
@@ -129,42 +133,44 @@ export function useKnowledgeWorkbench() {
       await clearRAG()
       setRagStats({ total_documents: 0, total_chunks: 0, index_size: 0 })
       setRagDocs([])
-      addToast('Deep memory index cleared', 'success')
+      notify.toast('Deep memory index cleared', { type: 'success' })
     } catch {
-      addToast('Could not clear deep memory index', 'error')
+      notify.toast('Could not clear deep memory index', { type: 'error' })
     } finally {
       setRagClearing(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleRAGSync = useCallback(async () => {
     setRagSyncing(true)
     try {
       const result = await syncKGToRAG()
-      addToast(`Synced ${result.total_triples} knowledge connections to deep memory`, 'success')
+      notify.toast(`Synced ${result.total_triples} knowledge connections to deep memory`, {
+        type: 'success',
+      })
       await fetchRAGData()
     } catch {
-      addToast('Could not sync to deep memory', 'error')
+      notify.toast('Could not sync to deep memory', { type: 'error' })
     } finally {
       setRagSyncing(false)
     }
-  }, [addToast, fetchRAGData])
+  }, [fetchRAGData])
 
   const handleTrainAdapter = useCallback(async () => {
     setAdapterTraining(true)
     try {
       const result = await knowledgeController.trainAdapter()
       setAdapterStatus(result.adapter_status)
-      addToast(
+      notify.toast(
         `Adapter trained on ${result.fact_count} facts in ${result.elapsed.toFixed(1)}s`,
-        'success',
+        { type: 'success' },
       )
     } catch {
-      addToast('Could not adapter training', 'error')
+      notify.toast('Could not adapter training', { type: 'error' })
     } finally {
       setAdapterTraining(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -196,9 +202,9 @@ export function useKnowledgeWorkbench() {
       const result = await knowledgeController.search(search)
       setSearchResults(result.results || [])
     } catch {
-      addToast('Could not search', 'error')
+      notify.toast('Could not search', { type: 'error' })
     }
-  }, [search, addToast])
+  }, [search])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -228,17 +234,20 @@ export function useKnowledgeWorkbench() {
     setPendingDelete(null)
     try {
       await knowledgeController.delete(deleted.id)
-      addToast('Deleted', 'info', undefined, () => {
-        setItems((prev) => [deleted, ...prev])
-        setStats((prev) => (prev ? { ...prev, total_items: prev.total_items + 1 } : prev))
-        knowledgeController.add(deleted.content, deleted.topic, false).catch(() => {
-          addToast('Could not restore item', 'error')
-        })
+      notify.toast('Deleted', {
+        type: 'info',
+        onUndo: () => {
+          setItems((prev) => [deleted, ...prev])
+          setStats((prev) => (prev ? { ...prev, total_items: prev.total_items + 1 } : prev))
+          knowledgeController.add(deleted.content, deleted.topic, false).catch(() => {
+            addToast('Could not restore item', 'error')
+          })
+        },
       })
     } catch {
       setItems((prev) => [deleted, ...prev])
       setStats((prev) => (prev ? { ...prev, total_items: prev.total_items + 1 } : prev))
-      addToast('Could not delete', 'error')
+      notify.toast('Could not delete', { type: 'error' })
     }
   }
 
@@ -252,27 +261,30 @@ export function useKnowledgeWorkbench() {
     setPendingBatchDelete(false)
     try {
       await knowledgeController.batchDelete(Array.from(deletedIds))
-      addToast(`Deleted ${deletedIds.size} items`, 'info', undefined, () => {
-        setItems((prev) => [...deletedItems, ...prev])
-        setStats((prev) =>
-          prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev,
-        )
-        knowledgeController
-          .batchIngest(deletedItems.map((i) => ({ content: i.content, tags: [i.topic] })))
-          .catch((e) => {
-            logger.error('knowledge batch undo re-ingest failed', {
-              count: deletedIds.size,
-              exception: String(e),
+      notify.toast(`Deleted ${deletedIds.size} items`, {
+        type: 'info',
+        onUndo: () => {
+          setItems((prev) => [...deletedItems, ...prev])
+          setStats((prev) =>
+            prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev,
+          )
+          knowledgeController
+            .batchIngest(deletedItems.map((i) => ({ content: i.content, tags: [i.topic] })))
+            .catch((e) => {
+              logger.error('knowledge batch undo re-ingest failed', {
+                count: deletedIds.size,
+                exception: String(e),
+              })
+              addToast('Could not restore deleted items', 'error')
             })
-            addToast('Could not restore deleted items', 'error')
-          })
+        },
       })
     } catch {
       setItems((prev) => [...deletedItems, ...prev])
       setStats((prev) =>
         prev ? { ...prev, total_items: prev.total_items + deletedIds.size } : prev,
       )
-      addToast('Could not batch delete', 'error')
+      notify.toast('Could not batch delete', { type: 'error' })
     }
   }
 
@@ -291,14 +303,14 @@ export function useKnowledgeWorkbench() {
       await Promise.all(
         Array.from(affectedIds).map((id) => knowledgeController.update(id, { topic: newTopic })),
       )
-      addToast(`Updated ${affectedIds.size} items to "${newTopic}"`, 'success')
+      notify.toast(`Updated ${affectedIds.size} items to "${newTopic}"`, { type: 'success' })
     } catch {
       setItems((prev) =>
         prev.map((i) =>
           affectedIds.has(i.id) ? { ...i, topic: oldTopics.get(i.id) || 'general' } : i,
         ),
       )
-      addToast('Could not reassign topics', 'error')
+      notify.toast('Could not reassign topics', { type: 'error' })
     }
   }
 
@@ -333,12 +345,12 @@ export function useKnowledgeWorkbench() {
     setShowAdd(false)
     try {
       await knowledgeController.add(newContent.trim(), newTopic, true)
-      addToast('Knowledge added', 'info')
+      notify.toast('Knowledge added', { type: 'info' })
       await fetchData()
     } catch {
       setItems((prev) => prev.filter((i) => i.id !== tempId))
       setStats((prev) => (prev ? { ...prev, total_items: prev.total_items - 1 } : prev))
-      addToast('Could not add knowledge', 'error')
+      notify.toast('Could not add knowledge', { type: 'error' })
     }
   }
 
@@ -368,9 +380,9 @@ export function useKnowledgeWorkbench() {
         ),
       )
       setEditingId(null)
-      addToast('Updated', 'info')
+      notify.toast('Updated', { type: 'info' })
     } catch {
-      addToast('Could not update', 'error')
+      notify.toast('Could not update', { type: 'error' })
     }
   }
 
@@ -379,9 +391,9 @@ export function useKnowledgeWorkbench() {
       await knowledgeController.update(id, { importance: importanceValue })
       setItems((prev) => prev.map((i) => (i.id === id ? { ...i, importance: importanceValue } : i)))
       setEditingImportanceId(null)
-      addToast('Importance updated', 'info')
+      notify.toast('Importance updated', { type: 'info' })
     } catch {
-      addToast('Could not update', 'error')
+      notify.toast('Could not update', { type: 'error' })
     }
   }
 
@@ -393,7 +405,7 @@ export function useKnowledgeWorkbench() {
       importance: i.importance,
     }))
     downloadJson(data, `knowledge-export-${todayDateString()}.json`)
-    addToast(`Exported ${items.length} items`, 'success')
+    notify.toast(`Exported ${items.length} items`, { type: 'success' })
   }
 
   const handleExportSelected = () => {
@@ -405,7 +417,7 @@ export function useKnowledgeWorkbench() {
       importance: i.importance,
     }))
     downloadJson(data, `knowledge-export-selected-${todayDateString()}.json`)
-    addToast(`Exported ${selected.length} selected items`, 'success')
+    notify.toast(`Exported ${selected.length} selected items`, { type: 'success' })
   }
 
   const handleExportCSV = () => {
@@ -435,7 +447,7 @@ export function useKnowledgeWorkbench() {
     a.download = `knowledge-export-${todayDateString()}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    addToast(`Exported ${items.length} items as CSV`, 'success')
+    notify.toast(`Exported ${items.length} items as CSV`, { type: 'success' })
   }
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -463,7 +475,7 @@ export function useKnowledgeWorkbench() {
       } else if (file.name.endsWith('.csv')) {
         const lines = splitLines(text)
         if (lines.length === 0) {
-          addToast('No data found in CSV', 'error')
+          notify.toast('No data found in CSV', { type: 'error' })
           return
         }
         const header = lines[0].toLowerCase()
@@ -482,7 +494,7 @@ export function useKnowledgeWorkbench() {
         facts = splitLines(text)
       }
       if (facts.length === 0) {
-        addToast('No facts found in file', 'error')
+        notify.toast('No facts found in file', { type: 'error' })
         return
       }
       setImportProgress({ current: 0, total: facts.length })
@@ -492,10 +504,10 @@ export function useKnowledgeWorkbench() {
         await knowledgeController.bulkIngest(batch, 'imported', 'file-import')
         setImportProgress({ current: Math.min(i + batchSize, facts.length), total: facts.length })
       }
-      addToast(`Imported ${facts.length} facts`, 'success')
+      notify.toast(`Imported ${facts.length} facts`, { type: 'success' })
       await fetchData()
     } catch {
-      addToast('Could not import', 'error')
+      notify.toast('Could not import', { type: 'error' })
     } finally {
       setImporting(false)
       setImportProgress(null)

@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
@@ -13,9 +14,13 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
 import { IconBolt } from '@sloughgpt/strui'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const PRACTICE_WORDS: Record<PhonemeLanguage, string[]> = {
   en: ['hello', 'world', 'goodbye', 'please', 'thank', 'cat', 'dog', 'house', 'water', 'food'],
@@ -83,7 +88,6 @@ export default function PracticeCard() {
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
   const randomWordTrigger = usePhonemeStore((s) => s.randomWordTrigger)
   const pronunciationStreak = usePhonemeStore((s) => s.pronunciationStreak)
-  const addToast = useToastStore((s) => s.addToast)
 
   useEffect(() => {
     return () => {
@@ -176,17 +180,17 @@ export default function PracticeCard() {
       })
       if (res.score >= 0.8) {
         const newStreak = pronunciationStreak + 1
-        if (newStreak === 3) addToast('3 in a row! Nice streak!', 'success')
-        else if (newStreak === 5) addToast('5 in a row! Amazing!', 'success')
-        else if (newStreak === 10) addToast('10 in a row! Unstoppable!', 'success')
-        else if (newStreak === 20) addToast('20 in a row! Legendary!', 'success')
+        if (newStreak === 3) notify.toast('3 in a row! Nice streak!', { type: 'success' })
+        else if (newStreak === 5) notify.toast('5 in a row! Amazing!', { type: 'success' })
+        else if (newStreak === 10) notify.toast('10 in a row! Unstoppable!', { type: 'success' })
+        else if (newStreak === 20) notify.toast('20 in a row! Legendary!', { type: 'success' })
       }
     } catch {
-      addToast('Scoring failed', 'error')
+      notify.toast('Scoring failed', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [targetWord, attempt, language, addToHistory, addToast, pronunciationStreak])
+  }, [targetWord, attempt, language, addToHistory, pronunciationStreak])
 
   useEffect(() => {
     const handleSubmit = () => handleScore()
@@ -230,9 +234,9 @@ export default function PracticeCard() {
         setRecordingTime((t) => t + 1)
       }, 1000)
     } catch {
-      addToast('Microphone access denied', 'error')
+      notify.toast('Microphone access denied', { type: 'error' })
     }
-  }, [isRecording, addToast])
+  }, [isRecording])
 
   return (
     <div className="space-y-4">

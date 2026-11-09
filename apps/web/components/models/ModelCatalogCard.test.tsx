@@ -61,7 +61,9 @@ vi.mock('@sloughgpt/strui', async () => {
 vi.mock('@/lib/cache/api-hooks', () => ({
   useLoadModel: () => ({ mutateAsync: vi.fn().mockResolvedValue({ model_id: 'test-model' }) }),
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => vi.fn(),
 }))
 vi.mock('@/lib/generate-controller', () => ({

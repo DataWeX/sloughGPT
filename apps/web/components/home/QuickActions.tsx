@@ -1,11 +1,11 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useRef } from 'react'
 import { Card, CardContent, Button } from '@sloughgpt/strui'
 import { chatController } from '@/lib/chat-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 interface QuickActionsProps {
   loading: boolean
@@ -18,8 +18,16 @@ interface QuickActionsProps {
   setKnowledgeCount: React.Dispatch<React.SetStateAction<number>>
 }
 
-export function QuickActions({ loading, modelStatus, testRunning, testResponse, setTestRunning, setTestResponse, knowledgeCount, setKnowledgeCount }: QuickActionsProps) {
-  const addToast = useToastStore(s => s.addToast)
+export function QuickActions({
+  loading,
+  modelStatus,
+  testRunning,
+  testResponse,
+  setTestRunning,
+  setTestResponse,
+  knowledgeCount,
+  setKnowledgeCount,
+}: QuickActionsProps) {
   const [streaming, setStreaming] = useState(false)
   const streamingRef = useRef(false)
 
@@ -59,7 +67,9 @@ export function QuickActions({ loading, modelStatus, testRunning, testResponse, 
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Quick test</p>
-              <p className="text-xs text-muted-foreground">Send &quot;Hello!&quot; to verify the model works</p>
+              <p className="text-xs text-muted-foreground">
+                Send &quot;Hello!&quot; to verify the model works
+              </p>
             </div>
             <Button
               size="sm"
@@ -73,7 +83,9 @@ export function QuickActions({ loading, modelStatus, testRunning, testResponse, 
                 streamingRef.current = true
                 let accumulated = ''
                 try {
-                  for await (const token of chatController.stream('Hello!', { waitForModel: true })) {
+                  for await (const token of chatController.stream('Hello!', {
+                    waitForModel: true,
+                  })) {
                     if (!streamingRef.current) break
                     accumulated += token
                     setTestResponse(accumulated)
@@ -93,7 +105,9 @@ export function QuickActions({ loading, modelStatus, testRunning, testResponse, 
           {testResponse && (
             <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono leading-relaxed">
               {testResponse}
-              {streaming && <span className="inline-block w-1.5 h-3 bg-primary/70 animate-pulse ml-0.5" />}
+              {streaming && (
+                <span className="inline-block w-1.5 h-3 bg-primary/70 animate-pulse ml-0.5" />
+              )}
             </div>
           )}
         </CardContent>
@@ -104,25 +118,32 @@ export function QuickActions({ loading, modelStatus, testRunning, testResponse, 
             <p className="text-sm font-medium">Quick note</p>
             <p className="text-xs text-muted-foreground">Add a fact the AI can remember</p>
           </div>
-          <form onSubmit={async (e) => {
-            e.preventDefault()
-            const input = e.currentTarget.querySelector('input') as HTMLInputElement
-            const text = input.value.trim()
-            if (!text) return
-            try {
-              await knowledgeController.add(text, 'general')
-              input.value = ''
-              setKnowledgeCount(k => k + 1)
-              addToast('Fact saved', 'success')
-            } catch { addToast('Could not save', 'error') }
-          }} className="flex gap-2">
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const input = e.currentTarget.querySelector('input') as HTMLInputElement
+              const text = input.value.trim()
+              if (!text) return
+              try {
+                await knowledgeController.add(text, 'general')
+                input.value = ''
+                setKnowledgeCount((k) => k + 1)
+                notify.toast('Fact saved', { type: 'success' })
+              } catch {
+                notify.toast('Could not save', { type: 'error' })
+              }
+            }}
+            className="flex gap-2"
+          >
             <input
               type="text"
               placeholder="e.g., I prefer Python over JavaScript"
               aria-label="Quick add knowledge"
               className="flex-1 h-9 rounded-md border border-border/60 bg-background px-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
-            <Button size="sm" type="submit" className="h-8 text-xs shrink-0">Save</Button>
+            <Button size="sm" type="submit" className="h-8 text-xs shrink-0">
+              Save
+            </Button>
           </form>
         </CardContent>
       </Card>

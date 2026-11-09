@@ -145,7 +145,9 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/model/gpt2',
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.addToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mocks.addToast }),
 }))
 vi.mock('@/lib/model-controller', () => ({
@@ -329,7 +331,7 @@ describe('ModelDetailPage', () => {
     mocks.apiGet.mockRejectedValue(new Error('network'))
     render(<Page />)
     await waitFor(() => {
-      expect(mocks.addToast).toHaveBeenCalledWith('Failed to load model details', 'error')
+      expect(mocks.addToast).toHaveBeenCalledWith('Failed to load model details', { type: 'error' })
     })
   })
 

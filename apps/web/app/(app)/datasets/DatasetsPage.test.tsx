@@ -143,7 +143,9 @@ vi.mock('@/lib/dataset-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
 }))
 
@@ -261,7 +263,9 @@ describe('DatasetsPage', () => {
     await waitFor(() => {
       expect(mockExport).toHaveBeenCalledWith('ds1', 'jsonl')
       expect(createObjectURL).toHaveBeenCalled()
-      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Exported'), 'success')
+      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Exported'), {
+        type: 'success',
+      })
     })
     vi.unstubAllGlobals()
   })
@@ -275,7 +279,7 @@ describe('DatasetsPage', () => {
     fireEvent.click(screen.getByLabelText('Export Shakespeare'))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not export', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not export', { type: 'error' })
     })
     vi.unstubAllGlobals()
   })
@@ -335,7 +339,7 @@ describe('DatasetsPage', () => {
     })
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('ds1')
-      expect(mockAddToast).toHaveBeenCalledWith('Deleted "Shakespeare"', 'info')
+      expect(mockAddToast).toHaveBeenCalledWith('Deleted "Shakespeare"', { type: 'info' })
     })
   })
 

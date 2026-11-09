@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -16,7 +17,6 @@ import {
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { agentsController, type Agent, type AgentRun } from '@/lib/agents-controller'
-import { useToastStore } from '@/lib/toast-store'
 import {
   ArrowLeft,
   Bot,
@@ -30,6 +30,12 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react'
+
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const TOOL_LABELS: Record<string, string> = {
   code_execution: 'Code Execution',
@@ -46,7 +52,6 @@ export default function AgentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const agentId = params.id as string
-  const addToast = useToastStore((s) => s.addToast)
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [runs, setRuns] = useState<AgentRun[]>([])
@@ -71,18 +76,18 @@ export default function AgentDetailPage() {
       if (found) {
         setAgent(found)
       } else {
-        addToast('Agent not found', 'error')
+        notify.toast('Agent not found', { type: 'error' })
         router.push('/agents')
       }
 
       const runsData = await agentsController.listRuns(10)
       setRuns(runsData.runs.filter((r) => r.tasks.some((t) => t.agent === agentId)))
     } catch {
-      addToast('Failed to load agent', 'error')
+      notify.toast('Failed to load agent', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [agentId, addToast, router])
+  }, [agentId, router])
 
   useEffect(() => {
     fetchAgent()
@@ -106,9 +111,9 @@ export default function AgentDetailPage() {
         tools: editTools,
       })
       setEditing(false)
-      addToast('Updated', 'success')
+      notify.toast('Updated', { type: 'success' })
     } catch {
-      addToast('Update failed', 'error')
+      notify.toast('Update failed', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -118,10 +123,10 @@ export default function AgentDetailPage() {
     if (!agent) return
     try {
       await agentsController.delete(agent.id)
-      addToast('Deleted', 'success')
+      notify.toast('Deleted', { type: 'success' })
       router.push('/agents')
     } catch {
-      addToast('Delete failed', 'error')
+      notify.toast('Delete failed', { type: 'error' })
     }
   }
 
@@ -132,9 +137,9 @@ export default function AgentDetailPage() {
     try {
       const result = await agentsController.execute(agent.id, execPrompt)
       setExecResult(result.response)
-      addToast('Execution complete', 'success')
+      notify.toast('Execution complete', { type: 'success' })
     } catch {
-      addToast('Execution failed', 'error')
+      notify.toast('Execution failed', { type: 'error' })
     } finally {
       setExecuting(false)
     }

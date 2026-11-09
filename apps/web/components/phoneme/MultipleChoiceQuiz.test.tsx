@@ -4,19 +4,23 @@ import MultipleChoiceQuiz from './MultipleChoiceQuiz'
 
 // Mock the store
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: (selector: (state: unknown) => unknown) => selector({
-    quizScore: 0,
-    quizTotal: 0,
-    quizStreak: 0,
-    quizBestStreak: 0,
-    incrementQuizScore: vi.fn(),
-  }),
+  usePhonemeStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      quizScore: 0,
+      quizTotal: 0,
+      quizStreak: 0,
+      quizBestStreak: 0,
+      incrementQuizScore: vi.fn(),
+    }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 vi.mock('@/lib/phoneme-controller', () => ({

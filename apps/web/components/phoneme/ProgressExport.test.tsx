@@ -3,15 +3,19 @@ import { render, screen } from '@testing-library/react'
 import ProgressExport from './ProgressExport'
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: (selector: (state: unknown) => unknown) => selector({
-    history: [],
-  }),
+  usePhonemeStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      history: [],
+    }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 describe('ProgressExport', () => {

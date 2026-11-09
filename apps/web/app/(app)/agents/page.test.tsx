@@ -134,7 +134,9 @@ vi.mock('@/lib/agents-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 

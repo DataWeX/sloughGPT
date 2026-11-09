@@ -20,7 +20,9 @@ vi.mock('@/hooks/useLocale', () => ({
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
@@ -37,7 +39,11 @@ describe('ConsciousnessVersionsPage', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mockController.getStatus.mockResolvedValue({ level: 2, enabled: true } as any)
-    mockController.getPersonality.mockResolvedValue({ voice: 'Analytical', traits: ['curious', 'precise'], style: 'Formal' } as any)
+    mockController.getPersonality.mockResolvedValue({
+      voice: 'Analytical',
+      traits: ['curious', 'precise'],
+      style: 'Formal',
+    } as any)
     mockController.updateConfig.mockResolvedValue({ updated: true } as any)
     mockController.updatePersonality.mockResolvedValue({ updated: true } as any)
   })
@@ -73,7 +79,9 @@ describe('ConsciousnessVersionsPage', () => {
   it('shows auto-save section', async () => {
     render(<ConsciousnessVersionsPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_versions.auto_save_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_versions.auto_save_title').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 

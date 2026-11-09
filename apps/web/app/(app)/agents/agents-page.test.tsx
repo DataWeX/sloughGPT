@@ -140,7 +140,9 @@ vi.mock('@/lib/agents-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 
@@ -253,7 +255,7 @@ describe('AgentsPage Run History', () => {
     mockListRuns.mockRejectedValue(new Error('500'))
     render(<AgentsPage />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not load run history', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not load run history', { type: 'error' })
     })
   })
 

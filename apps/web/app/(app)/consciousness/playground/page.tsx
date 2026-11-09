@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -13,7 +14,6 @@ import {
   CardTitle,
   Skeleton,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -97,7 +97,6 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessPlaygroundPage() {
-  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const [input, setInput] = useState('')
   const [reflecting, setReflecting] = useState(false)
@@ -132,7 +131,7 @@ export default function ConsciousnessPlaygroundPage() {
 
   const handleReflect = async () => {
     if (!input.trim()) {
-      addToast('Please enter some text first', 'error')
+      notify.toast('Please enter some text first', { type: 'error' })
       return
     }
     setReflecting(true)
@@ -140,9 +139,9 @@ export default function ConsciousnessPlaygroundPage() {
     try {
       const data = await consciousnessController.reflect()
       setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
-      addToast('Reflection generated', 'success')
+      notify.toast('Reflection generated', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setReflecting(false)
     }
@@ -150,7 +149,7 @@ export default function ConsciousnessPlaygroundPage() {
 
   const handleProcess = async () => {
     if (!input.trim()) {
-      addToast('Please enter some text first', 'error')
+      notify.toast('Please enter some text first', { type: 'error' })
       return
     }
     setProcessing(true)
@@ -158,10 +157,10 @@ export default function ConsciousnessPlaygroundPage() {
       const data = await consciousnessController.reflect()
       setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
       await Promise.all([fetchStatus(), fetchEpisodes()])
-      addToast('Input processed through consciousness', 'success')
+      notify.toast('Input processed through consciousness', { type: 'success' })
       setInput('')
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setProcessing(false)
     }
@@ -171,10 +170,10 @@ export default function ConsciousnessPlaygroundPage() {
     setRatingEpisode(episodeIndex)
     try {
       await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
-      addToast(`Rated ${rating}/5`, 'success')
+      notify.toast(`Rated ${rating}/5`, { type: 'success' })
       await fetchEpisodes()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setRatingEpisode(null)
     }

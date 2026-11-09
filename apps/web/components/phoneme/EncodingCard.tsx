@@ -1,11 +1,25 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge, Kbd } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Input,
+  Button,
+  Badge,
+  Kbd,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, toIPA, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  toIPA,
+  type PhonemeEncodeResult,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function EncodingCard() {
@@ -14,11 +28,13 @@ export default function EncodingCard() {
   const [showIPA, setShowIPA] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PhonemeEncodeResult | null>(null)
-  const addToast = useToastStore(s => s.addToast)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const doEncode = useCallback(async (t: string, l: PhonemeLanguage) => {
-    if (!t.trim()) { setResult(null); return }
+    if (!t.trim()) {
+      setResult(null)
+      return
+    }
     setLoading(true)
     try {
       const res = await phonemeController.encode(t, l)
@@ -33,7 +49,9 @@ export default function EncodingCard() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => doEncode(text, language), 300)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
   }, [text, language, doEncode])
 
   const handleEncode = useCallback(() => {
@@ -58,18 +76,20 @@ export default function EncodingCard() {
         <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={(e) => setText(e.target.value)}
             placeholder="Enter text to encode..."
-            onKeyDown={e => e.key === 'Enter' && handleEncode()}
+            onKeyDown={(e) => e.key === 'Enter' && handleEncode()}
             className="flex-1"
           />
-          <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+          <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PHONEME_LANGUAGES.map(l => (
-                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -93,7 +113,7 @@ export default function EncodingCard() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-muted-foreground">Phonemes:</span>
                 <button
-                  onClick={() => setShowIPA(prev => !prev)}
+                  onClick={() => setShowIPA((prev) => !prev)}
                   className="text-xs text-primary hover:underline"
                 >
                   {showIPA ? 'Show ARPAbet' : 'Show IPA'}

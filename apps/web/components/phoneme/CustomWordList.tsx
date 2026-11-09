@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge, Input } from '@sloughgpt/strui'
@@ -8,8 +9,12 @@ import {
   PHONEME_LANGUAGES,
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const STORAGE_KEY = 'sloughgpt-phoneme-custom-words'
 
@@ -43,7 +48,6 @@ export default function CustomWordList() {
   const [words, setWords] = useState<CustomWord[]>([])
   const [newWord, setNewWord] = useState('')
   const [language, setLanguage] = useState<PhonemeLanguage>('en')
-  const addToast = useToastStore((s) => s.addToast)
 
   useEffect(() => {
     setWords(loadCustomWords())
@@ -54,7 +58,7 @@ export default function CustomWordList() {
     if (!trimmed) return
 
     if (words.some((w) => w.word === trimmed && w.language === language)) {
-      addToast(`"${trimmed}" already in your list`, 'error')
+      notify.toast(`"${trimmed}" already in your list`, { type: 'error' })
       return
     }
 
@@ -71,27 +75,27 @@ export default function CustomWordList() {
       setWords(updated)
       saveCustomWords(updated)
       setNewWord('')
-      addToast(`Added "${trimmed}"`, 'success')
+      notify.toast(`Added "${trimmed}"`, { type: 'success' })
     } catch (err) {
-      addToast(`Failed to encode "${trimmed}"`, 'error')
+      notify.toast(`Failed to encode "${trimmed}"`, { type: 'error' })
     }
-  }, [newWord, language, words, addToast])
+  }, [newWord, language, words])
 
   const removeWord = useCallback(
     (id: string) => {
       const updated = words.filter((w) => w.id !== id)
       setWords(updated)
       saveCustomWords(updated)
-      addToast('Word removed', 'info')
+      notify.toast('Word removed', { type: 'info' })
     },
-    [words, addToast],
+    [words],
   )
 
   const clearAll = useCallback(() => {
     setWords([])
     saveCustomWords([])
-    addToast('All custom words cleared', 'info')
-  }, [addToast])
+    notify.toast('All custom words cleared', { type: 'info' })
+  }, [])
 
   const groupedWords = words.reduce<Record<string, CustomWord[]>>((acc, w) => {
     acc[w.language] = acc[w.language] || []

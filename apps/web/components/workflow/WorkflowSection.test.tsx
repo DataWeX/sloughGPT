@@ -20,7 +20,9 @@ vi.mock('@/lib/workflow-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.mockAddToast, banner: vi.fn() },
+
   useToastStore: (selector: any) => selector({ addToast: mocks.mockAddToast }),
 }))
 
@@ -43,18 +45,26 @@ vi.mock('@sloughgpt/strui', () => {
   return {
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
     Card: ({ children }: any) => <div>{children}</div>,
-    ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
+    ActionCard: ({ title, actions, children, ...p }: any) => (
+      <div data-testid="action-card" {...p}>
+        {title}
+        {actions}
+        {children}
+      </div>
+    ),
     CardHeader: ({ children }: any) => <div>{children}</div>,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     CardContent: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled, ...props }: any) => (
-      <button onClick={onClick} disabled={disabled} {...props}>{children}</button>
+      <button onClick={onClick} disabled={disabled} {...props}>
+        {children}
+      </button>
     ),
     StatCard,
     KpiGrid,
     IconRefresh: () => <span data-testid="icon-refresh" />,
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
     Tabs: ({ children }: any) => <div>{children}</div>,
@@ -62,7 +72,9 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -89,7 +101,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 import { WorkflowSection } from './WorkflowSection'
@@ -160,7 +172,9 @@ describe('WorkflowSection', () => {
     mocks.mockStatus.mockRejectedValue(new Error('down'))
     render(<WorkflowSection />)
     expect(await screen.findByText('Feedback Pipeline')).toBeDefined()
-    expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not load workflow status', 'error')
+    expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not load workflow status', {
+      type: 'error',
+    })
   })
 
   it('runs a manual trigger and shows the result message', async () => {

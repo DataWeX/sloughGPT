@@ -1,18 +1,22 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { Button } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
-import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { useBootstrap } from '@/contexts/BootstrapContext'
 import { extractErrorMessage } from '@/lib/error-utils'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function ConsciousnessQuickActions() {
   const router = useRouter()
   const { t } = useLocale()
-  const addToast = useToastStore((s) => s.addToast)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [result, setResult] = useState<{ action: string; data: any } | null>(null)
@@ -62,14 +66,14 @@ export function ConsciousnessQuickActions() {
       try {
         const data = await fn()
         setResult({ action, data })
-        addToast(t(`consciousness_quick_actions.toast_${action}`), 'success')
+        notify.toast(t(`consciousness_quick_actions.toast_${action}`), { type: 'success' })
       } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
+        notify.toast(extractErrorMessage(e), { type: 'error' })
       } finally {
         setLoading(null)
       }
     },
-    [addToast, t],
+    [t],
   )
 
   const handleReflect = useCallback(() => {
@@ -88,11 +92,11 @@ export function ConsciousnessQuickActions() {
     const slice = bootstrap?.members.consciousness_status
     if (slice && !sliceMutatedRef.current) {
       setResult({ action: 'status', data: slice })
-      addToast(t('consciousness_quick_actions.toast_status'), 'success')
+      notify.toast(t('consciousness_quick_actions.toast_status'), { type: 'success' })
       return
     }
     runAction('status', () => apiGet('/consciousness/status'))
-  }, [bootstrap, runAction, addToast, t])
+  }, [bootstrap, runAction, t])
 
   const handleHealth = useCallback(() => {
     runAction('health', () => apiGet('/consciousness/health'))

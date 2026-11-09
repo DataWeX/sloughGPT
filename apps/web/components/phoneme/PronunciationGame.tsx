@@ -9,7 +9,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 
 const WORDS: Record<PhonemeLanguage, string[]> = {
@@ -141,7 +140,6 @@ export default function PronunciationGame() {
   const [roundStartTime, setRoundStartTime] = useState(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {

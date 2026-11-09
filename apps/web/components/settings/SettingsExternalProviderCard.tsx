@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -19,7 +20,6 @@ import {
   type ProviderApiSettings,
   type ProviderApiSettingsUpdate,
 } from '@/lib/settings-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 interface SettingsExternalProviderCardProps {
@@ -27,7 +27,6 @@ interface SettingsExternalProviderCardProps {
 }
 
 export function SettingsExternalProviderCard({ version }: SettingsExternalProviderCardProps) {
-  const addToast = useToastStore((s) => s.addToast)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(false)
@@ -75,7 +74,7 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
       return
     }
     if (enabled && !apiKey && !apiKeySet) {
-      addToast('API key required before enabling the external provider', 'error')
+      notify.toast('API key required before enabling the external provider', { type: 'error' })
       return
     }
 
@@ -92,12 +91,12 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
       applyProvider(p)
       setRegistered(p.registered ?? null)
       if (enabled && p.enabled && p.registered === false) {
-        addToast('Saved — provider not registered (check API key)', 'info')
+        notify.toast('Saved — provider not registered (check API key)', { type: 'info' })
       } else {
-        addToast('External provider settings saved', 'success')
+        notify.toast('External provider settings saved', { type: 'success' })
       }
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Could not save provider settings'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not save provider settings'), { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -109,9 +108,9 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
       const p = await settingsController.updateProviderApi({ api_key: '' })
       applyProvider(p)
       setApiKeySet(false)
-      addToast('API key cleared', 'success')
+      notify.toast('API key cleared', { type: 'success' })
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Could not clear API key'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not clear API key'), { type: 'error' })
     } finally {
       setSaving(false)
     }

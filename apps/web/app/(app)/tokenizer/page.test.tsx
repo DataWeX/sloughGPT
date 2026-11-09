@@ -145,7 +145,9 @@ vi.mock('@/lib/tokenizer-controller', () => ({
     train: mockTrain,
   },
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 vi.mock('@/components/tokenizer/TokenizerEfficiencyCard', () => ({
@@ -279,7 +281,7 @@ describe('TokenizerPage', () => {
       screen.getByText('Tokenize').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not tokenize', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not tokenize', { type: 'error' })
     })
   })
 
@@ -346,7 +348,7 @@ describe('TokenizerPage', () => {
       screen.getByText('Vocabulary').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not load vocabulary', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not load vocabulary', { type: 'error' })
     })
   })
 
@@ -395,7 +397,7 @@ describe('TokenizerPage', () => {
       screen.getByText('Vocabulary').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not load samples', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not load samples', { type: 'error' })
     })
   })
 

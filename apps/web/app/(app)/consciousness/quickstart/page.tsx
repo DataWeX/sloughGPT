@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
@@ -13,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 
@@ -71,7 +71,6 @@ const LINKS = [
 
 export default function ConsciousnessQuickstartPage() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
   const { t } = useLocale()
   const [progress, setProgress] = useState<Progress>(DEFAULT_PROGRESS)
   const [enabling, setEnabling] = useState(false)
@@ -99,9 +98,9 @@ export default function ConsciousnessQuickstartPage() {
     try {
       await consciousnessController.updateConfig({ level: 1 })
       updateProgress({ enabled: true, levelChosen: true })
-      addToast('Consciousness enabled at Basic level', 'success')
+      notify.toast('Consciousness enabled at Basic level', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setEnabling(false)
     }
@@ -112,9 +111,9 @@ export default function ConsciousnessQuickstartPage() {
     try {
       await consciousnessController.applyPersonalityPreset('default')
       updateProgress({ personalitySet: true })
-      addToast('Default personality applied', 'success')
+      notify.toast('Default personality applied', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setApplying(false)
     }
@@ -125,9 +124,9 @@ export default function ConsciousnessQuickstartPage() {
     try {
       await consciousnessController.seedData({ count: 10 })
       updateProgress({ seeded: true })
-      addToast('Seeded 10 episodes', 'success')
+      notify.toast('Seeded 10 episodes', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }

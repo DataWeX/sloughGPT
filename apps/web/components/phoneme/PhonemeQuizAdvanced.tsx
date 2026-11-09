@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@sloughgpt/strui'
@@ -9,8 +10,12 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const WORDS: Record<PhonemeLanguage, string[]> = {
   en: [
@@ -173,7 +178,6 @@ export default function PhonemeQuizAdvanced() {
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const generateQuestion = useCallback(async () => {
     const words = WORDS[language]
@@ -239,9 +243,9 @@ export default function PhonemeQuizAdvanced() {
       setQuestion({ word, phonemes, ipa, mode, prompt, options, correctAnswer })
       setGameState('playing')
     } catch {
-      addToast('Failed to generate question', 'error')
+      notify.toast('Failed to generate question', { type: 'error' })
     }
-  }, [language, mode, addToast])
+  }, [language, mode])
 
   const startGame = useCallback(() => {
     setScore(0)
@@ -272,12 +276,11 @@ export default function PhonemeQuizAdvanced() {
         language,
       })
 
-      addToast(
-        isCorrect ? `Correct! ${question.word}` : `Answer: ${question.correctAnswer}`,
-        isCorrect ? 'success' : 'error',
-      )
+      notify.toast(isCorrect ? `Correct! ${question.word}` : `Answer: ${question.correctAnswer}`, {
+        type: isCorrect ? 'success' : 'error',
+      })
     },
-    [question, language, addToHistory, addToast],
+    [question, language, addToHistory],
   )
 
   const MODES: { value: QuizMode; label: string; desc: string }[] = [

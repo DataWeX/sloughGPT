@@ -1,31 +1,63 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useRef } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button, Input, Spinner } from '@sloughgpt/strui'
+import {
+  cn,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Spinner,
+} from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function KnowledgeIntelligenceCard() {
-  const addToast = useToastStore(s => s.addToast)
-
   const [labelText, setLabelText] = useState('')
-  const [labelResult, setLabelResult] = useState<{ label: string; confidence: number; reason: string; scores: Record<string, number> } | null>(null)
+  const [labelResult, setLabelResult] = useState<{
+    label: string
+    confidence: number
+    reason: string
+    scores: Record<string, number>
+  } | null>(null)
   const [labelLoading, setLabelLoading] = useState(false)
 
   const [dupText, setDupText] = useState('')
-  const [dupResult, setDupResult] = useState<{ is_duplicate: boolean; best_match: string | null; score: number; threshold: number } | null>(null)
+  const [dupResult, setDupResult] = useState<{
+    is_duplicate: boolean
+    best_match: string | null
+    score: number
+    threshold: number
+  } | null>(null)
   const [dupLoading, setDupLoading] = useState(false)
 
   const [catText, setCatText] = useState('')
-  const [catResult, setCatResult] = useState<{ topic: string; suggestions: Array<{ topic: string; score: number }> } | null>(null)
+  const [catResult, setCatResult] = useState<{
+    topic: string
+    suggestions: Array<{ topic: string; score: number }>
+  } | null>(null)
   const [catLoading, setCatLoading] = useState(false)
 
-  const [embedderStatus, setEmbedderStatus] = useState<{ trained: boolean; info: { embed_dim: number; vocab_size: number; path: string } | null } | null>(null)
+  const [embedderStatus, setEmbedderStatus] = useState<{
+    trained: boolean
+    info: { embed_dim: number; vocab_size: number; path: string } | null
+  } | null>(null)
   const [trainingEmbedder, setTrainingEmbedder] = useState(false)
   const [embedderLoading, setEmbedderLoading] = useState(false)
 
-  const [gaps, setGaps] = useState<{ gaps: Array<{ topic: string; suggestion: string }>; total_facts: number; topics: string[] } | null>(null)
+  const [gaps, setGaps] = useState<{
+    gaps: Array<{ topic: string; suggestion: string }>
+    total_facts: number
+    topics: string[]
+  } | null>(null)
   const [gapsLoading, setGapsLoading] = useState(false)
 
   const labelTextRef = useRef('')
@@ -42,11 +74,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.label(labelTextRef.current)
       setLabelResult(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Labeling failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Labeling failed'), { type: 'error' })
     } finally {
       setLabelLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleCheckDuplicate = useCallback(async () => {
     if (!dupTextRef.current.trim()) return
@@ -55,11 +87,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.checkDuplicate(dupTextRef.current)
       setDupResult(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Duplicate check failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Duplicate check failed'), { type: 'error' })
     } finally {
       setDupLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleCategorize = useCallback(async () => {
     if (!catTextRef.current.trim()) return
@@ -68,11 +100,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.categorize(catTextRef.current)
       setCatResult(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Categorization failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Categorization failed'), { type: 'error' })
     } finally {
       setCatLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleCheckEmbedder = useCallback(async () => {
     setEmbedderLoading(true)
@@ -80,24 +112,27 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.getEmbedderStatus()
       setEmbedderStatus(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not check embedder'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not check embedder'), { type: 'error' })
     } finally {
       setEmbedderLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleTrainEmbedder = useCallback(async () => {
     setTrainingEmbedder(true)
     try {
       const result = await knowledgeController.trainEmbedder()
-      addToast(`Embedder trained on ${result.texts_used} texts (loss: ${result.final_loss.toFixed(4)})`, 'success')
+      notify.toast(
+        `Embedder trained on ${result.texts_used} texts (loss: ${result.final_loss.toFixed(4)})`,
+        { type: 'success' },
+      )
       await handleCheckEmbedder()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Embedder training failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Embedder training failed'), { type: 'error' })
     } finally {
       setTrainingEmbedder(false)
     }
-  }, [addToast, handleCheckEmbedder])
+  }, [handleCheckEmbedder])
 
   const handleGaps = useCallback(async () => {
     setGapsLoading(true)
@@ -105,11 +140,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.gaps()
       setGaps(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Gap analysis failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Gap analysis failed'), { type: 'error' })
     } finally {
       setGapsLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   return (
     <Card>
@@ -123,12 +158,17 @@ export function KnowledgeIntelligenceCard() {
           <div className="flex gap-2">
             <Input
               value={labelText}
-              onChange={e => setLabelText(e.target.value)}
+              onChange={(e) => setLabelText(e.target.value)}
               placeholder="Enter text to classify..."
               className="h-8 text-xs"
-              onKeyDown={e => e.key === 'Enter' && void handleLabel()}
+              onKeyDown={(e) => e.key === 'Enter' && void handleLabel()}
             />
-            <Button size="sm" onClick={() => void handleLabel()} disabled={labelLoading || !labelText.trim()} className="shrink-0">
+            <Button
+              size="sm"
+              onClick={() => void handleLabel()}
+              disabled={labelLoading || !labelText.trim()}
+              className="shrink-0"
+            >
               {labelLoading ? '...' : 'Label'}
             </Button>
           </div>
@@ -136,7 +176,9 @@ export function KnowledgeIntelligenceCard() {
             <div className="rounded bg-muted/30 px-3 py-2 text-xs space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">Label: {labelResult.label}</span>
-                <span className="text-muted-foreground">({(labelResult.confidence * 100).toFixed(0)}%)</span>
+                <span className="text-muted-foreground">
+                  ({(labelResult.confidence * 100).toFixed(0)}%)
+                </span>
               </div>
               {labelResult.reason && <p className="text-muted-foreground">{labelResult.reason}</p>}
               {Object.keys(labelResult.scores).length > 0 && (
@@ -145,7 +187,10 @@ export function KnowledgeIntelligenceCard() {
                     .sort((a, b) => b[1] - a[1])
                     .slice(0, 5)
                     .map(([k, v]) => (
-                      <span key={k} className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                      <span
+                        key={k}
+                        className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                      >
                         {k}: {(v * 100).toFixed(0)}%
                       </span>
                     ))}
@@ -163,22 +208,37 @@ export function KnowledgeIntelligenceCard() {
           <div className="flex gap-2">
             <Input
               value={dupText}
-              onChange={e => setDupText(e.target.value)}
+              onChange={(e) => setDupText(e.target.value)}
               placeholder="Enter text to check for duplicates..."
               className="h-8 text-xs"
-              onKeyDown={e => e.key === 'Enter' && void handleCheckDuplicate()}
+              onKeyDown={(e) => e.key === 'Enter' && void handleCheckDuplicate()}
             />
-            <Button size="sm" onClick={() => void handleCheckDuplicate()} disabled={dupLoading || !dupText.trim()} className="shrink-0">
+            <Button
+              size="sm"
+              onClick={() => void handleCheckDuplicate()}
+              disabled={dupLoading || !dupText.trim()}
+              className="shrink-0"
+            >
               {dupLoading ? '...' : 'Check'}
             </Button>
           </div>
           {dupResult && (
-            <div className={cn('rounded px-3 py-2 text-xs', dupResult.is_duplicate ? 'bg-warning/10' : 'bg-success/10')}>
+            <div
+              className={cn(
+                'rounded px-3 py-2 text-xs',
+                dupResult.is_duplicate ? 'bg-warning/10' : 'bg-success/10',
+              )}
+            >
               {dupResult.is_duplicate ? (
                 <div className="space-y-1">
                   <p className="font-medium text-warning">Duplicate found</p>
-                  {dupResult.best_match && <p className="text-muted-foreground truncate">Match: {dupResult.best_match}</p>}
-                  <p className="text-muted-foreground">Score: {(dupResult.score * 100).toFixed(0)}% (threshold: {(dupResult.threshold * 100).toFixed(0)}%)</p>
+                  {dupResult.best_match && (
+                    <p className="text-muted-foreground truncate">Match: {dupResult.best_match}</p>
+                  )}
+                  <p className="text-muted-foreground">
+                    Score: {(dupResult.score * 100).toFixed(0)}% (threshold:{' '}
+                    {(dupResult.threshold * 100).toFixed(0)}%)
+                  </p>
                 </div>
               ) : (
                 <p className="font-medium text-success">No duplicates found</p>
@@ -195,22 +255,32 @@ export function KnowledgeIntelligenceCard() {
           <div className="flex gap-2">
             <Input
               value={catText}
-              onChange={e => setCatText(e.target.value)}
+              onChange={(e) => setCatText(e.target.value)}
               placeholder="Enter text to categorize..."
               className="h-8 text-xs"
-              onKeyDown={e => e.key === 'Enter' && void handleCategorize()}
+              onKeyDown={(e) => e.key === 'Enter' && void handleCategorize()}
             />
-            <Button size="sm" onClick={() => void handleCategorize()} disabled={catLoading || !catText.trim()} className="shrink-0">
+            <Button
+              size="sm"
+              onClick={() => void handleCategorize()}
+              disabled={catLoading || !catText.trim()}
+              className="shrink-0"
+            >
               {catLoading ? '...' : 'Categorize'}
             </Button>
           </div>
           {catResult && (
             <div className="rounded bg-muted/30 px-3 py-2 text-xs space-y-1">
-              <p><span className="font-medium">Topic:</span> {catResult.topic}</p>
+              <p>
+                <span className="font-medium">Topic:</span> {catResult.topic}
+              </p>
               {catResult.suggestions.length > 1 && (
                 <div className="flex flex-wrap gap-1 pt-1">
-                  {catResult.suggestions.slice(0, 5).map(s => (
-                    <span key={s.topic} className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                  {catResult.suggestions.slice(0, 5).map((s) => (
+                    <span
+                      key={s.topic}
+                      className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                    >
                       {s.topic}: {(s.score * 100).toFixed(0)}%
                     </span>
                   ))}
@@ -227,10 +297,20 @@ export function KnowledgeIntelligenceCard() {
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-muted-foreground">Embedder</p>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={() => void handleCheckEmbedder()} disabled={embedderLoading}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void handleCheckEmbedder()}
+                disabled={embedderLoading}
+              >
                 <Spinner className="h-3 w-3" />
               </Button>
-              <Button size="sm" variant="outline" onClick={() => void handleTrainEmbedder()} disabled={trainingEmbedder}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleTrainEmbedder()}
+                disabled={trainingEmbedder}
+              >
                 {trainingEmbedder ? 'Training...' : 'Train'}
               </Button>
             </div>
@@ -238,7 +318,12 @@ export function KnowledgeIntelligenceCard() {
           {embedderStatus && (
             <div className="rounded bg-muted/30 px-3 py-2 text-xs space-y-1">
               <div className="flex items-center gap-2">
-                <span className={cn('inline-block h-2 w-2 rounded-full', embedderStatus.trained ? 'bg-success' : 'bg-muted-foreground')} />
+                <span
+                  className={cn(
+                    'inline-block h-2 w-2 rounded-full',
+                    embedderStatus.trained ? 'bg-success' : 'bg-muted-foreground',
+                  )}
+                />
                 <span>{embedderStatus.trained ? 'Trained' : 'Not trained'}</span>
               </div>
               {embedderStatus.info && (
@@ -254,7 +339,13 @@ export function KnowledgeIntelligenceCard() {
 
         {/* Knowledge gaps */}
         <div className="space-y-2">
-          <Button size="sm" variant="outline" onClick={() => void handleGaps()} disabled={gapsLoading} className="w-full">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void handleGaps()}
+            disabled={gapsLoading}
+            className="w-full"
+          >
             {gapsLoading ? 'Analyzing...' : 'Analyze Knowledge Gaps'}
           </Button>
           {gaps && (
@@ -268,7 +359,8 @@ export function KnowledgeIntelligenceCard() {
                 <div className="rounded bg-warning/10 px-3 py-2 text-xs space-y-1">
                   {gaps.gaps.map((g, i) => (
                     <div key={i}>
-                      <span className="font-medium">{g.topic}:</span> <span className="text-muted-foreground">{g.suggestion}</span>
+                      <span className="font-medium">{g.topic}:</span>{' '}
+                      <span className="text-muted-foreground">{g.suggestion}</span>
                     </div>
                   ))}
                 </div>

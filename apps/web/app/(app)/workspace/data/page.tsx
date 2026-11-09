@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton } from '@sloughgpt/strui'
@@ -7,9 +8,13 @@ import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTab
 import { dataTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/dataset-controller'
 import { Database, Key, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Share {
   id: string
@@ -36,7 +41,6 @@ const RESOURCE_COLORS: Record<string, string> = {
 
 export default function SharedDataPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore((s) => s.addToast)
   const [shares, setShares] = useState<Share[]>([])
   const [loading, setLoading] = useState(true)
   const [showShareDialog, setShowShareDialog] = useState(false)
@@ -86,11 +90,11 @@ export default function SharedDataPage() {
       )
       setShares(res?.data?.shares ?? [])
     } catch {
-      addToast('Could not load shared data', 'error')
+      notify.toast('Could not load shared data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, addToast])
+  }, [currentWorkspace?.id])
 
   const fetchWorkspaces = useCallback(async () => {
     try {
@@ -118,7 +122,7 @@ export default function SharedDataPage() {
 
   const handleShare = async () => {
     if (!shareResourceId.trim() || !shareTargetWs) {
-      addToast('Fill in all fields', 'error')
+      notify.toast('Fill in all fields', { type: 'error' })
       return
     }
     try {
@@ -128,23 +132,23 @@ export default function SharedDataPage() {
         target_workspace_id: shareTargetWs,
         permission: sharePermission,
       })
-      addToast('Data shared successfully', 'success')
+      notify.toast('Data shared successfully', { type: 'success' })
       setShowShareDialog(false)
       setShareResourceId('')
       setShareTargetWs('')
       fetchShares()
     } catch {
-      addToast('Could not share data', 'error')
+      notify.toast('Could not share data', { type: 'error' })
     }
   }
 
   const handleRevoke = async (shareId: string) => {
     try {
       await apiDelete(`/workspaces/${currentWorkspace?.id}/share/${shareId}`)
-      addToast('Share revoked', 'success')
+      notify.toast('Share revoked', { type: 'success' })
       fetchShares()
     } catch {
-      addToast('Could not revoke share', 'error')
+      notify.toast('Could not revoke share', { type: 'error' })
     }
   }
 

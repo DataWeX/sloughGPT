@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -12,9 +13,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type TestStatus = 'pending' | 'running' | 'pass' | 'fail' | 'skip'
 
@@ -130,7 +135,6 @@ function buildTests(): Omit<TestCase, 'status' | 'duration'>[] {
 }
 
 export default function ConsciousnessTestRunnerPage() {
-  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
 
   const [suites, setSuites] = useState<TestSuite[]>(() => SUITES.map((s) => ({ ...s })))
@@ -427,9 +431,11 @@ export default function ConsciousnessTestRunnerPage() {
       const final = results
       const p = final.filter((t) => t.status === 'pass').length
       const f = final.filter((t) => t.status === 'fail').length
-      addToast(`Tests complete: ${p} passed, ${f} failed`, f > 0 ? 'error' : 'success')
+      notify.toast(`Tests complete: ${p} passed, ${f} failed`, {
+        type: f > 0 ? 'error' : 'success',
+      })
     },
-    [running, addToast],
+    [running],
   )
 
   const stopTests = useCallback(() => {
@@ -445,15 +451,15 @@ export default function ConsciousnessTestRunnerPage() {
     a.download = `consciousness-tests-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast('Results exported', 'success')
-  }, [tests, addToast])
+    notify.toast('Results exported', { type: 'success' })
+  }, [tests])
 
   const copyResults = useCallback(() => {
     navigator.clipboard.writeText(JSON.stringify(tests, null, 2)).then(
-      () => addToast('Results copied to clipboard', 'success'),
-      () => addToast('Failed to copy', 'error'),
+      () => notify.toast('Results copied to clipboard', { type: 'success' }),
+      () => notify.toast('Failed to copy', { type: 'error' }),
     )
-  }, [tests, addToast])
+  }, [tests])
 
   const statusColor = (s: TestStatus) => {
     switch (s) {

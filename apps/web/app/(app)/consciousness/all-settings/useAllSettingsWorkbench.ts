@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the All Settings page.
@@ -9,7 +10,6 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -27,9 +27,13 @@ import {
   type ConfigStatus,
   type FullStatus,
 } from './all-settings-prefs'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function useAllSettingsWorkbench() {
-  const addToast = useToastStore((s) => s.addToast)
   const { t } = useLocale()
   const [config, setConfig] = useState<ConfigStatus | null>(null)
   const [status, setStatus] = useState<FullStatus | null>(null)
@@ -83,7 +87,7 @@ export function useAllSettingsWorkbench() {
         savePersonality(next)
         return next
       })
-      addToast(`Applied ${presetName} preset`, 'success')
+      notify.toast(`Applied ${presetName} preset`, { type: 'success' })
     }
   }
 
@@ -91,9 +95,9 @@ export function useAllSettingsWorkbench() {
     try {
       await consciousnessController.updateConfig({ level: newLevel })
       setConfig((prev) => (prev ? { ...prev, level: newLevel, enabled: newLevel > 0 } : prev))
-      addToast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, 'success')
+      notify.toast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
@@ -106,10 +110,10 @@ export function useAllSettingsWorkbench() {
     setSeeding(true)
     try {
       await consciousnessController.seedData({ count: seedCount })
-      addToast(`Seeded ${seedCount} episodes`, 'success')
+      notify.toast(`Seeded ${seedCount} episodes`, { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }
@@ -118,32 +122,32 @@ export function useAllSettingsWorkbench() {
   const handleClearEpisodes = async () => {
     try {
       await consciousnessController.clearEpisodes()
-      addToast('Episodes cleared', 'success')
+      notify.toast('Episodes cleared', { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
   const handleClearBeliefs = async () => {
     try {
       await consciousnessController.resetBeliefs()
-      addToast('Beliefs reset to defaults', 'success')
+      notify.toast('Beliefs reset to defaults', { type: 'success' })
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
   const handleResetPersonality = async () => {
     try {
       await consciousnessController.resetPersonality()
-      addToast('Personality reset to defaults', 'success')
+      notify.toast('Personality reset to defaults', { type: 'success' })
       setPersonality(DEFAULT_PERSONALITY)
       savePersonality(DEFAULT_PERSONALITY)
       fetchStatus()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
@@ -162,9 +166,9 @@ export function useAllSettingsWorkbench() {
       a.download = `consciousness-settings-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('Settings exported', 'success')
+      notify.toast('Settings exported', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
@@ -186,9 +190,9 @@ export function useAllSettingsWorkbench() {
         if (data.config?.level !== undefined) {
           await updateLevel(data.config.level)
         }
-        addToast('Settings imported', 'success')
+        notify.toast('Settings imported', { type: 'success' })
       } catch {
-        addToast('Invalid settings file', 'error')
+        notify.toast('Invalid settings file', { type: 'error' })
       }
     }
     reader.readAsText(file)

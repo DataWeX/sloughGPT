@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -14,7 +15,6 @@ import {
   Skeleton,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessStats } from '@/hooks/useConsciousnessStats'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
@@ -38,6 +38,11 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
 } from 'recharts'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const BELIEF_COLORS: Record<string, string> = {
   competence: 'rgb(var(--chart-1))',
@@ -70,7 +75,6 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessMasterDashboardPage() {
-  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const { stats, loading: statsLoading } = useConsciousnessStats()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
@@ -120,11 +124,11 @@ export default function ConsciousnessMasterDashboardPage() {
         setBeliefsHistory(bResult.value.beliefs ?? [])
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -146,10 +150,10 @@ export default function ConsciousnessMasterDashboardPage() {
     setSeeding(true)
     try {
       await consciousnessController.seedData({ count: 30 })
-      addToast('30 episodes added', 'success')
+      notify.toast('30 episodes added', { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }
@@ -159,10 +163,10 @@ export default function ConsciousnessMasterDashboardPage() {
     setReflecting(true)
     try {
       await consciousnessController.reflect()
-      addToast('New episode recorded', 'success')
+      notify.toast('New episode recorded', { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setReflecting(false)
     }
@@ -187,9 +191,9 @@ export default function ConsciousnessMasterDashboardPage() {
       a.download = `consciousness-master-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('Exported master dashboard data', 'success')
+      notify.toast('Exported master dashboard data', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setExporting(false)
     }
@@ -258,7 +262,12 @@ export default function ConsciousnessMasterDashboardPage() {
     )
   }
 
-  const healthColor = healthScore > 80 ? 'rgb(var(--success))' : healthScore > 50 ? 'rgb(var(--warning))' : 'rgb(var(--destructive))'
+  const healthColor =
+    healthScore > 80
+      ? 'rgb(var(--success))'
+      : healthScore > 50
+        ? 'rgb(var(--warning))'
+        : 'rgb(var(--destructive))'
 
   return (
     <PageContainer

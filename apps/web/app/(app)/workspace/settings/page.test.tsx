@@ -17,7 +17,9 @@ vi.mock('@/lib/auth', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))
@@ -124,7 +126,10 @@ describe('WorkspaceSettingsPage', () => {
 
     const saveBtn = screen.getByText('Save Settings')
     await user.click(saveBtn)
-    expect(mockApiPut).toHaveBeenCalledWith('/workspaces/ws-1/settings', expect.objectContaining({ name: 'Updated Name' }))
+    expect(mockApiPut).toHaveBeenCalledWith(
+      '/workspaces/ws-1/settings',
+      expect.objectContaining({ name: 'Updated Name' }),
+    )
   })
 
   it('shows no workspace message when settings are null', async () => {

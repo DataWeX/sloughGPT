@@ -58,7 +58,9 @@ vi.mock('@/lib/knowledge-controller', () => ({
     delete: mockKnowledgeDelete,
   },
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 vi.mock('@/lib/conversations-utils', () => ({ formatDate: vi.fn(() => 'Jan 1, 2026') }))
@@ -139,7 +141,7 @@ describe('KnowledgeDetailPage', () => {
     mockKnowledgeList.mockResolvedValue([])
     render(<Page />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Knowledge item not found', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Knowledge item not found', { type: 'error' })
     })
   })
 
@@ -148,7 +150,7 @@ describe('KnowledgeDetailPage', () => {
     mockKnowledgeList.mockRejectedValue(new Error('network'))
     render(<Page />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge item', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge item', { type: 'error' })
     })
   })
 
@@ -175,7 +177,7 @@ describe('KnowledgeDetailPage', () => {
     await waitFor(() => {
       expect(mockKnowledgeDelete).toHaveBeenCalledWith('kb-1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Deleted', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Deleted', { type: 'success' })
     expect(mockPush).toHaveBeenCalledWith('/knowledge')
   })
 
@@ -189,7 +191,7 @@ describe('KnowledgeDetailPage', () => {
       screen.getByText('Delete').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Delete failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Delete failed', { type: 'error' })
     })
   })
 

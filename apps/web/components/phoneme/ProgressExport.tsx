@@ -1,15 +1,19 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export default function ProgressExport() {
-  const history = usePhonemeStore(s => s.history)
-  const addToHistory = usePhonemeStore(s => s.addToHistory)
-  const addToast = useToastStore(s => s.addToast)
+  const history = usePhonemeStore((s) => s.history)
+  const addToHistory = usePhonemeStore((s) => s.addToHistory)
 
   const exportData = useCallback(() => {
     const data = {
@@ -24,8 +28,8 @@ export default function ProgressExport() {
     a.download = `phoneme-progress-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast(`Exported ${history.length} entries`, 'success')
-  }, [history, addToast])
+    notify.toast(`Exported ${history.length} entries`, { type: 'success' })
+  }, [history])
 
   const importData = useCallback(() => {
     const input = document.createElement('input')
@@ -37,14 +41,23 @@ export default function ProgressExport() {
 
       try {
         const text = await file.text()
-        const data: { history: Array<{ target: string; spoken: string; language: string; targetPhonemes: string[]; spokenPhonemes: string[]; score: number }> } = JSON.parse(text)
+        const data: {
+          history: Array<{
+            target: string
+            spoken: string
+            language: string
+            targetPhonemes: string[]
+            spokenPhonemes: string[]
+            score: number
+          }>
+        } = JSON.parse(text)
 
         if (!data.history || !Array.isArray(data.history)) {
-          addToast('Invalid file format', 'error')
+          notify.toast('Invalid file format', { type: 'error' })
           return
         }
 
-        const existingWords = new Set(history.map(h => `${h.target}-${h.language}-${h.spoken}`))
+        const existingWords = new Set(history.map((h) => `${h.target}-${h.language}-${h.spoken}`))
 
         let imported = 0
         for (const entry of data.history) {
@@ -62,13 +75,16 @@ export default function ProgressExport() {
           }
         }
 
-        addToast(`Imported ${imported} new entries (${data.history.length - imported} duplicates skipped)`, 'success')
+        notify.toast(
+          `Imported ${imported} new entries (${data.history.length - imported} duplicates skipped)`,
+          { type: 'success' },
+        )
       } catch {
-        addToast('Failed to parse file', 'error')
+        notify.toast('Failed to parse file', { type: 'error' })
       }
     }
     input.click()
-  }, [addToast, history, addToHistory])
+  }, [history, addToHistory])
 
   return (
     <Card>

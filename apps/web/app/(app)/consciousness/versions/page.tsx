@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -24,7 +25,6 @@ import {
   Skeleton,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -110,7 +110,6 @@ function buildDiff(a: string, b: string): { value: string; type: 'same' | 'chang
 const LEVEL_LABELS = ['Off', 'Basic', 'Full', 'Deep']
 
 export default function ConsciousnessVersionsPage() {
-  const addToast = useToastStore((s) => s.addToast)
   const { t } = useLocale()
   const [config, setConfig] = useState<ConfigSnapshot | null>(null)
   const [personality, setPersonality] = useState<PersonalitySnapshot | null>(null)
@@ -162,7 +161,7 @@ export default function ConsciousnessVersionsPage() {
     if (!config || !personality) return
     const name = savingName.trim()
     if (!name) {
-      addToast('Version name is required', 'error')
+      notify.toast('Version name is required', { type: 'error' })
       return
     }
     const version: SavedVersion = {
@@ -177,14 +176,14 @@ export default function ConsciousnessVersionsPage() {
     saveVersions(updated)
     setSavingName('')
     setShowSaveDialog(false)
-    addToast(`Version "${name}" saved`, 'success')
+    notify.toast(`Version "${name}" saved`, { type: 'success' })
   }
 
   const handleDelete = (id: string) => {
     const updated = versions.filter((v) => v.id !== id)
     setVersions(updated)
     saveVersions(updated)
-    addToast('Version deleted', 'success')
+    notify.toast('Version deleted', { type: 'success' })
   }
 
   const handleRestore = async () => {
@@ -218,11 +217,11 @@ export default function ConsciousnessVersionsPage() {
       setPersonality(restoreTarget.personality)
       setShowRestoreDialog(false)
       setRestoreTarget(null)
-      addToast(`Restored version "${restoreTarget.name}"`, 'success')
+      notify.toast(`Restored version "${restoreTarget.name}"`, { type: 'success' })
       fetchConfig()
       fetchPersonality()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 

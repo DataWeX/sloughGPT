@@ -2,10 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import EncodingCard from './EncodingCard'
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 vi.mock('@/lib/phoneme-controller', () => ({
@@ -20,7 +23,7 @@ vi.mock('@/lib/phoneme-controller', () => ({
     { value: 'it', label: 'Italian' },
     { value: 'pt', label: 'Portuguese' },
   ],
-  toIPA: (phonemes: string[]) => phonemes.map(p => `/${p.toLowerCase()}/`),
+  toIPA: (phonemes: string[]) => phonemes.map((p) => `/${p.toLowerCase()}/`),
 }))
 
 vi.mock('./PhonemeSkeleton', () => ({ default: () => <div data-testid="skeleton" /> }))

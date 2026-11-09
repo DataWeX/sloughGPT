@@ -8,9 +8,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 
-const addToast = vi.fn()
+const { addToast } = vi.hoisted(() => ({ addToast: vi.fn() }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  // The hook writes through `notify.toast`; bind it to the spy the
+  // assertions below check (it previously read useToastStore.addToast).
+  notify: { toast: addToast, banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: typeof addToast }) => unknown) =>
     selector({ addToast }),
 }))
@@ -143,7 +147,7 @@ describe('useConsciousnessDashboard', () => {
     expect(result.current.currentQualia.valence).toBe(0.9)
     expect(result.current.currentBeliefs.competence).toBe(0.55)
     expect(result.current.consciousnessLevel).toBe(3)
-    expect(addToast).toHaveBeenCalledWith('Consciousness state updated', 'success')
+    expect(addToast).toHaveBeenCalledWith('Consciousness state updated', { type: 'success' })
   })
 
   it('ignores live events while the stream is off', async () => {
@@ -165,7 +169,7 @@ describe('useConsciousnessDashboard', () => {
 
     expect(result.current.qualiaHistory).toHaveLength(0)
     expect(result.current.consciousnessLevel).toBe(2)
-    expect(addToast).not.toHaveBeenCalledWith('Consciousness state updated', 'success')
+    expect(addToast).not.toHaveBeenCalledWith('Consciousness state updated', { type: 'success' })
   })
 
   it('surfaces a seed failure as an error toast and resets the busy flag', async () => {
@@ -178,7 +182,7 @@ describe('useConsciousnessDashboard', () => {
       await result.current.handleSeed()
     })
 
-    expect(addToast).toHaveBeenCalledWith('backend down', 'error')
+    expect(addToast).toHaveBeenCalledWith('backend down', { type: 'error' })
     expect(result.current.seeding).toBe(false)
   })
 
@@ -194,6 +198,6 @@ describe('useConsciousnessDashboard', () => {
 
     expect(mockCtrl.updateConfig).toHaveBeenCalledWith({ level: 0 })
     expect(result.current.consciousnessLevel).toBe(0)
-    expect(addToast).toHaveBeenCalledWith('Level set to 0', 'success')
+    expect(addToast).toHaveBeenCalledWith('Level set to 0', { type: 'success' })
   })
 })

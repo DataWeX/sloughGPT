@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
@@ -10,8 +11,12 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type QuizType = 'phoneme-to-word' | 'word-to-phoneme' | 'ipa-to-phoneme'
 
@@ -93,7 +98,6 @@ export default function MultipleChoiceQuiz() {
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
-  const addToast = useToastStore((s) => s.addToast)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const startNewQuestion = useCallback(() => {
@@ -128,14 +132,14 @@ export default function MultipleChoiceQuiz() {
         setStreak((prev) => {
           const newStreak = prev + 1
           setBestStreak((best) => Math.max(best, newStreak))
-          if (newStreak >= 3) addToast(`${newStreak} streak!`, 'success')
+          if (newStreak >= 3) notify.toast(`${newStreak} streak!`, { type: 'success' })
           return newStreak
         })
       } else {
         setStreak(0)
       }
     },
-    [question, selectedAnswer, addToast],
+    [question, selectedAnswer],
   )
 
   const handleNext = useCallback(() => {

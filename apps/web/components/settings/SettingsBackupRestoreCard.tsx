@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import {
   Card,
@@ -10,7 +11,6 @@ import {
   Button,
 } from '@sloughgpt/strui'
 import { downloadJson, importFile } from '@/lib/download-utils'
-import { useToastStore } from '@/lib/toast-store'
 
 interface SettingsBackupRestoreCardProps {
   settings: Record<string, unknown>
@@ -23,11 +23,9 @@ export function SettingsBackupRestoreCard({
   onImport,
   version,
 }: SettingsBackupRestoreCardProps) {
-  const addToast = useToastStore((s) => s.addToast)
-
   const handleExport = () => {
     downloadJson(settings, 'sloughgpt-settings.json')
-    addToast('Settings exported', 'success')
+    notify.toast('Settings exported', { type: 'success' })
   }
 
   const handleImport = async () => {
@@ -52,9 +50,9 @@ export function SettingsBackupRestoreCard({
       if (typeof raw.bannerHoldMs === 'number') valid.bannerHoldMs = raw.bannerHoldMs
       if (Object.keys(valid).length === 0) throw new Error('No valid settings found')
       onImport(valid)
-      addToast('Settings imported', 'success')
+      notify.toast('Settings imported', { type: 'success' })
     } catch {
-      addToast('Invalid settings file', 'error')
+      notify.toast('Invalid settings file', { type: 'error' })
     }
   }
 

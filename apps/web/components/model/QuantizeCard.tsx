@@ -1,16 +1,28 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { modelController, type QuantizationResult } from '@/lib/model-controller'
-import { useToastStore } from '@/lib/toast-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface QuantizeCardProps {
   isLoaded: boolean
   modelId: string
-  health: { quantization?: { quantized: boolean; bits?: number; mode?: string; summary?: { bits: number; tensors: number; avg_cosine_sim: number; min_cosine_sim: number } } } | null
+  health: {
+    quantization?: {
+      quantized: boolean
+      bits?: number
+      mode?: string
+      summary?: { bits: number; tensors: number; avg_cosine_sim: number; min_cosine_sim: number }
+    }
+  } | null
   onQuantized?: () => void
 }
 
@@ -24,7 +36,6 @@ interface DisplayState {
 }
 
 export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: QuantizeCardProps) {
-  const addToast = useToastStore(s => s.addToast)
   const [quantizing, setQuantizing] = useState(false)
   const [dequantizing, setDequantizing] = useState(false)
   const [lastResult, setLastResult] = useState<QuantizationResult | null>(null)
@@ -32,20 +43,25 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
   const q = health?.quantization
   const isQuantized = q?.quantized ?? false
 
-  const handleQuantize = useCallback(async (bits: number) => {
-    if (quantizing || dequantizing) return
-    setQuantizing(true)
-    try {
-      const result = await modelController.quantize(bits, 'symmetric')
-      setLastResult(result)
-      addToast(`Quantized to ${bits}-bit (${result.summary?.tensors ?? 0} tensors)`, 'success')
-      onQuantized?.()
-    } catch {
-      addToast('Could not quantize model', 'error')
-    } finally {
-      setQuantizing(false)
-    }
-  }, [quantizing, dequantizing, addToast, onQuantized])
+  const handleQuantize = useCallback(
+    async (bits: number) => {
+      if (quantizing || dequantizing) return
+      setQuantizing(true)
+      try {
+        const result = await modelController.quantize(bits, 'symmetric')
+        setLastResult(result)
+        notify.toast(`Quantized to ${bits}-bit (${result.summary?.tensors ?? 0} tensors)`, {
+          type: 'success',
+        })
+        onQuantized?.()
+      } catch {
+        notify.toast('Could not quantize model', { type: 'error' })
+      } finally {
+        setQuantizing(false)
+      }
+    },
+    [quantizing, dequantizing, onQuantized],
+  )
 
   const handleDequantize = useCallback(async () => {
     if (quantizing || dequantizing) return
@@ -53,21 +69,35 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
     try {
       await modelController.dequantize()
       setLastResult(null)
-      addToast('Model restored to full precision', 'success')
+      notify.toast('Model restored to full precision', { type: 'success' })
       onQuantized?.()
     } catch {
-      addToast('Could not dequantize model', 'error')
+      notify.toast('Could not dequantize model', { type: 'error' })
     } finally {
       setDequantizing(false)
     }
-  }, [quantizing, dequantizing, addToast, onQuantized])
+  }, [quantizing, dequantizing, onQuantized])
 
   if (!isLoaded) return null
 
   const display: DisplayState | null = lastResult
-    ? { quantized: lastResult.quantized, bits: lastResult.bits, mode: lastResult.mode, tensors: lastResult.summary?.tensors, avg_cosine_sim: lastResult.summary?.avg_cosine_sim, min_cosine_sim: lastResult.summary?.min_cosine_sim }
+    ? {
+        quantized: lastResult.quantized,
+        bits: lastResult.bits,
+        mode: lastResult.mode,
+        tensors: lastResult.summary?.tensors,
+        avg_cosine_sim: lastResult.summary?.avg_cosine_sim,
+        min_cosine_sim: lastResult.summary?.min_cosine_sim,
+      }
     : q
-      ? { quantized: q.quantized, bits: q.bits, mode: q.mode, tensors: q.summary?.tensors, avg_cosine_sim: q.summary?.avg_cosine_sim, min_cosine_sim: q.summary?.min_cosine_sim }
+      ? {
+          quantized: q.quantized,
+          bits: q.bits,
+          mode: q.mode,
+          tensors: q.summary?.tensors,
+          avg_cosine_sim: q.summary?.avg_cosine_sim,
+          min_cosine_sim: q.summary?.min_cosine_sim,
+        }
       : null
 
   return (
@@ -76,13 +106,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <CardTitle className="text-xs">Quantize</CardTitle>
-            {isQuantized && (
-              <Badge
-                label={`${q?.bits ?? '?'}-bit`}
-                variant="success"
-                size="sm"
-              />
-            )}
+            {isQuantized && <Badge label={`${q?.bits ?? '?'}-bit`} variant="success" size="sm" />}
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -127,7 +151,9 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
             {display.bits != null && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground/60">Precision</span>
-                <span className="font-mono tabular-nums">{display.bits}-bit {display.mode || 'symmetric'}</span>
+                <span className="font-mono tabular-nums">
+                  {display.bits}-bit {display.mode || 'symmetric'}
+                </span>
               </div>
             )}
             {display.tensors != null && (

@@ -75,7 +75,9 @@ vi.mock('@/lib/profiles-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => vi.fn(),
 }))
 

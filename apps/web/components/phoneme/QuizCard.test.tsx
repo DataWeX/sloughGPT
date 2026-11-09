@@ -42,7 +42,9 @@ vi.mock('@/lib/phoneme-store', () => ({
   ),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: vi.fn((selector: any) => selector({ addToast: vi.fn() })),
 }))
 

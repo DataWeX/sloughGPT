@@ -1,16 +1,31 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton, Button, StatusDot } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  StatCard,
+  KpiGrid,
+  Skeleton,
+  Button,
+  StatusDot,
+} from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
 import { overviewTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { RefreshCw, ExternalLink, ChevronRight, AlertTriangle } from 'lucide-react'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface WorkspaceStats {
   workspace_id: string
@@ -35,7 +50,13 @@ interface Activity {
 
 interface UsageData {
   members: { total: number; admins: number; users: number; viewers: number }
-  training: { total: number; running: number; completed: number; failed: number; total_minutes: number }
+  training: {
+    total: number
+    running: number
+    completed: number
+    failed: number
+    total_minutes: number
+  }
   datasets: { total: number }
   knowledge: { total: number }
   api_keys: { total: number }
@@ -62,13 +83,14 @@ export default function WorkspaceDashboardPage() {
   const [checkingHealth, setCheckingHealth] = useState(false)
   const [showAllActivities, setShowAllActivities] = useState(false)
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore(s => s.addToast)
 
   const runHealthCheck = useCallback(async () => {
     if (!currentWorkspace?.id) return
     setCheckingHealth(true)
     try {
-      const res = await apiGet<{ data: { status: string } }>(`/workspaces/${currentWorkspace.id}/health`)
+      const res = await apiGet<{ data: { status: string } }>(
+        `/workspaces/${currentWorkspace.id}/health`,
+      )
       setHealthStatus(res?.data?.status ?? null)
     } catch {
       setHealthStatus('error')
@@ -93,13 +115,15 @@ export default function WorkspaceDashboardPage() {
       setUsage(usageRes?.data ?? null)
       runHealthCheck()
     } catch {
-      addToast('Failed to load workspace data', 'error')
+      notify.toast('Failed to load workspace data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, runHealthCheck, addToast])
+  }, [currentWorkspace?.id, runHealthCheck])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
   useRefreshShortcut(fetchData)
 
   const activityByType = useMemo(() => {
@@ -121,14 +145,21 @@ export default function WorkspaceDashboardPage() {
 
   const formatTime = (ts: string) => {
     if (!ts) return ''
-    try { return new Date(ts).toLocaleString() } catch { return ts }
+    try {
+      return new Date(ts).toLocaleString()
+    } catch {
+      return ts
+    }
   }
 
   const maxActivityType = useMemo(() => {
     let max = 0
     let maxType = ''
     for (const [type, count] of Object.entries(activityByType)) {
-      if (count > max) { max = count; maxType = type }
+      if (count > max) {
+        max = count
+        maxType = type
+      }
     }
     return { type: maxType, count: max }
   }, [activityByType])
@@ -137,38 +168,54 @@ export default function WorkspaceDashboardPage() {
 
   if (loading) {
     return (
-      <PageContainer title="Workspace Dashboard"
-      toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
-    >
+      <PageContainer
+        title="Workspace Dashboard"
+        toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
+      >
         <Skeleton className="h-8 w-64 mb-4" />
         <KpiGrid className="mb-6">
-          {[1,2,3,4,5,6].map(i => (
-            <Card key={i}><CardContent className="p-4 space-y-2">
-              <Skeleton className="h-2 w-16" />
-              <Skeleton className="h-5 w-10" />
-            </CardContent></Card>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-2">
+                <Skeleton className="h-2 w-16" />
+                <Skeleton className="h-5 w-10" />
+              </CardContent>
+            </Card>
           ))}
         </KpiGrid>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-          <Card><CardContent className="p-4 space-y-3">
-            <Skeleton className="h-3 w-28" />
-            {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
-          </CardContent></Card>
-          <Card><CardContent className="p-4 space-y-3">
-            <Skeleton className="h-3 w-28" />
-            {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
-          </CardContent></Card>
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Skeleton className="h-3 w-28" />
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-3 w-full" />
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Skeleton className="h-3 w-28" />
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-3 w-full" />
+              ))}
+            </CardContent>
+          </Card>
         </div>
-        <Card><CardContent className="p-4 space-y-2">
-          <Skeleton className="h-3 w-32" />
-          {[1,2,3,4].map(i => <Skeleton key={i} className="h-8 w-full" />)}
-        </CardContent></Card>
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <Skeleton className="h-3 w-32" />
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }
 
   return (
-    <PageContainer title={stats?.name ? `${stats.name} — Dashboard` : "Workspace Dashboard"}
+    <PageContainer
+      title={stats?.name ? `${stats.name} — Dashboard` : 'Workspace Dashboard'}
       toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
     >
       {/* KPIs */}
@@ -189,7 +236,8 @@ export default function WorkspaceDashboardPage() {
               <div className="flex items-center gap-2 text-xs">
                 <StatusDot tone="success" pulse />
                 <span className="text-success font-medium">
-                  {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
+                  {stats?.active_training_jobs} training job
+                  {stats?.active_training_jobs !== 1 ? 's' : ''} running
                 </span>
               </div>
               <Button variant="ghost" size="sm" onClick={() => router.push('/training/queue')}>
@@ -206,7 +254,13 @@ export default function WorkspaceDashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs">Training Overview</CardTitle>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchData} title="Refresh">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={fetchData}
+                title="Refresh"
+              >
                 <RefreshCw className="h-3 w-3" />
               </Button>
             </div>
@@ -220,7 +274,9 @@ export default function WorkspaceDashboardPage() {
               <div className="w-full bg-muted rounded-full h-1.5">
                 <div
                   className="bg-success h-1.5 rounded-full"
-                  style={{ width: `${usage?.training?.total ? (trainingByStatus.completed / usage.training.total) * 100 : 0}%` }}
+                  style={{
+                    width: `${usage?.training?.total ? (trainingByStatus.completed / usage.training.total) * 100 : 0}%`,
+                  }}
                 />
               </div>
 
@@ -231,7 +287,9 @@ export default function WorkspaceDashboardPage() {
               <div className="w-full bg-muted rounded-full h-1.5">
                 <div
                   className="bg-info h-1.5 rounded-full"
-                  style={{ width: `${usage?.training?.total ? (trainingByStatus.running / usage.training.total) * 100 : 0}%` }}
+                  style={{
+                    width: `${usage?.training?.total ? (trainingByStatus.running / usage.training.total) * 100 : 0}%`,
+                  }}
                 />
               </div>
 
@@ -242,7 +300,9 @@ export default function WorkspaceDashboardPage() {
               <div className="w-full bg-muted rounded-full h-1.5">
                 <div
                   className="bg-destructive h-1.5 rounded-full"
-                  style={{ width: `${usage?.training?.total ? (trainingByStatus.failed / usage.training.total) * 100 : 0}%` }}
+                  style={{
+                    width: `${usage?.training?.total ? (trainingByStatus.failed / usage.training.total) * 100 : 0}%`,
+                  }}
                 />
               </div>
 
@@ -265,11 +325,15 @@ export default function WorkspaceDashboardPage() {
                 .map(([type, count]) => (
                   <div key={type} className="flex items-center justify-between text-[10px]">
                     <div className="flex items-center gap-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                        type === 'training' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
-                        type === 'audit' ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                          type === 'training'
+                            ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
+                            : type === 'audit'
+                              ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary'
+                              : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
                         {type}
                       </span>
                     </div>
@@ -277,10 +341,15 @@ export default function WorkspaceDashboardPage() {
                       <div className="w-24 bg-muted rounded-full h-1.5">
                         <div
                           className={`h-1.5 rounded-full ${
-                            type === 'training' ? 'bg-info' :
-                            type === 'audit' ? 'bg-primary' : 'bg-muted'
+                            type === 'training'
+                              ? 'bg-info'
+                              : type === 'audit'
+                                ? 'bg-primary'
+                                : 'bg-muted'
                           }`}
-                          style={{ width: `${maxActivityType.count ? (count / maxActivityType.count) * 100 : 0}%` }}
+                          style={{
+                            width: `${maxActivityType.count ? (count / maxActivityType.count) * 100 : 0}%`,
+                          }}
                         />
                       </div>
                       <span className="font-medium w-6 text-right">{count}</span>
@@ -288,7 +357,9 @@ export default function WorkspaceDashboardPage() {
                   </div>
                 ))}
               {Object.keys(activityByType).length === 0 && (
-                <p className="text-[10px] text-muted-foreground text-center py-4">No activity data</p>
+                <p className="text-[10px] text-muted-foreground text-center py-4">
+                  No activity data
+                </p>
               )}
             </div>
           </CardContent>
@@ -301,14 +372,17 @@ export default function WorkspaceDashboardPage() {
           <CardContent className="py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">
-                <StatusDot tone={
-                  healthStatus === 'healthy' ? 'success' :
-                  healthStatus === 'warning' ? 'warning' : 'destructive'
-                } />
+                <StatusDot
+                  tone={
+                    healthStatus === 'healthy'
+                      ? 'success'
+                      : healthStatus === 'warning'
+                        ? 'warning'
+                        : 'destructive'
+                  }
+                />
                 <span className="font-medium capitalize">Workspace {healthStatus}</span>
-                {healthStatus === 'error' && (
-                  <AlertTriangle className="h-3 w-3 text-warning" />
-                )}
+                {healthStatus === 'error' && <AlertTriangle className="h-3 w-3 text-warning" />}
               </div>
               <button
                 onClick={runHealthCheck}
@@ -327,7 +401,13 @@ export default function WorkspaceDashboardPage() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xs">Recent Activity</CardTitle>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchData} title="Refresh">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={fetchData}
+              title="Refresh"
+            >
               <RefreshCw className="h-3 w-3" />
             </Button>
           </div>
@@ -350,21 +430,30 @@ export default function WorkspaceDashboardPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <span className="font-medium">{a.action}</span>
-                      {a.detail && <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>}
+                      {a.detail && (
+                        <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {a.user && <span className="text-muted-foreground">{a.user}</span>}
                       {a.status && (
-                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                          a.status === 'completed' || a.status === 'success' ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success' :
-                          a.status === 'failed' || a.status === 'failure' ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive' :
-                          a.status === 'running' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
-                          'bg-muted text-muted-foreground'
-                        }`}>
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                            a.status === 'completed' || a.status === 'success'
+                              ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success'
+                              : a.status === 'failed' || a.status === 'failure'
+                                ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive'
+                                : a.status === 'running'
+                                  ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
+                                  : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
                           {a.status}
                         </span>
                       )}
-                      <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                      <span className="text-muted-foreground whitespace-nowrap">
+                        {formatTime(a.timestamp)}
+                      </span>
                       {link && <ExternalLink className="h-2.5 w-2.5 text-muted-foreground" />}
                     </div>
                   </Wrapper>

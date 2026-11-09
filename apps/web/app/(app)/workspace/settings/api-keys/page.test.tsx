@@ -19,7 +19,9 @@ vi.mock('@/lib/auth', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))
@@ -36,9 +38,37 @@ describe('ApiKeysPage', () => {
   const mockKeys = {
     data: {
       keys: [
-        { id: 'k1', name: 'Production Key', key_hash: 'sk-abc...xyz', scopes: ['*'], created_at: 1700000000, revoked: false, workspace_id: 'ws-1', user_id: 'u1' },
-        { id: 'k2', name: 'Dev Key', key_hash: 'sk-def...uvw', scopes: ['chat:send'], created_at: 1700100000, expires_at: 1700200000, revoked: false, workspace_id: 'ws-1', user_id: 'u1' },
-        { id: 'k3', name: 'Old Key', key_hash: 'sk-old...key', scopes: ['*'], created_at: 1699900000, revoked: true, workspace_id: 'ws-1', user_id: 'u1' },
+        {
+          id: 'k1',
+          name: 'Production Key',
+          key_hash: 'sk-abc...xyz',
+          scopes: ['*'],
+          created_at: 1700000000,
+          revoked: false,
+          workspace_id: 'ws-1',
+          user_id: 'u1',
+        },
+        {
+          id: 'k2',
+          name: 'Dev Key',
+          key_hash: 'sk-def...uvw',
+          scopes: ['chat:send'],
+          created_at: 1700100000,
+          expires_at: 1700200000,
+          revoked: false,
+          workspace_id: 'ws-1',
+          user_id: 'u1',
+        },
+        {
+          id: 'k3',
+          name: 'Old Key',
+          key_hash: 'sk-old...key',
+          scopes: ['*'],
+          created_at: 1699900000,
+          revoked: true,
+          workspace_id: 'ws-1',
+          user_id: 'u1',
+        },
       ],
       count: 3,
     },

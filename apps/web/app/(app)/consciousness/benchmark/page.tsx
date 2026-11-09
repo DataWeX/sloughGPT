@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -12,9 +13,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type TestType = 'reflect' | 'process' | 'seed' | 'batch' | 'status'
 
@@ -121,7 +126,6 @@ function computeHistogramBins(times: number[], bins: number): { start: number; c
 }
 
 export default function ConsciousnessBenchmarkPage() {
-  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
 
   const [iterations, setIterations] = useState(50)
@@ -185,7 +189,7 @@ export default function ConsciousnessBenchmarkPage() {
 
     if (times.length === 0) {
       setRunning(false)
-      addToast(t('consciousness_benchmark.toast_aborted'), 'error')
+      notify.toast(t('consciousness_benchmark.toast_aborted'), { type: 'error' })
       return
     }
 
@@ -214,8 +218,8 @@ export default function ConsciousnessBenchmarkPage() {
     saveRun(benchmarkResult)
     setResult(benchmarkResult)
     setRunning(false)
-    addToast(t('consciousness_benchmark.toast_complete'), 'success')
-  }, [running, testType, iterations, warmup, addToast, t])
+    notify.toast(t('consciousness_benchmark.toast_complete'), { type: 'success' })
+  }, [running, testType, iterations, warmup, t])
 
   const stopBenchmark = useCallback(() => {
     abortRef.current = true
@@ -230,8 +234,8 @@ export default function ConsciousnessBenchmarkPage() {
     a.download = `consciousness-benchmark-${result.testType}-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast(t('consciousness_benchmark.toast_exported'), 'success')
-  }, [result, addToast, t])
+    notify.toast(t('consciousness_benchmark.toast_exported'), { type: 'success' })
+  }, [result, t])
 
   const progressPct = warmup + iterations > 0 ? (progress / (warmup + iterations)) * 100 : 0
 

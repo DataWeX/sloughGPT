@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the Settings page.
@@ -10,7 +11,6 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useSettings, useUpdateSettings, DEFAULT_SETTINGS } from '@/lib/store'
-import { useToastStore } from '@/lib/toast-store'
 import { systemController } from '@/lib/system-controller'
 import { modelController } from '@/lib/model-controller'
 import { chatDB } from '@/lib/db'
@@ -26,11 +26,15 @@ import {
   type DiskUsage,
   type SystemInfo,
 } from '@/lib/system-controller'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function useSettingsWorkbench() {
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
-  const addToast = useToastStore((s) => s.addToast)
   const { healthLegacy: apiHealth } = useLiveStatus()
   const { locale, setLocale } = useLocale()
   const { palette, setPalette } = useTheme()
@@ -94,9 +98,11 @@ export function useSettingsWorkbench() {
     try {
       const status = await systemController.setProcessGuardEnabled(enabled)
       setProcessGuard(status)
-      addToast(enabled ? 'Process isolation enabled' : 'Process isolation disabled', 'success')
+      notify.toast(enabled ? 'Process isolation enabled' : 'Process isolation disabled', {
+        type: 'success',
+      })
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Could not toggle process guard'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not toggle process guard'), { type: 'error' })
     }
   }
 
@@ -123,12 +129,12 @@ export function useSettingsWorkbench() {
 
   const clearChat = () => {
     chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {})
-    addToast('Chat history cleared', 'success')
+    notify.toast('Chat history cleared', { type: 'success' })
   }
 
   const resetAllSettings = () => {
     updateSettings(DEFAULT_SETTINGS)
-    addToast('Settings reset to defaults', 'success')
+    notify.toast('Settings reset to defaults', { type: 'success' })
   }
 
   return {

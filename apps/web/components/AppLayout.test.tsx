@@ -1,3 +1,4 @@
+import { useBannerStore } from '@/lib/notify'
 import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
@@ -124,9 +125,18 @@ const { mockToastStore, mockApiMonitor, mockAppSettings } = vi.hoisted(() => ({
   // individual tests mutate these to exercise flag-driven behavior.
   mockAppSettings: { bannerGraceMs: 5_000, bannerHoldMs: 4_000 },
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel?: any) => (sel ? sel(mockToastStore) : mockToastStore),
-}))
+vi.mock('@/lib/notify', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/notify')>()
+  return {
+    ...actual,
+    // Only the toast surface is stubbed. The banner side stays REAL: AppLayout
+    // writes via notify.banner and GlobalBanner reads via useBannerStore —
+    // both must hit the same single slot (as they did when banner-store was
+    // never mocked).
+    notify: { ...actual.notify, toast: vi.fn() },
+    useToastStore: (sel?: any) => (sel ? sel(mockToastStore) : mockToastStore),
+  }
+})
 vi.mock('@/lib/store', () => ({
   useAppStore: Object.assign(
     (sel?: any) => (sel ? sel({ settings: mockAppSettings }) : { settings: mockAppSettings }),
@@ -142,7 +152,6 @@ vi.mock('@/hooks/useLiveStatus', () => ({ initLiveStatus: vi.fn(() => vi.fn()) }
 vi.mock('@/lib/backend-retry', () => ({ probeBackendAndRevalidate: vi.fn() }))
 
 import AppLayout, { OFFLINE_BANNER_GRACE_MS, RECOVERY_BANNER_HOLD_MS } from './AppLayout'
-import { useBannerStore } from '@/lib/banner-store'
 import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 
 describe('AppLayout', () => {

@@ -1,12 +1,17 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface HealthData {
   health_score: number
@@ -117,7 +122,6 @@ function buildFakeData(name: string): HealthData {
 }
 
 export default function ConsciousnessComparePage() {
-  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [configA, setConfigA] = useState<ConfigKey>('current')
@@ -145,16 +149,16 @@ export default function ConsciousnessComparePage() {
         setCurrentEpisodes(episodesData.value as unknown as EpisodesData)
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [addToast])
+  }, [])
 
   const fetchPresets = useCallback(async () => {
     try {
       const data = await consciousnessController.getPersonalityPresets()
       setPresets((data as any).presets ?? data)
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }, [])
 
@@ -198,10 +202,10 @@ export default function ConsciousnessComparePage() {
       await consciousnessController.applyPersonalityPreset(
         configA === 'current' ? 'default' : configA,
       )
-      addToast(t('consciousness_compare.toast_applied'), 'success')
+      notify.toast(t('consciousness_compare.toast_applied'), { type: 'success' })
       fetchCurrent()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setApplying(false)
     }

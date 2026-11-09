@@ -24,8 +24,10 @@ vi.mock('@/lib/state-events', () => ({
 }))
 
 // Mock toast-store
-const mockAddToast = vi.fn()
-vi.mock('@/lib/toast-store', () => ({
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: Object.assign(
     vi.fn((selector: any) => selector({ addToast: mockAddToast })),
     { getState: vi.fn(() => ({ addToast: mockAddToast })) },

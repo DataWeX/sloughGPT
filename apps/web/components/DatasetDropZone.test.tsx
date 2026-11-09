@@ -12,7 +12,9 @@ vi.mock('@/lib/files-controller', () => ({
   filesController: { upload: mockUpload },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (selector: any) => selector({ addToast: mockAddToast }),
 }))
 
@@ -24,7 +26,10 @@ vi.mock('@sloughgpt/strui', () => ({
 
 import { DatasetDropZone } from './DatasetDropZone'
 
-afterEach(() => { cleanup(); vi.clearAllMocks() })
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
+})
 
 describe('DatasetDropZone', () => {
   it('renders without crashing', () => {
@@ -52,7 +57,7 @@ describe('DatasetDropZone', () => {
 
     await waitFor(() => {
       expect(mockUpload).toHaveBeenCalled()
-      expect(mockAddToast).toHaveBeenCalledWith('Uploaded 1 file(s)', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Uploaded 1 file(s)', { type: 'success' })
       expect(onComplete).toHaveBeenCalled()
     })
   })
@@ -66,7 +71,7 @@ describe('DatasetDropZone', () => {
     fireEvent.change(input, { target: { files: [file] } })
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Upload failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Upload failed', { type: 'error' })
     })
   })
 })

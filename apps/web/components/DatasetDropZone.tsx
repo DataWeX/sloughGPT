@@ -1,10 +1,15 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useRef } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconUpload } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { useUploadFile } from '@/lib/cache'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface DatasetDropZoneProps {
   onUploadComplete: () => void
@@ -12,7 +17,6 @@ interface DatasetDropZoneProps {
 }
 
 export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZoneProps) {
-  const addToast = useToastStore((s) => s.addToast)
   const uploadFile = useUploadFile()
   const [isDragging, setIsDragging] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -33,15 +37,15 @@ export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZone
           await uploadFile.mutateAsync(formData)
         }
 
-        addToast(`Uploaded ${fileArray.length} file(s)`, 'success')
+        notify.toast(`Uploaded ${fileArray.length} file(s)`, { type: 'success' })
         onUploadComplete()
       } catch {
-        addToast('Upload failed', 'error')
+        notify.toast('Upload failed', { type: 'error' })
       } finally {
         setProgress(null)
       }
     },
-    [addToast, onUploadComplete, uploadFile],
+    [onUploadComplete, uploadFile],
   )
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {

@@ -1,9 +1,14 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Pipeline {
   id: string
@@ -22,7 +27,6 @@ interface CollectionStats {
 }
 
 export default function CollectionsContent() {
-  const addToast = useToastStore(s => s.addToast)
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [stats, setStats] = useState<CollectionStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -39,11 +43,11 @@ export default function CollectionsContent() {
       setPipelines(data.pipelines ?? [])
       setStats(data.counts ?? null)
     } catch {
-      addToast('Could not load collections', 'error')
+      notify.toast('Could not load collections', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     void fetchPipelines()
@@ -51,7 +55,7 @@ export default function CollectionsContent() {
 
   const createPipeline = useCallback(async () => {
     if (!newName.trim()) {
-      addToast('Name is required', 'error')
+      notify.toast('Name is required', { type: 'error' })
       return
     }
     setCreating(true)
@@ -61,39 +65,45 @@ export default function CollectionsContent() {
         source_type: newSourceType,
         store_type: newStoreType,
       })
-      addToast(`Created pipeline: ${newName}`, 'success')
+      notify.toast(`Created pipeline: ${newName}`, { type: 'success' })
       setNewName('')
       setShowCreate(false)
       void fetchPipelines()
     } catch {
-      addToast('Could not create pipeline', 'error')
+      notify.toast('Could not create pipeline', { type: 'error' })
     } finally {
       setCreating(false)
     }
-  }, [newName, newSourceType, newStoreType, addToast, fetchPipelines])
+  }, [newName, newSourceType, newStoreType, fetchPipelines])
 
-  const runPipeline = useCallback(async (pipelineId: string) => {
-    setRunningId(pipelineId)
-    try {
-      await apiPost(`/collections/run?name=${encodeURIComponent(pipelineId)}`)
-      addToast('Pipeline executed', 'success')
-      void fetchPipelines()
-    } catch {
-      addToast('Could not run pipeline', 'error')
-    } finally {
-      setRunningId(null)
-    }
-  }, [addToast, fetchPipelines])
+  const runPipeline = useCallback(
+    async (pipelineId: string) => {
+      setRunningId(pipelineId)
+      try {
+        await apiPost(`/collections/run?name=${encodeURIComponent(pipelineId)}`)
+        notify.toast('Pipeline executed', { type: 'success' })
+        void fetchPipelines()
+      } catch {
+        notify.toast('Could not run pipeline', { type: 'error' })
+      } finally {
+        setRunningId(null)
+      }
+    },
+    [fetchPipelines],
+  )
 
-  const deletePipeline = useCallback(async (pipelineId: string) => {
-    try {
-      await apiDelete(`/collections/${pipelineId}`)
-      addToast('Pipeline deleted', 'success')
-      void fetchPipelines()
-    } catch {
-      addToast('Could not delete pipeline', 'error')
-    }
-  }, [addToast, fetchPipelines])
+  const deletePipeline = useCallback(
+    async (pipelineId: string) => {
+      try {
+        await apiDelete(`/collections/${pipelineId}`)
+        notify.toast('Pipeline deleted', { type: 'success' })
+        void fetchPipelines()
+      } catch {
+        notify.toast('Could not delete pipeline', { type: 'error' })
+      }
+    },
+    [fetchPipelines],
+  )
 
   const sourceTypes = ['file', 'url', 'rss', 'api', 'sse', 'watch', 'generator']
   const storeTypes = ['memory', 'file', 'callback', 'chained', 'stats']
@@ -136,23 +146,50 @@ export default function CollectionsContent() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="pipe-name" variant="uppercase">Name</Label>
-              <Input id="pipe-name" value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="my-pipeline" className="h-8 text-sm" />
+              <Label htmlFor="pipe-name" variant="uppercase">
+                Name
+              </Label>
+              <Input
+                id="pipe-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="my-pipeline"
+                className="h-8 text-sm"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="pipe-source" variant="uppercase">Source</Label>
-                <select id="pipe-source" value={newSourceType} onChange={e => setNewSourceType(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm">
-                  {sourceTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                <Label htmlFor="pipe-source" variant="uppercase">
+                  Source
+                </Label>
+                <select
+                  id="pipe-source"
+                  value={newSourceType}
+                  onChange={(e) => setNewSourceType(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {sourceTypes.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="pipe-store" variant="uppercase">Store</Label>
-                <select id="pipe-store" value={newStoreType} onChange={e => setNewStoreType(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm">
-                  {storeTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                <Label htmlFor="pipe-store" variant="uppercase">
+                  Store
+                </Label>
+                <select
+                  id="pipe-store"
+                  value={newStoreType}
+                  onChange={(e) => setNewStoreType(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {storeTypes.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -168,8 +205,14 @@ export default function CollectionsContent() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Pipelines ({pipelines.length})</CardTitle>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={() => void fetchPipelines()}>Refresh</Button>
-              <Button size="sm" onClick={() => setShowCreate(!showCreate)} aria-pressed={showCreate}>
+              <Button size="sm" variant="ghost" onClick={() => void fetchPipelines()}>
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowCreate(!showCreate)}
+                aria-pressed={showCreate}
+              >
                 {showCreate ? 'Cancel' : 'New pipeline'}
               </Button>
             </div>
@@ -178,16 +221,21 @@ export default function CollectionsContent() {
         <CardContent>
           {loading ? (
             <div className="space-y-2">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3].map((i) => (
                 <div key={i} className="h-16 animate-pulse bg-muted/50 rounded" />
               ))}
             </div>
           ) : pipelines.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No pipelines configured. Create one above.</p>
+            <p className="text-xs text-muted-foreground">
+              No pipelines configured. Create one above.
+            </p>
           ) : (
             <div className="space-y-2">
-              {pipelines.map(p => (
-                <div key={p.id} className="flex items-center justify-between rounded border p-3 text-sm">
+              {pipelines.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded border p-3 text-sm"
+                >
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{p.name}</p>
                     <div className="flex gap-3 text-xs text-muted-foreground">
@@ -198,10 +246,20 @@ export default function CollectionsContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => runPipeline(p.id)} disabled={runningId === p.id}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => runPipeline(p.id)}
+                      disabled={runningId === p.id}
+                    >
                       {runningId === p.id ? 'Running...' : 'Run'}
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deletePipeline(p.id)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => deletePipeline(p.id)}
+                    >
                       Delete
                     </Button>
                   </div>

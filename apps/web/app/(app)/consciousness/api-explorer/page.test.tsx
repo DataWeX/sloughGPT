@@ -11,7 +11,9 @@ vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: (k: string) => k, locale: 'en', setLocale: vi.fn() }),
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: Object.assign(
     vi.fn((sel: any) => sel({ addToast: vi.fn() })),
     { getState: () => ({ addToast: vi.fn() }) },

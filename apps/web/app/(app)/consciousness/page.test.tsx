@@ -55,7 +55,9 @@ vi.mock('@/lib/consciousness-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: vi.fn() }),
 }))
 

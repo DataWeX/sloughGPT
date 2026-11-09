@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
@@ -28,7 +29,6 @@ import { BenchmarkChartCard } from '@/components/benchmark/BenchmarkChartCard'
 import { BenchmarkCompareCard } from '@/components/benchmark/BenchmarkCompareCard'
 import { BenchmarkHistoryCard } from '@/components/benchmark/BenchmarkHistoryCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity' | 'compare'
@@ -62,7 +62,6 @@ export default function BenchmarkPage() {
   const [compareResults, setCompareResults] = useState<[string, BenchmarkResult][]>([])
   const [compareLoading, setCompareLoading] = useState(false)
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
-  const addToast = useToastStore((s) => s.addToast)
 
   // Shared by the initial mount, the 'r' refresh shortcut and PageContainer's
   // retry — all three re-run this page's own loader instead of reloading the
@@ -113,7 +112,7 @@ export default function BenchmarkPage() {
       const m = await benchmarkController.run({ model: currentModel })
       setMetrics(m)
     } catch {
-      addToast('Could not run benchmark', 'error')
+      notify.toast('Could not run benchmark', { type: 'error' })
     } finally {
       setRunning(false)
     }
@@ -126,7 +125,7 @@ export default function BenchmarkPage() {
       const data = await benchmarkController.history(20)
       setResponses(data)
     } catch {
-      addToast('Could not load responses', 'error')
+      notify.toast('Could not load responses', { type: 'error' })
     }
   }
 
@@ -136,7 +135,7 @@ export default function BenchmarkPage() {
       setResponses([])
       setStats(null)
     } catch {
-      addToast('Could not clear history', 'error')
+      notify.toast('Could not clear history', { type: 'error' })
     }
   }
 
@@ -150,7 +149,7 @@ export default function BenchmarkPage() {
       )
       setPplxResult(data)
     } catch {
-      addToast('Could not calculate perplexity', 'error')
+      notify.toast('Could not calculate perplexity', { type: 'error' })
     } finally {
       setPplxLoading(false)
     }
@@ -167,7 +166,7 @@ export default function BenchmarkPage() {
           const r = await benchmarkController.run({ model })
           results.push([model, r])
         } catch {
-          addToast(`Benchmark failed for ${model}`, 'error')
+          notify.toast(`Benchmark failed for ${model}`, { type: 'error' })
         }
       }
       setCompareResults(results)

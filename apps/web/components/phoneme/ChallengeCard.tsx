@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
@@ -10,7 +11,11 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface ChallengeWord {
   word: string
@@ -271,7 +276,6 @@ export default function ChallengeCard() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ score: number; phonemes: string[] } | null>(null)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const currentWord = challenge.words[currentWordIndex]
 
@@ -284,7 +288,7 @@ export default function ChallengeCard() {
 
       const passed = res.score >= 0.7
       if (passed) {
-        addToast(`+${currentWord.points} points!`, 'success')
+        notify.toast(`+${currentWord.points} points!`, { type: 'success' })
       }
 
       addToHistory({
@@ -296,11 +300,11 @@ export default function ChallengeCard() {
         spokenPhonemes: res.spoken_phonemes,
       })
     } catch {
-      addToast('Scoring failed', 'error')
+      notify.toast('Scoring failed', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWord, attempt, addToHistory, addToast])
+  }, [currentWord, attempt, addToHistory])
 
   const handleNext = useCallback(() => {
     const passed = result && result.score >= 0.7
@@ -317,14 +321,14 @@ export default function ChallengeCard() {
       saveChallenge(finalChallenge)
 
       if (newScore >= 10) {
-        addToast('Challenge complete! Excellent!', 'success')
+        notify.toast('Challenge complete! Excellent!', { type: 'success' })
       } else if (newScore >= 5) {
-        addToast('Challenge complete! Good job!', 'success')
+        notify.toast('Challenge complete! Good job!', { type: 'success' })
       } else {
-        addToast('Challenge complete! Keep practicing!', 'success')
+        notify.toast('Challenge complete! Keep practicing!', { type: 'success' })
       }
     }
-  }, [currentWordIndex, challenge, currentWord, result, addToast])
+  }, [currentWordIndex, challenge, currentWord, result])
 
   const handleNewChallenge = useCallback(() => {
     const newChallenge = generateDailyChallenge()

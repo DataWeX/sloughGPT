@@ -12,7 +12,9 @@ vi.mock('@/lib/token-tree-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.mockAddToast, banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
     selector({ addToast: mocks.mockAddToast }),
 }))
@@ -24,7 +26,9 @@ vi.mock('@sloughgpt/strui', () => ({
   CardContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Input: (props: any) => <input {...props} />,
   Button: ({ children, onClick, disabled }: any) => (
-    <button onClick={onClick} disabled={disabled}>{children}</button>
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
   ),
   Chip: ({ label }: { label: string }) => <span>{label}</span>,
   Skeleton: ({ className }: { className?: string }) => (
@@ -32,41 +36,48 @@ vi.mock('@sloughgpt/strui', () => ({
   ),
   IconActivity: () => <span data-testid="icon-activity" />,
 
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { TokenTreeLineageCard } from './TokenTreeLineageCard'
@@ -121,7 +132,11 @@ describe('TokenTreeLineageCard', () => {
     render(<TokenTreeLineageCard />)
     fireEvent.change(screen.getByLabelText('Token to inspect'), { target: { value: 'zzz' } })
     fireEvent.click(screen.getByText('Show lineage'))
-    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Token not in vocabulary: zzz', 'error'))
+    await waitFor(() =>
+      expect(mocks.mockAddToast).toHaveBeenCalledWith('Token not in vocabulary: zzz', {
+        type: 'error',
+      }),
+    )
     await waitFor(() => {
       expect(screen.queryByText(/Merge lineage of/)).toBeNull()
     })

@@ -5,7 +5,25 @@ import React from 'react'
 import { MemoryCard } from './MemoryCard'
 import type { MemoryItem, MemoryStats } from '@/lib/memory-controller'
 
-const { mockList, mockStats, mockSearch, mockStore, mockClear, mockDelete, mockUpdate, mockAddToast, mockArchiveStats, mockConsolidate, mockArchivePrune, mockSetEnabled, mockArchive, mockDownloadJson, mockImportFile, mockGetConfig, mockUpdateConfig } = vi.hoisted(() => ({
+const {
+  mockList,
+  mockStats,
+  mockSearch,
+  mockStore,
+  mockClear,
+  mockDelete,
+  mockUpdate,
+  mockAddToast,
+  mockArchiveStats,
+  mockConsolidate,
+  mockArchivePrune,
+  mockSetEnabled,
+  mockArchive,
+  mockDownloadJson,
+  mockImportFile,
+  mockGetConfig,
+  mockUpdateConfig,
+} = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockStats: vi.fn(),
   mockSearch: vi.fn(),
@@ -45,8 +63,10 @@ vi.mock('@/lib/memory-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
 }))
 
 vi.mock('@/lib/download-utils', () => ({
@@ -104,14 +124,39 @@ beforeEach(() => {
   mockClear.mockResolvedValue({ cleared: 3 })
   mockDelete.mockResolvedValue({ deleted: 1 })
   mockUpdate.mockResolvedValue({ updated: 1, duplicate: false })
-  mockArchiveStats.mockResolvedValue({ path: '/tmp/facts.jsonl', records: 5, bytes: 10240, task_types: {}, oldest_ts: 1, newest_ts: 2 })
+  mockArchiveStats.mockResolvedValue({
+    path: '/tmp/facts.jsonl',
+    records: 5,
+    bytes: 10240,
+    task_types: {},
+    oldest_ts: 1,
+    newest_ts: 2,
+  })
   mockConsolidate.mockResolvedValue({ removed: 2, kept: 3, threshold: 0.8 })
   mockArchivePrune.mockResolvedValue({ pruned: 4 })
   mockSetEnabled.mockResolvedValue({ enabled: true })
   mockArchive.mockResolvedValue({ records: [], total: 0 })
   mockImportFile.mockResolvedValue(null)
-  mockGetConfig.mockResolvedValue({ enabled: true, archive_retention_days: 30, min_chars: 80, max_facts: 5, store_path: 'data/memory', sync_remember: false, consolidation_threshold: 0.8, maintenance_interval_minutes: 60 })
-  mockUpdateConfig.mockResolvedValue({ enabled: true, archive_retention_days: 14, min_chars: 80, max_facts: 5, store_path: 'data/memory', sync_remember: false, consolidation_threshold: 0.8, maintenance_interval_minutes: 60 })
+  mockGetConfig.mockResolvedValue({
+    enabled: true,
+    archive_retention_days: 30,
+    min_chars: 80,
+    max_facts: 5,
+    store_path: 'data/memory',
+    sync_remember: false,
+    consolidation_threshold: 0.8,
+    maintenance_interval_minutes: 60,
+  })
+  mockUpdateConfig.mockResolvedValue({
+    enabled: true,
+    archive_retention_days: 14,
+    min_chars: 80,
+    max_facts: 5,
+    store_path: 'data/memory',
+    sync_remember: false,
+    consolidation_threshold: 0.8,
+    maintenance_interval_minutes: 60,
+  })
 })
 
 afterEach(() => {
@@ -128,7 +173,9 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Memory').length).toBeGreaterThanOrEqual(1)
       expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getAllByText('User prefers espresso in the morning').length).toBeGreaterThanOrEqual(1)
+      expect(
+        screen.getAllByText('User prefers espresso in the morning').length,
+      ).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -163,9 +210,12 @@ describe('MemoryCard', () => {
     render(<MemoryCard />)
     const input = await screen.findByPlaceholderText('Search memory...')
     fireEvent.change(input, { target: { value: 'espresso' } })
-    await waitFor(() => {
-      expect(mockSearch).toHaveBeenCalledWith('espresso')
-    }, { timeout: 2000 })
+    await waitFor(
+      () => {
+        expect(mockSearch).toHaveBeenCalledWith('espresso')
+      },
+      { timeout: 2000 },
+    )
   })
 
   it('shows search score when results are from search', async () => {
@@ -173,9 +223,12 @@ describe('MemoryCard', () => {
     render(<MemoryCard />)
     const input = await screen.findByPlaceholderText('Search memory...')
     fireEvent.change(input, { target: { value: 'espresso' } })
-    await waitFor(() => {
-      expect(screen.getAllByText('0.90').length).toBeGreaterThanOrEqual(1)
-    }, { timeout: 2000 })
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('0.90').length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 2000 },
+    )
   })
 
   it('renders topic chips derived from the loaded items', async () => {
@@ -195,7 +248,9 @@ describe('MemoryCard', () => {
 
     fireEvent.click(screen.getAllByText('geography')[0])
     expect(screen.queryByText('User prefers espresso in the morning')).toBeNull()
-    expect(screen.getAllByText('Stockholm is the capital of Sweden').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Stockholm is the capital of Sweden').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
 
   it('shows the empty message when the active topic has no items', async () => {
@@ -207,9 +262,12 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getAllByText('geography')[0])
     const input = screen.getByPlaceholderText('Search memory...')
     fireEvent.change(input, { target: { value: 'zzz-no-match' } })
-    await waitFor(() => {
-      expect(screen.getByText('No memory in the "geography" topic.')).toBeTruthy()
-    }, { timeout: 2000 })
+    await waitFor(
+      () => {
+        expect(screen.getByText('No memory in the "geography" topic.')).toBeTruthy()
+      },
+      { timeout: 2000 },
+    )
   })
 
   it('resets the filter when clicking All', async () => {
@@ -221,12 +279,21 @@ describe('MemoryCard', () => {
     expect(screen.queryByText('User prefers espresso in the morning')).toBeNull()
 
     fireEvent.click(screen.getAllByText('All')[0])
-    expect(screen.getAllByText('User prefers espresso in the morning').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Stockholm is the capital of Sweden').length).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('User prefers espresso in the morning').length,
+    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Stockholm is the capital of Sweden').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
 
   it('expands the list past 10 items with Show all', async () => {
-    const many = Array.from({ length: 12 }, (_, i) => ({ ...item, id: `m${i}`, content: `Fact number ${i + 1}`, topic: 'bulk' }))
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      ...item,
+      id: `m${i}`,
+      content: `Fact number ${i + 1}`,
+      topic: 'bulk',
+    }))
     mockList.mockResolvedValue({ items: many, total: 12 })
     render(<MemoryCard />)
     await screen.findByText('Fact number 1')
@@ -253,11 +320,18 @@ describe('MemoryCard', () => {
 
     fireEvent.click(screen.getAllByText('Clear search')[0])
     expect(screen.getByPlaceholderText('Search memory...')).toHaveValue('')
-    expect(screen.getAllByText('User prefers espresso in the morning').length).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('User prefers espresso in the morning').length,
+    ).toBeGreaterThanOrEqual(1)
   })
 
   it('shows relative timestamps on items', async () => {
-    const recent = { ...item, id: 'm3', content: 'A very recent fact', timestamp: Math.floor(Date.now() / 1000) - 60 }
+    const recent = {
+      ...item,
+      id: 'm3',
+      content: 'A very recent fact',
+      timestamp: Math.floor(Date.now() / 1000) - 60,
+    }
     mockList.mockResolvedValue({ items: [recent], total: 1 })
     render(<MemoryCard />)
     await screen.findByText('A very recent fact')
@@ -272,7 +346,7 @@ describe('MemoryCard', () => {
     render(<MemoryCard />)
     await screen.findByText('Recent fact')
 
-    const order = () => screen.getAllByTitle('Copy to clipboard').map(el => el.textContent)
+    const order = () => screen.getAllByTitle('Copy to clipboard').map((el) => el.textContent)
     expect(order()).toEqual(['Recent fact', 'Mid fact', 'Old fact'])
 
     fireEvent.click(screen.getByLabelText('Toggle memory sort order'))
@@ -283,9 +357,27 @@ describe('MemoryCard', () => {
   })
 
   it('sorts facts by importance when selected from the sort menu', async () => {
-    const low = { ...item, id: 'm-low', content: 'Low importance fact', timestamp: 1600000000, importance: 0.2 }
-    const high = { ...item, id: 'm-high', content: 'High importance fact', timestamp: 1700000000, importance: 0.9 }
-    const mid = { ...item, id: 'm-mid', content: 'Mid importance fact', timestamp: 1650000000, importance: 0.5 }
+    const low = {
+      ...item,
+      id: 'm-low',
+      content: 'Low importance fact',
+      timestamp: 1600000000,
+      importance: 0.2,
+    }
+    const high = {
+      ...item,
+      id: 'm-high',
+      content: 'High importance fact',
+      timestamp: 1700000000,
+      importance: 0.9,
+    }
+    const mid = {
+      ...item,
+      id: 'm-mid',
+      content: 'Mid importance fact',
+      timestamp: 1650000000,
+      importance: 0.5,
+    }
     mockList.mockResolvedValue({ items: [low, high, mid], total: 3 })
     render(<MemoryCard />)
     await screen.findByText('High importance fact')
@@ -295,7 +387,7 @@ describe('MemoryCard', () => {
     fireEvent.click(importance)
     await waitFor(() => expect(screen.getAllByText('Importance').length).toBeGreaterThanOrEqual(1))
 
-    const order = () => screen.getAllByTitle('Copy to clipboard').map(el => el.textContent)
+    const order = () => screen.getAllByTitle('Copy to clipboard').map((el) => el.textContent)
     expect(order()).toEqual(['High importance fact', 'Mid importance fact', 'Low importance fact'])
   })
 
@@ -307,8 +399,10 @@ describe('MemoryCard', () => {
     await screen.findByText('User prefers espresso in the morning')
 
     fireEvent.click(screen.getByText('User prefers espresso in the morning'))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('User prefers espresso in the morning'))
-    expect(mockAddToast).toHaveBeenCalledWith('Memory fact copied', 'success')
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('User prefers espresso in the morning'),
+    )
+    expect(mockAddToast).toHaveBeenCalledWith('Memory fact copied', { type: 'success' })
   })
 
   it('edits a memory fact and saves via the API', async () => {
@@ -317,14 +411,25 @@ describe('MemoryCard', () => {
     await screen.findByText('User prefers espresso in the morning')
 
     fireEvent.click(screen.getAllByLabelText('Edit memory item')[0])
-    expect(screen.getByLabelText('Edit memory fact text')).toHaveValue('User prefers espresso in the morning')
+    expect(screen.getByLabelText('Edit memory fact text')).toHaveValue(
+      'User prefers espresso in the morning',
+    )
 
-    fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'User prefers a cappuccino after noon' } })
+    fireEvent.change(screen.getByLabelText('Edit memory fact text'), {
+      target: { value: 'User prefers a cappuccino after noon' },
+    })
     fireEvent.change(screen.getByPlaceholderText('preferences'), { target: { value: 'drinks' } })
     fireEvent.click(screen.getAllByText('Save')[0])
 
-    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('m1', 'User prefers a cappuccino after noon', 'drinks', 0.8))
-    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', 'success')
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        'm1',
+        'User prefers a cappuccino after noon',
+        'drinks',
+        0.8,
+      ),
+    )
+    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', { type: 'success' })
     await waitFor(() => expect(screen.queryByLabelText('Edit memory fact text')).toBeNull())
   })
 
@@ -342,8 +447,15 @@ describe('MemoryCard', () => {
     fireEvent.change(slider, { target: { value: '0.3' } })
     fireEvent.click(screen.getAllByText('Save')[0])
 
-    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('m1', 'User prefers espresso in the morning', 'preferences', 0.3))
-    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', 'success')
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        'm1',
+        'User prefers espresso in the morning',
+        'preferences',
+        0.3,
+      ),
+    )
+    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', { type: 'success' })
   })
 
   it('surfaces a duplicate error when the edited fact already exists', async () => {
@@ -353,10 +465,16 @@ describe('MemoryCard', () => {
     await screen.findByText('User prefers espresso in the morning')
 
     fireEvent.click(screen.getAllByLabelText('Edit memory item')[0])
-    fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'Duplicated fact text' } })
+    fireEvent.change(screen.getByLabelText('Edit memory fact text'), {
+      target: { value: 'Duplicated fact text' },
+    })
     fireEvent.click(screen.getAllByText('Save')[0])
 
-    await waitFor(() => expect(mockAddToast).toHaveBeenCalledWith('That fact already exists in memory', 'error'))
+    await waitFor(() =>
+      expect(mockAddToast).toHaveBeenCalledWith('That fact already exists in memory', {
+        type: 'error',
+      }),
+    )
   })
 
   it('stores a fact via the inline form', async () => {
@@ -374,7 +492,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Saved to memory', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Saved to memory', { type: 'success' })
   })
 
   it('disables Save when empty', async () => {
@@ -397,7 +515,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockClear).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Cleared 3 memory items', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Cleared 3 memory items', { type: 'success' })
   })
 
   it('deletes a single memory item after confirmation', async () => {
@@ -413,7 +531,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('m1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Memory item deleted', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Memory item deleted', { type: 'success' })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
@@ -425,7 +543,9 @@ describe('MemoryCard', () => {
     await screen.findByText('User prefers espresso in the morning')
     await screen.findByText('Stockholm is the capital of Sweden')
 
-    fireEvent.click(screen.getByLabelText('Select memory fact User prefers espresso in the morning'))
+    fireEvent.click(
+      screen.getByLabelText('Select memory fact User prefers espresso in the morning'),
+    )
     fireEvent.click(screen.getByLabelText('Select memory fact Stockholm is the capital of Sweden'))
 
     await act(async () => {
@@ -441,7 +561,7 @@ describe('MemoryCard', () => {
     })
     expect(mockDelete).toHaveBeenCalledWith('m1')
     expect(mockDelete).toHaveBeenCalledWith('m2')
-    expect(mockAddToast).toHaveBeenCalledWith('Deleted 2 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Deleted 2 memory item(s)', { type: 'success' })
     await waitFor(() => {
       expect(screen.queryByText('Delete (2)')).toBeNull()
     })
@@ -456,7 +576,9 @@ describe('MemoryCard', () => {
     render(<MemoryCard />)
     await screen.findByText('User prefers espresso in the morning')
 
-    fireEvent.click(screen.getByLabelText('Select memory fact User prefers espresso in the morning'))
+    fireEvent.click(
+      screen.getByLabelText('Select memory fact User prefers espresso in the morning'),
+    )
     await act(async () => {
       fireEvent.click(screen.getByText('Delete (1)'))
     })
@@ -468,7 +590,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('m1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Selected items not found', 'error')
+    expect(mockAddToast).toHaveBeenCalledWith('Selected items not found', { type: 'error' })
   })
 
   it('selects all facts with the select-all checkbox', async () => {
@@ -480,12 +602,18 @@ describe('MemoryCard', () => {
     expect(selectAll).not.toBeChecked()
     fireEvent.click(selectAll)
     expect(selectAll).toBeChecked()
-    expect(screen.getByLabelText('Select memory fact User prefers espresso in the morning')).toBeChecked()
-    expect(screen.getByLabelText('Select memory fact Stockholm is the capital of Sweden')).toBeChecked()
+    expect(
+      screen.getByLabelText('Select memory fact User prefers espresso in the morning'),
+    ).toBeChecked()
+    expect(
+      screen.getByLabelText('Select memory fact Stockholm is the capital of Sweden'),
+    ).toBeChecked()
 
     fireEvent.click(selectAll)
     expect(selectAll).not.toBeChecked()
-    expect(screen.getByLabelText('Select memory fact User prefers espresso in the morning')).not.toBeChecked()
+    expect(
+      screen.getByLabelText('Select memory fact User prefers espresso in the morning'),
+    ).not.toBeChecked()
   })
 
   it('exports only the selected facts as JSON', async () => {
@@ -500,7 +628,7 @@ describe('MemoryCard', () => {
       [{ content: geographyItem.content, topic: 'geography', source: 'task' }],
       expect.stringContaining('memory-export-selected-'),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 memory item(s)', { type: 'success' })
   })
 
   it('clears the selection when Cancel is clicked', async () => {
@@ -508,11 +636,15 @@ describe('MemoryCard', () => {
     render(<MemoryCard />)
     await screen.findByText('User prefers espresso in the morning')
 
-    fireEvent.click(screen.getByLabelText('Select memory fact User prefers espresso in the morning'))
+    fireEvent.click(
+      screen.getByLabelText('Select memory fact User prefers espresso in the morning'),
+    )
     expect(screen.getByText('Delete (1)')).toBeTruthy()
     fireEvent.click(screen.getByText('Cancel'))
     expect(screen.queryByText('Delete (1)')).toBeNull()
-    expect(screen.getByLabelText('Select memory fact User prefers espresso in the morning')).not.toBeChecked()
+    expect(
+      screen.getByLabelText('Select memory fact User prefers espresso in the morning'),
+    ).not.toBeChecked()
   })
 
   const openMaintenance = async () => {
@@ -538,7 +670,9 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockConsolidate).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Consolidated 2 duplicate fact(s), kept 3', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Consolidated 2 duplicate fact(s), kept 3', {
+      type: 'success',
+    })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
@@ -552,7 +686,7 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getAllByText('Consolidate')[0])
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('No near-duplicate facts found', 'info')
+      expect(mockAddToast).toHaveBeenCalledWith('No near-duplicate facts found', { type: 'info' })
     })
   })
 
@@ -574,7 +708,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockArchivePrune).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Pruned 4 archive record(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Pruned 4 archive record(s)', { type: 'success' })
   })
 
   it('loads the configured retention into the maintenance input', async () => {
@@ -599,7 +733,9 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith({ archive_retention_days: 14 })
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Archive retention set to 14 day(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Archive retention set to 14 day(s)', {
+      type: 'success',
+    })
   })
 
   it('prunes using the configured retention window', async () => {
@@ -626,15 +762,33 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockUpdateConfig).not.toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Enter a retention window in days', 'error')
+    expect(mockAddToast).toHaveBeenCalledWith('Enter a retention window in days', { type: 'error' })
   })
 
   it('opens the archive browser and lists records', async () => {
     mockArchive.mockResolvedValue({
       records: [
-        { task_type: 'memory.remember', task_id: 'r1', ts: 1700000000, user_message: 'User prefers espresso in the morning' },
-        { task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'Stockholm is the capital of Sweden', topic: 'geography' },
-        { task_type: 'memory.consolidate', task_id: 'c1', ts: 1700000000, removed: 2, kept: 3, threshold: 0.8 },
+        {
+          task_type: 'memory.remember',
+          task_id: 'r1',
+          ts: 1700000000,
+          user_message: 'User prefers espresso in the morning',
+        },
+        {
+          task_type: 'memory.store',
+          task_id: 's1',
+          ts: 1700000000,
+          content: 'Stockholm is the capital of Sweden',
+          topic: 'geography',
+        },
+        {
+          task_type: 'memory.consolidate',
+          task_id: 'c1',
+          ts: 1700000000,
+          removed: 2,
+          kept: 3,
+          threshold: 0.8,
+        },
         { task_type: 'memory.forget', task_id: 'f1', ts: 1700000000 },
       ],
       total: 4,
@@ -670,7 +824,9 @@ describe('MemoryCard', () => {
 
   it('refreshes the archive when clicking Refresh', async () => {
     mockArchive.mockResolvedValue({
-      records: [{ task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'First pass' }],
+      records: [
+        { task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'First pass' },
+      ],
       total: 1,
     })
     render(<MemoryCard />)
@@ -680,7 +836,9 @@ describe('MemoryCard', () => {
     await screen.findByText('First pass')
 
     mockArchive.mockResolvedValue({
-      records: [{ task_type: 'memory.store', task_id: 's2', ts: 1700000000, content: 'After refresh' }],
+      records: [
+        { task_type: 'memory.store', task_id: 's2', ts: 1700000000, content: 'After refresh' },
+      ],
       total: 1,
     })
     fireEvent.click(within(screen.getByRole('dialog')).getByText('Refresh'))
@@ -693,7 +851,16 @@ describe('MemoryCard', () => {
 
   it('expands an archive record to show its raw payload', async () => {
     mockArchive.mockResolvedValue({
-      records: [{ task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'Stockholm is the capital of Sweden', topic: 'geography', url: 'https://example.com' }],
+      records: [
+        {
+          task_type: 'memory.store',
+          task_id: 's1',
+          ts: 1700000000,
+          content: 'Stockholm is the capital of Sweden',
+          topic: 'geography',
+          url: 'https://example.com',
+        },
+      ],
       total: 1,
     })
     render(<MemoryCard />)
@@ -702,11 +869,15 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getAllByText('View records')[0])
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByText('Stockholm is the capital of Sweden')
-    fireEvent.click(within(dialog).getByRole('button', { name: /Stockholm is the capital of Sweden/ }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Stockholm is the capital of Sweden/ }),
+    )
 
     expect(await within(dialog).findByText(/"task_id": "s1"/)).toBeTruthy()
     expect(within(dialog).getByText(/"url": "https:\/\/example.com"/)).toBeTruthy()
-    fireEvent.click(within(dialog).getByRole('button', { name: /Stockholm is the capital of Sweden/ }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Stockholm is the capital of Sweden/ }),
+    )
     await waitFor(() => {
       expect(within(dialog).queryByText(/"task_id": "s1"/)).toBeNull()
     })
@@ -714,7 +885,9 @@ describe('MemoryCard', () => {
 
   it('exports the archive as JSON from the dialog', async () => {
     mockArchive.mockResolvedValue({
-      records: [{ task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'Archive fact one' }],
+      records: [
+        { task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'Archive fact one' },
+      ],
       total: 1,
     })
     render(<MemoryCard />)
@@ -731,11 +904,17 @@ describe('MemoryCard', () => {
       [{ task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'Archive fact one' }],
       expect.stringContaining('memory-archive-'),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 archive record(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 archive record(s)', { type: 'success' })
   })
 
   it('exports all memory as JSON', async () => {
-    mockList.mockResolvedValue({ items: [item, { ...item, id: 'm2', content: 'User codes in TypeScript', topic: 'work', source: 'chat' }], total: 2 })
+    mockList.mockResolvedValue({
+      items: [
+        item,
+        { ...item, id: 'm2', content: 'User codes in TypeScript', topic: 'work', source: 'chat' },
+      ],
+      total: 2,
+    })
     render(<MemoryCard />)
     await screen.findByText('User prefers espresso in the morning')
     await openMaintenance()
@@ -751,11 +930,15 @@ describe('MemoryCard', () => {
       ],
       expect.stringContaining('memory-export-'),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Exported 2 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Exported 2 memory item(s)', { type: 'success' })
   })
 
   it('imports memory from a JSON file', async () => {
-    mockImportFile.mockResolvedValue(new File(['[{"content":"Fact one","topic":"notes"},{"content":"Fact two"}]'], 'memory.json', { type: 'application/json' }))
+    mockImportFile.mockResolvedValue(
+      new File(['[{"content":"Fact one","topic":"notes"},{"content":"Fact two"}]'], 'memory.json', {
+        type: 'application/json',
+      }),
+    )
     render(<MemoryCard />)
     await screen.findByText('User prefers espresso in the morning')
     await openMaintenance()
@@ -766,14 +949,18 @@ describe('MemoryCard', () => {
     })
     expect(mockStore).toHaveBeenCalledWith('Fact one', 'notes')
     expect(mockStore).toHaveBeenCalledWith('Fact two', 'manual')
-    expect(mockAddToast).toHaveBeenCalledWith('Imported 2 of 2 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Imported 2 of 2 memory item(s)', { type: 'success' })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
   })
 
   it('imports memory from a CSV file with header', async () => {
-    mockImportFile.mockResolvedValue(new File(['content,topic\n"Fact from csv","travel"\nSecond fact,'], 'memory.csv', { type: 'text/csv' }))
+    mockImportFile.mockResolvedValue(
+      new File(['content,topic\n"Fact from csv","travel"\nSecond fact,'], 'memory.csv', {
+        type: 'text/csv',
+      }),
+    )
     render(<MemoryCard />)
     await screen.findByText('User prefers espresso in the morning')
     await openMaintenance()
@@ -793,7 +980,7 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getAllByText('Import')[0])
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('No memory items found in file', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('No memory items found in file', { type: 'error' })
     })
     expect(mockStore).not.toHaveBeenCalled()
   })
@@ -826,7 +1013,10 @@ describe('MemoryCard', () => {
       expect(mockSetEnabled).toHaveBeenCalledWith(false)
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Memory is off — the AI will stop storing new facts', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith(
+        'Memory is off — the AI will stop storing new facts',
+        { type: 'success' },
+      )
     })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
@@ -852,7 +1042,10 @@ describe('MemoryCard', () => {
       expect(mockSetEnabled).toHaveBeenCalledWith(true)
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Memory is on — the AI will keep learning from conversations', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith(
+        'Memory is on — the AI will keep learning from conversations',
+        { type: 'success' },
+      )
     })
   })
 
@@ -869,7 +1062,9 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle automatic memory' }))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not update memory setting', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not update memory setting', {
+        type: 'error',
+      })
     })
   })
 })

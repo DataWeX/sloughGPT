@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -12,7 +13,6 @@ import type {
   TrainingStatus,
 } from '@/lib/multimodal-controller'
 import type { DetectedObject } from '@/components/multimodal/ObjectDetectionSection'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { apiPost } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
@@ -29,13 +29,17 @@ import VqaSection from '@/components/multimodal/VqaSection'
 import ObjectDetectionSection from '@/components/multimodal/ObjectDetectionSection'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), {
   ssr: false,
 })
 
 export default function MultimodalPage() {
-  const addToast = useToastStore((s) => s.addToast)
   const [caps, setCaps] = useState<MultimodalCapabilities | null>(null)
   const [report, setReport] = useState<TrainingReport | null>(null)
   const [trainStatus, setTrainStatus] = useState<TrainingStatus | null>(null)
@@ -77,11 +81,11 @@ export default function MultimodalPage() {
       setReport(r)
       setTrainStatus(s)
     } catch {
-      addToast('Could not load data', 'error')
+      notify.toast('Could not load data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return
@@ -96,16 +100,15 @@ export default function MultimodalPage() {
           }
           fetchAll()
           if (status.completed > 0)
-            addToast(
-              `Training complete: ${status.completed} images, ${status.errors} errors`,
-              status.errors > 0 ? 'error' : 'success',
-            )
+            notify.toast(`Training complete: ${status.completed} images, ${status.errors} errors`, {
+              type: status.errors > 0 ? 'error' : 'success',
+            })
         }
       } catch (err) {
         logger.error('Could not poll training status', { exception: String(err) })
       }
     }, 2000)
-  }, [fetchAll, addToast])
+  }, [fetchAll])
 
   const pollDPOStatus = useCallback(async () => {
     try {
@@ -116,18 +119,18 @@ export default function MultimodalPage() {
       if (s.status === 'completed' && s.result) {
         setDpoResult(s.result)
         setDpoRunning(false)
-        addToast('DPO training complete', 'success')
+        notify.toast('DPO training complete', { type: 'success' })
       } else if (s.status === 'error') {
         setDpoError((s.result?.error as string) || 'Could not dpo')
         setDpoRunning(false)
-        addToast((s.result?.error as string) || 'Could not dpo', 'error')
+        notify.toast((s.result?.error as string) || 'Could not dpo', { type: 'error' })
       } else if (s.status === 'idle') {
         setDpoRunning(false)
       }
     } catch (err) {
       logger.error('Could not dpo status poll', { exception: String(err) })
     }
-  }, [addToast])
+  }, [])
 
   useRefreshShortcut(fetchAll)
 
@@ -157,12 +160,12 @@ export default function MultimodalPage() {
       reader.onload = async () => {
         const dataUrl = reader.result as string
         const result = await multimodalController.trainImage(dataUrl, file.name)
-        addToast(`Trained on "${file.name}" — caption: ${result.caption}`, 'success')
+        notify.toast(`Trained on "${file.name}" — caption: ${result.caption}`, { type: 'success' })
         fetchAll()
       }
       reader.readAsDataURL(file)
     } catch {
-      addToast('Could not upload', 'error')
+      notify.toast('Could not upload', { type: 'error' })
     } finally {
       setUploading(false)
     }
@@ -173,10 +176,10 @@ export default function MultimodalPage() {
     setBatchUploading(true)
     try {
       const result = await multimodalController.trainBatch(files)
-      addToast(`Training started: ${result.total_images} images`, 'success')
+      notify.toast(`Training started: ${result.total_images} images`, { type: 'success' })
       startPolling()
     } catch {
-      addToast('Could not upload', 'error')
+      notify.toast('Could not upload', { type: 'error' })
     } finally {
       setBatchUploading(false)
     }
@@ -186,10 +189,12 @@ export default function MultimodalPage() {
     setBatchUploading(true)
     try {
       const result = await multimodalController.trainBatchFromDir(dirPath)
-      addToast(`Training started: ${result.total_images} images from ${dirPath}`, 'success')
+      notify.toast(`Training started: ${result.total_images} images from ${dirPath}`, {
+        type: 'success',
+      })
       startPolling()
     } catch (err: unknown) {
-      addToast(extractErrorMessage(err, 'Could not start training'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not start training'), { type: 'error' })
     } finally {
       setBatchUploading(false)
     }
@@ -207,9 +212,11 @@ export default function MultimodalPage() {
           auto_caption: true,
         },
       )
-      addToast(`Dataset "${result.dataset}" created: ${result.entries} entries`, 'success')
+      notify.toast(`Dataset "${result.dataset}" created: ${result.entries} entries`, {
+        type: 'success',
+      })
     } catch (err: unknown) {
-      addToast(extractErrorMessage(err, 'Could not dataset creation'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not dataset creation'), { type: 'error' })
     } finally {
       setCreatingDataset(false)
     }
@@ -223,13 +230,13 @@ export default function MultimodalPage() {
     setDpoStatus('running')
     try {
       const result = await apiPost<{ status: string }>('/multimodal/dpo')
-      addToast(`DPO training started: ${result.status || ''}`, 'success')
+      notify.toast(`DPO training started: ${result.status || ''}`, { type: 'success' })
     } catch (err: unknown) {
       const msg = extractErrorMessage(err, 'Could not dpo trigger')
       setDpoError(msg)
       setDpoStatus('error')
       setDpoRunning(false)
-      addToast(msg, 'error')
+      notify.toast(msg, { type: 'error' })
     }
   }
 
@@ -239,9 +246,9 @@ export default function MultimodalPage() {
     try {
       const result = await multimodalController.generateImage(prompt)
       setGeneratedImage(result.image)
-      addToast(`Generated: "${result.prompt}"`, 'success')
+      notify.toast(`Generated: "${result.prompt}"`, { type: 'success' })
     } catch {
-      addToast('Could not image generation', 'error')
+      notify.toast('Could not image generation', { type: 'error' })
     } finally {
       setGenerating(false)
     }
@@ -254,7 +261,7 @@ export default function MultimodalPage() {
       const result = await multimodalController.transcribeAudio(file)
       setTranscript(result.text)
     } catch {
-      addToast('Could not speech-to-text', 'error')
+      notify.toast('Could not speech-to-text', { type: 'error' })
     } finally {
       setTranscribing(false)
     }
@@ -266,9 +273,9 @@ export default function MultimodalPage() {
     try {
       const result = await multimodalController.synthesizeSpeech(text)
       setSynthAudio({ audio: result.audio, duration_sec: result.duration_sec })
-      addToast(`Voice generated (${result.duration_sec.toFixed(1)}s)`, 'success')
+      notify.toast(`Voice generated (${result.duration_sec.toFixed(1)}s)`, { type: 'success' })
     } catch {
-      addToast('Could not speech generation', 'error')
+      notify.toast('Could not speech generation', { type: 'error' })
     } finally {
       setSynthesizing(false)
     }
@@ -281,7 +288,7 @@ export default function MultimodalPage() {
       const result = await multimodalController.askQuestion(file, question)
       setVqaResult(result)
     } catch (err: unknown) {
-      addToast(extractErrorMessage(err, 'Could not ask question'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not ask question'), { type: 'error' })
     } finally {
       setAsking(false)
     }
@@ -294,7 +301,7 @@ export default function MultimodalPage() {
       const result = await multimodalController.detectObjects(file)
       setDetectedObjects(result.objects)
     } catch (err: unknown) {
-      addToast(extractErrorMessage(err, 'Could not detect objects'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not detect objects'), { type: 'error' })
     } finally {
       setDetecting(false)
     }

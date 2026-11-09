@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@sloughgpt/strui'
@@ -9,9 +10,13 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import PhonemeSkeleton from './PhonemeSkeleton'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const WORDS: Record<PhonemeLanguage, string[]> = {
   en: ['hello', 'world', 'phone', 'music', 'happy', 'green', 'blue', 'apple', 'tree', 'fish'],
@@ -43,7 +48,6 @@ export default function PronunciationDictation() {
   const [score, setScore] = useState(0)
   const [total, setTotal] = useState(0)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
 
   const pickNewWord = useCallback(() => {
     const words = WORDS[language]
@@ -81,11 +85,10 @@ export default function PronunciationDictation() {
       /* best-effort */
     }
 
-    addToast(
-      isCorrect ? 'Correct!' : `The word was "${currentWord}"`,
-      isCorrect ? 'success' : 'error',
-    )
-  }, [userInput, currentWord, language, addToHistory, addToast])
+    notify.toast(isCorrect ? 'Correct!' : `The word was "${currentWord}"`, {
+      type: isCorrect ? 'success' : 'error',
+    })
+  }, [userInput, currentWord, language, addToHistory])
 
   return (
     <Card>

@@ -1,3 +1,4 @@
+import { useBannerStore } from '@/lib/notify'
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
@@ -20,7 +21,6 @@ vi.mock('@/lib/backend-retry', () => ({
   probeBackendAndRevalidate: probeBackendAndRevalidateMock,
 }))
 
-import { useBannerStore } from '@/lib/banner-store'
 import { logStateEvent } from '@/lib/state-events'
 import { StartupOverlay } from './StartupOverlay'
 

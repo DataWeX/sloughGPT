@@ -7,7 +7,9 @@ vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://localhost:8000' }))
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: (key: string) => key }),
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: vi.fn() }),
 }))
 vi.mock('@/lib/error-utils', () => ({

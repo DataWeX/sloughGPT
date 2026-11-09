@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useEffect, useState } from 'react'
 import { Spinner } from '@sloughgpt/strui'
@@ -7,7 +8,6 @@ import { soulsController } from '@/lib/souls-controller'
 import { feedbackController } from '@/lib/feedback-controller'
 import { chatDB } from '@/lib/db'
 import { logger } from '@/lib/dev-log'
-import { useToastStore } from '@/lib/toast-store'
 
 interface SteeringMode {
   label: string
@@ -50,8 +50,6 @@ export function ContextTab() {
   const [loading, setLoading] = useState(true)
   const [showPrompt, setShowPrompt] = useState(false)
 
-  const addToast = useToastStore((s) => s.addToast)
-
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -83,7 +81,7 @@ export function ContextTab() {
       setKnowledgeCount(Array.isArray(knowledge) ? knowledge.length : null)
       setFeedback(fb)
     } catch (err) {
-      addToast('Failed to load context inspector', 'error')
+      notify.toast('Failed to load context inspector', { type: 'error' })
       logger.debug('Could not context inspector fetch', { exception: String(err) })
     } finally {
       setLoading(false)

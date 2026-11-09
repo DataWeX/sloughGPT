@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import QuantizationCard from './QuantizationCard'
 import { modelController, type QuantizationResult } from '@/lib/model-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
@@ -12,7 +11,12 @@ vi.mock('@/lib/model-controller', () => ({
   ...{ QuantizationResult: {} as new () => QuantizationResult },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+const { mockToast } = vi.hoisted(() => ({ mockToast: vi.fn() }))
+
+vi.mock('@/lib/notify', () => ({
+  // The card writes through `notify.toast`; bind it to the spy the
+  // assertions below check (it previously read useToastStore.addToast).
+  notify: { toast: mockToast, banner: vi.fn() },
   useToastStore: vi.fn(() => vi.fn()),
 }))
 
@@ -32,9 +36,9 @@ const mockResultWithLayers: QuantizationResult = {
   ...mockResult,
   per_tensor: {
     'blocks.0.q_proj.weight': { scale: 0.01, zero_point: 0, cosine_sim: 0.9995 },
-    'blocks.0.k_proj.weight': { scale: 0.02, zero_point: 0, cosine_sim: 0.9980 },
-    'blocks.0.fc1.weight': { scale: 0.03, zero_point: 0, cosine_sim: 0.9920 },
-    'lm_head.weight': { scale: 0.04, zero_point: 0, cosine_sim: 0.9970 },
+    'blocks.0.k_proj.weight': { scale: 0.02, zero_point: 0, cosine_sim: 0.998 },
+    'blocks.0.fc1.weight': { scale: 0.03, zero_point: 0, cosine_sim: 0.992 },
+    'lm_head.weight': { scale: 0.04, zero_point: 0, cosine_sim: 0.997 },
   },
 }
 
@@ -125,8 +129,6 @@ describe('QuantizationCard', () => {
   })
 
   it('shows error toast on failure', async () => {
-    const addToast = vi.fn()
-    vi.mocked(useToastStore).mockReturnValue(addToast)
     const mockQuantize = vi.mocked(modelController.quantize)
     mockQuantize.mockRejectedValue(new Error('No model loaded'))
 
@@ -134,7 +136,7 @@ describe('QuantizationCard', () => {
     fireEvent.click(screen.getByText('Apply'))
 
     await waitFor(() => {
-      expect(addToast).toHaveBeenCalledWith('No model loaded', 'error')
+      expect(mockToast).toHaveBeenCalledWith('No model loaded', { type: 'error' })
     })
   })
 

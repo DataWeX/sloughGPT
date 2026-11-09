@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Skeleton } from '@sloughgpt/strui'
@@ -7,8 +8,12 @@ import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTab
 import { membersTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface PermissionsResponse {
   data: {
@@ -39,10 +44,11 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function PermissionsPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore(s => s.addToast)
   const [roles, setRoles] = useState<Record<string, { name: string; permissions: string[] }>>({})
   const [allPermissions, setAllPermissions] = useState<Record<string, string[]>>({})
-  const [memberPerms, setMemberPerms] = useState<{ user_id: string; username: string; role: string; permissions: string[] }[]>([])
+  const [memberPerms, setMemberPerms] = useState<
+    { user_id: string; username: string; role: string; permissions: string[] }[]
+  >([])
   const [loading, setLoading] = useState(true)
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
 
@@ -52,28 +58,33 @@ export default function PermissionsPage() {
       return
     }
     try {
-      const res = await apiGet<PermissionsResponse>(`/workspaces/${currentWorkspace.id}/permissions`)
+      const res = await apiGet<PermissionsResponse>(
+        `/workspaces/${currentWorkspace.id}/permissions`,
+      )
       if (res?.data) {
         setRoles(res.data.roles)
         setAllPermissions(res.data.all_permissions)
         setMemberPerms(res.data.member_permissions)
       }
     } catch {
-      addToast('Could not load permissions', 'error')
+      notify.toast('Could not load permissions', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, addToast])
+  }, [currentWorkspace?.id])
 
   useRefreshShortcut(fetchPermissions)
 
-  useEffect(() => { fetchPermissions() }, [fetchPermissions])
+  useEffect(() => {
+    fetchPermissions()
+  }, [fetchPermissions])
 
   if (loading) {
     return (
-      <PageContainer title="Permissions"
-      toolbar={<WorkspaceSectionTabs tabs={membersTabs} ariaLabel="Workspace members" />}
-    >
+      <PageContainer
+        title="Permissions"
+        toolbar={<WorkspaceSectionTabs tabs={membersTabs} ariaLabel="Workspace members" />}
+      >
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -81,7 +92,8 @@ export default function PermissionsPage() {
   }
 
   return (
-    <PageContainer title="Permissions"
+    <PageContainer
+      title="Permissions"
       toolbar={<WorkspaceSectionTabs tabs={membersTabs} ariaLabel="Workspace members" />}
     >
       {/* Role-Permission Matrix */}
@@ -95,9 +107,11 @@ export default function PermissionsPage() {
               <thead>
                 <tr className="border-b">
                   <th className="text-left py-2 pr-4 font-medium">Permission</th>
-                  {Object.keys(roles).map(role => (
+                  {Object.keys(roles).map((role) => (
                     <th key={role} className="text-center py-2 px-2 font-medium">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ROLE_COLORS[role] || 'bg-muted'}`}>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ROLE_COLORS[role] || 'bg-muted'}`}
+                      >
                         {role}
                       </span>
                     </th>
@@ -108,11 +122,14 @@ export default function PermissionsPage() {
                 {Object.entries(allPermissions).map(([category, perms]) => (
                   <>
                     <tr key={`cat-${category}`} className="border-b bg-muted/30">
-                      <td colSpan={Object.keys(roles).length + 1} className="py-1.5 font-medium text-muted-foreground">
+                      <td
+                        colSpan={Object.keys(roles).length + 1}
+                        className="py-1.5 font-medium text-muted-foreground"
+                      >
                         {CATEGORY_LABELS[category] || category}
                       </td>
                     </tr>
-                    {perms.map(perm => (
+                    {perms.map((perm) => (
                       <tr key={perm} className="border-b border-border/40">
                         <td className="py-1.5 pr-4 text-muted-foreground">{perm}</td>
                         {Object.entries(roles).map(([role, { permissions }]) => (
@@ -143,7 +160,7 @@ export default function PermissionsPage() {
           {memberPerms.length === 0 ? (
             <p className="text-[10px] text-muted-foreground text-center py-4">No members</p>
           ) : (
-            memberPerms.map(m => (
+            memberPerms.map((m) => (
               <div
                 key={m.user_id}
                 className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40 cursor-pointer"
@@ -152,7 +169,9 @@ export default function PermissionsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{m.username || m.user_id}</div>
                 </div>
-                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ROLE_COLORS[m.role] || 'bg-muted'}`}>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ROLE_COLORS[m.role] || 'bg-muted'}`}
+                >
                   {m.role}
                 </span>
               </div>
@@ -160,17 +179,19 @@ export default function PermissionsPage() {
           )}
 
           {/* Expanded permission details */}
-          {selectedRole && memberPerms.find(m => m.user_id === selectedRole) && (
+          {selectedRole && memberPerms.find((m) => m.user_id === selectedRole) && (
             <div className="mt-2 p-3 rounded-md bg-muted/30 border">
               <p className="text-[10px] font-medium mb-2">
-                {memberPerms.find(m => m.user_id === selectedRole)?.username} permissions:
+                {memberPerms.find((m) => m.user_id === selectedRole)?.username} permissions:
               </p>
               <div className="flex flex-wrap gap-1">
-                {memberPerms.find(m => m.user_id === selectedRole)?.permissions.map(p => (
-                  <span key={p} className="px-1.5 py-0.5 rounded bg-background text-[9px] border">
-                    {p}
-                  </span>
-                ))}
+                {memberPerms
+                  .find((m) => m.user_id === selectedRole)
+                  ?.permissions.map((p) => (
+                    <span key={p} className="px-1.5 py-0.5 rounded bg-background text-[9px] border">
+                      {p}
+                    </span>
+                  ))}
               </div>
             </div>
           )}

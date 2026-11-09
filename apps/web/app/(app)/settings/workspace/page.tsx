@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
@@ -30,8 +31,12 @@ import {
 import { IconTrash } from '@/components/icons/NavIcons'
 import { apiGet, apiPut, apiDelete, apiPost } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { useLocale } from '@/hooks/useLocale'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface WorkspaceSettings {
   workspace_id: string
@@ -55,7 +60,13 @@ interface SettingsResponse {
 
 interface UsageData {
   members: { total: number; admins: number; users: number; viewers: number }
-  training: { total: number; running: number; completed: number; failed: number; total_minutes: number }
+  training: {
+    total: number
+    running: number
+    completed: number
+    failed: number
+    total_minutes: number
+  }
   datasets: { total: number }
   knowledge: { total: number }
   api_keys: { total: number }
@@ -76,7 +87,6 @@ interface HealthResponse {
 
 export default function WorkspaceSettingsPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore(s => s.addToast)
   const { t } = useLocale()
 
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null)
@@ -121,18 +131,20 @@ export default function WorkspaceSettingsPage() {
         setAllowSharing(s.allow_sharing)
       }
     } catch {
-      addToast('Could not load workspace settings', 'error')
+      notify.toast('Could not load workspace settings', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [wsId, addToast])
+  }, [wsId])
 
   const fetchUsage = useCallback(async () => {
     if (!wsId) return
     try {
       const res = await apiGet<UsageResponse>(`/workspaces/${wsId}/usage`)
       setUsage(res?.data ?? null)
-    } catch { /* optional */ }
+    } catch {
+      /* optional */
+    }
   }, [wsId])
 
   const fetchHealth = useCallback(async () => {
@@ -140,7 +152,9 @@ export default function WorkspaceSettingsPage() {
     try {
       const res = await apiGet<HealthResponse>(`/workspaces/${wsId}/health`)
       setHealth(res?.data ?? null)
-    } catch { /* optional */ }
+    } catch {
+      /* optional */
+    }
   }, [wsId])
 
   useEffect(() => {
@@ -164,10 +178,10 @@ export default function WorkspaceSettingsPage() {
         max_members: maxMembers,
         allow_sharing: allowSharing,
       })
-      addToast('Settings saved', 'success')
+      notify.toast('Settings saved', { type: 'success' })
       await fetchSettings()
     } catch {
-      addToast('Could not save settings', 'error')
+      notify.toast('Could not save settings', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -178,10 +192,10 @@ export default function WorkspaceSettingsPage() {
     setDeleting(true)
     try {
       await apiDelete(`/workspaces/${wsId}`)
-      addToast('Workspace deleted', 'success')
+      notify.toast('Workspace deleted', { type: 'success' })
       window.location.href = '/workspaces'
     } catch {
-      addToast('Could not delete workspace', 'error')
+      notify.toast('Could not delete workspace', { type: 'error' })
     } finally {
       setDeleting(false)
       setDeleteConfirm('')
@@ -192,15 +206,14 @@ export default function WorkspaceSettingsPage() {
     if (!wsId) return
     setCleaning(true)
     try {
-      const res = await apiPost<{ data: { retention_days: number; cleaned: Record<string, number> } }>(
-        `/workspaces/${wsId}/cleanup`,
-        {}
-      )
+      const res = await apiPost<{
+        data: { retention_days: number; cleaned: Record<string, number> }
+      }>(`/workspaces/${wsId}/cleanup`, {})
       const cleaned = res?.data?.cleaned ?? {}
       const total = Object.values(cleaned).reduce((a, b) => a + b, 0)
-      addToast(`Cleanup complete: ${total} items removed`, 'success')
+      notify.toast(`Cleanup complete: ${total} items removed`, { type: 'success' })
     } catch {
-      addToast('Could not run cleanup', 'error')
+      notify.toast('Could not run cleanup', { type: 'error' })
     } finally {
       setCleaning(false)
     }
@@ -212,30 +225,34 @@ export default function WorkspaceSettingsPage() {
     try {
       const res = await apiPost<{ data: { id: string; name: string; members_cloned: number } }>(
         `/workspaces/${wsId}/clone`,
-        {}
+        {},
       )
       const data = res?.data
       if (data) {
-        addToast(`Cloned to "${data.name}" with ${data.members_cloned} members`, 'success')
+        notify.toast(`Cloned to "${data.name}" with ${data.members_cloned} members`, {
+          type: 'success',
+        })
       }
     } catch {
-      addToast('Could not clone workspace', 'error')
+      notify.toast('Could not clone workspace', { type: 'error' })
     } finally {
       setCloning(false)
     }
   }
 
-  const hasChanges = settings && (
-    name !== settings.name ||
-    description !== settings.description ||
-    defaultModel !== (settings.default_model || '') ||
-    retentionDays !== settings.data_retention_days ||
-    trainingRetention !== (settings.training_retention_days || settings.data_retention_days || 90) ||
-    auditRetention !== (settings.audit_retention_days || settings.data_retention_days || 90) ||
-    datasetRetention !== (settings.dataset_retention_days || settings.data_retention_days || 90) ||
-    maxMembers !== settings.max_members ||
-    allowSharing !== settings.allow_sharing
-  )
+  const hasChanges =
+    settings &&
+    (name !== settings.name ||
+      description !== settings.description ||
+      defaultModel !== (settings.default_model || '') ||
+      retentionDays !== settings.data_retention_days ||
+      trainingRetention !==
+        (settings.training_retention_days || settings.data_retention_days || 90) ||
+      auditRetention !== (settings.audit_retention_days || settings.data_retention_days || 90) ||
+      datasetRetention !==
+        (settings.dataset_retention_days || settings.data_retention_days || 90) ||
+      maxMembers !== settings.max_members ||
+      allowSharing !== settings.allow_sharing)
 
   if (loading) {
     return (
@@ -255,10 +272,12 @@ export default function WorkspaceSettingsPage() {
   }
 
   return (
-    <PageContainer title={settings?.name ? `${settings.name} — Settings` : "Workspace Settings"}>
-
+    <PageContainer title={settings?.name ? `${settings.name} — Settings` : 'Workspace Settings'}>
       <KpiGrid className="mb-6">
-        <StatCard label="Members" value={String(usage?.members?.total ?? settings.member_count ?? 0)} />
+        <StatCard
+          label="Members"
+          value={String(usage?.members?.total ?? settings.member_count ?? 0)}
+        />
         <StatCard label="Training Jobs" value={String(usage?.training?.total ?? 0)} />
         <StatCard label="Datasets" value={String(usage?.datasets?.total ?? 0)} />
         <StatCard label="Knowledge" value={String(usage?.knowledge?.total ?? 0)} />
@@ -275,7 +294,7 @@ export default function WorkspaceSettingsPage() {
             <label className="text-sm font-medium mb-1 block">Name</label>
             <Input
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={(e) => setName(e.target.value)}
               placeholder="Workspace name"
               maxLength={200}
             />
@@ -284,7 +303,7 @@ export default function WorkspaceSettingsPage() {
             <label className="text-sm font-medium mb-1 block">Description</label>
             <Textarea
               value={description}
-              onChange={e => setDescription(e.target.value)}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder="Workspace description"
               maxLength={1000}
               rows={3}
@@ -304,7 +323,7 @@ export default function WorkspaceSettingsPage() {
             <label className="text-sm font-medium mb-1 block">Default Model</label>
             <Input
               value={defaultModel}
-              onChange={e => setDefaultModel(e.target.value)}
+              onChange={(e) => setDefaultModel(e.target.value)}
               placeholder="e.g. llama-3.1-8b"
               maxLength={200}
             />
@@ -369,9 +388,7 @@ export default function WorkspaceSettingsPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-1 block">
-              Max Members: {maxMembers}
-            </label>
+            <label className="text-sm font-medium mb-1 block">Max Members: {maxMembers}</label>
             <Slider
               value={[maxMembers]}
               onValueChange={([v]) => setMaxMembers(v)}
@@ -391,10 +408,7 @@ export default function WorkspaceSettingsPage() {
                 Allow members to share datasets and knowledge outside the workspace
               </p>
             </div>
-            <Switch
-              checked={allowSharing}
-              onCheckedChange={setAllowSharing}
-            />
+            <Switch checked={allowSharing} onCheckedChange={setAllowSharing} />
           </div>
         </CardContent>
         <CardFooter className="flex justify-end">
@@ -413,10 +427,15 @@ export default function WorkspaceSettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2 mb-2">
-              <span className={`inline-block w-2 h-2 rounded-full ${
-                health.status === 'healthy' ? 'bg-success' :
-                health.status === 'warning' ? 'bg-warning' : 'bg-destructive'
-              }`} />
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  health.status === 'healthy'
+                    ? 'bg-success'
+                    : health.status === 'warning'
+                      ? 'bg-warning'
+                      : 'bg-destructive'
+                }`}
+              />
               <span className="font-medium capitalize">{health.status}</span>
             </div>
             {health.checks && Object.keys(health.checks).length > 0 && (
@@ -477,7 +496,7 @@ export default function WorkspaceSettingsPage() {
               </AlertDialogHeader>
               <Input
                 value={deleteConfirm}
-                onChange={e => setDeleteConfirm(e.target.value)}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
                 placeholder={settings.name}
                 className="mt-2"
               />

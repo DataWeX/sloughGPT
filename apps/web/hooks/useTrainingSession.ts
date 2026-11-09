@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useEffect } from 'react'
 import { trainingFacade } from '@/lib/training-facade'
@@ -14,7 +15,6 @@ import {
   type TrainingShellState,
   type TrainingToastFn,
 } from '@/lib/app-shell'
-import { useToastStore } from '@/lib/toast-store'
 import { logger, trackEvent } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import type { TrainingJob } from '@/lib/training-controller'
@@ -205,15 +205,10 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             // Server has no active training — stale localStorage state, clear it
             _log.info('Shell training is stale (server has no active training), clearing')
             appShellStore.getState().resetTraining()
-            useToastStore
-              .getState()
-              .addToast(
-                'Previous training session expired — server was restarted',
-                'info',
-                undefined,
-                undefined,
-                'training-session-expired',
-              )
+            notify.toast('Previous training session expired — server was restarted', {
+              type: 'info',
+              key: 'training-session-expired',
+            })
             return
           }
 
@@ -229,9 +224,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           })
           // On verification failure, clear stale state to avoid phantom training
           appShellStore.getState().resetTraining()
-          useToastStore
-            .getState()
-            .addToast('Could not verify training status — showing idle state', 'info')
+          notify.toast('Could not verify training status — showing idle state', { type: 'info' })
         }
         return
       }

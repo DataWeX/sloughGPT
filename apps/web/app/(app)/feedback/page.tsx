@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
@@ -28,9 +29,13 @@ import { FeedbackFormCard } from '@/components/feedback/FeedbackFormCard'
 import { ConversationDetailCard } from '@/components/feedback/ConversationDetailCard'
 import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { formatLocaleDate } from '@/lib/time-format'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type Tab = 'stats' | 'conversations' | 'training'
 
@@ -39,7 +44,6 @@ export default function FeedbackPage() {
   const [tab, setTab] = useState<Tab>('stats')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
 
   const [stats, setStats] = useState<FeedbackStats | null>(null)
   const [workflow, setWorkflow] = useState<WorkflowStatus | null>(null)
@@ -95,11 +99,11 @@ export default function FeedbackPage() {
   const handleExport = useCallback(async () => {
     try {
       const resp = await feedbackController.exportTrainingData('json')
-      addToast(`Exported ${resp.count} items to ${resp.path ?? 'server'}`, 'success')
+      notify.toast(`Exported ${resp.count} items to ${resp.path ?? 'server'}`, { type: 'success' })
     } catch {
-      addToast('Could not export training data', 'error')
+      notify.toast('Could not export training data', { type: 'error' })
     }
-  }, [addToast])
+  }, [])
 
   const handleRefreshStats = async () => {
     const [s, w, t] = await Promise.all([
@@ -125,7 +129,7 @@ export default function FeedbackPage() {
     try {
       setConversations(await feedbackConversationsController.list())
     } catch {
-      addToast('Could not load conversations', 'error')
+      notify.toast('Could not load conversations', { type: 'error' })
     }
   }
 
@@ -137,7 +141,7 @@ export default function FeedbackPage() {
       setNewConvName('')
       await handleLoadConversations()
     } catch {
-      addToast('Could not create conversation', 'error')
+      notify.toast('Could not create conversation', { type: 'error' })
     } finally {
       setCreating(false)
     }
@@ -148,7 +152,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.delete(id)
       await handleLoadConversations()
     } catch {
-      addToast('Could not delete conversation', 'error')
+      notify.toast('Could not delete conversation', { type: 'error' })
     }
   }
 
@@ -157,7 +161,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.togglePin(conv.id, !conv.pinned)
       await handleLoadConversations()
     } catch {
-      addToast('Could not update pin', 'error')
+      notify.toast('Could not update pin', { type: 'error' })
     }
   }
 
@@ -166,7 +170,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.toggleStar(conv.id, !conv.starred)
       await handleLoadConversations()
     } catch {
-      addToast('Could not update star', 'error')
+      notify.toast('Could not update star', { type: 'error' })
     }
   }
 
@@ -266,9 +270,9 @@ export default function FeedbackPage() {
                   assistantResponse: '',
                   rating: fb.rating,
                 })
-                addToast('Feedback submitted', 'success')
+                notify.toast('Feedback submitted', { type: 'success' })
               } catch {
-                addToast('Could not submit feedback', 'error')
+                notify.toast('Could not submit feedback', { type: 'error' })
               }
             }}
           />
@@ -493,10 +497,10 @@ export default function FeedbackPage() {
                       setWorkflowBusy(true)
                       try {
                         await feedbackController.triggerWorkflowAction('aggregate')
-                        addToast('Aggregation triggered', 'success')
+                        notify.toast('Aggregation triggered', { type: 'success' })
                         handleRefreshStats()
                       } catch {
-                        addToast('aggregation', 'error')
+                        notify.toast('aggregation', { type: 'error' })
                       } finally {
                         setWorkflowBusy(false)
                       }
@@ -513,10 +517,10 @@ export default function FeedbackPage() {
                       setWorkflowBusy(true)
                       try {
                         await feedbackController.triggerWorkflowAction('prune')
-                        addToast('Prune triggered', 'success')
+                        notify.toast('Prune triggered', { type: 'success' })
                         handleRefreshStats()
                       } catch {
-                        addToast('prune', 'error')
+                        notify.toast('prune', { type: 'error' })
                       } finally {
                         setWorkflowBusy(false)
                       }
@@ -533,9 +537,9 @@ export default function FeedbackPage() {
                       setWorkflowBusy(true)
                       try {
                         await feedbackController.triggerWorkflowAction('export')
-                        addToast('Export triggered', 'success')
+                        notify.toast('Export triggered', { type: 'success' })
                       } catch {
-                        addToast('export', 'error')
+                        notify.toast('export', { type: 'error' })
                       } finally {
                         setWorkflowBusy(false)
                       }

@@ -28,7 +28,9 @@ vi.mock('@/hooks/useLocale', () => ({
   })),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: vi.fn(() => ({
     addToast: vi.fn(),
   })),
@@ -80,7 +82,13 @@ const mockHealth = {
 
 const mockEpisodes = {
   episodes: [
-    { input: 'Hello', response: 'Hi there', growth_delta: 0.01, rating: 4, timestamp: '2024-01-01T00:00:00Z' },
+    {
+      input: 'Hello',
+      response: 'Hi there',
+      growth_delta: 0.01,
+      rating: 4,
+      timestamp: '2024-01-01T00:00:00Z',
+    },
   ],
   total: 1,
 }

@@ -5,7 +5,9 @@ import PracticeCard from './PracticeCard'
 vi.mock('@/lib/phoneme-controller', () => ({
   phonemeController: {
     encode: vi.fn().mockResolvedValue({
-      text: 'hello', language: 'en', phonemes: ['HH', 'EH', 'L', 'OW'],
+      text: 'hello',
+      language: 'en',
+      phonemes: ['HH', 'EH', 'L', 'OW'],
     }),
     score: vi.fn(),
   },
@@ -20,14 +22,18 @@ vi.mock('@/lib/phoneme-controller', () => ({
 }))
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: vi.fn((selector: any) => selector({
-    addToHistory: vi.fn(),
-    randomWordTrigger: 0,
-    pronunciationStreak: 0,
-  })),
+  usePhonemeStore: vi.fn((selector: any) =>
+    selector({
+      addToHistory: vi.fn(),
+      randomWordTrigger: 0,
+      pronunciationStreak: 0,
+    }),
+  ),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: vi.fn((selector: any) => selector({ addToast: vi.fn() })),
 }))
 
@@ -42,13 +48,36 @@ vi.mock('@sloughgpt/strui', () => ({
   CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
   CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
   Input: ({ value, onChange, placeholder, onKeyDown, className, ...props }: any) => (
-    <input value={value} onChange={onChange} placeholder={placeholder} onKeyDown={onKeyDown} className={className} {...props} />
+    <input
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      onKeyDown={onKeyDown}
+      className={className}
+      {...props}
+    />
   ),
   Button: ({ children, onClick, variant, disabled, className, ...props }: any) => (
-    <button onClick={onClick} disabled={disabled} className={className} data-variant={variant} {...props}>{children}</button>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+      data-variant={variant}
+      {...props}
+    >
+      {children}
+    </button>
   ),
-  Badge: ({ children, variant, className }: any) => <span className={className} data-variant={variant}>{children}</span>,
-  Select: ({ children, value, onValueChange }: any) => <select value={value} onChange={e => onValueChange(e.target.value)}>{children}</select>,
+  Badge: ({ children, variant, className }: any) => (
+    <span className={className} data-variant={variant}>
+      {children}
+    </span>
+  ),
+  Select: ({ children, value, onValueChange }: any) => (
+    <select value={value} onChange={(e) => onValueChange(e.target.value)}>
+      {children}
+    </select>
+  ),
   SelectTrigger: ({ children }: any) => <>{children}</>,
   SelectValue: () => null,
   SelectContent: ({ children }: any) => <>{children}</>,
@@ -62,7 +91,9 @@ vi.mock('@sloughgpt/strui', () => ({
 }))
 
 describe('PracticeCard', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders without crashing', () => {
     render(<PracticeCard />)

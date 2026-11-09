@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton } from '@sloughgpt/strui'
@@ -7,7 +8,6 @@ import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTab
 import { settingsTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet, apiPut } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
 interface WorkspaceSettings {
@@ -35,7 +35,6 @@ export default function WorkspaceSettingsPage() {
     allow_sharing: true,
   })
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore(s => s.addToast)
 
   const fetchSettings = useCallback(async () => {
     if (!currentWorkspace?.id) {
@@ -43,7 +42,9 @@ export default function WorkspaceSettingsPage() {
       return
     }
     try {
-      const res = await apiGet<{ data: WorkspaceSettings }>(`/workspaces/${currentWorkspace.id}/settings`)
+      const res = await apiGet<{ data: WorkspaceSettings }>(
+        `/workspaces/${currentWorkspace.id}/settings`,
+      )
       const data = res?.data
       if (data) {
         setSettings(data)
@@ -63,36 +64,39 @@ export default function WorkspaceSettingsPage() {
     }
   }, [currentWorkspace?.id])
 
-  useEffect(() => { fetchSettings() }, [fetchSettings])
+  useEffect(() => {
+    fetchSettings()
+  }, [fetchSettings])
 
   const handleSave = async () => {
     if (!currentWorkspace?.id) return
     setSaving(true)
     try {
       await apiPut(`/workspaces/${currentWorkspace.id}/settings`, form)
-      addToast('Settings saved', 'success')
+      notify.toast('Settings saved', { type: 'success' })
       await fetchSettings()
     } catch {
-      addToast('Could not save settings', 'error')
+      notify.toast('Could not save settings', { type: 'error' })
     } finally {
       setSaving(false)
     }
   }
 
-  const hasChanges = settings && (
-    form.name !== settings.name ||
-    form.description !== settings.description ||
-    form.default_model !== settings.default_model ||
-    form.data_retention_days !== settings.data_retention_days ||
-    form.max_members !== settings.max_members ||
-    form.allow_sharing !== settings.allow_sharing
-  )
+  const hasChanges =
+    settings &&
+    (form.name !== settings.name ||
+      form.description !== settings.description ||
+      form.default_model !== settings.default_model ||
+      form.data_retention_days !== settings.data_retention_days ||
+      form.max_members !== settings.max_members ||
+      form.allow_sharing !== settings.allow_sharing)
 
   if (loading) {
     return (
-      <PageContainer title="Workspace Settings"
-      toolbar={<WorkspaceSectionTabs tabs={settingsTabs} ariaLabel="Workspace settings" />}
-    >
+      <PageContainer
+        title="Workspace Settings"
+        toolbar={<WorkspaceSectionTabs tabs={settingsTabs} ariaLabel="Workspace settings" />}
+      >
         <div className="space-y-4">
           <Skeleton className="h-40" />
           <Skeleton className="h-60" />
@@ -103,9 +107,10 @@ export default function WorkspaceSettingsPage() {
 
   if (!settings) {
     return (
-      <PageContainer title="Workspace Settings"
-      toolbar={<WorkspaceSectionTabs tabs={settingsTabs} ariaLabel="Workspace settings" />}
-    >
+      <PageContainer
+        title="Workspace Settings"
+        toolbar={<WorkspaceSectionTabs tabs={settingsTabs} ariaLabel="Workspace settings" />}
+      >
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             No workspace selected. Use the workspace switcher to select one.
@@ -116,10 +121,10 @@ export default function WorkspaceSettingsPage() {
   }
 
   return (
-    <PageContainer title="Workspace Settings"
+    <PageContainer
+      title="Workspace Settings"
       toolbar={<WorkspaceSectionTabs tabs={settingsTabs} ariaLabel="Workspace settings" />}
     >
-
       <div className="space-y-6">
         {/* General */}
         <Card>
@@ -131,7 +136,7 @@ export default function WorkspaceSettingsPage() {
               <label className="text-sm font-medium text-foreground">Name</label>
               <Input
                 value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Workspace name"
               />
             </div>
@@ -139,7 +144,7 @@ export default function WorkspaceSettingsPage() {
               <label className="text-sm font-medium text-foreground">Description</label>
               <textarea
                 value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Describe this workspace"
                 rows={3}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -158,7 +163,7 @@ export default function WorkspaceSettingsPage() {
               <label className="text-sm font-medium text-foreground">Default Model</label>
               <Input
                 value={form.default_model}
-                onChange={e => setForm(f => ({ ...f, default_model: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, default_model: e.target.value }))}
                 placeholder="e.g. llama-3.2-3b"
               />
               <p className="text-xs text-muted-foreground">
@@ -182,7 +187,9 @@ export default function WorkspaceSettingsPage() {
                   min={7}
                   max={365}
                   value={form.data_retention_days}
-                  onChange={e => setForm(f => ({ ...f, data_retention_days: parseInt(e.target.value) || 90 }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, data_retention_days: parseInt(e.target.value) || 90 }))
+                  }
                 />
                 <p className="text-xs text-muted-foreground">
                   Training jobs and datasets older than this are auto-archived
@@ -195,7 +202,9 @@ export default function WorkspaceSettingsPage() {
                   min={2}
                   max={500}
                   value={form.max_members}
-                  onChange={e => setForm(f => ({ ...f, max_members: parseInt(e.target.value) || 50 }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, max_members: parseInt(e.target.value) || 50 }))
+                  }
                 />
                 <p className="text-xs text-muted-foreground">
                   Maximum number of members in this workspace
@@ -215,7 +224,7 @@ export default function WorkspaceSettingsPage() {
               <input
                 type="checkbox"
                 checked={form.allow_sharing}
-                onChange={e => setForm(f => ({ ...f, allow_sharing: e.target.checked }))}
+                onChange={(e) => setForm((f) => ({ ...f, allow_sharing: e.target.checked }))}
                 className="h-4 w-4 rounded border-border"
               />
               <div>
@@ -233,10 +242,7 @@ export default function WorkspaceSettingsPage() {
           <div className="text-sm text-muted-foreground">
             {hasChanges ? 'You have unsaved changes' : 'No changes'}
           </div>
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-          >
+          <Button onClick={handleSave} disabled={!hasChanges || saving}>
             {saving ? 'Saving...' : 'Save Settings'}
           </Button>
         </div>

@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 import { useState, useCallback, useRef, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
@@ -7,7 +8,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Progress } from '@sloughgpt/strui'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
 import { usePhonemeStore, type HistoryEntry } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import {
   AreaChart,
@@ -19,6 +19,11 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import PhonemeSkeleton from './PhonemeSkeleton'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
   const time = new Date(entry.timestamp).toLocaleTimeString()
@@ -285,7 +290,6 @@ export default function HistoryCard() {
   const clearHistory = usePhonemeStore((s) => s.clearHistory)
   const exportHistory = usePhonemeStore((s) => s.exportHistory)
   const importHistory = usePhonemeStore((s) => s.importHistory)
-  const addToast = useToastStore((s) => s.addToast)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const filteredHistory = useMemo(() => {
@@ -302,8 +306,8 @@ export default function HistoryCard() {
     a.download = 'phoneme-history.json'
     a.click()
     URL.revokeObjectURL(url)
-    addToast('History exported as JSON', 'success')
-  }, [exportHistory, addToast])
+    notify.toast('History exported as JSON', { type: 'success' })
+  }, [exportHistory])
 
   const handleExportCSV = useCallback(() => {
     const headers = [
@@ -332,8 +336,8 @@ export default function HistoryCard() {
     a.download = 'phoneme-history.csv'
     a.click()
     URL.revokeObjectURL(url)
-    addToast('History exported as CSV', 'success')
-  }, [history, addToast])
+    notify.toast('History exported as CSV', { type: 'success' })
+  }, [history])
 
   const handleImport = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -343,18 +347,18 @@ export default function HistoryCard() {
       reader.onload = () => {
         const json = reader.result as string
         importHistory(json)
-        addToast('History imported', 'success')
+        notify.toast('History imported', { type: 'success' })
       }
       reader.readAsText(file)
       e.target.value = ''
     },
-    [importHistory, addToast],
+    [importHistory],
   )
 
   const handleClear = useCallback(() => {
     clearHistory()
-    addToast('History cleared', 'info')
-  }, [clearHistory, addToast])
+    notify.toast('History cleared', { type: 'info' })
+  }, [clearHistory])
 
   return (
     <Card>

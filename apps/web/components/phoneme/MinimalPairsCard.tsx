@@ -10,7 +10,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 
 interface MinimalPair {
   word1: string
@@ -246,7 +245,6 @@ export default function MinimalPairsCard() {
   const [score, setScore] = useState(0)
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
-  const addToast = useToastStore((s) => s.addToast)
 
   const startNewRound = useCallback(() => {
     const pair = MINIMAL_PAIRS[Math.floor(Math.random() * MINIMAL_PAIRS.length)]

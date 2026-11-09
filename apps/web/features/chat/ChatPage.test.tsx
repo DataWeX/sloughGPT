@@ -489,7 +489,12 @@ const { useToastStore, toastState } = vi.hoisted(() => {
   return { useToastStore: { getState: () => toastState }, toastState }
 })
 
-vi.mock('@/lib/toast-store', () => ({ useToastStore }))
+vi.mock('@/lib/notify', () => ({
+  // The component writes toasts through `notify.toast`; bind it to the
+  // same spy the tests assert on (previously the store's addToast).
+  notify: { toast: mockAddToast, banner: vi.fn() },
+  useToastStore,
+}))
 
 import { LocaleProvider } from '@/hooks/useLocale'
 import { useChatStore } from '@/lib/chat-store'
@@ -650,7 +655,7 @@ describe('ChatPage', () => {
       expect(mockClipboardWrite).toHaveBeenCalledWith('the last answer')
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Last response copied', 'info')
+      expect(mockAddToast).toHaveBeenCalledWith('Last response copied', { type: 'info' })
     })
   })
 
@@ -711,7 +716,7 @@ describe('ChatPage', () => {
       screen.getByTestId('delete-btn').click()
     })
     expect(screen.getByTestId('msg-count').textContent).toBe('0')
-    expect(mockAddToast).toHaveBeenCalledWith('Message deleted', 'info')
+    expect(mockAddToast).toHaveBeenCalledWith('Message deleted', { type: 'info' })
   })
 
   it('adds a bookmark for an existing message', async () => {
@@ -737,7 +742,7 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(mockKnowledgeAdd).toHaveBeenCalledWith('some content', 'chat-saved', true)
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Saved to knowledge', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Saved to knowledge', { type: 'success' })
   })
 
   it('enables the voice overlay in talk mode', async () => {

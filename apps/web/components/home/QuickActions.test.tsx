@@ -5,7 +5,7 @@ import React from 'react'
 const mockSend = vi.fn()
 const mockStream = vi.fn()
 const mockAdd = vi.fn()
-const mockAddToast = vi.fn()
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
 
 vi.mock('@/lib/chat-controller', () => ({
   chatController: {
@@ -18,7 +18,9 @@ vi.mock('@/lib/knowledge-controller', () => ({
   knowledgeController: { add: (...args: any[]) => mockAdd(...args) },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 

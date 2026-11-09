@@ -3,15 +3,19 @@ import { render, screen } from '@testing-library/react'
 import PronunciationRecording from './PronunciationRecording'
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: (selector: (state: unknown) => unknown) => selector({
-    addToHistory: vi.fn(),
-  }),
+  usePhonemeStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToHistory: vi.fn(),
+    }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (state: unknown) => unknown) => selector({
-    addToast: vi.fn(),
-  }),
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      addToast: vi.fn(),
+    }),
 }))
 
 describe('PronunciationRecording', () => {
