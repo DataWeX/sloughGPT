@@ -724,6 +724,16 @@ from .webhook_endpoints import router as _webhook_router
 router.include_router(_turbo_router)
 router.include_router(_webhook_router)
 
+# Consolidated from routers/ (card 20261101_154058) — the /training row's
+# remaining router gap; descriptor-projected, byte-identical paths.
+from .cloud_training import router as _cloud_training_router
+from .lora_eval import router as _lora_eval_router
+from .self_train import router as _self_train_router
+
+router.include_router(_self_train_router)
+router.include_router(_lora_eval_router)
+router.include_router(_cloud_training_router)
+
 
 async def get_training_recommendation(
     dataset_path: str = "",

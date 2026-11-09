@@ -30,7 +30,7 @@ def reset_state():
 @pytest.fixture
 def app():
     """Create FastAPI app with self_train router."""
-    from apps.api.server.routers.self_train import SelfTrainRouter
+    from apps.api.server.training.self_train import SelfTrainRouter
 
     router_instance = SelfTrainRouter()
     return build_test_app(router_instance.router)

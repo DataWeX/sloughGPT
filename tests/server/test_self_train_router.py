@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
-from apps.api.server.routers.self_train import router
+from apps.api.server.training.self_train import router
 
 
 @pytest.fixture(autouse=True)
@@ -110,7 +110,7 @@ class TestSelfTrainDeterministic:
         assert data["status"] == "already_running"
         assert data["pid"] == 4242
 
-    @patch("apps.api.server.routers.self_train.subprocess.Popen")
+    @patch("apps.api.server.training.self_train.subprocess.Popen")
     def test_start_builds_command(self, mock_popen, client):
         import state as server_state
 
@@ -128,7 +128,7 @@ class TestSelfTrainDeterministic:
         assert "--forever" in cmd
         assert server_state._self_train_proc is proc
 
-    @patch("apps.api.server.routers.self_train.subprocess.Popen")
+    @patch("apps.api.server.training.self_train.subprocess.Popen")
     def test_invalid_model_returns_422(self, mock_popen, client):
         resp = client.post("/self-train/start", json={"model": "bad model!"})
         assert resp.status_code == 422
@@ -286,7 +286,7 @@ class TestSelfTrainEdgePaths:
         resp = client.post("/self-train/start", json={})
         assert resp.json()["data"]["status"] == "started"
 
-    @patch("apps.api.server.routers.self_train.subprocess.Popen")
+    @patch("apps.api.server.training.self_train.subprocess.Popen")
     def test_start_popen_failure_returns_error(self, mock_popen, client):
         mock_popen.side_effect = FileNotFoundError("no python")
         resp = client.post("/self-train/start", json={})

@@ -530,7 +530,7 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/lora_eval.py::LoraEvalRouter.run_eval": {
+    "apps/api/server/training/lora_eval.py::LoraEvalRouter.run_eval": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
@@ -645,17 +645,17 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/self_train.py::SelfTrainRouter.get_self_train_status": {
+    "apps/api/server/training/self_train.py::SelfTrainRouter.get_self_train_status": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/self_train.py::SelfTrainRouter.start_self_train": {
+    "apps/api/server/training/self_train.py::SelfTrainRouter.start_self_train": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/self_train.py::SelfTrainRouter.stop_self_train": {
+    "apps/api/server/training/self_train.py::SelfTrainRouter.stop_self_train": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1

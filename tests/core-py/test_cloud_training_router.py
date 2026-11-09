@@ -12,7 +12,7 @@ api_server = Path(__file__).resolve().parent.parent.parent.parent / "apps" / "ap
 if str(api_server) not in sys.path:
     sys.path.insert(0, str(api_server))
 
-from routers.cloud_training import CloudTrainingRouter
+from training.cloud_training import CloudTrainingRouter
 
 
 @pytest.fixture

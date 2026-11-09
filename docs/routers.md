@@ -301,6 +301,9 @@ Routes are split across focused sub-modules:
 | `training/helpers.py`         | ~111  | Shared `_finish_job`, `_sloughgpt_trainer_kwds`, `_run_async`            |
 | `training/turbo_endpoints.py` | ~122  | Turbo start + from-sessions start + turbo status                         |
 | `training/sse_stream.py`      | ~282  | Shared SSE stream helper, stop_all_training, cancel_from_sessions        |
+| `training/self_train.py`      | ~243  | `/self-train` start/stop/status (folded in from `routers/`, card `20261101_154058`) |
+| `training/lora_eval.py`       | ~352  | `/lora-eval` run/history/aggregate (folded in from `routers/`, card `20261101_154058`) |
+| `training/cloud_training.py`  | ~190  | `/cloud-training` jobs/submit/status/cancel (folded in from `routers/`, card `20261101_154058`) |
 
 ### Execution Routes (`execution.py`, `legacy.py`)
 
@@ -383,6 +386,8 @@ Routes are split across focused sub-modules:
 > **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domain.training._internal.service` (core layer — read through the `domain.training` facade since card `20261101_140447`).
 
 ## Self-Train Router (`/self-train`)
+
+> Served by `training/self_train.py`, included by the `/training` aggregate since card `20261101_154058` — `routers/self_train.py` was folded into the training router as a descriptor projection (paths and wire shapes unchanged).
 
 | Method | Path                 | Description           |
 | ------ | -------------------- | --------------------- |
@@ -596,6 +601,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST`   | `/user-adapters/prune`            | Prune adapters.          |
 
 ## LoRA Eval Router (`/lora-eval`)
+
+> Served by `training/lora_eval.py`, included by the `/training` aggregate since card `20261101_154058` — `routers/lora_eval.py` was folded into the training router as a descriptor projection (paths and wire shapes unchanged).
 
 | Method | Path                   | Description                   |
 | ------ | ---------------------- | ----------------------------- |

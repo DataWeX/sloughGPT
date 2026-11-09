@@ -6,9 +6,11 @@ import asyncio
 import logging
 import re
 from pathlib import Path
+from typing import ClassVar
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router
 from schemas.common import (
     classify_and_raise,
     endpoint,
@@ -17,19 +19,131 @@ from schemas.common import (
     success_response,
 )
 
+from domain.agents import ToolParam, ToolSpec
+
 _VALID_ADAPTER_PATH = re.compile(r"^[\w\-/]+\.npz$")
 _ADAPTER_BASE = Path("data/user_adapters").resolve()
 
 
 class LoraEvalRouter:
+    # One projection per process (contract registry: same identity
+    # re-registering = double projection). Later instances — test fixtures —
+    # share the router the first instance registered.
+    _shared_router: ClassVar[APIRouter | None] = None
+
     def __init__(self):
-        self.router = APIRouter(prefix="/lora-eval", tags=["lora-eval"])
+        if LoraEvalRouter._shared_router is not None:
+            self.router = LoraEvalRouter._shared_router
+            return
+        # Descriptor projection (card 20261101_154058): full paths in the
+        # RouteSpecs — no prefix, byte-identical paths on direct mount.
+        self.router = APIRouter()
         self._register_routes()
+        LoraEvalRouter._shared_router = self.router
 
     def _register_routes(self):
-        self.router.add_api_route("/run", self.run_eval, methods=["POST"])
-        self.router.add_api_route("/history", self.get_eval_history, methods=["GET"])
-        self.router.add_api_route("/aggregate", self.trigger_aggregation, methods=["POST"])
+        # Both POSTs are query-carried (params=... in tests and the hand-built
+        # FastAPI twin's plain defaults) — input="query" keeps that wire.
+        # envelope=False: handlers keep their success_response wraps.
+        self.router.include_router(
+            create_router(
+                ToolSpec(
+                    name="training.lora_eval.run",
+                    description=(
+                        "Run LoRA quality evaluation — baseline vs with-adapter comparison.\n"
+                        "\n"
+                        "Args:\n"
+                        "    adapter_path: path to adapter .npz file\n"
+                        "    soul: soul name for evaluation\n"
+                        "\n"
+                        "Returns:\n"
+                        "    dict with baseline/with_adapter metrics and delta comparison\n"
+                        "\n"
+                        "Side effects:\n"
+                        "    - calls LoRAEvaluator.run() with and without adapter\n"
+                        "    - saves results to eval history"
+                    ),
+                    parameters=[
+                        ToolParam("adapter_path", "string", "", False),
+                        ToolParam("soul", "string", "", False),
+                    ],
+                    execute=self.run_eval,
+                    auth_scope="public",
+                    idempotent=False,
+                    version="1",
+                ),
+                RouteSpec(
+                    path="/lora-eval/run",
+                    input="query",
+                    envelope=False,
+                    summary="Run LoRA Evaluation",
+                    tags=["lora-eval"],
+                ),
+                self.run_eval,
+            )
+        )
+        self.router.include_router(
+            create_router(
+                ToolSpec(
+                    name="training.lora_eval.history",
+                    description=(
+                        "Retrieve recent evaluation history.\n"
+                        "\n"
+                        "Args:\n"
+                        "    limit: max number of results to return (default 20)\n"
+                        "\n"
+                        "Returns:\n"
+                        "    dict with list of eval result dicts\n"
+                        "\n"
+                        "Side effects:\n"
+                        "    - reads from LoRAEvaluator history"
+                    ),
+                    parameters=[ToolParam("limit", "integer", "", False)],
+                    execute=self.get_eval_history,
+                    auth_scope="public",
+                    idempotent=True,
+                    version="1",
+                ),
+                RouteSpec(
+                    path="/lora-eval/history",
+                    envelope=False,
+                    summary="Get Evaluation History",
+                    tags=["lora-eval"],
+                ),
+                self.get_eval_history,
+            )
+        )
+        self.router.include_router(
+            create_router(
+                ToolSpec(
+                    name="training.lora_eval.aggregate",
+                    description=(
+                        "Trigger aggregation of top-k best user adapters.\n"
+                        "\n"
+                        "Calls PerUserLoRAStore.aggregate_best_adapters() which merges top adapters,\n"
+                        "then runs LoRAEvaluator before/after to measure quality delta."
+                    ),
+                    parameters=[
+                        ToolParam("top_k", "integer", "", False),
+                        ToolParam("min_feedback", "integer", "", False),
+                        ToolParam("output_name", "string", "", False),
+                        ToolParam("run_eval", "boolean", "", False),
+                    ],
+                    execute=self.trigger_aggregation,
+                    auth_scope="authenticated",
+                    idempotent=False,
+                    version="1",
+                ),
+                RouteSpec(
+                    path="/lora-eval/aggregate",
+                    input="query",
+                    envelope=False,
+                    summary="Aggregate Best Adapters",
+                    tags=["lora-eval"],
+                ),
+                self.trigger_aggregation,
+            )
+        )
 
     @endpoint("lora_eval.run")
     async def run_eval(
@@ -120,7 +234,7 @@ class LoraEvalRouter:
     @endpoint("lora_eval.history")
     async def get_eval_history(
         self,
-        limit: int = Query(default=20, ge=1, le=100),
+        limit: int = 20,  # plain default: the projection omits absent query keys
     ) -> dict:
         """
         Retrieve recent evaluation history.
@@ -134,6 +248,14 @@ class LoraEvalRouter:
         Side effects:
             - reads from LoRAEvaluator history
         """
+        # Was FastAPI Query(ge=1, le=100); the projection's ToolParam has no
+        # range vocabulary, so the bound lives here — same 422, same inputs.
+        if not 1 <= limit <= 100:
+            raise_error(
+                f"limit must be between 1 and 100, got {limit}",
+                "E_VAL_REQUEST",
+                status_code=422,
+            )
         try:
             from domain.feedback import get_lora_evaluator
 
@@ -146,10 +268,10 @@ class LoraEvalRouter:
     @endpoint("lora_eval.aggregate")
     async def trigger_aggregation(
         self,
-        top_k: int = Query(default=10, ge=1, le=50),
-        min_feedback: int = Query(default=5, ge=1),
-        output_name: str = Query(default="best_aggregated"),
-        run_eval: bool = Query(default=True),
+        top_k: int = 10,  # plain defaults: the projection omits absent query keys
+        min_feedback: int = 5,
+        output_name: str = "best_aggregated",
+        run_eval: bool = True,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """
@@ -158,6 +280,19 @@ class LoraEvalRouter:
         Calls PerUserLoRAStore.aggregate_best_adapters() which merges top adapters,
         then runs LoRAEvaluator before/after to measure quality delta.
         """
+        # Was FastAPI Query(ge/le); range bound moved here — same 422, same inputs.
+        if not 1 <= top_k <= 50:
+            raise_error(
+                f"top_k must be between 1 and 50, got {top_k}",
+                "E_VAL_REQUEST",
+                status_code=422,
+            )
+        if min_feedback < 1:
+            raise_error(
+                f"min_feedback must be at least 1, got {min_feedback}",
+                "E_VAL_REQUEST",
+                status_code=422,
+            )
         try:
             from domain.feedback import get_per_user_lora
 

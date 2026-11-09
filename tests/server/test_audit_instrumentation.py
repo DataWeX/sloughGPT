@@ -21,10 +21,10 @@ from apps.api.server.routers.config import ConfigRouter
 from apps.api.server.routers.datasets import DatasetsRouter
 from apps.api.server.routers.experiments import ExperimentsRouter
 from apps.api.server.routers.kb import KBRouter
-from apps.api.server.routers.lora_eval import LoraEvalRouter
+from apps.api.server.training.lora_eval import LoraEvalRouter
 from apps.api.server.routers.models import ModelsRouter
 from apps.api.server.routers.multimodal import MultimodalRouter
-from apps.api.server.routers.self_train import SelfTrainRouter
+from apps.api.server.training.self_train import SelfTrainRouter
 from apps.api.server.routers.souls import SoulsRouter
 from apps.api.server.routers.system import SystemRouter
 from apps.api.server.routers.tokenizer import TokenizerRouter
@@ -1086,7 +1086,7 @@ def self_train_client():
 class TestSelfTrainAudit:
     """Self-training start/stop emit audit events."""
 
-    @patch("apps.api.server.routers.self_train.subprocess.Popen")
+    @patch("apps.api.server.training.self_train.subprocess.Popen")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_logs_event(self, mock_logger, mock_popen, self_train_client):
         proc = mock_popen.return_value

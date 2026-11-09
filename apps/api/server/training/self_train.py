@@ -8,10 +8,12 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import state as server_state
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from pydantic import BaseModel, Field
 from schemas.common import (
     classify_and_raise,
@@ -21,6 +23,7 @@ from schemas.common import (
     success_response,
 )
 
+from domain.agents import ToolSpec
 from domain.infrastructure import AppError
 
 logger = logging.getLogger("slo.api.self_train")
@@ -41,21 +44,98 @@ class SelfTrainRequest(BaseModel):
 
 
 class SelfTrainRouter:
+    # One projection per process (contract registry: same identity
+    # re-registering = double projection). Later instances — test fixtures —
+    # share the router the first instance registered.
+    _shared_router: ClassVar[APIRouter | None] = None
+
     def __init__(self):
-        self._repo_root = Path(__file__).resolve().parents[4]
+        self._repo_root = Path(__file__).resolve().parents[3]
         self._model_name_re = re.compile(r"^[a-zA-Z0-9_./-]+$")
-        self.router = APIRouter(prefix="/self-train", tags=["self-train"])
+        if SelfTrainRouter._shared_router is not None:
+            self.router = SelfTrainRouter._shared_router
+            return
+        # Descriptor projection (card 20261101_154058): full paths live in the
+        # RouteSpecs below — no prefix, so test apps that mount this router
+        # directly serve the same byte-identical paths as the aggregate.
+        self.router = APIRouter()
         self._register_routes()
+        SelfTrainRouter._shared_router = self.router
 
     def _register_routes(self):
-        self.router.add_api_route("/start", self.start_self_train, methods=["POST"])
-        self.router.add_api_route("/stop", self.stop_self_train, methods=["POST"])
-        self.router.add_api_route("/status", self.get_self_train_status, methods=["GET"])
+        # envelope=False: the handlers keep their success_response wraps, so the
+        # wire bytes are unchanged by the projection.
+        self.router.include_router(
+            create_router(
+                ToolSpec(
+                    name="training.self_train.start",
+                    description=(
+                        "Start self-training in a subprocess.\n\n"
+                        "Args:\n"
+                        "    req: Validated config with model, temperature, forever keys.\n\n"
+                        "Returns:\n"
+                        "    Status dict with pid or error."
+                    ),
+                    parameters=params_from_model(SelfTrainRequest),
+                    execute=self.start_self_train,
+                    auth_scope="authenticated",
+                    idempotent=False,
+                    version="1",
+                ),
+                RouteSpec(
+                    path="/self-train/start",
+                    envelope=False,
+                    summary="Start Self-Training",
+                    tags=["self-train"],
+                ),
+                self.start_self_train,
+            )
+        )
+        self.router.include_router(
+            create_router(
+                ToolSpec(
+                    name="training.self_train.stop",
+                    description="Stop the running self-training subprocess.",
+                    parameters=[],
+                    execute=self.stop_self_train,
+                    auth_scope="authenticated",
+                    idempotent=False,
+                    version="1",
+                ),
+                RouteSpec(
+                    path="/self-train/stop",
+                    envelope=False,
+                    summary="Stop Self-Training",
+                    tags=["self-train"],
+                ),
+                self.stop_self_train,
+            )
+        )
+        self.router.include_router(
+            create_router(
+                ToolSpec(
+                    name="training.self_train.status",
+                    description="Check the current status of the self-training subprocess.",
+                    parameters=[],
+                    execute=self.get_self_train_status,
+                    auth_scope="public",
+                    idempotent=True,
+                    version="1",
+                ),
+                RouteSpec(
+                    path="/self-train/status",
+                    envelope=False,
+                    summary="Get Self-Training Status",
+                    tags=["self-train"],
+                ),
+                self.get_self_train_status,
+            )
+        )
 
     @endpoint("self_train.start")
     async def start_self_train(
         self,
-        req: SelfTrainRequest | None = None,
+        req: SelfTrainRequest = None,  # model-style body — required by the projection; default is a signature-level fallback
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Start self-training in a subprocess.
