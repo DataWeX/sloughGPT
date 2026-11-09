@@ -1,7 +1,7 @@
 {
  "note": "Route + OpenAPI baseline for scripts/check_contract.py \u2014 report-only drift signal, regenerated with --write-baseline.",
- "routers": 53,
- "count": 552,
+ "routers": 52,
+ "count": 543,
  "routes": [
   [
    "/",
@@ -1333,42 +1333,6 @@
   ],
   [
    "/operations/purge",
-   "POST"
-  ],
-  [
-   "/phoneme/batch-encode",
-   "POST"
-  ],
-  [
-   "/phoneme/decode",
-   "POST"
-  ],
-  [
-   "/phoneme/detect-language",
-   "POST"
-  ],
-  [
-   "/phoneme/encode",
-   "POST"
-  ],
-  [
-   "/phoneme/languages",
-   "GET"
-  ],
-  [
-   "/phoneme/score",
-   "POST"
-  ],
-  [
-   "/phoneme/status",
-   "GET"
-  ],
-  [
-   "/phoneme/synthesize",
-   "POST"
-  ],
-  [
-   "/phoneme/visualize",
    "POST"
   ],
   [
@@ -10831,130 +10795,6 @@
     "responses": [
      "200",
      "422"
-    ]
-   }
-  },
-  "/phoneme/encode": {
-   "POST": {
-    "operationId": "encode_phoneme_encode_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "EncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/decode": {
-   "POST": {
-    "operationId": "decode_phoneme_decode_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": {
-      "items": {
-       "type": "integer"
-      },
-      "type": "array",
-      "title": "Ids"
-     }
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/visualize": {
-   "POST": {
-    "operationId": "visualize_phoneme_visualize_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "EncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/score": {
-   "POST": {
-    "operationId": "score_phoneme_score_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "ScoreRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/batch-encode": {
-   "POST": {
-    "operationId": "batch_encode_phoneme_batch_encode_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "BatchEncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/detect-language": {
-   "POST": {
-    "operationId": "detect_language_phoneme_detect_language_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "EncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/synthesize": {
-   "POST": {
-    "operationId": "synthesize_phoneme_synthesize_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "SynthesizeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/languages": {
-   "GET": {
-    "operationId": "languages_phoneme_languages_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/phoneme/status": {
-   "GET": {
-    "operationId": "status_phoneme_status_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
     ]
    }
   },
