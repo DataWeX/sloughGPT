@@ -244,9 +244,11 @@ async def delete_checkpoint(name: str) -> list[str]:
                     if meta.exists():
                         meta.unlink()
                     # externalized optimizer moments — same stem, never orphan
-                    state_file = Path(str(resolved) + ".optimizer.json.gz")
-                    if state_file.exists():
-                        state_file.unlink()
+                    # (legacy gzip sibling + current binary sibling)
+                    for state_suffix in (".optimizer.json.gz", ".optimizer.dat"):
+                        state_file = Path(str(resolved) + state_suffix)
+                        if state_file.exists():
+                            state_file.unlink()
 
     await asyncio.to_thread(_delete)
     return deleted

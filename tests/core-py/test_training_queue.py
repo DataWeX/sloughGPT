@@ -1263,3 +1263,73 @@ class TestCheckpointPruning:
         remaining_meta = list(tmp_path.glob("*.meta.json"))
         assert len(remaining_soul) == 1
         assert len(remaining_meta) == 1
+
+    def test_prune_cleans_optimizer_state_files(self, tmp_path):
+        """Pruning removes externalized optimizer state siblings too.
+
+        State files share the full .soul name (<x>.soul.optimizer.dat /
+        <x>.soul.optimizer.json.gz) — pruning the .soul without them leaves
+        orphaned multi-MB blobs behind (seen in the tinyshakespeare run dir).
+        """
+        import domain.training._internal.train_pipeline as tp
+
+        config = tp.TrainerConfig(checkpoint_dir=str(tmp_path), max_checkpoints=1)
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        trainer._best_model_path = None
+        trainer._last_checkpoint_path = None
+
+        for i in range(3):
+            f = tmp_path / f"ckpt_{i}.soul"
+            f.write_text(f"checkpoint {i}")
+            for suffix in (".optimizer.dat", ".optimizer.json.gz"):
+                state = tmp_path / f"ckpt_{i}.soul{suffix}"
+                state.write_bytes(b"moments")
+            os.utime(f, (i, i))
+
+        trainer._prune_stale_checkpoints(keep_final=False)
+
+        remaining_soul = list(tmp_path.glob("*.soul"))
+        remaining_state = list(tmp_path.glob("*.optimizer.*"))
+        assert len(remaining_soul) == 1
+        # only the kept checkpoint's two state files survive
+        assert len(remaining_state) == 2
+        kept = remaining_soul[0].name
+        assert all(name.startswith(kept) for name in (p.name for p in remaining_state))
+
+    def test_disk_limit_prune_cleans_state_and_meta(self, tmp_path, monkeypatch):
+        """_enforce_disk_limit removes sidecars + optimizer state with the .soul.
+
+        Same invariant as _prune_stale_checkpoints: a deleted checkpoint leaves
+        no orphaned .meta.json / .optimizer.* siblings behind.
+        """
+        import domain.training._internal.state as state_mod
+        import domain.training._internal.train_pipeline as tp
+
+        monkeypatch.setattr(state_mod, "MAX_CHECKPOINT_DISK_MB", 1)  # 1 MiB limit
+        config = tp.TrainerConfig(checkpoint_dir=str(tmp_path), max_checkpoints=5)
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        trainer._best_model_path = None
+        trainer._last_checkpoint_path = None
+
+        # 3 checkpoints x ~0.6 MB = 1.8 MB > 1 MiB → oldest two pruned
+        for i in range(3):
+            f = tmp_path / f"ckpt_{i}.soul"
+            f.write_bytes(b"x" * 600_000)
+            (tmp_path / f"ckpt_{i}.soul.meta.json").write_text("{}")
+            (tmp_path / f"ckpt_{i}.soul.optimizer.dat").write_bytes(b"m")
+            os.utime(f, (i, i))
+
+        trainer._enforce_disk_limit(tmp_path)
+
+        remaining_soul = list(tmp_path.glob("*.soul"))
+        assert len(remaining_soul) == 1
+        assert remaining_soul[0].name == "ckpt_2.soul"
+        # no orphaned siblings for the pruned checkpoints
+        for i in (0, 1):
+            assert not (tmp_path / f"ckpt_{i}.soul.meta.json").exists()
+            assert not (tmp_path / f"ckpt_{i}.soul.optimizer.dat").exists()
+        # kept checkpoint's siblings survive
+        assert (tmp_path / "ckpt_2.soul.optimizer.dat").exists()
+        assert (tmp_path / "ckpt_2.soul.meta.json").exists()

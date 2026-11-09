@@ -571,6 +571,56 @@ def _make_json_safe(obj):
     return obj
 
 
+def _remove_checkpoint_artifacts(stale: Path) -> None:
+    """Unlink a stale ``.soul`` and every sibling that shares its name.
+
+    A checkpoint is a file family: the ``.soul`` weights, its ``.meta.json`` /
+    ``.points.json`` sidecars, and the externalized optimizer state
+    (``.optimizer.dat`` / legacy ``.optimizer.json.gz`` — full-name and
+    stem-name conventions both occur). Unlinking only the ``.soul`` leaves
+    orphaned multi-MB moment blobs behind (observed after a pruned periodic
+    checkpoint in the tinyshakespeare run dir).
+
+    Both prune sites — ``_prune_stale_checkpoints`` (window) and
+    ``_enforce_disk_limit`` (byte budget) — call this so the cleanup can
+    never drift between them. All unlinks are ``OSError``-tolerant: a sibling
+    that vanished mid-scan is already handled by whoever removed it.
+    """
+    from domain.inference._internal.soul_meta_slim import STATE_SUFFIX, STATE_SUFFIX_BIN
+
+    candidates = [
+        stale,
+        Path(str(stale) + ".meta.json"),
+        stale.parent / (stale.stem + ".meta.json"),
+        stale.parent / (stale.stem + ".points.json"),
+    ]
+    for state_suffix in (STATE_SUFFIX, STATE_SUFFIX_BIN):
+        candidates.append(Path(str(stale) + state_suffix))
+        candidates.append(stale.parent / (stale.stem + state_suffix))
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                candidate.unlink()
+        except OSError:
+            pass
+
+
+def _state_dict_as_arrays(optimizer, params):
+    """``state_dict`` with moment buffers as numpy snapshots (as_arrays=True).
+
+    Slo optimizers take the kwarg so the checkpoint path gets bytes
+    end-to-end — no ``tolist()`` of millions of floats per save. Custom or
+    legacy optimizers without the kwarg fall back to their list form; the
+    manifest encoder handles both. A TypeError raised *inside* ``state_dict``
+    re-raises on the plain call, so it still surfaces as the logged
+    serialization failure instead of being swallowed here.
+    """
+    try:
+        return optimizer.state_dict(params=params, as_arrays=True)
+    except TypeError:
+        return optimizer.state_dict(params=params)
+
+
 def _load_soul_checkpoint(path: str) -> dict[str, Any] | None:
     """Load a .soul checkpoint and return a dict compatible with _restore_from_checkpoint_bundle.
 
@@ -648,7 +698,7 @@ def _build_training_state_metadata(
     if optimizer is not None:
         try:
             opt_state = (
-                optimizer.state_dict(params=params)
+                _state_dict_as_arrays(optimizer, params)
                 if params is not None
                 else optimizer.state_dict()
             )
@@ -663,6 +713,14 @@ def _build_training_state_metadata(
                 hyper = opt_state.get("hyperparameters")
                 if isinstance(hyper, dict):
                     hyper["lr"] = initial_lr
+            # Moments become base64 manifests here: bytes end-to-end from the
+            # optimizer buffers to the sidecar, never Python float lists (the
+            # old _make_json_safe walk over millions of floats cost ~10 s per
+            # periodic save — training-throughput card 20261107).
+            if isinstance(opt_state, dict) and isinstance(opt_state.get("state"), dict):
+                from domain.inference._internal.soul_meta_slim import to_state_manifest
+
+                opt_state["state"] = to_state_manifest(opt_state["state"])
             state["optimizer"] = _make_json_safe(opt_state)
         except Exception as e:
             logger.warning(
@@ -735,12 +793,23 @@ def _parse_training_state_metadata(metadata: dict, base_dir=None) -> dict:
             loaded = load_state_file(ref, base_dir)
             if loaded is not None:
                 state = loaded
+        # Header-embedded manifests → ndarray (legacy lists pass through to
+        # _to_numpy below; a corrupt manifest degrades like a missing ref).
+        if isinstance(state, dict) and state:
+            from domain.inference._internal.soul_meta_slim import from_state_manifest
+
+            decoded = from_state_manifest(state)
+            state = decoded if isinstance(decoded, dict) else {}
         if not isinstance(state, dict):
             state = {}
-        # Convert nested lists in state back to numpy arrays
+        # Convert nested lists in state back to numpy arrays. Flat buffers
+        # (SGD-style {name: buffer}) carry no per-moment dict — keep them flat.
         converted_state = {}
         for name, buffers in state.items():
-            converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
+            if isinstance(buffers, dict):
+                converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
+            else:
+                converted_state[name] = _to_numpy(buffers)
         opt["state"] = converted_state
         opt.pop("state_ref", None)
         result["optimizer"] = opt
@@ -2621,13 +2690,10 @@ class SloughGPTTrainer:
                 total_bytes -= oldest.stat().st_size
             except OSError:
                 continue
-            try:
-                oldest.unlink()
-                logger.info(
-                    "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
-                )
-            except OSError:
-                pass
+            _remove_checkpoint_artifacts(oldest)
+            logger.info(
+                "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
+            )
 
     def _prune_stale_checkpoints(self, keep_final: bool = False) -> None:
         """Delete stale ``.soul`` checkpoints so the directory never accumulates files.
@@ -2643,6 +2709,8 @@ class SloughGPTTrainer:
 
         Side effects:
             - unlinks stale ``.soul`` files under ``config.checkpoint_dir``
+              together with their ``.meta.json``/``.points.json`` sidecars and
+              externalized optimizer state (``.optimizer.dat``/``.optimizer.json.gz``)
             - rewires ``_best_model_path`` so it never points at a deleted file
               (on final saves it points at the final checkpoint; otherwise it is
               reset to None when the best checkpoint was pruned by the window)
@@ -2665,26 +2733,9 @@ class SloughGPTTrainer:
         keep_count = 1 if keep_final else max(1, int(getattr(self.config, "max_checkpoints", 5)))
         keep = {str(p) for p in files[:keep_count]}
         for stale in files[keep_count:]:
-            try:
-                stale.unlink()
-            except OSError:
-                pass
-            meta = Path(str(stale) + ".meta.json")
-            try:
-                if meta.exists():
-                    meta.unlink()
-            except OSError:
-                pass
-            # Sidecars use the stem name (<name>.points.json, <name>.meta.json),
-            # not the full .soul name — remove them so pruned checkpoints
-            # leave no orphaned artifacts behind.
-            for suffix in (".points.json", ".meta.json"):
-                sidecar = stale.parent / (stale.stem + suffix)
-                try:
-                    if sidecar.exists():
-                        sidecar.unlink()
-                except OSError:
-                    pass
+            # Full file family: .soul + meta/points sidecars + optimizer state
+            # (.optimizer.dat / legacy .optimizer.json.gz) — never orphan them.
+            _remove_checkpoint_artifacts(stale)
 
         if keep_final and self._last_checkpoint_path:
             # The just-written final checkpoint is the newest file (kept above);

@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-"""Migrate fat ``*.soul.meta.json`` sidecars: Adam moments → gzip + state_ref.
+"""Migrate fat ``*.soul.meta.json`` sidecars: Adam moments → binary state file + state_ref.
 
 Measured 2026-11-07: 17 sidecars under ``models/`` totalled 1.3 GB, of which
 ~92 MB per periodic checkpoint was ``metadata.training_state.optimizer.state``
 as pretty JSON float text (the weights beside them are ~98 MB). This rewrites
 each fat sidecar to keep a hash-pinned ``state_ref`` and moves the moments to
-a ``<x>.optimizer.json.gz`` sibling — the format the writer
-(``domain/inference/_internal/soul_meta_slim.py``) now emits for every save.
+a ``<x>.optimizer.dat`` sibling — the ``bin-v1`` format the writer
+(``domain/inference/_internal/soul_meta_slim.py``) now emits for every save
+(legacy ``.optimizer.json.gz`` siblings are still read).
 
 Safety contract:
 - **Dry-run by default** — nothing is written without ``--apply``.
 - **Original preserved byte-for-byte** under ``<root>/.meta-backups/<stamp>/``
   before the sidecar is replaced (user-trained artifacts are user data).
 - **Atomic replace** — slim JSON is written to a ``.tmp``, re-parsed and
-  checked, then ``os.replace``d; the gzip lands (fsync) before the ref does.
+  checked, then ``os.replace``d; the state file lands (fsync) before the ref does.
 - **Idempotent** — already-slim metas are skipped, and ``.meta-backups`` is
   never re-migrated (those are the preserved originals).
 - **stdlib-only** — the helper is loaded standalone via importlib, so this
@@ -134,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
             ref = slim["metadata"]["training_state"]["optimizer"]["state_ref"]
             gz_path = meta_path.parent / ref["file"]
             if hashlib.sha256(gz_path.read_bytes()).hexdigest() != ref["sha256"]:
-                raise RuntimeError("gzip sha256 mismatch after write")
+                raise RuntimeError("state file sha256 mismatch after write")
 
             # backup first (copy, never move — the original stays until swap)
             backup = root / BACKUP_DIRNAME / stamp / rel

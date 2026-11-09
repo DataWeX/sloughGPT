@@ -254,3 +254,35 @@ class TestSloAdamW:
         opt.step([p])
         assert p.data.shape == p_shape
         assert np.all(np.isfinite(p.data))
+
+
+class TestStateDictArrays:
+    """``as_arrays=True`` hands moments back as numpy (bytes end-to-end — no
+    ``tolist()`` → JSON float-text round-trip on the checkpoint hot path).
+
+    The default stays lists: chat_trainer and any legacy consumer serialize
+    ``state_dict()`` straight to JSON today and must not change shape.
+    """
+
+    @staticmethod
+    def _populated():
+        w = _NamedTensor(np.array([1.0, 2.0]), name="w", requires_grad=True)
+        adamw = SloAdamW(lr=0.01, weight_decay=0.0)
+        w.grad = Tensor(np.array([0.5, -0.5]))
+        adamw.step([w])
+        return adamw, w
+
+    def test_as_arrays_returns_snapshotted_ndarrays(self):
+        adamw, w = self._populated()
+        state = adamw.state_dict([w], as_arrays=True)
+        m = state["state"]["w"]["m"]
+        v = state["state"]["w"]["v"]
+        assert isinstance(m, np.ndarray) and isinstance(v, np.ndarray)
+        np.testing.assert_array_equal(m, adamw._m[id(w)])
+        assert m is not adamw._m[id(w)]  # snapshot, not a live buffer view
+
+    def test_default_state_dict_stays_lists(self):
+        adamw, w = self._populated()
+        state = adamw.state_dict([w])
+        assert isinstance(state["state"]["w"]["m"], list)
+        assert isinstance(state["state"]["w"]["v"], list)

@@ -26,7 +26,10 @@ from typing import Any
 
 import numpy as np
 
-from domain.inference._internal.soul_meta_slim import externalize_optimizer_state
+from domain.inference._internal.soul_meta_slim import (
+    externalize_optimizer_state,
+    to_state_manifest,
+)
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.shared import repair_iso, utc_now_iso
 
@@ -83,6 +86,35 @@ def _soul_json_sanitize(obj: Any) -> Any:
     if isinstance(obj, float):
         return obj if math.isfinite(obj) else None
     return obj
+
+
+def _embed_state_manifests(profile_dict: dict) -> dict:
+    """Writer-boundary invariant: optimizer moments become base64 manifests.
+
+    The .soul header is JSON — without this, hand-built list state walks the
+    sanitize/hash/dumps pipeline float-by-float (~40 MB of JSON float text
+    per periodic save). ``to_state_manifest`` is idempotent (already-encoded
+    manifests pass through), and the metadata path is structurally copied so
+    the caller's profile object is left untouched.
+    """
+    md = profile_dict.get("metadata")
+    if not isinstance(md, dict):
+        return profile_dict
+    ts = md.get("training_state")
+    if not isinstance(ts, dict):
+        return profile_dict
+    opt = ts.get("optimizer")
+    if not isinstance(opt, dict) or not isinstance(opt.get("state"), dict):
+        return profile_dict
+    new_opt = dict(opt)
+    new_opt["state"] = to_state_manifest(opt["state"])
+    new_ts = dict(ts)
+    new_ts["optimizer"] = new_opt
+    new_md = dict(md)
+    new_md["training_state"] = new_ts
+    new_profile = dict(profile_dict)
+    new_profile["metadata"] = new_md
+    return new_profile
 
 
 def _soul_profile_hash(soul_dict: dict) -> str:
@@ -608,7 +640,9 @@ def save_soul(
 
     # Single to_dict + sanitize pass feeds the hash, the embedded config and
     # the sidecar — each previously re-walked the full training_state.
-    soul_dict = _soul_json_sanitize(soul_profile.to_dict())
+    # _embed_state_manifests runs first so the walk and the JSON text see
+    # O(#arrays) manifests instead of O(#floats) nested lists.
+    soul_dict = _soul_json_sanitize(_embed_state_manifests(soul_profile.to_dict()))
     soul_profile.integrity_hash = _soul_profile_hash(soul_dict)
     soul_dict["integrity_hash"] = soul_profile.integrity_hash
     config_json = json.dumps(soul_dict, default=str, allow_nan=False)

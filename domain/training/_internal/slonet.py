@@ -4663,6 +4663,24 @@ def clip_grad_norm_(
     return total_norm
 
 
+def _optimizer_buffer(buf, as_arrays: bool):
+    """Snapshot one optimizer moment buffer.
+
+    ``as_arrays=True`` → C-contiguous numpy copy (checkpoint hot path: bytes
+    end-to-end, no ``tolist()`` → JSON float-text round-trip per save).
+    Default → nested Python lists, the pre-existing JSON-serializable
+    contract that chat_trainer and legacy consumers rely on.
+    """
+    if isinstance(buf, np.ndarray):
+        return buf.copy() if as_arrays else buf.tolist()
+    if hasattr(buf, "detach"):  # torch tensor
+        arr = buf.detach().cpu().numpy()
+        return arr.copy() if as_arrays else arr.tolist()
+    if as_arrays:
+        return np.asarray(buf)
+    return buf
+
+
 class SloSGD:
     """Stochastic gradient descent with optional momentum.
 
@@ -4709,12 +4727,17 @@ class SloSGD:
             p.data -= self.lr * g
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists — the checkpoint hot path's bytes end-to-end
+                mode (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters' and 'state' (name-keyed buffers).
@@ -4734,13 +4757,7 @@ class SloSGD:
             pid = id(p)
             if pid in self._v:
                 buf = self._v[pid]
-                state["state"][name] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                state["state"][name] = _optimizer_buffer(buf, as_arrays)
         return state
 
     def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
@@ -4894,12 +4911,16 @@ class SloAdam:
             p.data -= self._reduce_to_param_shape(upd, p)
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters and timestep (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters', 't', and 'state' (name-keyed buffers).
@@ -4924,22 +4945,10 @@ class SloAdam:
             entry = {}
             if pid in self._m:
                 buf = self._m[pid]
-                entry["m"] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                entry["m"] = _optimizer_buffer(buf, as_arrays)
             if pid in self._v:
                 buf = self._v[pid]
-                entry["v"] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                entry["v"] = _optimizer_buffer(buf, as_arrays)
             if entry:
                 state["state"][name] = entry
         return state
@@ -5075,19 +5084,23 @@ class SloAdamW(SloAdam):
                 p.data -= lr * wd * p.data
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters and timestep (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters', 't', and 'state' (name-keyed
             buffers). When ``amsgrad`` is active, each entry also carries
             the 'maxv' running maximum.
         """
-        state = super().state_dict(params)
+        state = super().state_dict(params, as_arrays=as_arrays)
         state["hyperparameters"]["amsgrad"] = self.amsgrad
         state["hyperparameters"]["maximize"] = self.maximize
         if params is None:
@@ -5097,13 +5110,7 @@ class SloAdamW(SloAdam):
             pid = id(p)
             if pid in self._vmax:
                 buf_v = self._vmax[pid]
-                state["state"].setdefault(name, {})["maxv"] = (
-                    buf_v.tolist()
-                    if isinstance(buf_v, np.ndarray)
-                    else buf_v.detach().cpu().tolist()
-                    if hasattr(buf_v, "detach")
-                    else buf_v
-                )
+                state["state"].setdefault(name, {})["maxv"] = _optimizer_buffer(buf_v, as_arrays)
         return state
 
     def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
