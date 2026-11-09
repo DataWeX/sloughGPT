@@ -1208,3 +1208,92 @@ def test_router_openapi_matches_the_hand_built_doc():
     # vs projection `type`+`description`; (4) the standing 422
     # description/content class; (5) 200-response-model schemas on the 13
     # group-A envelope routes (envelope routes keep the derived `-> dict`).
+
+
+# ── sub-batch C: training/live_stream.py (1 site) ────────────────────────
+# The brief's edge-2 exception clause was NOT needed: the SSE route is
+# projectable exactly like router.py's two streams — raw-Request injection
+# serves ``request``, name-based auth detection serves ``auth_user``, and
+# ``envelope=False`` passes the StreamingResponse through untouched.
+
+
+def test_live_stream_descriptor_registered():
+    import training.live_stream  # noqa: F401 — import registers the descriptor
+
+    entry = _entry("training.live_stream")
+    assert entry["path"] == "/training/live-stream"
+    assert entry["method"] == "GET"
+    assert entry["idempotent"] is True
+    assert entry["auth_scope"] == "authenticated"  # the hand-built Depends chain
+    assert entry["params"]["properties"] == {}
+    assert entry["params"]["required"] == []
+
+
+def test_live_stream_serves_sse():
+    """First frame over HTTP: standard SSE envelope, headers byte-identical."""
+    import json as _json
+    from unittest.mock import patch
+
+    from training.router import router as training_router
+
+    app = FastAPI()
+    app.include_router(training_router)
+    client = TestClient(app)
+
+    # The route is an infinite SSE loop and TestClient runs the app to
+    # completion, so the test drives the generator's own disconnect check
+    # (the same fake-request trick TestLiveSnapshot uses directly) — cycle 1
+    # emits the first frame, cycle 2 breaks the loop. The bare app has no
+    # middleware, so nothing else touches the check.
+    calls = {"n": 0}
+
+    async def _disconnect_after_first_frame(_self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    with (
+        patch("starlette.requests.Request.is_disconnected", _disconnect_after_first_frame),
+        patch("training.live_stream.LIVE_STREAM_INTERVAL", 0.05),
+    ):
+        resp = client.get("/training/live-stream")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/event-stream")
+    assert resp.headers["cache-control"] == "no-cache"
+    frames = [
+        _json.loads(line[len("data: ") :])
+        for line in resp.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert frames, "expected at least one SSE frame"
+    frame = frames[0]
+    assert frame["stream"] == "training-live"
+    assert frame["phase"] == "LIVE"
+    assert frame["status"] == "working"
+    # the first frame is the baseline: changed=True by contract
+    assert frame["data"]["changed"] is True
+    assert set(frame["data"]) >= {"sources", "totals", "jobs", "at", "changed"}
+    assert isinstance(frame["data"]["jobs"], dict)
+
+
+def test_live_stream_openapi_matches_the_hand_built_doc():
+    """URL/verb/tags/summary/description/security/response exact."""
+    from training.router import router as training_router
+
+    app = FastAPI()
+    app.include_router(training_router)
+    op = app.openapi()["paths"]["/training/live-stream"]["get"]
+
+    assert op["summary"] == "Training Live Stream"
+    assert op["tags"] == ["training", "training-feed"]  # parent + module chain
+    assert sorted(op["responses"]) == ["200"]  # no params → nothing can 422
+    assert op["security"] == [{"HTTPBearer": []}]  # edge 3: the Depends chain
+    assert "parameters" not in op
+    assert "requestBody" not in op
+    desc = op.get("description") or ""
+    assert desc.splitlines()[0] == "SSE stream of feed arrivals and active training jobs."
+    assert len(desc.splitlines()) == 11  # the handler docstring, verbatim
+
+    # Accepted doc-only deltas (before/after diff — 2 field diffs, zero on
+    # wire fields): (1) operationId — registry scheme vs FastAPI's
+    # function-name derivation; (2) the additive `x-contract` extension.
