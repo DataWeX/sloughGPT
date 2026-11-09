@@ -21,7 +21,7 @@ from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
 from domain.agents import ToolSpec
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds, notify_push
@@ -44,7 +44,7 @@ def _feed_spec(request: TrainingRequest) -> tuple[str, str, None, str] | None:
     reads the feed at run time. ``out_stem`` is derived from the feed source/URL
     so checkpoints get a stable name.
     """
-    from domain.training._internal.training_feed import is_feed_source
+    from domain.training import is_feed_source
 
     dataset_str = (request.dataset or "").strip()
     is_feed = (
@@ -117,7 +117,7 @@ async def start_training(
     if feed_spec is not None:
         data_path_str, out_stem, manifest_meta, source_kind = feed_spec
     else:
-        from domain.training._internal.dataset_manifest import ManifestError
+        from domain.training import ManifestError
 
         try:
             data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
@@ -212,7 +212,7 @@ async def start_training(
                     details=_quality,
                 )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.infrastructure import AppError
 
         if isinstance(e, AppError):
             raise
@@ -264,7 +264,7 @@ async def start_training(
                         status_code=400,
                     )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.infrastructure import AppError
 
         if isinstance(e, AppError):
             raise
@@ -363,8 +363,7 @@ async def start_training(
         logger.warning("CancelManager registration failed for %s: %s", job_id, e)
 
     def run_training(job_id_: str = jid) -> None:
-        from domain.training import SloughGPTTrainer
-        from domain.training._internal.wandb_helpers import create_training_tracker_for_api_job
+        from domain.training import SloughGPTTrainer, create_training_tracker_for_api_job
 
         tracker = None
         try:

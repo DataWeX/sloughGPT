@@ -366,3 +366,255 @@ def test_full_training_chain_keeps_the_hand_built_tag_composition():
         "training",
         "jobs",
     ]
+    # batch 3 composes the same three-level tags as the hand-built routes
+    assert doc["paths"]["/training/feed"]["get"]["tags"] == ["training", "training-feed"]
+    assert doc["paths"]["/training/feeds"]["get"]["tags"] == ["training", "training-feed"]
+    assert doc["paths"]["/training/turbo/status"]["get"]["tags"] == ["training", "training-turbo"]
+    assert doc["paths"]["/training/turbo-start"]["post"]["tags"] == ["training", "training-turbo"]
+    assert doc["paths"]["/training/from-sessions-start"]["post"]["tags"] == [
+        "training",
+        "training-turbo",
+    ]
+    assert doc["paths"]["/train/resolve"]["post"]["tags"] == [
+        "training",
+        "training-execution",
+        "training-legacy",
+    ]
+    assert doc["paths"]["/training/lora-finetune"]["post"]["tags"] == [
+        "training",
+        "training-execution",
+        "training-lora",
+    ]
+    assert doc["paths"]["/training/load-adapter"]["post"]["tags"] == [
+        "training",
+        "training-execution",
+        "training-lora",
+    ]
+    assert doc["paths"]["/training/unload-adapter"]["post"]["tags"] == [
+        "training",
+        "training-execution",
+        "training-lora",
+    ]
+    assert doc["paths"]["/training/from-feedback"]["post"]["tags"] == [
+        "training",
+        "training-execution",
+        "training-feedback",
+    ]
+
+
+# ── batch 3: turbo_endpoints / feeds / legacy / lora / from_feedback ────
+# 10 sites projected; ``/train`` retained as the card's first listed
+# exception (the projection reserves the param name ``request`` for
+# raw-Request injection — see training/legacy.py's module docstring).
+
+
+BATCH3_ROUTES = [
+    # name, path, method, idempotent, auth_scope
+    ("training.turbo.status", "/training/turbo/status", "GET", True, "public"),
+    ("training.turbo.from_sessions", "/training/from-sessions-start", "POST", False, "public"),
+    ("training.turbo.start", "/training/turbo-start", "POST", False, "public"),
+    ("training.feeds.read", "/training/feed", "GET", True, "authenticated"),
+    ("training.feeds.list", "/training/feeds", "GET", True, "authenticated"),
+    ("training.legacy.resolve", "/train/resolve", "POST", False, "public"),
+    ("training.lora.finetune", "/training/lora-finetune", "POST", False, "authenticated"),
+    ("training.lora.load_adapter", "/training/load-adapter", "POST", False, "public"),
+    ("training.lora.unload_adapter", "/training/unload-adapter", "POST", False, "public"),
+    (
+        "training.feedback.from_feedback",
+        "/training/from-feedback",
+        "POST",
+        False,
+        "authenticated",
+    ),
+]
+
+
+def test_batch3_descriptors_registered():
+    import training.feeds  # noqa: F401 — import registers the descriptors
+    import training.from_feedback  # noqa: F401
+    import training.legacy  # noqa: F401
+    import training.lora  # noqa: F401
+    import training.turbo_endpoints  # noqa: F401
+
+    for name, path, method, idem, scope in BATCH3_ROUTES:
+        entry = _entry(name)
+        assert entry["path"] == path, name
+        assert entry["method"] == method, name
+        assert entry["idempotent"] is idem, name
+        assert entry["auth_scope"] == scope, name
+    # the model's fields document the contract (one declaration, both views)
+    feed_props = _entry("training.feeds.read")["params"]["properties"]
+    assert feed_props["source"] == {"type": "string", "description": ""}
+    assert feed_props["offset"] == {"type": "integer", "description": ""}
+    assert _entry("training.feeds.read")["params"]["required"] == []
+    assert _entry("training.legacy.resolve")["params"] == {
+        "type": "object",
+        "properties": {"body": {"type": "string", "description": ""}},
+        "required": ["body"],
+    }
+    # listed exception: /train carries no descriptor at all
+    assert not any(e["path"] == "/train" for e in REGISTRY.routes())
+
+
+def _batch3_client() -> TestClient:
+    from infrastructure.exception_handlers import register_all_handlers
+    from training.feeds import router as feeds_router
+    from training.from_feedback import router as feedback_router
+    from training.legacy import router as legacy_router
+    from training.lora import router as lora_router
+    from training.turbo_endpoints import router as turbo_router
+
+    app = FastAPI()
+    for r in (turbo_router, feeds_router, legacy_router, lora_router, feedback_router):
+        app.include_router(r)
+    # raise_error raises AppErrors; the app-level handlers are what turn them
+    # into the 400/422 JSON both hand-built and projected routes serve
+    register_all_handlers(app)
+    return TestClient(app)
+
+
+def test_batch3_serves_the_wire():
+    """Envelope split + validation parity across the batch's five modules."""
+    client = _batch3_client()
+
+    # feeds read: group A — the projection's envelope wraps the payload
+    # exactly as the hand-built success_response(data=...) did
+    resp = client.get("/training/feed")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "success"
+    assert set(body) == {"status", "data"}
+    assert set(body["data"]) == {"name", "source", "offset", "next_offset", "total", "records"}
+    assert body["data"]["name"] == body["data"]["source"] == "api-conversations"
+
+    # feeds list: same wrap, data = {feeds, total}
+    resp = client.get("/training/feeds")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"status", "data"}
+    assert set(body["data"]) == {"feeds", "total"}
+    assert body["data"]["total"] == len(body["data"]["feeds"])
+
+    # turbo status: the service's bare dict stays bare (envelope=False) —
+    # no {status, data} wrap may leak in; the service boots at "idle"
+    resp = client.get("/training/turbo/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "data" not in body
+    assert body["status"] == "idle"
+
+    # transport validation: a non-int query member 422s before the handler
+    assert client.get("/training/feed?offset=abc").status_code == 422
+
+    # the handler's own guards keep their 400s (unknown source is checked
+    # before offset/limit, so the message proves the handler ran)
+    resp = client.get("/training/feed?source=nope")
+    assert resp.status_code == 400
+    assert "Unknown feed source" in resp.text
+
+    # listed exception /train: a JSON-body POST has always 422'd here — the
+    # hand-built route's required `request` query member cannot be supplied
+    assert client.post("/train", json={"epochs": 1}).status_code == 422
+
+    # /train/resolve keeps `body` as a required QUERY param (hand-built wire).
+    # The documented divergence — a supplied ?body=x reaching an untyped
+    # handler — is deliberately NOT pinned; only the missing-param 422 is
+    # the shared contract.
+    assert client.post("/train/resolve").status_code == 422
+
+    # unload-adapter pre-flight: empty server state → the handler's own 400
+    resp = client.post("/training/unload-adapter")
+    assert resp.status_code == 400
+    assert "No model loaded" in resp.text
+
+    # lora-finetune pre-flight: unknown model file → 400 before any job exists
+    resp = client.post(
+        "/training/lora-finetune", json={"model_path": "/bogus/nope.slnc", "dataset": "x"}
+    )
+    assert resp.status_code == 400
+    assert "Model not found" in resp.text
+
+    # model ge/le constraints stay validator 422s (handler never runs)
+    assert client.post("/training/from-sessions-start", json={"epochs": 0}).status_code == 422
+    assert client.post("/training/from-feedback", json={"epochs": 0}).status_code == 422
+
+
+def test_batch3_openapi_matches_the_hand_built_doc():
+    """Byte-identical wire fields; the 4 accepted delta classes noted below."""
+    client = _batch3_client()
+    doc = client.app.openapi()
+
+    # operation titles byte-identical (RouteSpec.summary, jobs precedent)
+    summaries = {
+        "/training/turbo/status": "Get Turbo Status",
+        "/training/from-sessions-start": "Start From Sessions Unified",
+        "/training/turbo-start": "Start Turbo Training Unified",
+        "/training/feed": "Training Feed",
+        "/training/feeds": "Training Feeds",
+        "/train/resolve": "Train Resolve",
+        "/training/lora-finetune": "Start Lora Finetune",
+        "/training/load-adapter": "Load Adapter",
+        "/training/unload-adapter": "Unload Adapter",
+        "/training/from-feedback": "Train From Feedback",
+    }
+    for path, summary in summaries.items():
+        (method,) = doc["paths"][path]  # one verb per path in this batch
+        assert doc["paths"][path][method]["summary"] == summary, path
+
+    # declared query carriers keep name + position (the real wire defect the
+    # comparison caught: resolve defaults to body-input without input="query")
+    feed_params = [
+        (p["name"], p["in"]) for p in doc["paths"]["/training/feed"]["get"]["parameters"]
+    ]
+    assert feed_params == [("source", "query"), ("offset", "query"), ("limit", "query")]
+    resolve_params = [
+        (p["name"], p["in"]) for p in doc["paths"]["/train/resolve"]["post"]["parameters"]
+    ]
+    assert resolve_params == [("body", "query")]
+
+    # no-param ops publish 200 alone — nothing can fail validation — exactly
+    # the hand-built doc (turbo status, feeds list, unload adapter)
+    for path in ("/training/turbo/status", "/training/feeds", "/training/unload-adapter"):
+        (method,) = doc["paths"][path]
+        assert sorted(doc["paths"][path][method]["responses"]) == ["200"], path
+    # every other op can 422 → 200 + 422
+    for path in (
+        "/training/from-sessions-start",
+        "/training/turbo-start",
+        "/training/feed",
+        "/train/resolve",
+        "/training/lora-finetune",
+        "/training/load-adapter",
+        "/training/from-feedback",
+    ):
+        (method,) = doc["paths"][path]
+        assert sorted(doc["paths"][path][method]["responses"]) == ["200", "422"], path
+
+    # security rides auth_scope — HTTPBearer exactly where the hand-built
+    # routes declared it (deps=require_auth_if_enabled), nowhere else
+    for path in (
+        "/training/feed",
+        "/training/feeds",
+        "/training/lora-finetune",
+        "/training/from-feedback",
+    ):
+        (method,) = doc["paths"][path]
+        assert doc["paths"][path][method].get("security") == [{"HTTPBearer": []}], path
+    for path in (
+        "/training/turbo/status",
+        "/training/from-sessions-start",
+        "/training/turbo-start",
+        "/train/resolve",
+        "/training/load-adapter",
+        "/training/unload-adapter",
+    ):
+        (method,) = doc["paths"][path]
+        assert "security" not in doc["paths"][path][method], path
+
+    # Accepted doc-only deltas (4 classes, outside the brief's verb/URL/wire
+    # bar — all verified byte-identical on wire fields by the batch's
+    # before/after OpenAPI comparison): (1) param schema cosmetics — hand-built
+    # `default`+`title` vs projection `type`+`description` on feed ×3 + resolve;
+    # (2) 200-response-model schemas on feeds ×2 + turbo-start (envelope routes
+    # keep the derived `-> dict`); (3) resolve's 200 schema `{}` from the popped
+    # annotation; (4) 422 description/content — the class accepted since part 1.

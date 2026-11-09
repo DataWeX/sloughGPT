@@ -68,19 +68,24 @@ the remaining release mass, not one track among several.
 
 Definition of done — all four, each closing with a card ID + landed sha:
 
-1. **Seven ⏳ route-map targets landed** — `/models`, `/souls`, `/knowledge`,
+1. **Seven ⏳ route-map targets landed** ✅ (2026-11-09, card `20261101_140445_v1-route-map-land-the-7-pending-targets-models-souls-knowled`) — `/models`, `/souls`, `/knowledge`,
    `/settings`, `/shell`, `/files`, `/monitoring` → ~20 frontend pages, ~15
    routers (per-page merge detail lives in `PRODUCT_ENGINEERING.md` → Route
    Map; this file does not duplicate that table).
-2. **Every 🔧 partial fully integrated** — `/training` sidebar consolidation,
-   `/benchmark` headless, `/feedback` kept, `/voice` → chat mode: no
-   half-merged navigation left behind.
-3. **Build order #5** — phoneme, knowledge, and training pages restructured
+2. **Every 🔧 partial fully integrated** ✅ (2026-11-09, card `20261101_140445_v1-integration-fold-every-partial-surface-into-its-merged-ho`) — `/training` sidebar consolidation,
+   `/benchmark` headless (nav-level: no sidebar entry; page kept as a hidden
+   deep-link surface), `/feedback` kept, `/voice` → chat mode: no
+   half-merged navigation left behind (19/19 nav paths resolve, 0 straggler
+   pages; Route Map status cells truthed up).
+3. **Build order #5** ✅ (2026-11-09, card `20261101_140445_build-order-5-restructure-phoneme-knowledge-and-training-pag`) — phoneme, knowledge, and training pages restructured
    to follow `UX_FLOWS.md` (`PRODUCT_ENGINEERING.md` → Build Order) —
    knowledge + training landed 2026-11-08; phoneme split to card
    `20261108_152007` (model-capability ruling, not a learning UI).
-4. **Build order #7** — user journeys green: `tests/core-py/test_user_journeys.py`,
-   `packages/avion/tests/test_journeys.py`, `scripts/run_journey_tests.py`.
+4. **Build order #7** ✅ (2026-11-09, card `20261101_140446`) — user journeys green:
+   `tests/core-py/test_user_journeys.py` 103 passed (live stack of this checkout:
+   `SLO_WEB_URL`/`SLO_API_URL` — default `:5173` was a foreign session's tree),
+   `packages/avion/tests/test_journeys.py` 3 passed (FakeBackend),
+   `scripts/run_journey_tests.py` 8/8 API + 8/8 Playwright, exit 0.
 
 ## Next — after v1
 
@@ -102,15 +107,24 @@ Definition of done — all four, each closing with a card ID + landed sha:
 
 ### Platform
 
-- **test-core-py green baseline** — chronically red on main (pre-existing
-  timeouts: quantization e2e, shell TUI, VM benchmarks; PRs merge only after
-  proving those failures pre-existed). Fix them or quarantine them honestly
-  — a permanently red baseline stops being visible debt the day someone
-  starts believing it.
-- **Routers out of `domain.*_internal*`** — 8 in scope, not the 2 the router
-  playbook claimed (measured 2026-10-01); re-card
-  `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`
-  (supersedes lost `97260724`).
+- **test-core-py green baseline ✅ (umbrella closed 2026-11-03, card
+  `20261101_140448` — consecutive green CI runs + honest quarantine of the
+  pre-existing timeouts under `pytest.mark.slow`: shell TUI 18, quant e2e 17,
+  VM benchmarks 71)** — the warning ("a permanently red baseline stops being
+  visible debt the day someone starts believing it") proved right once more:
+  the residual `test_quantization_benchmark_e2e` A-B pair flaked red on CI
+  twice in a row (2026-11-08/09). Fixed 2026-11-09, card
+  `20261105_170745` — the tests asserted runner stability instead of our
+  code; replaced with round-trip + exit/report-coherence claims and a
+  synthetic regression pin. Land bar: two consecutive green CI test-core-py
+  runs.
+- **Routers out of `domain.*_internal*` ✅ (2026-11-09, card
+  `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`,
+  supersedes lost `97260724`)** — re-measured: 8 in scope (not the 2 the
+  router playbook claimed), all in `training/`'s sub-routers; migrated
+  through facades, conformance scan made structural (route surface outside
+  `routers/`+`controllers/` now scanned; `world_render` zone emptied),
+  landed sha in `AGENT_SYNC.md`.
 - **Feature-flag kill/merge memo — declined (user ruling, 2026-11-02)** — no
   memo, no deletion; the 10 flags that gate nothing stay as-is. Was card
   `d94aea1c` (lost to churn), re-carded, then dropped by ruling; no open

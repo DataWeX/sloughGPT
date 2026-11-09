@@ -1,7 +1,7 @@
 {
  "note": "Route + OpenAPI baseline for scripts/check_contract.py \u2014 report-only drift signal, regenerated with --write-baseline.",
- "routers": 56,
- "count": 567,
+ "routers": 46,
+ "count": 342,
  "routes": [
   [
    "/",
@@ -220,46 +220,6 @@
    "GET"
   ],
   [
-   "/companion/",
-   "DELETE"
-  ],
-  [
-   "/companion/",
-   "GET"
-  ],
-  [
-   "/companion/chat",
-   "POST"
-  ],
-  [
-   "/companion/personality",
-   "PATCH"
-  ],
-  [
-   "/companion/personality",
-   "POST"
-  ],
-  [
-   "/companion/preset",
-   "POST"
-  ],
-  [
-   "/companion/presets",
-   "GET"
-  ],
-  [
-   "/companion/presets",
-   "POST"
-  ],
-  [
-   "/companion/presets/{preset_id}",
-   "DELETE"
-  ],
-  [
-   "/companion/prompt",
-   "GET"
-  ],
-  [
    "/config/generation",
    "GET"
   ],
@@ -444,46 +404,6 @@
    "PUT"
   ],
   [
-   "/errors/clear",
-   "DELETE"
-  ],
-  [
-   "/errors/export",
-   "GET"
-  ],
-  [
-   "/errors/grouped",
-   "GET"
-  ],
-  [
-   "/errors/log",
-   "GET"
-  ],
-  [
-   "/errors/log",
-   "POST"
-  ],
-  [
-   "/errors/logs/ingest",
-   "POST"
-  ],
-  [
-   "/errors/recent",
-   "GET"
-  ],
-  [
-   "/errors/stream",
-   "GET"
-  ],
-  [
-   "/errors/trends",
-   "GET"
-  ],
-  [
-   "/errors/unread",
-   "GET"
-  ],
-  [
    "/experiments",
    "GET"
   ],
@@ -560,70 +480,6 @@
    "GET"
   ],
   [
-   "/files",
-   "GET"
-  ],
-  [
-   "/files/search",
-   "GET"
-  ],
-  [
-   "/files/upload",
-   "POST"
-  ],
-  [
-   "/files/{file_id}",
-   "DELETE"
-  ],
-  [
-   "/files/{file_id}",
-   "GET"
-  ],
-  [
-   "/files/{file_id}/ingest",
-   "POST"
-  ],
-  [
-   "/images/gallery",
-   "GET"
-  ],
-  [
-   "/images/generate",
-   "POST"
-  ],
-  [
-   "/images/styles",
-   "GET"
-  ],
-  [
-   "/infer",
-   "POST"
-  ],
-  [
-   "/infer/detokenize",
-   "POST"
-  ],
-  [
-   "/infer/embed",
-   "POST"
-  ],
-  [
-   "/infer/health",
-   "GET"
-  ],
-  [
-   "/infer/info",
-   "GET"
-  ],
-  [
-   "/infer/stream",
-   "POST"
-  ],
-  [
-   "/infer/tokenize",
-   "POST"
-  ],
-  [
    "/inference/generate",
    "POST"
   ],
@@ -638,182 +494,6 @@
   [
    "/info/soul",
    "GET"
-  ],
-  [
-   "/knowledge",
-   "GET"
-  ],
-  [
-   "/knowledge",
-   "POST"
-  ],
-  [
-   "/knowledge/adapter-status",
-   "GET"
-  ],
-  [
-   "/knowledge/batch",
-   "POST"
-  ],
-  [
-   "/knowledge/batch-delete",
-   "POST"
-  ],
-  [
-   "/knowledge/bulk-ingest",
-   "POST"
-  ],
-  [
-   "/knowledge/categorize",
-   "POST"
-  ],
-  [
-   "/knowledge/check-duplicate",
-   "POST"
-  ],
-  [
-   "/knowledge/context",
-   "GET"
-  ],
-  [
-   "/knowledge/embedder-status",
-   "GET"
-  ],
-  [
-   "/knowledge/gaps",
-   "GET"
-  ],
-  [
-   "/knowledge/ingest-file",
-   "POST"
-  ],
-  [
-   "/knowledge/ingest-url",
-   "POST"
-  ],
-  [
-   "/knowledge/kg/pipeline-stats",
-   "GET"
-  ],
-  [
-   "/knowledge/kg/sync",
-   "POST"
-  ],
-  [
-   "/knowledge/label",
-   "GET"
-  ],
-  [
-   "/knowledge/rag/clear",
-   "POST"
-  ],
-  [
-   "/knowledge/rag/documents",
-   "GET"
-  ],
-  [
-   "/knowledge/rag/ingest",
-   "POST"
-  ],
-  [
-   "/knowledge/rag/query",
-   "POST"
-  ],
-  [
-   "/knowledge/rag/stats",
-   "GET"
-  ],
-  [
-   "/knowledge/rag/verify",
-   "POST"
-  ],
-  [
-   "/knowledge/reviews/due",
-   "GET"
-  ],
-  [
-   "/knowledge/reviews/{item_id}/schedule",
-   "POST"
-  ],
-  [
-   "/knowledge/search",
-   "GET"
-  ],
-  [
-   "/knowledge/search-files",
-   "POST"
-  ],
-  [
-   "/knowledge/stats",
-   "GET"
-  ],
-  [
-   "/knowledge/suggest-topic",
-   "POST"
-  ],
-  [
-   "/knowledge/topics",
-   "GET"
-  ],
-  [
-   "/knowledge/train-adapter",
-   "POST"
-  ],
-  [
-   "/knowledge/train-embedder",
-   "POST"
-  ],
-  [
-   "/knowledge/{item_id}",
-   "DELETE"
-  ],
-  [
-   "/knowledge/{item_id}",
-   "PATCH"
-  ],
-  [
-   "/knowledge/{item_id}/related",
-   "GET"
-  ],
-  [
-   "/learn/deploy",
-   "POST"
-  ],
-  [
-   "/learn/evaluate",
-   "POST"
-  ],
-  [
-   "/learn/feed",
-   "GET"
-  ],
-  [
-   "/learn/feed",
-   "POST"
-  ],
-  [
-   "/learn/ingest",
-   "POST"
-  ],
-  [
-   "/learn/ingest-url",
-   "POST"
-  ],
-  [
-   "/learn/knowledge",
-   "GET"
-  ],
-  [
-   "/learn/search",
-   "POST"
-  ],
-  [
-   "/learn/status",
-   "GET"
-  ],
-  [
-   "/learn/train",
-   "POST"
   ],
   [
    "/lora-eval/aggregate",
@@ -1064,182 +744,6 @@
    "DELETE"
   ],
   [
-   "/models",
-   "GET"
-  ],
-  [
-   "/models/backends",
-   "GET"
-  ],
-  [
-   "/models/backends/active",
-   "GET"
-  ],
-  [
-   "/models/backends/active",
-   "POST"
-  ],
-  [
-   "/models/cache-usage",
-   "GET"
-  ],
-  [
-   "/models/catalog",
-   "GET"
-  ],
-  [
-   "/models/catalog/stats",
-   "GET"
-  ],
-  [
-   "/models/conversion-status",
-   "GET"
-  ],
-  [
-   "/models/current",
-   "GET"
-  ],
-  [
-   "/models/debug/providers",
-   "GET"
-  ],
-  [
-   "/models/dequantize",
-   "POST"
-  ],
-  [
-   "/models/download",
-   "POST"
-  ],
-  [
-   "/models/download/qwen-gguf",
-   "GET"
-  ],
-  [
-   "/models/download/{model_id:path}",
-   "GET"
-  ],
-  [
-   "/models/download/{model_id:path}/cancel",
-   "POST"
-  ],
-  [
-   "/models/download/{model_id:path}/pause",
-   "POST"
-  ],
-  [
-   "/models/download/{model_id:path}/resume",
-   "POST"
-  ],
-  [
-   "/models/download/{model_id:path}/retry",
-   "POST"
-  ],
-  [
-   "/models/download/{model_id:path}/verify",
-   "POST"
-  ],
-  [
-   "/models/downloads",
-   "GET"
-  ],
-  [
-   "/models/engine/reload",
-   "POST"
-  ],
-  [
-   "/models/engine/status",
-   "GET"
-  ],
-  [
-   "/models/export",
-   "POST"
-  ],
-  [
-   "/models/export/formats",
-   "GET"
-  ],
-  [
-   "/models/external/download",
-   "POST"
-  ],
-  [
-   "/models/external/models",
-   "GET"
-  ],
-  [
-   "/models/external/servers",
-   "GET"
-  ],
-  [
-   "/models/external/servers",
-   "POST"
-  ],
-  [
-   "/models/external/servers/{name}",
-   "DELETE"
-  ],
-  [
-   "/models/file/{model_id:path}/{file_path:path}",
-   "GET"
-  ],
-  [
-   "/models/hf",
-   "GET"
-  ],
-  [
-   "/models/history",
-   "GET"
-  ],
-  [
-   "/models/load",
-   "POST"
-  ],
-  [
-   "/models/logs",
-   "GET"
-  ],
-  [
-   "/models/memory-cleanup",
-   "POST"
-  ],
-  [
-   "/models/memory-pressure",
-   "GET"
-  ],
-  [
-   "/models/precision",
-   "POST"
-  ],
-  [
-   "/models/process-guard",
-   "GET"
-  ],
-  [
-   "/models/process-guard",
-   "POST"
-  ],
-  [
-   "/models/quantize",
-   "POST"
-  ],
-  [
-   "/models/unload",
-   "POST"
-  ],
-  [
-   "/models/visual-load",
-   "POST"
-  ],
-  [
-   "/models/{model_id:path}/file/{file_path:path}",
-   "GET"
-  ],
-  [
-   "/models/{model_id:path}/manifest.json",
-   "GET"
-  ],
-  [
    "/mole/report",
    "GET"
   ],
@@ -1380,42 +884,6 @@
    "POST"
   ],
   [
-   "/phoneme/batch-encode",
-   "POST"
-  ],
-  [
-   "/phoneme/decode",
-   "POST"
-  ],
-  [
-   "/phoneme/detect-language",
-   "POST"
-  ],
-  [
-   "/phoneme/encode",
-   "POST"
-  ],
-  [
-   "/phoneme/languages",
-   "GET"
-  ],
-  [
-   "/phoneme/score",
-   "POST"
-  ],
-  [
-   "/phoneme/status",
-   "GET"
-  ],
-  [
-   "/phoneme/synthesize",
-   "POST"
-  ],
-  [
-   "/phoneme/visualize",
-   "POST"
-  ],
-  [
    "/plugins",
    "GET"
   ],
@@ -1464,60 +932,8 @@
    "GET"
   ],
   [
-   "/registry/artifacts",
-   "GET"
-  ],
-  [
-   "/registry/best",
-   "GET"
-  ],
-  [
-   "/registry/models",
-   "GET"
-  ],
-  [
-   "/registry/models/{model_id}",
-   "GET"
-  ],
-  [
-   "/registry/stats",
-   "GET"
-  ],
-  [
-   "/registry/verify",
-   "GET"
-  ],
-  [
    "/search",
    "GET"
-  ],
-  [
-   "/security/audit",
-   "GET"
-  ],
-  [
-   "/security/keys",
-   "GET"
-  ],
-  [
-   "/security/keys",
-   "POST"
-  ],
-  [
-   "/security/keys/validate",
-   "POST"
-  ],
-  [
-   "/security/keys/{key_id}",
-   "DELETE"
-  ],
-  [
-   "/security/keys/{key_id}",
-   "GET"
-  ],
-  [
-   "/security/keys/{key_id}/rotate",
-   "POST"
   ],
   [
    "/self-train/start",
@@ -1530,302 +946,6 @@
   [
    "/self-train/stop",
    "POST"
-  ],
-  [
-   "/session/{session_id}/context",
-   "POST"
-  ],
-  [
-   "/session/{session_id}/inspector",
-   "GET"
-  ],
-  [
-   "/session/{session_id}/messages",
-   "GET"
-  ],
-  [
-   "/settings",
-   "GET"
-  ],
-  [
-   "/settings/adaptive",
-   "GET"
-  ],
-  [
-   "/settings/adaptive",
-   "PATCH"
-  ],
-  [
-   "/settings/adaptive/insights",
-   "GET"
-  ],
-  [
-   "/settings/generation",
-   "GET"
-  ],
-  [
-   "/settings/generation",
-   "PATCH"
-  ],
-  [
-   "/settings/model-card",
-   "POST"
-  ],
-  [
-   "/settings/providers/api",
-   "GET"
-  ],
-  [
-   "/settings/providers/api",
-   "PATCH"
-  ],
-  [
-   "/settings/reset",
-   "POST"
-  ],
-  [
-   "/settings/training",
-   "GET"
-  ],
-  [
-   "/settings/training",
-   "PATCH"
-  ],
-  [
-   "/settings/training/analytics",
-   "GET"
-  ],
-  [
-   "/settings/training/auto-train/config",
-   "PATCH"
-  ],
-  [
-   "/settings/training/auto-train/status",
-   "GET"
-  ],
-  [
-   "/settings/training/batch-status",
-   "GET"
-  ],
-  [
-   "/settings/training/bookmarks",
-   "GET"
-  ],
-  [
-   "/settings/training/compare",
-   "GET"
-  ],
-  [
-   "/settings/training/history/clear",
-   "POST"
-  ],
-  [
-   "/settings/training/history/export",
-   "GET"
-  ],
-  [
-   "/settings/training/presets",
-   "GET"
-  ],
-  [
-   "/settings/training/presets/{preset_name}",
-   "GET"
-  ],
-  [
-   "/settings/training/presets/{preset_name}/apply",
-   "POST"
-  ],
-  [
-   "/settings/training/runs",
-   "GET"
-  ],
-  [
-   "/settings/training/runs/bulk/bookmark",
-   "POST"
-  ],
-  [
-   "/settings/training/runs/bulk/delete",
-   "POST"
-  ],
-  [
-   "/settings/training/runs/bulk/tag",
-   "POST"
-  ],
-  [
-   "/settings/training/runs/{run_id}",
-   "DELETE"
-  ],
-  [
-   "/settings/training/runs/{run_id}",
-   "GET"
-  ],
-  [
-   "/settings/training/runs/{run_id}/bookmark",
-   "POST"
-  ],
-  [
-   "/settings/training/runs/{run_id}/duplicate",
-   "POST"
-  ],
-  [
-   "/settings/training/runs/{run_id}/export",
-   "GET"
-  ],
-  [
-   "/settings/training/runs/{run_id}/notes",
-   "PUT"
-  ],
-  [
-   "/settings/training/runs/{run_id}/tags",
-   "POST"
-  ],
-  [
-   "/settings/training/runs/{run_id}/tags/{tag}",
-   "DELETE"
-  ],
-  [
-   "/settings/training/tags",
-   "GET"
-  ],
-  [
-   "/settings/training/tags/{tag}",
-   "GET"
-  ],
-  [
-   "/settings/ui",
-   "GET"
-  ],
-  [
-   "/settings/ui",
-   "PATCH"
-  ],
-  [
-   "/settings/voice",
-   "GET"
-  ],
-  [
-   "/settings/voice",
-   "PATCH"
-  ],
-  [
-   "/shell/exec",
-   "POST"
-  ],
-  [
-   "/shell/exec/stream",
-   "POST"
-  ],
-  [
-   "/souls",
-   "GET"
-  ],
-  [
-   "/souls/chat",
-   "POST"
-  ],
-  [
-   "/souls/current",
-   "GET"
-  ],
-  [
-   "/souls/stats",
-   "GET"
-  ],
-  [
-   "/souls/switch",
-   "POST"
-  ],
-  [
-   "/souls/weights",
-   "GET"
-  ],
-  [
-   "/souls/weights",
-   "POST"
-  ],
-  [
-   "/souls/weights/modes",
-   "GET"
-  ],
-  [
-   "/souls/weights/snapshot/{name}",
-   "DELETE"
-  ],
-  [
-   "/souls/weights/snapshot/{name}",
-   "POST"
-  ],
-  [
-   "/souls/weights/snapshot/{name}/load",
-   "POST"
-  ],
-  [
-   "/souls/weights/snapshots",
-   "GET"
-  ],
-  [
-   "/souls/{soul_name}",
-   "GET"
-  ],
-  [
-   "/system/battery",
-   "GET"
-  ],
-  [
-   "/system/battery/limit",
-   "POST"
-  ],
-  [
-   "/system/battery/policy",
-   "PUT"
-  ],
-  [
-   "/system/disk",
-   "GET"
-  ],
-  [
-   "/system/executor",
-   "GET"
-  ],
-  [
-   "/system/executor/purge",
-   "POST"
-  ],
-  [
-   "/system/executor/{job_id}",
-   "GET"
-  ],
-  [
-   "/system/executor/{job_id}/cancel",
-   "POST"
-  ],
-  [
-   "/system/executor/{job_id}/result",
-   "GET"
-  ],
-  [
-   "/system/inference-pool",
-   "GET"
-  ],
-  [
-   "/system/info",
-   "GET"
-  ],
-  [
-   "/system/lifecycle",
-   "GET"
-  ],
-  [
-   "/system/metrics",
-   "GET"
-  ],
-  [
-   "/system/output",
-   "GET"
-  ],
-  [
-   "/system/stream",
-   "GET"
   ],
   [
    "/tenants",
@@ -2089,26 +1209,6 @@
   ],
   [
    "/vector/upsert",
-   "POST"
-  ],
-  [
-   "/vm/builtins",
-   "GET"
-  ],
-  [
-   "/vm/info",
-   "GET"
-  ],
-  [
-   "/vm/run",
-   "POST"
-  ],
-  [
-   "/vm/training/jobs/{job_id}",
-   "GET"
-  ],
-  [
-   "/vm/training/jobs/{job_id}/stop",
    "POST"
   ],
   [
@@ -2872,131 +1972,6 @@
     "params": [
      {
       "name": "job_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/companion/": {
-   "GET": {
-    "operationId": "get_companion_info_companion__get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   },
-   "DELETE": {
-    "operationId": "reset_companion_companion__delete",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/companion/personality": {
-   "POST": {
-    "operationId": "set_personality_companion_personality_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "SetPersonalityRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   },
-   "PATCH": {
-    "operationId": "patch_personality_companion_personality_patch",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "PatchPersonalityRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/companion/preset": {
-   "POST": {
-    "operationId": "use_preset_companion_preset_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": {
-      "type": "string",
-      "title": "Preset Id"
-     }
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/companion/prompt": {
-   "GET": {
-    "operationId": "get_prompt_companion_prompt_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/companion/chat": {
-   "POST": {
-    "operationId": "chat_companion_chat_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "routers__companion__ChatRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/companion/presets": {
-   "GET": {
-    "operationId": "list_presets_companion_presets_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   },
-   "POST": {
-    "operationId": "create_preset_companion_presets_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "PresetCreateRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/companion/presets/{preset_id}": {
-   "DELETE": {
-    "operationId": "delete_preset_companion_presets__preset_id__delete",
-    "params": [
-     {
-      "name": "preset_id",
       "in": "path",
       "required": true,
       "type": "string"
@@ -3783,142 +2758,6 @@
     ]
    }
   },
-  "/errors/log": {
-   "GET": {
-    "operationId": "get_opencode_log_errors_log_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   },
-   "POST": {
-    "operationId": "log_errors_errors_log_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "ErrorBatch"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/errors/logs/ingest": {
-   "POST": {
-    "operationId": "ingest_frontend_logs_errors_logs_ingest_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "FrontendLogBatch"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/errors/recent": {
-   "GET": {
-    "operationId": "get_recent_errors_errors_recent_get",
-    "params": [
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     },
-     {
-      "name": "offset",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/errors/grouped": {
-   "GET": {
-    "operationId": "get_grouped_errors_errors_grouped_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/errors/trends": {
-   "GET": {
-    "operationId": "get_error_trends_errors_trends_get",
-    "params": [
-     {
-      "name": "hours",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/errors/export": {
-   "GET": {
-    "operationId": "export_errors_errors_export_get",
-    "params": [
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/errors/clear": {
-   "DELETE": {
-    "operationId": "clear_errors_errors_clear_delete",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/errors/unread": {
-   "GET": {
-    "operationId": "unread_count_errors_unread_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/errors/stream": {
-   "GET": {
-    "operationId": "error_stream_errors_stream_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
   "/experiments": {
    "GET": {
     "operationId": "list_experiments_experiments_get",
@@ -4296,6 +3135,38 @@
     ]
    }
   },
+  "/files/import": {
+   "POST": {
+    "operationId": "download_url_files_import_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/files/import/{job_id}": {
+   "GET": {
+    "operationId": "import_status_files_import__job_id__get",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
   "/files/search": {
    "GET": {
     "operationId": "search_files_files_search_get",
@@ -4378,7 +3249,7 @@
     "params": [],
     "body": {
      "content_type": "application/json",
-     "schema": "routers__images__GenerateRequest"
+     "schema": "routers__files__GenerateRequest"
     },
     "responses": [
      "200",
@@ -4399,96 +3270,6 @@
   "/images/styles": {
    "GET": {
     "operationId": "list_styles_images_styles_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/infer": {
-   "POST": {
-    "operationId": "infer_infer_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "InferRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/infer/stream": {
-   "POST": {
-    "operationId": "infer_stream_infer_stream_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "InferRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/infer/embed": {
-   "POST": {
-    "operationId": "infer_embed_infer_embed_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "EmbedRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/infer/tokenize": {
-   "POST": {
-    "operationId": "infer_tokenize_infer_tokenize_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "routers__infer__TokenizeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/infer/detokenize": {
-   "POST": {
-    "operationId": "infer_detokenize_infer_detokenize_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "routers__infer__DetokenizeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/infer/health": {
-   "GET": {
-    "operationId": "infer_health_infer_health_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/infer/info": {
-   "GET": {
-    "operationId": "infer_info_infer_info_get",
     "params": [],
     "body": null,
     "responses": [
@@ -7353,6 +6134,198 @@
     ]
    }
   },
+  "/infer": {
+   "POST": {
+    "operationId": "infer_infer_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "InferRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/stream": {
+   "POST": {
+    "operationId": "infer_stream_infer_stream_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "InferRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/embed": {
+   "POST": {
+    "operationId": "infer_embed_infer_embed_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "EmbedRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/tokenize": {
+   "POST": {
+    "operationId": "infer_tokenize_infer_tokenize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__models__TokenizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/detokenize": {
+   "POST": {
+    "operationId": "infer_detokenize_infer_detokenize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__models__DetokenizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/health": {
+   "GET": {
+    "operationId": "infer_health_infer_health_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/infer/info": {
+   "GET": {
+    "operationId": "infer_info_infer_info_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/models": {
+   "GET": {
+    "operationId": "list_models_registry_models_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/models/{model_id}": {
+   "GET": {
+    "operationId": "get_model_registry_models__model_id__get",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/registry/best": {
+   "GET": {
+    "operationId": "get_best_model_registry_best_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/stats": {
+   "GET": {
+    "operationId": "get_registry_stats_registry_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/artifacts": {
+   "GET": {
+    "operationId": "list_artifacts_registry_artifacts_get",
+    "params": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "lineage",
+      "in": "query",
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/registry/verify": {
+   "GET": {
+    "operationId": "verify_artifacts_registry_verify_get",
+    "params": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
   "/mole/report": {
    "GET": {
     "operationId": "get_report_mole_report_get",
@@ -7825,130 +6798,6 @@
     ]
    }
   },
-  "/phoneme/encode": {
-   "POST": {
-    "operationId": "encode_phoneme_encode_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "EncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/decode": {
-   "POST": {
-    "operationId": "decode_phoneme_decode_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": {
-      "items": {
-       "type": "integer"
-      },
-      "type": "array",
-      "title": "Ids"
-     }
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/visualize": {
-   "POST": {
-    "operationId": "visualize_phoneme_visualize_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "EncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/score": {
-   "POST": {
-    "operationId": "score_phoneme_score_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "ScoreRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/batch-encode": {
-   "POST": {
-    "operationId": "batch_encode_phoneme_batch_encode_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "BatchEncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/detect-language": {
-   "POST": {
-    "operationId": "detect_language_phoneme_detect_language_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "EncodeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/synthesize": {
-   "POST": {
-    "operationId": "synthesize_phoneme_synthesize_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "SynthesizeRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/phoneme/languages": {
-   "GET": {
-    "operationId": "languages_phoneme_languages_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/phoneme/status": {
-   "GET": {
-    "operationId": "status_phoneme_status_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
   "/plugins": {
    "GET": {
     "operationId": "list_plugins_plugins_get",
@@ -8087,102 +6936,6 @@
     ]
    }
   },
-  "/registry/models": {
-   "GET": {
-    "operationId": "list_models_registry_models_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/registry/models/{model_id}": {
-   "GET": {
-    "operationId": "get_model_registry_models__model_id__get",
-    "params": [
-     {
-      "name": "model_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/registry/best": {
-   "GET": {
-    "operationId": "get_best_model_registry_best_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/registry/stats": {
-   "GET": {
-    "operationId": "get_registry_stats_registry_stats_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/registry/artifacts": {
-   "GET": {
-    "operationId": "list_artifacts_registry_artifacts_get",
-    "params": [
-     {
-      "name": "kind",
-      "in": "query",
-      "required": false,
-      "type": null
-     },
-     {
-      "name": "q",
-      "in": "query",
-      "required": false,
-      "type": null
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/registry/verify": {
-   "GET": {
-    "operationId": "verify_artifacts_registry_verify_get",
-    "params": [
-     {
-      "name": "kind",
-      "in": "query",
-      "required": false,
-      "type": null
-     },
-     {
-      "name": "q",
-      "in": "query",
-      "required": false,
-      "type": null
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
   "/search": {
    "GET": {
     "operationId": "search_system_search_get",
@@ -8210,134 +6963,6 @@
       "in": "query",
       "required": false,
       "type": null
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/security/audit": {
-   "GET": {
-    "operationId": "get_audit_logs_security_audit_get",
-    "params": [
-     {
-      "name": "before",
-      "in": "query",
-      "required": false,
-      "type": null
-     },
-     {
-      "name": "event_type",
-      "in": "query",
-      "required": false,
-      "type": null
-     },
-     {
-      "name": "history",
-      "in": "query",
-      "required": false,
-      "type": "boolean"
-     },
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/security/keys": {
-   "GET": {
-    "operationId": "list_keys_security_keys_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   },
-   "POST": {
-    "operationId": "create_key_security_keys_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "CreateKeyRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/security/keys/validate": {
-   "POST": {
-    "operationId": "validate_key_security_keys_validate_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": {
-      "additionalProperties": true,
-      "type": "object",
-      "title": "Body"
-     }
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/security/keys/{key_id}": {
-   "GET": {
-    "operationId": "get_key_security_keys__key_id__get",
-    "params": [
-     {
-      "name": "key_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   },
-   "DELETE": {
-    "operationId": "delete_key_security_keys__key_id__delete",
-    "params": [
-     {
-      "name": "key_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/security/keys/{key_id}/rotate": {
-   "POST": {
-    "operationId": "rotate_key_security_keys__key_id__rotate_post",
-    "params": [
-     {
-      "name": "key_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
      }
     ],
     "body": null,
@@ -8388,63 +7013,6 @@
     "body": null,
     "responses": [
      "200"
-    ]
-   }
-  },
-  "/session/{session_id}/context": {
-   "POST": {
-    "operationId": "set_session_context_session__session_id__context_post",
-    "params": [
-     {
-      "name": "session_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": {
-     "content_type": "application/json",
-     "schema": "SessionContext"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/session/{session_id}/messages": {
-   "GET": {
-    "operationId": "get_session_messages_session__session_id__messages_get",
-    "params": [
-     {
-      "name": "session_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/session/{session_id}/inspector": {
-   "GET": {
-    "operationId": "get_session_inspector_session__session_id__inspector_get",
-    "params": [
-     {
-      "name": "session_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
     ]
    }
   },
@@ -9176,6 +7744,134 @@
     ]
    }
   },
+  "/security/audit": {
+   "GET": {
+    "operationId": "get_audit_logs_security_audit_get",
+    "params": [
+     {
+      "name": "before",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "event_type",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "history",
+      "in": "query",
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys": {
+   "GET": {
+    "operationId": "list_keys_security_keys_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_key_security_keys_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "CreateKeyRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys/validate": {
+   "POST": {
+    "operationId": "validate_key_security_keys_validate_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Body"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys/{key_id}": {
+   "GET": {
+    "operationId": "get_key_security_keys__key_id__get",
+    "params": [
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_key_security_keys__key_id__delete",
+    "params": [
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys/{key_id}/rotate": {
+   "POST": {
+    "operationId": "rotate_key_security_keys__key_id__rotate_post",
+    "params": [
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
   "/shell/exec": {
    "POST": {
     "operationId": "exec_command_shell_exec_post",
@@ -9201,6 +7897,76 @@
     "responses": [
      "200",
      "422"
+    ]
+   }
+  },
+  "/vm/run": {
+   "POST": {
+    "operationId": "run_assembly_vm_run_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "VMRunRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vm/training/jobs/{job_id}": {
+   "GET": {
+    "operationId": "training_job_status_vm_training_jobs__job_id__get",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vm/training/jobs/{job_id}/stop": {
+   "POST": {
+    "operationId": "training_job_stop_vm_training_jobs__job_id__stop_post",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vm/builtins": {
+   "GET": {
+    "operationId": "list_builtins_vm_builtins_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/vm/info": {
+   "GET": {
+    "operationId": "vm_info_vm_info_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
     ]
    }
   },
@@ -9369,6 +8135,131 @@
     "params": [
      {
       "name": "soul_name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/": {
+   "GET": {
+    "operationId": "get_companion_info_companion__get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "DELETE": {
+    "operationId": "reset_companion_companion__delete",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/companion/personality": {
+   "POST": {
+    "operationId": "set_personality_companion_personality_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SetPersonalityRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PATCH": {
+    "operationId": "patch_personality_companion_personality_patch",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PatchPersonalityRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/preset": {
+   "POST": {
+    "operationId": "use_preset_companion_preset_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "type": "string",
+      "title": "Preset Id"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/prompt": {
+   "GET": {
+    "operationId": "get_prompt_companion_prompt_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/companion/chat": {
+   "POST": {
+    "operationId": "chat_companion_chat_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__souls__ChatRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/presets": {
+   "GET": {
+    "operationId": "list_presets_companion_presets_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_preset_companion_presets_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PresetCreateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/presets/{preset_id}": {
+   "DELETE": {
+    "operationId": "delete_preset_companion_presets__preset_id__delete",
+    "params": [
+     {
+      "name": "preset_id",
       "in": "path",
       "required": true,
       "type": "string"
@@ -9616,6 +8507,199 @@
     "body": null,
     "responses": [
      "200"
+    ]
+   }
+  },
+  "/errors/log": {
+   "GET": {
+    "operationId": "get_opencode_log_errors_log_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "log_errors_errors_log_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ErrorBatch"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/logs/ingest": {
+   "POST": {
+    "operationId": "ingest_frontend_logs_errors_logs_ingest_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "FrontendLogBatch"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/recent": {
+   "GET": {
+    "operationId": "get_recent_errors_errors_recent_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/grouped": {
+   "GET": {
+    "operationId": "get_grouped_errors_errors_grouped_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/errors/trends": {
+   "GET": {
+    "operationId": "get_error_trends_errors_trends_get",
+    "params": [
+     {
+      "name": "hours",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/export": {
+   "GET": {
+    "operationId": "export_errors_errors_export_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/clear": {
+   "DELETE": {
+    "operationId": "clear_errors_errors_clear_delete",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/errors/unread": {
+   "GET": {
+    "operationId": "unread_count_errors_unread_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/errors/stream": {
+   "GET": {
+    "operationId": "error_stream_errors_stream_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/session/{session_id}/context": {
+   "POST": {
+    "operationId": "set_session_context_session__session_id__context_post",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SessionContext"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/session/{session_id}/messages": {
+   "GET": {
+    "operationId": "get_session_messages_session__session_id__messages_get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/session/{session_id}/inspector": {
+   "GET": {
+    "operationId": "get_session_inspector_session__session_id__inspector_get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
     ]
    }
   },
@@ -10547,76 +9631,6 @@
     ]
    }
   },
-  "/vm/run": {
-   "POST": {
-    "operationId": "run_assembly_vm_run_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "VMRunRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/vm/training/jobs/{job_id}": {
-   "GET": {
-    "operationId": "training_job_status_vm_training_jobs__job_id__get",
-    "params": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/vm/training/jobs/{job_id}/stop": {
-   "POST": {
-    "operationId": "training_job_stop_vm_training_jobs__job_id__stop_post",
-    "params": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/vm/builtins": {
-   "GET": {
-    "operationId": "list_builtins_vm_builtins_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/vm/info": {
-   "GET": {
-    "operationId": "vm_info_vm_info_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
   "/voice/tts": {
    "POST": {
     "operationId": "text_to_speech_voice_tts_post",
@@ -11354,8 +10368,7 @@
     "params": [],
     "body": null,
     "responses": [
-     "200",
-     "422"
+     "200"
     ]
    }
   }

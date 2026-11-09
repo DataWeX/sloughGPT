@@ -1075,19 +1075,41 @@ class TestBaseline:
     # pure-python compare tests keep the fast 120s hang ceiling.
     @pytest.mark.timeout(600)
     def test_baseline_cli_creates_then_validates(self, tmp_path):
-        """First run writes the baseline; second run passes with no regressions."""
+        """First run writes the baseline; second run compares against it.
+
+        The A-B pair is deliberately NOT asserted regression-free: on a loaded
+        CI runner two back-to-back runs can drift, and treating that as a
+        code failure flaked twice in a row (card 20261105_170745 — the
+        assertion measured runner stability, which Test Rule clause 1 says we
+        do not own). What this test owns is the round-trip contract: the
+        baseline is written, the second run actually compares against it, and
+        the exit code agrees with the printed report. Regression DETECTION
+        stays pinned synthetically in test_baseline_cli_exit_1_on_regression.
+        """
         bl = tmp_path / "bl.json"
         first = self._run("--bits", "8,4", "--quick", "--baseline", str(bl))
         assert first.returncode == 0, first.stderr
         assert bl.exists()
         assert "Saved baseline" in first.stdout
         second = self._run("--bits", "8,4", "--quick", "--baseline", str(bl))
-        assert second.returncode == 0, second.stderr
-        assert "No regressions vs baseline" in second.stdout
+        # Both outcomes print the "Baseline Regression Check" header — its
+        # presence proves the compare ran against the saved baseline.
+        assert "Baseline Regression Check" in second.stdout
+        # Coherence invariant: exit 0 iff the report says "No regressions".
+        # A noise-flagged run exits 1 with the regression table; both sides
+        # must move together or the CLI's gating is broken.
+        assert (second.returncode == 0) == ("No regressions vs baseline." in second.stdout)
 
     @pytest.mark.timeout(600)
     def test_baseline_cli_json_block(self, tmp_path):
-        """--baseline --json emits a baseline block with exists flag."""
+        """--baseline --json emits a baseline block with exists flag.
+
+        The second run's ``regressions`` is asserted as a coherent LIST, not
+        as empty: same CI-noise class as test_baseline_cli_creates_then_validates
+        (card 20261105_170745 — non-empty on a loaded runner is the CLI
+        behaving correctly, not a code defect). Detection itself is pinned by
+        test_baseline_cli_json_reports_regressions (synthetic baseline).
+        """
         bl = tmp_path / "bl2.json"
         first = self._run("--bits", "8", "--quick", "--baseline", str(bl), "--json")
         data = json.loads(first.stdout)
@@ -1095,7 +1117,11 @@ class TestBaseline:
         second = self._run("--bits", "8", "--quick", "--baseline", str(bl), "--json")
         data = json.loads(second.stdout)
         assert data["baseline"]["exists"] is True
-        assert data["baseline"]["regressions"] == []
+        regressions = data["baseline"]["regressions"]
+        assert isinstance(regressions, list)
+        # Coherence invariant: the JSON block's regressions and the process
+        # exit code must agree (exit 1 iff non-empty).
+        assert (second.returncode == 0) == (regressions == [])
 
     @pytest.mark.timeout(600)
     def test_baseline_cli_exit_1_on_regression(self, tmp_path):
@@ -1121,6 +1147,44 @@ class TestBaseline:
         result = self._run("--bits", "8", "--quick", "--baseline", str(bl))
         assert result.returncode == 1
         assert "Regression" in result.stdout
+
+    @pytest.mark.timeout(600)
+    def test_baseline_cli_json_reports_regressions(self, tmp_path):
+        """--json carries the regression entries themselves (synthetic signal).
+
+        Card 20261105_170745: the live A-B assertion ``regressions == []``
+        verified runner stability, not our code, and flaked on CI twice in a
+        row. The relaxed shape assertions in this class are only honest
+        because regression DETECTION is pinned here with a fabricated
+        baseline: a known-worse baseline must come back exit 1 with a
+        non-empty, key-complete ``regressions`` list in the JSON block.
+        """
+        bl = tmp_path / "bl5.json"
+        payload = {
+            "metrics": {
+                "tiny:int8": {
+                    "passed": 7,
+                    "total": 7,
+                    "gen_geomean": 1.0,
+                    "prompt_geomean": 1.0,
+                    "temp_geomean": 1.0,
+                    "weight_compression": 8.0,
+                    "avg_logit_cosine": 0.999,
+                    "avg_token_agreement": 0.01,
+                    "cold_start_s": 0.1,
+                    "warm_median_s": 0.05,
+                }
+            }
+        }
+        bl.write_text(json.dumps(payload))
+        result = self._run("--bits", "8", "--quick", "--baseline", str(bl), "--json")
+        data = json.loads(result.stdout)
+        assert result.returncode == 1, result.stderr
+        assert data["baseline"]["exists"] is True
+        regressions = data["baseline"]["regressions"]
+        assert isinstance(regressions, list) and regressions
+        for entry in regressions:
+            assert {"key", "metric", "baseline", "current"} <= set(entry)
 
     @pytest.mark.timeout(600)
     def test_baseline_report_section(self, tmp_path):

@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
 from domain.agents import ToolParam, ToolSpec
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .jobs import training_jobs
 

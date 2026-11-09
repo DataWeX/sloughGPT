@@ -31,7 +31,6 @@ ROUTER_MODULES: list[str] = [
     "mole",
     "multimodal",
     "openwebui",
-    "phoneme",
     "plugins",
     "profiles",
     "ratelimit",
