@@ -40,7 +40,6 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import check_contract  # noqa: E402
 import gen_router_manifest  # noqa: E402
-import gen_ts_contracts  # noqa: E402
 
 # ── helpers ────────────────────────────────────────────────────────────
 
@@ -446,9 +445,9 @@ def test_contract_gate_static_checks_pass():
     assert check_contract.main(["--static"]) == 0
 
 
-def test_ts_contract_projection_is_fresh():
-    """The frontend registry is a projection: change a descriptor ⇒ regen or red."""
-    assert gen_ts_contracts.main(["--check"]) == 0
+# TS projection freshness lives in test_ts_contracts.py (subprocess): an
+# in-process check here saw rows other tests had registered into the global
+# REGISTRY and went red on suite order, duplicating that gate.
 
 
 def test_importing_the_routers_package_stays_lazy():
