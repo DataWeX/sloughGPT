@@ -373,7 +373,16 @@ class PlannerStore:
                     new_line = replacements[obj["id"]]
                     matched += 1
                     if new_line is not None:
-                        out.append(new_line)
+                        # Preserve legacy keys the Card round-trip drops
+                        # (note-schema ``body``): fresh line over the
+                        # original, fresh wins on conflicts.
+                        out.append(
+                            json.dumps(
+                                {**obj, **json.loads(new_line)},
+                                sort_keys=True,
+                                ensure_ascii=False,
+                            )
+                        )
                     continue
                 out.append(raw)
             new_text = "\n".join(out) + "\n" if out else ""
@@ -381,7 +390,14 @@ class PlannerStore:
                 self._atomic_write(new_text, expect=token)
             return matched
 
-        return self._occ(attempt)
+        matched = self._occ(attempt)
+        if matched:
+            # Seal-at-write (card 20261109_112756): the rewritten line's
+            # content changed, invalidating its own hash link and every
+            # successor's. Re-chain immediately so verify_chain() != []
+            # means tampering — not routine editing.
+            self.compute_chains()
+        return matched
 
     def _append_card(self, card: Card) -> None:
         """Append a single card line, adding the schema header only if missing.
@@ -406,6 +422,10 @@ class PlannerStore:
             self._atomic_write("\n".join(out) + "\n", expect=token)
 
         self._occ(attempt)
+        # Seal-at-write (card 20261109_112756): the appended line lands
+        # unchained (chain_index -1) — re-chain so the board verifies the
+        # moment add_card returns.
+        self.compute_chains()
 
     def _read_board_lines(self) -> list[dict[str, Any]]:
         if not self._board_file.exists():
@@ -868,7 +888,34 @@ class PlannerStore:
             old_text = self._board_file.read_text(encoding="utf-8")
             token = _token_of(old_text)
             id_set = {c.id for c in ordered}
-            card_lines = [self._card_line(c) for c in ordered]
+            # Line-level merge (card 20261109_112756): the file line may
+            # carry legacy keys the Card round-trip drops (note-schema
+            # ``body``, web-shaped ``root_hash``); the fresh card line
+            # carries the canonical chain fields. Fresh wins on conflicts —
+            # the seal is authoritative — while legacy keys survive, so
+            # re-sealing never loses data.
+            orig: dict[str, dict[str, Any]] = {}
+            for raw in old_text.splitlines():
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                try:
+                    obj = json.loads(stripped)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(obj, dict) and isinstance(obj.get("id"), str):
+                    orig[obj["id"]] = obj
+            fresh = [self._card_line(c) for c in ordered]
+            card_lines = [
+                json.dumps(
+                    {**orig[c.id], **json.loads(line)},
+                    sort_keys=True,
+                    ensure_ascii=False,
+                )
+                if c.id in orig
+                else line
+                for c, line in zip(ordered, fresh)
+            ]
             out: list[str] = []
             emitted = False
             for raw in old_text.splitlines():

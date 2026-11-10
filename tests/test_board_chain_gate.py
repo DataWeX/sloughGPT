@@ -85,10 +85,14 @@ class TestCorruptionSymptoms:
 
     def test_unsealed_card_breaks_chain(self, tmp_path: Path):
         """A card appended without compute_chains() (chain_index=-1) must
-        fail — sealing before landing is the whole point of the gate."""
+        fail — sealing before landing is the whole point of the gate.
+
+        add_card auto-seals since card 20261109_112756, so the unsealed
+        state is produced the way a hand-edit would: a raw append."""
         board = _sealed(tmp_path, ["a", "b"])
         store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
-        store.add_card("never sealed")  # add_card does NOT auto-seal
+        with store._board_file.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"id": "raw-unsealed", "title": "never sealed"}) + "\n")
         findings = gate.check_board(board)
         assert any("hash chain broken" in f for f in findings), findings
 

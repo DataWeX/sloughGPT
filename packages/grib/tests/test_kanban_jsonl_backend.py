@@ -6,9 +6,9 @@ KanbanStore JSONL migration tests — the GUI store reads/writes the live
 Guarantees under test:
 - tolerant parse: web-shaped cards (gh, chain_*, root_hash, unknown note
   keys) load and round-trip without destroying the unknown fields;
-- surgical saves: only lines the caller changed are rewritten — header,
-  foreign schema rows, unparsable lines, and concurrent additions survive
-  byte-for-byte;
+- surgical saves: non-card lines (header, foreign schema rows, unparsable)
+  and concurrent additions survive byte-for-byte; card lines re-seal after
+  every write (seal-at-write, card 20261109_112756) so verify_chain() == [];
 - wipe protection: a corrupt/empty read can never blank the live board;
 - legacy migration: a board.json-only directory loads, and the first save
   lands board.jsonl without touching board.json;
@@ -97,6 +97,19 @@ def _line(obj: dict) -> str:
     return json.dumps(obj, sort_keys=True, ensure_ascii=False)
 
 
+def _by_id(lines: list[str]) -> dict[str, dict]:
+    """Card lines by id — skips header, foreign rows, unparsable lines."""
+    out: dict[str, dict] = {}
+    for raw in lines:
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("id"):
+            out[obj["id"]] = obj
+    return out
+
+
 def _seed(dir_path: Path) -> Path:
     lines = [
         _line(_HEADER),
@@ -161,7 +174,12 @@ def test_stray_column_coerced_for_display_only(store: KanbanStore, board_dir: Pa
 # ── Surgical writes ─────────────────────────────────────────────────────
 
 
-def test_move_rewrites_only_that_card_line(store: KanbanStore, board_dir: Path):
+def test_move_reseals_chain_preserving_non_card_lines(store: KanbanStore, board_dir: Path):
+    """The GUI move re-chains every card line (the move invalidated the
+    moved card's link and both successors') while header, foreign schema
+    rows, and unparsable lines stay byte-for-byte."""
+    from grib.store import PlannerStore
+
     path = board_dir / "board.jsonl"
     before = path.read_text(encoding="utf-8").splitlines()
     moved = store.move_card("card-aaa-move-me", "wip")
@@ -169,27 +187,40 @@ def test_move_rewrites_only_that_card_line(store: KanbanStore, board_dir: Path):
     after = path.read_text(encoding="utf-8").splitlines()
     assert len(after) == len(before)
     changed = [i for i, (a, b) in enumerate(zip(before, after)) if a != b]
-    assert len(changed) == 1
-    rewritten = json.loads(after[changed[0]])
-    assert rewritten["id"] == "card-aaa-move-me"
+    assert changed == [1, 2, 3]  # the three card lines; 0/4/5 byte-pinned
+    by_id = _by_id(after)
+    rewritten = by_id["card-aaa-move-me"]
     assert rewritten["column"] == "wip"
-    assert rewritten["chain_hash"] == "c" * 64
     assert rewritten["root_hash"] == "frozen-at-creation"
     assert rewritten["notes"][0]["action"] == "add"  # unknown note keys survive
-    # untouched lines are byte-identical (header, B, stray, foreign, unparsable)
-    for i, line in enumerate(before):
-        if i != changed[0]:
-            assert after[i] == line
+    # the stale fake hash is gone — the board is sealed, not pinning "c"*64
+    assert PlannerStore(board_dir=board_dir, notes_dir=board_dir).verify_chain() == []
+    # content of the untouched card lines survives the re-seal
+    assert by_id["card-bbb-untouched"]["title"] == "Web-shaped card B"
+    assert by_id["card-ccc-stray-col"]["column"] == "todo"  # coerced, as on read
+    # non-card lines byte-identical (header, foreign row, unparsable)
+    for i in (0, 4, 5):
+        assert after[i] == before[i]
 
 
 def test_add_appends_one_line_preserving_foreign_rows(store: KanbanStore, board_dir: Path):
+    from grib.store import PlannerStore
+
     path = board_dir / "board.jsonl"
     before = path.read_text(encoding="utf-8").splitlines()
     card = store.add_card("Fresh from the GUI", column="todo")
     after = path.read_text(encoding="utf-8").splitlines()
     assert len(after) == len(before) + 1
-    assert after[: len(before)] == before  # every prior line byte-identical
-    assert json.loads(after[-1])["id"] == card.id
+    # Non-card lines stay byte-pinned (header at 0; foreign row and
+    # unparsable line shift by exactly the one added card line).
+    assert after[0] == before[0]
+    assert after[5] == before[4]
+    assert after[6] == before[5]
+    by_id = _by_id(after)
+    assert by_id[card.id]["title"] == "Fresh from the GUI"
+    # prior card lines re-chain but keep their content
+    assert by_id["card-bbb-untouched"]["column"] == "done"
+    assert PlannerStore(board_dir=board_dir, notes_dir=board_dir).verify_chain() == []
 
 
 def test_delete_last_card_allowed(store: KanbanStore, board_dir: Path):
@@ -226,6 +257,25 @@ def test_concurrent_addition_survives_surgical_save(store: KanbanStore, board_di
     ids = {c.id for c in store.load_board().cards}
     assert "card-zzz-concurrent" in ids  # other session's line preserved
     assert next(c for c in store.load_board().cards if c.id == card.id).column == "wip"
+
+
+def test_kanban_writes_leave_chain_sealed(store: KanbanStore, board_dir: Path):
+    """Seal-at-write (card 20261109_112756): the GUI write path must leave
+    verify_chain() == [] — a drag used to leave the canonical board broken
+    until some session happened to run `grib sync`."""
+    from grib.store import PlannerStore
+
+    def chain() -> list[int]:
+        return PlannerStore(board_dir=board_dir, notes_dir=board_dir).verify_chain()
+
+    moved = store.move_card("card-aaa-move-me", "wip")
+    assert moved is not None and moved.column == "wip"
+    assert chain() == []
+
+    board = store.load_board()
+    board.cards[0].title = "edited through save"
+    store._bk.save(board)  # the GUI write path (gui.py:423)
+    assert chain() == []
 
 
 # ── Legacy board.json fallback + migration ──────────────────────────────

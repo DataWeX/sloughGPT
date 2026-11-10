@@ -143,12 +143,15 @@ class TestPlannerStore:
 
 
 class TestSurgicalBoardUpdates:
-    """Board writes must be surgical: only the touched card's line changes.
+    """Board writes must be surgical: untouched content survives every write.
 
     The real board.jsonl contains mixed note-derived lines
     ({"body","id","priority","status","title"}) and card-schema lines. A full
-    re-serialize re-keys every line, producing whole-file diffs. These tests
-    pin byte-for-byte preservation of untouched lines.
+    re-serialize re-keys every line and drops legacy keys, so the write
+    funnels merge the fresh line over the original (legacy ``body`` survives)
+    and re-seal the chain (card 20261109_112756). Contract: untouched card
+    lines change only by added chain fields — never lost content — and
+    non-card lines stay byte-for-byte.
     """
 
     def _seed_note_schema(self, store, board_file):
@@ -165,7 +168,6 @@ class TestSurgicalBoardUpdates:
     def test_update_only_rewrites_target_line(self, store):
         board_file = store._board_file
         self._seed_note_schema(store, board_file)
-        before = board_file.read_text().splitlines()
 
         card = store.get_card("n1")
         assert card is not None
@@ -173,39 +175,57 @@ class TestSurgicalBoardUpdates:
 
         after = board_file.read_text().splitlines()
         assert len(after) == 2
-        # sibling note-schema line preserved byte-for-byte
-        assert after[1] == before[1]
-        assert json.loads(after[1]) == {
+        by_id = {json.loads(line)["id"]: json.loads(line) for line in after}
+        # The target's legacy ``body`` survives the surgical rewrite...
+        assert by_id["n1"]["body"] == "b1"
+        assert by_id["n1"]["column"] == "done"
+        # ...the sibling's note-schema content survives the re-seal,
+        # gaining only chain fields.
+        assert {k: by_id["n2"][k] for k in ("id", "title", "body", "priority", "column")} == {
             "id": "n2",
             "title": "Two",
             "body": "b2",
             "priority": "low",
             "column": "done",
         }
+        assert "chain_hash" in by_id["n2"]
         assert store.get_card("n1").column == "done"
+        assert store.verify_chain() == []
 
     def test_move_only_rewrites_target_line(self, store):
         board_file = store._board_file
         self._seed_note_schema(store, board_file)
-        before = board_file.read_text().splitlines()
 
         store.move_card("n1", "review")
 
         after = board_file.read_text().splitlines()
-        assert after[1] == before[1]
+        assert len(after) == 2
+        by_id = {json.loads(line)["id"]: json.loads(line) for line in after}
+        # sibling content survives the re-seal — legacy ``body`` included
+        assert by_id["n2"]["body"] == "b2"
+        assert by_id["n2"]["priority"] == "low"
+        assert by_id["n2"]["column"] == "done"
         assert store.get_card("n1").column == "review"
+        assert store.verify_chain() == []
 
     def test_delete_removes_only_target_line(self, store):
         board_file = store._board_file
         self._seed_note_schema(store, board_file)
-        before = board_file.read_text().splitlines()
 
         assert store.delete_card("n1") is True
 
         after = board_file.read_text().splitlines()
         assert len(after) == 1
-        assert after[0] == before[1]  # surviving sibling byte-identical
+        # only the target line is gone; the survivor keeps its content
+        # through the re-seal (legacy ``body`` included) and is re-chained
+        survivor = json.loads(after[0])
+        assert survivor["id"] == "n2"
+        assert survivor["body"] == "b2"
+        assert survivor["priority"] == "low"
+        assert survivor["column"] == "done"
+        assert "chain_hash" in survivor
         assert store.get_card("n2") is not None
+        assert store.verify_chain() == []
 
     def test_add_appends_without_touching_existing_lines(self, store):
         board_file = store._board_file
@@ -227,7 +247,15 @@ class TestSurgicalBoardUpdates:
         assert store.archive_done() == 1
         after = board_file.read_text().splitlines()
         assert len(after) == 1
-        assert json.loads(after[0]) == {"id": "n1", "title": "One", "body": "b1", "priority": "med"}
+        survivor = json.loads(after[0])
+        # content intact through archive + re-seal (legacy ``body`` included)
+        assert {k: survivor[k] for k in ("id", "title", "body", "priority")} == {
+            "id": "n1",
+            "title": "One",
+            "body": "b1",
+            "priority": "med",
+        }
+        assert store.verify_chain() == []
 
 
 # ── CLI tests ────────────────────────────────────────────────────────────

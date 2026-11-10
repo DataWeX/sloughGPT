@@ -4,6 +4,8 @@ import json
 import uuid
 from unittest.mock import MagicMock, patch
 
+from infrastructure.contract import REGISTRY
+
 from apps.api.server.tests.test_support import get_test_client
 
 client = get_test_client()
@@ -530,3 +532,33 @@ class TestSchemaValidationExtended:
     def test_chat_control_missing_action(self):
         resp = client.post("/chat/control", json={"session_id": "s"})
         assert resp.status_code == 422
+
+
+class TestSessionsDescriptorProjection:
+    """The chat.sessions.list descriptor must project an honest registry row."""
+
+    def test_chat_sessions_list_registered(self):
+        routes = {(r["method"], r["path"]): r for r in REGISTRY.routes()}
+        entry = routes[("GET", "/chat/sessions")]
+        assert entry["name"] == "chat.sessions.list"
+        assert entry["auth_scope"] == "authenticated"
+        assert entry["idempotent"] is True
+        assert entry["module"] == "routers.inference"
+        # params: JSON Schema projection of the declared query params (archived)
+        assert set(entry["params"]["properties"]) == {"archived"}
+        # result derives from SessionModel — the five index fields, always present
+        items = entry["result"]["items"]
+        props = items["properties"]
+        for field in ("id", "name", "created_at", "updated_at", "message_count"):
+            assert field in props, f"SessionModel missing {field}"
+
+    def test_chat_sessions_list_served_route_matches_descriptor(self):
+        resp = client.get("/chat/sessions")
+        assert resp.status_code == 200
+        rows = resp.json()["data"]
+        assert isinstance(rows, list)
+        # Wire rows carry exactly the SessionModel fields (extra="allow" lets
+        # the index grow, but every model field must be present per row).
+        for row in rows[:3]:
+            for field in ("id", "name", "created_at", "updated_at", "message_count"):
+                assert field in row, f"row missing {field}"

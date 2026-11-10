@@ -125,15 +125,45 @@ class TestChainVerify:
         store.compute_chains()
         assert store.verify_chain() == []
 
+    def test_every_mutation_keeps_chain_sealed(self, store: PlannerStore):
+        """Seal-at-write (card 20261109_112756): every sanctioned mutation
+        leaves the chain intact, so ``verify_chain() != []`` now means
+        tampering — not routine editing."""
+        a = store.add_card("a")
+        assert store.verify_chain() == []
+        b = store.add_card("b")
+        assert store.verify_chain() == []
+        store.update_card(a.id, title="renamed")
+        assert store.verify_chain() == []
+        store.move_card(b.id, "wip")
+        assert store.verify_chain() == []
+        store.block_card(b.id, a.id)
+        assert store.verify_chain() == []
+        store.unblock_card(b.id, a.id)
+        assert store.verify_chain() == []
+        assert store.delete_card(a.id) is True
+        assert store.verify_chain() == []
+
     def test_verify_flags_mutation(self, store: PlannerStore):
         a = store.add_card("a")
         store.add_card("b")
         store.compute_chains()
-        store.update_card(a.id, title="tampered")
+        # Tamper the way an attacker (or careless hand-edit) would — a raw
+        # file write. The sanctioned update path re-seals now
+        # (card 20261109_112756), so it can no longer simulate tampering.
+        text = store._board_file.read_text()
+        line_a = next(raw for raw in text.splitlines() if f'"id": "{a.id}"' in raw)
+        store._atomic_write(
+            text.replace(line_a, line_a.replace('"title": "a"', '"title": "tampered"'))
+        )
         assert store.verify_chain() == [0]
 
     def test_verify_flags_unchained(self, store: PlannerStore):
         store.add_card("a")
+        # The sanctioned add re-seals now (card 20261109_112756); simulate
+        # a hand-appended unchained line with a raw write.
+        text = store._board_file.read_text()
+        store._atomic_write(text + json.dumps({"id": "sneaky", "title": "Unchained"}) + "\n")
         assert store.verify_chain() == [-1]
 
     def test_verify_flags_reordered_file(self, store: PlannerStore):

@@ -17,19 +17,17 @@ Usage as a module::
 
 Usage as a CLI::
 
-    grib init
-    grib add "Fix boot order" --priority high
-    grib cards --column todo
-    grib board
-    grib move <id> wip
-    grib note add <id> "Looking into it"
+    grib board show
+    grib board add "Fix boot order" --priority high
+    grib board move <id> wip
+    grib board delete <id>
+    grib sync
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import shutil
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
@@ -57,22 +55,10 @@ PRIORITY_ICONS = {"low": " ", "medium": "!", "high": "!!", "critical": "!!!"}
 PRIORITY_SORT = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 CARD_TYPES = ("task", "bug", "feature", "chore", "spike", "docs")
-CARD_TYPE_ICONS = {
-    "task": "☐",
-    "bug": "🐛",
-    "feature": "✨",
-    "chore": "🔧",
-    "spike": "🔍",
-    "docs": "📝",
-}
 
 
 def _make_id(title: str, taken: set[str] | None = None) -> str:
     return make_readable_id(title, taken or ())
-
-
-def _abbrev(s: str, max_len: int = 50) -> str:
-    return s[:max_len] + "..." if len(s) > max_len else s
 
 
 @dataclass
@@ -433,6 +419,10 @@ class _JSONBackend:
         allow_wipe: bool = False,
     ) -> None:
         self._planner._occ(lambda: self._attempt_save(board, baseline, allow_wipe))
+        # Seal-at-write (card 20261109_112756): any changed line invalidates
+        # the chain — re-chain here so the GUI write path leaves
+        # verify_chain() intact instead of waiting for a lucky `grib sync`.
+        self._planner.compute_chains()
 
     def _attempt_save(
         self,
@@ -915,454 +905,11 @@ def reset_kanban_store() -> None:
     _store = None
 
 
-def _render_board(board: Board, width: int = 78) -> str:
-    if not board.columns:
-        return "  No columns."
-    col_width = max(width // len(board.columns), 20)
-    lines: list[str] = [f"  Kanban: {board.name}", ""]
-
-    cols_sorted = sorted(board.columns, key=lambda c: c.order)
-    headers = [
-        f"  {c.name.upper()}" + (f" (WIP:{c.wip_limit})" if c.wip_limit else "")
-        for c in cols_sorted
-    ]
-
-    by_col: dict[str, list[Card]] = {c.name: [] for c in board.columns}
-    for card in board.cards:
-        by_col.setdefault(card.column, []).append(card)
-
-    for col_name in by_col:
-        by_col[col_name].sort(key=lambda c: PRIORITY_SORT.get(c.priority, 99))
-
-    sep = "─" * (sum(col_width for _ in cols_sorted) + len(cols_sorted) + 1)
-    lines.append(f"┌{sep}┐")
-    lines.append(
-        f"│{'│'.join(f'{h:^{col_width}}' for h, cw in zip(headers, [col_width] * len(cols_sorted)))}│"
-    )
-    lines.append(f"├{sep}┤")
-
-    today = date.today().isoformat()
-    max_rows = max((len(cards) for cards in by_col.values()), default=1)
-    for row_idx in range(max_rows):
-        cells = []
-        for col in cols_sorted:
-            cards = by_col.get(col.name, [])
-            if row_idx < len(cards):
-                c = cards[row_idx]
-                type_icon = CARD_TYPE_ICONS.get(c.card_type, "☐")
-                due = f" [{c.due_date}]" if c.due_date else ""
-                overdue = (
-                    " !OVERDUE" if c.due_date and c.due_date < today and c.column != "done" else ""
-                )
-                blocked = " BLOCKED" if c.blocked_by else ""
-                assign = f" @{c.assignee}" if c.assignee else ""
-                tags = ""
-                if c.tags:
-                    tags = " #" + ",".join(c.tags[:2])
-                    if len(c.tags) > 2:
-                        tags += "+"
-                notes = f" ({len(c.notes)})" if c.notes else ""
-                effort = f" {c.effort}pts" if c.effort else ""
-                sprint = f" [{c.sprint}]" if c.sprint else ""
-                label = f"{c.priority_icon} {type_icon} {c.short_id} {_abbrev(c.title, col_width - 17)}{due}{overdue}{blocked}{assign}{effort}{sprint}{tags}{notes}"
-                cells.append(f" {label:<{col_width - 1}}")
-            else:
-                cells.append(" " * col_width)
-        lines.append(
-            f"│{'│'.join(f'{c:<{col_width}}' for c, cw in zip(cells, [col_width] * len(cols_sorted)))}│"
-        )
-
-    lines.append(f"└{sep}┘")
-    lines.append(f"  {len(board.cards)} card(s) across {len(board.columns)} column(s)")
-    return "\n".join(lines)
-
-
 def cli_main(argv: list[str] | None = None) -> int:
-    import argparse
+    """Backward-compatible entry point delegating to the unified CLI."""
+    from grib.cli import cli_main as unified_cli_main
 
-    parser = argparse.ArgumentParser(prog="grib", description="Kanban board with notes")
-    parser.add_argument("--dir", default=None, help="Board directory (default: config/env)")
-    sub = parser.add_subparsers(dest="cmd")
-
-    p_init = sub.add_parser("init", help="Initialize a new board")
-    p_init.add_argument("--name", default="board", help="Board name")
-    p_init.add_argument("--force", action="store_true", help="Recreate if exists")
-
-    p_add = sub.add_parser("add", help="Add a card")
-    p_add.add_argument("title", help="Card title")
-    p_add.add_argument("--column", default="", help="Target column")
-    p_add.add_argument("--priority", default="medium", choices=PRIORITIES)
-    p_add.add_argument("--type", default="task", choices=CARD_TYPES, help="Card type")
-    p_add.add_argument("--effort", type=float, default=0.0, help="Effort estimate (story points)")
-    p_add.add_argument("--sprint", default="", help="Sprint identifier")
-    p_add.add_argument("--desc", default="", help="Description")
-    p_add.add_argument("--tags", default="", help="Comma-separated tags")
-    p_add.add_argument("--due", default="", help="Due date (ISO)")
-    p_add.add_argument("--assignee", default="", help="Assignee")
-
-    p_list = sub.add_parser("list", help="List cards")
-    p_list.add_argument("--column", default=None, help="Filter by column")
-    p_list.add_argument("--priority", default=None, choices=PRIORITIES)
-    p_list.add_argument("--tag", default=None, help="Filter by tag")
-    p_list.add_argument("--assignee", default=None, help="Filter by assignee")
-    p_list.add_argument("--due-before", default="", help="Due before YYYY-MM-DD")
-    p_list.add_argument("--due-after", default="", help="Due after YYYY-MM-DD")
-    p_list.add_argument("--overdue", action="store_true", help="Only overdue cards")
-    p_list.add_argument("--limit", type=int, default=50)
-
-    p_show = sub.add_parser("show", help="Show card details")
-    p_show.add_argument("card_id", help="Card id or prefix")
-
-    p_edit = sub.add_parser("edit", help="Edit a card")
-    p_edit.add_argument("card_id", help="Card id or prefix")
-    p_edit.add_argument("--title", default=None)
-    p_edit.add_argument("--desc", default=None)
-    p_edit.add_argument("--priority", default=None, choices=PRIORITIES)
-    p_edit.add_argument("--type", default=None, choices=CARD_TYPES)
-    p_edit.add_argument("--effort", type=float, default=None, help="Effort estimate")
-    p_edit.add_argument("--sprint", default=None, help="Sprint identifier")
-    p_edit.add_argument("--tags", default=None)
-    p_edit.add_argument("--due", default=None)
-    p_edit.add_argument("--assignee", default=None)
-
-    p_move = sub.add_parser("move", help="Move card to another column")
-    p_move.add_argument("card_id", help="Card id or prefix")
-    p_move.add_argument("column", help="Target column")
-
-    p_block = sub.add_parser("block", help="Block a card by another card")
-    p_block.add_argument("card_id", help="Card id or prefix to block")
-    p_block.add_argument("blocker_id", help="Blocker card id or prefix")
-
-    p_unblock = sub.add_parser("unblock", help="Unblock a card")
-    p_unblock.add_argument("card_id", help="Card id or prefix")
-    p_unblock.add_argument("blocker_id", help="Blocker card id or prefix")
-
-    sub.add_parser("blocked", help="List blocked cards")
-
-    p_del = sub.add_parser("delete", aliases=["rm"], help="Delete a card")
-    p_del.add_argument("card_id", help="Card id or prefix")
-
-    sub.add_parser("board", help="Show ASCII kanban board")
-
-    p_note = sub.add_parser("note", help="Manage notes on a card")
-    p_note_sub = p_note.add_subparsers(dest="note_cmd")
-    p_na = p_note_sub.add_parser("add", help="Add note")
-    p_na.add_argument("card_id")
-    p_na.add_argument("text", help="Note text")
-    p_na.add_argument("--author", default="")
-    p_nl = p_note_sub.add_parser("list", help="List notes")
-    p_nl.add_argument("card_id")
-    p_nd = p_note_sub.add_parser("delete", aliases=["rm"], help="Delete note")
-    p_nd.add_argument("card_id")
-    p_nd.add_argument("note_id")
-
-    sub.add_parser("columns", help="List columns")
-    p_ca = sub.add_parser("column-add", help="Add a column")
-    p_ca.add_argument("name")
-    p_ca.add_argument("--wip", type=int, default=0)
-    p_cr = sub.add_parser("column-rename", help="Rename a column")
-    p_cr.add_argument("name")
-    p_cr.add_argument("new_name")
-    p_crm = sub.add_parser("column-rm", help="Remove a column")
-    p_crm.add_argument("name")
-    p_crm.add_argument("--move-to", default="todo")
-
-    sub.add_parser("archive", help="Archive (delete) all done cards")
-    p_search = sub.add_parser("search", help="Search cards")
-    p_search.add_argument("query")
-    p_search.add_argument("--limit", type=int, default=30)
-    sub.add_parser("stats", help="Board statistics")
-
-    p_export = sub.add_parser("export", help="Export board to JSON")
-    p_export.add_argument("--output", default="", help="Output file path")
-
-    p_import = sub.add_parser("import", help="Import board from JSON")
-    p_import.add_argument("input", help="Input JSON file path")
-
-    args = parser.parse_args(argv)
-    if args.cmd is None:
-        parser.print_help()
-        return 1
-
-    store = get_kanban_store(board_dir=args.dir)
-
-    if args.cmd == "init":
-        board = store.init_board(name=args.name, force=args.force)
-        print(f"Board '{board.name}' at {store._dir / _LIVE_BOARD_FILE}")
-        cols = ", ".join(c.name for c in board.columns)
-        print(f"  {len(board.columns)} columns: {cols}")
-        return 0
-
-    if args.cmd == "add":
-        tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
-        card = store.add_card(
-            args.title,
-            column=args.column,
-            priority=args.priority,
-            card_type=args.type,
-            effort=args.effort,
-            sprint=args.sprint,
-            description=args.desc,
-            tags=tags,
-            due_date=args.due,
-            assignee=args.assignee,
-        )
-        effort_s = f"  effort={args.effort}" if args.effort else ""
-        sprint_s = f"  sprint={args.sprint}" if args.sprint else ""
-        print(
-            f"Added: {card.short_id}  {card.title}  [{card.column}]  {card.priority_icon}{effort_s}{sprint_s}"
-        )
-        return 0
-
-    if args.cmd == "list":
-        cards = store.list_cards(
-            column=args.column,
-            priority=args.priority,
-            tag=args.tag,
-            assignee=args.assignee,
-            due_before=args.due_before,
-            due_after=args.due_after,
-            overdue=args.overdue,
-            limit=args.limit,
-        )
-        if not cards:
-            print("No cards found.")
-            return 0
-        today = date.today().isoformat()
-        for c in cards:
-            tags_s = f"  [{', '.join(c.tags)}]" if c.tags else ""
-            due_s = f"  [{c.due_date}]" if c.due_date else ""
-            overdue_s = (
-                "  OVERDUE" if c.due_date and c.due_date < today and c.column != "done" else ""
-            )
-            assign_s = f"  @{c.assignee}" if c.assignee else ""
-            effort_s = f"  {c.effort}pts" if c.effort else ""
-            sprint_s = f"  [{c.sprint}]" if c.sprint else ""
-            notes_s = f"  ({len(c.notes)})" if c.notes else ""
-            print(
-                f"  {c.priority_icon} {c.short_id}  {c.title}  [{c.column}]{tags_s}{due_s}{overdue_s}{assign_s}{effort_s}{sprint_s}{notes_s}"
-            )
-        print(f"\n  {len(cards)} card(s)")
-        return 0
-
-    if args.cmd == "show":
-        card = store.get_card(args.card_id)
-        if card is None:
-            print(f"Card not found: {args.card_id}")
-            return 1
-        tags_s = ", ".join(card.tags) if card.tags else "none"
-        blocked_s = ", ".join(card.blocked_by) if card.blocked_by else "none"
-        type_icon = CARD_TYPE_ICONS.get(card.card_type, "☐")
-        effort_s = f"  effort:   {card.effort} pts" if card.effort else "  effort:   0"
-        sprint_s = f"  sprint:   {card.sprint}" if card.sprint else ""
-        print(f"  {card.priority_icon} {type_icon}  {card.title}")
-        print(f"  id:       {card.id}")
-        print(f"  type:     {card.card_type}")
-        print(f"  column:   {card.column}")
-        print(f"  priority: {card.priority}")
-        print(f"  tags:     {tags_s}")
-        print(f"  assignee: {card.assignee or 'unassigned'}")
-        print(f"  due:      {card.due_date or 'none'}")
-        print(f"  blocked:  {blocked_s}")
-        print(effort_s)
-        if sprint_s:
-            print(sprint_s)
-        print(f"  created:  {card.created_at}")
-        print(f"  updated:  {card.updated_at}")
-        if card.history:
-            print(f"\n  History ({len(card.history)} changes):")
-            for h in card.history[-5:]:
-                ts = h["timestamp"][:19].replace("T", " ")
-                changes = ", ".join(f"{k}={v['new']}" for k, v in h["changes"].items())
-                print(f"    [{ts}] {changes}")
-        if card.description:
-            print(f"\n  {card.description}")
-        if card.notes:
-            print(f"\n  Notes ({len(card.notes)}):")
-            for n in card.notes:
-                author_s = f"  [{n.author}]" if n.author else ""
-                print(f"    [{display_id(n.id)}]  {n.created_at[:10]}{author_s}")
-                for line in n.text.split("\n"):
-                    print(f"      {line}")
-        return 0
-
-    if args.cmd == "edit":
-        kwargs: dict[str, Any] = {}
-        if args.title is not None:
-            kwargs["title"] = args.title
-        if args.desc is not None:
-            kwargs["description"] = args.desc
-        if args.priority is not None:
-            kwargs["priority"] = args.priority
-        if args.type is not None:
-            kwargs["card_type"] = args.type
-        if args.effort is not None:
-            kwargs["effort"] = args.effort
-        if args.sprint is not None:
-            kwargs["sprint"] = args.sprint
-        if args.tags is not None:
-            kwargs["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
-        if args.due is not None:
-            kwargs["due_date"] = args.due
-        if args.assignee is not None:
-            kwargs["assignee"] = args.assignee
-        if not kwargs:
-            print("No changes specified.")
-            return 1
-        card = store.update_card(args.card_id, **kwargs)
-        if card is None:
-            print(f"Card not found: {args.card_id}")
-            return 1
-        print(f"Updated: {card.short_id}  {card.title}")
-        return 0
-
-    if args.cmd == "move":
-        card = store.move_card(args.card_id, args.column)
-        if card is None:
-            print(f"Card not found: {args.card_id}")
-            return 1
-        print(f"Moved: {card.short_id}  {card.title}  ->  {card.column}")
-        return 0
-
-    if args.cmd == "block":
-        card = store.block_card(args.card_id, args.blocker_id)
-        if card is None:
-            print(f"Card not found: {args.card_id}")
-            return 1
-        print(f"Blocked: {card.short_id}  {card.title}  by {display_id(args.blocker_id)}")
-        return 0
-
-    if args.cmd == "unblock":
-        card = store.unblock_card(args.card_id, args.blocker_id)
-        if card is None:
-            print(f"Card not found: {args.card_id}")
-            return 1
-        print(f"Unblocked: {card.short_id}  {card.title}")
-        return 0
-
-    if args.cmd == "blocked":
-        cards = store.list_cards(limit=9999)
-        blocked = [c for c in cards if c.blocked_by]
-        if not blocked:
-            print("No blocked cards.")
-            return 0
-        for c in blocked:
-            blockers = ", ".join(display_id(b) for b in c.blocked_by)
-            print(f"  {c.short_id}  {c.title}  [{c.column}]  blocked by: {blockers}")
-        print(f"\n  {len(blocked)} blocked card(s)")
-        return 0
-
-    if args.cmd in ("delete", "rm"):
-        print("Deleted." if store.delete_card(args.card_id) else "Card not found.")
-        return 0
-
-    if args.cmd == "board":
-        board = store.load_board()
-        tw = shutil.get_terminal_size(fallback=(80, 24)).columns
-        print(_render_board(board, width=tw - 4))
-        return 0
-
-    if args.cmd == "note":
-        if args.note_cmd is None:
-            print("Usage: kanban note add|list|delete ...")
-            return 1
-        if args.note_cmd == "add":
-            note = store.add_note(args.card_id, args.text, author=args.author)
-            print(f"Note added: [{display_id(note.id)}]" if note else "Card not found.")
-            return 0 if note else 1
-        if args.note_cmd == "list":
-            notes = store.list_notes(args.card_id)
-            if notes is None:
-                print("Card not found.")
-                return 1
-            if not notes:
-                print("No notes on this card.")
-                return 0
-            for n in notes:
-                author_s = f"  [{n.author}]" if n.author else ""
-                print(f"  [{display_id(n.id)}]  {n.created_at[:10]}{author_s}")
-                print(f"    {n.text}")
-            return 0
-        if args.note_cmd in ("delete", "rm"):
-            print(
-                "Note deleted."
-                if store.delete_note(args.card_id, args.note_id)
-                else "Note not found."
-            )
-            return 0
-
-    if args.cmd == "columns":
-        for c in sorted(store.list_columns(), key=lambda x: x.order):
-            wip = f"  (wip: {c.wip_limit})" if c.wip_limit else ""
-            print(f"  {c.name}{wip}")
-        return 0
-
-    if args.cmd == "column-add":
-        col = store.add_column(args.name, wip_limit=args.wip)
-        print(f"Column added: {col.name}" if col else "Failed.")
-        return 0 if col else 1
-
-    if args.cmd == "column-rename":
-        print("Renamed." if store.rename_column(args.name, args.new_name) else "Column not found.")
-        return 0
-
-    if args.cmd == "column-rm":
-        print(
-            "Removed."
-            if store.remove_column(args.name, move_to=args.move_to)
-            else "Column not found."
-        )
-        return 0
-
-    if args.cmd == "archive":
-        print(f"Archived {store.archive_done()} done card(s).")
-        return 0
-
-    if args.cmd == "search":
-        results = store.search_cards(args.query, limit=args.limit)
-        if not results:
-            print(f"No cards matching '{args.query}'")
-            return 0
-        for c in results:
-            tags_s = f"  [{', '.join(c.tags)}]" if c.tags else ""
-            print(f"  {c.priority_icon} {c.short_id}  {c.title}  [{c.column}]{tags_s}")
-        print(f"\n  {len(results)} card(s)")
-        return 0
-
-    if args.cmd == "stats":
-        s = store.stats()
-        print(f"  Total cards: {s['total']}")
-        print(f"  Columns:     {s['column_count']}")
-        for name, count in s["columns"]:
-            print(f"    {name:15s}  {count:3d}  {'█' * count}")
-        print("  Priorities:")
-        for pri, count in s["priorities"]:
-            print(f"    {pri:10s}  {count}")
-        return 0
-
-    if args.cmd == "export":
-        board = store.load_board()
-        path = args.output or (store._dir / f"{board.name}_export.json")
-        path.write_text(json.dumps(board.to_dict(), indent=2, default=str))
-        print(f"Exported {len(board.cards)} cards to {path}")
-        return 0
-
-    if args.cmd == "import":
-        path = Path(args.input)
-        if not path.exists():
-            print(f"File not found: {path}")
-            return 1
-        try:
-            data = json.loads(path.read_text())
-            board = Board.from_dict(data)
-        except Exception as exc:
-            print(f"Import failed: {exc}")
-            return 1
-        store._bk.save(board, allow_wipe=True)
-        print(f"Imported {len(board.cards)} cards from {path}")
-        return 0
-
-    return 0
+    return unified_cli_main(argv)
 
 
 if __name__ == "__main__":
