@@ -90,6 +90,16 @@ class TestInit:
 # ---------------------------------------------------------------------------
 
 
+def _poll(cond, timeout: float = 5.0) -> None:
+    """Wait for an engine-spawned state change (spawn is async, not instant)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if cond():
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"condition not met within {timeout}s")
+
+
 class TestWarmup:
     def test_warmup_success(self, mock_model, mock_tokenizer):
         s = SloNetServer(mock_model, mock_tokenizer, enable_warmup=True, warmup_prompt="Hi")
@@ -110,6 +120,45 @@ class TestWarmup:
         SloNetServer(mock_model, mock_tokenizer, enable_warmup=True)
         elapsed = time.monotonic() - start
         assert elapsed < 0.1
+
+    def test_lazy_warmup_defers_without_attempt(self, mock_model, mock_tokenizer, caplog):
+        """Lazy mode must DEFER warmup, not fail it (card 20261104_071036).
+
+        At boot the parent provider is header-only by design (weights sit on
+        the preload timer), so an attempt can only raise "provider missing
+        _tokenizer/_model" and train operators to ignore a boot WRN.
+        """
+        with caplog.at_level(logging.WARNING):
+            s = SloNetServer(
+                model=None,
+                tokenizer=mock_tokenizer,
+                lazy_model_factory=lambda: mock_model,
+                enable_warmup=True,
+                warmup_prompt="Hi",
+            )
+            _poll(lambda: s._warmup_deferred)  # engine spawn is async
+        assert s._warmup_deferred is True
+        assert s.warmup_completed is False  # deferred, never claimed done
+        assert s.warmup_error is None  # and never failed
+        assert not mock_model.generate_numpy.called  # no doomed attempt
+        assert "SloNet warmup failed" not in caplog.text
+
+    def test_lazy_warmup_runs_once_triggered(self, mock_model, mock_tokenizer):
+        """The deferred warmup runs when startup's preload triggers it."""
+        s = SloNetServer(
+            model=None,
+            tokenizer=mock_tokenizer,
+            lazy_model_factory=lambda: mock_model,
+            enable_warmup=True,
+            warmup_prompt="Hi",
+        )
+        _poll(lambda: s._warmup_deferred)  # init-spawned run deferred it
+        assert not mock_model.generate_numpy.called  # still deferred
+        s.trigger_warmup()  # what _preload_parent_weights does post-materialisation
+        _poll(lambda: s.warmup_completed)
+        assert s.warmup_completed is True
+        assert s.warmup_error is None
+        assert mock_model.generate_numpy.called
 
 
 # ---------------------------------------------------------------------------

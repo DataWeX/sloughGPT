@@ -109,6 +109,9 @@ class SloNetServer:
         self._warmup_lock = threading.Lock()
         self._warmup_completed = False
         self._warmup_error: str | None = None
+        self._warmup_deferred = False  # lazy boot deferred the attempt
+        self._warmup_started = False  # single-attempt claim (run/trigger race)
+        self._warmup_pending_trigger = False  # trigger beat the init-spawned run
 
         # Lazy single-model mode: the model is materialized in this process on
         # first need (guard dead / no guard) via ``lazy_model_factory`` and
@@ -226,14 +229,25 @@ class SloNetServer:
     # Warmup
     # ------------------------------------------------------------------
 
-    def _run_warmup(self) -> None:
-        # Lazy mode + no live guard: skip warmup rather than force a parent
-        # model load at startup. The guard (if starting) warms itself up; a
-        # lazy parent load only happens as a dead-guard fallback.
-        if self._lazy_model_factory is not None and not self._use_guard():
-            with self._warmup_lock:
-                self._warmup_completed = True
-            return
+    def _run_warmup(self, forced: bool = False) -> None:
+        with self._warmup_lock:
+            if self._warmup_started:
+                return
+            if self._warmup_pending_trigger:
+                # trigger_warmup() fired before this init-spawned run
+                # executed: it is the post-preload attempt, run it forced.
+                forced = True
+                self._warmup_pending_trigger = False
+            if not forced and self._lazy_model_factory is not None:
+                # Lazy boot: the parent provider is header-only by design
+                # (weights sit on the preload timer), so an attempt now can
+                # only fail with "provider missing _tokenizer/_model" and
+                # train operators to ignore a boot WRN. Defer instead --
+                # _preload_parent_weights calls trigger_warmup() once the
+                # resident model is published (card 20261104_071036).
+                self._warmup_deferred = True
+                return
+            self._warmup_started = True
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -244,6 +258,32 @@ class SloNetServer:
             with self._warmup_lock:
                 self._warmup_error = str(e)
             logger.warning("SloNet warmup failed: %s", e)
+
+    def trigger_warmup(self) -> None:
+        """Run the warmup deferred at boot (post-materialisation hook).
+
+        Called by _preload_parent_weights once the resident model is
+        published: at boot the provider is header-only, so the attempt was
+        deferred rather than attempted-and-failed (card 20261104_071036).
+        Idempotent -- a second call, or a server that deferred nothing, is
+        a no-op.
+        """
+        with self._warmup_lock:
+            if self._warmup_started:
+                return
+            if self._warmup_deferred:
+                self._warmup_deferred = False
+                fire = True
+            else:
+                # The init-spawned run may not have executed yet (spawn is
+                # async): mark pending so it performs the attempt when it
+                # does, instead of the trigger being dropped.
+                self._warmup_pending_trigger = True
+                fire = False
+        if fire:
+            from .pugqeep.singleton import get_engine
+
+            get_engine().spawn(self._run_warmup, True, name="slonet-warmup-triggered")
 
     @property
     def warmup_completed(self) -> bool:

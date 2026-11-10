@@ -1492,6 +1492,21 @@ def _preload_parent_weights(model_type: str) -> bool:
             logger.debug(
                 "Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"}
             )
+
+        # Wake the warmup the lazy boot deferred (card 20261104_071036):
+        # weights are resident now, so the cache-warm attempt can succeed.
+        # Fail-open -- a cache warmup must never fail the preload.
+        if model is not None:
+            try:
+                trigger = getattr(getattr(provider, "_server", None), "trigger_warmup", None)
+                if callable(trigger):
+                    trigger()
+            except Exception as exc:
+                logger.debug(
+                    "Parent preload: warmup trigger failed (non-fatal): %s",
+                    exc,
+                    extra={"tag": "START"},
+                )
         return model is not None
     except Exception as e:
         logger.debug(

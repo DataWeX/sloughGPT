@@ -1115,6 +1115,52 @@ class TestTryLazyGuardAutoload:
         assert state.model is provider._model
         core.model.set.assert_called_once_with(provider._model)
 
+    def test_preload_triggers_deferred_warmup(self):
+        """After materialisation, preload wakes the warmup deferred at boot."""
+        mod = self._import()
+        self._reset_preload_state(mod)
+
+        class _FakeProvider:
+            def __init__(self):
+                self._model = None
+
+            def materialize_model(self):
+                self._model = object()
+                return self._model
+
+        provider = _FakeProvider()
+        provider._server = MagicMock()
+        state = types.SimpleNamespace(model=None, provider=provider)
+        core = MagicMock()
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("domain.infrastructure.server_state.get_server_state", return_value=core),
+        ):
+            assert mod._preload_parent_weights("gpt2") is True
+        provider._server.trigger_warmup.assert_called_once()
+
+    def test_preload_without_server_skips_warmup_trigger(self):
+        """A provider with no attached server must not raise on the trigger."""
+        mod = self._import()
+        self._reset_preload_state(mod)
+
+        class _BareProvider:
+            def __init__(self):
+                self._model = None
+
+            def materialize_model(self):
+                self._model = object()
+                return self._model
+
+        provider = _BareProvider()
+        state = types.SimpleNamespace(model=None, provider=provider)
+        core = MagicMock()
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("domain.infrastructure.server_state.get_server_state", return_value=core),
+        ):
+            assert mod._preload_parent_weights("gpt2") is True
+
     def test_preload_without_provider_returns_false(self):
         mod = self._import()
         self._reset_preload_state(mod)
