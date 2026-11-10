@@ -26,13 +26,14 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
+from infrastructure.contract import REGISTRY, RouteEntry
 from infrastructure.sse_fallback import sse_error, sse_event, sse_token
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents import get_agent_system, get_tool_registry
+from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
 from domain.cognition import get_rag_service
 from domain.feedback import get_response_tracker
 from domain.infrastructure import AppError
@@ -336,6 +337,27 @@ class BranchSessionRequest(BaseModel):
 
     from_index: int
     name: str | None = Field(None, max_length=200)
+
+
+class SessionModel(BaseModel):
+    """One row of GET /chat/sessions — the session-metadata index contract.
+
+    Single source of truth for the wire shape of a session row: the
+    ``chat.sessions.list`` descriptor's ``result`` schema and the generated TS
+    ``SessionMeta`` interface both derive from this model
+    (``scripts/gen_ts_contracts.py``). Mirrors
+    ``InferenceRouter._build_session_metadata_index`` output — exactly these
+    five keys, always present. ``extra="allow"`` so indexed rows may grow
+    without breaking consumers.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+    message_count: int
 
 
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
@@ -1161,7 +1183,7 @@ class InferenceRouter:
                         {
                             "id": sid,
                             "name": name,
-                            "created_at": data.get("created_at", ""),
+                            "created_at": data.get("created_at") or "",
                             "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
                             "message_count": msg_count,
                         }
@@ -2922,6 +2944,56 @@ class InferenceRouter:
 
 _instance = InferenceRouter()
 router = _instance.router
+
+
+# ── Descriptor for GET /chat/sessions ───────────────────────────────────────
+# The route above is grandfathered (hand-built, counted in the hand-built
+# baseline); this descriptor is its contract declaration — the single source of
+# truth for the session-metadata index wire shape. The frontend derives its
+# ``Conversation``/``SessionMeta`` types from the generated artifact of this
+# descriptor (scripts/gen_ts_contracts.py), not from hand-written interfaces.
+
+SESSIONS_SPEC = ToolSpec(
+    name="chat.sessions.list",
+    description=(
+        "Session-metadata index for the chat sidebar: one row per session with "
+        "id/name/timestamps/message_count (SessionModel wire shape)."
+    ),
+    parameters=[
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Include archived sessions (default excludes them)",
+        ),
+    ],
+    execute=_instance.list_sessions,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={"type": "array", "items": SessionModel.model_json_schema()},
+    version="1",
+)
+
+
+def _register_sessions_spec(spec: ToolSpec, method: str, path: str) -> None:
+    operation_id = REGISTRY.claim_operation_id(f"{spec.name}.{method.lower()}", method, path)
+    REGISTRY.register(
+        RouteEntry(
+            name=spec.name,
+            version=spec.version,
+            auth_scope=spec.auth_scope,
+            idempotent=spec.idempotent,
+            description=spec.description,
+            method=method,
+            path=path,
+            operation_id=operation_id,
+            module=__name__,
+            params=spec.params,
+            result=spec.result,
+        )
+    )
+
+
+_register_sessions_spec(SESSIONS_SPEC, "GET", "/chat/sessions")
 
 
 class _GenerationEngine:

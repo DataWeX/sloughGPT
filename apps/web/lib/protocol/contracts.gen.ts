@@ -29,6 +29,65 @@ export interface ContractDescriptor {
 }
 
 export const CONTRACTS = {
+  "chat.sessions.list": {
+    "auth_scope": "authenticated",
+    "description": "Session-metadata index for the chat sidebar: one row per session with id/name/timestamps/message_count (SessionModel wire shape).",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.inference",
+    "name": "chat.sessions.list",
+    "operation_id": "chat.sessions.list.get",
+    "params": {
+      "properties": {
+        "archived": {
+          "description": "Include archived sessions (default excludes them)",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "path": "/chat/sessions",
+    "result": {
+      "items": {
+        "additionalProperties": true,
+        "description": "One row of GET /chat/sessions \u2014 the session-metadata index contract.\n\nSingle source of truth for the wire shape of a session row: the\n``chat.sessions.list`` descriptor's ``result`` schema and the generated TS\n``SessionMeta`` interface both derive from this model\n(``scripts/gen_ts_contracts.py``). Mirrors\n``InferenceRouter._build_session_metadata_index`` output \u2014 exactly these\nfive keys, always present. ``extra=\"allow\"`` so indexed rows may grow\nwithout breaking consumers.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message_count": {
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at",
+          "message_count"
+        ],
+        "title": "SessionModel",
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "version": "1"
+  },
   "consciousness.personality_history": {
     "auth_scope": "authenticated",
     "description": "Personality evolution history derived from episodes (voice and trait trends).",
@@ -252,4 +311,17 @@ export interface ProcessEvent {
   contract_version: number
   name?: string
   reason?: string
+}
+
+// ── Session-metadata contract — projection of
+// routers/inference.py SessionModel. One declaration, one interface:
+// edit the Pydantic model, then regenerate — never edit here.
+
+/** One row of GET /chat/sessions — exactly the `SessionModel` wire shape. */
+export interface SessionMeta {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+  message_count: number
 }
