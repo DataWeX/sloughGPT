@@ -29,6 +29,9 @@ describe('POST /api/planner/transition', () => {
     expect(proxyRequest).toHaveBeenCalledWith('/api/board/transition', {
       method: 'POST',
       body: JSON.stringify(payload),
+      // first-party relay marker the route must set for proxyRequest
+      // (card 20261108_142919)
+      headers: { 'x-slo-relay': '1' },
     })
     expect(res).toBe(expected)
   })

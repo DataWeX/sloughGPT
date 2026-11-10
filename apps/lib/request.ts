@@ -103,6 +103,7 @@ export async function request<T>(
           headers: finalConfig.headers,
           body: fetchBody,
           signal,
+          keepalive: opts?.keepalive,
         })
         if (!originalRes.ok || !originalRes.body) {
           res = originalRes
@@ -145,6 +146,7 @@ export async function request<T>(
           headers: finalConfig.headers,
           body: fetchBody,
           signal,
+          keepalive: opts?.keepalive,
         })
       }
 
