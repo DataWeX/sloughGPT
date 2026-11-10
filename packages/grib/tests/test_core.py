@@ -209,3 +209,37 @@ class TestCLINotes:
         code, out = _run(tmp_path, "sync")
         assert code == 0
         assert "1 new card" in out
+
+    def test_show_displays_single_note_fields(self, tmp_path):
+        """`note show <id>` renders one note's fields — the read side of the
+        card-closure journey (handler was uncovered, F5)."""
+        _new(tmp_path, "Visible", "--tags", "t1", "--status", "wip", "--body", "hello body")
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        note = store.list_notes()[0]
+        code, out = _run(tmp_path, "note", "show", note.id)
+        assert code == 0
+        assert "Title:   Visible" in out
+        assert "Status:  wip" in out
+        assert "hello body" in out
+
+    def test_update_changes_status(self, tmp_path):
+        """`note update <id> --status done` is the card-closure command every
+        session runs (note-first: update → board move → sync; F5)."""
+        _new(tmp_path, "Close me", "--status", "wip")
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        note = store.list_notes()[0]
+        code, out = _run(tmp_path, "note", "update", note.id, "--status", "done")
+        assert code == 0
+        assert "Updated" in out
+        # fresh instance: no stale in-memory read after the CLI mutated on disk
+        reread = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path).list_notes()[0]
+        assert reread.status == "done"
+
+    def test_search_matches_title_and_body(self, tmp_path):
+        _new(tmp_path, "Alpha engine", "--body", "spinny bits")
+        _new(tmp_path, "Unrelated", "--body", "nothing here")
+        code, out = _run(tmp_path, "note", "search", "spinny")
+        assert code == 0
+        assert "Alpha engine" in out
+        assert "Unrelated" not in out
+        assert "1 result(s)" in out

@@ -57,6 +57,24 @@ def test_export_manifest_tracks_board(tmp_path):
     assert manifest["source"] == str(board_dir)
 
 
+def test_manifest_card_count_excludes_schema_header(tmp_path):
+    """card_count counts cards, not lines — the planner/1 schema header
+    is not a card (observed 2026-11-09: 174 reported vs 173 real;
+    informational only — the freshness gate keys on board_sha256)."""
+    board_dir, notes_dir = _canonical(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    result = export(repo, board_dir=board_dir, notes_dir=notes_dir)
+
+    raw_lines = [l for l in (board_dir / "board.jsonl").read_text().splitlines() if l.strip()]
+    assert len(raw_lines) == 2  # fixture: schema header + exactly 1 card
+    assert json.loads(raw_lines[0])["schema"] == "planner/1"
+    assert result["card_count"] == 1
+    manifest = json.loads(Path(result["manifest"]).read_text())
+    assert manifest["card_count"] == 1
+
+
 def test_export_prunes_stale_repo_notes_but_keeps_legacy(tmp_path):
     board_dir, notes_dir = _canonical(tmp_path)
     repo = tmp_path / "repo"
@@ -280,3 +298,35 @@ def test_export_non_done_conflict_still_canonical_wins(tmp_path):
     export(repo, board_dir=board_dir, notes_dir=notes_dir)
 
     assert _dest_cards(repo)[card_id].column == "todo"
+
+
+def test_cli_export_handler_reports_counts(tmp_path):
+    """`python -m grib.cli export --repo ...` is the producer pipeline's own
+    call (scripts/kanban_sync.sh:88) — the handler must report real counts
+    (schema header excluded since the F6 fix; F5)."""
+    import contextlib
+    import io
+
+    from grib.cli import main as cli_main
+
+    board_dir, notes_dir = _canonical(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = cli_main(
+            [
+                "--board-dir",
+                str(board_dir),
+                "--notes-dir",
+                str(notes_dir),
+                "export",
+                "--repo",
+                str(repo),
+            ]
+        )
+    out = buf.getvalue()
+    assert code == 0
+    assert "export: 1 cards" in out  # 1 real card — header excluded (F6)
+    assert (repo / ".kanban" / "manifest.json").is_file()

@@ -199,7 +199,19 @@ def export(
             stale.unlink()
             notes_removed += 1
 
-    card_count = sum(1 for line in board_bytes.splitlines() if line.strip())
+    # Count cards, not lines: the planner/1 schema header (and any other
+    # non-card line) is not a card — observed 2026-11-09 as 174 reported
+    # vs 173 real (card 20261109_112817, F6).
+    card_count = 0
+    for line in board_bytes.splitlines():
+        if not line.strip():
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("id"):
+            card_count += 1
     manifest = {
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "note_count": len(canonical_notes),

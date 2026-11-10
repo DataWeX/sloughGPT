@@ -285,6 +285,19 @@ class TestCLI:
         assert code == 0
         assert "usage:" in out
 
+    def test_board_index_then_query_filters(self, tmp_path):
+        """`board index` rebuilds the read-only query index; `board query`
+        filters through it (both CLI handlers were uncovered, F5 — the
+        index class itself is tested in test_board_index.py)."""
+        _add(tmp_path, "Indexed Task", "--column", "todo")
+        code, out = _run(tmp_path, "board", "index")
+        assert code == 0
+        assert "Indexed 1" in out
+        code, out = _run(tmp_path, "board", "query", "--column", "todo")
+        assert code == 0
+        assert "Indexed Task" in out
+        assert "1 card(s)" in out
+
 
 # ── Column vocabulary ──────────────────────────────────────────────────────
 
