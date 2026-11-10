@@ -172,5 +172,92 @@
       "system": "current vs 2\u00d7: construct_ms +71.9% | run_ms +0.1% | footprint +4.00 MiB (expected +4)"
     },
     "checks_ok": true
+  },
+  {
+    "ts": "2026-11-09T11:56:19+01:00",
+    "git": "172fb4ebb",
+    "repeat": 20,
+    "construct_repeat": 5,
+    "cpu": [
+      {
+        "size": 524288,
+        "construct_ms": 0.6388,
+        "footprint_b": 525913,
+        "alu_ms": 8.865,
+        "alu_steps": 2001,
+        "mem_ms": 5.5167,
+        "mem_steps": 1001
+      },
+      {
+        "size": 1048576,
+        "construct_ms": 1.3906,
+        "footprint_b": 1050193,
+        "alu_ms": 8.9626,
+        "alu_steps": 2001,
+        "mem_ms": 5.5031,
+        "mem_steps": 1001
+      },
+      {
+        "size": 2097152,
+        "construct_ms": 2.8267,
+        "footprint_b": 2098769,
+        "alu_ms": 8.9063,
+        "alu_steps": 2001,
+        "mem_ms": 5.5164,
+        "mem_steps": 1001
+      },
+      {
+        "size": 4194304,
+        "construct_ms": 5.8866,
+        "footprint_b": 4195921,
+        "alu_ms": 8.9511,
+        "alu_steps": 2001,
+        "mem_ms": 5.4299,
+        "mem_steps": 1001
+      }
+    ],
+    "system": [
+      {
+        "size": 2097152,
+        "construct_ms": 2.0373,
+        "footprint_b": 2256595,
+        "spawn_ok": true,
+        "spawn_ms": 0.1163,
+        "run_ms": 8.9054,
+        "steps": 2001
+      },
+      {
+        "size": 4194304,
+        "construct_ms": 1.0839,
+        "footprint_b": 4351587,
+        "spawn_ok": true,
+        "spawn_ms": 0.1176,
+        "run_ms": 9.0152,
+        "steps": 2001
+      },
+      {
+        "size": 8388608,
+        "construct_ms": 1.7505,
+        "footprint_b": 8546019,
+        "spawn_ok": true,
+        "spawn_ms": 0.1229,
+        "run_ms": 8.9947,
+        "steps": 2001
+      },
+      {
+        "size": 16777216,
+        "construct_ms": 3.7505,
+        "footprint_b": 16934883,
+        "spawn_ok": true,
+        "spawn_ms": 0.1213,
+        "run_ms": 8.9425,
+        "steps": 2001
+      }
+    ],
+    "delta": {
+      "cpu": "current vs 2\u00d7: construct_ms +103.3% | alu_ms -0.6% | mem_ms +0.2% | footprint +1.00 MiB (expected +1)",
+      "system": "current vs 2\u00d7: construct_ms +61.5% | run_ms -0.2% | footprint +4.00 MiB (expected +4)"
+    },
+    "checks_ok": true
   }
 ]
