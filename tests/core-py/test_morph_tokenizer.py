@@ -360,13 +360,24 @@ class TestBPEMergeComplexity:
         tok.encode(small)  # warm numba / flatten weights
         tok.encode(large)
 
-        t0 = time.perf_counter()
-        tok.encode(small)
-        t_small = time.perf_counter() - t0
+        def best(fn, reps=3):
+            """Minimum of ``reps`` runs, not a single shot.
 
-        t0 = time.perf_counter()
-        tok.encode(large)
-        t_large = time.perf_counter() - t0
+            A lone scheduler stall must not decide this gate: one run taken
+            while four concurrent vitest workers pushed load to 10 inflated
+            the 1500-char sample enough to breach the threshold, while 6 of 7
+            runs passed and every run passes on an idle box. Min-statistics
+            discard stalls; the ratio threshold below is unchanged.
+            """
+            times = []
+            for _ in range(reps):
+                t0 = time.perf_counter()
+                fn()
+                times.append(time.perf_counter() - t0)
+            return min(times)
+
+        t_small = best(lambda: tok.encode(small))
+        t_large = best(lambda: tok.encode(large))
 
         ratio = t_large / max(t_small, 1e-9)
         assert ratio < 8, (
