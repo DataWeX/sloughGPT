@@ -125,3 +125,28 @@ def test_python_dash_m_planner_imports() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)  # top-level import must not raise
     assert callable(module.main)
+
+
+def test_python_dash_m_grib_runs_help() -> None:
+    """`python -m grib --help` must run the repo's CLI, not ImportError.
+
+    Like the planner test above, the subprocess gets the repo's own source
+    first on PYTHONPATH — this gate tests what the repo declares, not what
+    happens to be installed (F5).
+    """
+    import os
+    import subprocess
+
+    repo_src = str(REPO / "packages" / "grib" / "src")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = repo_src + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.run(
+        [sys.executable, "-m", "grib", "--help"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "usage:" in proc.stdout
+    assert "board" in proc.stdout

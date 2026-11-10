@@ -53,3 +53,25 @@ def test_snapshot_distinct_stamps_same_run(tmp_path):
     expected = (board_dir / "board.jsonl").read_bytes()
     assert first.read_bytes() == expected
     assert second.read_bytes() == expected
+
+
+def test_cli_snapshot_handler_prints_path(tmp_path):
+    """The `snapshot` CLI handler wraps snapshot() for operators: it reports
+    the copied path and suggests the git command but never runs git (F5)."""
+    import contextlib
+    import io
+
+    from grib.cli import main as cli_main
+
+    board_dir = _canonical_board(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = cli_main(["--board-dir", str(board_dir), "snapshot", "--repo", str(repo)])
+    out = buf.getvalue()
+    assert code == 0
+    assert "snapshot:" in out
+    assert str(repo / ".kanban" / "snapshots") in out
+    assert "git add" in out  # suggested, never executed
