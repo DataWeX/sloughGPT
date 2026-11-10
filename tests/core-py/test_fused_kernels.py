@@ -7,6 +7,7 @@ to machine precision.
 """
 
 import numpy as np
+import pytest
 
 
 class TestFusedLayerNorm:
@@ -842,3 +843,95 @@ class TestFusedAttentionExpanded:
         slonet_mod._KERNELS_AVAILABLE = True
         diff = np.abs(out_single - out_einsum).max()
         assert diff < 1e-5
+
+
+class TestFusedAttentionMultiBLASPath:
+    """The prefill einsum must ask for optimize=True (BLAS dispatch).
+
+    Why this assertion and not a stopwatch: np.einsum defaults to
+    optimize=False, which takes a generic contraction loop instead of
+    dispatching to BLAS. Measured at Qwen2.5-0.5B prefill shapes
+    (H=14, kv=2, E=128), arms interleaved per repetition with min-of-7,
+    run twice for consistency, box at load ~2:
+
+        seq   generic     BLAS       ratio
+        256    93.98ms    27.33ms     3.44x
+        512   395.29ms   105.63ms     3.74x
+        681   683.07ms   132.90ms     5.14x
+       1024  1679.10ms   286.30ms     5.86x
+       2048  7130.77ms  1231.26ms     5.79x
+
+    ...with allclose True at every size (rtol=1e-5, atol=1e-6). Attention is
+    10.8s of a 22.0s profiled prefill (49%), so this is the largest single
+    lever on /chat time-to-first-token.
+
+    An earlier pass of this same measurement recorded 8.4-11.6x at these
+    sizes; that figure did NOT reproduce on a re-run (two methods, sequential
+    and interleaved, agreed on 3.4-5.9x). Quote the reproduced range -- the
+    absolute times move with CPU state and load, and the ratio moves with them.
+
+    A timing assertion here would be a flake generator: the same shape read
+    1.18x while another session's test suite ran and 8.05x once the box was
+    idle. So this pins WHICH PATH IS REQUESTED -- deterministic, no clock --
+    and the performance number lives in scripts/benchmark_slonet.py instead.
+    """
+
+    def test_prefill_attention_requests_the_blas_path(self, monkeypatch):
+        from domain.training._internal.slonet_kernels import fused_attention_multi
+
+        seen: list[bool] = []
+        real_einsum = np.einsum
+
+        def spy(*args, **kwargs):
+            seen.append(bool(kwargs.get("optimize", False)))
+            return real_einsum(*args, **kwargs)
+
+        monkeypatch.setattr(np, "einsum", spy)
+
+        H, E_head, seq = 4, 16, 32
+        rng = np.random.default_rng(42)
+        q = rng.standard_normal((seq, H, E_head), dtype=np.float32)
+        k = rng.standard_normal((2, seq, E_head), dtype=np.float32)
+        v = rng.standard_normal((2, seq, E_head), dtype=np.float32)
+
+        out = fused_attention_multi(q, k, v, np.float32(0.25), H, E_head)
+
+        if not seen:
+            # numba kernel took the call (SLO_USE_NUMBA=1) — no einsum here.
+            pytest.skip("numba attention kernel active; einsum path not exercised")
+
+        assert all(seen), (
+            "prefill attention is on einsum's generic contraction path "
+            f"(optimize defaults per call: {seen}); pass optimize=True to "
+            "dispatch to BLAS — measured 3.4-5.9x faster at prefill sizes "
+            "with identical output"
+        )
+        assert out.shape == (seq, H, E_head)
+        assert np.all(np.isfinite(out))
+
+    def test_prefill_output_still_matches_the_generic_path(self):
+        """optimize=True must not change the numbers — pin it directly."""
+        from domain.training._internal.slonet_kernels import fused_attention_multi
+
+        H, E_head, seq, K_H = 4, 16, 24, 2
+        rng = np.random.default_rng(7)
+        q = rng.standard_normal((seq, H, E_head), dtype=np.float32)
+        k = rng.standard_normal((K_H, seq, E_head), dtype=np.float32)
+        v = rng.standard_normal((K_H, seq, E_head), dtype=np.float32)
+        scale = np.float32(1.0 / np.sqrt(E_head))
+        reps = H // K_H
+        kx, vx = k[np.arange(H) // reps], v[np.arange(H) // reps]
+
+        # Reference: einsum WITHOUT optimize + the causal mask — exactly what
+        # the pre-change fallback computes, chunk for chunk.
+        scores = np.einsum("she,hne->hsn", q, kx, optimize=False) * scale
+        cols = np.arange(seq, dtype=np.int64)[None, :]
+        rows = np.arange(seq, dtype=np.int64)[:, None]
+        scores = scores + np.where(cols > rows, np.float32(-1e9), np.float32(0.0))
+        attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+        attn = attn / attn.sum(axis=-1, keepdims=True)
+        expected = np.einsum("hsn,hne->she", attn, vx, optimize=False)
+
+        got = fused_attention_multi(q, k, v, scale, H, E_head)
+        diff = np.abs(got - expected).max()
+        assert diff < 1e-4, f"BLAS path diverged from generic path: {diff}"
