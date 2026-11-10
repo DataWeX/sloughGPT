@@ -433,6 +433,10 @@ class _JSONBackend:
         allow_wipe: bool = False,
     ) -> None:
         self._planner._occ(lambda: self._attempt_save(board, baseline, allow_wipe))
+        # Seal-at-write (card 20261109_112756): any changed line invalidates
+        # the chain — re-chain here so the GUI write path leaves
+        # verify_chain() intact instead of waiting for a lucky `grib sync`.
+        self._planner.compute_chains()
 
     def _attempt_save(
         self,
