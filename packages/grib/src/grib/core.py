@@ -14,9 +14,9 @@ Usage as a module::
 
 Usage as a CLI::
 
-    grib new "Fix kernel boot" --tags kernel,bugfix --status done
-    grib list
-    grib search kernel
+    grib note new "Fix kernel boot" --tags kernel,bugfix --status done
+    grib note list
+    grib note search kernel
 """
 
 from __future__ import annotations

@@ -6,9 +6,9 @@ default. Pure Python stdlib: no external dependencies, no servers.
 
 ## Philosophy
 
-- **One CLI.** Notes and kanban share one command tree under `grib.cli`.
-  `planner`, `notes`, `kanban`, and `sync-notes-to-board` all resolve to the
-  same entry point.
+- **One CLI.** Notes and kanban share one command tree under `grib.cli`;
+  `grib` is the single entry point, with `notes`/`kanban` as aliases of the
+  `note`/`board` subcommands.
 - **One source of truth.** Data locations, storage backend, and the
   status <-> column mapping live in `grib/config.py`, not scattered across
   commands. Every tool reads the same answer.
@@ -20,34 +20,38 @@ default. Pure Python stdlib: no external dependencies, no servers.
   plain `file`. `GRIB_BACKEND` overrides when set.
 - **Status and column are the same fact.** Notes store a status; cards live in
   a column. `sync` reconciles both directions — missing cards are created and
-  out-of-step cards are moved. Use `--no-sync` to skip auto-sync on mutations.
+  out-of-step cards are moved.
 
 ## Install
 
 ```bash
-pip install -e packages/grib        # editable, console scripts auto-installed
+# grib + the planner engine it imports (grib board/gui validation runs
+# through planner.engine). Install planner explicitly — never add it as a
+# grib pyproject dependency: the PyPI name `planner` is an unrelated
+# package.
+pip install -e packages/grib -e packages/planner
 ```
 
 ## Quick start
 
 ```bash
 # Notes
-grib new "Fix boot order" --tags kernel,os --status wip
-grib list --today
-grib show <short-id>
-grib edit <short-id> --status done --body "Completed: ..."
-grib search "keyword"
+grib note new "Fix boot order" --tags kernel,os --status wip
+grib note list
+grib note show <short-id>
+grib note update <short-id> --status done --body "Completed: ..."
+grib note search "keyword"
 
 # Kanban
-grib board                          # ASCII board, grouped by column
-grib add "Ship v2.0" --column wip --tags release
-grib move <card-id> done
+grib board show                      # ASCII board, grouped by column
+grib board add "Ship v2.0" --column wip --tags release
+grib board move <card-id> done
 
 # Sync notes to board explicitly
 grib sync
 
 # Three-way diff: note frontmatter (status/board/landed) <-> board card <-> git
-grib verify card092 --repo /path/to/repo   # exit 1 on any drift
+grib verify <note> --repo /path/to/repo   # exit 1 on any drift
 
 # Local web UI (stdlib HTTP server, embedded SPA)
 grib gui
@@ -55,50 +59,34 @@ grib gui
 
 ## Commands
 
-| Command                     | Purpose                                                                           |
-| --------------------------- | --------------------------------------------------------------------------------- |
-| `new`                       | Create a note                                                                     |
-| `list`                      | List notes                                                                        |
-| `show <id>`                 | Show a note                                                                       |
-| `edit <id>`                 | Edit a note                                                                       |
-| `delete` / `rm`             | Delete a note                                                                     |
-| `search <query>`            | Search notes                                                                      |
-| `today`                     | Show today's notes                                                                |
-| `export`                    | Export all notes                                                                  |
-| `tags`                      | List all tags                                                                     |
-| `status`                    | Status summary                                                                    |
-| `timeline`                  | Show notes grouped by day                                                         |
-| `sprint <name>`             | Sprint operations                                                                 |
-| `init`                      | Initialize a new board                                                            |
-| `add`                       | Add a card                                                                        |
-| `cards`                     | List cards                                                                        |
-| `card <id>`                 | Show card details                                                                 |
-| `edit-card <id>`            | Edit a card                                                                       |
-| `move <id> <column>`        | Move card to another column                                                       |
-| `block <card> <blocker>`    | Block a card by another card                                                      |
-| `unblock <card> <blocker>`  | Unblock a card                                                                    |
-| `blocked`                   | List blocked cards                                                                |
-| `delete-card` / `rm-card`   | Delete a card                                                                     |
-| `board`                     | Show ASCII kanban board                                                           |
-| `note add <card> <text>`    | Add note to a card                                                                |
-| `note list <card>`          | List notes on a card                                                              |
-| `note delete <card> <id>`   | Delete note from a card                                                           |
-| `columns`                   | List columns                                                                      |
-| `column-add <name>`         | Add a column                                                                      |
-| `column-rename <old> <new>` | Rename a column                                                                   |
-| `column-rm <name>`          | Remove a column                                                                   |
-| `archive`                   | Archive (delete) all done cards                                                   |
-| `search-cards <query>`      | Search cards                                                                      |
-| `stats`                     | Board statistics                                                                  |
-| `verify <note>`             | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift) |
-| `export-board`              | Export board to JSON                                                              |
-| `import-board <file>`       | Import board from JSON                                                            |
-| `sync`                      | Sync notes to board                                                               |
-| `gui`                       | Launch web GUI                                                                    |
+| Command                               | Purpose                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| `note new <title>`                    | Create a note (`--tags`, `--status`, `--body`, `--sprint`, `--gh`)              |
+| `note list`                           | List notes (`--tag`, `--status`, `--limit`)                                     |
+| `note show <id>`                      | Show a note                                                                    |
+| `note update <id>`                    | Update a note (`--title`, `--status`, `--tags`, `--body`)                       |
+| `note delete <id>`                    | Delete a note (alias `rm`)                                                     |
+| `note search <query>`                 | Search notes                                                                   |
+| `board show`                          | Show the ASCII board; `board show <id>` shows one card                          |
+| `board add <title>`                   | Add a card (`--column`, `--priority`, `--description`, `--tags`)                |
+| `board move <id> <column>`            | Move card to another column                                                    |
+| `board delete <id>`                   | Delete a card (alias `rm`)                                                     |
+| `board tags`                          | List tags                                                                      |
+| `board stats`                         | Board statistics                                                               |
+| `board index`                         | Rebuild the read-only MogDB query index                                        |
+| `board query`                         | Filter cards via the index (file fallback)                                     |
+| `sync`                                | Sync notes to board                                                            |
+| `verify <note>`                       | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift) |
+| `migrate`                             | Import repo-local `.kanban`/`.dev-notes` into the canonical store              |
+| `snapshot`                            | Copy the canonical board into `<repo>/.kanban/snapshots/`                       |
+| `export`                              | Mirror canonical board + notes into the repo checkout                          |
+| `gui`                                 | Launch the web GUI (`--backend {file,mogdb}`, `--port`)                         |
 
-Global options: `--backend {file,mogdb}`, `--notes-dir`, `--board-dir`, `--no-sync`
+Aliases: `notes` → `note`, `kanban` → `board`.
 
-Environment: `GRIB_NOTES_DIR`, `GRIB_BOARD_DIR`, `GRIB_BACKEND`, `GRIB_NO_SYNC` (set to any value to disable auto-sync)
+Global options: `--notes-dir`, `--board-dir` (`--backend {file,mogdb}` belongs to `gui`)
+
+Environment: `GRIB_NOTES_DIR`, `GRIB_BOARD_DIR`, `GRIB_BACKEND`
 
 ## Configuration
 
