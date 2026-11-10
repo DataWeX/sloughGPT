@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "c1a8edf11f359863bc0672cf72dc942805dca606",
+    "recorded_commit": "3975fc459c1df978ad5066ae2998bd5f81cd870e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "8152f9cde04867c56262ba438d06e8c35b656d8a"
+      "tree_hash": "83da8e0e32d650a7a36993a39a53c3917e8df85a"
     },
     "voice": {
       "class": "core-capability",
