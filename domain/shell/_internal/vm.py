@@ -4212,10 +4212,39 @@ class X86Assembler:
         elif inner.startswith("db ") or inner.startswith("dw ") or inner.startswith("dd "):
             for _ in range(count):
                 self._emit_data(inner)
-        else:
+        elif self._is_times_value(inner):
             val = self._parse_imm(inner)
             for _ in range(count):
                 self._output.append(val & 0xFF)
+        else:
+            # Operand-bearing instruction: assemble once, repeat its bytes
+            # (nasm "times" semantics). The old path passed the whole operand
+            # string to _parse_imm, which silently returned 0 -- "times 5
+            # mov eax,42" emitted 0000000000 instead of the instruction x5
+            # (card 20261108_143743).
+            if count <= 0:
+                return
+            before = len(self._output)
+            self._emit_instruction(inner)
+            chunk = bytes(self._output[before:])
+            for _ in range(count - 1):
+                self._output.extend(chunk)
+
+    def _is_times_value(self, inner):
+        """True when a "times" operand is a raw byte value, not an instruction.
+
+        Value forms: integer/char literals, arithmetic expressions, "$", and
+        label/const references ("times 4 PAD") -- everything _parse_imm
+        already understands. An identifier that is NOT a label/const is a
+        mnemonic: assemble it instead of repeating a byte value.
+        """
+        parts = inner.split(None, 1)
+        first = parts[0] if parts else ""
+        if not first or not (first[0].isalpha() or first[0] == "_"):
+            return True  # literal / expression / $ / quote -> value form
+        if first in self._labels:
+            return True
+        return any(k.lower() == first.lower() for k in self._labels)
 
     def _emit_data(self, line):
         if line.startswith("db"):

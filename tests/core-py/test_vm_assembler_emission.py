@@ -613,6 +613,26 @@ def test_times():
     assert _hex("times 0 nop") == ""
 
 
+def test_times_operand_instruction():
+    """`times N <insn-with-operands>` repeats the instruction's real bytes.
+
+    The old else-branch fed the whole operand string to _parse_imm, which
+    silently returned 0 -- `times 5 mov eax,42` emitted 0000000000 instead
+    of the instruction x5 (card 20261108_143743; worst case: a swallowed
+    0xF4 hlt consumed as ModRM, execution runs off into zeros).
+    """
+    # mov r32, imm32 -> B8+rd id (5 bytes)
+    assert _hex("times 5 mov eax,42", 32) == "b82a000000" * 5
+    # push r32 -> single byte 50
+    assert _hex("times 5 push eax", 32) == "50" * 5
+    # alu r32, imm8 -> 83 /0 ib (3 bytes; add eax,1 -> 83 C0 01)
+    assert _hex("times 5 add eax,1", 32) == "83c001" * 5
+    # displacement/memory operand -> ModRM + disp8 (8B 43 08)
+    assert _hex("times 3 mov eax,[ebx+8]", 32) == "8b4308" * 3
+    # count 0 must emit nothing (the assemble-once path must not leak one copy)
+    assert _hex("times 0 mov eax,42", 32) == ""
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Directives and immediate parsing
 # ══════════════════════════════════════════════════════════════════════════════
