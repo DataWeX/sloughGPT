@@ -186,3 +186,97 @@ def test_export_union_is_idempotent(tmp_path):
     second = (repo / ".kanban" / "board.jsonl").read_bytes()
 
     assert first == second
+
+
+def test_export_repo_side_close_survives_when_newer(tmp_path):
+    """Incident 2026-10-31 (0566d9f7f): a card closed repo-side with a
+    newer ``updated_at`` was silently reverted todo by the canonical-wins
+    union. A column conflict involving ``done`` resolves by recency — the
+    newer side wins — so the close survives, canonical still owns the
+    content, and the result stays stable across exports."""
+    board_dir, notes_dir = _canonical(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    export(repo, board_dir=board_dir, notes_dir=notes_dir)
+
+    # canonical keeps the old todo state...
+    canon = PlannerStore(board_dir=board_dir, notes_dir=notes_dir)
+    canon_board = canon.load_board()
+    card_id = canon_board.cards[0].id
+    canon_board.cards[0].updated_at = "2026-01-01T00:00:00+00:00"
+    canon.save_board(canon_board)
+
+    # ...while the repo copy closes the card later (bumped, as move_card does)
+    dest = _dest_store(repo)
+    dest_board = dest.load_board()
+    dest_board.cards[0].column = "done"
+    dest_board.cards[0].rev += 1
+    dest_board.cards[0].updated_at = "2026-01-02T00:00:00+00:00"
+    dest.save_board(dest_board)
+
+    export(repo, board_dir=board_dir, notes_dir=notes_dir)
+    card = _dest_cards(repo)[card_id]
+    assert card.column == "done", "repo-side close must survive the union"
+    assert card.title == "sync me", "content stays canonical's even when the column loses"
+
+    # stability: the merged card must carry the winning recency, or the
+    # next export sees a tie and flips the close back
+    export(repo, board_dir=board_dir, notes_dir=notes_dir)
+    assert _dest_cards(repo)[card_id].column == "done"
+
+
+def test_export_canonical_reopen_beats_stale_repo_done(tmp_path):
+    """Recency is two-way: the repo mirror can hold a ``done`` left over
+    from an earlier close while canonical has since reopened the card. The
+    newer canonical state must propagate — done-monotonic must not mean
+    done-forever (the mirror is export's own output, so a one-way rule
+    would make reopens impossible to sink)."""
+    board_dir, notes_dir = _canonical(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    export(repo, board_dir=board_dir, notes_dir=notes_dir)
+
+    # repo mirror: done, from an old close
+    dest = _dest_store(repo)
+    dest_board = dest.load_board()
+    card_id = dest_board.cards[0].id
+    dest_board.cards[0].column = "done"
+    dest_board.cards[0].updated_at = "2026-01-01T00:00:00+00:00"
+    dest.save_board(dest_board)
+
+    # canonical: reopened afterwards
+    canon = PlannerStore(board_dir=board_dir, notes_dir=notes_dir)
+    canon_board = canon.load_board()
+    canon_board.cards[0].column = "wip"
+    canon_board.cards[0].updated_at = "2026-01-02T00:00:00+00:00"
+    canon.save_board(canon_board)
+
+    export(repo, board_dir=board_dir, notes_dir=notes_dir)
+
+    assert _dest_cards(repo)[card_id].column == "wip"
+
+
+def test_export_non_done_conflict_still_canonical_wins(tmp_path):
+    """Recency resolution is scoped to conflicts involving done: for every
+    other column disagreement canonical stays the authority even when the
+    repo edit is newer (the union's documented contract)."""
+    board_dir, notes_dir = _canonical(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    export(repo, board_dir=board_dir, notes_dir=notes_dir)
+
+    canon = PlannerStore(board_dir=board_dir, notes_dir=notes_dir)
+    canon_board = canon.load_board()
+    card_id = canon_board.cards[0].id
+    canon_board.cards[0].updated_at = "2026-01-01T00:00:00+00:00"
+    canon.save_board(canon_board)
+
+    dest = _dest_store(repo)
+    dest_board = dest.load_board()
+    dest_board.cards[0].column = "review"
+    dest_board.cards[0].updated_at = "2026-01-02T00:00:00+00:00"
+    dest.save_board(dest_board)
+
+    export(repo, board_dir=board_dir, notes_dir=notes_dir)
+
+    assert _dest_cards(repo)[card_id].column == "todo"
