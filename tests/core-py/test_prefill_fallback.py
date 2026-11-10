@@ -83,10 +83,74 @@ def numpy_fallback():
         K._nb_fused_attention_multi = saved
 
 
+@pytest.fixture
+def forces_chunking(monkeypatch):
+    """Shrink the prefill budget so the shapes in ``SHAPES`` actually chunk.
+
+    Why this is needed: at the default 64 MB the budget works out to a ``blk``
+    of 511 to 1,048,576 rows for these shapes, so ``seq_len <= blk``, the loop
+    body runs exactly once, and "chunked vs unchunked" compares the unchunked
+    form against itself. Verified by injecting a chunk-boundary defect
+    (chunk-local row indices instead of absolute): with the default budget
+    ``test_matches_one_shot_reference`` passes **12/12** -- it cannot fail --
+    while with this fixture **22 of the 26** tests in the class fail. The 4
+    that still pass are the two ``(1, 1, ...)`` params (one row, cannot chunk)
+    plus the causality and finiteness tests, which are unaffected because the
+    first chunk always has ``s0 == 0``, where chunk-local indices are already
+    the correct absolute ones.
+
+    Production does chunk: a 2865-token prompt at H=14 gives ``blk ~= 104``.
+    So the path these tests exist to guard is precisely the path they were
+    not exercising.
+
+    2048 bytes yields ``blk < seq_len`` for 11 of the 12 shapes (every shape
+    with ``seq_len > 1``) and ``blk == 1`` for most of them, so every
+    boundary in the loop is hit. ``(1, 1, ...)`` has one row and cannot chunk
+    by definition -- nothing can make that case multi-chunk.
+    """
+    monkeypatch.setenv("SLO_PREFILL_FALLBACK_BUDGET_MB", str(2048 / 2**20))
+
+
+@pytest.fixture
+def generic_contraction(monkeypatch):
+    """Pin every ``np.einsum`` to ``optimize=False`` for one test.
+
+    Why this exists: the shipped prefill passes ``optimize=True``, because
+    einsum's default ``optimize=False`` takes a generic contraction loop
+    instead of dispatching to BLAS -- measured 3.4-5.9x slower at prefill
+    sizes (H=14, kv=2, E=128, interleaved arms; 49% of a profiled 22.0s
+    prefill is ``c_einsum``).
+
+    BLAS gemm's summation order depends on its ``m`` dimension, and chunking
+    changes ``m``. So under ``optimize=True`` chunking *does* perturb each
+    element by ~1e-6, which makes bit-exactness unachievable for the shipped
+    configuration. That is not a chunking bug and must not be read as one.
+
+    Both sides are therefore forced onto the same deterministic path, so the
+    bit-exact assertion below keeps testing the single thing this class exists
+    for: that chunking reorders *which rows are computed when* and never the
+    arithmetic. The premise in that comment is only true while the arithmetic
+    is held constant -- this fixture is what holds it constant.
+
+    The BLAS half is covered separately, not dropped:
+    ``test_blas_path_matches_across_chunk_boundaries`` (this file, chunking in
+    play) and ``TestFusedAttentionMultiBLASPath`` (test_fused_kernels.py).
+    """
+    real = np.einsum
+
+    def forced(*args, **kwargs):
+        kwargs["optimize"] = False
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(np, "einsum", forced)
+
+
 # Shapes: (seq_len, new_len, H, E_head, kv_heads). kv_heads < H exercises the
 # GQA path (reps = H // kv_heads); seq != new_len exercises non-square prefill.
-# The values around 64 and 128 are chosen to straddle chunk boundaries at the
-# default budget, so a boundary error in the causal mask shows up here.
+# The values around 64 and 128 straddle chunk boundaries -- but only under the
+# `forces_chunking` fixture. At the DEFAULT 64 MB budget none of these chunk
+# (blk comes out 511..1,048,576 against seq_len 1..513), which is why the
+# equivalence tests now ask for a small budget explicitly; see that fixture.
 SHAPES = [
     (1, 1, 4, 8, 4),
     (8, 8, 4, 8, 4),
@@ -108,7 +172,15 @@ class TestChunkedEquivalence:
 
     @pytest.mark.parametrize("seq_len,new_len,H,E_head,kv_heads", SHAPES)
     def test_matches_one_shot_reference(
-        self, numpy_fallback, seq_len, new_len, H, E_head, kv_heads
+        self,
+        numpy_fallback,
+        forces_chunking,
+        generic_contraction,
+        seq_len,
+        new_len,
+        H,
+        E_head,
+        kv_heads,
     ):
         reps = H // kv_heads
         rng = np.random.default_rng(0)
@@ -125,16 +197,62 @@ class TestChunkedEquivalence:
         # Bit-exact, not merely close: chunking only reorders which rows are
         # computed when, never the arithmetic on any single element, so anything
         # above 0.0 means the causal mask or the chunk boundary is wrong.
+        # `generic_contraction` holds the arithmetic constant so this stays
+        # true; see that fixture for why the shipped optimize=True path cannot
+        # be bit-exact here and where it is pinned instead.
         np.testing.assert_array_equal(got, ref)
 
-    def test_first_query_attends_only_to_first_key(self, numpy_fallback):
+    @pytest.mark.parametrize("seq_len,new_len,H,E_head,kv_heads", SHAPES)
+    def test_blas_path_matches_across_chunk_boundaries(
+        self, numpy_fallback, forces_chunking, seq_len, new_len, H, E_head, kv_heads
+    ):
+        """The shipped configuration must reproduce the specification.
+
+        The counterpart to ``test_matches_one_shot_reference``: that test
+        holds the arithmetic constant to isolate *chunking*, and so can only
+        run on the generic path. This one runs the configuration that
+        actually ships -- chunked AND ``optimize=True`` -- against the same
+        unchunked generic reference, so it is an end-to-end check rather than
+        an isolated one: if chunking, the causal mask, or the BLAS dispatch
+        is wrong, the shipped output drifts from the specification and this
+        fails.
+
+        Bit-exactness is not available here -- BLAS blocking depends on the
+        ``m`` dimension that chunking changes -- so the tolerance is explicit
+        and grounded in measurement rather than picked to pass. Across all 12
+        shapes the observed max deviation is 1.19e-06, while an actual
+        chunk-boundary defect (chunk-local row indices instead of absolute)
+        lands at 2.58e+00 and above. That is ~7 orders of separation, so
+        rtol/atol below cannot hide the bug this file exists to catch.
+        """
+        reps = H // kv_heads
+        rng = np.random.default_rng(0)
+        q = rng.standard_normal((seq_len, H, E_head), dtype=np.float32)
+        k = rng.standard_normal((kv_heads, new_len, E_head), dtype=np.float32)
+        v = rng.standard_normal((kv_heads, new_len, E_head), dtype=np.float32)
+        scale = np.float32(1.0 / np.sqrt(E_head))
+
+        # Reference on the generic path (no BLAS); got is the shipped path.
+        ref = _reference_one_shot(q, k, v, scale, H, E_head, seq_len, new_len, reps)
+        got = K.fused_attention_multi(q, k, v, scale, H, E_head)
+
+        assert got.shape == ref.shape
+        assert got.dtype == ref.dtype
+        np.testing.assert_allclose(got, ref, rtol=1e-5, atol=1e-6)
+
+    def test_first_query_attends_only_to_first_key(self, numpy_fallback, forces_chunking):
         """Query 0 must see key 0 and nothing else -- exactly.
 
-        The sharpest causal check available, and one a chunk-boundary bug would
-        fail: if the loop used chunk-local row indices instead of absolute ones,
-        query 0 (and every other query) would read the wrong mask columns and
-        blend future values in silently. The output would still be well-formed,
-        just wrong.
+        The sharpest causal check available for query 0. What it does NOT
+        catch, stated plainly because the original docstring claimed the
+        opposite: a chunk-boundary defect that uses chunk-local row indices
+        instead of absolute ones leaves query 0 *correct*, because query 0
+        sits in the first chunk (s0 == 0) where the two index spaces
+        coincide. Verified by injection -- this test passes with that defect
+        present. Boundary coverage therefore comes from
+        ``test_matches_one_shot_reference`` and
+        ``test_blas_path_matches_across_chunk_boundaries``, which chunk for
+        real via ``forces_chunking``.
 
         Query 0's attention row has a single unmasked entry, so softmax gives it
         weight exactly 1.0 and output[0] collapses to v[0] bit-exactly. Any
@@ -144,7 +262,7 @@ class TestChunkedEquivalence:
         globally -- that would also invalidate keys that earlier queries should
         legitimately see. Only query 0 has a well-defined "no other valid key".
         """
-        seq_len = 65  # forces >1 chunk at the default budget
+        seq_len = 65  # >1 chunk under forces_chunking (NOT at the default budget)
         H, E_head = 4, 4
         rng = np.random.default_rng(1)
         q = rng.standard_normal((seq_len, H, E_head), dtype=np.float32)
