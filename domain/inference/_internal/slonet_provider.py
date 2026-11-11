@@ -1516,6 +1516,14 @@ class SloNetChatProvider:
             return int(sum(p.data.size for p in model.parameters()))
         return 0
 
+    def _decode_generated(self, result, prompt_tokens) -> str:
+        """Decode only completion IDs, tolerating providers that return only new IDs."""
+        token_ids = result[0].tolist()
+        prompt_prefix = list(prompt_tokens)
+        if token_ids[: len(prompt_prefix)] == prompt_prefix:
+            token_ids = token_ids[len(prompt_prefix) :]
+        return self._tokenizer.decode(token_ids)
+
     def generate(
         self,
         prompt: str,
@@ -1544,7 +1552,7 @@ class SloNetChatProvider:
             eos_token=self._tokenizer.eos_token_id,
             extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
         )
-        return self._tokenizer.decode(result[0].tolist())
+        return self._decode_generated(result, tokens)
 
     async def chat(
         self,
@@ -1635,7 +1643,7 @@ class SloNetChatProvider:
             extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
             kv_state=kv_state,
         )
-        return self._tokenizer.decode(result[0].tolist())
+        return self._decode_generated(result, tokens)
 
     async def chat_stream(
         self,

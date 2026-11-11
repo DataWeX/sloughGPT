@@ -1,7 +1,7 @@
 {
- "note": "Route + OpenAPI baseline for scripts/check_contract.py \u2014 report-only drift signal, regenerated with --write-baseline.",
+ "note": "Route + OpenAPI baseline for scripts/check_contract.py — report-only drift signal, regenerated with --write-baseline.",
  "routers": 53,
- "count": 552,
+ "count": 550,
  "routes": [
   [
    "/",
@@ -576,10 +576,6 @@
    "GET"
   ],
   [
-   "/infer",
-   "POST"
-  ],
-  [
    "/infer/detokenize",
    "POST"
   ],
@@ -596,19 +592,15 @@
    "GET"
   ],
   [
-   "/infer/stream",
-   "POST"
-  ],
-  [
    "/infer/tokenize",
    "POST"
   ],
   [
-   "/inference/generate",
+   "/infer",
    "POST"
   ],
   [
-   "/inference/generate/stream",
+   "/infer/stream",
    "POST"
   ],
   [
@@ -2910,34 +2902,6 @@
     "body": null,
     "responses": [
      "200"
-    ]
-   }
-  },
-  "/inference/generate": {
-   "POST": {
-    "operationId": "generate_inference_generate_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "routers__inference__GenerateRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/inference/generate/stream": {
-   "POST": {
-    "operationId": "generate_stream_inference_generate_stream_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "routers__inference__GenerateRequest"
-    },
-    "responses": [
-     "200",
-     "422"
     ]
    }
   },
@@ -8845,34 +8809,6 @@
     ]
    }
   },
-  "/infer": {
-   "POST": {
-    "operationId": "infer_infer_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "InferRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/infer/stream": {
-   "POST": {
-    "operationId": "infer_stream_infer_stream_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "InferRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
   "/infer/embed": {
    "POST": {
     "operationId": "infer_embed_infer_embed_post",
@@ -10993,6 +10929,34 @@
     "body": null,
     "responses": [
      "200"
+    ]
+   }
+  },
+  "/infer/stream": {
+   "POST": {
+    "operationId": "generate_stream_infer_stream_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__inference__GenerateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer": {
+   "POST": {
+    "operationId": "generate_infer_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__inference__GenerateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
     ]
    }
   }
