@@ -172,9 +172,18 @@ vi.mock('@/lib/training-controller', () => ({
   },
 }))
 vi.mock('@/lib/souls-controller', () => ({ soulsController: { loadCheckpoint: vi.fn() } }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+// notify.ts calls useToastStore.getState() (the real module exports a static
+// getState beside the hook, lib/toast-store.ts:65). A selector-only mock made
+// any post-test notify() call throw `getState is not a function` — surfaced as
+// an unhandled rejection when QuickTrainCard's unmocked
+// experimentsController.list() rejected after HTTP retries with the backend
+// down. Mirror the real export shape instead.
+vi.mock('@/lib/toast-store', () => {
+  const state = { addToast: mockAddToast, dismissToast: vi.fn(), clearToasts: vi.fn() }
+  const useToastStore = (sel: any) => sel(state)
+  ;(useToastStore as any).getState = () => state
+  return { useToastStore }
+})
 
 vi.mock('@/hooks/useTrainingSession', () => ({ useTrainingSession: () => mockSession }))
 vi.mock('@/hooks/useTrainingDatasets', () => ({ useTrainingDatasets: () => mockDatasets }))
