@@ -27,6 +27,10 @@ class AgentOut(BaseModel):
     id: str
     name: str
     description: str
+    role: str = "general_assistant"
+    objective: str = ""
+    scope: str = ""
+    success_criteria: list[str] = Field(default_factory=list)
     instructions: str = ""
     tools: list[str] = []
     avatar: str = ""
@@ -36,6 +40,10 @@ class AgentCreate(BaseModel):
     id: str = ""
     name: str = Field(..., min_length=1)
     description: str = ""
+    role: str = "general_assistant"
+    objective: str = ""
+    scope: str = ""
+    success_criteria: list[str] = Field(default_factory=list)
     instructions: str = ""
     tools: list[str] = []
     avatar: str = ""
@@ -44,6 +52,10 @@ class AgentCreate(BaseModel):
 class AgentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
+    role: str | None = Field(default=None, min_length=1, max_length=100)
+    objective: str | None = Field(default=None, max_length=2000)
+    scope: str | None = Field(default=None, max_length=4000)
+    success_criteria: list[str] | None = None
     instructions: str | None = Field(default=None, max_length=50000)
     tools: list[str] | None = None
     avatar: str | None = Field(default=None, max_length=500)
@@ -150,6 +162,10 @@ class AgentsRouter:
                 agent_id=agent_id,
                 name=req.name,
                 description=req.description,
+                role=req.role,
+                objective=req.objective,
+                scope=req.scope,
+                success_criteria=req.success_criteria,
                 instructions=req.instructions,
                 tools=req.tools,
                 avatar=req.avatar,
@@ -182,6 +198,10 @@ class AgentsRouter:
                 agent_id=agent_id,
                 name=req.name,
                 description=req.description,
+                role=req.role,
+                objective=req.objective,
+                scope=req.scope,
+                success_criteria=req.success_criteria,
                 instructions=req.instructions,
                 tools=req.tools,
                 avatar=req.avatar,

@@ -689,6 +689,35 @@ class TestAgentPlanning:
         plan = await agent._plan_with_llm("run code")
         assert plan == [(ToolCapability.CODE_EXECUTION.value, {"code": "print(1)"})]
 
+    async def test_plan_prompt_contains_only_allowed_tools(self, monkeypatch):
+        agent = Agent(AgentConfig(tools=[ToolCapability.FILE_READ], instructions="Role: reviewer"))
+        prompts = []
+
+        def return_no_tools(prompt):
+            prompts.append(prompt)
+            return "[]"
+
+        monkeypatch.setattr(agent, "_inference_fn", return_no_tools)
+        assert await agent._plan_with_llm("review this") == []
+        assert "Role: reviewer" in prompts[0]
+        assert "Available tools: file_read" in prompts[0]
+        assert "file_search" not in prompts[0]
+        assert "code_execution" not in prompts[0]
+
+    async def test_empty_allowlist_prompt_does_not_advertise_tools(self, monkeypatch):
+        agent = Agent(AgentConfig(tools=[]))
+        prompts = []
+
+        def return_no_tools(prompt):
+            prompts.append(prompt)
+            return "[]"
+
+        monkeypatch.setattr(agent, "_inference_fn", return_no_tools)
+        assert await agent._plan_with_llm("answer directly") == []
+        assert "No tools are available to this agent." in prompts[0]
+        assert "Available tools: \n" in prompts[0]
+        assert '"tool": "file_search"' not in prompts[0]
+
     async def test_plan_with_llm_exception_falls_back(self, monkeypatch):
         agent = Agent()
 
@@ -798,6 +827,41 @@ class TestAgentExecute:
 
         agent.set_inference_fn(fake)
         assert agent._inference_fn is fake
+
+    async def test_tool_allowlist_is_enforced_before_runner(self, monkeypatch):
+        agent = Agent(AgentConfig(tools=[ToolCapability.FILE_READ]))
+        calls = []
+
+        async def fake_execute(tool_name, args, context):
+            calls.append(tool_name)
+            return {"success": True}
+
+        monkeypatch.setattr(agent._runner, "execute", fake_execute)
+        result = await agent._execute_allowed_tool(
+            ToolCapability.CODE_EXECUTION.value,
+            {"code": "print('should not run')"},
+            make_context(),
+        )
+
+        assert calls == []
+        assert result["success"] is False
+        assert result["code"] == "E_TOOL_NOT_ALLOWED"
+
+    async def test_empty_tool_allowlist_does_not_expand_to_all_tools(self, monkeypatch):
+        agent = Agent(AgentConfig(tools=[]))
+        calls = []
+
+        async def fake_execute(tool_name, args, context):
+            calls.append(tool_name)
+            return {"success": True}
+
+        monkeypatch.setattr(agent._runner, "execute", fake_execute)
+        result = await agent._execute_allowed_tool(
+            ToolCapability.FILE_READ.value, {"path": "README.md"}, make_context()
+        )
+
+        assert calls == []
+        assert result["code"] == "E_TOOL_NOT_ALLOWED"
 
 
 # ── Singletons & lazy imports ──────────────────────────────────────────────

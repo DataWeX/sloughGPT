@@ -761,7 +761,7 @@ class Agent:
                         "run_id": run_id,
                     }
                     try:
-                        result = await self._runner.execute(tool_name, args, context)
+                        result = await self._execute_allowed_tool(tool_name, args, context)
                     except Exception as e:
                         result = {"success": False, "error": str(e)}
                     summary = _result_summary(result)
@@ -796,6 +796,22 @@ class Agent:
                 except Exception as e:
                     logger.debug("complete failed: %s", e, extra={"tag": "AGENT"})
         yield {"event": "run_end", "run_id": run_id, "session_id": session_id}
+
+    async def _execute_allowed_tool(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> dict[str, Any]:
+        """Enforce the agent's capability allowlist at execution time."""
+        allowed = {capability.value for capability in self.config.tools}
+        if tool_name not in allowed:
+            return {
+                "success": False,
+                "code": "E_TOOL_NOT_ALLOWED",
+                "error": f"Tool '{tool_name}' is not allowed for this agent",
+            }
+        return await self._runner.execute(tool_name, args, context)
 
     async def _plan_next(
         self,
@@ -971,16 +987,22 @@ class Agent:
         With ``observations`` the model sees what already ran and decides the
         next step — ``[]`` means "enough information, synthesize now".
         """
-        allowed = [t.value for t in self.config.tools] or [c.value for c in ToolCapability]
+        allowed = [t.value for t in self.config.tools]
         # The 0.5B bootstrap model treats a bare "decide which tools" question
         # as chit-chat and refuses/loops (live journey 2026-10-30). A tiny
         # format example + strict format line raises JSON compliance without
         # any training — the SFT lever stays carded for real quality.
+        example = (
+            f'  [{{"tool": "{allowed[0]}", "args": {{}}}}]\n'
+            if allowed
+            else "No tools are available to this agent.\n"
+        )
         prompt = (
-            "You are a tool-calling assistant. Pick tools for the request.\n"
+            f"Agent role contract:\n{self.config.instructions}\n\n"
+            "You are a tool-calling assistant. Pick only tools in the allowlist.\n"
             f"Available tools: {', '.join(allowed)}\n"
-            "Respond with ONLY one JSON array, no prose. Examples:\n"
-            '  [{"tool": "file_search", "args": {"query": "run_history"}}]\n'
+            "Respond with ONLY one JSON array, no prose. Format example:\n"
+            f"{example}"
             "  []\n"
             "Use [] when no tool is needed.\n"
             f"User request: {request}\n"

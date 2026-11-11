@@ -51,7 +51,48 @@ class TestAgentSystem:
     def test_create_default_tools(self):
         sys = AgentSystem()
         result = sys.create("test_agent_2", "Test Agent 2", "desc")
-        assert result["tools"] == ["memory"]
+        assert result["tools"] == []
+
+    def test_builtin_roles_are_specific_and_use_real_capabilities(self):
+        from domain.agents._internal.agents import ToolCapability
+        from domain.agents._internal.system import DEFAULT_AGENTS
+
+        valid_tools = {capability.value for capability in ToolCapability}
+        for definition in DEFAULT_AGENTS.values():
+            assert definition["role"]
+            assert definition["objective"]
+            assert definition["scope"]
+            assert definition["success_criteria"]
+            assert set(definition["tools"]) <= valid_tools
+
+    def test_invalid_configured_tools_fail_closed(self):
+        sys = AgentSystem()
+        sys.create("invalid_tools", "Invalid Tools", "desc", tools=["terminal"])
+
+        agent = sys._fresh_agent("invalid_tools")
+
+        assert agent is not None
+        assert agent.config.tools == []
+
+    def test_role_contract_is_injected_into_agent_config(self):
+        sys = AgentSystem()
+        sys.create(
+            "specific_agent",
+            "Specific Agent",
+            "desc",
+            role="repo_reviewer",
+            objective="Find correctness issues",
+            scope="Read-only repository review",
+            success_criteria=["Cite file and line", "Report actionable findings"],
+        )
+
+        agent = sys._fresh_agent("specific_agent")
+
+        assert agent is not None
+        assert "Role: repo_reviewer" in agent.config.instructions
+        assert "Objective: Find correctness issues" in agent.config.instructions
+        assert "Scope: Read-only repository review" in agent.config.instructions
+        assert "Cite file and line" in agent.config.instructions
 
     def test_update(self):
         sys = AgentSystem()
