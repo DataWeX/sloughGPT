@@ -538,3 +538,21 @@ def load_feed_text(
         extra={"tag": "TRAIN"},
     )
     return pairs_to_text(pairs, use_prompt_engine=use_prompt_engine)
+
+
+def corrected_feedback_to_text(records: list[dict[str, Any]]) -> tuple[str, int]:
+    """Format explicit corrections with the same prompt template used at inference."""
+    pairs: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for record in records:
+        user = record.get("user_message")
+        assistant = record.get("corrected_response")
+        if not isinstance(user, str) or not isinstance(assistant, str):
+            continue
+        user, assistant = user.strip(), assistant.strip()
+        key = (user, assistant)
+        if len(user) < _MIN_CONTENT_LEN or len(assistant) < _MIN_CONTENT_LEN or key in seen:
+            continue
+        seen.add(key)
+        pairs.append({"user_msg": user, "assistant_msg": assistant})
+    return pairs_to_text(pairs), len(pairs)

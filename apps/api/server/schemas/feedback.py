@@ -13,6 +13,7 @@ class FeedbackRequest(BaseModel):
     context: str | None = None
     user_message: str | None = None
     assistant_response: str | None = None
+    corrected_response: str | None = Field(default=None, max_length=10_000)
 
     @field_validator("rating")
     @classmethod
@@ -35,6 +36,7 @@ class FeedbackStats(BaseModel):
     thumbs_down: int = 0
     total: int = 0
     up_ratio: float = 0.0
+    corrected_examples: int = 0
 
 
 class ConversationCreate(BaseModel):

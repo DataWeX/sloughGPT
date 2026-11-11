@@ -46,6 +46,7 @@ interface ChatMessagesConfig {
   recordFeedback: (params: {
     userMessage: string
     assistantResponse: string
+    correctedResponse?: string
     rating: 'thumbs_up' | 'thumbs_down'
     conversationId?: string
     qualityScore?: number
@@ -460,7 +461,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
   // ── Feedback ──────────────────────────────────────────────────────────────
   const handleFeedback = useCallback(
-    async (messageId: string, rating: 'thumbs_up' | 'thumbs_down') => {
+    async (messageId: string, rating: 'thumbs_up' | 'thumbs_down', correctedResponse?: string) => {
       const allMsgs = messagesRef.current
       const msgIdx = allMsgs.findIndex((m) => m.id === messageId)
       const assistantMsg = allMsgs.find((m) => m.id === messageId)
@@ -468,12 +469,17 @@ export function useChatMessages(config: ChatMessagesConfig) {
       const success = await recordFeedback({
         userMessage: userMsg?.content || '',
         assistantResponse: assistantMsg?.content || '',
+        correctedResponse,
         rating,
         conversationId: sessionIdRef.current,
         userId: userIdRef.current,
       })
       showToast(
-        success ? 'Thanks for the feedback!' : 'Could not submit feedback',
+        success
+          ? correctedResponse
+            ? 'Correction saved for model training.'
+            : 'Thanks for the feedback!'
+          : 'Could not submit feedback',
         success ? 'success' : 'error',
       )
     },
@@ -491,6 +497,12 @@ export function useChatMessages(config: ChatMessagesConfig) {
     (messageId: string) => {
       return handleFeedback(messageId, 'thumbs_down')
     },
+    [handleFeedback],
+  )
+
+  const handleCorrectResponse = useCallback(
+    (messageId: string, correctedResponse: string) =>
+      handleFeedback(messageId, 'thumbs_down', correctedResponse),
     [handleFeedback],
   )
 
@@ -1124,6 +1136,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     handleRegenerateWithOptions,
     handleThumbsUp,
     handleThumbsDown,
+    handleCorrectResponse,
     handleEditMessage,
     handleAddImage,
     handleRemoveImage,

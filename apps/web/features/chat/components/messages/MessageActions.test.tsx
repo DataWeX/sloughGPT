@@ -312,6 +312,26 @@ describe('MessageActions', () => {
     // after click, speaking is true, label should change
     expect(screen.getByRole('button', { name: /stop reading aloud/i })).toBeInTheDocument()
   })
+
+  it('submits an explicit correction as a separate training example', async () => {
+    const onCorrectResponse = vi.fn()
+    render(
+      <MessageActions
+        content="Incorrect answer"
+        messageId="m1"
+        role="assistant"
+        onCorrectResponse={onCorrectResponse}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Teach a correction' }))
+    fireEvent.change(screen.getByLabelText('What should the model have said?'), {
+      target: { value: 'Correct answer' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save correction' }))
+    })
+    expect(onCorrectResponse).toHaveBeenCalledWith('m1', 'Correct answer')
+  })
 })
 
 // Add a test for when speechSynthesis is not available

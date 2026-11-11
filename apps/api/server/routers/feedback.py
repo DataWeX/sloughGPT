@@ -35,6 +35,7 @@ class WorkflowFeedbackRequest(BaseModel):
     rating: str = Field(..., pattern=r"^(thumbs_up|thumbs_down|neutral)$")
     assistant_response: str = Field("", max_length=10000)
     user_message: str = Field("", max_length=10000)
+    corrected_response: str | None = Field(default=None, max_length=10000)
 
 
 class FeedbackRouter:
@@ -97,6 +98,7 @@ class FeedbackRouter:
             message_content=req.assistant_response,
             user_message=req.user_message,
             assistant_response=req.assistant_response,
+            corrected_response=req.corrected_response,
         )
         safe_audit_log(
             "feedback.record_workflow",

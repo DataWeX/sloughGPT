@@ -18,10 +18,29 @@ from domain.training._internal.training_feed import (
     FeedBatchSampler,
     TrainingFeedClient,
     extract_pair,
+    corrected_feedback_to_text,
     is_feed_source,
     load_feed_text,
     pairs_to_text,
 )
+
+
+def test_corrected_feedback_to_text_uses_only_explicit_corrections():
+    text, count = corrected_feedback_to_text(
+        [
+            {
+                "user_message": "What is 2 + 2?",
+                "assistant_response": "It is 5.",
+                "corrected_response": "It is 4.",
+            },
+            {"user_message": "No correction", "assistant_response": "Original"},
+            {"user_message": "What is 2 + 2?", "corrected_response": "It is 4."},
+        ]
+    )
+
+    assert count == 1
+    assert "It is 4." in text
+    assert "It is 5." not in text
 
 
 def _corpus_record(user: str, assistant: str) -> dict:

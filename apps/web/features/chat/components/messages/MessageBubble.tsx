@@ -27,6 +27,7 @@ export interface MessageBubbleProps {
   onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
+  onCorrectResponse?: (messageId: string, correctedResponse: string) => void | Promise<void>
   onEdit?: (messageId: string, newContent: string) => void
   onSuggestionClick?: (text: string) => void
   messageId?: string
@@ -75,6 +76,7 @@ export const MessageBubble = memo(function MessageBubble({
   onRegenerate,
   onThumbsUp,
   onThumbsDown,
+  onCorrectResponse,
   onEdit,
   onSuggestionClick,
   messageId,
@@ -213,6 +215,7 @@ export const MessageBubble = memo(function MessageBubble({
               onRegenerate={onRegenerate}
               onThumbsUp={onThumbsUp}
               onThumbsDown={onThumbsDown}
+              onCorrectResponse={onCorrectResponse}
               onSuggestionClick={onSuggestionClick}
               isBookmarked={isBookmarked}
               onBookmark={onBookmark}

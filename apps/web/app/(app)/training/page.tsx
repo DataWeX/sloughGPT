@@ -19,6 +19,7 @@ import { useTestDialog } from '@/hooks/useTestDialog'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
 import { LiveFeedStream } from '@/components/training/LiveFeedStream'
 import { QuickTrainCard } from '@/components/training/QuickTrainCard'
+import { CorrectionsTrainingCard } from '@/components/training/CorrectionsTrainingCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
@@ -239,6 +240,8 @@ export default function TrainingPage() {
         <StatCard label="Finished jobs" value={completedCount} numeric />
         <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />
       </KpiGrid>
+
+      <CorrectionsTrainingCard />
 
       {/* 3-step pipeline */}
       <SectionHeader title="Guided setup" description="Data, configure, train, results." />

@@ -133,6 +133,7 @@ class FeedbackController:
         message_content: str | None = None,
         user_message: str | None = None,
         assistant_response: str | None = None,
+        corrected_response: str | None = None,
     ) -> dict[str, Any]:
         """Record user feedback and pipe into learning systems.
 
@@ -162,13 +163,14 @@ class FeedbackController:
             "message_content": message_content,
             "user_message": user_message,
             "assistant_response": assistant_response,
+            "corrected_response": corrected_response,
             "timestamp": utc_now_iso(),
         }
 
         self._feedback.insert_one(feedback)
 
         # Pipe into learning pipeline
-        if user_message and assistant_response:
+        if user_message and assistant_response and not corrected_response:
             workflow = self._get_workflow()
             if workflow:
                 workflow.record_feedback(
@@ -188,7 +190,7 @@ class FeedbackController:
                 )
 
         # Trigger HF DPO in background on thumbs-down
-        if rating == "thumbs_down":
+        if rating == "thumbs_down" and not corrected_response:
             from domain.training import get_training_executor
 
             executor = get_training_executor()
@@ -221,16 +223,21 @@ class FeedbackController:
         """
         total = self._feedback.count()
         if total == 0:
-            return {"thumbs_up": 0, "thumbs_down": 0, "total": 0, "up_ratio": 0}
+            return {"thumbs_up": 0, "thumbs_down": 0, "total": 0, "up_ratio": 0, "corrected_examples": 0}
 
         thumbs_up = self._feedback.count({"rating": "thumbs_up"})
         thumbs_down = self._feedback.count({"rating": "thumbs_down"})
+        corrected_examples = sum(
+            bool(item.get("user_message") and item.get("corrected_response"))
+            for item in self._feedback.find()
+        )
 
         return {
             "thumbs_up": thumbs_up,
             "thumbs_down": thumbs_down,
             "total": total,
             "up_ratio": thumbs_up / total if total > 0 else 0,
+            "corrected_examples": corrected_examples,
         }
 
     def create_conversation(self, name: str, session_id: str | None = None) -> dict[str, Any]:

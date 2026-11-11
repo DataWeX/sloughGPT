@@ -70,26 +70,22 @@ async def train_from_feedback(
     lora_alpha = req.lora_alpha
 
     try:
-        from domain.feedback import FeedbackTrainer
+        from controllers.feedback import get_feedback_controller
+        from domain.training._internal.training_feed import corrected_feedback_to_text
 
-        trainer = FeedbackTrainer()
-
-        # Pre-flight: check feedback data exists before creating job
-        count = trainer.export_sft("/dev/null")
+        feedback = get_feedback_controller()
+        training_text, count = corrected_feedback_to_text(feedback.feedback_collection.find())
         if count == 0:
-            raise_error("No feedback data available for training", "E_BAD_REQUEST", status_code=400)
+            raise_error("No corrected responses available for training", "E_BAD_REQUEST", status_code=400)
 
         # Export feedback data
         timestamp = int(time.time())
         export_dir = find_repo_root(Path(__file__).resolve()) / "data" / "training_exports"
         export_dir.mkdir(parents=True, exist_ok=True)
 
-        # Export as SFT format for training
-        sft_path = export_dir / f"feedback_sft_{timestamp}.jsonl"
-        count = trainer.export_sft(str(sft_path))
-
-        if count == 0:
-            raise_error("No feedback data available for training", "E_BAD_REQUEST", status_code=400)
+        # The native trainer consumes the shared train/serve conversation template.
+        sft_path = export_dir / f"feedback_sft_{timestamp}.txt"
+        sft_path.write_text(training_text, encoding="utf-8")
 
         # Create training job
         jid = f"feedback_train_{uuid.uuid4().hex[:8]}"

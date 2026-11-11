@@ -61,6 +61,7 @@ interface ChatScreenProps {
   onRegenerate?: (fromMessageId?: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
+  onCorrectResponse?: (messageId: string, correctedResponse: string) => void | Promise<void>
   onEdit?: (messageId: string, newContent: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
@@ -102,6 +103,7 @@ export const ChatScreen = memo(function ChatScreen({
   onRegenerate,
   onThumbsUp,
   onThumbsDown,
+  onCorrectResponse,
   onEdit,
   searchQuery,
   onSuggestionClick,
@@ -380,6 +382,7 @@ export const ChatScreen = memo(function ChatScreen({
             onCopy={onCopy}
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
+            onCorrectResponse={onCorrectResponse}
             onEdit={onEdit}
             onRegenerate={showRegenerate ? handleRegenerate : undefined}
             onSuggestionClick={onSuggestionClick}

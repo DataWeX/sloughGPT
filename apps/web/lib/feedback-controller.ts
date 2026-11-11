@@ -24,7 +24,13 @@ export type {
  * both members arrive in the same response, no extra requests).
  */
 export function buildFeedbackStats(
-  summary: { thumbs_up?: number; thumbs_down?: number; total?: number; up_ratio?: number },
+  summary: {
+    thumbs_up?: number
+    thumbs_down?: number
+    total?: number
+    up_ratio?: number
+    corrected_examples?: number
+  },
   metaStats: { current_weights?: Record<string, unknown>; history_length?: number },
 ): FeedbackStats & { quality_trend: { thumbs_up_ratio: number } } {
   const thumbsUp = summary.thumbs_up ?? 0
@@ -32,6 +38,7 @@ export function buildFeedbackStats(
   const total = summary.total ?? 0
   const ratio = summary.up_ratio ?? (total > 0 ? thumbsUp / total : 0)
   return {
+    corrected_examples: summary.corrected_examples ?? 0,
     db_stats: {
       conversations: 0,
       messages: 0,
@@ -56,6 +63,7 @@ export const feedbackController = {
   async recordFeedbackWorkflow(params: {
     userMessage: string
     assistantResponse: string
+    correctedResponse?: string
     rating: 'thumbs_up' | 'thumbs_down'
     conversationId?: string
     qualityScore?: number
@@ -64,6 +72,7 @@ export const feedbackController = {
     return apiPost('/feedback/workflow-record', {
       user_message: params.userMessage,
       assistant_response: params.assistantResponse,
+      corrected_response: params.correctedResponse,
       rating: params.rating,
       conversation_id: params.conversationId,
       quality_score: params.qualityScore,
@@ -80,6 +89,7 @@ export const feedbackController = {
         thumbs_down?: number
         total?: number
         up_ratio?: number
+        corrected_examples?: number
       }>('/feedback/stats/summary').catch(() => ({}) as Record<string, never>),
       apiGet<{
         current_weights?: Record<string, unknown>
@@ -87,6 +97,10 @@ export const feedbackController = {
       }>('/meta-weights/stats').catch(() => ({}) as Record<string, never>),
     ])
     return buildFeedbackStats(summary, metaStats)
+  },
+
+  async trainFromCorrections(): Promise<{ job_id: string }> {
+    return apiPost('/training/from-feedback', {})
   },
 
   async getWorkflowStatus(): Promise<WorkflowStatus> {

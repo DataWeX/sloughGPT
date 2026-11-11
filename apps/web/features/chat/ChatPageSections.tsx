@@ -470,6 +470,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           onRegenerateWithOptions={controller.chat.handleRegenerateWithOptions}
           onThumbsUp={controller.chat.handleThumbsUp}
           onThumbsDown={controller.chat.handleThumbsDown}
+          onCorrectResponse={controller.chat.handleCorrectResponse}
           onEdit={controller.chat.handleEditMessage}
           searchQuery={ui.searchQuery}
           onSuggestionClick={controller.chat.handleSuggestionClick}

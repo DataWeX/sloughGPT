@@ -20,6 +20,7 @@ interface FeedbackState {
   recordFeedback: (params: {
     userMessage: string
     assistantResponse: string
+    correctedResponse?: string
     rating: 'thumbs_up' | 'thumbs_down'
     conversationId?: string
     qualityScore?: number

@@ -183,6 +183,7 @@ export interface AdapterInfo {
 // ── Feedback ──
 
 export interface FeedbackStats {
+  corrected_examples?: number
   db_stats: {
     conversations: number
     messages: number

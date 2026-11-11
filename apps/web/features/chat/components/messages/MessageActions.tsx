@@ -34,6 +34,7 @@ interface MessageActionsProps {
   onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
+  onCorrectResponse?: (messageId: string, correctedResponse: string) => void | Promise<void>
   onEdit?: (messageId: string) => void
   onSuggestionClick?: (text: string) => void
   isBookmarked?: boolean
@@ -117,6 +118,7 @@ export const MessageActions = memo(function MessageActions({
   onRegenerate,
   onThumbsUp,
   onThumbsDown,
+  onCorrectResponse,
   onEdit,
   onSuggestionClick,
   isBookmarked,
@@ -131,6 +133,9 @@ export const MessageActions = memo(function MessageActions({
   const [speaking, setSpeaking] = useState(false)
   const [savedToKnowledge, setSavedToKnowledge] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [correctionOpen, setCorrectionOpen] = useState(false)
+  const [correctionText, setCorrectionText] = useState('')
+  const [savingCorrection, setSavingCorrection] = useState(false)
   const [localReactions, setLocalReactions] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
@@ -285,6 +290,19 @@ export const MessageActions = memo(function MessageActions({
           </Button>
         )}
 
+        {onCorrectResponse && role === 'assistant' && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setCorrectionOpen((open) => !open)}
+            className="p-2"
+            aria-label="Teach a correction"
+            aria-expanded={correctionOpen}
+          >
+            <IconEdit className="h-3.5 w-3.5" />
+          </Button>
+        )}
+
         {onBookmark && (
           <Button
             variant="ghost"
@@ -415,6 +433,45 @@ export const MessageActions = memo(function MessageActions({
           )}
         </div>
       </div>
+
+      {correctionOpen && onCorrectResponse && (
+        <form
+          className="mt-2 max-w-xl space-y-2 rounded-lg border border-border/50 bg-card p-3"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            const value = correctionText.trim()
+            if (!value || savingCorrection) return
+            setSavingCorrection(true)
+            try {
+              await onCorrectResponse(messageId, value)
+              setCorrectionText('')
+              setCorrectionOpen(false)
+            } finally {
+              setSavingCorrection(false)
+            }
+          }}
+        >
+          <label htmlFor={`correction-${messageId}`} className="text-sm font-medium">
+            What should the model have said?
+          </label>
+          <textarea
+            id={`correction-${messageId}`}
+            className="min-h-24 w-full rounded-md border border-border bg-background p-2 text-sm"
+            value={correctionText}
+            onChange={(event) => setCorrectionText(event.target.value)}
+            maxLength={10000}
+            required
+          />
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={!correctionText.trim() || savingCorrection}>
+              {savingCorrection ? 'Saving…' : 'Save correction'}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setCorrectionOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
 
       {Object.keys(localReactions).length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
