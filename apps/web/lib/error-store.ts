@@ -1,6 +1,7 @@
 'use client'
 
 import { notify } from '@/lib/notify'
+import { serverNow } from '../../lib/clock'
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -223,7 +224,7 @@ const errorStore = createStore<ErrorStore>((set, get) => ({
     const title = opts.title || extractErrorTitle(err)
     const message = safeMessage(err)
     const severity = getSeverity(err, sev)
-    const now = Date.now()
+    const now = serverNow()
 
     // Deduplication: same fingerprint within 30s → increment count
     const fp = fingerprint(message)
@@ -289,7 +290,7 @@ const errorStore = createStore<ErrorStore>((set, get) => ({
   hasErrors: () => get().errors.length > 0,
 
   logStateEvent: (event, opts = {}) => {
-    const now = Date.now()
+    const now = serverNow()
     const kind = opts.kind ?? inferStateKind(event)
     const from = opts.from
     const to = opts.to

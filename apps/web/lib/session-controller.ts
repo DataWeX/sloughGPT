@@ -4,6 +4,7 @@
 
 import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
 import { logger } from './dev-log'
+import type { SessionMeta } from './protocol/contracts.gen'
 
 const _log = logger.child('session-controller')
 
@@ -34,17 +35,20 @@ export interface SessionInspector {
   elapsed_ms: number
 }
 
-export interface Conversation {
-  id: string
-  name: string
+/**
+ * One sidebar conversation — derived from the backend's `SessionMeta`
+ * (projection of `routers.inference.SessionModel`, the `GET /chat/sessions`
+ * wire shape). The generated interface owns the server-truth fields; this
+ * type only adds frontend-owned presentation/local state. Never restate
+ * `id`/`name`/`created_at`/`updated_at`/`message_count` here — edit the
+ * Pydantic model and regenerate instead.
+ */
+export interface Conversation extends SessionMeta {
   session_id: string
-  created_at: string
-  updated_at: string
   pinned: boolean
   starred: boolean
   archived?: boolean
   unread?: boolean
-  message_count: number
   messages?: Array<{ id: string; role: string; content: string; timestamp?: string | number }>
   user_id?: string
   feedback_count?: number
@@ -68,11 +72,13 @@ export interface SearchResult {
   matches: SearchMatch[]
 }
 
-export interface Session {
-  id: string
-  name: string
-  created_at: string
-  updated_at: string
+/**
+ * A session as other endpoints return it (`/chat/sessions/current`,
+ * `/chat/sessions` create) — `SessionMeta` minus `message_count`, which those
+ * payloads don't always carry, plus session-local UI state.
+ */
+export interface Session extends Omit<SessionMeta, 'message_count'> {
+  message_count?: number
   starred?: boolean
   pinned?: boolean
   archived?: boolean

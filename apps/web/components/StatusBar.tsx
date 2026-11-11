@@ -7,6 +7,7 @@ import { useConsciousnessStatus, getQualiaMood } from '@/hooks/useConsciousnessS
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
+import { serverNow } from '../../lib/clock'
 import { useErrorStream } from '@/hooks/useErrorStream'
 import {
   cn,
@@ -47,7 +48,7 @@ export function StatusBar() {
   const clearFailures = useApiMonitor((s) => s.clearFailures)
   const errorCount = useErrorStore((s) =>
     s.errors.reduce(
-      (sum, e) => (Date.now() - e.timestamp < ERROR_BADGE_TTL_MS ? sum + e.count : sum),
+      (sum, e) => (serverNow() - e.timestamp < ERROR_BADGE_TTL_MS ? sum + e.count : sum),
       0,
     ),
   )

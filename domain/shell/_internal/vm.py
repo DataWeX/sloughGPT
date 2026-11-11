@@ -4205,17 +4205,15 @@ class X86Assembler:
         expr = expr.replace("$$", "0").replace("$", str(len(self._output)))
         count = self._eval_expr(expr)
         # Handle instructions
-        single_byte_insns = {"nop": 0x90, "hlt": 0xF4, "cli": 0xFA, "sti": 0xFB, "ret": 0xC3}
-        if inner in single_byte_insns:
-            for _ in range(count):
-                self._output.append(single_byte_insns[inner])
-        elif inner.startswith("db ") or inner.startswith("dw ") or inner.startswith("dd "):
+        if inner.startswith("db ") or inner.startswith("dw ") or inner.startswith("dd "):
             for _ in range(count):
                 self._emit_data(inner)
         else:
-            val = self._parse_imm(inner)
+            # Unroll the full instruction N times through the normal emitter
+            # so operands survive (card 20261108_140706) and rel displacements
+            # are recomputed per copy from the copy's own position.
             for _ in range(count):
-                self._output.append(val & 0xFF)
+                self._emit_instruction(inner)
 
     def _emit_data(self, line):
         if line.startswith("db"):

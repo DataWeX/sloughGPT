@@ -6,11 +6,16 @@ import pytest
 
 from domain.shell._internal.vm import CPU, X86CPU, Assembler, X86Assembler
 
-# Assertion-free ns/run benchmarks, not correctness tests. The whole module is
-# interpreter-dispatch bound, so CI's --cov tracing balloons them past the
-# 120s pytest-timeout (test_loop_100 alone is 93s untraced). Keep them out of
-# the fast lane like the #173 quant benchmarks; real VM coverage lives in the
-# other test_vm_*.py files. Run explicitly with: -m slow.
+# Timing values stay assertion-free ns/run benchmarks, not correctness tests.
+# The whole module is interpreter-dispatch bound, so CI's --cov tracing
+# balloons them past the 120s pytest-timeout (test_loop_100 alone is 93s
+# untraced). Keep them out of the fast lane like the #173 quant benchmarks;
+# real VM coverage lives in the other test_vm_*.py files. Run explicitly
+# with: -m slow — slow tests do NOT run in CI's default lane.
+# One exception, card 20261108_140706: the times-based x86 workloads pin
+# their executed step count via _run_steps — this module used to time the
+# assembler's 0x00-byte garbage output as if it were real work, and an
+# assertion-free charter is what let that defect ship.
 pytestmark = pytest.mark.slow
 
 
@@ -53,6 +58,19 @@ def bench_x86(name, source, iterations=100, max_steps=100_000):
     avg = sum(times) / len(times)
     print(f"  {name}: {avg:,.0f} ns/run  ({1e9 / avg:,.0f} runs/sec)  [{len(binary)} bytes]")
     return avg
+
+
+def _run_steps(source, max_steps=100_000):
+    """Assemble + run once, return the executed step count.
+
+    Step-count pin for the times-based workloads (card 20261108_140706):
+    the old assembler emitted one 0x00 byte per `times N <insn>` repetition,
+    so these benchmarks were timing garbage that executed at the wrong
+    count. Comparing against the hand-computed unrolled count catches that.
+    """
+    cpu = X86CPU()
+    cpu.load(X86Assembler().assemble(source))
+    return cpu.run(max_steps=max_steps)
 
 
 class TestTensorIntALU:
@@ -294,21 +312,19 @@ class TestTensorComposite:
 
 class TestX86Basic:
     def test_nop(self):
-        bench_x86("NOP x1000", "[BITS 32]\n[ORG 0x100000]\ntimes 1000 nop\nhlt", iterations=100)
+        src = "[BITS 32]\n[ORG 0x100000]\ntimes 1000 nop\nhlt"
+        assert _run_steps(src) == 1000  # 1000 unrolled nops (hlt not counted)
+        bench_x86("NOP x1000", src, iterations=100)
 
     def test_mov(self):
-        bench_x86(
-            "MOV x1000",
-            "[BITS 32]\n[ORG 0x100000]\ntimes 500 mov eax, 42\ntimes 500 mov ebx, 99\nhlt",
-            iterations=100,
-        )
+        src = "[BITS 32]\n[ORG 0x100000]\ntimes 500 mov eax, 42\ntimes 500 mov ebx, 99\nhlt"
+        assert _run_steps(src) == 1000  # 500 + 500 unrolled movs
+        bench_x86("MOV x1000", src, iterations=100)
 
     def test_add_sub(self):
-        bench_x86(
-            "ADD/SUB x1000",
-            "[BITS 32]\n[ORG 0x100000]\nmov eax, 0\ntimes 1000 add eax, 1\ntimes 1000 sub eax, 1\nhlt",
-            iterations=50,
-        )
+        src = "[BITS 32]\n[ORG 0x100000]\nmov eax, 0\ntimes 1000 add eax, 1\ntimes 1000 sub eax, 1\nhlt"
+        assert _run_steps(src) == 2001  # 1 mov + 1000 add + 1000 sub
+        bench_x86("ADD/SUB x1000", src, iterations=50)
 
     def test_cmp_jnz(self):
         bench_x86(
@@ -318,32 +334,26 @@ class TestX86Basic:
         )
 
     def test_push_pop(self):
-        bench_x86(
-            "PUSH/POP x1000",
-            "[BITS 32]\n[ORG 0x100000]\ntimes 500 push eax\ntimes 500 pop ebx\nhlt",
-            iterations=100,
-        )
+        src = "[BITS 32]\n[ORG 0x100000]\ntimes 500 push eax\ntimes 500 pop ebx\nhlt"
+        assert _run_steps(src) == 1000  # 500 push + 500 pop
+        bench_x86("PUSH/POP x1000", src, iterations=100)
 
     def test_mul(self):
-        bench_x86(
-            "MUL x100",
-            "[BITS 32]\n[ORG 0x100000]\nmov eax, 7\nmov ebx, 6\ntimes 100 mul ebx\nhlt",
-            iterations=50,
-        )
+        src = "[BITS 32]\n[ORG 0x100000]\nmov eax, 7\nmov ebx, 6\ntimes 100 mul ebx\nhlt"
+        assert _run_steps(src) == 102  # 2 mov + 100 mul
+        bench_x86("MUL x100", src, iterations=50)
 
     def test_div(self):
-        bench_x86(
-            "DIV x100",
-            "[BITS 32]\n[ORG 0x100000]\nmov eax, 1000\nmov ebx, 7\ntimes 100 div ebx\nhlt",
-            iterations=50,
-        )
+        src = "[BITS 32]\n[ORG 0x100000]\nmov eax, 1000\nmov ebx, 7\ntimes 100 div ebx\nhlt"
+        assert _run_steps(src) == 102  # 2 mov + 100 div
+        bench_x86("DIV x100", src, iterations=50)
 
     def test_shift(self):
-        bench_x86(
-            "SHL/SHR x1000",
-            "[BITS 32]\n[ORG 0x100000]\nmov eax, 1\ntimes 500 shl eax, 1\ntimes 500 shr eax, 1\nhlt",
-            iterations=50,
+        src = (
+            "[BITS 32]\n[ORG 0x100000]\nmov eax, 1\ntimes 500 shl eax, 1\ntimes 500 shr eax, 1\nhlt"
         )
+        assert _run_steps(src) == 1001  # 1 mov + 500 shl + 500 shr
+        bench_x86("SHL/SHR x1000", src, iterations=50)
 
     def test_call_ret(self):
         bench_x86(
@@ -353,11 +363,9 @@ class TestX86Basic:
         )
 
     def test_lea(self):
-        bench_x86(
-            "LEA x1000",
-            "[BITS 32]\n[ORG 0x100000]\nmov ebx, 8\ntimes 1000 lea eax, [ebx+ecx*4+16]\nhlt",
-            iterations=50,
-        )
+        src = "[BITS 32]\n[ORG 0x100000]\nmov ebx, 8\ntimes 1000 lea eax, [ebx+ecx*4+16]\nhlt"
+        assert _run_steps(src) == 1001  # 1 mov + 1000 lea
+        bench_x86("LEA x1000", src, iterations=50)
 
 
 class TestX86Complex:

@@ -138,6 +138,7 @@ def build_source() -> str:
         "\n"
         "export type ContractName = keyof typeof CONTRACTS\n"
         f"{event_types_source()}"
+        f"{session_types_source()}"
     )
 
 
@@ -191,6 +192,48 @@ def event_types_source() -> str:
         "/** A projected process event — exactly `EVENT_SCHEMA`, nothing else. */\n"
         "export interface ProcessEvent {\n"
         f"{fields(pe.EVENT_SCHEMA)}\n"
+        "}\n"
+    )
+
+
+_JSON_TO_TS = {
+    "string": "string",
+    "integer": "number",
+    "number": "number",
+    "boolean": "boolean",
+    "array": "unknown[]",
+    "object": "Record<string, unknown>",
+}
+
+
+def session_types_source() -> str:
+    """Project the session-metadata wire model into a TS interface.
+
+    ``routers.inference.SessionModel`` is the single Python declaration of
+    ``GET /chat/sessions``' row shape; this renders it as ``SessionMeta`` in
+    every consumer artifact on the same freshness gate as ``CONTRACTS`` — the
+    frontend derives ``Conversation`` from this instead of hand-writing a
+    duplicate interface. One declaration, three byte-identical projections.
+    """
+    from routers.inference import SessionModel  # noqa: PLC0415 — after sys.path bootstrap
+
+    schema = SessionModel.model_json_schema()
+    required = set(schema.get("required", []))
+    lines = []
+    for name, prop in schema.get("properties", {}).items():
+        ts_type = _JSON_TO_TS.get(prop.get("type", ""), "unknown")
+        optional = "" if name in required else "?"
+        lines.append(f"  {name}{optional}: {ts_type}")
+    fields = "\n".join(lines)
+    return (
+        "\n"
+        "// ── Session-metadata contract — projection of\n"
+        "// routers/inference.py SessionModel. One declaration, one interface:\n"
+        "// edit the Pydantic model, then regenerate — never edit here.\n"
+        "\n"
+        "/** One row of GET /chat/sessions — exactly the `SessionModel` wire shape. */\n"
+        "export interface SessionMeta {\n"
+        f"{fields}\n"
         "}\n"
     )
 
