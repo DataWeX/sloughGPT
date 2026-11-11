@@ -700,7 +700,7 @@ def test_webhook_serves_the_wire(tmp_path):
         # register: flat scalars are QUERY members on POST (hand-built wire)
         resp = client.post(
             "/training/webhooks",
-            params={"url": "https://hooks.example/x", "events": '["training.completed"]'},
+            params={"url": "https://example.com/hook-x", "events": '["training.completed"]'},
         )
         assert resp.status_code == 200, resp.text
         reg = resp.json()

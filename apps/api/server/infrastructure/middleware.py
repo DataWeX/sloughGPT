@@ -31,6 +31,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from domain.infrastructure.correlation import set_correlation_id
 from domain.logging._internal.config import set_request_id
+from infrastructure.origin_guard import OriginGuardMiddleware
 
 logger = logging.getLogger("slo.middleware")
 
@@ -695,11 +696,15 @@ def get_configured_middleware(
     order, and the inbound request path is the reverse of it.
 
     Request path (inbound -> outbound):
-        CorrelationId -> ReadinessGate -> UnifiedRequest -> Metrics -> RequestTimeout -> handler
+        CorrelationId -> OriginGuard -> ReadinessGate -> UnifiedRequest -> Metrics -> RequestTimeout -> handler
 
     CorrelationId MUST run before ReadinessGate so that the gate can
     include the correlation ID in its logs.  ReadinessGate MUST run
     before UnifiedRequest so blocked requests are logged by the gate.
+    OriginGuard sits between the two: after CorrelationId so its 403
+    envelope carries the correlation ID, before ReadinessGate so a
+    foreign-Origin send is refused before anything else evaluates it
+    (card 20261108_142919).
     """
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
@@ -707,6 +712,7 @@ def get_configured_middleware(
         (UnifiedRequestMiddleware, {}),
         (SerializationGuardMiddleware, {}),
         (ReadinessGateMiddleware, {}),
+        (OriginGuardMiddleware, {}),
         (CorrelationIdMiddleware, {}),
     ]
 
