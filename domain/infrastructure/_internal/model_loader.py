@@ -141,6 +141,13 @@ def _describe_soul(path: Path, identity: dict[str, Any]) -> str:
     )
 
 
+# Failure classification for retry loops: "permanent" = retrying the identical
+# load cannot succeed (no artifacts, refused soul lookup); "transient" = worth
+# waiting for (load lock busy). Unclassified (None) keeps historical retries.
+ERROR_KIND_PERMANENT = "permanent"
+ERROR_KIND_TRANSIENT = "transient"
+
+
 @dataclass
 class LoadResult:
     """Standardized result from model loading."""
@@ -152,6 +159,8 @@ class LoadResult:
     model: Any = None
     tokenizer: Any = None
     error: str | None = None
+    # ERROR_KIND_PERMANENT | ERROR_KIND_TRANSIENT | None (unclassified → retry)
+    error_kind: str | None = None
     metrics: dict[str, Any] = field(default_factory=dict)
 
 
@@ -208,6 +217,7 @@ class ModelLoader:
                 model_id=model_id,
                 model_type="unknown",
                 error="Another model is currently loading. Please wait.",
+                error_kind=ERROR_KIND_TRANSIENT,
             )
         try:
             ModelLoader._loading = True
@@ -304,6 +314,7 @@ class ModelLoader:
             model_id=model_id,
             model_type="slonet",
             error=f"No .slnc or .soul file found for {model_id}",
+            error_kind=ERROR_KIND_PERMANENT,
         )
 
     def _try_load_slnc(
@@ -527,6 +538,7 @@ class ModelLoader:
             model_id=model_id,
             model_type="slonet-native",
             error=error,
+            error_kind=ERROR_KIND_PERMANENT,
         )
 
     def _try_convert_to_slnc(self, cache_dir: Path, model_id: str) -> Path | None:

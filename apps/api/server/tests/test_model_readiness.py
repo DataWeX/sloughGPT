@@ -214,6 +214,94 @@ class TestAutoloadRecordsFailureReason:
         assert MODEL_LOAD_STATE["error"] is None
 
 
+def _autoload_cfg(autoload_model: str = "Qwen/Qwen2.5-0.5B-Instruct"):
+    """Minimal ServerConfig for driving ``_autoload_model`` directly."""
+    return SimpleNamespace(
+        native_soul_path="",
+        autoload_model=autoload_model,
+        autoload_device="auto",
+        quantize_slonet=False,
+        quant_bits=8,
+        quant_mode="symmetric",
+    )
+
+
+class TestPermanentFailureSkipsRetry:
+    """Classified-permanent failures burn none of the backoff budget.
+
+    A fresh worktree (no .slnc/.soul anywhere) used to run attempt 1 →
+    sleep 5 s → attempt 2 → sleep 10 s → attempt 3 before READY — 15 s
+    spent retrying a failure that cannot change between attempts
+    (card 20261104_062205). ``LoadResult.error_kind == "permanent"``
+    breaks both retry loops on the first attempt; unclassified or
+    transient results keep the historical backoff.
+    """
+
+    @patch("state.model", None)
+    @patch("state.provider", None)
+    @patch("time.sleep")
+    @patch("domain.infrastructure.model_loader.ModelLoader.load")
+    def test_permanent_failure_stops_after_first_attempt(self, mock_load, _sleep):
+        """One attempt, zero sleeps, reason still recorded (bootstrap off)."""
+        mock_load.return_value = MagicMock(
+            success=False,
+            error="No .slnc or .soul file found for Qwen/Qwen2.5-0.5B-Instruct",
+            error_kind="permanent",
+        )
+        from infrastructure.startup import _autoload_model
+
+        with patch.dict("os.environ", {"SLO_BOOTSTRAP_HF": "0"}):
+            result = _autoload_model(_autoload_cfg())
+
+        assert result is None
+        assert mock_load.call_count == 1
+        _sleep.assert_not_called()
+        assert "No local weights" in (MODEL_LOAD_STATE.get("error") or "")
+
+    @patch("state.model", None)
+    @patch("state.provider", None)
+    @patch("time.sleep")
+    @patch("domain.infrastructure.hf_hub.download_hf_model")
+    @patch("domain.infrastructure.model_loader.ModelLoader.load")
+    def test_post_download_permanent_failure_stops_too(self, mock_load, _dl, _sleep):
+        """The post-download loop honors the same classification: one
+        attempt in the local loop, one after the download, no sleeps."""
+        mock_load.return_value = MagicMock(
+            success=False,
+            error="No .slnc or .soul file found for Qwen/Qwen2.5-0.5B-Instruct",
+            error_kind="permanent",
+        )
+        from infrastructure.startup import _autoload_model
+
+        with patch.dict("os.environ", {"SLO_BOOTSTRAP_HF": "1"}):
+            result = _autoload_model(_autoload_cfg())
+
+        assert result is None
+        assert mock_load.call_count == 2
+        _sleep.assert_not_called()
+
+    @patch("state.model", None)
+    @patch("state.provider", None)
+    @patch("time.sleep")
+    @patch("domain.infrastructure.model_loader.ModelLoader.load")
+    def test_unclassified_failure_keeps_backoff(self, mock_load, _sleep):
+        """No error_kind (every pre-existing mock) → old retry behaviour."""
+        from domain.infrastructure.constants import DEFAULT_LOAD_MAX_RETRIES
+
+        mock_load.return_value = MagicMock(
+            success=False,
+            error="Another model is currently loading. Please wait.",
+        )
+        from infrastructure.startup import _autoload_model
+
+        with patch.dict("os.environ", {"SLO_BOOTSTRAP_HF": "0"}):
+            result = _autoload_model(_autoload_cfg())
+
+        assert result is None
+        assert mock_load.call_count == DEFAULT_LOAD_MAX_RETRIES + 1
+        assert _sleep.call_count == DEFAULT_LOAD_MAX_RETRIES
+
+
 class TestPgqLoadDoneRecordsFailure:
     """The PGQ completion callback's failure branch records the verdict too.
 

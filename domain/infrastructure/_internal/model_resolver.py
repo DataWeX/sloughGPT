@@ -44,8 +44,9 @@ def get_model_dir(model_id: str) -> Path:
     """Resolve HuggingFace cache directory for a model.
 
     Searches the standard HF cache first, then the project-local
-    cache (models/hf-cache/hub/) mirroring MorphTokenizer.from_pretrained.
-    A candidate that actually contains weights wins over an empty
+    cache (models/hf-cache/hub/) mirroring MorphTokenizer.from_pretrained,
+    then the user-level default cache (~/.cache/huggingface/hub) as a last
+    resort. A candidate that actually contains weights wins over an empty
     refs-only stub anywhere earlier in the order; the first existing
     candidate remains the fallback when no candidate has weights.
     """
@@ -60,6 +61,14 @@ def get_model_dir(model_id: str) -> Path:
         / f"models--{cache_id}",
         Path("models/hf-cache/hub") / f"models--{cache_id}",
     ]
+    # The user-level default cache is last: main.py pins HF_HOME to the
+    # repo-local models/hf-cache (gitignored — empty in a fresh worktree),
+    # which hid weights `hf download` had put in ~/.cache/huggingface/hub
+    # (card 20261104_062205). Appended, never inserted — it must not shadow
+    # an intact candidate earlier in the order.
+    user_cache = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{cache_id}"
+    if user_cache not in candidates:
+        candidates.append(user_cache)
 
     for candidate in candidates:
         if candidate.exists() and _dir_has_weights(candidate):

@@ -12,6 +12,15 @@ from domain.infrastructure._internal.model_resolver import (
     load_model_config,
 )
 
+
+@pytest.fixture(autouse=True)
+def _isolate_user_cache(tmp_path, monkeypatch):
+    """get_model_dir consults ~/.cache/huggingface/hub as its last candidate —
+    point HOME at tmp so the machine running the suite can never leak a real
+    user-cache entry into candidate selection (card 20261104_062205)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+
 # ── get_model_dir ─────────────────────────────────────────────────────────
 
 
@@ -171,6 +180,51 @@ class TestGetModelDirWeightsPreference:
             lambda _: tmp_path,
         )
         assert get_model_dir("gpt2") == stub
+
+
+# ── user-level cache fallback (card 20261104_062205, Defect B) ────────────
+#
+# main.py pins HF_HOME to the repo-local models/hf-cache — gitignored, so a
+# fresh worktree has an empty pin while plain `hf download` had already put
+# real weights in ~/.cache/huggingface/hub. The user cache is appended as the
+# LAST candidate: it rescues an empty pin, but never shadows a real candidate
+# earlier in the order.
+
+
+class TestGetModelDirUserCacheFallback:
+    @staticmethod
+    def _user_entry(tmp_path):
+        entry = tmp_path / "home" / ".cache" / "huggingface" / "hub" / "models--gpt2"
+        snap = entry / "snapshots" / "abc123"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_text("fake-weights")
+        return entry
+
+    def test_rescues_weights_when_pinned_candidates_are_empty(self, tmp_path, monkeypatch):
+        """HF_HOME pinned to an empty repo cache — weights a plain
+        `hf download` left in the user cache must still resolve."""
+        monkeypatch.setenv("HF_HOME", str(tmp_path / "pinned-empty"))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        entry = self._user_entry(tmp_path)
+        assert get_model_dir("gpt2") == entry
+
+    def test_never_shadows_an_earlier_weighted_candidate(self, tmp_path, monkeypatch):
+        """Appended at the end: an intact earlier candidate still wins."""
+        hf_home = tmp_path / "hf"
+        weighted = hf_home / "hub" / "models--gpt2"
+        snap = weighted / "snapshots" / "abc123"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_text("fake-weights")
+        self._user_entry(tmp_path)
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == weighted
 
 
 # ── find_safetensors ──────────────────────────────────────────────────────

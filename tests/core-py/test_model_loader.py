@@ -90,6 +90,44 @@ class TestLoadResult:
         assert result.metrics["quant_bits"] == 8
 
 
+class TestLoadErrorClassification:
+    """``error_kind`` tells retry loops what a failure means (card 20261104_062205).
+
+    ``"permanent"`` = retrying the identical load cannot succeed (no
+    artifacts, refused soul lookup) — startup breaks its backoff loop instead
+    of burning 5 s + 10 s. ``"transient"`` = worth waiting for (load lock
+    busy). ``None`` (the default) keeps every pre-existing caller's retry
+    behaviour.
+    """
+
+    def test_missing_artifacts_is_permanent(self, tmp_path):
+        loader = ModelLoader(models_dir=tmp_path)
+        result = loader.load("nonexistent-model")
+        assert not result.success
+        assert "No .slnc or .soul file" in result.error
+        assert result.error_kind == "permanent"
+
+    def test_load_lock_busy_is_transient(self):
+        loader = ModelLoader()
+        assert ModelLoader._load_lock.acquire(blocking=False)
+        try:
+            result = loader.load("whatever")
+        finally:
+            ModelLoader._load_lock.release()
+        assert not result.success
+        assert "Another model is currently loading" in result.error
+        assert result.error_kind == "transient"
+
+    def test_soul_refusal_is_permanent(self):
+        result = ModelLoader()._soul_refusal("some-model", "name", "some-key", [])
+        assert not result.success
+        assert result.error_kind == "permanent"
+
+    def test_error_kind_defaults_to_none(self):
+        result = LoadResult(success=False, model_id="x", model_type="slonet")
+        assert result.error_kind is None
+
+
 class TestModelLoader:
     """Test ModelLoader detection and routing."""
 

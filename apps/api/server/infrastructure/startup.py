@@ -2029,7 +2029,7 @@ def _autoload_model(cfg: ServerConfig):
     model_id = cfg.autoload_model
 
     # 1) Try local .slnc / safetensors via ModelLoader (with retries)
-    from domain.infrastructure.model_loader import ModelLoader
+    from domain.infrastructure.model_loader import ERROR_KIND_PERMANENT, ModelLoader
 
     loader = ModelLoader()
 
@@ -2060,6 +2060,15 @@ def _autoload_model(cfg: ServerConfig):
             return result.provider
 
         if attempt < max_retries:
+            if getattr(result, "error_kind", None) == ERROR_KIND_PERMANENT:
+                logger.warning(
+                    "Autoload attempt %d/%d failed permanently: %s — not retrying",
+                    attempt + 1,
+                    max_retries + 1,
+                    result.error,
+                    extra={"tag": "START"},
+                )
+                break
             delay = retry_delay_s * (2**attempt)
             logger.warning(
                 "Autoload attempt %d/%d failed: %s — retrying in %.1fs",
@@ -2132,6 +2141,15 @@ def _autoload_model(cfg: ServerConfig):
             return result.provider
 
         if attempt < max_retries:
+            if getattr(result, "error_kind", None) == ERROR_KIND_PERMANENT:
+                logger.warning(
+                    "Post-download load attempt %d/%d failed permanently: %s — not retrying",
+                    attempt + 1,
+                    max_retries + 1,
+                    result.error,
+                    extra={"tag": "START"},
+                )
+                break
             delay = retry_delay_s * (2**attempt)
             logger.warning(
                 "Post-download load attempt %d/%d failed: %s — retrying in %.1fs",
