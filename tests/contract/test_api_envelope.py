@@ -5,7 +5,7 @@ Response styles (docs/API.md → Response Envelope):
 - **Envelope** (default): ``success_response()`` → ``{"status": "success", "data": ...}``.
 - **Typed**: a route registered with ``response_model=X`` returns the bare typed
   payload (``GET /knowledge`` → ``list[KnowledgeItemOut]``,
-  ``POST /shell/exec`` → ``ShellExecResponse``, ``POST /inference/generate`` →
+  ``POST /shell/exec`` → ``ShellExecResponse``, ``POST /infer`` →
   ``InferResponse``). Clients pass non-enveloped payloads through unchanged
   (``apps/web/lib/http-client.ts`` unwraps iff ``status`` and ``data`` are present).
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, memo } from 'react'
-import Link from '@/vite/next-compat/link'
+import Link from 'next/link'
 import { cn, Switch, Button, Spinner } from '@sloughgpt/strui'
 import { IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
