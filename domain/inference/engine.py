@@ -82,6 +82,8 @@ class TurnResult:
     model: str | None = None
     usage: dict = field(default_factory=dict)
     elapsed_ms: float | None = None
+    generation_elapsed_ms: float | None = None
+    tokens_per_sec: float | None = None
     finish_reason: str | None = None
     tokens: list[str] = field(default_factory=list)
     consciousness: dict | None = None
