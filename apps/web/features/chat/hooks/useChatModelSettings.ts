@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { modelController } from '@/lib/model-controller'
-import { generationConfigController } from '@/lib/generation-config-controller'
+import { settingsController } from '@/lib/settings-controller'
 import { soulsController, type Soul } from '@/lib/souls-controller'
 import { trainingJobsController, type FineTunedModel } from '@/lib/training-controller'
 import { startDownload, getDownloadStatus } from '@/lib/download-controller'
@@ -194,7 +194,7 @@ export function useChatModelSettings(
     try {
       const [models, genConfig, soulsData, checkpointsData, fineTunedModels] = await Promise.all([
         modelController.list(),
-        generationConfigController.get(),
+        settingsController.getGeneration(),
         soulsController.list(),
         soulsController.listCheckpoints(),
         trainingJobsController.listFineTuned(),

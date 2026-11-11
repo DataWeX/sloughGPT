@@ -116,13 +116,24 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   updateSettings: (partial) => {
-    trackEvent('settings_changed', { keys: Object.keys(partial) })
-    const next = { ...get().settings, ...partial }
+    // Steady-state guard (card 20261102_085248): the health-driven fetch
+    // re-sends the same values every ~3 s. Filter to keys that actually
+    // changed first — an all-identical payload is a no-op: no analytics,
+    // no state churn, no localStorage flush, no backend PATCH.
+    const current = get().settings
+    const changed = Object.fromEntries(
+      Object.entries(partial).filter(
+        ([k, v]) => v !== (current as unknown as Record<string, unknown>)[k],
+      ),
+    ) as Partial<AppSettings>
+    if (Object.keys(changed).length === 0) return
+    trackEvent('settings_changed', { keys: Object.keys(changed) })
+    const next = { ...current, ...changed }
     set({ settings: next })
-    _pendingSettings = { ...(_pendingSettings ?? {}), ...partial }
+    _pendingSettings = { ...(_pendingSettings ?? {}), ...changed }
     if (_settingsTimer) clearTimeout(_settingsTimer)
     _settingsTimer = setTimeout(() => _flushSettings(get), DEBOUNCE_MS)
-    _pushToBackend(partial).catch(() => {})
+    _pushToBackend(changed).catch(() => {})
   },
 
   setModelReadiness: (readiness) => {

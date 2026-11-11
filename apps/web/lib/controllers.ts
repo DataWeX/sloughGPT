@@ -44,7 +44,6 @@ export { companionController } from './companion-controller'
 export { startDownload, getDownloadStatus } from './download-controller'
 export { feedbackController } from './feedback-controller'
 export { feedbackConversationsController } from './feedback-conversations-controller'
-export { generationConfigController } from './generation-config-controller'
 export { imagesController } from './images-controller'
 export { inferController } from './infer-controller'
 export { kbController } from './kb-controller'
@@ -140,7 +139,6 @@ export type {
 export type { CompanionTraits, CompanionInfo, CompanionPreset } from './companion-controller'
 export type { DownloadProgress } from './download-controller'
 export type { Conversation as FeedbackConversation } from './feedback-conversations-controller'
-export type { GenerationConfig } from './generation-config-controller'
 export type {
   GenerateImageResponse,
   GalleryImage,

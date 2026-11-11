@@ -44,10 +44,6 @@ vi.mock('@/features/chat/contexts/ChatToolbarContext', () => ({
   ChatToolbarProvider: ({ children }: any) => <div>{children}</div>,
 }))
 
-vi.mock('@/lib/generation-config-controller', () => ({
-  generationConfigController: { update: vi.fn() },
-}))
-
 function makeController(overrides?: Partial<ChatPageController>): ChatPageController {
   const base = {
     chat: {

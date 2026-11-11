@@ -1,16 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { chatDBMock } = vi.hoisted(() => {
+const { chatDBMock, settingsControllerMock } = vi.hoisted(() => {
   const chatDBMock = {
     getKV: vi.fn().mockResolvedValue(undefined),
     setKV: vi.fn().mockResolvedValue(undefined),
     deleteKV: vi.fn().mockResolvedValue(undefined),
   }
-  return { chatDBMock }
+  const settingsControllerMock = {
+    getGeneration: vi.fn(),
+    updateGeneration: vi.fn().mockResolvedValue({}),
+    getAll: vi.fn(),
+  }
+  return { chatDBMock, settingsControllerMock }
 })
 
 vi.mock('@/lib/db', () => ({
   chatDB: chatDBMock,
+}))
+
+vi.mock('@/lib/settings-controller', () => ({
+  settingsController: settingsControllerMock,
 }))
 
 import { useAppStore, DEFAULT_SETTINGS } from './store'
@@ -66,6 +75,50 @@ describe('useAppStore', () => {
         expect.objectContaining({ defaultTemp: 0.5 }),
       )
       vi.useRealTimers()
+    })
+  })
+
+  // Card 20261102_085248: the health-driven fetch re-sends the same values
+  // every ~3 s. In steady state nothing changed, so nothing may leave — no
+  // backend PATCH, no localStorage flush, no state churn.
+  describe('updateSettings identical-payload guard', () => {
+    it('never pushes or persists when every key is unchanged', () => {
+      vi.useFakeTimers()
+      try {
+        chatDBMock.setKV.mockClear()
+        settingsControllerMock.updateGeneration.mockClear()
+        for (let i = 0; i < 5; i++) {
+          useAppStore.getState().updateSettings({
+            defaultTemp: DEFAULT_SETTINGS.defaultTemp,
+            defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens,
+          })
+          vi.advanceTimersByTime(3_000)
+        }
+        expect(settingsControllerMock.updateGeneration).not.toHaveBeenCalled()
+        expect(chatDBMock.setKV).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('pushes only the keys that actually changed', () => {
+      settingsControllerMock.updateGeneration.mockClear()
+      useAppStore.getState().updateSettings({
+        defaultTemp: DEFAULT_SETTINGS.defaultTemp, // unchanged
+        defaultMaxTokens: 500, // changed
+      })
+      expect(settingsControllerMock.updateGeneration).toHaveBeenCalledTimes(1)
+      expect(settingsControllerMock.updateGeneration).toHaveBeenCalledWith({
+        max_new_tokens: 500,
+      })
+      expect(useAppStore.getState().settings.defaultMaxTokens).toBe(500)
+    })
+
+    it('a real change still round-trips to the backend', () => {
+      settingsControllerMock.updateGeneration.mockClear()
+      useAppStore.getState().updateSettings({ defaultTemp: 0.9 })
+      expect(settingsControllerMock.updateGeneration).toHaveBeenCalledWith({ temperature: 0.9 })
+      expect(useAppStore.getState().settings.defaultTemp).toBe(0.9)
     })
   })
 

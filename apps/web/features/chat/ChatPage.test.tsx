@@ -133,9 +133,6 @@ vi.mock('@/lib/controllers', () => ({
   modelController: { list: mockModelList, getHealth: mockGetHealth },
 }))
 vi.mock('@/lib/chat-controller', () => ({ chatController: { getSuggestions: mockGetSuggestions } }))
-vi.mock('@/lib/generation-config-controller', () => ({
-  generationConfigController: { update: vi.fn() },
-}))
 vi.mock('@/lib/feedback-store', () => ({
   useFeedbackStore: () => ({
     recordFeedback: vi.fn(),

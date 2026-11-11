@@ -14,13 +14,18 @@ const mockGetDownloadStatus = vi.fn()
 const mockIsApproved = vi.fn()
 const mockListFineTuned = vi.fn()
 const mockLoadFineTuned = vi.fn()
+const mockUpdateGeneration = vi.fn().mockResolvedValue({})
 
 vi.mock('@/lib/model-controller', () => ({
   modelController: { list: (...args: any[]) => mockList(...args), load: (...args: any[]) => mockLoad(...args), unloadModel: (...args: any[]) => mockUnloadModel(...args) },
 }))
 
-vi.mock('@/lib/generation-config-controller', () => ({
-  generationConfigController: { get: (...args: any[]) => mockGet(...args) },
+vi.mock('@/lib/settings-controller', () => ({
+  settingsController: {
+    getGeneration: (...args: any[]) => mockGet(...args),
+    updateGeneration: (...args: any[]) => mockUpdateGeneration(...args),
+    getAll: vi.fn(),
+  },
 }))
 
 vi.mock('@/lib/souls-controller', () => ({
@@ -252,5 +257,44 @@ describe('useChatModelSettings', () => {
     await act(async () => { await result.current.handleLoadFineTuned('gpt2__dataset_1') })
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('load failed'), 'error')
     expect(result.current.loadingModel).toBeNull()
+  })
+
+  // ── polling path (card 20261102_085248) ─────────────────────────────────
+
+  it('fetchInitialData reads generation settings via the current contract', async () => {
+    mockGet.mockResolvedValue({ temperature: 0.7, max_new_tokens: 300 })
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData() })
+    // mockGet is bound to settingsController.getGeneration (/settings/generation);
+    // the deprecated GET /config/generation must be gone from this path.
+    expect(mockGet).toHaveBeenCalledTimes(1)
+  })
+
+  it('steady-state refetch (the ~3s health poll) never PATCHes identical values', async () => {
+    mockGet.mockResolvedValue({ temperature: 0.7, max_new_tokens: 300 }) // == store defaults
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => {
+      for (let i = 0; i < 3; i++) await result.current.fetchInitialData()
+    })
+    expect(mockGet).toHaveBeenCalledTimes(3)
+    expect(mockUpdateGeneration).not.toHaveBeenCalled()
+  })
+
+  it('a server-side settings change round-trips into UI and store', async () => {
+    mockGet.mockResolvedValue({ temperature: 0.9, max_new_tokens: 400 })
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData() })
+    expect(result.current.temperature).toBe(0.9)
+    expect(result.current.maxTokens).toBe(400)
+    expect(useAppStore.getState().settings.defaultTemp).toBe(0.9)
+    expect(useAppStore.getState().settings.defaultMaxTokens).toBe(400)
+  })
+
+  it('a user temperature change still round-trips to the backend', async () => {
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    act(() => { result.current.setTemperature(0.9) })
+    expect(result.current.temperature).toBe(0.9)
+    expect(useAppStore.getState().settings.defaultTemp).toBe(0.9)
+    expect(mockUpdateGeneration).toHaveBeenCalledWith({ temperature: 0.9 })
   })
 })

@@ -4,14 +4,12 @@ import dynamicNext from '@/vite/next-compat/dynamic'
 import { memo, useCallback, useMemo } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
-import { generationConfigController } from '@/lib/generation-config-controller'
 import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ToolApprovalDialog } from '@/features/chat/components/ToolApprovalDialog'
 import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
 import { ModeBar } from '@/features/chat/components/toolbar/ModeBar'
 import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
-import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
 import { useAppStore } from '@/lib/store'
 import { useChatStore } from '@/lib/chat-store'
@@ -157,10 +155,11 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
 
   const handleTemperatureChange = useCallback(
     (temp: number) => {
+      // model.setTemperature is handleSetTemperature: it persists through the
+      // store → PATCH /settings/generation. The old direct write to the
+      // deprecated /config/generation here duplicated that PATCH on every
+      // slider click (card 20261102_085248) — the store path is the only one.
       model.setTemperature(temp)
-      generationConfigController.update({ temperature: temp }).catch((e) => {
-        logger.warning('Could not generation config temperature save', { exception: String(e) })
-      })
     },
     [model],
   )
@@ -168,9 +167,6 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
   const handleMaxTokensChange = useCallback(
     (tokens: number) => {
       model.setMaxTokens(tokens)
-      generationConfigController.update({ max_new_tokens: tokens }).catch((e) => {
-        logger.warning('Could not generation config max_tokens save', { exception: String(e) })
-      })
     },
     [model],
   )

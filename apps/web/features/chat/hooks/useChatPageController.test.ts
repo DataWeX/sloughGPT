@@ -207,10 +207,6 @@ vi.mock('@/lib/chat-controller', () => ({
   chatController: { getSuggestions: vi.fn().mockResolvedValue([]) },
 }))
 
-vi.mock('@/lib/generation-config-controller', () => ({
-  generationConfigController: {},
-}))
-
 vi.mock('@/lib/images-controller', () => ({
   imagesController: { generate: vi.fn() },
 }))
