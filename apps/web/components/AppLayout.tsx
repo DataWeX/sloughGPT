@@ -22,7 +22,7 @@ import { loadProcessSnapshot } from '@/lib/process-notifications'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
 import { useToastStore } from '@/lib/toast-store'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, syncWithBackend } from '@/lib/store'
 import { useBannerStore } from '@/lib/banner-store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
@@ -80,6 +80,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   // Contract-versioned and failure-tolerant inside (never blocks boot).
   useEffect(() => {
     void loadProcessSnapshot()
+  }, [])
+
+  // Global defaults are server truth (Phase 2): pull them once at boot so the
+  // chat dialog can resolve an effective value per conversation
+  // (conversation AppScope delta ?? this global default).
+  useEffect(() => {
+    void syncWithBackend()
   }, [])
 
   useEffect(() => {

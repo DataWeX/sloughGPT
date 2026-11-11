@@ -66,6 +66,14 @@ class ChatRequest(BaseModel):
         and passes it down through the router; this translation is the one place
         it crosses into the turn so the provider's token loop can observe it.
         """
+        # ``max_new_tokens`` resolves into ``max_tokens`` (model_post_init), so
+        # the alias must carry the SAME precedence as the field it resolves to:
+        # otherwise an explicit turn value looks unset to the AppScope seam
+        # (``apply_scope`` reads ``model_fields_set``) and gets swallowed by the
+        # conversation/global layer — breaking turn > delta > global per field.
+        fields_set = set(self.model_fields_set)
+        if "max_new_tokens" in fields_set:
+            fields_set.add("max_tokens")
         return TurnRequest(
             messages=[{"role": m.role, "content": m.content} for m in self.messages],
             model=self.model,
@@ -83,7 +91,7 @@ class ChatRequest(BaseModel):
             use_context_core=self.use_context_core,
             use_rag=self.use_rag,
             cancel_event=cancel_event,
-            model_fields_set=set(self.model_fields_set),
+            model_fields_set=fields_set,
         )
 
 

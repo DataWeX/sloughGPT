@@ -25,8 +25,14 @@ interface StreamChatParams {
   messages: { role: string; content: string }[]
   model: string
   systemPrompt: string
-  maxTokens: number
-  temperature: number
+  /**
+   * Turn-layer override for this one request. Omit it and the server resolves
+   * the value from the conversation's AppScope over the global defaults —
+   * sending it means "this turn wins" (e.g. regenerate-with-options).
+   */
+  maxTokens?: number
+  /** Turn-layer override — same precedence rule as `maxTokens`. */
+  temperature?: number
   userId: string
   sessionId: string
   images?: string[]
@@ -76,19 +82,25 @@ interface StreamChatParams {
 }
 
 function buildBody(params: StreamChatParams) {
-  return {
+  // Precedence at the turn seam: turn (explicit wire field) > conversation
+  // AppScope > global settings. An *absent* field is how the client says
+  // "resolve me from my layers", so defaults are not shipped on every POST —
+  // that was the scattered-read Phase 2 retired (the client used to be the
+  // de facto resolver). `use_rag` likewise travels as a scope field, not as a
+  // constant `true` that would pin the conversation layer out.
+  const body: Record<string, unknown> = {
     messages: params.messages,
     model: params.model,
     system_prompt: params.systemPrompt,
-    max_new_tokens: params.maxTokens,
-    temperature: params.temperature,
     user_id: params.userId,
     session_id: params.sessionId,
     images: params.images,
     knowledge: params.knowledge,
     agent_id: params.agentId || undefined,
-    use_rag: true,
   }
+  if (params.temperature !== undefined) body.temperature = params.temperature
+  if (params.maxTokens !== undefined) body.max_new_tokens = params.maxTokens
+  return body
 }
 
 export async function streamChatResponse(params: StreamChatParams): Promise<void> {

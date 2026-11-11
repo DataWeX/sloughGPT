@@ -84,6 +84,8 @@ vi.mock('@/lib/store', () => ({
   useAppStore: Object.assign((sel?: any) => (sel ? sel({ settings: {} }) : { settings: {} }), {
     getState: () => ({ settings: {} }),
   }),
+  // Boot-time global-defaults pull — a no-op here (the real one fetches).
+  syncWithBackend: vi.fn(async () => {}),
 }))
 
 import AppLayout from './AppLayout'
