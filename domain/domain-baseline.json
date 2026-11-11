@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "a78d711caa192d2dfec56f9ff1f1446b0d6454dd",
+    "recorded_commit": "bad7f5ee2d82516144cc750b1a1bec8669829b9c",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -260,7 +260,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "032874e0fc1a46f2603e0f10dff7167950becd16"
+      "tree_hash": "821f2f96ac34296184864614d76e8fd80af80624"
     },
     "infrastructure": {
       "class": "core-capability",
