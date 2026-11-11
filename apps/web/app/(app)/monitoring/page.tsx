@@ -60,6 +60,7 @@ import {
   BatteryCard,
 } from '@/components/monitoring/SystemInfoCards'
 import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
+import { TestRunsCard } from '@/components/monitoring/TestRunsCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
@@ -594,6 +595,9 @@ export default function SystemHealthPage() {
 
       {/* Row 2: Server errors — always visible */}
       {loaded && <ServerErrorsCard liveHealth={liveHealth} />}
+
+      {/* Test-run summaries from the stored artifacts (card 20261111_110106) */}
+      {loaded && <TestRunsCard />}
 
       {/* Session inspector (folded from the old /session page, card 20261101_154058) */}
       {loaded && (

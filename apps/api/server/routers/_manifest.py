@@ -7,6 +7,7 @@ registration order, so this list is also the route-precedence order.
 
 # fmt: off
 ROUTER_MODULES: list[str] = [
+    "agent_routines",
     "agents",
     "auth",
     "benchmark",
@@ -29,6 +30,7 @@ ROUTER_MODULES: list[str] = [
     "mole",
     "multimodal",
     "openwebui",
+    "personality",
     "plugins",
     "profiles",
     "ratelimit",
@@ -38,6 +40,7 @@ ROUTER_MODULES: list[str] = [
     "souls",
     "system",
     "tenants",
+    "test_results",
     "token_tree",
     "tokenizer",
     "tokens",
@@ -49,7 +52,5 @@ ROUTER_MODULES: list[str] = [
     "workflow",
     "workspaces",
     "world_render",
-    "personality",
-    "agent_routines",
 ]
 # fmt: on
