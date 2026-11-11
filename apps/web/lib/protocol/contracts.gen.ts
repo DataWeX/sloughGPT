@@ -274,6 +274,33 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
+  "test_results.list": {
+    "auth_scope": "authenticated",
+    "description": "Per-file summaries of the stored test-run artifacts (tests/core-py/test_results/*.json): counts, status and freshness.",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.test_results",
+    "name": "test_results.list",
+    "operation_id": "test_results.list.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/test-results",
+    "result": {
+      "properties": {
+        "files": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
 } as const satisfies Record<string, ContractDescriptor>
 
 export type ContractName = keyof typeof CONTRACTS
