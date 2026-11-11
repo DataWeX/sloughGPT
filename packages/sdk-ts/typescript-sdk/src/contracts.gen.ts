@@ -274,6 +274,45 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
+  "test_results.list": {
+    "auth_scope": "authenticated",
+    "description": "Journey test-result runs from tests/core-py/test_results/*.json, normalized to real booleans (string 'False' never becomes truthy).",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.test_results",
+    "name": "test_results.list",
+    "operation_id": "test_results.list.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/test-results",
+    "result": {
+      "properties": {
+        "failed": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "integer"
+        },
+        "suites": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "unknown": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
 } as const satisfies Record<string, ContractDescriptor>
 
 export type ContractName = keyof typeof CONTRACTS

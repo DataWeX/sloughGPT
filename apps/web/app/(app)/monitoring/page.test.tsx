@@ -286,6 +286,13 @@ vi.mock('@/components/monitoring/WorkflowCard', () => ({
 }))
 vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => mockUseLiveStatus,
+  // api-monitor-store enters this graph via http-client (the TestRunsCard's
+  // useEndpoint) and dynamically imports this module at load to subscribe —
+  // the stub shape matches training/page.test.tsx.
+  liveStatusStore: {
+    getState: () => ({ health: null, connectionStatus: 'connected' }),
+    subscribe: () => () => {},
+  },
 }))
 
 import MonitoringPage from './page'

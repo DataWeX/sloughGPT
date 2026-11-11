@@ -60,6 +60,7 @@ import {
   BatteryCard,
 } from '@/components/monitoring/SystemInfoCards'
 import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
+import { TestRunsCard } from '@/components/monitoring/TestRunsCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
@@ -694,6 +695,9 @@ export default function SystemHealthPage() {
           </div>
         </FoldSection>
       )}
+
+      {/* Collapsible: journey test-run evidence (tests/core-py/test_results/*.json) */}
+      {loaded && <TestRunsCard />}
 
       {/* Collapsible: System Info */}
       {loaded && (
