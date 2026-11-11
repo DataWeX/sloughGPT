@@ -28,6 +28,7 @@ import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { publishMemoryEvent } from '@/lib/memory-events'
+import { useConversationScope, effectiveGeneration } from '@/lib/conversation-scope-store'
 import { useChatSessions } from './useChatSessions'
 
 const _log = logger.child('chat-messages')
@@ -285,8 +286,6 @@ export function useChatMessages(config: ChatMessagesConfig) {
           messages: contextMessages.map((m) => ({ role: m.role, content: m.content })),
           model,
           systemPrompt,
-          maxTokens,
-          temperature,
           userId: userIdRef.current,
           sessionId: sessionIdRef.current,
           signal: loadingRef.current?.signal,
@@ -341,8 +340,6 @@ export function useChatMessages(config: ChatMessagesConfig) {
       storeSessionContext,
       scheduleFlush,
       model,
-      temperature,
-      maxTokens,
       currentSoul,
       currentAgent,
       customSystemPrompt,
@@ -359,7 +356,6 @@ export function useChatMessages(config: ChatMessagesConfig) {
       if (targetIdx <= 0) return
       const contextMessages = currentMessages.slice(0, targetIdx + 1)
       const assistantId = currentMessages[targetIdx].id
-      const overrideTemp = options.temperature ?? temperature
 
       // Truncate conversation after this point if regenerating from a non-last message
       if (targetIdx < currentMessages.length - 1) {
@@ -398,8 +394,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
           messages: contextMessages.map((m) => ({ role: m.role, content: m.content })),
           model,
           systemPrompt,
-          maxTokens,
-          temperature: overrideTemp,
+          // One-off overrides ride the turn layer — only what the user actually
+          // picked is sent; everything else resolves through the conversation
+          // AppScope over global defaults.
+          maxTokens: options.maxTokens,
+          temperature: options.temperature,
           userId: userIdRef.current,
           sessionId: sessionIdRef.current,
           signal: loadingRef.current?.signal,
@@ -446,16 +445,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
         storeSessionContext(sessionIdRef.current, messagesRef.current)
       }
     },
-    [
-      model,
-      temperature,
-      maxTokens,
-      currentSoul,
-      customSystemPrompt,
-      showToast,
-      storeSessionContext,
-      scheduleFlush,
-    ],
+    [model, currentSoul, customSystemPrompt, showToast, storeSessionContext, scheduleFlush],
   )
 
   // ── Feedback ──────────────────────────────────────────────────────────────
@@ -739,7 +729,15 @@ export function useChatMessages(config: ChatMessagesConfig) {
           let hasContent = false
           let assistantContentLen = 0
           const signal = loadingRef.current?.signal
-          for await (const token of engineRef.current.generate(prompt, maxTokens, temperature)) {
+          // Offline twin of the turn seam: the local engine has no server to
+          // ask, so it resolves this conversation's delta over the global
+          // default here — same per-field precedence, same values.
+          const eff = effectiveGeneration(sessionIdRef.current, { temperature, maxTokens })
+          for await (const token of engineRef.current.generate(
+            prompt,
+            eff.maxTokens,
+            eff.temperature,
+          )) {
             if (signal?.aborted) break
             hasContent = true
             let cleanedToken = token
@@ -771,8 +769,6 @@ export function useChatMessages(config: ChatMessagesConfig) {
               .map((m) => ({ role: m.role, content: m.content })),
             model,
             systemPrompt: finalSystemPrompt,
-            maxTokens,
-            temperature,
             userId: userIdRef.current,
             sessionId: sessionIdRef.current,
             images: userImages.length > 0 ? userImages.map((img) => img.dataUrl) : undefined,
@@ -1007,6 +1003,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
         const backendSessions = await (
           await import('@/lib/session-controller')
         ).sessionController.list()
+        // The session index carries each conversation's AppScope delta — seed
+        // the scope cache from the fetch we already made (no extra request).
+        useConversationScope.getState().seed(backendSessions)
         if (ignore) return
         const localSessions = await chatDB.loadSessions()
         if (ignore) return
