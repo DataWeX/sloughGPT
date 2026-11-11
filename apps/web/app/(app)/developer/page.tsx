@@ -21,6 +21,7 @@ import { ApiTab } from './dev-api-tab'
 import { QuickActionsTab } from './dev-quick-actions-tab'
 import { StartupTab } from './dev-startup-tab'
 import { VmTab } from './dev-vm-tab'
+import { DevDepsTab } from './dev-deps-tab'
 
 export default function DeveloperPage() {
   const [tab, setTab] = useState<string>('shell')
@@ -66,6 +67,7 @@ export default function DeveloperPage() {
           <TabsTrigger value="quick">Quick Actions</TabsTrigger>
           <TabsTrigger value="startup">Startup</TabsTrigger>
           <TabsTrigger value="vm">VM</TabsTrigger>
+          <TabsTrigger value="deps">Dependencies</TabsTrigger>
         </TabsList>
 
         <TabsContent value="shell">
@@ -88,6 +90,9 @@ export default function DeveloperPage() {
         </TabsContent>
         <TabsContent value="vm">
           <VmTab />
+        </TabsContent>
+        <TabsContent value="deps">
+          <DevDepsTab />
         </TabsContent>
       </Tabs>
     </PageContainer>

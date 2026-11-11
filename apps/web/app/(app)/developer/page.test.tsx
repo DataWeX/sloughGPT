@@ -79,6 +79,13 @@ describe('DeveloperPage', () => {
     expect(screen.getByRole('tab', { name: 'VM' })).toBeTruthy()
   })
 
+  it('exposes the Dependencies tab — build-time library landscape (card 20261111_110106)', () => {
+    // Composition assertion: grouping/drift logic is exercised end-to-end
+    // in developer/dev-deps-tab.test.tsx (5 tests against the same DevDepsTab).
+    render(<DeveloperPage />)
+    expect(screen.getByRole('tab', { name: /dependencies/i })).toBeTruthy()
+  })
+
   it('defaults to shell tab', () => {
     render(<DeveloperPage />)
     expect(screen.getByTestId('terminal-panel')).toBeTruthy()
