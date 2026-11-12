@@ -623,6 +623,135 @@ async def _cmd_agent(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+async def _cmd_cockpit(args: argparse.Namespace) -> int:
+    """Live agent console window — direct a running agent while it works.
+
+    Serves the four-pane console (log/work/message/terminal) and drains
+    its commands at step boundaries; --window opens it as its own
+    browser window, --pin keeps that window on top (wmctrl, best-effort).
+    Model: --soul, --http, or the AVION_SOUL env (same as `avion agent`).
+    Browser: --profile owns a launch; otherwise the global --cdp flag
+    (before the subcommand) or AVION_CDP_URL attaches.
+    """
+    from avion.ai.agent import Agent, AgentConfig
+    from avion.ai.control import CommandInbox
+    from avion.backends.cdp import CdpBackend
+    from avion.cockpit import Cockpit, EventStream
+    from avion.launch import Profile, launch_chromium
+
+    model = _build_agent_model(args)
+    if model is None:
+        return _fail("cockpit needs a model: --soul PATH, --http URL, or AVION_SOUL set")
+
+    launched = None
+    if args.profile:
+        launched = launch_chromium(
+            Profile(args.profile), headless=not args.headed, extra_args=args.arg
+        )
+        backend: Any = launched.backend
+        print(f"cockpit on profile={args.profile} model={model.model_name}", file=sys.stderr)
+    else:
+        backend = CdpBackend(cdp_url=args.cdp)
+        print(f"cockpit on {args.cdp} model={model.model_name}", file=sys.stderr)
+
+    inbox = CommandInbox()
+    agent = Agent(model=model, config=AgentConfig(max_steps=args.max_steps), inbox=inbox)
+    events = EventStream()
+    agent.on_step(
+        lambda step: events.emit(
+            "step",
+            {
+                "step": step.step_number,
+                "action": step.action.action_type.value if step.action else "",
+                "observation": (step.observation or "")[:200],
+                "reward": step.reward,
+            },
+        )
+    )
+    result_box: dict[str, Any] = {"result": None}
+
+    def state() -> dict[str, Any]:
+        result = result_box["result"]
+        control = agent.control
+        cfg = agent.config
+        return {
+            "task": args.task,
+            "model": model.model_name,
+            "running": result is None,
+            "done": result is not None,
+            "paused": control.paused,
+            "stopped": control.stopped,
+            "steps": agent.step_count,
+            "instructions": control.instructions,
+            "messages": list(control.messages),
+            "params": {
+                "max_steps": cfg.max_steps,
+                "deadline_ms": cfg.deadline_ms,
+                "action_delay_ms": cfg.action_delay_ms,
+                "step_timeout": cfg.step_timeout,
+            },
+            "stop_reason": result.stop_reason if result else "",
+            "transcript": result.transcript_path if result else "",
+        }
+
+    cockpit = Cockpit(
+        inbox=inbox,
+        events=events,
+        state=state,
+        records=lambda: agent.control_records,
+        host=args.host,
+        port=args.port,
+    )
+    result = None
+    try:
+        await agent.start(backend=backend)
+        url = await cockpit.start()
+        print(f"console: {url}", file=sys.stderr)
+        if args.window:
+            if not cockpit.open_window(url, pin=args.pin, extra_args=args.arg):
+                print(f"could not open a window — open {url} in a browser instead", file=sys.stderr)
+        elif args.pin:
+            print("--pin only applies to --window (ignored)", file=sys.stderr)
+        result = await agent.run(args.task)
+        result_box["result"] = result
+        # one beat so the console can fetch final state/events before shutdown
+        await asyncio.sleep(0.3)
+    except Exception as exc:
+        return _fail(f"cockpit run failed: {exc}")
+    finally:
+        await cockpit.stop()
+        await agent.stop()
+        # the console window stays open for the operator — it is the handoff
+        if launched is not None and not (
+            result is not None and result.stop_reason == "needs_human"
+        ):
+            launched.stop()
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        # Summarize, don't dump: one status line + why it stopped, then errors.
+        if result.success:
+            mark = "done"
+        elif result.stop_reason == "stopped":
+            mark = "stopped"
+        else:
+            mark = "FAILED"
+        print(f"{mark}: {result.steps_taken} steps — stop: {result.stop_reason}")
+        for line in (result.error or "").splitlines()[:5]:
+            print(f"  {line}")
+        if result.stop_reason == "needs_human":
+            ch = result.challenge or {}
+            print(
+                f"needs a human: {ch.get('evidence', 'challenge page')} —"
+                " close the browser when you're done with it"
+            )
+    if result.stop_reason == "needs_human":
+        return 3  # distinct from 1 (failed): a human must take over
+    if result.stop_reason == "stopped":
+        return 0  # operator-initiated stop is a clean end, not a failure
+    return 0 if result.success else 1
+
+
 # ── recording commands ──────────────────────────────────────────────────
 
 
@@ -956,6 +1085,65 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CHROMIUM_ARG",
         help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
     )
+
+    sp = sub.add_parser(
+        "cockpit",
+        help="live agent console — four-pane web window to direct a running agent",
+        description=(
+            "Serves the console (log / work / message / terminal) and streams a "
+            "running agent loop: send pause/resume/stop, instructions, messages "
+            "and params (set_params) while it works; commands apply at step "
+            "boundaries. Model: --soul (local .soul checkpoint), --http (a running "
+            "inference server), or the AVION_SOUL env var. Browser: --profile owns "
+            "a launch; otherwise the global --cdp flag (before the subcommand) or "
+            "AVION_CDP_URL attaches. --window opens the console as its own browser "
+            "window; --pin keeps it always on top (X11, needs wmctrl)."
+        ),
+    )
+    sp.add_argument("task", nargs="?", default="describe what you see on the current page")
+    sp.add_argument("--soul", default=None, help="local .soul checkpoint for our own engine")
+    sp.add_argument("--http", default=None, help="base URL of a running inference server")
+    sp.add_argument(
+        "--api-key",
+        default=None,
+        help=(
+            "API key for --http: switches it to the hosted chat-completions "
+            "wire shape (Authorization: Bearer). Prefer the AVION_API_KEY "
+            "env so the key stays out of shell history and process lists."
+        ),
+    )
+    sp.add_argument(
+        "--model",
+        default=None,
+        help="model id for hosted chat-completions providers that require one",
+    )
+    sp.add_argument("--profile", default=None, help="launch and own this profile's browser")
+    sp.add_argument("--max-steps", type=int, default=50, help="step cap (AgentConfig default: 50)")
+    sp.add_argument(
+        "--headed", action="store_true", help="show the window when launching (default: headless)"
+    )
+    sp.add_argument(
+        "--port", type=int, default=0, help="console port (0 = ephemeral, printed on start)"
+    )
+    sp.add_argument("--host", default="127.0.0.1", help="console bind address")
+    sp.add_argument(
+        "--window",
+        action="store_true",
+        help="open the console as its own browser window (not a tab)",
+    )
+    sp.add_argument(
+        "--pin",
+        action="store_true",
+        help="keep the console window always on top (X11, needs wmctrl; with --window)",
+    )
+    sp.add_argument("--json", action="store_true", help="print the final trajectory as JSON")
+    sp.add_argument(
+        "--arg",
+        action="append",
+        default=[],
+        metavar="CHROMIUM_ARG",
+        help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
+    )
     return p
 
 
@@ -980,6 +1168,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_cmd_run(args))
     if args.cmd == "agent":
         return asyncio.run(_cmd_agent(args))
+    if args.cmd == "cockpit":
+        return asyncio.run(_cmd_cockpit(args))
 
     async def run(b) -> int:
         if args.cmd == "open":

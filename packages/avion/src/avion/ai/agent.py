@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from avion.ai.control import CommandInbox, ControlState
 from avion.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
 from avion.ai.models import (
     Action,
@@ -88,7 +89,8 @@ class AgentResult:
     total_duration_ms: float = 0.0
     steps_taken: int = 0
     screenshots_captured: int = 0
-    stop_reason: str = ""  # done|fail|max_steps|deadline|no_progress|unverified|needs_human|aborted
+    # done|fail|max_steps|deadline|no_progress|unverified|needs_human|aborted|stopped
+    stop_reason: str = ""
     challenge: dict[str, Any] | None = None  # set when stop_reason == "needs_human"
     transcript_path: str = ""  # where this run's transcript landed ('' = not saved)
     transcript_failures: int = 0  # write/close errors counted, never fatal
@@ -138,6 +140,7 @@ class Agent:
         headless: bool = True,
         tools: ToolRegistry | None = None,
         executor: ToolExecutor | None = None,
+        inbox: CommandInbox | None = None,
     ):
         self._model = model or EchoModel()
         self._config = config or AgentConfig()
@@ -146,6 +149,12 @@ class Agent:
         self._headless = headless
         self._tools = tools
         self._executor = executor
+        # Control plane: commands arrive via the inbox, are drained at
+        # step boundaries, and land in _control/_control_records. Without
+        # an inbox the loop behaves exactly as before.
+        self._inbox = inbox
+        self._control = ControlState()
+        self._control_records: list[dict[str, Any]] = []
 
         self._backend = None
         self._mouse: Mouse | None = None
@@ -190,6 +199,30 @@ class Agent:
     @property
     def feedback_loop(self) -> FeedbackLoop:
         return self._feedback_loop
+
+    @property
+    def config(self) -> AgentConfig:
+        return self._config
+
+    @property
+    def inbox(self) -> CommandInbox | None:
+        """The command inbox this loop drains (None when undirected)."""
+        return self._inbox
+
+    @property
+    def control(self) -> ControlState:
+        """Live control state — written only at step boundaries by drain."""
+        return self._control
+
+    @property
+    def control_records(self) -> list[dict[str, Any]]:
+        """Applied commands, oldest first (read by consoles/logs)."""
+        return list(self._control_records)
+
+    @property
+    def step_count(self) -> int:
+        """Steps completed in the current (or last) run."""
+        return self._step_count
 
     def on_step(self, callback: Callable[[Step], None]) -> None:
         """Register a callback for each step.
@@ -294,6 +327,16 @@ class Agent:
                 if (time.monotonic() - run_start) * 1000 >= self._config.deadline_ms:
                     raise _DeadlineExceeded("deadline exceeded")
 
+                # CONTROL — drain operator commands at the step boundary;
+                # a pause holds here and its drift is credited back to the
+                # clock (pausing must never age the run into "deadline").
+                if self._inbox is not None:
+                    stop_requested, drift = await self._control_boundary()
+                    run_start += drift
+                    if stop_requested:
+                        stop_reason = "stopped"
+                        break
+
                 step_start = time.perf_counter()
 
                 # 1. OBSERVE — bounded; a hung capture degrades to an
@@ -321,9 +364,15 @@ class Agent:
                         break
 
                 # 2. DECIDE — bounded + retried (predict is a pure call,
-                #    so retrying it has no side effects)
+                #    so retrying it has no side effects). The task text is
+                #    rebuilt each step so operator instructions/messages
+                #    land on the very next prediction.
                 action = await self._predict(
-                    task, screenshot_b64, a11y_tree, trajectory.steps, run_start
+                    self._control.effective_task(task),
+                    screenshot_b64,
+                    a11y_tree,
+                    trajectory.steps,
+                    run_start,
                 )
 
                 # No-progress detection: identical actions in a row.
@@ -542,6 +591,35 @@ class Agent:
             return await asyncio.wait_for(factory(), timeout=budget)
         except TimeoutError as exc:
             raise _StepTimeout(f"no result within {budget:.2f}s") from exc
+
+    # ── Control-plane boundary ────────────────────────────────────────
+
+    def _drain_control(self) -> None:
+        """Apply pending commands — the loop is their only writer."""
+        for record in self._inbox.drain(self._control, self._config):
+            self._control_records.append(record)
+
+    async def _control_boundary(self) -> tuple[bool, float]:
+        """Drain at a step boundary; hold here while paused.
+
+        Returns ``(stop_requested, clock_drift_s)``. The drift is the
+        time spent paused: the caller credits it back to ``run_start``,
+        so a pause *stops* the run's deadline clock instead of
+        consuming it — an operator may stay paused for hours without
+        aging the run into ``stop_reason "deadline"``. Resume/stop
+        commands are drained inside the hold, which is what lets a
+        paused run end without ever resuming.
+        """
+        self._drain_control()
+        if self._control.stopped:
+            return True, 0.0
+        drift = 0.0
+        while self._control.paused and self._running and not self._control.stopped:
+            mark = time.monotonic()
+            await asyncio.sleep(0.05)
+            drift += time.monotonic() - mark
+            self._drain_control()
+        return self._control.stopped, drift
 
     async def _observe(self, run_start: float) -> tuple[str, dict[str, Any] | None]:
         """Bounded OBSERVE. A hung capture degrades (empty frame / no
