@@ -116,7 +116,31 @@ describe('ConfigureStep advanced options fold', () => {
   })
 
   it('keeps hyperparameter validation errors visible while collapsed', () => {
-    renderStep({ ...baseForm, trainingEpochs: 999 })
-    expect(screen.getByText('Epochs must be 1–500')).toBeTruthy()
+    renderStep({ ...baseForm, trainingEpochs: 1001 })
+    expect(screen.getByText('Epochs must be 1–1000')).toBeTruthy()
+  })
+
+  it('clamps epochs to TRAINING_LIMITS on input (1–1000, no NaN)', () => {
+    const form = makeForm({ trainingEpochs: 10 })
+    renderStep(form)
+    fireEvent.click(screen.getByText('Show advanced options'))
+    fireEvent.change(screen.getByLabelText('Epochs'), { target: { value: '5000' } })
+    expect(form.setTrainingEpochs).toHaveBeenCalledWith(1000)
+  })
+
+  it('commits the learning rate on blur only — typeable, clamped, no silent fallback', () => {
+    const form = makeForm({ trainingLR: 0.001 })
+    renderStep(form)
+    fireEvent.click(screen.getByText('Show advanced options'))
+    const lr = screen.getByLabelText('Learning rate')
+    // Typing "0.001" must not commit mid-entry (the old onChange did).
+    fireEvent.change(lr, { target: { value: '0.001' } })
+    expect(form.setTrainingLR).not.toHaveBeenCalled()
+    fireEvent.blur(lr)
+    expect(form.setTrainingLR).toHaveBeenCalledWith(0.001)
+    // Out-of-range draft clamps to the limit on blur.
+    fireEvent.change(lr, { target: { value: '2' } })
+    fireEvent.blur(lr)
+    expect(form.setTrainingLR).toHaveBeenLastCalledWith(1)
   })
 })

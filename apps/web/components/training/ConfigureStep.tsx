@@ -24,18 +24,34 @@ import {
   trainingJobsController,
   type TrainingRecommendationResponse,
 } from '@/lib/training-controller'
+import { TRAINING_LIMITS, clampTrainingField, parseAndClamp } from '@/lib/sanitize'
 import type { StepProps } from './DataStep'
+
+// Backend field limits — sanitize.ts TRAINING_LIMITS is the single source of
+// truth (the hand-written 1–500 / 1–256 / (0,1] checks drifted from it).
+const { epochs: EP, batch_size: BS, learning_rate: LR } = TRAINING_LIMITS
 
 export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: StepProps) {
   const [recommendation, setRecommendation] = useState<TrainingRecommendationResponse | null>(null)
   const [loadingRec, setLoadingRec] = useState(false)
 
+  // Learning rate commits on BLUR, not per keystroke: typing "0.001" must
+  // not clamp mid-entry, and the old `Number(x) || 1e-3` fallback silently
+  // turned intermediate states ("", "0") into 0.001 — the source of the
+  // reported LR=1 saved-config bug.
+  const [lrDraft, setLrDraft] = useState(String(form.trainingLR))
+  useEffect(() => {
+    setLrDraft(String(form.trainingLR))
+  }, [form.trainingLR])
+
   const hpErrors = useMemo(() => {
     const errors: string[] = []
-    if (form.trainingEpochs < 1 || form.trainingEpochs > 500) errors.push('Epochs must be 1–500')
-    if (form.trainingBatchSize < 1 || form.trainingBatchSize > 256)
-      errors.push('Batch size must be 1–256')
-    if (form.trainingLR <= 0 || form.trainingLR > 1) errors.push('Learning rate must be 0–1')
+    if (form.trainingEpochs < EP.min || form.trainingEpochs > EP.max)
+      errors.push(`Epochs must be ${EP.min}–${EP.max}`)
+    if (form.trainingBatchSize < BS.min || form.trainingBatchSize > BS.max)
+      errors.push(`Batch size must be ${BS.min}–${BS.max}`)
+    if (form.trainingLR < LR.min || form.trainingLR > LR.max)
+      errors.push(`Learning rate must be ${LR.min}–${LR.max}`)
     return errors
   }, [form.trainingEpochs, form.trainingBatchSize, form.trainingLR])
 
@@ -56,9 +72,11 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
   const applyRecommendation = () => {
     if (!recommendation) return
     const rec = recommendation.recommendation
-    form.setTrainingLR(rec.learning_rate)
-    form.setTrainingBatchSize(rec.batch_size)
-    form.setTrainingEpochs(rec.epochs)
+    // Clamp: backend recommendations must not smuggle out-of-range values
+    // into the form (single source of truth = TRAINING_LIMITS).
+    form.setTrainingLR(clampTrainingField('learning_rate', rec.learning_rate))
+    form.setTrainingBatchSize(clampTrainingField('batch_size', rec.batch_size))
+    form.setTrainingEpochs(clampTrainingField('epochs', rec.epochs))
   }
 
   return (
@@ -282,12 +300,14 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     <Input
                       id="train-epochs"
                       type="number"
-                      min={1}
-                      max={500}
+                      min={EP.min}
+                      max={EP.max}
                       value={form.trainingEpochs}
-                      onChange={(e) => form.setTrainingEpochs(Number(e.target.value))}
-                      error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
-                      aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                      onChange={(e) =>
+                        form.setTrainingEpochs(parseAndClamp(e.target.value, EP.min, EP.max))
+                      }
+                      error={form.trainingEpochs < EP.min || form.trainingEpochs > EP.max}
+                      aria-invalid={form.trainingEpochs < EP.min || form.trainingEpochs > EP.max}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
@@ -299,12 +319,16 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     <Input
                       id="train-batch"
                       type="number"
-                      min={1}
-                      max={256}
+                      min={BS.min}
+                      max={BS.max}
                       value={form.trainingBatchSize}
-                      onChange={(e) => form.setTrainingBatchSize(Number(e.target.value))}
-                      error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
-                      aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                      onChange={(e) =>
+                        form.setTrainingBatchSize(parseAndClamp(e.target.value, BS.min, BS.max))
+                      }
+                      error={form.trainingBatchSize < BS.min || form.trainingBatchSize > BS.max}
+                      aria-invalid={
+                        form.trainingBatchSize < BS.min || form.trainingBatchSize > BS.max
+                      }
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
@@ -317,10 +341,20 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                       id="train-lr"
                       type="text"
                       inputMode="decimal"
-                      value={form.trainingLR}
-                      onChange={(e) => form.setTrainingLR(Number(e.target.value) || 1e-3)}
-                      error={form.trainingLR <= 0 || form.trainingLR > 1}
-                      aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
+                      value={lrDraft}
+                      onChange={(e) => setLrDraft(e.target.value)}
+                      onBlur={() => {
+                        const n = Number(lrDraft)
+                        if (lrDraft.trim() !== '' && Number.isFinite(n)) {
+                          form.setTrainingLR(clampTrainingField('learning_rate', n))
+                        } else {
+                          // Unparseable draft → revert to the last valid value
+                          // (never a silent `|| 1e-3` substitution).
+                          setLrDraft(String(form.trainingLR))
+                        }
+                      }}
+                      error={form.trainingLR < LR.min || form.trainingLR > LR.max}
+                      aria-invalid={form.trainingLR < LR.min || form.trainingLR > LR.max}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
