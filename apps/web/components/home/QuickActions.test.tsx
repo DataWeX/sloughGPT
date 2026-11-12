@@ -147,7 +147,16 @@ describe('QuickActions', () => {
     const testBtn = Array.from(buttons).find((b) => b.textContent?.includes('Test model'))
     fireEvent.click(testBtn!)
     await waitFor(() => {
-      expect(mockStream).toHaveBeenCalledWith('Hello!', { waitForModel: true })
+      // Bare probe: own session + all three pipeline stages off, so the
+      // "Hello!" answer is the model's, not the consciousness narrative
+      // (card 20261112_140010).
+      expect(mockStream).toHaveBeenCalledWith('Hello!', {
+        waitForModel: true,
+        session_id: 'quick-test',
+        use_consciousness: false,
+        use_context_core: false,
+        use_rag: false,
+      })
     })
   })
 

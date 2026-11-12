@@ -2147,16 +2147,19 @@ class InferenceRouter:
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
 
-        # Context frame — memory/rag layers via ContextCore, gated on the memory
-        # service holding at least one fact (the gate travels with the frame
-        # builder: empty memory means skip the frame entirely).
+        # Context frame — memory/rag layers via ContextCore, gated on the wire
+        # flag first (use_context_core was previously honored only by the
+        # non-streaming chat(); stream_turn ignored it — card 20261112_140010),
+        # then on the memory service holding at least one fact (the gate travels
+        # with the frame builder: empty memory means skip the frame entirely).
         frame = None
-        try:
-            frame, _context_info = await _build_context_frame(
-                self._get_context_core(), session_id, user_msg, corr_id="stream"
-            )
-        except Exception as e:
-            logger.debug("Context frame build failed: %s", e)
+        if req.use_context_core:
+            try:
+                frame, _context_info = await _build_context_frame(
+                    self._get_context_core(), session_id, user_msg, corr_id="stream"
+                )
+            except Exception as e:
+                logger.debug("Context frame build failed: %s", e)
 
         frame_context = []
         if frame:
@@ -2224,7 +2227,12 @@ class InferenceRouter:
 
         # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
         # main's chat-pipeline wiring onto the stream_turn restructure).
-        messages = await _apply_consciousness_reflection(messages, "-")
+        # Gated on the wire flag: a bare probe (QuickActions "Test model",
+        # use_consciousness=false) must not receive the reflection system
+        # message — the 0.5B model answered the narrative instead of the
+        # probe (card 20261112_140010).
+        if req.use_consciousness:
+            messages = await _apply_consciousness_reflection(messages, "-")
 
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
