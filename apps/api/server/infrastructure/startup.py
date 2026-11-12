@@ -47,6 +47,7 @@ def _advance_startup_phase(**fields: object) -> None:
 
 # Timeout constants for startup/shutdown hooks (seconds)
 _TIMEOUT_TASK_QUEUE = 10.0
+_TIMEOUT_AGENT_ROUTINES = 10.0
 _TIMEOUT_CONFIG = 5.0
 _TIMEOUT_WANDB = 30.0
 _TIMEOUT_MULTIMODAL = 30.0
@@ -265,6 +266,18 @@ class StartupOrchestrator:
                     profiles=all_profiles,
                 ),
             )
+            # Agent phase 2: background routine runner. Depends on the task
+            # queue because it only ever enqueues; the queue owns execution.
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "agent_routines",
+                    self._phase_agent_routines,
+                    depends_on=["task_queue"],
+                    timeout=_TIMEOUT_AGENT_ROUTINES,
+                    critical=False,
+                    profiles=quick_plus,
+                ),
+            )
 
             # Register shutdown hooks
             self._lifecycle.register_shutdown_hook(
@@ -291,6 +304,16 @@ class StartupOrchestrator:
                     self._shutdown_task_queue,
                     depends_on=[],
                     timeout=_TIMEOUT_TASK_QUEUE,
+                ),
+            )
+            # Ticker stops before the queue drains (shutdown runs the
+            # reverse of startup): no new enqueues once draining begins.
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook(
+                    "agent_routines_shutdown",
+                    self._shutdown_agent_routines,
+                    depends_on=["task_queue_shutdown"],
+                    timeout=_TIMEOUT_AGENT_ROUTINES,
                 ),
             )
             self._lifecycle.register_shutdown_hook(
@@ -1118,6 +1141,26 @@ class StartupOrchestrator:
                 "Memory maintenance scheduler start failed: %s", e, extra={"tag": "START"}
             )
 
+    async def _phase_agent_routines(self):
+        """Register the routine handler and start the background ticker.
+
+        Non-critical: the server is fully usable without it, so a failure
+        here only means no scheduled runs (manual execute still works).
+        """
+        try:
+            from domain.agents import get_routine_runner
+
+            runner = get_routine_runner()
+            runner.register_handlers()
+            runner.start()
+            logger.info(
+                "Agent routine runner started (interval=%.1fs)",
+                runner.tick_interval,
+                extra={"tag": "START"},
+            )
+        except Exception as e:
+            logger.warning("Agent routine runner start failed: %s", e, extra={"tag": "START"})
+
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
         STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
@@ -1194,6 +1237,21 @@ class StartupOrchestrator:
                 logger.info("Task queue stopped", extra={"tag": "START"})
             except Exception as e:
                 logger.warning("Task queue shutdown: %s", e, extra={"tag": "START"})
+
+    async def _shutdown_agent_routines(self):
+        """Stop the routine ticker only — in-flight runs belong to the queue.
+
+        Deliberately does not await or cancel running tasks: the queue
+        drains them on its own shutdown, and killing a model⇄tool loop
+        mid-step would strand its run record.
+        """
+        try:
+            from domain.agents import get_routine_runner
+
+            get_routine_runner().stop()
+            logger.info("Agent routine runner stopped", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("Agent routine runner shutdown: %s", e, extra={"tag": "START"})
 
     async def _shutdown_jobs(self):
         """Mark running training jobs as crashed on shutdown."""

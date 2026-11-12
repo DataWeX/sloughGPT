@@ -658,6 +658,15 @@ class AgentConfig:
     max_iterations: int = 10
     timeout: int = 120
     instructions: str = ""
+    # Model tier, decided once at agent construction (never branched on
+    # inside execute_stream): "main" always asks the model, "fast" is
+    # cache-first so lightweight bots do not hit the slow model every run.
+    inference_tier: str = "main"
+    # Model tier, decided ONCE at agent construction (never branched on
+    # inside execute_stream): "main" always calls the model, "fast" serves
+    # identical prompts from the response cache first so lightweight bots
+    # do not always pay for the slow model.
+    inference_tier: str = "main"
 
 
 class Agent:

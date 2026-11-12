@@ -65,6 +65,11 @@ def _mock_system(**overrides) -> MagicMock:
 def _app(ar: AgentsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(ar.router)
+    # The routine stream lives in its own descriptor-projected module (the
+    # declaration ratchet forbids new hand-built routes in agents.py).
+    from routers.agent_routines import router as routines_router
+
+    app.include_router(routines_router)
     from infrastructure.exception_handlers import register_all_handlers
 
     register_all_handlers(app)
@@ -202,3 +207,70 @@ class TestListRuns:
             client = TestClient(_app(ar))
             resp = client.get("/agents/runs")
         assert resp.status_code == 200
+
+
+class TestRoutinesStream:
+    """SSE surface for the background routine runtime (agent phase 2)."""
+
+    def _runner_with_events(self):
+        """A runner that never touches disk — record_event needs no store."""
+        from domain.agents._internal.routines import AgentRoutineRunner
+
+        class _NullStore:
+            def list(self):
+                return []
+
+            def get(self, routine_id):
+                return None
+
+            def save(self, routine):
+                return True
+
+            def delete(self, routine_id):
+                return False
+
+        return AgentRoutineRunner(system=None, store=_NullStore(), queue=None)
+
+    @patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True]))
+    @patch("asyncio.sleep", new=AsyncMock(return_value=None))
+    def test_stream_content_type_and_snapshot(self):
+        ar = AgentsRouter()
+        client = TestClient(_app(ar))
+        with client.stream("GET", "/agents/routines/stream") as resp:
+            assert resp.status_code == 200
+            assert resp.headers["content-type"].startswith("text/event-stream")
+            body = resp.read().decode()
+        assert '"stream": "agent-routines"' in body
+        assert '"phase": "SNAPSHOT"' in body
+        assert '"routines"' in body
+
+    @patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True]))
+    @patch("asyncio.sleep", new=AsyncMock(return_value=None))
+    def test_stream_terminates_on_disconnect(self):
+        ar = AgentsRouter()
+        client = TestClient(_app(ar))
+        with client.stream("GET", "/agents/routines/stream") as resp:
+            body = resp.read().decode()
+        # A complete frame is emitted after the loop exits.
+        assert '"phase": "COMPLETE"' in body
+
+    @patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True]))
+    @patch("asyncio.sleep", new=AsyncMock(return_value=None))
+    def test_stream_forwards_routine_run_events(self):
+        from domain.agents._internal import routines as _rt
+
+        runner = self._runner_with_events()
+        runner.record_event(
+            {"event": "final", "routine_id": "r1", "agent_id": "helper", "text": "done"}
+        )
+        _rt._default_runner = runner
+
+        ar = AgentsRouter()
+        client = TestClient(_app(ar))
+        with client.stream("GET", "/agents/routines/stream") as resp:
+            body = resp.read().decode()
+
+        assert '"routine_id": "r1"' in body
+        assert '"phase": "FINAL"' in body
+
+        _rt._default_runner = None

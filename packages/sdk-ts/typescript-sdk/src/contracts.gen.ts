@@ -29,6 +29,30 @@ export interface ContractDescriptor {
 }
 
 export const CONTRACTS = {
+  "agents.routines_stream": {
+    "auth_scope": "authenticated",
+    "description": "Stream background routine status as SSE: a routine snapshot first, then live run events, each carrying a monotonic seq for resume.",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.agent_routines",
+    "name": "agents.routines_stream",
+    "operation_id": "agents.routines_stream.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/agents/routines/stream",
+    "result": {
+      "properties": {
+        "stream": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
   "chat.sessions.list": {
     "auth_scope": "authenticated",
     "description": "Session-metadata index for the chat sidebar: one row per session with id/name/timestamps/message_count (SessionModel wire shape).",
