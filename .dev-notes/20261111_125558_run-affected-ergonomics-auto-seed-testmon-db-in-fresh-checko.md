@@ -63,5 +63,25 @@ marker edits, no `tests/core-py/test_results/*.json`, CI unchanged.
 - 2026-11-12: card picked as next after landings (user answer); design
   presented, "continue building" = go with empirical slow-list seed +
   agreed scope (`scripts/seed_testmon.py`, `scripts/slow_paths.txt`,
-  `tests/test_run_affected_seed.py`). Code NOT started — landings
-  (Phase 2 → card 1 → card 2) run first per user's sequence answer.
+  `tests/test_run_affected_seed.py`, phases test). Code started in
+  worktree `fe08f8/run-affected` (branch `test/run-affected` @ `2a818d30f`)
+  while run 4 (Phase 2's gate) executes — landings still run first for
+  main.
+- TDD: seed helper RED (`ModuleNotFoundError`) → GREEN **11/11**; phases
+  RED against the old script (5 failed / 1 passed — the passthrough pin)
+  → GREEN **17/17**. ruff check+format clean on all 3 files; `sh -n`
+  clean; AGENTS.md Test Rule clauses 3 + 6 amended (seed exception +
+  fast/slow bullet).
+- Design correction found during research: primary worktree's `.testmondata`
+  is 9 days stale (16MB Nov 3) while session worktrees hold the live 52MB
+  one → seed source = **freshest across worktrees**, not primary
+  (TESTMON_SEED_DB overrides). Primary path contains a space
+  (`Default Project/sloughGPT`) → `worktree ` prefix-strip, never
+  whitespace-split (pinned by test).
+- Collision note: another session checked out `feat/run-affected-phases` in
+  `Default Project/sloughGPT/.wt-test-runs` at 08:17 (from its
+  `feat/work-history` lane) — tree clean, no own commits, run_affected.sh
+  untouched. Flagged to user; my work is on a separate branch/worktree.
+- Pending gates: fresh-worktree proof (real run: seed message + selection
+  <1k + fast phase ≤5min), partition collect-only evidence (union of the
+  two phases == plain run), change-scoped closure.
