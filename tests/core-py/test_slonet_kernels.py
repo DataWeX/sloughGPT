@@ -114,19 +114,29 @@ class TestNbSoftmax:
 
 class TestNbEmbed:
     def test_basic(self):
+        """In-place contract: the kernel writes into *out* — the numba path
+        returns None, the numpy fallback returns out, so the preallocated
+        buffer is what BOTH paths share (asserting on the return value was
+        the drift: AttributeError under SLO_USE_NUMBA=1)."""
         emb = np.ones((10, 4), dtype=np.float32)
         ids = np.array([[0, 1, 2]])
         out = np.zeros((1, 3, 4), dtype=np.float32)
-        result = nb_embed(emb, ids, out)
-        assert result.shape == (1, 3, 4)
-        assert np.allclose(result, 1.0)
+        nb_embed(emb, ids, out)
+        assert out.shape == (1, 3, 4)
+        assert np.allclose(out, 1.0)
 
     def test_clipping(self):
-        emb = np.ones((10, 4), dtype=np.float32)
+        """Out-of-range ids clamp to [0, rows-1] on both paths (numba: manual
+        clamp, numpy: np.clip). Row-distinct values make the clamp observable —
+        the original shape-only check passed no matter what was written."""
+        emb = np.arange(40, dtype=np.float32).reshape(10, 4)
         ids = np.array([[0, 100, -5]])
         out = np.zeros((1, 3, 4), dtype=np.float32)
-        result = nb_embed(emb, ids, out)
-        assert result.shape == (1, 3, 4)
+        nb_embed(emb, ids, out)
+        assert out.shape == (1, 3, 4)
+        np.testing.assert_allclose(out[0, 0], emb[0])  # id 0 → row 0
+        np.testing.assert_allclose(out[0, 1], emb[9])  # id 100 → clamped to last row
+        np.testing.assert_allclose(out[0, 2], emb[0])  # id -5 → clamped to row 0
 
 
 # ── nb_add_pos ──────────────────────────────────────────────────────────────
@@ -134,11 +144,13 @@ class TestNbEmbed:
 
 class TestNbAddPos:
     def test_basic(self):
+        """In-place contract: x is mutated (numba path returns None, numpy
+        fallback returns x — assert on x itself, not the return value)."""
         x = np.zeros((1, 4, 8), dtype=np.float32)
         pos_emb = np.ones((100, 8), dtype=np.float32)
-        out = nb_add_pos(x, pos_emb, 0, 4)
-        assert out.shape == x.shape
-        assert np.allclose(out, 1.0)
+        nb_add_pos(x, pos_emb, 0, 4)
+        assert x.shape == (1, 4, 8)
+        assert np.allclose(x, 1.0)
 
 
 # ── nb_swi_glu_mul ──────────────────────────────────────────────────────────
@@ -219,13 +231,18 @@ class TestFusedLayerNorm:
 
 class TestLmHeadArgmax:
     def test_basic(self):
-        # x is (embed_dim,), W is (vocab_size, embed_dim)
-        x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        """x is (1, D) — both paths read row 0 (numba: x[0, d] under nopython
+        type inference; numpy fallback: logits[0]). The original 1-D x failed
+        numba type inference while the numpy fallback returned 0 by
+        COINCIDENCE (np.argmax of a scalar), so the test was green on the
+        wrong arithmetic. W's rows are then permuted so the answer lands at a
+        different index — a constant-0 kernel cannot pass."""
         W = np.array([[3.0, 2.0, 1.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
-        # logits = x @ W.T = [1*3+2*2+3*1, 1*1+2*0+3*0, 1*0+2*0+3*1] = [10, 1, 3]
-        # argmax = 0
-        result = lm_head_argmax(x, W)
-        assert result == 0
+        x = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
+        # logits = x @ W.T = [[1*3+2*2+3*1, 1, 3]] = [[10, 1, 3]] → argmax 0
+        assert lm_head_argmax(x, W) == 0
+        # rows permuted → logits [[1, 3, 10]] → argmax 2
+        assert lm_head_argmax(x, W[[1, 2, 0]]) == 2
 
 
 # ── fused_attention_single / fused_attention_multi ──────────────────────────
