@@ -534,8 +534,22 @@ class TestInitLifecycle:
         ):
             asyncio.run(orch._init_lifecycle())
         assert orch._lifecycle is lifecycle
-        assert lifecycle.register_startup_hook.call_count == 7
-        assert lifecycle.register_shutdown_hook.call_count == 7
+        assert lifecycle.register_startup_hook.call_count == 8
+        assert lifecycle.register_shutdown_hook.call_count == 8
+        startup_names = {c.args[0].name for c in lifecycle.register_startup_hook.call_args_list}
+        assert startup_names == {
+            "task_queue",
+            "config",
+            "model_load",
+            "wandb",
+            "multimodal",
+            "model_registry",
+            "routers",
+            "agent_routines",
+        }
+        shutdown_names = {c.args[0].name for c in lifecycle.register_shutdown_hook.call_args_list}
+        assert "agent_routines_shutdown" in shutdown_names
+        assert "task_queue_shutdown" in shutdown_names
         assert lifecycle.register_gate.call_count == 2
         mock_bus.assert_called_once()
         assert orch._profile_enum is not None

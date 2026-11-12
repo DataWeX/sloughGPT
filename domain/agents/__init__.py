@@ -4,7 +4,7 @@ Public API:
     SecurityConfig, SecurityBoundary, ToolCapability, ToolDefinition
     ToolExecutionContext, ToolRunner, AgentConfig, Agent
     ToolSpec, ToolParam, ToolRegistry, get_agent, get_runner, get_agent_system,
-    get_tool_registry
+    get_tool_registry, get_routine_runner
     AgentLoop, Event, ToolCall, ProtocolError, decode, encode_tool_block,
     validate_args
     make_provider_infer, resolve_provider, render_tool_contract
@@ -31,6 +31,8 @@ _LAZY_IMPORTS = {
     # orchestrator + run history (heavier graphs)
     "MultiAgentOrchestrator": ("._internal.multi", "MultiAgentOrchestrator"),
     "get_agent_run_store": ("._internal.run_history", "get_agent_run_store"),
+    # background routine runner (agent phase 2 — file store, task-queue seam)
+    "get_routine_runner": ("._internal.routines", "get_routine_runner"),
     # canonical loop + protocol
     "AgentLoop": ("._internal.loop", "AgentLoop"),
     "Event": ("._internal.loop", "Event"),
@@ -70,6 +72,7 @@ __all__ = [
     "get_runner",
     "get_agent_system",
     "get_tool_registry",
+    "get_routine_runner",
     "ToolSpec",
     "ToolParam",
     "ToolRegistry",

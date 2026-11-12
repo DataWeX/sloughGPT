@@ -50,5 +50,6 @@ ROUTER_MODULES: list[str] = [
     "workspaces",
     "world_render",
     "personality",
+    "agent_routines",
 ]
 # fmt: on
