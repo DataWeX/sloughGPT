@@ -103,19 +103,61 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: package-lock.json
-      # Cache the Cypress binary (~120 MB) keyed on the exact lockfile
-      # version — `npx cypress install` skips the download when warm.
+      # Step-level gate (NOT job-level `if:`): the job must always REPORT its
+      # check — a job-level skip can leave a required check "expected" and
+      # block merges. When no frontend-relevant path changed, everything
+      # below is skipped and the job completes in seconds instead of ~30m
+      # (card 20261112_062436). Conservative: any unknown event, missing
+      # base, or empty diff → web=true (run, never silently skip).
+      - name: Frontend-relevant changes?
+        id: fe
+        shell: bash
+        run: |
+          base=""
+          case "${{ github.event_name }}" in
+            push) base="${{ github.event.before }}" ;;
+            pull_request) base="${{ github.event.pull_request.base.sha }}" ;;
+          esac
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            echo "no base — running"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git cat-file -e "$base^{commit}" 2>/dev/null || \
+            git fetch --no-tags --depth=1 origin "$base" 2>/dev/null || true
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "base unreachable — running"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$base" "${{ github.sha }}" 2>/dev/null || true)
+          echo "changed files:"; echo "$files"
+          if [ -z "$files" ]; then
+            echo "empty diff — running"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$files" | grep -qE '^(apps/web/|packages/|\.github/workflows/|package\.json$|package-lock\.json$|tsconfig\.base\.json$)'; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false — no frontend-relevant change" >> "$GITHUB_OUTPUT"
+          fi
       - name: Resolve Cypress version
         id: cypress
+        if: steps.fe.outputs.web == 'true'
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/cypress'].version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
+        if: steps.fe.outputs.web == 'true'
         with:
           path: ~/.cache/Cypress
           key: cypress-${{ runner.os }}-${{ steps.cypress.outputs.version }}
       - run: npm ci --ignore-scripts
+        if: steps.fe.outputs.web == 'true'
       # --ignore-scripts skips cypress's binary download; fetch it explicitly.
       - run: npx cypress install
+        if: steps.fe.outputs.web == 'true'
       - run: npm run e2e:vite
+        if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
 
   python-checks:
