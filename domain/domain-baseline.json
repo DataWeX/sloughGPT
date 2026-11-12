@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "bad7f5ee2d82516144cc750b1a1bec8669829b9c",
+    "recorded_commit": "4ebe2364393c0ee8761abe7bd5e51a42a7c2232d",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -147,7 +147,7 @@
       "consumers": ["tests/", "apps/cli/", "scripts/"],
       "note": "static gate cores (command parity, domain baseline, router manifest) projected to sloughgpt gates + Site Doctor",
       "debt": null,
-      "tree_hash": "680bc0b92fe76a8615693e9d7c1a03cfab2c9be0"
+      "tree_hash": "0c28a7e8c67aaf6b36b9aba656796b875de405e2"
     },
     "generation": {
       "class": "core-capability",
