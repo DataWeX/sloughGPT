@@ -85,8 +85,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests pillow
+          # torch/transformers/peft removed 2026-11-12: domain/ is torch-free
+          # (own engine), the suite runs green without them, and the two
+          # torch-touching tests importorskip by design (card 20261112_062436).
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow
           python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist pytest-timeout
           # test_vfs_addon.py imports lz4 at module scope -> collection error
           python -m pip install lz4
@@ -138,8 +140,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests pillow
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow
           # pytest-cov was missing here (every other python job has it): the
           # --cov flags made pytest exit 4 before collecting a single test.
           python -m pip install pytest pytest-cov pytest-asyncio
@@ -188,8 +189,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests pillow
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow
           python -m pip install -e packages/mogdb
 
       - name: Projection matches the served route table (runtime)
@@ -215,8 +215,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests
           python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist pytest-timeout
           python -m pip install -e packages/mogdb
 
@@ -499,6 +498,9 @@ jobs:
       - name: Install + benchmark
         run: |
           python -m pip install --upgrade pip
+          # torch stays HERE only: scripts/tools/performance_test.py imports
+          # torch at module level (torch-era benchmark — every other job dropped
+          # torch 2026-11-12, card 20261112_062436; own-engine perf = own card).
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install transformers numpy
           python scripts/tools/performance_test.py --test latency --runs 5 --tokens 20
