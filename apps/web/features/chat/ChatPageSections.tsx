@@ -4,7 +4,6 @@ import dynamicNext from '@/vite/next-compat/dynamic'
 import { memo, useCallback, useMemo } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
-import { generationConfigController } from '@/lib/generation-config-controller'
 import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ToolApprovalDialog } from '@/features/chat/components/ToolApprovalDialog'
 import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
@@ -14,6 +13,7 @@ import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
 import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
 import { useAppStore } from '@/lib/store'
+import { useConversationScope, saveConversationScope } from '@/lib/conversation-scope-store'
 import { useChatStore } from '@/lib/chat-store'
 
 const VoiceChatMode = dynamicNext(
@@ -154,25 +154,31 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
   const { ui, model, chat, clearChat } = controller
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
+  // Effective value for THIS conversation: its AppScope delta over the global
+  // default — the same per-field precedence the server applies at the turn
+  // seam. The dialog edits the conversation instance, never the globals.
+  const scope = useConversationScope((state) => state.scopes[chat.sessionIdRef.current])
 
   const handleTemperatureChange = useCallback(
     (temp: number) => {
-      model.setTemperature(temp)
-      generationConfigController.update({ temperature: temp }).catch((e) => {
-        logger.warning('Could not generation config temperature save', { exception: String(e) })
+      const sid = chat.sessionIdRef.current
+      if (!sid) return
+      saveConversationScope(sid, { temperature: temp }).catch((e) => {
+        logger.warning('Could not conversation scope temperature save', { exception: String(e) })
       })
     },
-    [model],
+    [chat],
   )
 
   const handleMaxTokensChange = useCallback(
     (tokens: number) => {
-      model.setMaxTokens(tokens)
-      generationConfigController.update({ max_new_tokens: tokens }).catch((e) => {
-        logger.warning('Could not generation config max_tokens save', { exception: String(e) })
+      const sid = chat.sessionIdRef.current
+      if (!sid) return
+      saveConversationScope(sid, { max_tokens: tokens }).catch((e) => {
+        logger.warning('Could not conversation scope max_tokens save', { exception: String(e) })
       })
     },
-    [model],
+    [chat],
   )
 
   const handleAutoApproveToolsChange = useCallback(
@@ -187,8 +193,8 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
     <ChatSettings
       isOpen={true}
       model={model.model}
-      temperature={model.temperature}
-      maxTokens={model.maxTokens}
+      temperature={scope?.temperature ?? settings.defaultTemp}
+      maxTokens={scope?.max_tokens ?? settings.defaultMaxTokens}
       autoApproveTools={settings.autoApproveTools}
       onModelChange={model.setModel}
       availableModels={model.availableModels}

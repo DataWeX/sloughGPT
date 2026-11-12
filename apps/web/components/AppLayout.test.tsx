@@ -132,6 +132,8 @@ vi.mock('@/lib/store', () => ({
     (sel?: any) => (sel ? sel({ settings: mockAppSettings }) : { settings: mockAppSettings }),
     { getState: () => ({ settings: mockAppSettings }) },
   ),
+  // Boot-time global-defaults pull — a no-op here (the real one fetches).
+  syncWithBackend: vi.fn(async () => {}),
 }))
 vi.mock('@/lib/api-monitor-store', () => ({
   useApiMonitor: (sel?: any) => (sel ? sel(mockApiMonitor) : mockApiMonitor),

@@ -74,8 +74,141 @@ export const CONTRACTS = {
     "path": "/chat/sessions",
     "result": {
       "items": {
+        "$defs": {
+          "AppScopeDelta": {
+            "additionalProperties": false,
+            "description": "Per-conversation configuration delta \u2014 the mini-app's own settings.\n\nPydantic twin of ``domain.inference.app_scope.AppScope`` (the frozen\ndomain value object; ``tests/test_app_scope.py`` pins field parity\nbetween the two). Persisted wholesale on the session record under\n``scope`` via ``PUT /chat/sessions/{id}``; ``None`` on any field means\n\"unset \u2014 inherit the layer below\" (presence-based, never value-based).\nBounds mirror ``ChatRequest`` so a delta can never hold a value the wire\nwould reject.",
+            "properties": {
+              "knowledge": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Knowledge"
+              },
+              "max_tokens": {
+                "anyOf": [
+                  {
+                    "maximum": 2048,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max Tokens"
+              },
+              "repetition_penalty": {
+                "anyOf": [
+                  {
+                    "maximum": 2.0,
+                    "minimum": 0.5,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Repetition Penalty"
+              },
+              "system_prompt": {
+                "anyOf": [
+                  {
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "System Prompt"
+              },
+              "temperature": {
+                "anyOf": [
+                  {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Temperature"
+              },
+              "top_k": {
+                "anyOf": [
+                  {
+                    "maximum": 500,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Top K"
+              },
+              "top_p": {
+                "anyOf": [
+                  {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Top P"
+              },
+              "use_context_core": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Use Context Core"
+              },
+              "use_rag": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Use Rag"
+              }
+            },
+            "title": "AppScopeDelta",
+            "type": "object"
+          }
+        },
         "additionalProperties": true,
-        "description": "One row of GET /chat/sessions \u2014 the session-metadata index contract.\n\nSingle source of truth for the wire shape of a session row: the\n``chat.sessions.list`` descriptor's ``result`` schema and the generated TS\n``SessionMeta`` interface both derive from this model\n(``scripts/gen_ts_contracts.py``). Mirrors\n``InferenceRouter._build_session_metadata_index`` output \u2014 exactly these\nfive keys, always present. ``extra=\"allow\"`` so indexed rows may grow\nwithout breaking consumers.",
+        "description": "One row of GET /chat/sessions \u2014 the session-metadata index contract.\n\nSingle source of truth for the wire shape of a session row: the\n``chat.sessions.list`` descriptor's ``result`` schema and the generated TS\n``SessionMeta`` interface both derive from this model\n(``scripts/gen_ts_contracts.py``). Mirrors\n``InferenceRouter._build_session_metadata_index`` output \u2014 exactly these\nkeys, always present. ``extra=\"allow\"`` so indexed rows may grow\nwithout breaking consumers.",
         "properties": {
           "created_at": {
             "title": "Created At",
@@ -93,6 +226,17 @@ export const CONTRACTS = {
             "title": "Name",
             "type": "string"
           },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AppScopeDelta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"
@@ -109,6 +253,54 @@ export const CONTRACTS = {
         "type": "object"
       },
       "type": "array"
+    },
+    "version": "1"
+  },
+  "chat.sessions.update": {
+    "auth_scope": "authenticated",
+    "description": "Update session metadata (name/archived/starred/pinned) and/or replace the conversation's AppScope delta (scope: model settings, system prompt, knowledge, context toggles) \u2014 the per-conversation config resolved over global defaults on each turn.",
+    "idempotent": true,
+    "method": "PUT",
+    "module": "routers.inference",
+    "name": "chat.sessions.update",
+    "operation_id": "chat.sessions.update.put",
+    "params": {
+      "properties": {
+        "archived": {
+          "description": "Archive/unarchive the session",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "New session name",
+          "type": "string"
+        },
+        "pinned": {
+          "description": "Pin/unpin the session",
+          "type": "boolean"
+        },
+        "scope": {
+          "description": "AppScope delta for this conversation \u2014 replaces the stored delta wholesale (omit to leave it unchanged)",
+          "type": "object"
+        },
+        "starred": {
+          "description": "Star/unstar the session",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "path": "/chat/sessions/{session_id}",
+    "result": {
+      "properties": {
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
     },
     "version": "1"
   },
@@ -348,4 +540,18 @@ export interface SessionMeta {
   created_at: string
   updated_at: string
   message_count: number
+  scope?: AppScopeDelta | null
+}
+
+/** Per-conversation config delta (`AppScopeDelta` — see SessionMeta.scope). */
+export interface AppScopeDelta {
+  temperature?: number | null
+  top_p?: number | null
+  top_k?: number | null
+  repetition_penalty?: number | null
+  max_tokens?: number | null
+  system_prompt?: string | null
+  knowledge?: string[] | null
+  use_context_core?: boolean | null
+  use_rag?: boolean | null
 }

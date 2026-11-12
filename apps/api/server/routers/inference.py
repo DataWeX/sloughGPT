@@ -28,7 +28,7 @@ from infrastructure.auth import require_auth_if_enabled
 from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
 from infrastructure.contract import REGISTRY, RouteEntry
 from infrastructure.sse_fallback import sse_error, sse_event, sse_token
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
@@ -44,6 +44,7 @@ from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
 from domain.models import ConsciousnessProcessor, apply_processors, get_provider
+from domain.settings import get_settings
 
 logger = logging.getLogger("slo.inference")
 
@@ -319,6 +320,31 @@ class CreateSessionRequest(BaseModel):
     model: str | None = None
 
 
+class AppScopeDelta(BaseModel):
+    """Per-conversation configuration delta — the mini-app's own settings.
+
+    Pydantic twin of ``domain.inference.app_scope.AppScope`` (the frozen
+    domain value object; ``tests/test_app_scope.py`` pins field parity
+    between the two). Persisted wholesale on the session record under
+    ``scope`` via ``PUT /chat/sessions/{id}``; ``None`` on any field means
+    "unset — inherit the layer below" (presence-based, never value-based).
+    Bounds mirror ``ChatRequest`` so a delta can never hold a value the wire
+    would reject.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_k: int | None = Field(default=None, ge=0, le=500)
+    repetition_penalty: float | None = Field(default=None, ge=0.5, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=2048)
+    system_prompt: str | None = Field(default=None, max_length=100000)
+    knowledge: list[str] | None = Field(default=None, max_length=100)
+    use_context_core: bool | None = None
+    use_rag: bool | None = None
+
+
 class UpsertSessionRequest(BaseModel):
     """Schema for updating session metadata."""
 
@@ -326,6 +352,8 @@ class UpsertSessionRequest(BaseModel):
     archived: bool | None = None
     starred: bool | None = None
     pinned: bool | None = None
+    scope: AppScopeDelta | None = None
+    """Conversation AppScope delta — replaces the stored delta wholesale."""
 
 
 class BranchSessionRequest(BaseModel):
@@ -347,7 +375,7 @@ class SessionModel(BaseModel):
     ``SessionMeta`` interface both derive from this model
     (``scripts/gen_ts_contracts.py``). Mirrors
     ``InferenceRouter._build_session_metadata_index`` output — exactly these
-    five keys, always present. ``extra="allow"`` so indexed rows may grow
+    keys, always present. ``extra="allow"`` so indexed rows may grow
     without breaking consumers.
     """
 
@@ -358,6 +386,8 @@ class SessionModel(BaseModel):
     created_at: str
     updated_at: str
     message_count: int
+    scope: AppScopeDelta | None = None
+    """This conversation's AppScope delta (``None`` = inherits global only)."""
 
 
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
@@ -370,6 +400,10 @@ from schemas.chat import (  # noqa: E402
     Message,
 )
 
+from domain.inference.app_scope import (  # noqa: E402
+    apply_scope,
+    resolve_scope,
+)
 from domain.inference.engine import (  # noqa: E402
     TurnRequest,
     TurnResult,
@@ -1186,6 +1220,7 @@ class InferenceRouter:
                             "created_at": data.get("created_at") or "",
                             "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
                             "message_count": msg_count,
+                            "scope": data.get("scope"),
                         }
                     )
                 except (json.JSONDecodeError, OSError):
@@ -1988,6 +2023,47 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
 
+    def _resolve_turn_scope(self, session_id: str, req: TurnRequest) -> frozenset[str]:
+        """Resolve this conversation's AppScope over global settings; apply to ``req``.
+
+        The turn seam: the below-turn layers are loaded here (conversation
+        delta from the session record, global defaults from
+        ``domain.settings``), while resolution itself stays the pure
+        ``resolve_scope``. Applied in place on ``req`` — transport fields only
+        where the wire left them unset (``apply_scope``), plus the additive
+        ``system_prompt``/``knowledge`` composition.
+
+        Returns the conversation-won field names: the caller passes them to
+        ``_apply_meta_weights`` alongside ``model_fields_set`` so a
+        server-side heuristic may not move a value the user deliberately
+        scoped to this conversation.
+        """
+        session = self._get_session(session_id)
+        raw = session.get("scope")
+        delta: dict[str, Any] | None = None
+        if isinstance(raw, dict):
+            try:
+                # Re-validate on read: the session file is a trust boundary
+                # (hand-edited / foreign-version data). Corrupt or out-of-
+                # bounds deltas fail safe — inherit the layers below.
+                delta = AppScopeDelta.model_validate(raw).model_dump(exclude_none=True)
+            except ValidationError:
+                logger.debug("Dropping invalid scope delta on session %s", session_id)
+        scope = resolve_scope(
+            conversation=delta,
+            global_settings=get_settings().settings.generation,
+        )
+        applied = apply_scope(req, scope, conversation=delta)
+        if scope.system_prompt:
+            req.system_prompt = (
+                f"{req.system_prompt}\n\n{scope.system_prompt}"
+                if req.system_prompt
+                else scope.system_prompt
+            )
+        if scope.knowledge:
+            req.knowledge = [*scope.knowledge, *(req.knowledge or [])]
+        return applied
+
     async def stream_turn(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]:
         """The single inference method: yield raw tokens, then the final ``TurnResult``.
 
@@ -2040,6 +2116,11 @@ class InferenceRouter:
         if not user_msg:
             raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
+        # Instance seam: resolve this conversation's AppScope (delta over
+        # global defaults) once, before anything reads the transport fields.
+        session_id = req.session_id or "default"
+        scope_applied = self._resolve_turn_scope(session_id, req)
+
         system_prompt = req.system_prompt or ""
 
         if req.images:
@@ -2065,8 +2146,6 @@ class InferenceRouter:
                 logger.warning(
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
-
-        session_id = req.session_id or "default"
 
         # Context frame — memory/rag layers via ContextCore, gated on the memory
         # service holding at least one fact (the gate travels with the frame
@@ -2154,7 +2233,7 @@ class InferenceRouter:
             repetition_penalty=req.repetition_penalty,
             user_message=user_msg,
             user_id=req.user_id or "default",
-            explicit=req.model_fields_set,
+            explicit=req.model_fields_set | scope_applied,
         )
         # Attach per-turn context to the last user turn BEFORE the budget trim,
         # so the trimmer counts those tokens instead of the block arriving
@@ -2994,6 +3073,64 @@ def _register_sessions_spec(spec: ToolSpec, method: str, path: str) -> None:
 
 
 _register_sessions_spec(SESSIONS_SPEC, "GET", "/chat/sessions")
+
+
+# ── Descriptor for PUT /chat/sessions/{session_id} ──────────────────────────
+# Same grandfathering as above: the route is hand-built (baseline untouched);
+# this descriptor declares its contract, including the ``scope`` field that
+# persists a conversation's AppScope delta — the mini-app instance config
+# resolved at the turn seam (``InferenceRouter._resolve_turn_scope``).
+
+SESSIONS_UPDATE_SPEC = ToolSpec(
+    name="chat.sessions.update",
+    description=(
+        "Update session metadata (name/archived/starred/pinned) and/or replace "
+        "the conversation's AppScope delta (scope: model settings, system "
+        "prompt, knowledge, context toggles) — the per-conversation config "
+        "resolved over global defaults on each turn."
+    ),
+    parameters=[
+        ToolParam(
+            name="name",
+            type="string",
+            description="New session name",
+        ),
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Archive/unarchive the session",
+        ),
+        ToolParam(
+            name="starred",
+            type="boolean",
+            description="Star/unstar the session",
+        ),
+        ToolParam(
+            name="pinned",
+            type="boolean",
+            description="Pin/unpin the session",
+        ),
+        ToolParam(
+            name="scope",
+            type="object",
+            description=(
+                "AppScope delta for this conversation — replaces the stored "
+                "delta wholesale (omit to leave it unchanged)"
+            ),
+        ),
+    ],
+    execute=_instance.upsert_session,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": ["session_id"],
+    },
+    version="1",
+)
+
+_register_sessions_spec(SESSIONS_UPDATE_SPEC, "PUT", "/chat/sessions/{session_id}")
 
 
 class _GenerationEngine:
