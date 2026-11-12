@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { TRAINING_LIMITS, parseAndClamp } from '@/lib/sanitize'
 
 interface TrainConfig {
   dataset: string
@@ -32,7 +33,23 @@ interface VMTrainingConfigFormProps {
   onDismissJob: () => void
 }
 
-const num = (v: string) => (v.trim() === '' ? NaN : Number(v))
+// TrainConfig field → sanitize.ts TRAINING_LIMITS key. The local `num()`
+// helper is gone: NaN could reach the config unclamped (and every limit was
+// re-derived by hand here) — parseAndClamp over TRAINING_LIMITS is the one
+// source of truth for backend field limits.
+const LIMIT_KEY = {
+  epochs: 'epochs',
+  lr: 'learning_rate',
+  batch_size: 'batch_size',
+  n_layer: 'n_layer',
+  n_head: 'n_head',
+  embed_dim: 'n_embed',
+} as const
+
+const clampCfg = (field: keyof typeof LIMIT_KEY, raw: string): number => {
+  const limit = TRAINING_LIMITS[LIMIT_KEY[field]]
+  return parseAndClamp(raw, limit.min, limit.max)
+}
 
 export function VMTrainingConfigForm({
   config,
@@ -48,6 +65,22 @@ export function VMTrainingConfigForm({
   onDismissJob,
 }: VMTrainingConfigFormProps) {
   const [customDataset, setCustomDataset] = useState(false)
+
+  // LR commits on blur (draft string), so typing "0.001" is not clamped
+  // mid-entry; syncs back when config.lr changes externally (reset/sample).
+  const [lrDraft, setLrDraft] = useState(String(config.lr))
+  useEffect(() => {
+    setLrDraft(String(config.lr))
+  }, [config.lr])
+
+  const commitLr = () => {
+    const n = Number(lrDraft)
+    if (lrDraft.trim() === '' || !Number.isFinite(n)) {
+      setLrDraft(String(config.lr)) // unparseable → revert, never NaN into config
+      return
+    }
+    updateConfig({ lr: clampCfg('lr', lrDraft) })
+  }
 
   const updateConfig = (patch: Partial<TrainConfig>) => {
     onConfigChange({ ...config, ...patch })
@@ -65,9 +98,7 @@ export function VMTrainingConfigForm({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-          <label className="col-span-2 text-xs font-medium text-muted-foreground">
-            Dataset
-          </label>
+          <label className="col-span-2 text-xs font-medium text-muted-foreground">Dataset</label>
           {datasetNames.length > 0 ? (
             <>
               <select
@@ -105,8 +136,8 @@ export function VMTrainingConfigForm({
                   {config.dataset.trim() !== '' &&
                     !datasetNames.includes(config.dataset.trim()) && (
                       <p className="col-span-2 text-xs text-destructive">
-                        Unknown dataset &quot;{config.dataset.trim()}&quot; — Training will fail
-                        to start. Available: {datasetNames.slice(0,5).join(', ')}
+                        Unknown dataset &quot;{config.dataset.trim()}&quot; — Training will fail to
+                        start. Available: {datasetNames.slice(0, 5).join(', ')}
                         {datasetNames.length > 5 ? ` +${datasetNames.length - 5} more` : ''}.
                       </p>
                     )}
@@ -128,14 +159,15 @@ export function VMTrainingConfigForm({
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.epochs}
             aria-label="Training epochs"
-            onChange={(e) => updateConfig({ epochs: num(e.target.value) })}
+            onChange={(e) => updateConfig({ epochs: clampCfg('epochs', e.target.value) })}
           />
           <label className="text-xs font-medium text-muted-foreground">Learning rate</label>
           <input
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
-            value={config.lr}
+            value={lrDraft}
             aria-label="Training learning rate"
-            onChange={(e) => updateConfig({ lr: num(e.target.value) })}
+            onChange={(e) => setLrDraft(e.target.value)}
+            onBlur={commitLr}
           />
           <label className="text-xs font-medium text-muted-foreground">Batch size</label>
           <input
@@ -144,7 +176,7 @@ export function VMTrainingConfigForm({
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.batch_size}
             aria-label="Training batch size"
-            onChange={(e) => updateConfig({ batch_size: num(e.target.value) })}
+            onChange={(e) => updateConfig({ batch_size: clampCfg('batch_size', e.target.value) })}
           />
           <label className="text-xs font-medium text-muted-foreground">Layers</label>
           <input
@@ -153,7 +185,7 @@ export function VMTrainingConfigForm({
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.n_layer}
             aria-label="Training layers"
-            onChange={(e) => updateConfig({ n_layer: num(e.target.value) })}
+            onChange={(e) => updateConfig({ n_layer: clampCfg('n_layer', e.target.value) })}
           />
           <label className="text-xs font-medium text-muted-foreground">Heads</label>
           <input
@@ -162,7 +194,7 @@ export function VMTrainingConfigForm({
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.n_head}
             aria-label="Training heads"
-            onChange={(e) => updateConfig({ n_head: num(e.target.value) })}
+            onChange={(e) => updateConfig({ n_head: clampCfg('n_head', e.target.value) })}
           />
           <label className="text-xs font-medium text-muted-foreground">Embed size</label>
           <input
@@ -171,7 +203,7 @@ export function VMTrainingConfigForm({
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.embed_dim}
             aria-label="Training embed size"
-            onChange={(e) => updateConfig({ embed_dim: num(e.target.value) })}
+            onChange={(e) => updateConfig({ embed_dim: clampCfg('embed_dim', e.target.value) })}
           />
         </div>
         {hints.length > 0 && (
@@ -185,14 +217,12 @@ export function VMTrainingConfigForm({
         )}
         <p className="text-xs text-muted-foreground">
           Generates the <span className="font-mono">train</span> sample with this config and runs
-          it. Requires the <span className="font-medium">admin</span> role — the Training card
-          polls the job and shows the final result.
+          it. Requires the <span className="font-medium">admin</span> role — the Training card polls
+          the job and shows the final result.
         </p>
         {role === 'user' && (
           <div className="flex items-center justify-between gap-2 rounded border border-warning/40 bg-warning/10 px-2 py-1.5">
-            <p className="text-xs text-warning">
-              Training is denied for the user role (EAX = -2).
-            </p>
+            <p className="text-xs text-warning">Training is denied for the user role (EAX = -2).</p>
             <Button size="sm" variant="outline" onClick={() => onRoleChange('admin')}>
               Switch to admin
             </Button>
