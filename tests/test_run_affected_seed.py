@@ -47,6 +47,9 @@ def _make_db(path: Path, tables: set[str] | None = None) -> None:
         con.execute(
             f"INSERT INTO {tables and sorted(tables)[0] or 'metadata'} (v) VALUES ('marker')"
         )
+        # At least one recorded test: discovery only considers DBs with rows
+        # (a 0-row DB is the cascade-wiped state — never a seed source).
+        con.execute("INSERT INTO test_execution (v) VALUES ('recorded-test')")
         con.commit()
     finally:
         con.close()

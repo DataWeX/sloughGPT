@@ -16,6 +16,20 @@ worktree held a 9-day-stale 16MB DB while a session worktree held the live
 52MB one. So the source is the FRESHEST ``.testmondata`` across the repo's
 worktrees, overridable with ``TESTMON_SEED_DB``.
 
+Env guard (card 20261112_122610): freshness alone can hand over a recording
+whose environment differs from the current interpreter — testmon then REPLACES
+the environment row on first run and ``test_execution.environment_id`` is
+ON DELETE CASCADE, so every copied row is purged: a silent no-op behind a
+"fresh-worktree penalty skipped" lie. Discovery therefore takes only
+recordings whose fingerprint (``system_packages`` + ``python_version``) equals
+what testmon will record here — computed with testmon's own
+``drop_patch_version`` (storage drops the patch level: ``PyJWT 2.14``, never
+``PyJWT 2.14.0``) — with rows > 0 (a 0-row DB is the post-wipe state, nothing
+to seed). No match → None → the honest full record. An unknown fingerprint on
+either side (no testmon, no env row, unreadable) falls back to freshness,
+never a hard fail; ``TESTMON_SEED_DB`` stays explicit user intent (warn on
+mismatch, still copy).
+
 Fallback contract (Test Rule clause 3): no seed source, a corrupt/non-testmon
 source, or any error means NO database is written and the caller degrades to
 today's behavior — a full record run. Unknown state is a full run, never a
@@ -41,16 +55,115 @@ _REQUIRED_TABLES = frozenset(
 ENV_OVERRIDE = "TESTMON_SEED_DB"
 
 
+def _current_fingerprint() -> tuple[str, str] | None:
+    """``(system_packages, python_version)`` exactly as testmon stores them here.
+
+    Uses testmon's OWN helpers so the comparison matches storage byte for byte
+    (``drop_patch_version`` is applied on write — raw versions would never
+    match). ``None`` = can't compute (testmon absent) → callers fall back to
+    freshness, never a hard fail.
+    """
+    try:
+        import platform
+
+        from testmon.common import drop_patch_version, get_system_packages
+    except Exception:  # pragma: no cover - only in envs without testmon
+        return None
+    try:
+        return drop_patch_version(get_system_packages()), platform.python_version()
+    except Exception:  # pragma: no cover - defensive: unknown, not fatal
+        return None
+
+
+def _env_status(path: Path, current: tuple[str, str] | None) -> bool | None:
+    """True/False = does the recording's environment match ``current``; None = unknown.
+
+    Compares against the environment rows the RECORDED TESTS point at (the
+    cascade deletes exactly those on drift) — the newest row alone could belong
+    to a different generation. ``None`` covers every unknown: no current
+    fingerprint, no env row yet, or a schema without the columns.
+    """
+    if current is None:
+        return None
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            rows = list(
+                con.execute(
+                    "SELECT DISTINCT e.system_packages, e.python_version"
+                    " FROM environment e"
+                    " JOIN test_execution t ON t.environment_id = e.id"
+                )
+            )
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    if not rows:
+        return None
+    return all((r[0], r[1]) == current for r in rows)
+
+
+def _has_recorded_tests(path: Path) -> bool:
+    """True when the recording holds at least one test_execution row."""
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            n = con.execute("SELECT COUNT(*) FROM test_execution").fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+    return bool(n)
+
+
+def dest_state(path: Path) -> str:
+    """Seed health of an existing (or absent) destination DB.
+
+    ``missing``   — no recording: seedable.
+    ``empty``     — valid testmon schema, 0 recorded tests: the cascade wipe
+                    already purged it; nothing to select from → re-seedable.
+    ``healthy``   — recorded tests on disk: trusted as-is (never overwritten).
+    ``invalid``   — exists but isn't a usable testmon DB: trusted as-is too —
+                    an unknown file is never destroyed (Test Rule: unknown
+                    state is a full run, never a guess).
+    """
+    if not path.exists():
+        return "missing"
+    if not _is_testmon_db(path):
+        return "invalid"
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            n = con.execute("SELECT COUNT(*) FROM test_execution").fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return "invalid"
+    return "empty" if n == 0 else "healthy"
+
+
 def find_seed_db(repo: Path) -> Path | None:
     """Locate the best seed source for ``repo``'s worktrees.
 
-    Order: ``TESTMON_SEED_DB`` (if it names a readable testmon DB) → the
-    freshest ``.testmondata`` among the repo's registered worktrees → None.
+    Order: ``TESTMON_SEED_DB`` (explicit override — copied even on env
+    mismatch, warned) → the freshest ENVIRONMENT-MATCHING ``.testmondata``
+    with recorded tests among the repo's registered worktrees → (fingerprint
+    unknown everywhere) the freshest such recording → None.
     """
+    current = _current_fingerprint()
     override = os.environ.get(ENV_OVERRIDE)
     if override:
         candidate = Path(override)
         if _is_testmon_db(candidate):
+            if _env_status(candidate, current) is False:
+                logger.warning(
+                    "%s=%s environment differs from this interpreter — "
+                    "copying anyway (explicit override); its rows may be "
+                    "purged on the first run",
+                    ENV_OVERRIDE,
+                    override,
+                )
             return candidate
         logger.warning("%s=%s is not a readable testmon DB — ignoring", ENV_OVERRIDE, override)
 
@@ -65,7 +178,8 @@ def find_seed_db(repo: Path) -> Path | None:
     except (OSError, subprocess.SubprocessError):
         return None
 
-    newest: tuple[float, Path] | None = None
+    matched: list[tuple[float, Path]] = []
+    unknown: list[tuple[float, Path]] = []
     for line in res.stdout.splitlines():
         # Path may contain spaces ('/home/.../Default Project/sloughGPT') —
         # strip the prefix, never split on whitespace.
@@ -76,9 +190,21 @@ def find_seed_db(repo: Path) -> Path | None:
             mtime = db.stat().st_mtime
         except OSError:
             continue  # worktree gone, or no recording yet
-        if newest is None or mtime > newest[0]:
-            newest = (mtime, db)
-    return newest[1] if newest else None
+        if not _is_testmon_db(db) or not _has_recorded_tests(db):
+            continue  # unreadable schema, or the cascade-wiped 0-row state
+        status = _env_status(db, current)
+        if status is True:
+            matched.append((mtime, db))
+        elif status is None:
+            # Fingerprint unknown on one side — freshness fallback, never a
+            # hard fail (the conservative full run only follows a None here).
+            unknown.append((mtime, db))
+        # status is False: copying it would be purged on the destination's
+        # first run — a seed that cannot deliver its claim is no seed at all.
+    pool = matched or unknown
+    if not pool:
+        return None
+    return max(pool)[1]
 
 
 def seed_testmon_db(

@@ -18,10 +18,14 @@
 # guess. A selective run is an optimization of the local loop only; the full
 # suite in CI on merge to main remains the backstop (Test Rule clause 3).
 #
-# Auto-seed (card 20261111_125558 Part A): selective mode with a MISSING
-# .testmondata first snapshots the freshest recording from another worktree of
-# this repo (scripts/seed_testmon.py — sqlite backup API, safe against a live
-# writer; TESTMON_SEED_DB overrides the source). No seed source, a corrupt
+# Auto-seed (card 20261111_125558 Part A, env-guard 20261112_122610):
+# selective mode snapshots the freshest ENVIRONMENT-MATCHING recording from
+# another worktree of this repo (scripts/seed_testmon.py — sqlite backup API,
+# safe against a live writer; TESTMON_SEED_DB overrides the source). A
+# mismatched environment would be cascade-purged on the destination's first
+# run, so it is never copied — no match degrades to the full record. A dest
+# holding a valid DB with 0 recorded tests (the post-wipe state) re-seeds;
+# healthy and invalid dests are trusted as-is. No seed source, a corrupt
 # source, or any error → the full record run, exactly as before.
 #
 # Slow phase (card 20261111_125558 Part B): phase 1 (foreground) adds
@@ -114,20 +118,36 @@ if [ "${RUN_AFFECTED_PHASE:-}" = "slow" ]; then
   exit "$rc"
 fi
 
-# ── phase 1 (foreground): everything except the tracked slow paths ──
-if [ "${RUN_ALL:-0}" != "1" ] && [ ! -f "$ROOT/.testmondata" ]; then
+# ── seed + seed health (cards 20261111_125558 + 20261112_122610) ──
+# Runs on EVERY selective invocation: healthy/invalid dests are trusted
+# silently; a missing or cascade-wiped (0-row) dest re-seeds from an
+# environment-matching worktree recording. RUN_ALL re-records atomically —
+# no seed, no health check.
+if [ "${RUN_ALL:-0}" != "1" ]; then
   "$PY" - "$ROOT" <<'PY' || echo "run_affected: seed failed — full record run" >&2
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+dest = root / ".testmondata"
 sys.path.insert(0, str(root / "scripts"))
-from seed_testmon import seed_testmon_db
+from seed_testmon import dest_state, seed_testmon_db
 
-if seed_testmon_db(root / ".testmondata", repo=root):
-    print("run_affected: seeded .testmondata from another worktree (fresh-worktree penalty skipped)")
-else:
-    print("run_affected: no seed source — full record run (unknown state, Test Rule 3)")
+state = dest_state(dest)
+if state == "empty":
+    # Valid schema, 0 recorded tests = the cascade wipe already purged it
+    # (env drift on a previous first run). Nothing to select from — and a
+    # stale -wal/-shm would corrupt whatever is written next.
+    print("run_affected: .testmondata holds 0 recorded tests (cascade-wiped) — re-seeding")
+    for p in (dest, Path(f"{dest}-wal"), Path(f"{dest}-shm")):
+        p.unlink(missing_ok=True)
+    state = "missing"
+if state == "missing":
+    if seed_testmon_db(dest, repo=root):
+        print("run_affected: seeded .testmondata from an environment-matching worktree recording (fresh-worktree penalty skipped)")
+    else:
+        print("run_affected: no seed source — full record run (unknown state, Test Rule 3)")
+# healthy / invalid → silent: an existing recording is trusted as-is.
 PY
 fi
 
