@@ -1,6 +1,6 @@
 ---
 id: 20261111_125558_run-affected-ergonomics-auto-seed-testmon-db-in-fresh-checko
-status: wip
+status: done
 board: 20261111_125558_run-affected-ergonomics-auto-seed-testmon-db-in-fresh-checko
 title: "run_affected ergonomics: auto-seed testmon DB in fresh checkouts + fast-phase before slow-phase (tests must feel fast)"
 tags: [testing, ci, tooling]
@@ -65,6 +65,33 @@ marker edits, no `tests/core-py/test_results/*.json`, CI unchanged.
   agreed scope (`scripts/seed_testmon.py`, `scripts/slow_paths.txt`,
   `tests/test_run_affected_seed.py`, phases test). Code started in
   worktree `fe08f8/run-affected` (branch `test/run-affected` @ `2a818d30f`)
+- 2026-11-12: ALL GATES PASS. TDD RED→GREEN 20/20 (9 phase + 11 seed);
+  ruff check+format clean, `sh -n` clean (shellcheck not installed on box);
+  fresh-worktree proof (no DB → seeded 52MB, 7 selected <1k, fast phase 21s
+  ≤5min, background EXIT=0); back-to-back ×2 (seed skip when DB exists,
+  honest RC passthrough); union proof tests/core-py collect-only: plain
+  42705 = phase1 42484 ∪ phase2 221, 0 strays / 0 dropped / p1∩p2=0;
+  slow list repaired (4 dead tests/ paths → tests/core-py/) + ratchet test.
+  Slow-tail defects found en route (part of the fix): scope positionals
+  re-collected in phase 2 (stripped now), explicit-slow-arg double-run
+  (excluded from both sides). Pre-existing, NOT this card: phoneme-router
+  collection error on default scope (kill 63e682360; CI --ignores
+  tests/server/) + 4 documented env/lane reds — testmon file-reads prove
+  none of the 7 read any changed card file. Code: `ca31b32c8` (pre-rebase).
+- 2026-11-12: LANDED ON MAIN (card complete). User ruling "all done once" =
+  also fix the phoneme orphan + merge. Rebased onto origin/main twice (it
+  moved mid-flight); final main history: feat `567335989`, sync entry
+  `a3c015654`, phoneme-orphan delete `a03957e3f`, slow-path +user_journeys
+  `945101e0e` (external 11:25 edit kept verbatim), citation fix-forward
+  `96621b339` (rebase edit-fold stopped one commit late — entry cited its
+  own docs commit; pushed main never rewritten). Pushed via
+  `git push origin HEAD:main` (local main checked out by quiet-pixel lane,
+  Core-Rules-sanctioned lane push); lane `test/run-affected` force-synced
+  to match. Gates post-rebase: 28 passed (capability_surface +
+  docs_api_parity + the 20), sh -n, ruff clean; tests/server collects
+  clean (2134/2204, 0 errors). CI on main: `CI` workflow success 5m32s;
+  `CI/CD` full-suite backstop in progress at close. AGENT_SYNC entry cites
+  `567335989`.
   while run 4 (Phase 2's gate) executes — landings still run first for
   main.
 - TDD: seed helper RED (`ModuleNotFoundError`) → GREEN **11/11**; phases
