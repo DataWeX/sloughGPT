@@ -141,7 +141,6 @@ known-third-party = ["datasets"]
 "domain/training/*.py" = ["B006", "C408"]
 "**/tests/*.py" = ["F811", "B017"]
 "tests/fixtures/__init__.py" = ["F403", "F405"]
-"domain/cognitive/_internal/metacognition/__init__.py" = ["F403", "F405"]
 "scripts/examples/*.py" = ["F821"]
 
 [tool.mypy]

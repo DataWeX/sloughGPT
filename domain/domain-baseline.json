@@ -22,7 +22,7 @@
   "ratchet": {
     "misfiled": 0,
     "projection": 0,
-    "debt": 6
+    "debt": 4
   },
   "dirs": {
     "agents": {
@@ -134,19 +134,9 @@
         "scripts/",
         "domain/core/"
       ],
-      "note": "reasoning core (24 py) — pair with cognitive/, consolidation card",
-      "debt": "duplicate pair with cognitive/ — merge candidate",
+      "note": "reasoning core (24 py) — absorbed its orphan dup cognitive/ (2026-11-12, card 20261101_045925)",
+      "debt": null,
       "tree_hash": "c97732333719d22b451fd131a30ce812f1327710"
-    },
-    "cognitive": {
-      "class": "core-capability",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [],
-      "note": "orphan duplicate of cognition/: zero external consumers found — first merge candidate",
-      "debt": "duplicate pair with cognition/ — merge candidate",
-      "tree_hash": "45bafe83561f00ae535926f4487b5473aa1b9615"
     },
     "collections": {
       "class": "feature",
