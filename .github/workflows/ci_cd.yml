@@ -103,6 +103,10 @@ jobs:
           # always reddened (card 20261031_080004). Coverage now points at the
           # domain library the tests actually import, so the 50% floor measures
           # real source. Source of truth: pyproject [tool.coverage.run] source.
+          # -n auto: xdist workers (installed above; pytest-cov combines
+          # distributed coverage natively — the 50% floor still measures
+          # the whole run). Serial test-core-py was 50m19s on 2026-11-11;
+          # this is the duration lever (card 20261112_062436).
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -114,7 +118,7 @@ jobs:
             --ignore=tests/core-py/test_slonet_provider.py \
             --ignore=tests/core-py/test_shell_repl.py \
             --cov=domain --cov-report=term-missing --cov-fail-under=50 \
-            -q --tb=short
+            -q --tb=short -n auto
 
   # ─── Server API tests ───────────────────────────────────────────
   test-server:
@@ -277,6 +281,44 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+      # Step-level gate (NOT job-level `if:`): the check must always report
+      # (job-level skip → required check stuck "expected"). No frontend-
+      # relevant change → install/lint/typecheck/test/build all skip; the job
+      # reports success in seconds (card 20261112_062436). Conservative:
+      # unknown event / missing base / empty diff → web=true (run).
+      - name: Frontend-relevant changes?
+        id: fe
+        shell: bash
+        run: |
+          base=""
+          case "${{ github.event_name }}" in
+            push) base="${{ github.event.before }}" ;;
+            pull_request) base="${{ github.event.pull_request.base.sha }}" ;;
+          esac
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            echo "no base — running"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git cat-file -e "$base^{commit}" 2>/dev/null || \
+            git fetch --no-tags --depth=1 origin "$base" 2>/dev/null || true
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "base unreachable — running"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$base" "${{ github.sha }}" 2>/dev/null || true)
+          echo "changed files:"; echo "$files"
+          if [ -z "$files" ]; then
+            echo "empty diff — running"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$files" | grep -qE '^(apps/web/|packages/|\.github/workflows/|package\.json$|package-lock\.json$|tsconfig\.base\.json$)'; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false — no frontend-relevant change" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -290,20 +332,25 @@ jobs:
       # The root install also links @sloughgpt/strui automatically, so the old
       # manual symlink step is no longer needed.
       - run: npm ci --ignore-scripts
+        if: steps.fe.outputs.web == 'true'
 
       - name: Lint
+        if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
         run: npx eslint . --max-warnings 900
 
       - name: Typecheck
+        if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
         run: npx tsc --noEmit
 
       - name: Unit tests
+        if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
         run: npx vitest run
 
       - name: Build
+        if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
         run: npm run build
 
