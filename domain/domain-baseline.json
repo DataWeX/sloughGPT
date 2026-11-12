@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "4ebe2364393c0ee8761abe7bd5e51a42a7c2232d",
+    "recorded_commit": "b4e8e938b6f85c90b0ea3ec8f0a4e88e40581eab",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -73,16 +73,8 @@
     },
     "cognition": {
       "class": "core-capability",
-      "facets": [
-        "cognitive",
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "scripts/",
-        "domain/core/"
-      ],
+      "facets": ["cognitive", "core"],
+      "consumers": ["tests/", "apps/api/", "scripts/", "domain/core/"],
       "note": "reasoning core (24 py) — absorbed its orphan dup cognitive/ (2026-11-12, card 20261101_045925)",
       "debt": null,
       "tree_hash": "c97732333719d22b451fd131a30ce812f1327710"
@@ -147,7 +139,7 @@
       "consumers": ["tests/", "apps/cli/", "scripts/"],
       "note": "static gate cores (command parity, domain baseline, router manifest) projected to sloughgpt gates + Site Doctor",
       "debt": null,
-      "tree_hash": "0c28a7e8c67aaf6b36b9aba656796b875de405e2"
+      "tree_hash": "0b5d24ed601f0f6eabf2b7bd42d29f64cb5256b9"
     },
     "generation": {
       "class": "core-capability",
