@@ -18,3 +18,4 @@ tests/core-py/test_ui_journey_generic.py
 tests/core-py/test_ui_journey_library.py
 tests/core-py/test_comprehensive_journeys.py
 tests/core-py/test_comprehensive_training_journeys.py
+tests/core-py/test_user_journeys.py
