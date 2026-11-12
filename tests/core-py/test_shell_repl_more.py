@@ -864,12 +864,19 @@ class TestCmdAiLLMExecution:
 
         Prints the load hint, records an ERROR in the shell log buffer (via
         `logs`), and exits 1 — the 120s generate hang must not start.
+
+        Entry-IDENTITY delta, not a count delta (flake 20261109_134510): the
+        buffer is a process-wide 2000-entry ring, so in a full-suite CI run a
+        saturated ring evicts one ERROR when this command appends its own —
+        `len(errs) > before` then reads 1209 > 1209 and fails byte-identical
+        on a command that DID log. Object refs in `before` keep the old
+        entries alive (no id reuse), so `new` is exactly the appended entries.
         """
         mock_api = MagicMock()
         mock_api.status.return_value = {"available": True, "model_loaded": False}
         mock_api.generate.return_value = {"text": "models"}
         repl.os._api = mock_api
-        before = len(repl._log_buffer.get(level="ERROR"))
+        before = list(repl._log_buffer.get(level="ERROR"))
 
         out = capture_cmd(repl, repl._cmd_ai, "show models")
 
@@ -878,8 +885,9 @@ class TestCmdAiLLMExecution:
         assert "models load" in out, "hint must name the load command"
         assert repl._last_exit_code == 1
         errs = repl._log_buffer.get(level="ERROR")
-        assert len(errs) > before, "no ERROR entry added to shell log buffer"
-        assert any("model" in e.message.lower() for e in errs[-3:])
+        new = [e for e in errs if not any(e is b for b in before)]
+        assert new, "no ERROR entry added to shell log buffer"
+        assert any("model" in e.message.lower() for e in new)
 
     def test_ai_runs_when_model_loaded(self, repl):
         """The gate must not fire when model_loaded=True (regression pin)."""
