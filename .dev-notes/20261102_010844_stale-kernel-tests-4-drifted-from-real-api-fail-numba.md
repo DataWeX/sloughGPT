@@ -1,6 +1,6 @@
 ---
 id: 20261102_010844_stale-kernel-tests-4-drifted-from-real-api-fail-numba
-status: todo
+status: done
 board: 20261102_010844_stale-kernel-tests-4-drifted-from-real-api-fail-numba
 title: "Fix 4 stale kernel tests that drifted from the real numba API (only fail under SLO_USE_NUMBA=1)"
 tags: [tests, kernels, numba, stale-test]
@@ -51,3 +51,5 @@ opts in.
 - Discovered while landing `a6c8f3b31` + `b70a0d085` (prefill-OOM fix + numba
   opt-in). Pre-existing drift — verified failing identically at HEAD before
   those commits, so not a regression from them.
+
+CLOSED 2026-11-12 — fixed all 4 tests to the real kernel API (in-place embed/add_pos buffers, observable clipping, 2-D lm_head x + permuted-W 2nd assertion); RED 4F/27P → GREEN opt-in 31P/0F, default 30P/1S (the 128 figure above was stale); closure 7 failed / 30 skipped / 0 passed / 1340 deselected in 669.73s (all 7 triaged zero-attributable: 4 documented ledger, vm_life load-flake green isolated 7.09s, datasets ImportUrl x2 = pre-existing main regression from e9973ce4e carded 20261112_062928); kernels tests recorded green in the killed first pass; pushed `fix/stale-kernel-tests` ed3514237 + 0394c2af5.
