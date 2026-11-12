@@ -617,7 +617,11 @@ class TestSloManagerGetSoul:
     def _make_manager(self, tmp_path):
         _write_soul_binary(tmp_path / "alpha.soul", {"name": "alpha"})
         _write_soul_binary(tmp_path / "beta.soul", {"name": "beta"})
-        return SloManager(souls_dir=str(tmp_path))
+        m = SloManager(souls_dir=str(tmp_path))
+        # Read the fixture's preference, never the repo's real one — the
+        # real file's value must not decide these assertions.
+        m._preference_file = tmp_path / "data" / ".soul_preference"
+        return m
 
     def test_get_soul_exists(self, tmp_path):
         m = self._make_manager(tmp_path)
@@ -655,7 +659,12 @@ class TestSloManagerSwitchSoul:
                 "traits": ["beta"],
             },
         )
-        return SloManager(souls_dir=str(tmp_path))
+        m = SloManager(souls_dir=str(tmp_path))
+        # Every switch_soul below saves its preference — point the save at
+        # this fixture's data/ dir so the suite never clobbers the repo's
+        # real soul selection (which also broke other tests on reruns).
+        m._preference_file = tmp_path / "data" / ".soul_preference"
+        return m
 
     def test_switch_success(self, tmp_path):
         m = self._make_manager(tmp_path)
@@ -688,8 +697,11 @@ class TestSloManagerSwitchSoul:
     def test_switch_persists_preference(self, tmp_path):
         m = self._make_manager(tmp_path)
         m.switch_soul("x")
-        # Re-create manager — preference should be restored
+        # Re-create manager — preference should be restored. It must read
+        # the SAME fixture file m just wrote (both retargeted off the
+        # repo's real data/.soul_preference).
         m2 = SloManager(souls_dir=str(tmp_path))
+        m2._preference_file = tmp_path / "data" / ".soul_preference"
         current = m2.get_current_soul()
         assert current is not None
         assert current.name == "x"
@@ -807,6 +819,7 @@ class TestSloManagerStats:
     def test_stats_after_switch(self, tmp_path):
         _write_soul_binary(tmp_path / "s.soul", {"name": "s"})
         m = SloManager(souls_dir=str(tmp_path))
+        m._preference_file = tmp_path / "data" / ".soul_preference"
         m.switch_soul("s")
         stats = m.get_stats()
         assert stats["current_soul"] == "s"
@@ -849,6 +862,11 @@ class TestSloManagerPreference:
         pref_dir.mkdir()
         (pref_dir / ".soul_preference").write_text("nonexistent")
         m = SloManager(souls_dir=str(tmp_path))
+        # SloManager defaults _preference_file to the repo's real
+        # data/.soul_preference — retarget it here so the scenario reads
+        # THIS fixture's file (the real one would make the test pass
+        # vacuously) and nothing outside tmp_path is ever touched.
+        m._preference_file = tmp_path / "data" / ".soul_preference"
         assert m.get_current_soul() is None
 
     def test_preference_empty_file(self, tmp_path):
@@ -857,16 +875,22 @@ class TestSloManagerPreference:
         pref_dir.mkdir()
         (pref_dir / ".soul_preference").write_text("")
         m = SloManager(souls_dir=str(tmp_path))
+        m._preference_file = tmp_path / "data" / ".soul_preference"
         assert m.get_current_soul() is None
 
     def test_save_preference_creates_directory(self, tmp_path):
         _write_soul_binary(tmp_path / "x.soul", {"name": "x"})
         m = SloManager(souls_dir=str(tmp_path))
+        # Retarget before switch_soul: the save must create THIS tmp data/
+        # dir (its namesake behavior) instead of clobbering the repo's real
+        # soul selection, which also broke the two tests above on reruns.
+        m._preference_file = tmp_path / "data" / ".soul_preference"
         m.switch_soul("x")
         assert m.get_current_soul().name == "x"
 
     def test_save_preference_with_no_soul(self, tmp_path):
         m = SloManager(souls_dir=str(tmp_path))
+        m._preference_file = tmp_path / "data" / ".soul_preference"
         m._save_preference()  # should not raise
         assert m.get_current_soul() is None
 
@@ -905,6 +929,7 @@ class TestSloManagerModuleFunctions:
         try:
             _write_soul_binary(tmp_path / "x.soul", {"name": "x"})
             mod._slo_manager = SloManager(souls_dir=str(tmp_path))
+            mod._slo_manager._preference_file = tmp_path / "data" / ".soul_preference"
             result = mod.switch_soul("x")
             assert result["success"] is True
         finally:
