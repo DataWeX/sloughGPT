@@ -274,6 +274,36 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
+  "runtime_config.get": {
+    "auth_scope": "authenticated",
+    "description": "Resolved runtime configuration for the web client: every feature flag with its registered status and env-overridden enabled state, versioned by a sha256 config_version (served as the ETag).",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.runtime_config",
+    "name": "runtime_config.get",
+    "operation_id": "runtime_config.get.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/runtime-config",
+    "result": {
+      "properties": {
+        "config_version": {
+          "type": "string"
+        },
+        "flags": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
 } as const satisfies Record<string, ContractDescriptor>
 
 export type ContractName = keyof typeof CONTRACTS
