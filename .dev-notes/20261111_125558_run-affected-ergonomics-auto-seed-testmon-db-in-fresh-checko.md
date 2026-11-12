@@ -92,6 +92,18 @@ marker edits, no `tests/core-py/test_results/*.json`, CI unchanged.
   clean (2134/2204, 0 errors). CI on main: `CI` workflow success 5m32s;
   `CI/CD` full-suite backstop in progress at close. AGENT_SYNC entry cites
   `567335989`.
+- 2026-11-12: card CLOSED on the board (skill flow: note .md `status: done`
+  first → `grib board move <uuid> done` → `grib sync`, chain resealed,
+  rev 2). Finding: the CLI `grib note` dialect reads
+  `dev-notes/notes.journal.jsonl` (59 notes), NOT the `.md` journal (247) —
+  `grib note update` on this uuid returns "Note not found"; the `.md` →
+  board direction is the legacy NoteStore/GUI path. Pre-existing dialect
+  split, not this card. Closure re-run (default scope): **7 failed / 8
+  passed / 0 collection errors** — the 7 are exactly the ledger set
+  (ml_types cuda, feature_flags ×2, slonet numba, infra_thread_teardown,
+  datasets ×2); an earlier run's 8 `test_agents_router` SSE reds vanished
+  on re-run and pass in isolation in both trees → transient interference
+  from the concurrent `session-contract` full suite, not this change.
   while run 4 (Phase 2's gate) executes — landings still run first for
   main.
 - TDD: seed helper RED (`ModuleNotFoundError`) → GREEN **11/11**; phases
