@@ -1,0 +1,20 @@
+# Tracked known-slow test paths — phase 2 of scripts/run_affected.sh
+# (card 20261111_125558). One repo-relative path per line, comments on their
+# own line, NO SPACES (POSIX sh word-splitting).
+#
+# These paths are never excluded from any run: phase 1 runs everything else
+# first (fast feedback), phase 2 runs exactly these in the background with
+# the same selection mode. Grow this list by evidence (--durations on a full
+# run), never by weakening selection.
+#
+# Why these (measured 2026-11-11/12, card evidence): vm_life is 23 tests at
+# timeout(600) doing millions of x86 emulation steps (~5min/test under
+# contention); the UI/journey files drive real browsers and only run fast in
+# worktrees where the environment gate skips them.
+tests/core-py/test_vm_life_program.py
+tests/test_journeys_vertical.py
+tests/core-py/test_ui_journey_chrome_devtools.py
+tests/core-py/test_ui_journey_generic.py
+tests/core-py/test_ui_journey_library.py
+tests/core-py/test_comprehensive_journeys.py
+tests/core-py/test_comprehensive_training_journeys.py
