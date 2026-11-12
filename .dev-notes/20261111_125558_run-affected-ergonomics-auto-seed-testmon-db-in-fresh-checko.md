@@ -77,8 +77,21 @@ marker edits, no `tests/core-py/test_results/*.json`, CI unchanged.
   (excluded from both sides). Pre-existing, NOT this card: phoneme-router
   collection error on default scope (kill 63e682360; CI --ignores
   tests/server/) + 4 documented env/lane reds — testmon file-reads prove
-  none of the 7 read any changed card file. Code: `ca31b32c8`; AGENT_SYNC
-  entry rides the push on `test/run-affected`.
+  none of the 7 read any changed card file. Code: `ca31b32c8` (pre-rebase).
+- 2026-11-12: LANDED ON MAIN (card complete). User ruling "all done once" =
+  also fix the phoneme orphan + merge. Rebased onto origin/main twice (it
+  moved mid-flight); final main history: feat `567335989`, sync entry
+  `a3c015654`, phoneme-orphan delete `a03957e3f`, slow-path +user_journeys
+  `945101e0e` (external 11:25 edit kept verbatim), citation fix-forward
+  `96621b339` (rebase edit-fold stopped one commit late — entry cited its
+  own docs commit; pushed main never rewritten). Pushed via
+  `git push origin HEAD:main` (local main checked out by quiet-pixel lane,
+  Core-Rules-sanctioned lane push); lane `test/run-affected` force-synced
+  to match. Gates post-rebase: 28 passed (capability_surface +
+  docs_api_parity + the 20), sh -n, ruff clean; tests/server collects
+  clean (2134/2204, 0 errors). CI on main: `CI` workflow success 5m32s;
+  `CI/CD` full-suite backstop in progress at close. AGENT_SYNC entry cites
+  `567335989`.
   while run 4 (Phase 2's gate) executes — landings still run first for
   main.
 - TDD: seed helper RED (`ModuleNotFoundError`) → GREEN **11/11**; phases
