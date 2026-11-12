@@ -1,6 +1,6 @@
 ---
 id: 20261111_125558_run-affected-ergonomics-auto-seed-testmon-db-in-fresh-checko
-status: wip
+status: done
 board: 20261111_125558_run-affected-ergonomics-auto-seed-testmon-db-in-fresh-checko
 title: "run_affected ergonomics: auto-seed testmon DB in fresh checkouts + fast-phase before slow-phase (tests must feel fast)"
 tags: [testing, ci, tooling]
@@ -65,6 +65,20 @@ marker edits, no `tests/core-py/test_results/*.json`, CI unchanged.
   agreed scope (`scripts/seed_testmon.py`, `scripts/slow_paths.txt`,
   `tests/test_run_affected_seed.py`, phases test). Code started in
   worktree `fe08f8/run-affected` (branch `test/run-affected` @ `2a818d30f`)
+- 2026-11-12: ALL GATES PASS. TDD RED→GREEN 20/20 (9 phase + 11 seed);
+  ruff check+format clean, `sh -n` clean (shellcheck not installed on box);
+  fresh-worktree proof (no DB → seeded 52MB, 7 selected <1k, fast phase 21s
+  ≤5min, background EXIT=0); back-to-back ×2 (seed skip when DB exists,
+  honest RC passthrough); union proof tests/core-py collect-only: plain
+  42705 = phase1 42484 ∪ phase2 221, 0 strays / 0 dropped / p1∩p2=0;
+  slow list repaired (4 dead tests/ paths → tests/core-py/) + ratchet test.
+  Slow-tail defects found en route (part of the fix): scope positionals
+  re-collected in phase 2 (stripped now), explicit-slow-arg double-run
+  (excluded from both sides). Pre-existing, NOT this card: phoneme-router
+  collection error on default scope (kill 63e682360; CI --ignores
+  tests/server/) + 4 documented env/lane reds — testmon file-reads prove
+  none of the 7 read any changed card file. Code: `ca31b32c8`; AGENT_SYNC
+  entry rides the push on `test/run-affected`.
   while run 4 (Phase 2's gate) executes — landings still run first for
   main.
 - TDD: seed helper RED (`ModuleNotFoundError`) → GREEN **11/11**; phases
