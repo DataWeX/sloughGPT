@@ -491,6 +491,9 @@ class TestImportUrl:
 
     @patch("domain.training._internal.data_import.URLImporter")
     def test_success(self, mock_cls, client):
+        """Importer result -> 200. Host must RESOLVE: the SSRF guard runs
+        before the fetch and blocks unresolvable hosts (card 20261112_062928).
+        """
         result = MagicMock()
         result.success = True
         result.files_imported = 1
@@ -501,7 +504,7 @@ class TestImportUrl:
         resp = client.post(
             "/datasets/import/url",
             json={
-                "url": "https://x.example/data.txt",
+                "url": "https://example.com/data.txt",
                 "name": "u",
             },
         )
@@ -511,6 +514,10 @@ class TestImportUrl:
 
     @patch("domain.training._internal.data_import.URLImporter")
     def test_failure_400(self, mock_cls, client):
+        """Importer failure -> 400 carrying the IMPORTER's error, not the
+        guard's (card 20261112_062928): with a resolvable host the guard
+        passes, so the mocked 404 is what surfaces.
+        """
         result = MagicMock()
         result.success = False
         result.error = "404 not found"
@@ -520,12 +527,28 @@ class TestImportUrl:
         resp = client.post(
             "/datasets/import/url",
             json={
-                "url": "https://x.example/missing.txt",
+                "url": "https://example.com/missing.txt",
                 "name": "u",
             },
         )
         assert resp.status_code == 400
         assert resp.json()["error"] == "404 not found"
+
+    @patch("domain.training._internal.data_import.URLImporter")
+    def test_rejects_private_url_before_import(self, mock_cls, client):
+        """The SSRF rejection on THIS endpoint stays intact (card
+        20261112_062928 MUST-NOT): retargeting the fixtures must not weaken
+        it. 169.254.169.254 is the cloud metadata IP — an IP literal, so it
+        needs no DNS and this pin cannot flake offline.
+        """
+        resp = client.post(
+            "/datasets/import/url",
+            json={"url": "http://169.254.169.254/latest/meta-data", "name": "u"},
+        )
+        assert resp.status_code == 400
+        assert "private" in resp.json()["error"].lower()
+        # Rejected BEFORE any importer work — no fetch is ever attempted.
+        mock_cls.assert_not_called()
 
     def test_missing_url_422(self, client):
         resp = client.post("/datasets/import/url", json={"name": "u"})
