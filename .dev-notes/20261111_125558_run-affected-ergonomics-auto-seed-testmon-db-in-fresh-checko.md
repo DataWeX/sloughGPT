@@ -112,3 +112,25 @@ marker edits, no `tests/core-py/test_results/*.json`, CI unchanged.
 - Pending gates: fresh-worktree proof (real run: seed message + selection
   <1k + fast phase ≤5min), partition collect-only evidence (union of the
   two phases == plain run), change-scoped closure.
+- 2026-11-12 (landed): concurrent session made on-card scope improvements in
+  this worktree at 10:31-10:36 (scope-aware deferral, explicit slow args run
+  once, phase-2 scope stripping + 3 contract tests — all adopted, verified
+  green); user ruling "both keep building, whoever lands first wins" →
+  their push at 11:31:34 won the race. Landed on main as `567335989`
+  (+ sync `a3c015654`, phoneme-orphan deletion `a03957e3f`, this session's
+  `test_user_journeys` slow-path entry `945101e0e`, sync sha-fix
+  `96621b339`). Pre-push gates (all green): 20/20 tests, ruff check+format,
+  `sh -n`, domain baseline 8/8, board chain 0, feature tags OK; partition
+  proof exact at 48,685 nodeids (A = B∪C, B∩C = ∅, both directions 0 diff,
+  8-entry list); fresh-worktree proof (seed message, 420 selected vs 48k,
+  fast phase 296s, slow phase EXIT=0, no dead entries). CI quick
+  `43201134448` = success; CI/CD `43201134343` running at time of writing.
+- Run-4 triage (Phase 2's gate): 13 unique failures, all classified —
+  5 ledger (feature_flags ×2 order-dependent, infra_thread card
+  `2026106_115359`, ml_types cuda + slonet numba env), 3 shared-stack
+  stale-dock (comprehensive_training_journeys ×2 + e2e_training_trigger —
+  byte-identical `training interrupted` NotificationDock overlay from zombie
+  jobs in the shared :8000; documented + user-ruled in journey-env-gate
+  card `20261104_085623`; e2e also red on pristine main), 5 contention
+  flakes passing isolated (config env-override, learner background loop,
+  export presets ×2, user_journeys training load).
