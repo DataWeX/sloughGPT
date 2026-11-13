@@ -86,7 +86,16 @@ def measure_inference(model, prompt, new_tokens: int, repeats: int = 1) -> dict:
     prompt = list(prompt)
     model.clear_kv_cache()
 
-    # Prefill: one forward over the prompt (cached after first generate).
+    # Warm-up: the first generate() on a _lazy model pays one-time init
+    # (measured 2026-11-11: 856ms cold vs 12ms warmed = 69x). Timing it
+    # reported init cost as prefill throughput (16-24 tok/s vs 649 decode —
+    # a 40x "inversion" that was entirely artifact, since prefill is a
+    # single parallel forward and must be FASTER per token than autoregressive
+    # decode). One discarded call, then measure the steady state.
+    model.generate(np.array([prompt], dtype=np.int64), max_new_tokens=1)
+    model.clear_kv_cache()
+
+    # Prefill: one warm forward over the prompt.
     t0 = time.perf_counter()
     model.generate(np.array([prompt], dtype=np.int64), max_new_tokens=1)
     prefill_s = max(time.perf_counter() - t0, 1e-9)
@@ -115,6 +124,7 @@ def measure_training(
     n_head: int = 4,
     block_size: int = 64,
     batch_size: int = 32,
+    seed: int = 0,
 ) -> dict:
     """Training throughput via SloughGPTTrainer — ONE loop, never a new one."""
     config = TrainerConfig(
@@ -135,7 +145,7 @@ def measure_training(
         min_data_quality=0.0,
         max_toxicity_rate=1.0,
     )
-    np.random.seed(0)
+    np.random.seed(seed)
     trainer = SloughGPTTrainer(data_path=data_path, config=config, soul_name="gap-bench")
     t0 = time.perf_counter()
     result = trainer.train()
@@ -340,6 +350,9 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=3, help="generate() repeats for timing")
     parser.add_argument("--target", default=DEFAULT_TARGET, help="SLO target name")
     parser.add_argument(
+        "--seed", type=int, default=0, help="numpy RNG seed for init + batching (multi-seed sweeps)"
+    )
+    parser.add_argument(
         "--decode-slo", type=float, default=DEFAULT_DECODE_SLO_TPS, help="min decode tok/s"
     )
     parser.add_argument(
@@ -391,6 +404,7 @@ def main() -> None:
         n_layer=n_layer,
         n_head=n_head,
         block_size=block_size,
+        seed=args.seed,
     )
     print(f"  {training['tokens_per_s']} tok/s (final loss {training['final_loss']})")
 
