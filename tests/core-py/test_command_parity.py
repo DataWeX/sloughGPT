@@ -5,6 +5,12 @@ declaration), its parser (the behaviour) and — when it has an option view —
 the row registry shown by `options <command>`.  The rule says those three
 agree; this test is that rule.
 
+As of card 20261112_060632 the *detection* lives in
+`domain/gates/_internal/parity.py` (product code, so `sloughgpt gates` and
+Site Doctor can run it without the test runner); this file is the thin
+assertion wrapper over that core — same detection, same messages, same
+strict-xfail baseline semantics.  One contract, two projections.
+
 Coverage: every command registered in ``ShellREPL.COMMANDS`` (the explicit
 specs plus the auto-registered LinuxCommandsMixin set).  A command with no
 flags on *any* side has nothing to compare, so it is not parametrized at
@@ -27,57 +33,17 @@ parity check must not run a command.  Two consequences worth knowing:
 
 from __future__ import annotations
 
-import inspect
-import json
-import re
-from pathlib import Path
-
 import pytest
 
+from domain.gates._internal import parity
 from domain.shell._internal.repl import ShellREPL
 
-_BASELINE_PATH = Path(__file__).with_name("command_parity_baseline.json")
-
-_FLAG_DOC = re.compile(r"--[a-z][a-z0-9-]*")
-_FLAG_CODE = re.compile(r"""["'](--[a-z][a-z0-9-]*)["']""")
-_HELP_FLAG = "--help"
-
-
-def _body(fn) -> str:
-    """The method's code with its docstring removed — what actually runs."""
-    try:
-        src = inspect.getsource(fn)
-    except (OSError, TypeError):  # builtins / unavailable source
-        return ""
-    parts = src.split('"""')
-    return parts[2] if len(parts) >= 3 else src
-
-
-def _declared(fn) -> set[str]:
-    """Flags the docstring promises (the declaration)."""
-    return set(_FLAG_DOC.findall(fn.__doc__ or "")) - {_HELP_FLAG}
-
-
-def _parsed(fn) -> set[str]:
-    """Flags the parser really accepts — quoted literals in the body."""
-    return set(_FLAG_CODE.findall(_body(fn))) - {_HELP_FLAG}
-
-
-def _rows(name: str) -> set[str]:
-    """Flags the option view shows for *name*; empty when it has no view."""
-    from domain.shell._internal.option_views import command_rows
-
-    return {str(r["flag"]) for r in command_rows(name) if r.get("flag")} - {_HELP_FLAG}
-
-
-def _sides(name: str, fn) -> tuple[set[str], set[str], set[str]]:
-    return _declared(fn), _parsed(fn), _rows(name)
-
-
-def _baseline() -> dict[str, str]:
-    if not _BASELINE_PATH.exists():
-        return {}
-    return json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+_BASELINE_PATH = parity.BASELINE_PATH
+_baseline = parity.baseline
+_declared = parity.declared
+_parsed = parity.parsed
+_rows = parity.rows
+_sides = parity.sides
 
 
 def _governed() -> list:
@@ -85,8 +51,7 @@ def _governed() -> list:
     baseline = _baseline()
     params = []
     for name, fn in sorted(ShellREPL.COMMANDS.items()):
-        declared, parsed, rows = _sides(name, fn)
-        if not (declared or parsed or rows):
+        if not any(_sides(name, fn)):
             continue
         marks = []
         if name in baseline:
@@ -114,16 +79,7 @@ def test_detector_reads_a_real_command():
 def test_flag_parity(command: str):
     """declared == parsed, and any option rows are a subset of both."""
     fn = ShellREPL.COMMANDS[command]
-    declared, parsed, rows = _sides(command, fn)
-    problems: list[str] = []
-    if declared - parsed:
-        problems.append(f"declared but never parsed: {sorted(declared - parsed)}")
-    if parsed - declared:
-        problems.append(f"parsed but never declared: {sorted(parsed - declared)}")
-    if rows - declared:
-        problems.append(f"option rows show undeclared flags: {sorted(rows - declared)}")
-    if rows - parsed:
-        problems.append(f"option rows show unparsed flags: {sorted(rows - parsed)}")
+    problems = parity.command_problems(command, fn)
     if problems:
         pytest.fail(
             f"{command}: "

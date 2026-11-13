@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "f496847d7155a6acf9839481c9a1a1d7acbf344b",
+    "recorded_commit": "b4e8e938b6f85c90b0ea3ec8f0a4e88e40581eab",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -133,6 +133,14 @@
       "debt": null,
       "tree_hash": "3a62a81f489cdd5d520ee702b6f0c94979294575"
     },
+    "gates": {
+      "class": "core-capability",
+      "facets": ["core"],
+      "consumers": ["tests/", "apps/cli/", "scripts/"],
+      "note": "static gate cores (command parity, domain baseline, router manifest) projected to sloughgpt gates + Site Doctor",
+      "debt": null,
+      "tree_hash": "0b5d24ed601f0f6eabf2b7bd42d29f64cb5256b9"
+    },
     "generation": {
       "class": "core-capability",
       "facets": ["core"],
@@ -153,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "4db05ad4ab5e988d5867771feabbbde05598ab02"
+      "tree_hash": "821f2f96ac34296184864614d76e8fd80af80624"
     },
     "infrastructure": {
       "class": "core-capability",
