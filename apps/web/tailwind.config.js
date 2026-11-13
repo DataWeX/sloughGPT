@@ -21,6 +21,10 @@ module.exports = {
     extend: {
       transitionTimingFunction: {
         smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        // easeOutExpo — sharp start, long settle. Named token, not an arbitrary
+        // value: `ease-[cubic-bezier(0.16,1,0.3,1)]` makes the Tailwind parser
+        // ambiguous (commas look like multiple values) and warns on every build.
+        expo: 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
       fontFamily: {
         sans: ['var(--font-rubik)', 'system-ui', 'sans-serif'],

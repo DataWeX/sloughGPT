@@ -98,7 +98,7 @@ export const ReasoningPanel = memo(function ReasoningPanel({ isThinking, context
       </button>
 
       <div
-        className="overflow-hidden transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="overflow-hidden transition-[grid-template-rows] duration-300 ease-expo"
         style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
         role="region"
         aria-hidden={!expanded}
