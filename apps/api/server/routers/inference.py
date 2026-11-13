@@ -35,7 +35,7 @@ from config import ServerConfig
 from config import gen_config as _gen_config
 from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
 from domain.cognition import get_rag_service
-from domain.feedback import get_response_tracker
+from domain.feedback import SAFE_BAND, get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
@@ -543,12 +543,19 @@ _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
 
-# Bounds mirroring GenerateRequest's Field constraints (:temperature ge=0 le=2,
-# :top_p ge=0 le=1, :top_k ge=0 le=500, :repetition_penalty ge=0.5 le=2). Nudged
-# values are clamped here so a feedback-derived adjustment can never push a
-# defaulted param outside the schema the request itself is validated against
-# (drift-gated by tests/test_meta_weights_clamp.py).
-_META_WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
+# SCHEMA bounds only — what the wire accepts (GenerateRequest Field
+# constraints: :temperature ge=0 le=2, :top_p ge=0 le=1, :top_k ge=0 le=500,
+# :repetition_penalty ge=0.5 le=2). Nudged values are clamped here so a
+# feedback-derived adjustment can never push a defaulted param outside the
+# schema the request itself is validated against (drift-gated by
+# tests/test_meta_weights_clamp.py).
+#
+# This is NOT the generation-safety bound (card 20261101_182428): schema
+# validity and generation safety are different facts written twice at one
+# seam. rep 0.5 is schema-valid and actively REWARDS repetition — safety
+# lives in ONE place, ``domain.feedback.SAFE_BAND``, applied to every
+# feedback-moved value in the merge loop below (cache hit or not).
+_SCHEMA_BOUNDS: dict[str, tuple[float, float]] = {
     "temperature": (0.0, 2.0),
     "top_p": (0.0, 1.0),
     "top_k": (0.0, 500.0),
@@ -600,7 +607,11 @@ def _apply_meta_weights(
     default, because an explicitly-set value is user intent and outranks a
     derived one.
 
-    Returns a dict of parameters to pass to the provider.
+    Returns a dict of parameters to pass to the provider. Non-explicit
+    params that feedback moved are clamped into ``domain.feedback.SAFE_BAND``
+    (the one generation-safe bounds authority, card 20261101_182428) before
+    the schema clamp — so a cache-hit or unbanded nudge can never restore
+    the repetition-loop hazard the band exists to prevent.
 
     Disabled by default: ``SLO_META_WEIGHT_NUDGE=0`` returns the caller's
     parameters untouched. Feedback steering belongs to the context stack
@@ -689,8 +700,22 @@ def _apply_meta_weights(
             # request schema — pass through verbatim.
             merged[param] = value
             continue
-        nudged = value + nudge.get(param, 0)
-        lo, hi = _META_WEIGHT_BOUNDS[param]
+        n = nudge.get(param, 0)
+        nudged = value + n
+        if n:
+            # Generation safety at the USE seam (card 20261101_182428): the
+            # band must hold for every path a nudge can arrive on — a cache
+            # hit, a mock, an unbanded producer — not just inside
+            # get_adjustment(). Two rules:
+            #   base inside the band  -> the merged value is clamped into it;
+            #   base outside the band -> the caller (scope/global config)
+            #     chose a value feedback may not touch: feedback ABSTAINS
+            #     rather than dragging a user-configured value around.
+            # n == 0 (no feedback signal) never bands: a silent feedback
+            # layer must not clamp user configuration at all.
+            lo_b, hi_b = SAFE_BAND[param]
+            nudged = min(max(nudged, lo_b), hi_b) if lo_b <= value <= hi_b else value
+        lo, hi = _SCHEMA_BOUNDS[param]
         nudged = min(max(nudged, lo), hi)
         if param == "top_k":
             nudged = int(round(nudged))
