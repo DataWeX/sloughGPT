@@ -2,6 +2,8 @@
 // Extracted from page.tsx by the page-decomposition refactor — no React, no
 // controllers; the x86 sample programs below are data, not logic.
 
+import { clampTrainingField } from '@/lib/sanitize'
+
 export const DEFAULT_MAX_STEPS = 5000
 export const MAX_STEPS_LIMIT = 1_000_000
 
@@ -43,29 +45,35 @@ export function clampSteps(n: number): number {
 }
 
 export function clampTrainConfig(config: TrainConfig): TrainConfig {
+  // Upper bounds matter as much as lower: epochs=99999 previously sailed
+  // through to the backend and died as a 422. Limits come from
+  // TRAINING_LIMITS (same declaration the training form validates against);
+  // NaN (cleared/invalid input) keeps falling back to the defaults, per the
+  // hint contract asserted in vm-tab.test.tsx.
   return {
     ...config,
     dataset: config.dataset.trim() || DEFAULT_TRAIN_CONFIG.dataset,
     epochs: Number.isFinite(config.epochs)
-      ? Math.max(1, Math.floor(config.epochs))
+      ? clampTrainingField('epochs', Math.floor(config.epochs))
       : DEFAULT_TRAIN_CONFIG.epochs,
-    lr: Number.isFinite(config.lr) && config.lr > 0 ? config.lr : DEFAULT_TRAIN_CONFIG.lr,
+    lr:
+      Number.isFinite(config.lr) && config.lr > 0
+        ? clampTrainingField('learning_rate', config.lr)
+        : DEFAULT_TRAIN_CONFIG.lr,
     batch_size: Number.isFinite(config.batch_size)
-      ? Math.max(1, Math.floor(config.batch_size))
+      ? clampTrainingField('batch_size', Math.floor(config.batch_size))
       : DEFAULT_TRAIN_CONFIG.batch_size,
     n_layer: Number.isFinite(config.n_layer)
-      ? Math.max(1, Math.floor(config.n_layer))
+      ? clampTrainingField('n_layer', Math.floor(config.n_layer))
       : DEFAULT_TRAIN_CONFIG.n_layer,
     n_head: Number.isFinite(config.n_head)
-      ? Math.max(1, Math.floor(config.n_head))
+      ? clampTrainingField('n_head', Math.floor(config.n_head))
       : DEFAULT_TRAIN_CONFIG.n_head,
     embed_dim: Number.isFinite(config.embed_dim)
-      ? Math.max(1, Math.floor(config.embed_dim))
+      ? clampTrainingField('n_embed', Math.floor(config.embed_dim))
       : DEFAULT_TRAIN_CONFIG.embed_dim,
   }
 }
-
-export const num = (v: string) => (v.trim() === '' ? NaN : Number(v))
 
 export function trainConfigHints(config: TrainConfig): { label: string; message: string }[] {
   const hints: { label: string; message: string }[] = []

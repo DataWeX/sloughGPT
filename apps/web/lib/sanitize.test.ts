@@ -9,6 +9,8 @@ import {
   sanitizeForDisplay,
   getFieldLimit,
   clampTrainingField,
+  parseTrainingField,
+  validateTrainingField,
   TRAINING_LIMITS,
 } from './sanitize'
 
@@ -351,5 +353,60 @@ describe('TRAINING_LIMITS', () => {
         expect(limit.step).toBeGreaterThan(0)
       }
     }
+  })
+})
+
+// ── parseTrainingField ─────────────────────────────────────────────
+// Lenient input parsing for form fields: empty/invalid → NaN (the caller
+// decides the fallback — e.g. the VM hint contract), finite values clamped
+// to the field's TRAINING_LIMITS range.
+
+describe('parseTrainingField', () => {
+  it('returns NaN for empty or non-numeric input', () => {
+    expect(parseTrainingField('epochs', '')).toBeNaN()
+    expect(parseTrainingField('epochs', '   ')).toBeNaN()
+    expect(parseTrainingField('learning_rate', 'abc')).toBeNaN()
+    expect(parseTrainingField('batch_size', '-')).toBeNaN()
+  })
+
+  it('returns in-range values unchanged', () => {
+    expect(parseTrainingField('epochs', '5')).toBe(5)
+    expect(parseTrainingField('batch_size', '32')).toBe(32)
+    expect(parseTrainingField('learning_rate', '0.001')).toBe(0.001)
+  })
+
+  it('clamps out-of-range values to the field limits', () => {
+    expect(parseTrainingField('epochs', '99999')).toBe(1000)
+    expect(parseTrainingField('epochs', '0')).toBe(1)
+    expect(parseTrainingField('batch_size', '99999')).toBe(512)
+    expect(parseTrainingField('learning_rate', '5')).toBe(1)
+    expect(parseTrainingField('learning_rate', '0.000001')).toBe(1e-5)
+  })
+})
+
+// ── validateTrainingField ──────────────────────────────────────────
+
+describe('validateTrainingField', () => {
+  it('returns null for in-range values', () => {
+    expect(validateTrainingField('epochs', 5, 'Epochs')).toBeNull()
+    expect(validateTrainingField('epochs', 1000, 'Epochs')).toBeNull()
+    expect(validateTrainingField('batch_size', 512, 'Batch size')).toBeNull()
+    expect(validateTrainingField('learning_rate', 0.001, 'Learning rate')).toBeNull()
+    expect(validateTrainingField('learning_rate', 1, 'Learning rate')).toBeNull()
+  })
+
+  it('formats the limit message from TRAINING_LIMITS', () => {
+    expect(validateTrainingField('epochs', 9999, 'Epochs')).toBe('Epochs must be 1–1000')
+    expect(validateTrainingField('batch_size', 9999, 'Batch size')).toBe('Batch size must be 1–512')
+    expect(validateTrainingField('learning_rate', 5, 'Learning rate')).toBe(
+      'Learning rate must be 0.00001–1',
+    )
+  })
+
+  it('treats NaN as invalid', () => {
+    expect(validateTrainingField('epochs', NaN, 'Epochs')).toBe('Epochs must be 1–1000')
+    expect(validateTrainingField('learning_rate', NaN, 'Learning rate')).toBe(
+      'Learning rate must be 0.00001–1',
+    )
   })
 })

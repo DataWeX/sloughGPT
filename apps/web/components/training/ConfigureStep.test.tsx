@@ -116,31 +116,88 @@ describe('ConfigureStep advanced options fold', () => {
   })
 
   it('keeps hyperparameter validation errors visible while collapsed', () => {
-    renderStep({ ...baseForm, trainingEpochs: 1001 })
+    renderStep({ ...baseForm, trainingEpochs: 9999 })
+    expect(screen.getByText('Epochs must be 1–1000')).toBeTruthy()
+  })
+})
+
+describe('ConfigureStep hyperparameter sanitization', () => {
+  afterEach(cleanup)
+
+  const openAdvanced = () => fireEvent.click(screen.getByText('Show advanced options'))
+
+  it('flags batch size beyond the shared limits', () => {
+    renderStep({ ...baseForm, trainingBatchSize: 9999 })
+    expect(screen.getByText('Batch size must be 1–512')).toBeTruthy()
+  })
+
+  it('flags learning rate beyond the shared limits', () => {
+    renderStep({ ...baseForm, trainingLR: 5 })
+    expect(screen.getByText('Learning rate must be 0.00001–1')).toBeTruthy()
+  })
+
+  it('flags NaN hyperparameters instead of passing validation', () => {
+    renderStep({ ...baseForm, trainingEpochs: Number.NaN })
     expect(screen.getByText('Epochs must be 1–1000')).toBeTruthy()
   })
 
-  it('clamps epochs to TRAINING_LIMITS on input (1–1000, no NaN)', () => {
-    const form = makeForm({ trainingEpochs: 10 })
+  it('lets the learning rate be typed without snapping mid-edit', () => {
+    // Reported bug: the old onChange (`Number(x) || 1e-3`) replaced the
+    // user's draft on every keystroke, so `0.001` could never be typed —
+    // typing `0` immediately snapped to `0.001` and the edit was fought.
+    const form = makeForm({ trainingLR: 1 })
     renderStep(form)
-    fireEvent.click(screen.getByText('Show advanced options'))
-    fireEvent.change(screen.getByLabelText('Epochs'), { target: { value: '5000' } })
-    expect(form.setTrainingEpochs).toHaveBeenCalledWith(1000)
+    openAdvanced()
+    const lr = screen.getByLabelText('Learning rate') as HTMLInputElement
+
+    fireEvent.change(lr, { target: { value: '0' } })
+    expect(lr.value).toBe('0')
+    expect(form.setTrainingLR).not.toHaveBeenCalled()
+
+    fireEvent.change(lr, { target: { value: '0.001' } })
+    expect(lr.value).toBe('0.001')
+    expect(form.setTrainingLR).not.toHaveBeenCalled()
+
+    fireEvent.blur(lr)
+    expect(form.setTrainingLR).toHaveBeenLastCalledWith(0.001)
+    expect(lr.value).toBe('0.001')
   })
 
-  it('commits the learning rate on blur only — typeable, clamped, no silent fallback', () => {
+  it('clamps an out-of-range learning rate on blur', () => {
     const form = makeForm({ trainingLR: 0.001 })
     renderStep(form)
-    fireEvent.click(screen.getByText('Show advanced options'))
-    const lr = screen.getByLabelText('Learning rate')
-    // Typing "0.001" must not commit mid-entry (the old onChange did).
-    fireEvent.change(lr, { target: { value: '0.001' } })
+    openAdvanced()
+    const lr = screen.getByLabelText('Learning rate') as HTMLInputElement
+
+    fireEvent.change(lr, { target: { value: '999' } })
     expect(form.setTrainingLR).not.toHaveBeenCalled()
     fireEvent.blur(lr)
-    expect(form.setTrainingLR).toHaveBeenCalledWith(0.001)
-    // Out-of-range draft clamps to the limit on blur.
-    fireEvent.change(lr, { target: { value: '2' } })
-    fireEvent.blur(lr)
     expect(form.setTrainingLR).toHaveBeenLastCalledWith(1)
+    expect(lr.value).toBe('1')
+  })
+
+  it('commits a clamped epochs value only on blur', () => {
+    const form = makeForm({ trainingEpochs: 10 })
+    renderStep(form)
+    openAdvanced()
+    const epochs = screen.getByLabelText('Epochs') as HTMLInputElement
+
+    fireEvent.change(epochs, { target: { value: '5000' } })
+    expect(form.setTrainingEpochs).not.toHaveBeenCalled()
+    fireEvent.blur(epochs)
+    expect(form.setTrainingEpochs).toHaveBeenLastCalledWith(1000)
+    expect(epochs.value).toBe('1000')
+  })
+
+  it('reverts to the last valid value when the field is left empty', () => {
+    const form = makeForm({ trainingEpochs: 10 })
+    renderStep(form)
+    openAdvanced()
+    const epochs = screen.getByLabelText('Epochs') as HTMLInputElement
+
+    fireEvent.change(epochs, { target: { value: '' } })
+    fireEvent.blur(epochs)
+    expect(form.setTrainingEpochs).not.toHaveBeenCalled()
+    expect(epochs.value).toBe('10')
   })
 })
