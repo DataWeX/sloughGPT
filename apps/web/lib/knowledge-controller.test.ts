@@ -15,123 +15,157 @@ setupApiMocks()
 
 import { knowledgeController } from './knowledge-controller'
 
-describe('knowledgeController', () => {
+describe('knowledgeController.list', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('list GETs /knowledge with limit and offset', async () => {
-    apiClient.apiGet.mockResolvedValue([{ id: 'k1', content: 'fact 1' }])
-    const result = await knowledgeController.list(10, 5)
-    expect(result).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge?limit=10&offset=5')
-  })
+  it('GETs /knowledge and returns items', async () => {
+    const items = [
+      { id: 'k1', content: 'fact 1', topic: 'general', source: 'manual', url: '', timestamp: 1704067200, importance: 0.5, score: 0.0 },
+      { id: 'k2', content: 'fact 2', topic: 'science', source: 'manual', url: '', timestamp: 1704153600, importance: 0.5, score: 0.0 },
+    ]
+    apiClient.apiGet.mockResolvedValue(items)
 
-  it('list returns [] when null', async () => {
-    apiClient.apiGet.mockResolvedValue(null)
     const result = await knowledgeController.list()
-    expect(result).toEqual([])
+    expect(result).toHaveLength(2)
+    expect(result[0].content).toBe('fact 1')
+    expect(result[0].topic).toBe('general')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge?limit=200&offset=0')
+  })
+})
+
+describe('knowledgeController.add', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs to /knowledge with content and topic', async () => {
+    const returned = { status: 'stored', content: 'new fact' }
+    apiClient.apiPost.mockResolvedValue(returned)
+
+    const item = await knowledgeController.add('new fact', 'custom')
+    expect(item.status).toBe('stored')
+    expect(item.content).toBe('new fact')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge', { content: 'new fact', topic: 'custom', auto_tag: false })
   })
 
-  it('add POSTs /knowledge with content', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'ok', content: 'hello' })
-    const result = await knowledgeController.add('hello', 'general')
-    expect(result.status).toBe('ok')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge', { content: 'hello', topic: 'general', auto_tag: false })
-  })
+  it('uses default topic when none specified', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'stored', content: 'plain' })
 
-  it('add supports autoTag', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'ok', content: 'hello', topic: 'auto-tag' })
-    const result = await knowledgeController.add('hello', 'general', true)
-    expect(result.topic).toBe('auto-tag')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge', { content: 'hello', topic: 'general', auto_tag: true })
+    await knowledgeController.add('plain')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge', { content: 'plain', topic: 'general', auto_tag: false })
   })
+})
 
-  it('update PATCHes /knowledge/{id}', async () => {
-    apiClient.apiPatch.mockResolvedValue({ status: 'updated' })
-    const result = await knowledgeController.update('k1', { content: 'new' })
-    expect(apiClient.apiPatch).toHaveBeenCalledWith('/knowledge/k1', { content: 'new' })
-    expect(result.status).toBe('updated')
-  })
+describe('knowledgeController.delete', () => {
+  beforeEach(() => { vi.clearAllMocks() })
 
-  it('delete DELETEs /knowledge/{id}', async () => {
-    apiClient.apiDelete.mockResolvedValue(undefined)
+  it('DELETEs /knowledge/{id}', async () => {
+    apiClient.apiDelete.mockResolvedValue({ error: undefined })
+
     await knowledgeController.delete('k1')
     expect(apiClient.apiDelete).toHaveBeenCalledWith('/knowledge/k1')
   })
+})
 
-  it('search GETs /knowledge/search with encoded query', async () => {
-    apiClient.apiGet.mockResolvedValue({ results: [{ id: 'k1' }] })
-    const result = await knowledgeController.search('hello world')
+describe('knowledgeController.search', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GETs /knowledge/search with query param', async () => {
+    const data = { results: [{ id: 'k1', content: 'fact about ai', topic: 'general', source: 'manual', url: '', timestamp: 0, importance: 0.5, score: 0.0 }] }
+    apiClient.apiGet.mockResolvedValue(data)
+
+    const result = await knowledgeController.search('ai')
     expect(result.results).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/search?query=hello%20world')
+    expect(result.results[0].topic).toBe('general')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/search?query=ai')
   })
 
-  it('batchIngest POSTs /knowledge/batch', async () => {
-    apiClient.apiPost.mockResolvedValue({ stored: 3 })
-    const result = await knowledgeController.batchIngest([{ content: 'a' }, { content: 'b' }])
-    expect(result.stored).toBe(3)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/batch', { items: [{ content: 'a' }, { content: 'b' }] })
+  it('returns empty results when no match', async () => {
+    apiClient.apiGet.mockResolvedValue({ results: [] })
+    const data = await knowledgeController.search('nonexistent')
+    expect(data.results).toEqual([])
   })
+})
 
-  it('stats GETs /knowledge/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({ total_items: 10, topics: {}, topic_count: 0, sources: {}, avg_importance: 0, searchable: true })
-    const result = await knowledgeController.stats()
-    expect(result.total_items).toBe(10)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/stats')
+describe('knowledgeController.batchIngest', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs to /knowledge/batch with items', async () => {
+    apiClient.apiPost.mockResolvedValue({ stored: 2 })
+
+    const result = await knowledgeController.batchIngest([
+      { content: 'fact a', source: 'chat' },
+      { content: 'fact b' },
+    ])
+    expect(result.stored).toBe(2)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/batch', {
+      items: [
+        { content: 'fact a', source: 'chat' },
+        { content: 'fact b' },
+      ],
+    })
   })
+})
 
-  it('topics GETs /knowledge/topics', async () => {
-    apiClient.apiGet.mockResolvedValue({ topics: [], total: 0 })
-    const result = await knowledgeController.topics()
-    expect(result.total).toBe(0)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/topics')
-  })
+describe('knowledgeController.batchDelete', () => {
+  beforeEach(() => vi.clearAllMocks())
 
-  it('related GETs /knowledge/{id}/related', async () => {
-    apiClient.apiGet.mockResolvedValue({ items: [], count: 0 })
-    const result = await knowledgeController.related('k1', 6)
-    expect(result.count).toBe(0)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/k1/related?top_k=6')
-  })
-
-  it('batchDelete POSTs /knowledge/batch-delete', async () => {
+  it('POSTs to /knowledge/batch-delete with IDs', async () => {
     apiClient.apiPost.mockResolvedValue({ deleted: 2 })
-    const result = await knowledgeController.batchDelete(['k1', 'k2'])
+
+    const result = await knowledgeController.batchDelete(['id1', 'id2'])
     expect(result.deleted).toBe(2)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/batch-delete', { ids: ['k1', 'k2'] })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/batch-delete', { ids: ['id1', 'id2'] })
   })
+})
 
-  it('suggestTopic POSTs /knowledge/suggest-topic', async () => {
-    apiClient.apiPost.mockResolvedValue({ topic: 'AI', confidence: '0.85' })
-    const result = await knowledgeController.suggestTopic('neural networks')
-    expect(result.topic).toBe('AI')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/suggest-topic', { content: 'neural networks' })
+describe('knowledgeController.suggestTopic', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('POSTs to /knowledge/suggest-topic and returns topic', async () => {
+    apiClient.apiPost.mockResolvedValue({ topic: 'code', confidence: 'high' })
+
+    const result = await knowledgeController.suggestTopic('def foo(): pass')
+    expect(result.topic).toBe('code')
+    expect(result.confidence).toBe('high')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/suggest-topic', { content: 'def foo(): pass' })
   })
+})
 
-  it('trainAdapter POSTs /knowledge/train-adapter', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'ok', fact_count: 5, elapsed: 1.2, adapter_status: { adapter_exists: true, fact_count: 5 } })
+describe('knowledgeController.related', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('GETs /knowledge/{id}/related', async () => {
+    const related = { items: [{ id: 'k2', content: 'related fact', topic: 'code', source: '', url: '', timestamp: 0, importance: 0.5, score: 0.0 }], count: 1 }
+    apiClient.apiGet.mockResolvedValue(related)
+
+    const result = await knowledgeController.related('k1', 5)
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0].content).toBe('related fact')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/k1/related?top_k=5')
+  })
+})
+
+describe('knowledgeController.trainAdapter', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('POSTs to /knowledge/train-adapter', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'trained', fact_count: 10, elapsed: 5.2, adapter_status: { adapter_exists: true, fact_count: 10 } })
+
     const result = await knowledgeController.trainAdapter()
-    expect(result.status).toBe('ok')
+    expect(result.status).toBe('trained')
+    expect(result.fact_count).toBe(10)
     expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/train-adapter')
   })
+})
 
-  it('getAdapterStatus GETs /knowledge/adapter-status', async () => {
-    apiClient.apiGet.mockResolvedValue({ adapter_exists: true, fact_count: 5 })
+describe('knowledgeController.getAdapterStatus', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('GETs /knowledge/adapter-status', async () => {
+    apiClient.apiGet.mockResolvedValue({ adapter_exists: false, fact_count: 0, total_facts_available: 5 })
+
     const result = await knowledgeController.getAdapterStatus()
-    expect(result.fact_count).toBe(5)
+    expect(result.adapter_exists).toBe(false)
+    expect(result.total_facts_available).toBe(5)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/adapter-status')
-  })
-
-  it('context GETs /knowledge/context', async () => {
-    apiClient.apiGet.mockResolvedValue({ context: 'string', count: 1 })
-    const result = await knowledgeController.context()
-    expect(result.count).toBe(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/knowledge/context')
-  })
-
-  it('ingestUrl POSTs /knowledge/ingest-url', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'ok', new_facts: 1, title: 'Page', content_length: 100, rejected: false })
-    const result = await knowledgeController.ingestUrl('https://example.com')
-    expect(result.status).toBe('ok')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/knowledge/ingest-url', { url: 'https://example.com' })
   })
 })

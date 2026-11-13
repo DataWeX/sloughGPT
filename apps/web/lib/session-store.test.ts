@@ -26,4 +26,23 @@ describe('sessionStore', () => {
     sessionStore.reset()
     expect(sessionStore.isApproved('model-x')).toBe(false)
   })
+
+  it('setApproved is idempotent', () => {
+    sessionStore.setApproved('a')
+    sessionStore.setApproved('a')
+    expect(sessionStore.isApproved('a')).toBe(true)
+  })
+
+  it('reset does not affect other stores', () => {
+    sessionStore.setApproved('a')
+    sessionStore.setApproved('b')
+    sessionStore.reset()
+    expect(sessionStore.isApproved('a')).toBe(false)
+    expect(sessionStore.isApproved('b')).toBe(false)
+  })
+
+  it('supports empty string key', () => {
+    sessionStore.setApproved('')
+    expect(sessionStore.isApproved('')).toBe(true)
+  })
 })

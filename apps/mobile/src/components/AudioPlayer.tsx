@@ -51,7 +51,9 @@ export function AudioPlayer({audioUrl, audioPath, durationMs = 0}: Props) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current.unloadAsync().catch((e: unknown) => {
+          if (__DEV__) console.warn('[AudioPlayer] unload failed:', e);
+        });
       }
     };
   }, []);
@@ -74,7 +76,9 @@ export function AudioPlayer({audioUrl, audioPath, durationMs = 0}: Props) {
               if (intervalRef.current) clearInterval(intervalRef.current);
             }
           }
-        } catch {}
+        } catch (e) {
+          if (__DEV__) console.warn('[AudioPlayer] position poll error:', e);
+        }
       }
     }, 250);
   }, [animWidth]);
@@ -101,7 +105,9 @@ export function AudioPlayer({audioUrl, audioPath, durationMs = 0}: Props) {
       }
       setPlaying(true);
       startPositionPolling();
-    } catch {}
+    } catch (e) {
+      if (__DEV__) console.warn('[AudioPlayer] playback error:', e);
+    }
   }, [playing, resolvedUrl, startPositionPolling]);
 
   const progressWidth = animWidth.interpolate({

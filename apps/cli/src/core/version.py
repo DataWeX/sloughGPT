@@ -3,11 +3,8 @@ Version tracking for SloughGPT CLI.
 
 Provides version information and update checking.
 """
-import json
-import os
-from pathlib import Path
-from typing import Optional
 
+import json
 
 __version__ = "0.1.0"
 __version_tuple__ = (0, 1, 0)
@@ -22,8 +19,8 @@ class VersionInfo:
     def __init__(
         self,
         version: str = __version__,
-        python_version: Optional[str] = None,
-        platform: Optional[str] = None,
+        python_version: str | None = None,
+        platform: str | None = None,
     ):
         self.version = version
         self.python_version = python_version or _get_python_version()
@@ -49,12 +46,14 @@ class VersionInfo:
 def _get_python_version() -> str:
     """Get Python version string."""
     import sys
+
     return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
 
 def _get_platform() -> str:
     """Get platform string."""
     import platform
+
     return f"{platform.system()} {platform.machine()}"
 
 

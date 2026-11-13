@@ -139,6 +139,8 @@ interface RangeSliderProps {
   step?: number
   onValueChange?: (value: [number, number]) => void
   label?: string
+  /** Show current values even when no label is present */
+  showValue?: boolean
   formatValue?: (value: number) => string
   className?: string
 }
@@ -151,6 +153,7 @@ function RangeSlider({
   step = 1,
   onValueChange,
   label,
+  showValue = false,
   formatValue,
   className,
 }: RangeSliderProps) {
@@ -167,12 +170,14 @@ function RangeSlider({
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      {label && (
-        <div className="flex justify-between">
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <span className="text-xs font-semibold text-foreground tabular-nums">
-            {fmt(lo)} – {fmt(hi)}
-          </span>
+      {(label || showValue) && (
+        <div className={cn('flex justify-between', !label && 'justify-end')}>
+          {label && <span className="text-xs font-medium text-muted-foreground">{label}</span>}
+          {(label || showValue) && (
+            <span className="text-xs font-semibold text-foreground tabular-nums">
+              {fmt(lo)} – {fmt(hi)}
+            </span>
+          )}
         </div>
       )}
       <div className="relative flex items-center h-5">

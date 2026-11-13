@@ -3,10 +3,8 @@ Tests for Production-Grade Knowledge Graph
 """
 
 import pytest
-from domains.cognitive.knowledge_graph_v2 import (
-    Entity,
-    Fact,
-    RelationType,
+
+from domain.cognition._internal.knowledge_graph_v2 import (
     KnowledgeGraph,
 )
 
@@ -147,11 +145,11 @@ class TestKnowledgeGraph:
         kg.add_fact("socrates", "is_a", "mortal")
 
         result = kg.verify_statement("socrates is a human")
-        assert result["verified"] == True
+        assert result["verified"]
         assert result["confidence"] == 1.0
 
         result = kg.verify_statement("socrates is a stone")
-        assert result["verified"] == False
+        assert not result["verified"]
 
     def test_consistency_check(self):
         """Test consistency checking."""

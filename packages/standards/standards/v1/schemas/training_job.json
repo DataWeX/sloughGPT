@@ -35,7 +35,7 @@
         "checkpoint_in": { "type": "string" },
         "output_format": {
           "type": "array",
-          "items": { "type": "string", "enum": [".pt", ".pth", ".safetensors", "gguf"] }
+          "items": { "type": "string", "enum": [".soul", ".safetensors", "gguf"] }
         }
       }
     },

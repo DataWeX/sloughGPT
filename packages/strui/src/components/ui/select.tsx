@@ -26,6 +26,7 @@ interface SelectContextValue {
   onValueChange: (value: string) => void
   placeholder?: string
   triggerRef: React.RefObject<HTMLButtonElement | null>
+  contentId: string
   registerItem: (el: HTMLElement | null) => void
   unregisterItem: (el: HTMLElement | null) => void
   focusFirst: () => void
@@ -51,7 +52,12 @@ interface SelectRootProps {
   children: ReactNode
 }
 
-function Select({ value: controlledValue, defaultValue = '', onValueChange, children }: SelectRootProps) {
+function Select({
+  value: controlledValue,
+  defaultValue = '',
+  onValueChange,
+  children,
+}: SelectRootProps) {
   const [internalValue, setInternalValue] = useState(defaultValue)
   const isControlled = controlledValue !== undefined
   const value = isControlled ? controlledValue : internalValue
@@ -59,6 +65,7 @@ function Select({ value: controlledValue, defaultValue = '', onValueChange, chil
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const itemsRef = useRef<Map<HTMLElement, number>>(new Map())
   const nextId = useRef(0)
+  const contentId = useId()
 
   const handleChange = useCallback(
     (v: string) => {
@@ -108,7 +115,19 @@ function Select({ value: controlledValue, defaultValue = '', onValueChange, chil
 
   return (
     <SelectContext.Provider
-      value={{ open, onOpenChange: setOpen, value, onValueChange: handleChange, triggerRef, registerItem, unregisterItem, focusFirst, focusNext, focusPrev }}
+      value={{
+        open,
+        onOpenChange: setOpen,
+        value,
+        onValueChange: handleChange,
+        triggerRef,
+        contentId,
+        registerItem,
+        unregisterItem,
+        focusFirst,
+        focusNext,
+        focusPrev,
+      }}
     >
       {children}
     </SelectContext.Provider>
@@ -117,63 +136,107 @@ function Select({ value: controlledValue, defaultValue = '', onValueChange, chil
 
 /* ── Trigger ────────────────────────────────────────────────────── */
 
-const SelectTrigger = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonElement> & { placeholder?: string }>(
-  ({ className, children, placeholder, ...props }, ref) => {
-    const ctx = useSelectContext()
-    const mergedRef = useCallback(
-      (node: HTMLButtonElement | null) => {
-        ;(ctx.triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = node
-        if (typeof ref === 'function') ref(node)
-        else if (ref) ref.current = node
-      },
-      [ref, ctx.triggerRef],
-    )
+const SelectTrigger = forwardRef<
+  HTMLButtonElement,
+  HTMLAttributes<HTMLButtonElement> & { placeholder?: string }
+>(({ className, children, placeholder, ...props }, ref) => {
+  const ctx = useSelectContext()
+  const mergedRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      ;(ctx.triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = node
+      if (typeof ref === 'function') ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref, ctx.triggerRef],
+  )
 
-    return (
-      <button
-        ref={mergedRef}
-        type="button"
-        role="combobox"
-        aria-expanded={ctx.open}
-        aria-haspopup="listbox"
-        onClick={() => ctx.onOpenChange(!ctx.open)}
+  return (
+    <button
+      ref={mergedRef}
+      type="button"
+      role="combobox"
+      aria-expanded={ctx.open}
+      aria-haspopup="listbox"
+      aria-controls={ctx.contentId}
+      onClick={() => ctx.onOpenChange(!ctx.open)}
+      className={cn(
+        'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:ring-offset-2',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+      {...props}
+    >
+      <span className={cn('truncate', !ctx.value && 'text-muted-foreground')}>
+        {ctx.value ? children : (placeholder ?? 'Select...')}
+      </span>
+      <svg
         className={cn(
-          'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm',
-          'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2',
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          className,
+          'h-4 w-4 text-muted-foreground transition-transform',
+          ctx.open && 'rotate-180',
         )}
-        {...props}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
       >
-        <span className={cn('truncate', !ctx.value && 'text-muted-foreground')}>
-          {ctx.value ? children : placeholder ?? 'Select...'}
-        </span>
-        <svg className={cn('h-4 w-4 text-muted-foreground transition-transform', ctx.open && 'rotate-180')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-    )
-  },
-)
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9l6 6 6-6" />
+      </svg>
+    </button>
+  )
+})
 SelectTrigger.displayName = 'SelectTrigger'
 
 /* ── Content ────────────────────────────────────────────────────── */
+
+interface SelectPosition {
+  top: number
+  left: number
+  width: number
+}
 
 const SelectContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
     const ctx = useSelectContext()
     const contentRef = useRef<HTMLDivElement>(null)
     const previousActiveElement = useRef<HTMLElement | null>(null)
+    const [pos, setPos] = useState<SelectPosition | null>(null)
+
+    const computePosition = useCallback(() => {
+      const trigger = ctx.triggerRef.current
+      const content = contentRef.current
+      if (!trigger || !content) return
+      const rect = trigger.getBoundingClientRect()
+      const viewH = window.innerHeight
+      const viewW = window.innerWidth
+      const h = content.offsetHeight
+      const w = content.offsetWidth
+      const flip = rect.bottom + 6 + h > viewH && rect.top - h - 6 >= 8
+      const top = flip ? Math.max(8, rect.top - h - 6) : rect.bottom + 6
+      const left = Math.max(8, Math.min(rect.left, viewW - w - 8))
+      setPos({ top, left, width: rect.width })
+    }, [ctx.triggerRef])
 
     useLayoutEffect(() => {
       if (ctx.open) {
         previousActiveElement.current = document.activeElement as HTMLElement
+        computePosition()
         requestAnimationFrame(() => ctx.focusFirst())
       } else if (previousActiveElement.current) {
         previousActiveElement.current.focus()
         previousActiveElement.current = null
       }
-    }, [ctx.open, ctx.focusFirst])
+    }, [ctx.open, ctx.focusFirst, computePosition])
+
+    useEffect(() => {
+      if (!ctx.open) return
+      computePosition()
+      window.addEventListener('resize', computePosition)
+      document.addEventListener('scroll', computePosition, true)
+      return () => {
+        window.removeEventListener('resize', computePosition)
+        document.removeEventListener('scroll', computePosition, true)
+      }
+    }, [ctx.open, computePosition])
 
     useEffect(() => {
       if (!ctx.open) return
@@ -221,9 +284,13 @@ const SelectContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>
           if (typeof ref === 'function') ref(node)
           else if (ref) ref.current = node
         }}
+        id={ctx.contentId}
         role="listbox"
+        style={
+          pos ? { top: pos.top, left: pos.left, minWidth: pos.width } : { visibility: 'hidden' }
+        }
         className={cn(
-          'absolute z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg',
+          'fixed z-50 max-h-96 min-w-[8rem] overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg',
           'animate-in fade-in-0 zoom-in-95 duration-150',
           className,
         )}
@@ -283,8 +350,18 @@ const SelectItem = forwardRef<HTMLDivElement, SelectItemProps>(
       >
         {isSelected && (
           <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-            <svg className="h-3.5 w-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            <svg
+              className="h-3.5 w-3.5 text-primary"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M5 13l4 4L19 7"
+              />
             </svg>
           </span>
         )}
@@ -311,8 +388,18 @@ const SelectGroup = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
 SelectGroup.displayName = 'SelectGroup'
 
 const SelectSeparator = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => <div ref={ref} role="separator" className={cn('my-1 h-px bg-border', className)} {...props} />,
+  ({ className, ...props }, ref) => (
+    <div ref={ref} role="separator" className={cn('my-1 h-px bg-border', className)} {...props} />
+  ),
 )
 SelectSeparator.displayName = 'SelectSeparator'
 
-export { Select, SelectTrigger, SelectContent, SelectItem, SelectValue, SelectGroup, SelectSeparator }
+export {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+  SelectGroup,
+  SelectSeparator,
+}

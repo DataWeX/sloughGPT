@@ -1,8 +1,10 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { useApiMonitor } from './api-monitor-store'
+import { useErrorStore } from './error-store'
 
 beforeEach(() => {
   useApiMonitor.setState({ status: 'connecting', lastOnline: null })
+  useErrorStore.getState().clearStateEvents()
 })
 
 describe('useApiMonitor', () => {
@@ -44,5 +46,34 @@ describe('useApiMonitor', () => {
     useApiMonitor.getState().setStatus('connected')
     const ts2 = useApiMonitor.getState().lastOnline
     expect(ts2).toBeGreaterThan(ts1!)
+  })
+
+  it('can set multiple status transitions', () => {
+    useApiMonitor.getState().setStatus('connected')
+    expect(useApiMonitor.getState().status).toBe('connected')
+    useApiMonitor.getState().setStatus('reloading')
+    expect(useApiMonitor.getState().status).toBe('reloading')
+    useApiMonitor.getState().setStatus('offline')
+    expect(useApiMonitor.getState().status).toBe('offline')
+  })
+
+  it('logs exactly one state event per transition (no double-log)', () => {
+    useApiMonitor.getState().setStatus('connected')
+    const events = useErrorStore
+      .getState()
+      .getStateEvents()
+      .filter((e) => e.event === 'api_connection_changed')
+    expect(events).toHaveLength(1)
+    expect(events[0].from).toBe('connecting')
+    expect(events[0].to).toBe('connected')
+  })
+
+  it('logs nothing when status is unchanged', () => {
+    useApiMonitor.getState().setStatus('connecting')
+    const events = useErrorStore
+      .getState()
+      .getStateEvents()
+      .filter((e) => e.event === 'api_connection_changed')
+    expect(events).toHaveLength(0)
   })
 })

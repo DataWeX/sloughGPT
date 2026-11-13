@@ -2,7 +2,7 @@ import type { HTMLAttributes } from 'react'
 
 import { cn } from '../../lib/cn'
 
-export type StatusDotTone = 'success' | 'warning' | 'destructive' | 'muted' | 'primary'
+export type StatusDotTone = 'success' | 'warning' | 'destructive' | 'muted' | 'primary' | 'accent'
 
 export interface StatusDotProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'children'> {
   tone?: StatusDotTone
@@ -21,6 +21,7 @@ export const STATUS_DOT_TONE_CLASSES: Record<StatusDotTone, string> = {
   destructive: 'bg-destructive',
   muted: 'bg-muted-foreground/60',
   primary: 'bg-primary',
+  accent: 'bg-accent',
 }
 
 /** Compact health / connection indicator: colored dot with optional pulse and label. */
@@ -35,10 +36,7 @@ export function StatusDot({
   const visibleLabel = showLabel ?? Boolean(label)
 
   return (
-    <span
-      className={cn('inline-flex items-center gap-2', className)}
-      {...props}
-    >
+    <span className={cn('inline-flex items-center gap-2', className)} {...props}>
       <span className="relative inline-flex h-2.5 w-2.5 shrink-0">
         {pulse ? (
           <span
@@ -50,7 +48,10 @@ export function StatusDot({
           />
         ) : null}
         <span
-          className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', STATUS_DOT_TONE_CLASSES[tone])}
+          className={cn(
+            'relative inline-flex h-2.5 w-2.5 rounded-full',
+            STATUS_DOT_TONE_CLASSES[tone],
+          )}
           aria-hidden
         />
       </span>

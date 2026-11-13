@@ -1,7 +1,8 @@
 """
 Config Controller - Business logic for configuration
 """
-from typing import Dict, Any, Optional
+
+from typing import Any
 
 
 class ConfigController:
@@ -9,19 +10,19 @@ class ConfigController:
 
     def __init__(self):
         self._config = {
-            "temperature": 0.8,
-            "top_p": 0.9,
-            "top_k": 50,
-            "repetition_penalty": 1.2,
+            "temperature": 0.7,
+            "top_p": 0.85,
+            "top_k": 40,
+            "repetition_penalty": 1.15,
             "max_new_tokens": 200,
             "max_context_length": 1024,
         }
 
-    def get_generation_config(self) -> Dict[str, Any]:
+    def get_generation_config(self) -> dict[str, Any]:
         """Get current generation config"""
         return self._config.copy()
 
-    def update_generation_config(self, **kwargs) -> Dict[str, Any]:
+    def update_generation_config(self, **kwargs) -> dict[str, Any]:
         """Update generation config"""
         for key, value in kwargs.items():
             if value is not None and key in self._config:
@@ -29,7 +30,7 @@ class ConfigController:
         return self._config.copy()
 
 
-_config_controller: Optional[ConfigController] = None
+_config_controller: ConfigController | None = None
 
 
 def get_config_controller() -> ConfigController:

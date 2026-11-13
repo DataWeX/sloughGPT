@@ -2,17 +2,20 @@
 SloughGPT Config Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_cli_src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps", "cli", "src")
+_cli_src = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps", "cli", "src"
+)
 if os.path.isdir(_cli_src) and _cli_src not in sys.path:
     sys.path.insert(0, _cli_src)
 
+import tempfile
 from types import SimpleNamespace
 
 import pytest
-import tempfile
 import yaml
 
 
@@ -21,7 +24,7 @@ class TestConfigLoader:
 
     def test_load_default_config(self):
         """Test loading default config."""
-        from config_loader import load_config, Config
+        from config_loader import Config, load_config
 
         config = load_config("nonexistent.yaml")
 
@@ -35,12 +38,12 @@ class TestConfigLoader:
         from config_loader import load_config
 
         config_data = {
-            'model': {'n_embed': 128, 'n_layer': 4},
-            'training': {'epochs': 5, 'batch_size': 32},
-            'lora': {'enabled': True, 'rank': 4},
+            "model": {"n_embed": 128, "n_layer": 4},
+            "training": {"epochs": 5, "batch_size": 32},
+            "lora": {"enabled": True, "rank": 4},
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(config_data, f)
             config_path = f.name
 
@@ -87,8 +90,14 @@ class TestConfigLoader:
         assert cfg.gradient_accumulation_steps == 1
         assert cfg.min_lr == 1e-5
         assert cfg.gradient_clip == 1.0
-        assert cfg.use_mixed_precision is True
+        assert cfg.use_mixed_precision is False
         assert cfg.mixed_precision_dtype == "bf16"
+
+    def test_training_config_mixed_precision_deprecation_warns(self):
+        from config_loader import TrainingConfig
+
+        with pytest.warns(DeprecationWarning):
+            TrainingConfig(use_mixed_precision=True)
 
     def test_lora_config(self):
         """Test LoRA config defaults."""
@@ -257,35 +266,6 @@ class TestConfigLoader:
         assert cfg.lora.rank == 16
         assert cfg.lora.alpha == 32
 
-    def test_merge_mixed_precision_from_args(self):
-        from config_loader import Config, TrainingConfig, merge_args_with_config
-
-        cfg = Config(training=TrainingConfig(use_mixed_precision=True, mixed_precision_dtype="bf16"))
-        args = SimpleNamespace(
-            dataset=None,
-            epochs=None,
-            batch_size=None,
-            lr=None,
-            scheduler=None,
-            warmup_steps=None,
-            weight_decay=None,
-            min_lr=None,
-            max_grad_norm=None,
-            gradient_accumulation_steps=None,
-            lora_rank=None,
-            lora_alpha=None,
-            use_lora=False,
-            resume=None,
-            max_steps=None,
-            log_interval=None,
-            eval_interval=None,
-            use_mixed_precision=False,
-            precision="fp16",
-        )
-        merge_args_with_config(cfg, args)
-        assert cfg.training.use_mixed_precision is False
-        assert cfg.training.mixed_precision_dtype == "fp16"
-
     def test_checkpoint_config_defaults(self):
         from config_loader import CheckpointConfig
 
@@ -294,7 +274,7 @@ class TestConfigLoader:
         assert c.trainer_interval == 1000
         assert c.save_best_only is False
         assert c.max_checkpoints == 5
-        assert c.export_format == "sou"
+        assert c.export_format == "soul"
 
     def test_merge_trainer_checkpoint_from_args(self):
         from config_loader import CheckpointConfig, Config, merge_args_with_config
@@ -319,20 +299,30 @@ class TestConfigLoader:
         assert cfg.checkpoint.save_best_only is True
         assert cfg.checkpoint.max_checkpoints == 11
 
-    def test_merge_soul_name_and_export_format(self):
-        from config_loader import Config, ModelConfig, CheckpointConfig, merge_args_with_config
+    def test_merge_soul_name_from_args(self):
+        from config_loader import Config, ModelConfig, merge_args_with_config
+
+        cfg = Config(model=ModelConfig(name="m1", soul_name="orig"))
+        args = SimpleNamespace(soul_name="cli soul")
+        merge_args_with_config(cfg, args)
+        assert cfg.model.soul_name == "cli soul"
+
+    def test_merge_save_format_is_ignored(self):
+        from config_loader import CheckpointConfig, Config, ModelConfig, merge_args_with_config
 
         cfg = Config(
             model=ModelConfig(name="m1", soul_name="orig"),
-            checkpoint=CheckpointConfig(export_format="sou"),
+            checkpoint=CheckpointConfig(),
         )
-        args = SimpleNamespace(
-            soul_name="cli soul",
-            save_format="safetensors",
-        )
+        args = SimpleNamespace(soul_name=None, save_format="safetensors")
         merge_args_with_config(cfg, args)
-        assert cfg.model.soul_name == "cli soul"
-        assert cfg.checkpoint.export_format == "safetensors"
+        assert cfg.checkpoint.export_format == "soul"
+
+    def test_checkpoint_export_format_deprecation_warns(self):
+        from config_loader import CheckpointConfig
+
+        with pytest.warns(DeprecationWarning):
+            CheckpointConfig(export_format="sou")
 
     def test_merge_dropout_from_args(self):
         from config_loader import Config, ModelConfig, merge_args_with_config
@@ -351,36 +341,6 @@ class TestConfigLoader:
         assert cfg.device.type == "cpu"
 
 
-class TestCliTrainOptimizedPreset:
-    def test_apply_optimized_sets_fp16(self):
-        from apps.cli.src.cli import _apply_optimized_train_preset
-        from config_loader import Config, TrainingConfig
-
-        cfg = Config(
-            training=TrainingConfig(
-                use_mixed_precision=False, mixed_precision_dtype="bf16"
-            )
-        )
-        args = SimpleNamespace(optimized=True)
-        assert _apply_optimized_train_preset(cfg, args) is True
-        assert cfg.training.use_mixed_precision is True
-        assert cfg.training.mixed_precision_dtype == "fp16"
-
-    def test_apply_optimized_false_noop(self):
-        from apps.cli.src.cli import _apply_optimized_train_preset
-        from config_loader import Config, TrainingConfig
-
-        cfg = Config(
-            training=TrainingConfig(
-                use_mixed_precision=False, mixed_precision_dtype="bf16"
-            )
-        )
-        args = SimpleNamespace(optimized=False)
-        assert _apply_optimized_train_preset(cfg, args) is False
-        assert cfg.training.use_mixed_precision is False
-        assert cfg.training.mixed_precision_dtype == "bf16"
-
-
 class TestGetDevice:
     """Sanity checks for ``config_loader.get_device`` (see ``cli.py train`` local path)."""
 
@@ -390,38 +350,3 @@ class TestGetDevice:
         assert get_device(DeviceConfig(type="cpu")) == "cpu"
         assert get_device(DeviceConfig(type="cuda")) == "cuda"
         assert get_device(DeviceConfig(type="mps")) == "mps"
-
-
-class TestInferenceConfig:
-    """Tests for inference configuration."""
-
-    def test_generation_config_defaults(self):
-        """Test GenerationConfig defaults."""
-        from domains.inference.engine import GenerationConfig
-
-        cfg = GenerationConfig()
-
-        assert cfg.max_new_tokens == 100
-        assert cfg.temperature == 0.8
-        assert cfg.top_k == 50
-        assert cfg.top_p == 0.9
-        assert cfg.repetition_penalty == 1.0
-        assert cfg.do_sample is True
-
-    def test_generation_config_custom(self):
-        """Test custom GenerationConfig."""
-        from domains.inference.engine import GenerationConfig
-
-        cfg = GenerationConfig(
-            max_new_tokens=200,
-            temperature=0.5,
-            top_k=20,
-            top_p=0.95,
-            repetition_penalty=1.2,
-        )
-
-        assert cfg.max_new_tokens == 200
-        assert cfg.temperature == 0.5
-        assert cfg.top_k == 20
-        assert cfg.top_p == 0.95
-        assert cfg.repetition_penalty == 1.2

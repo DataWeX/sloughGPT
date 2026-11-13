@@ -1,0 +1,28 @@
+# /etc/profile - SloughGPT shell environment
+
+# PATH
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+# Prompt
+export PS1='\[\e[36m\]\u@sloughgpt\[\e[0m\]:\[\e[33m\]\w\[\e[0m\]\$ '
+
+# Locale
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+
+# History
+export HISTSIZE=1000
+export HISTFILESIZE=2000
+export HISTCONTROL=ignoredups:ignorespace
+
+# Aliases
+alias ll='ls -la'
+alias la='ls -A'
+alias l='ls -CF'
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
+# SloughGPT specific
+export SLOUGHPGT_VERSION="0.1.0"
+export SLOUGHPGT_HOME="/root"

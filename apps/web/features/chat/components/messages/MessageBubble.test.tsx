@@ -1,0 +1,650 @@
+/**
+ */
+import { describe, expect, it, vi, afterEach, beforeEach, beforeAll } from 'vitest'
+import { render, screen, cleanup, act } from '@testing-library/react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  IconStar: (props: any) => <span data-testid="icon-star" {...props} />,
+  IconCopy: (props: any) => <span data-testid="icon-copy" {...props} />,
+  IconCheck: (props: any) => <span data-testid="icon-check" {...props} />,
+  IconRefresh: (props: any) => <span data-testid="icon-refresh" {...props} />,
+  IconEdit: (props: any) => <span data-testid="icon-edit" {...props} />,
+  IconTrash: (props: any) => <span data-testid="icon-trash" {...props} />,
+  IconPin: (props: any) => <span data-testid="icon-pin" {...props} />,
+  IconMessage: (props: any) => <span data-testid="icon-message" {...props} />,
+  IconChat: (props: any) => <span data-testid="icon-chat" {...props} />,
+
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  StatusDot: ({ tone, pulse, label, className }: any) => (
+    <span
+      data-testid="status-dot"
+      data-tone={tone}
+      data-pulse={String(!!pulse)}
+      className={className}
+    >
+      {label}
+    </span>
+  ),
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}))
+
+import { MessageBubble } from './MessageBubble'
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn()
+})
+
+vi.mock('./MessageContextMenu', () => ({
+  // Passthrough: the real menu loads via next/dynamic (async) — tests need
+  // synchronous children.
+  MessageContextMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
+vi.mock('./Markdown', () => ({
+  Markdown: ({ content, className }: { content: string; className?: string }) => (
+    <div data-testid="markdown" className={className}>
+      {content}
+    </div>
+  ),
+}))
+
+vi.mock('./MessageActions', () => ({
+  MessageActions: (props: Record<string, unknown>) => (
+    <div data-testid="message-actions" data-props={JSON.stringify(props)} />
+  ),
+}))
+
+afterEach(cleanup)
+
+beforeEach(async () => {
+  // Warm next/dynamic's module cache: the context menu loads asynchronously
+  // and renders null until resolved, which would make the first test in the
+  // file order-dependent. One flushed render per test keeps every assertion
+  // synchronous and deterministic.
+  const { unmount } = render(
+    <MessageBubble content="warmup" role="user" timestamp={new Date()} showTimestamp />,
+  )
+  await act(async () => {})
+  unmount()
+})
+
+describe('formatTime', () => {
+  it('returns "just now" for recent timestamp', () => {
+    const { container } = render(
+      <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+    )
+    expect(container.textContent).toContain('just now')
+  })
+
+  it('returns "Xm ago" for minutes-old timestamp', () => {
+    const past = new Date(Date.now() - 5 * 60000)
+    const { container } = render(
+      <MessageBubble content="hi" role="assistant" timestamp={past} showTimestamp />,
+    )
+    expect(container.textContent).toContain('5m ago')
+  })
+
+  it('returns localized time for older messages', () => {
+    const past = new Date(Date.now() - 120 * 60000)
+    const { container } = render(
+      <MessageBubble content="hi" role="assistant" timestamp={past} showTimestamp />,
+    )
+    expect(container.textContent).not.toContain('just now')
+    expect(container.textContent).not.toContain('m ago')
+  })
+})
+
+describe('highlightText', () => {
+  it('renders original text when no search query', () => {
+    const { container } = render(
+      <MessageBubble content="hello world" role="user" timestamp={new Date()} showTimestamp />,
+    )
+    expect(container.textContent).toContain('hello world')
+  })
+
+  it('renders highlight mark for matching query', () => {
+    const { container } = render(
+      <MessageBubble
+        content="hello world testing"
+        role="user"
+        timestamp={new Date()}
+        searchQuery="world"
+        showTimestamp
+      />,
+    )
+    expect(container.querySelector('mark')).toBeInTheDocument()
+  })
+
+  it('highlights case-insensitive', () => {
+    const { container } = render(
+      <MessageBubble
+        content="Hello World"
+        role="user"
+        timestamp={new Date()}
+        searchQuery="hello"
+        showTimestamp
+      />,
+    )
+    const marks = container.querySelectorAll('mark')
+    expect(marks.length).toBeGreaterThan(0)
+  })
+})
+
+describe('MessageBubble', () => {
+  it('renders user message content', () => {
+    render(<MessageBubble content="user text" role="user" timestamp={new Date()} showTimestamp />)
+    expect(screen.getByText('user text')).toBeInTheDocument()
+  })
+
+  it('renders assistant message via Markdown', () => {
+    render(
+      <MessageBubble
+        content="assistant text"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+      />,
+    )
+    expect(screen.getByTestId('markdown')).toHaveTextContent('assistant text')
+  })
+
+  it('has accessible label for user role', () => {
+    const { container } = render(
+      <MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />,
+    )
+    const article = container.querySelector('[role="article"]')
+    expect(article).toHaveAttribute('aria-label', 'Message from You')
+  })
+
+  it('has accessible label for assistant role', () => {
+    const { container } = render(
+      <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+    )
+    const article = container.querySelector('[role="article"]')
+    expect(article).toHaveAttribute('aria-label', 'Message from Assistant')
+  })
+
+  it('shows role indicator "You" for user', () => {
+    render(<MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />)
+    expect(screen.getByText('You')).toBeInTheDocument()
+  })
+
+  it('shows role indicator "Assistant" for assistant', () => {
+    render(<MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />)
+    expect(screen.getByText('Assistant')).toBeInTheDocument()
+  })
+
+  it('shows model name when provided', () => {
+    render(
+      <MessageBubble
+        content="hi"
+        role="assistant"
+        timestamp={new Date()}
+        model="gpt2"
+        showTimestamp
+      />,
+    )
+    expect(screen.getByText('gpt2')).toBeInTheDocument()
+  })
+
+  it('does not show model name for user messages', () => {
+    render(
+      <MessageBubble content="hi" role="user" timestamp={new Date()} model="gpt2" showTimestamp />,
+    )
+    expect(screen.queryByText('gpt2')).not.toBeInTheDocument()
+  })
+
+  it('shows timestamp when showTimestamp is true', () => {
+    const { container } = render(
+      <MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />,
+    )
+    expect(container.textContent).toContain('just now')
+  })
+
+  it('hides timestamp when showTimestamp is false', () => {
+    const { container } = render(
+      <MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp={false} />,
+    )
+    expect(container.textContent).not.toContain('just now')
+  })
+
+  it('shows loading dots when content is empty, assistant, and streaming', () => {
+    const { container } = render(
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        isStreaming
+      />,
+    )
+    const dots = container.querySelector('.animate-bounce')
+    expect(dots).toBeInTheDocument()
+  })
+
+  it('hides model + timestamp until first token lands (empty streaming turn)', () => {
+    const { container } = render(
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        model="Qwen/Qwen2.5-0.5B-Instruct"
+        isStreaming
+      />,
+    )
+    // The log must not claim a finished entry before content exists.
+    expect(container.textContent).not.toContain('Qwen/Qwen2.5-0.5B-Instruct')
+    expect(container.textContent).not.toContain('just now')
+    // Role label still signals the in-progress turn.
+    expect(screen.getByText('Assistant')).toBeInTheDocument()
+  })
+
+  it('shows model + timestamp once content lands', () => {
+    const { container } = render(
+      <MessageBubble
+        content="hello"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        model="Qwen/Qwen2.5-0.5B-Instruct"
+        isStreaming
+      />,
+    )
+    expect(container.textContent).toContain('Qwen/Qwen2.5-0.5B-Instruct')
+    expect(container.textContent).toContain('just now')
+  })
+
+  it('shows no loading dots when content is empty and not streaming', () => {
+    const { container } = render(
+      <MessageBubble content="" role="assistant" timestamp={new Date()} showTimestamp />,
+    )
+    expect(container.querySelector('.animate-bounce')).not.toBeInTheDocument()
+  })
+
+  it('shows streaming cursor when isStreaming', () => {
+    const { container } = render(
+      <MessageBubble
+        content="streaming"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        isStreaming
+      />,
+    )
+    expect(container.textContent).toContain('▊')
+  })
+
+  it('applies polite aria-live when streaming', () => {
+    const { container } = render(
+      <MessageBubble
+        content="hi"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        isStreaming
+      />,
+    )
+    const article = container.querySelector('[role="article"]')
+    expect(article).toHaveAttribute('aria-live', 'polite')
+  })
+
+  it('sets id attribute when messageId provided', () => {
+    const { container } = render(
+      <MessageBubble
+        content="hi"
+        role="user"
+        timestamp={new Date()}
+        messageId="abc"
+        showTimestamp
+      />,
+    )
+    expect(container.querySelector('#msg-abc')).toBeInTheDocument()
+  })
+
+  it('renders MessageActions for assistant when content exists and not streaming', () => {
+    render(
+      <MessageBubble
+        content="hi"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        onCopy={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('message-actions')).toBeInTheDocument()
+  })
+
+  it('does not render MessageActions for assistant when streaming', () => {
+    render(
+      <MessageBubble
+        content="hi"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        onCopy={vi.fn()}
+        isStreaming
+      />,
+    )
+    expect(screen.queryByTestId('message-actions')).not.toBeInTheDocument()
+  })
+
+  it('does not render MessageActions for assistant with empty content', () => {
+    render(
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        onCopy={vi.fn()}
+      />,
+    )
+    expect(screen.queryByTestId('message-actions')).not.toBeInTheDocument()
+  })
+
+  it('renders MessageActions for user with onEdit', () => {
+    render(
+      <MessageBubble
+        content="hi"
+        role="user"
+        timestamp={new Date()}
+        showTimestamp
+        onEdit={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('message-actions')).toBeInTheDocument()
+  })
+
+  it('renders images when provided', () => {
+    const images = [
+      {
+        id: 'img1',
+        dataUrl: 'data:image/png;base64,abc',
+        name: 'test.png',
+        file: new File([], 'test.png'),
+      },
+    ]
+    const { container } = render(
+      <MessageBubble
+        content="with image"
+        role="user"
+        timestamp={new Date()}
+        images={images}
+        showTimestamp
+      />,
+    )
+    const img = container.querySelector('img')
+    expect(img).toBeInTheDocument()
+    expect(img).toHaveAttribute('src', 'data:image/png;base64,abc')
+    expect(img).toHaveAttribute('alt', 'test.png')
+  })
+
+  it('transitions to visible state on mount', () => {
+    const { container } = render(
+      <MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />,
+    )
+    const article = container.querySelector('[role="article"]') as HTMLElement
+    expect(article).toBeInTheDocument()
+    expect(article.className).toContain('transition-all')
+  })
+
+  it('accepts custom aria-live for assistant', () => {
+    const { container } = render(
+      <MessageBubble
+        content="hi"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        aria-live="assertive"
+      />,
+    )
+    const article = container.querySelector('[role="article"]')
+    expect(article).toHaveAttribute('aria-live', 'assertive')
+  })
+
+  describe('transcript frame (MessageFrame — Direction B, ruling 2026-11-03)', () => {
+    it('renders both roles through MessageFrame', () => {
+      const user = render(
+        <MessageBubble content="q" role="user" timestamp={new Date()} showTimestamp />,
+      )
+      expect(user.container.querySelector('[data-message-frame="user"]')).not.toBeNull()
+      cleanup()
+      const assistant = render(
+        <MessageBubble content="a" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      expect(assistant.container.querySelector('[data-message-frame="assistant"]')).not.toBeNull()
+    })
+
+    it('keeps metadata (role label, metrics) in the frame footer, not a detached gutter', () => {
+      const { container } = render(
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          metrics={{ tokens: 100, elapsedMs: 2000 }}
+        />,
+      )
+      const frame = container.querySelector('[data-message-frame]')!
+      const footer = frame.querySelector('[data-message-frame-footer]')!
+      expect(footer.textContent).toContain('Assistant')
+      expect(footer.textContent).toContain('50.0 tok/s · 100 tok · 2.0s')
+    })
+
+    it('renders no message index numbers (sub-decision: removed entirely)', () => {
+      const { container } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      // The old gutter printed zero-padded turn numbers (07, 11, 13…).
+      expect(container.textContent).not.toMatch(/\b0\d\b/)
+    })
+
+    it('omits metrics text when metrics are absent or zero-elapsed', () => {
+      const { container: none } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      expect(none.textContent).not.toContain('tok/s')
+      cleanup()
+      const { container: zero } = render(
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          metrics={{ tokens: 5, elapsedMs: 0 }}
+        />,
+      )
+      expect(zero.textContent).not.toContain('tok/s')
+    })
+
+    it('shows a pulsing primary StatusDot while streaming', () => {
+      render(
+        <MessageBubble
+          content="streaming"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          isStreaming
+        />,
+      )
+      const dot = screen.getByTestId('status-dot')
+      expect(dot).toHaveAttribute('data-tone', 'primary')
+      expect(dot).toHaveAttribute('data-pulse', 'true')
+    })
+
+    it('does not render a bubble tail class (bubble-free transcript)', () => {
+      const { container } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      const article = container.querySelector('[role="article"]') as HTMLElement
+      expect(article.className).not.toMatch(/rounded-(br|bl)-md/)
+    })
+
+    it('renders the user turn as a tinted card, not a tail bubble', () => {
+      const { container } = render(
+        <MessageBubble content="question" role="user" timestamp={new Date()} showTimestamp />,
+      )
+      const article = container.querySelector('[role="article"]') as HTMLElement
+      expect(article.className).not.toMatch(/rounded-br-md/)
+      expect(container.textContent).toContain('question')
+    })
+
+    it('does not right-align the frame and the action toolbar as one horizontal pair', () => {
+      render(
+        <MessageBubble
+          content="question"
+          role="user"
+          timestamp={new Date()}
+          showTimestamp
+          onEdit={vi.fn()}
+        />,
+      )
+      const wrapper = screen.getByTestId('message-actions').parentElement as HTMLElement
+      // Root cause of the "user bubble floats mid-row" bug: a shared
+      // `flex justify-end` wrapper right-aligns [frame][opacity-0 toolbar] as a
+      // PAIR, so the bubble stops short of the right edge. MessageFrame already
+      // self-aligns (MessageFrame.tsx `isUser && 'justify-end'`), so the wrapper
+      // must not add `justify-end` — that is what pins the pair.
+      expect(wrapper.className).not.toMatch(/(^|\s)justify-end(\s|$)/)
+    })
+
+    it('keeps the user frame right-aligned by its own chrome, not the wrapper', () => {
+      const { container } = render(
+        <MessageBubble content="question" role="user" timestamp={new Date()} showTimestamp />,
+      )
+      const frame = container.querySelector('[data-message-frame="user"]') as HTMLElement
+      // Deleting the wrapper's justify-end must not lose right alignment:
+      // MessageFrame owns it, and the bubble stays flush right.
+      expect(frame.className).toMatch(/(^|\s)justify-end(\s|$)/)
+    })
+  })
+
+  describe('message folding', () => {
+    const longContent = 'A'.repeat(600)
+    const shortContent = 'A'.repeat(50)
+
+    it('collapses long content when collapsibleLength is set', () => {
+      const { container } = render(
+        <MessageBubble
+          content={longContent}
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          collapsibleLength={200}
+        />,
+      )
+      const markdown = container.querySelector('[data-testid="markdown"]')
+      expect(markdown?.textContent?.length).toBe(200)
+    })
+
+    it('does not collapse short content', () => {
+      const { container } = render(
+        <MessageBubble
+          content={shortContent}
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          collapsibleLength={200}
+        />,
+      )
+      const markdown = container.querySelector('[data-testid="markdown"]')
+      expect(markdown?.textContent?.length).toBe(50)
+    })
+
+    it('shows "Show more" button when collapsed', () => {
+      render(
+        <MessageBubble
+          content={longContent}
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          collapsibleLength={200}
+        />,
+      )
+      expect(screen.getByText(/Show more/)).toBeInTheDocument()
+    })
+
+    it('does not show "Show more" when collapsibleLength is 0', () => {
+      const { container } = render(
+        <MessageBubble
+          content={longContent}
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          collapsibleLength={0}
+        />,
+      )
+      expect(screen.queryByText(/Show more/)).not.toBeInTheDocument()
+      const markdown = container.querySelector('[data-testid="markdown"]')
+      expect(markdown?.textContent?.length).toBe(600)
+    })
+
+    it('shows remaining char count in collapse label', () => {
+      render(
+        <MessageBubble
+          content={longContent}
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          collapsibleLength={200}
+        />,
+      )
+      expect(screen.getByText(/400 more/)).toBeInTheDocument()
+    })
+
+    it('collapses user messages too', () => {
+      const { container } = render(
+        <MessageBubble
+          content={longContent}
+          role="user"
+          timestamp={new Date()}
+          showTimestamp
+          collapsibleLength={200}
+        />,
+      )
+      expect(container.textContent).toContain('Show more')
+    })
+  })
+})

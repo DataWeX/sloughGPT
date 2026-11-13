@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Fake npm for journey tests: log argv/env, then serve the requested port so
+# _check_port sees a real HTTP 200. Port source: --port argv (vite) or PORT
+# env (next). If the port is taken, http.server's EADDRINUSE error goes to
+# stderr — exactly what a real web server would produce.
+set -u
+LOG="${FAKE_NPM_LOG:-/tmp/fake_npm.log}"
+ENV_PORT="${PORT:-}"
+PORT_ARG=""
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "--port" ]; then PORT_ARG="$a"; fi
+  prev="$a"
+done
+RESOLVED="${PORT_ARG:-${ENV_PORT:-4173}}"
+{
+  echo "argv: $*"
+  if [ -n "$ENV_PORT" ]; then echo "PORT_ENV: $ENV_PORT"; fi
+  echo "BOUND_PORT: $RESOLVED"
+} >> "$LOG"
+
+if [ "${1:-}" = "run" ]; then
+  exec python3 -m http.server "$RESOLVED" --bind 0.0.0.0
+fi
+exit 0

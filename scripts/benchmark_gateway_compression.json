@@ -1,0 +1,234 @@
+[
+  {
+    "mib": 32,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 33554432,
+        "wire_bytes": 33554432,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 33554432,
+        "wire_bytes": 766647,
+        "ratio": 0.0228,
+        "savings_pct": 97.72,
+        "enc_mibs": 159.9,
+        "dec_mibs": 496.1
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 33554432,
+        "wire_bytes": 287238,
+        "ratio": 0.0086,
+        "savings_pct": 99.14,
+        "enc_mibs": 1211.9,
+        "dec_mibs": 1243.2
+      }
+    ]
+  },
+  {
+    "mib": null,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 5555744,
+        "wire_bytes": 5555744,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 5555744,
+        "wire_bytes": 4125161,
+        "ratio": 0.7425,
+        "savings_pct": 25.75,
+        "enc_mibs": 4.0,
+        "dec_mibs": 34.2
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 5555744,
+        "wire_bytes": 4083192,
+        "ratio": 0.7349,
+        "savings_pct": 26.51,
+        "enc_mibs": 17.6,
+        "dec_mibs": 150.2
+      }
+    ],
+    "file": "checkpoints/step_25.pt",
+    "raw_bytes": 5555744
+  },
+  {
+    "mib": null,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 2125595,
+        "wire_bytes": 2125595,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 2125595,
+        "wire_bytes": 408416,
+        "ratio": 0.1921,
+        "savings_pct": 80.79,
+        "enc_mibs": 7.5,
+        "dec_mibs": 84.7
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 2125595,
+        "wire_bytes": 379473,
+        "ratio": 0.1785,
+        "savings_pct": 82.15,
+        "enc_mibs": 84.6,
+        "dec_mibs": 259.5
+      }
+    ],
+    "file": "apps/web/public/v86/v86-fallback.wasm",
+    "raw_bytes": 2125595
+  },
+  {
+    "mib": null,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 20520,
+        "wire_bytes": 20520,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 20520,
+        "wire_bytes": 6804,
+        "ratio": 0.3316,
+        "savings_pct": 66.84,
+        "enc_mibs": 3.8,
+        "dec_mibs": 62.0
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 20520,
+        "wire_bytes": 7096,
+        "ratio": 0.3458,
+        "savings_pct": 65.42,
+        "enc_mibs": 21.6,
+        "dec_mibs": 178.8
+      }
+    ],
+    "file": "domain/infrastructure/_internal/quant_core/matmul_int8.so",
+    "raw_bytes": 20520
+  },
+  {
+    "mib": null,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 846560,
+        "wire_bytes": 846560,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 846560,
+        "wire_bytes": 628925,
+        "ratio": 0.7429,
+        "savings_pct": 25.71,
+        "enc_mibs": 2.7,
+        "dec_mibs": 38.6
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 846560,
+        "wire_bytes": 550427,
+        "ratio": 0.6502,
+        "savings_pct": 34.98,
+        "enc_mibs": 15.4,
+        "dec_mibs": 113.6
+      }
+    ],
+    "file": "checkpoints/step_30.pt",
+    "raw_bytes": 846560
+  },
+  {
+    "mib": 64,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 67108864,
+        "wire_bytes": 67108864,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 67108864,
+        "wire_bytes": 1530175,
+        "ratio": 0.0228,
+        "savings_pct": 97.72,
+        "enc_mibs": 79.9,
+        "dec_mibs": 263.6
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 67108864,
+        "wire_bytes": 573363,
+        "ratio": 0.0085,
+        "savings_pct": 99.15,
+        "enc_mibs": 638.5,
+        "dec_mibs": 609.5
+      }
+    ]
+  },
+  {
+    "mib": 64,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 67108864,
+        "wire_bytes": 67108864,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 67108864,
+        "wire_bytes": 1530175,
+        "ratio": 0.0228,
+        "savings_pct": 97.72,
+        "enc_mibs": 65.7,
+        "dec_mibs": 218.4
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 67108864,
+        "wire_bytes": 573363,
+        "ratio": 0.0085,
+        "savings_pct": 99.15,
+        "enc_mibs": 345.2,
+        "dec_mibs": 481.5
+      }
+    ]
+  }
+]

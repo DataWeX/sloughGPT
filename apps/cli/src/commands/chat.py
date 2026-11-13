@@ -1,23 +1,29 @@
 """
 Chat commands - Interactive chat and one-shot generation.
 """
-import sys
+
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
-from core.printer import printer
+from domain.logging import get_global
+
+log = get_global()
 from utils.formatting import truncate
 
 
 def cmd_chat(args):
     """Interactive chat against the API."""
     import subprocess
+
     import requests
     from requests.exceptions import ConnectionError as RequestsConnectionError
-
-    from ..cli import _chat_repository_root, _chat_uvicorn_bind_host, _chat_find_available_port, _chat_wait_for_health
+    from utils.helpers import (
+        chat_find_available_port,
+        chat_repository_root,
+        chat_uvicorn_bind_host,
+        chat_wait_for_health,
+    )
 
     base_url = f"http://{args.host}:{args.port}".rstrip("/")
     server_proc = None
@@ -29,9 +35,7 @@ def cmd_chat(args):
         try:
             r = requests.get(f"{base_url}/health", timeout=3)
             return r.status_code == 200
-        except RequestsConnectionError:
-            return False
-        except Exception:
+        except requests.RequestException:
             return False
 
     def try_load_model(model_id: str) -> bool:
@@ -44,48 +48,50 @@ def cmd_chat(args):
                 timeout=120,
             )
         except Exception as e:
-            printer.warning(f"Model load failed: {e}")
+            log.warning(f"Model load failed: {e}")
             return False
 
         if r.ok:
-            printer.success(f"Model ready: {model_id}")
+            log.success(f"Model ready: {model_id}")
             return True
 
-        printer.warning(f"Could not load '{model_id}' ({r.status_code})")
+        log.warning(f"Could not load '{model_id}' ({r.status_code})")
         return False
 
     if not api_reachable():
         if getattr(args, "no_serve", False):
-            printer.error("API not reachable and --no-serve set")
-            printer.info("Start server: python3 cli.py dev")
+            log.error("API not reachable and --no-serve set")
+            log.info("Start server: python3 cli.py dev")
             return
 
-        repo = _chat_repository_root()
+        repo = chat_repository_root()
         marker = repo / "apps" / "api" / "server" / "main.py"
         if not marker.is_file():
-            printer.error("Not inside SloughGPT repo")
+            log.error("Not inside SloughGPT repo")
             return
 
-        bind_host = _chat_uvicorn_bind_host(args.host)
+        bind_host = chat_uvicorn_bind_host(args.host)
         try:
-            listen_port = _chat_find_available_port(bind_host, args.port)
+            listen_port = chat_find_available_port(bind_host, args.port)
         except RuntimeError as e:
-            printer.error(str(e))
+            log.error(str(e))
             return
 
         if listen_port != args.port:
-            printer.warning(f"Port {args.port} busy, using {listen_port}")
+            log.warning(f"Port {args.port} busy, using {listen_port}")
 
         base_url = f"http://{args.host}:{listen_port}".rstrip("/")
 
-        printer.info("API not reachable, starting server...")
+        log.info("API not reachable, starting server...")
         log_f = tempfile.NamedTemporaryFile(prefix="sloughgpt-chat-", suffix=".log", delete=False)
         log_path = log_f.name
         log_f.close()
 
         server_dir = repo / "apps" / "api" / "server"
+        from domain.shared import find_server_python
+
         cmd = [
-            sys.executable,
+            find_server_python(repo),
             "-m",
             "uvicorn",
             "main:app",
@@ -107,26 +113,26 @@ def cmd_chat(args):
                 )
             started_server_here = True
         except OSError as e:
-            printer.error(f"Failed to start server: {e}")
+            log.error(f"Failed to start server: {e}")
             try:
                 os.unlink(log_path)
             except OSError:
                 pass
             return
 
-        if not _chat_wait_for_health(base_url):
+        if not chat_wait_for_health(base_url):
             if server_proc.poll() is None:
                 server_proc.terminate()
                 try:
                     server_proc.wait(timeout=8)
                 except subprocess.TimeoutExpired:
                     server_proc.kill()
-            printer.error("Server did not respond in time")
+            log.error("Server did not respond in time")
             try:
                 with open(log_path, encoding="utf-8", errors="replace") as lf:
                     tail = lf.read()[-4000:]
                 if tail.strip():
-                    print(tail)
+                    log.info(tail)
             except OSError:
                 pass
             try:
@@ -135,28 +141,31 @@ def cmd_chat(args):
                 pass
             return
 
-        printer.success("Server ready")
-        print()
+        log.success("Server ready")
+        log.blank()
 
-    printer.header("SloughGPT Chat")
-    printer.info(f"Connected to {base_url}")
-    printer.info("Type 'quit' to exit")
-    printer.info("Tip: --auto-model gpt2 to preload a model")
+    log.header("SloughGPT Chat")
+    log.info(f"Connected to {base_url}")
+    log.info("Type 'quit' to exit")
+    log.info("Tip: --auto-model gpt2 to preload a model")
 
     auto_model = getattr(args, "auto_model", None)
     legacy_model = getattr(args, "model", None)
     if auto_model and legacy_model:
-        printer.warning("Both --auto-model and --model provided, using --auto-model")
+        log.warning("Both --auto-model and --model provided, using --auto-model")
     model_to_autoload = auto_model or legacy_model
     if model_to_autoload:
-        printer.step(f"Loading: {model_to_autoload}")
+        log.step(f"Loading: {model_to_autoload}")
         try_load_model(model_to_autoload)
 
-    printer.blank()
+    log.blank()
 
     try:
+        from domain.shell._internal.io import ConsoleIO
+
+        io = ConsoleIO()
         while True:
-            user_input = input("You: ")
+            user_input = io.read("You: ")
             if user_input.lower() in ["quit", "exit", "q"]:
                 break
 
@@ -175,20 +184,24 @@ def cmd_chat(args):
                     data = response.json()
                     text = data.get("text", data)
                     print(f"\nSloughGPT: {text}\n")
-                    if isinstance(text, str) and "No model loaded" in text and not printed_no_model_hint:
-                        printer.info("Load a model first: --auto-model gpt2")
+                    if (
+                        isinstance(text, str)
+                        and "No model loaded" in text
+                        and not printed_no_model_hint
+                    ):
+                        log.info("Load a model first: --auto-model gpt2")
                         printed_no_model_hint = True
                 else:
-                    printer.error(f"HTTP {response.status_code}: {response.text}")
+                    log.error(f"HTTP {response.status_code}: {response.text}")
 
             except RequestsConnectionError:
-                printer.error("Lost connection to API")
+                log.error("Lost connection to API")
             except Exception as e:
-                printer.error(str(e))
+                log.error(str(e))
     finally:
         if started_server_here and server_proc is not None and server_proc.poll() is None:
-            print()
-            printer.info("Stopping server...")
+            log.blank()
+            log.info("Stopping server...")
             server_proc.terminate()
             try:
                 server_proc.wait(timeout=10)
@@ -203,18 +216,18 @@ def cmd_chat(args):
 
 def cmd_generate(args):
     """One-shot text generation."""
-    from pathlib import Path
-    from domains.core import SloEngine
-    from ..cli import _local_soul_candidate_paths
+
+    from utils.helpers import local_soul_candidate_paths
+
+    from domain.core._internal.soul import SloEngine
 
     models_dir = Path("models")
-    pt_path = models_dir / "sloughgpt_finetuned.pt"
 
-    printer.header("Text Generation")
-    printer.key_value("Prompt", args.prompt)
-    printer.key_value("Max Tokens", str(args.max_tokens))
-    printer.key_value("Temperature", str(args.temperature))
-    printer.blank()
+    log.header("Text Generation")
+    log.key_value("Prompt", args.prompt)
+    log.key_value("Max Tokens", str(args.max_tokens))
+    log.key_value("Temperature", str(args.temperature))
+    log.blank()
 
     engine = SloEngine(device="cpu")
     loaded = False
@@ -223,59 +236,38 @@ def cmd_generate(args):
         nonlocal loaded
         try:
             soul = engine.load_soul(str(path))
-            printer.success(f"Loaded soul: {soul.name} from {path.name}")
+            log.success(f"Loaded soul: {soul.name} from {path.name}")
             loaded = True
             return True
-        except Exception as e:
+        except Exception:
             return False
 
-    for sou_path in _local_soul_candidate_paths(models_dir):
-        if _try_load_sou(sou_path):
-            break
-
-    if not loaded and pt_path.exists():
-        try:
-            import torch
-            from domains.training.checkpoint_utils import (
-                load_sloughgpt_from_checkpoint,
-                normalize_raw_checkpoint,
-                torch_load_checkpoint,
-                tokenizer_maps_from_bundle,
-            )
-
-            raw = torch_load_checkpoint(str(pt_path), map_location="cpu")
-            bundle = normalize_raw_checkpoint(raw)
-            stoi_len = len(bundle.get("stoi", {})) or 65
-            model, _ = load_sloughgpt_from_checkpoint(
-                bundle,
-                device="cpu",
-                strict=True,
-                fallback_vocab_size=stoi_len,
-                fallback_n_embed=128,
-                fallback_n_layer=4,
-                fallback_n_head=4,
-                fallback_block_size=64,
-            )
-            engine._model = model
-            stoi, itos = tokenizer_maps_from_bundle(bundle)
-            if stoi is not None and itos is not None:
-                engine.set_vocab(stoi, itos)
-            loaded = True
-            printer.success(f"Loaded checkpoint: {pt_path.name}")
-        except Exception as e:
-            printer.warning(f"Failed to load .pt: {e}")
+    explicit = getattr(args, "model", None)
+    if isinstance(explicit, str) and explicit.strip():
+        cand = Path(explicit)
+        if not cand.is_file():
+            cand = models_dir / cand
+        if _try_load_sou(cand):
+            log.key_value("Model", str(cand))
+        else:
+            log.warning(f"Could not load explicit model: {explicit}")
 
     if not loaded:
-        printer.warning("No model found, using demo mode")
+        for sou_path in local_soul_candidate_paths(models_dir):
+            if _try_load_sou(sou_path):
+                break
 
-    printer.step("Generating...")
+    if not loaded:
+        log.warning("No model found, using demo mode")
+
+    log.step("Generating...")
     result = engine.generate(
         args.prompt,
         max_new_tokens=args.max_tokens,
         temperature=args.temperature,
     )
-    printer.blank()
-    printer.key_value("Generated", truncate(result, 500))
+    log.blank()
+    log.key_value("Generated", truncate(result, 500))
 
 
 def register(subparsers):

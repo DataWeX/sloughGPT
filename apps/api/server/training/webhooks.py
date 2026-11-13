@@ -1,24 +1,31 @@
 """Webhook notification system for training events.
 
 Allows registering URLs to receive POST notifications when training events occur.
+Includes persistent retry queue with exponential backoff and dead-letter tracking.
 """
+
+from __future__ import annotations
 
 import asyncio
 import hashlib
 import hmac
 import json
 import logging
-import sqlite3
 import threading
 import time
 import uuid
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
-import httpx
+from pathlib import Path
+from typing import Any
 
-logger = logging.getLogger("man.webhooks")
+import httpx
+from infrastructure.ssrf import validate_url_not_private
+from mogdb import MogDB
+
+from domain.shared import find_repo_root
+
+logger = logging.getLogger("slo.webhooks")
 
 
 @dataclass
@@ -27,12 +34,14 @@ class Webhook:
 
     id: str
     url: str
-    events: List[str]  # Event types to receive
+    events: list[str]  # Event types to receive
     secret: str  # HMAC secret for signature
     created_at: datetime
     is_active: bool = True
     description: str = ""
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
+    timeout: float = 10.0  # Per-webhook HTTP timeout (seconds)
+    retry_count: int = 3  # Delivery attempts inside deliver() per outcome
 
 
 @dataclass
@@ -42,71 +51,94 @@ class WebhookDelivery:
     id: str
     webhook_id: str
     event: str
-    payload: Dict[str, Any]
-    status_code: Optional[int] = None
+    payload: dict[str, Any]
+    status_code: int | None = None
     success: bool = False
     attempted_at: datetime = field(default_factory=datetime.now)
-    response_body: Optional[str] = None
-    error: Optional[str] = None
+    response_body: str | None = None
+    error: str | None = None
+    attempt_count: int = 0
+    next_retry_at: datetime | None = None
+    dead_letter: bool = False
+    duration_ms: float = 0.0  # Wall-clock time of the delivery outcome (incl. backoff)
 
 
 class WebhookStore:
     """
-    SQLite-backed store for managing registered webhooks.
+    MogDB-backed store for managing registered webhooks.
 
-    Persists across server restarts.
+    Persists across server restarts. Delivery records are kept in memory
+    (matching the original SQLite behaviour, which never persisted them).
+    Failed deliveries are queued for retry with exponential backoff.
     """
 
     _max_log_size: int = 1000
+    _max_retries: int = 3
+    _retry_base_delay: float = 2.0  # seconds
+    _max_retry_delay: float = 300.0  # 5 minutes
+    _dead_letter_max_attempts: int = 5
 
-    def __init__(self, db_path: str = "data/webhooks.db"):
+    def __init__(self, db_path: str | None = None):
+        if db_path is None:
+            db_path = str(find_repo_root(Path(__file__).resolve()) / "data" / "webhooks.db")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self.delivery_log: list = []
-        self._init_db()
+        self._retry_queue: list[dict] = []  # Pending retries
+        self._dead_letters: list[dict] = []  # Permanently failed deliveries
+        self._db: MogDB | None = None
+        self._webhooks = None
+        self._retry_worker_task: asyncio.Task | None = None
+        try:
+            self._db = MogDB(str(self.db_path))
+            self._webhooks = self._db.collection("webhooks")
+        except Exception:
+            logger.warning(
+                "WebhookStore: failed to open MogDB at %s, operating in degraded mode", self.db_path
+            )
 
-    def _init_db(self) -> None:
-        """Initialize database schema."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS webhooks (
-                    id TEXT PRIMARY KEY,
-                    url TEXT NOT NULL,
-                    events TEXT NOT NULL,
-                    secret TEXT NOT NULL,
-                    description TEXT DEFAULT '',
-                    is_active INTEGER DEFAULT 1,
-                    created_at TEXT NOT NULL,
-                    headers TEXT DEFAULT '{}'
-                )
-            """)
-            conn.commit()
-            conn.close()
-
-    def _row_to_webhook(self, row: sqlite3.Row) -> Webhook:
-        """Convert a database row to a Webhook object."""
+    @staticmethod
+    def _doc_to_webhook(doc: dict[str, Any]) -> Webhook:
+        """Convert a stored MogDB document to a Webhook object."""
         return Webhook(
-            id=row["id"],
-            url=row["url"],
-            events=json.loads(row["events"]),
-            secret=row["secret"],
-            description=row["description"],
-            is_active=bool(row["is_active"]),
-            created_at=datetime.fromisoformat(row["created_at"]),
-            headers=json.loads(row["headers"]) if row["headers"] else {},
+            id=doc["_id"],
+            url=doc["url"],
+            events=doc["events"],
+            secret=doc["secret"],
+            description=doc.get("description", ""),
+            is_active=bool(doc.get("is_active", True)),
+            created_at=datetime.fromisoformat(doc["created_at"]),
+            headers=doc.get("headers") or {},
+            timeout=float(doc.get("timeout", 10.0)),
+            retry_count=int(doc.get("retry_count", 3)),
         )
+
+    @property
+    def is_available(self) -> bool:
+        """Whether the backing store is usable."""
+        return self._db is not None and self._webhooks is not None
 
     def register(
         self,
         url: str,
-        events: List[str],
-        secret: Optional[str] = None,
+        events: list[str],
+        secret: str | None = None,
         description: str = "",
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
+        timeout: float = 10.0,
+        retry_count: int = 3,
     ) -> str:
         """Register a new webhook."""
+        if not self.is_available:
+            raise RuntimeError("Webhook store unavailable (MogDB failed to initialise)")
+
+        # SSRF: webhook URLs are caller-chosen destinations fetched server-side.
+        # Registration is the single seam where they enter the system
+        # (card 20261108_142919); delivery-time re-resolution (TOCTOU/DNS
+        # rebinding) is explicitly out of scope for this card.
+        validate_url_not_private(url)
+
         webhook_id = hashlib.sha256(f"{url}{time.time()}".encode()).hexdigest()[:16]
 
         # Generate secret if not provided
@@ -116,78 +148,64 @@ class WebhookStore:
         now = datetime.now().isoformat()
 
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.execute(
-                """
-                INSERT INTO webhooks (id, url, events, secret, description, is_active, created_at, headers)
-                VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-            """,
-                (
-                    webhook_id,
-                    url,
-                    json.dumps(events),
-                    secret,
-                    description,
-                    now,
-                    json.dumps(headers or {}),
-                ),
+            self._webhooks.insert_one(
+                {
+                    "_id": webhook_id,
+                    "url": url,
+                    "events": events,
+                    "secret": secret,
+                    "description": description,
+                    "is_active": True,
+                    "created_at": now,
+                    "headers": headers or {},
+                    "timeout": timeout,
+                    "retry_count": retry_count,
+                }
             )
-            conn.commit()
-            conn.close()
 
-        logger.info("Registered webhook %s for %s", webhook_id, url)
+        logger.info("Registered webhook %s for %s", webhook_id, url, extra={"tag": "TRAIN"})
         return webhook_id
 
     def unregister(self, webhook_id: str) -> bool:
         """Unregister a webhook."""
+        if not self.is_available:
+            return False
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            cursor = conn.execute("DELETE FROM webhooks WHERE id = ?", (webhook_id,))
-            conn.commit()
-            deleted = cursor.rowcount > 0
-            conn.close()
+            deleted = self._webhooks.delete_one({"_id": webhook_id}) > 0
 
         if deleted:
-            logger.info("Unregistered webhook %s", webhook_id)
+            logger.info("Unregistered webhook %s", webhook_id, extra={"tag": "TRAIN"})
         return deleted
 
-    def get(self, webhook_id: str) -> Optional[Webhook]:
+    def get(self, webhook_id: str) -> Webhook | None:
         """Get a webhook by ID."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM webhooks WHERE id = ?", (webhook_id,))
-            row = cursor.fetchone()
-            conn.close()
+        if not self.is_available:
+            return None
+        doc = self._webhooks.find_one({"_id": webhook_id})
+        return self._doc_to_webhook(doc) if doc else None
 
-        if row:
-            return self._row_to_webhook(row)
-        return None
-
-    def list(self, event_filter: Optional[str] = None) -> List[Webhook]:
+    def list(self, event_filter: str | None = None) -> list[Webhook]:
         """List all webhooks, optionally filtered by event."""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                "SELECT * FROM webhooks WHERE is_active = 1 ORDER BY created_at DESC"
-            )
-            rows = cursor.fetchall()
-            conn.close()
+        if not self.is_available:
+            return []
+        docs = self._webhooks.find(
+            {"is_active": True},
+            sort=[("created_at", -1)],
+        )
 
-        webhooks = [self._row_to_webhook(row) for row in rows]
+        webhooks = [self._doc_to_webhook(d) for d in docs]
 
         if event_filter:
             webhooks = [w for w in webhooks if event_filter in w.events]
 
         return webhooks
 
-    def get_secret(self, webhook_id: str) -> Optional[str]:
+    def get_secret(self, webhook_id: str) -> str | None:
         """Get the secret for a webhook (for signing)."""
         webhook = self.get(webhook_id)
         return webhook.secret if webhook else None
 
-    def sign_payload(self, webhook_id: str, payload: str) -> Optional[str]:
+    def sign_payload(self, webhook_id: str, payload: str) -> str | None:
         """Generate HMAC signature for payload."""
         secret = self.get_secret(webhook_id)
         if not secret:
@@ -201,17 +219,23 @@ class WebhookStore:
         self,
         webhook_id: str,
         event: str,
-        payload: Dict[str, Any],
-        timeout: float = 10.0,
-        retries: int = 3,
+        payload: dict[str, Any],
+        timeout: float | None = None,
+        retries: int | None = None,
+        base_attempt_count: int = 0,
     ) -> WebhookDelivery:
         """Deliver a webhook event to the endpoint."""
         webhook = self.get(webhook_id)
+        # Per-webhook knobs: explicit caller args win, otherwise the registered
+        # webhook's config (legacy defaults: 10s timeout, 3 attempts).
+        timeout = timeout if timeout is not None else (webhook.timeout if webhook else 10.0)
+        retries = retries if retries is not None else (webhook.retry_count if webhook else 3)
         delivery = WebhookDelivery(
             id=hashlib.sha256(f"{webhook_id}{time.time()}".encode()).hexdigest()[:16],
             webhook_id=webhook_id,
             event=event,
             payload=payload,
+            attempt_count=0,
         )
 
         if not webhook or not webhook.is_active:
@@ -232,7 +256,7 @@ class WebhookStore:
             "data": payload,
         }
 
-        payload_str = str(full_payload)
+        payload_str = json.dumps(full_payload, default=str)
         signature = self.sign_payload(webhook_id, payload_str)
 
         headers = {
@@ -248,7 +272,9 @@ class WebhookStore:
 
         # Deliver with retries
         last_error = None
+        started = time.perf_counter()
         for attempt in range(retries):
+            delivery.attempt_count = base_attempt_count + attempt + 1
             try:
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.post(
@@ -262,29 +288,172 @@ class WebhookStore:
                     delivery.success = 200 <= response.status_code < 300
 
                     if delivery.success:
-                        logger.info("Webhook %s delivered successfully", webhook_id)
+                        logger.info(
+                            "Webhook %s delivered successfully (attempt %d)",
+                            webhook_id,
+                            attempt + 1,
+                            extra={"tag": "TRAIN"},
+                        )
                         break
 
                     last_error = f"HTTP {response.status_code}"
                     logger.warning(
-                        "Webhook %s delivery failed (attempt %d): %s",
-                        webhook_id, attempt + 1, last_error,
+                        "Webhook %s delivery failed (attempt %d/%d): %s",
+                        webhook_id,
+                        attempt + 1,
+                        retries,
+                        last_error,
+                        extra={"tag": "TRAIN"},
                     )
 
             except Exception as e:
                 last_error = str(e)
-                logger.warning("Webhook %s delivery failed (attempt %d): %s",
-                               webhook_id, attempt + 1, e)
+                logger.warning(
+                    "Webhook %s delivery failed (attempt %d/%d): %s",
+                    webhook_id,
+                    attempt + 1,
+                    retries,
+                    e,
+                    extra={"tag": "TRAIN"},
+                )
 
+            # Exponential backoff between attempts
             if attempt < retries - 1:
-                await asyncio.sleep(2**attempt)  # Exponential backoff
+                delay = min(self._retry_base_delay * (2**attempt), self._max_retry_delay)
+                await asyncio.sleep(delay)
 
+        delivery.duration_ms = round((time.perf_counter() - started) * 1000, 2)
         if not delivery.success:
             delivery.error = last_error
-            logger.error("Webhook %s delivery failed after %d attempts", webhook_id, retries)
+            # Queue for background retry if we haven't exhausted all retries
+            if delivery.attempt_count < self._dead_letter_max_attempts:
+                self._queue_retry(delivery, webhook_id, event, payload, timeout)
+            else:
+                delivery.dead_letter = True
+                self._add_dead_letter(delivery)
+                logger.error(
+                    "Webhook %s moved to dead letter queue after %d attempts",
+                    webhook_id,
+                    retries,
+                    extra={"tag": "TRAIN"},
+                )
+            logger.error(
+                "Webhook %s delivery failed after %d attempts",
+                webhook_id,
+                retries,
+                extra={"tag": "TRAIN"},
+            )
 
         self._add_delivery(delivery)
         return delivery
+
+    def _queue_retry(
+        self,
+        delivery: WebhookDelivery,
+        webhook_id: str,
+        event: str,
+        payload: dict[str, Any],
+        timeout: float,
+    ) -> None:
+        """Queue a failed delivery for background retry."""
+        next_retry_delay = min(
+            self._retry_base_delay * (2**delivery.attempt_count),
+            self._max_retry_delay,
+        )
+        next_retry_at = datetime.now().timestamp() + next_retry_delay
+
+        retry_entry = {
+            "delivery_id": delivery.id,
+            "webhook_id": webhook_id,
+            "event": event,
+            "payload": payload,
+            "timeout": timeout,
+            "attempt_count": delivery.attempt_count,
+            "next_retry_at": next_retry_at,
+            "queued_at": datetime.now().isoformat(),
+        }
+
+        self._retry_queue.append(retry_entry)
+        logger.info(
+            "Webhook %s queued for retry in %.1fs (attempt %d/%d)",
+            webhook_id,
+            next_retry_delay,
+            delivery.attempt_count,
+            self._dead_letter_max_attempts,
+            extra={"tag": "TRAIN"},
+        )
+
+    def _add_dead_letter(self, delivery: WebhookDelivery) -> None:
+        """Add a permanently failed delivery to the dead letter queue."""
+        self._dead_letters.append(
+            {
+                "delivery_id": delivery.id,
+                "webhook_id": delivery.webhook_id,
+                "event": delivery.event,
+                "error": delivery.error,
+                "status_code": delivery.status_code,
+                "attempt_count": delivery.attempt_count,
+                "dead_lettered_at": datetime.now().isoformat(),
+            }
+        )
+        # Trim dead letter queue
+        if len(self._dead_letters) > self._max_log_size:
+            self._dead_letters = self._dead_letters[-self._max_log_size :]
+
+    async def process_retry_queue(self) -> int:
+        """Process pending retries. Returns number of retries attempted."""
+        now = datetime.now().timestamp()
+        ready = [r for r in self._retry_queue if r["next_retry_at"] <= now]
+
+        if not ready:
+            return 0
+
+        processed = 0
+        for entry in ready:
+            self._retry_queue.remove(entry)
+            attempt_count = entry["attempt_count"]
+
+            if attempt_count >= self._dead_letter_max_attempts:
+                # Move to dead letter
+                delivery = WebhookDelivery(
+                    id=entry["delivery_id"],
+                    webhook_id=entry["webhook_id"],
+                    event=entry["event"],
+                    payload=entry["payload"],
+                    attempt_count=attempt_count,
+                    dead_letter=True,
+                )
+                self._add_dead_letter(delivery)
+                continue
+
+            # Attempt retry
+            try:
+                await self.deliver(
+                    entry["webhook_id"],
+                    entry["event"],
+                    entry["payload"],
+                    timeout=entry["timeout"],
+                    retries=1,  # Single attempt, will re-queue if needed
+                    base_attempt_count=attempt_count,
+                )
+                processed += 1
+            except Exception as e:
+                logger.warning(
+                    "Retry failed for delivery %s: %s",
+                    entry["delivery_id"],
+                    e,
+                    extra={"tag": "TRAIN"},
+                )
+
+        return processed
+
+    def get_retry_queue(self) -> list[dict]:
+        """Get pending retries."""
+        return list(self._retry_queue)
+
+    def get_dead_letters(self, limit: int = 50) -> list[dict]:
+        """Get dead-lettered deliveries."""
+        return self._dead_letters[-limit:]
 
     def _add_delivery(self, delivery: WebhookDelivery) -> None:
         """Add delivery to log, trimming if needed."""
@@ -294,9 +463,9 @@ class WebhookStore:
 
     def get_deliveries(
         self,
-        webhook_id: Optional[str] = None,
+        webhook_id: str | None = None,
         limit: int = 50,
-    ) -> List[WebhookDelivery]:
+    ) -> list[WebhookDelivery]:
         """Get delivery log."""
         deliveries = self.delivery_log
 
@@ -305,16 +474,23 @@ class WebhookStore:
 
         return deliveries[-limit:]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get webhook statistics."""
+        if not self.is_available:
+            return {
+                "total_webhooks": 0,
+                "active_webhooks": 0,
+                "total_deliveries": len(self.delivery_log),
+                "successful_deliveries": sum(1 for d in self.delivery_log if d.success),
+                "failed_deliveries": sum(1 for d in self.delivery_log if not d.success),
+                "success_rate": "N/A",
+                "pending_retries": len(self._retry_queue),
+                "dead_letters": len(self._dead_letters),
+            }
         with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT COUNT(*) as cnt FROM webhooks")
-            total_webhooks = cursor.fetchone()["cnt"]
-            cursor = conn.execute("SELECT COUNT(*) as cnt FROM webhooks WHERE is_active = 1")
-            active_webhooks = cursor.fetchone()["cnt"]
-            conn.close()
+            docs = self._webhooks.find()
+            total_webhooks = len(docs)
+            active_webhooks = sum(1 for d in docs if d.get("is_active"))
 
         total_deliveries = len(self.delivery_log)
         successful = sum(1 for d in self.delivery_log if d.success)
@@ -329,16 +505,49 @@ class WebhookStore:
             "success_rate": f"{(successful / total_deliveries * 100):.1f}%"
             if total_deliveries > 0
             else "N/A",
+            "pending_retries": len(self._retry_queue),
+            "dead_letters": len(self._dead_letters),
         }
 
 
-# Global webhook store
-webhook_store = WebhookStore()
+# Global webhook store (lazy — initialised on first access to avoid import-time crashes)
+_webhook_store: WebhookStore | None = None
+_retry_worker_started: bool = False
 
 
 def get_webhook_store() -> WebhookStore:
-    """Get the global webhook store."""
-    return webhook_store
+    """Get the global webhook store, initialising on first call."""
+    global _webhook_store, _retry_worker_started
+    if _webhook_store is None:
+        _webhook_store = WebhookStore()
+    if not _retry_worker_started:
+        _retry_worker_started = True
+        _start_retry_worker()
+    return _webhook_store
+
+
+def _start_retry_worker() -> None:
+    """Start background retry worker if not already running."""
+    import asyncio as _asyncio
+
+    async def _retry_loop() -> None:
+        """Background loop that processes pending webhook retries."""
+        while True:
+            try:
+                await asyncio.sleep(30)  # Check every 30 seconds
+                store = get_webhook_store()
+                await store.process_retry_queue()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug("Webhook retry worker error: %s", e)
+
+    try:
+        loop = _asyncio.get_running_loop()
+        loop.create_task(_retry_loop())
+    except RuntimeError:
+        # No event loop running — worker will start when one is
+        pass
 
 
 # Event types
@@ -351,14 +560,30 @@ TRAINING_EVENTS = [
 ]
 
 
-async def notify_training_event(
+def known_webhook_events() -> list[str]:
+    """Every event string the engine accepts: training + startup.
+
+    One registry, two domains (training/ and infrastructure/startup_webhooks).
+    The REST ``available_events`` view and the emit gate both read this list.
+    """
+    from infrastructure.startup_webhooks import WebhookEvent
+
+    return [*TRAINING_EVENTS, *(e.value for e in WebhookEvent)]
+
+
+async def notify_event(
     event: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     sync: bool = False,
-) -> List[WebhookDelivery]:
-    """Send notification to all matching webhooks."""
-    if event not in TRAINING_EVENTS:
-        logger.warning("Unknown training event: %s", event)
+) -> list[WebhookDelivery]:
+    """Send a notification to all webhooks registered for *event*.
+
+    Fire-and-forget by default (``sync=False``): each delivery runs as a
+    background task with the webhook's own timeout/retry knobs, so a slow
+    endpoint never blocks the caller — the boot path relies on this.
+    """
+    if event not in known_webhook_events():
+        logger.warning("Unknown webhook event: %s", event, extra={"tag": "TRAIN"})
         return []
 
     store = get_webhook_store()
@@ -368,16 +593,29 @@ async def notify_training_event(
         logger.debug("No webhooks registered for event: %s", event)
         return []
 
-    logger.info("Sending %s to %d webhook(s)", event, len(matching_webhooks))
+    logger.info(
+        "Sending %s to %d webhook(s)", event, len(matching_webhooks), extra={"tag": "TRAIN"}
+    )
 
     deliveries = []
     for webhook in matching_webhooks:
         if sync:
-            # Synchronous delivery
-            delivery = await store.deliver(webhook.id, event, payload, retries=1)
+            # Synchronous delivery — single attempt, caller waits (historical
+            # contract: test endpoints must not block on retry backoff).
+            delivery = await store.deliver(
+                webhook.id, event, payload, timeout=webhook.timeout, retries=1
+            )
         else:
-            # Fire and forget in background
-            asyncio.create_task(store.deliver(webhook.id, event, payload))
+            # Fire and forget in background, honoring the webhook's knobs.
+            asyncio.create_task(
+                store.deliver(
+                    webhook.id,
+                    event,
+                    payload,
+                    timeout=webhook.timeout,
+                    retries=webhook.retry_count,
+                )
+            )
             delivery = WebhookDelivery(
                 id="pending",
                 webhook_id=webhook.id,
@@ -387,3 +625,15 @@ async def notify_training_event(
         deliveries.append(delivery)
 
     return deliveries
+
+
+async def notify_training_event(
+    event: str,
+    payload: dict[str, Any],
+    sync: bool = False,
+) -> list[WebhookDelivery]:
+    """Send a training-event notification (delegates to :func:`notify_event`).
+
+    Kept as the historical entry point; accepts any known webhook event.
+    """
+    return await notify_event(event, payload, sync)

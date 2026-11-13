@@ -3,8 +3,7 @@
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-from bawl.crawl import crawl, crawl_urls, _normalize
+from bawl.crawl import _normalize, crawl, crawl_urls
 
 
 def test_crawl_single_depth():
@@ -21,8 +20,7 @@ def test_crawl_max_pages():
 
 def test_crawl_on_page_callback():
     seen = []
-    crawl("https://example.com", depth=0, max_pages=1,
-          on_page=lambda p: seen.append(p.url))
+    crawl("https://example.com", depth=0, max_pages=1, on_page=lambda p: seen.append(p.url))
     assert seen == ["https://example.com"]
 
 
@@ -199,6 +197,7 @@ def test_crawl_urls_exclude_partial():
 def test_url_matches_exclude():
     """_url_matches_exclude matches fnmatch patterns correctly."""
     from bawl.crawl import _url_matches_exclude
+
     assert _url_matches_exclude("https://example.com/page", ["*page*"])
     assert not _url_matches_exclude("https://example.com/page", ["*other*"])
     assert _url_matches_exclude("https://example.com", ["*example*"])
@@ -208,6 +207,7 @@ def test_url_matches_exclude():
 def test_progress_tracker():
     """ProgressTracker produces correct status strings."""
     from bawl.crawl import ProgressTracker
+
     t = ProgressTracker(total_depth=3)
     assert "0 pages" in t.status()
     assert "0.0" in t.status()
@@ -253,6 +253,7 @@ def test_crawl_urls_include():
 def test_url_matches_include():
     """_url_matches_include matches fnmatch patterns correctly."""
     from bawl.crawl import _url_matches_include
+
     assert _url_matches_include("https://example.com/page", ["*page*"])
     assert not _url_matches_include("https://example.com/page", ["*other*"])
     assert _url_matches_include("https://example.com", ["*example*"])

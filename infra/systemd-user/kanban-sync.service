@@ -1,0 +1,25 @@
+# Kanban -> GitHub sync producer (installed to ~/.config/systemd/user/).
+#
+#   cp infra/systemd-user/kanban-sync.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now kanban-sync.timer
+#
+# Adjust ExecStart if your clone lives elsewhere.
+[Unit]
+Description=SloughGPT kanban/notes export+push (single-writer, detached worktree)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/mana/Documents/sloughgpt-api-std/scripts/kanban_sync.sh
+Nice=10
+# MANDATORY, not belt-and-braces: the systemd *user* manager defaults
+# TimeoutStartSec to infinity (verified on the live unit — TimeoutStartUSec
+# =infinity), so a `git fetch` that never returns never times out. Observed
+# 2026-11-03/04: one stalled fetch froze the producer for ~13h while the
+# timer dutifully reported success every 5 minutes.
+#
+# 180s > the worst healthy run (export + commit + push, 3 push races) and
+# kills the whole cgroup on expiry, which releases the flock for the next
+# tick. CI's freshness alarm allows 120min, so 180s per attempt is generous.
+TimeoutStartSec=180

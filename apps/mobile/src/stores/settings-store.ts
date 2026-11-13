@@ -2,13 +2,15 @@ import {create} from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {ThemeMode} from '../types';
 
-export type FontFamilyOption = 'system' | 'dm-sans';
+export type FontFamilyOption = 'system' | 'outfit';
 export type FontSizeScale = 0.85 | 0.925 | 1.0 | 1.1 | 1.2;
+export type AccentColor = 'violet' | 'rose' | 'amber' | 'emerald' | 'sky';
 
 interface SettingsState {
   theme: ThemeMode;
   fontFamily: FontFamilyOption;
   fontSizeScale: FontSizeScale;
+  accentColor: AccentColor;
   temperature: number;
   maxTokens: number;
   topP: number;
@@ -27,14 +29,15 @@ interface SettingsState {
 const STORAGE_KEY = '@sloughgpt/settings';
 
 const defaults: Omit<SettingsState, 'setTheme' | 'setFontFamily' | 'setFontSizeScale' | 'update' | 'reset'> = {
-  theme: 'system',
-  fontFamily: 'dm-sans',
+  theme: 'dark',
+  fontFamily: 'outfit',
   fontSizeScale: 1.0,
-  temperature: 0.8,
+  accentColor: 'violet',
+  temperature: 0.7,
   maxTokens: 256,
-  topP: 0.9,
-  topK: 50,
-  repetitionPenalty: 1.2,
+  topP: 0.85,
+  topK: 40,
+  repetitionPenalty: 1.15,
   memoryContext: '',
   apiUrl: 'http://localhost:8000',
   chatBackground: '',

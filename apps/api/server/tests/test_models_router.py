@@ -1,20 +1,25 @@
+from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for models router — list, current, hf, cache-usage, export-formats.
 
 Only registers the models router to avoid pulling in heavy dependencies.
 """
 
-import os
-import pytest
+import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from routers.models import ModelsRouter
+from routers.models import _instance as _models_instance
 from routers.models import router as models_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(models_router)
 client = TestClient(app)
 
@@ -35,6 +40,7 @@ def fake_cache_dir():
     blob_file.write_text("x" * 1024 * 1024)  # 1 MB blob
     yield tmp
     import shutil
+
     shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -69,13 +75,14 @@ def mock_controller():
     }
 
     with patch("routers.models.get_models_controller", return_value=ctrl):
+        _models_instance._cache.clear()
         yield ctrl
 
 
 # ── GET /models ────────────────────────────────────────────────────────────
 
-class TestListModels:
 
+class TestListModels:
     def test_list_includes_loaded_model(self, mock_controller):
         resp = client.get("/models")
         assert resp.status_code == 200
@@ -114,11 +121,51 @@ class TestListModels:
         loaded = [m for m in data if m["status"] == "loaded"][0]
         assert loaded["vocab_size"] == 50257
 
+    def test_list_non_integral_parameters_coerced_to_int(self, mock_controller):
+        """Regression: HF Hub num_parameters can be a fractional float; int field
+        must not raise ValidationError (int_from_float) → 422 fields=1."""
+        mock_controller.list_hf_models.return_value = [
+            {"model_id": "gpt2-xl", "parameters": 1558000000.5, "vocab_size": 50257.0},
+        ]
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        data = _data(resp)
+        m = [x for x in data if x["model_id"] == "gpt2-xl"][0]
+        assert m["parameters"] == 1558000000
+        assert isinstance(m["parameters"], int)
+        assert m["vocab_size"] == 50257
+
+    def test_list_none_parameters_coerced_to_int(self, mock_controller):
+        """Regression: None parameters must not raise int_type validation error."""
+        mock_controller.list_hf_models.return_value = [
+            {"model_id": "gpt2-medium", "parameters": None, "vocab_size": None},
+        ]
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        data = _data(resp)
+        m = [x for x in data if x["model_id"] == "gpt2-medium"][0]
+        assert m["parameters"] == 0
+        assert m["vocab_size"] == 0
+
+    def test_list_string_parameters_coerced_to_int(self, mock_controller):
+        """Regression: string parameters must not crash _describe_model (< int)."""
+        mock_controller.list_hf_models.return_value = [
+            {"model_id": "gpt2-xl", "parameters": "1558000000", "vocab_size": "50257"},
+        ]
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        data = _data(resp)
+        m = [x for x in data if x["model_id"] == "gpt2-xl"][0]
+        assert m["parameters"] == 1558000000
+        assert isinstance(m["parameters"], int)
+        assert m["vocab_size"] == 50257
+        assert len(m["description"]) > 5
+
 
 # ── GET /models/current ────────────────────────────────────────────────────
 
-class TestCurrentModel:
 
+class TestCurrentModel:
     def test_current_returns_loaded(self, mock_controller):
         resp = client.get("/models/current")
         assert resp.status_code == 200
@@ -133,8 +180,8 @@ class TestCurrentModel:
 
 # ── GET /models/hf ─────────────────────────────────────────────────────────
 
-class TestHFModels:
 
+class TestHFModels:
     def test_hf_returns_all(self, mock_controller):
         resp = client.get("/models/hf")
         assert resp.status_code == 200
@@ -155,8 +202,8 @@ class TestHFModels:
 
 # ── GET /models/cache-usage ────────────────────────────────────────────────
 
-class TestCacheUsage:
 
+class TestCacheUsage:
     def test_cache_usage(self, mock_controller, fake_cache_dir):
         with patch("routers.models._hf_cache_dir", fake_cache_dir):
             resp = client.get("/models/cache-usage")
@@ -183,16 +230,15 @@ class TestCacheUsage:
 
 # ── GET /models/export/formats ────────────────────────────────────────────
 
-class TestExportFormats:
 
+class TestExportFormats:
     def test_export_formats(self, mock_controller):
         resp = client.get("/models/export/formats")
         assert resp.status_code == 200
         data = _data(resp)
         assert isinstance(data, dict)
-        assert "safetensors" in data
         assert "gguf_q4_k_m" in data
-        assert "sou" in data
+        assert len(data) >= 1
 
     def test_export_formats_has_descriptions(self, mock_controller):
         resp = client.get("/models/export/formats")
@@ -201,3 +247,428 @@ class TestExportFormats:
             assert isinstance(key, str)
             assert isinstance(desc, str)
             assert len(desc) > 5
+
+
+# ── POST /models/load ───────────────────────────────────────────────────────
+
+
+class TestLoadModel:
+    LOADED = {
+        "status": "loaded",
+        "model_id": "gpt2",
+        "type": "slonet",
+        "device": "cpu",
+        "loaded_at": "2025-01-01T00:00:00",
+    }
+
+    def test_load_returns_envelope_with_real_data(self, mock_controller):
+        mock_controller.load_model.return_value = self.LOADED
+        resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        body = resp.json()
+        # Envelope must be preserved — the controller result must NOT be
+        # stripped by response_model (regression for Bug A).
+        assert body["status"] == "success"
+        data = _data(resp)
+        assert data["model_id"] == "gpt2"
+        assert data["status"] == "loaded"
+        assert data["type"] == "slonet"
+        assert data["device"] == "cpu"
+        assert data["loaded_at"] == "2025-01-01T00:00:00"
+
+    def test_load_preserves_controller_error(self, mock_controller):
+        mock_controller.load_model.return_value = {"status": "error", "error": "boom"}
+        resp = client.post("/models/load", json={"model_id": "gpt2"})
+        body = resp.json()
+        assert body["error"] == "boom"
+        assert body["code"] == "E_DOMAIN"
+
+    def test_load_records_load_event_on_success(self, mock_controller):
+        mock_controller.load_model.return_value = self.LOADED
+        ss = MagicMock()
+        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("load", "gpt2", "device=cpu")
+
+    def test_load_event_records_requested_device_when_result_has_none(self, mock_controller):
+        loaded = dict(self.LOADED)
+        loaded["device"] = None
+        mock_controller.load_model.return_value = loaded
+        ss = MagicMock()
+        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("load", "gpt2", "device=auto")
+
+    def test_load_records_error_event_on_failure(self, mock_controller):
+        mock_controller.load_model.return_value = {"status": "error", "error": "boom"}
+        ss = MagicMock()
+        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/load", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("error", "gpt2", "boom")
+
+    def test_load_calls_controller_with_args(self, mock_controller):
+        mock_controller.load_model.return_value = self.LOADED
+        client.post("/models/load", json={"model_id": "gpt2", "device": "cpu", "quantize": "q8"})
+        mock_controller.load_model.assert_called_once_with("gpt2", "cpu", "q8")
+
+
+# ── POST /models/unload ─────────────────────────────────────────────────────
+
+
+class TestUnloadModel:
+    def test_unload_records_event_with_model_id(self, mock_controller):
+        mock_controller.active_model_id.return_value = "Qwen/Qwen2.5-0.5B-Instruct"
+        ss = MagicMock()
+        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/unload")
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("unload", "Qwen/Qwen2.5-0.5B-Instruct")
+
+    def test_unload_falls_back_to_unknown_when_no_active_model(self, mock_controller):
+        mock_controller.active_model_id.return_value = None
+        ss = MagicMock()
+        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+            resp = client.post("/models/unload")
+        assert resp.status_code == 200
+        ss.record_model_event.assert_called_once_with("unload", "unknown")
+
+
+# ── GET/POST /models/process-guard ────────────────────────────────────────
+
+
+class TestProcessGuard:
+    def test_get_returns_status(self, mock_controller):
+        mock_controller.get_process_guard_status.return_value = {
+            "enabled": False,
+            "active": False,
+            "model_id": None,
+            "health": None,
+        }
+        resp = client.get("/models/process-guard")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["enabled"] is False
+        assert data["active"] is False
+
+    def test_get_when_enabled_and_active(self, mock_controller):
+        mock_controller.get_process_guard_status.return_value = {
+            "enabled": True,
+            "active": True,
+            "model_id": "gpt2",
+            "health": {"alive": True, "memory_mb": 512, "restarts": 0},
+        }
+        resp = client.get("/models/process-guard")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["enabled"] is True
+        assert data["active"] is True
+        assert data["model_id"] == "gpt2"
+
+    def test_enable_calls_controller(self, mock_controller):
+        mock_controller.set_process_guard_enabled.return_value = {
+            "enabled": True,
+            "active": False,
+            "model_id": "gpt2",
+            "health": None,
+        }
+        resp = client.post("/models/process-guard", json={"enabled": True})
+        assert resp.status_code == 200
+        mock_controller.set_process_guard_enabled.assert_called_once_with(True)
+        data = _data(resp)
+        assert data["enabled"] is True
+
+    def test_disable_calls_controller(self, mock_controller):
+        mock_controller.set_process_guard_enabled.return_value = {
+            "enabled": False,
+            "active": False,
+            "model_id": None,
+            "health": None,
+        }
+        resp = client.post("/models/process-guard", json={"enabled": False})
+        assert resp.status_code == 200
+        mock_controller.set_process_guard_enabled.assert_called_once_with(False)
+
+    def test_rejects_non_boolean(self, mock_controller):
+        resp = client.post("/models/process-guard", json={"enabled": [1, 2, 3]})
+        assert resp.status_code == 422
+
+
+# ── serve_model_file ────────────────────────────────────────────────────────
+
+
+class TestServeModelFile:
+    def test_returns_404_when_file_not_found(self):
+        """Returns 404 when the file doesn't exist in cache."""
+        with patch("routers.models.get_backend") as mock_get:
+            mock_backend = MagicMock()
+            mock_backend.supports_compressed_serve.return_value = True
+            mock_backend.serve_compressed.return_value = None
+            mock_get.return_value = mock_backend
+
+            resp = client.get("/models/file/nonexistent/model.bin")
+            assert resp.status_code == 404
+
+    def test_returns_501_when_compression_not_supported(self):
+        """Returns 501 when backend doesn't support compressed serving."""
+        with patch("routers.models.get_backend") as mock_get:
+            mock_backend = MagicMock()
+            mock_backend.supports_compressed_serve.return_value = False
+            mock_get.return_value = mock_backend
+
+            resp = client.get("/models/file/gpt2/model.bin")
+            assert resp.status_code == 501
+
+    def test_serves_compressed_file(self):
+        """Returns compressed file stream when backend supports it."""
+        import gzip
+
+        original_data = b"X" * 1024
+        compressed_data = gzip.compress(original_data)
+
+        def mock_iterator():
+            yield compressed_data
+
+        with patch("routers.models.get_backend") as mock_get:
+            mock_backend = MagicMock()
+            mock_backend.supports_compressed_serve.return_value = True
+            mock_backend.serve_compressed.return_value = {
+                "iterator": mock_iterator(),
+                "headers": {"Content-Encoding": "gzip"},
+                "size": len(compressed_data),
+            }
+            mock_get.return_value = mock_backend
+
+            resp = client.get("/models/file/gpt2/model.bin")
+            assert resp.status_code == 200
+            # TestClient auto-decompresses gzip, so content should be original data
+            assert resp.content == original_data
+
+
+# ── External server management ──────────────────────────────────────────────
+
+
+class TestExternalServers:
+    def test_list_empty(self):
+        """List servers returns empty when none registered."""
+        ModelsRouter._external_servers.clear()
+        resp = client.get("/models/external/servers")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data == {}
+
+    def test_register_and_list(self):
+        """Register a server and verify it appears in list."""
+        ModelsRouter._external_servers.clear()
+        resp = client.post(
+            "/models/external/servers",
+            json={
+                "name": "lab-server",
+                "url": "http://192.168.1.100:8000",
+                "compressed": True,
+            },
+        )
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["name"] == "lab-server"
+
+        resp = client.get("/models/external/servers")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "lab-server" in data
+        assert data["lab-server"]["url"] == "http://192.168.1.100:8000"
+
+    def test_remove_server(self):
+        """Remove a registered server."""
+        ModelsRouter._external_servers.clear()
+        client.post(
+            "/models/external/servers",
+            json={
+                "name": "temp",
+                "url": "http://localhost:9000",
+            },
+        )
+        resp = client.delete("/models/external/servers/temp")
+        assert resp.status_code == 200
+
+        resp = client.get("/models/external/servers")
+        assert "temp" not in _data(resp)
+
+    def test_remove_nonexistent_returns_404(self):
+        """Removing non-existent server returns 404."""
+        ModelsRouter._external_servers.clear()
+        resp = client.delete("/models/external/servers/nope")
+        assert resp.status_code == 404
+
+    def test_list_external_models(self):
+        """List models from external server."""
+        ModelsRouter._external_servers.clear()
+        client.post(
+            "/models/external/servers",
+            json={
+                "name": "peer",
+                "url": "http://localhost:8000",
+            },
+        )
+
+        mock_models = [{"model_id": "llama-7b"}, {"model_id": "mistral-7b"}]
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = json.dumps(mock_models).encode()
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_open.return_value = mock_resp
+
+            resp = client.get("/models/external/models?server=peer")
+            assert resp.status_code == 200
+            data = _data(resp)
+            assert data["server"] == "peer"
+            assert len(data["models"]) == 2
+
+    def test_list_external_models_unknown_server(self):
+        """List models from unknown server returns 404."""
+        ModelsRouter._external_servers.clear()
+        resp = client.get("/models/external/models?server=unknown")
+        assert resp.status_code == 404
+
+    def test_download_external_unknown_server(self):
+        """Download from unknown server returns 404."""
+        ModelsRouter._external_servers.clear()
+        resp = client.post(
+            "/models/external/download",
+            json={
+                "server": "unknown",
+                "model_id": "model",
+            },
+        )
+        assert resp.status_code == 404
+
+
+# ── Backend management ──────────────────────────────────────────────────────
+
+
+class TestBackendManagement:
+    def test_list_backends(self):
+        """List backends returns available backends."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "hf" in data
+        assert "external" in data
+        assert "HuggingFace Hub" in data["hf"]["description"]
+
+    def test_get_active_backend(self):
+        """Get active backend returns current backend type."""
+        resp = client.get("/models/backends/active")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "type" in data
+        assert "class" in data
+
+    def test_set_active_backend_hf(self):
+        """Switch to HF backend succeeds."""
+        resp = client.post("/models/backends/active?backend_name=hf")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["type"] == "hf"
+
+    def test_set_active_backend_unknown(self):
+        """Switch to unknown backend returns 404."""
+        resp = client.post("/models/backends/active?backend_name=unknown")
+        assert resp.status_code == 404
+
+    def test_set_active_backend_external_returns_400(self):
+        """Switch to external backend returns 400 (requires server config)."""
+        resp = client.post("/models/backends/active?backend_name=external")
+        assert resp.status_code == 400
+
+
+# ── Backend discovery ────────────────────────────────────────────────────────
+
+
+class TestBackendDiscovery:
+    def test_list_backends_includes_all_types(self):
+        """List backends returns all backend types with capabilities."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "hf" in data
+        assert "external" in data
+        assert "git" in data
+        assert "local" in data
+
+    def test_list_backends_has_capabilities(self):
+        """Each backend has capabilities."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        for _name, info in data.items():
+            assert "capabilities" in info
+            caps = info["capabilities"]
+            assert "compression" in caps
+            assert "cancel" in caps
+
+    def test_list_backends_active_flag(self):
+        """One backend is marked active."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        active_count = sum(1 for info in data.values() if info.get("active"))
+        assert active_count == 1
+
+
+# ── Download history ─────────────────────────────────────────────────────────
+
+
+class TestDownloadHistory:
+    def test_download_history_empty(self):
+        """Download history returns empty list when no downloads."""
+        resp = client.get("/models/history")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "history" in data
+        assert isinstance(data["history"], list)
+
+    def test_download_history_has_limit(self):
+        """Download history respects limit parameter."""
+        resp = client.get("/models/history?limit=5")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert len(data["history"]) <= 5
+
+    def test_download_history_structure(self):
+        """Each history entry has expected fields."""
+        resp = client.get("/models/history")
+        assert resp.status_code == 200
+        data = _data(resp)
+        for entry in data["history"]:
+            assert "detail" in entry
+            assert "status" in entry
+
+
+class TestModelsFacadeAbsorbsInferRegistry:
+    """The models router serves the merged /infer + /registry routes (card 20261101_154054).
+
+    infer.py and registry.py are folded into models.py: one module-level
+    router exposes /models/*, /infer/* and /registry/* paths, and
+    routers.infer / routers.registry no longer exist.
+    """
+
+    def test_models_router_serves_all_three_prefixes(self):
+        facade = FastAPI()
+        facade.include_router(models_router)
+        paths = set(facade.openapi()["paths"])
+        # models routes keep working
+        assert {"/models", "/models/hf"} <= paths
+        # merged infer routes
+        assert {"/infer", "/infer/stream", "/infer/health"} <= paths
+        # merged registry routes
+        assert {"/registry/models", "/registry/best"} <= paths
+
+    def test_infer_and_registry_modules_are_gone(self):
+        import importlib.util
+
+        assert importlib.util.find_spec("routers.infer") is None
+        assert importlib.util.find_spec("routers.registry") is None

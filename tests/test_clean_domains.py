@@ -3,24 +3,22 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from domains.chat.domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
+from domain.chat._internal.domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
 
 # companion.py (top-level, single file)
-from domains.companion import (
+from domain.companion._internal.companion import (
     CompanionSystem,
     CompanionTraits,
     ConversationContext,
     create_companion,
     get_companion,
 )
-
 
 # =============================================================================
 # ChatDomain Tests
@@ -31,7 +29,7 @@ class TestChatDataclasses:
     def test_chat_request_defaults(self):
         req = ChatRequest(messages=[{"role": "user", "content": "hi"}])
         assert req.model == "gpt2"
-        assert req.temperature == 0.8
+        assert req.temperature == 0.7
         assert req.max_tokens == 256
         assert req.session_id is None
 
@@ -45,14 +43,22 @@ class TestChatDataclasses:
 
 
 class TestChatDomain:
+    @pytest.fixture(autouse=True)
+    def _isolate_response_tracker(self, monkeypatch, tmp_path):
+        """Point the global ResponseTracker at a scratch dir so assertions never
+        see chat logs from prior server runs in the repo ``data/`` dir."""
+        from domain.feedback._internal import response_tracker as _rt
+
+        monkeypatch.setattr(_rt, "_response_tracker", _rt.ResponseTracker(log_dir=str(tmp_path)))
+
     def test_constructor_creates_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "chat_logs"
-            chat = ChatDomain(log_dir=str(log_dir))
+            ChatDomain(log_dir=str(log_dir))
             assert log_dir.is_dir()
 
     @pytest.mark.asyncio
-    @patch("domains.chat.domain.ChatDomain._generate", return_value="mock")
+    @patch("domain.chat._internal.domain.ChatDomain._generate", return_value="mock")
     async def test_respond_no_user_message_returns_placeholder(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         resp = await chat.respond(messages=[{"role": "assistant", "content": "Hey"}])
@@ -60,7 +66,7 @@ class TestChatDomain:
         assert resp.text != ""
 
     @pytest.mark.asyncio
-    @patch("domains.chat.domain.ChatDomain._generate", return_value="mock")
+    @patch("domain.chat._internal.domain.ChatDomain._generate", return_value="mock")
     async def test_respond_empty_messages(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         resp = await chat.respond(messages=[])
@@ -76,29 +82,28 @@ class TestChatDomain:
         stats = chat.get_stats()
         assert stats == {"total": 0}
 
-    def test_log_writes_jsonl(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            chat = ChatDomain(log_dir=tmp)
-            chat._log(
-                user_message="hi",
-                assistant_response="hello",
-                model="gpt2",
-                temperature=0.8,
-                max_tokens=256,
-                session_id="s1",
-                user_id="u1",
-                tokens_generated=5,
-                duration_ms=10,
-            )
-            log_files = list(Path(tmp).glob("responses_*.jsonl"))
-            assert len(log_files) == 1
-            with open(log_files[0]) as f:
-                entry = json.loads(f.readline())
-            assert entry["user_message"] == "hi"
-            assert entry["assistant_response"] == "hello"
+    def test_log_writes_jsonl(self, tmp_path):
+        chat = ChatDomain(log_dir=str(tmp_path))
+        chat._log(
+            user_message="hi",
+            assistant_response="hello",
+            model="gpt2",
+            temperature=0.8,
+            max_tokens=256,
+            session_id="s1",
+            user_id="u1",
+            tokens_generated=5,
+            duration_ms=10,
+        )
+        log_files = list(tmp_path.glob("responses_*.jsonl"))
+        assert len(log_files) == 1
+        with open(log_files[0]) as f:
+            entry = json.loads(f.readline())
+        assert entry["user_message"] == "hi"
+        assert entry["assistant_response"] == "hello"
 
     @pytest.mark.asyncio
-    @patch("domains.chat.domain.ChatDomain._generate", return_value="mock response")
+    @patch("domain.chat._internal.domain.ChatDomain._generate", return_value="mock response")
     async def test_respond_delegates_to_generate(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         resp = await chat.respond(messages=[{"role": "user", "content": "hello"}])
@@ -109,11 +114,13 @@ class TestChatDomain:
     async def test_respond_picks_last_user_message(self):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         with patch.object(chat, "_generate", return_value="ok") as mock:
-            await chat.respond(messages=[
-                {"role": "user", "content": "first"},
-                {"role": "assistant", "content": "middle"},
-                {"role": "user", "content": "last"},
-            ])
+            await chat.respond(
+                messages=[
+                    {"role": "user", "content": "first"},
+                    {"role": "assistant", "content": "middle"},
+                    {"role": "user", "content": "last"},
+                ]
+            )
             assert mock.call_args[1]["user_msg"] == "last"
 
     def test_get_recent_responses_returns_limited(self):
@@ -121,9 +128,15 @@ class TestChatDomain:
             chat = ChatDomain(log_dir=tmp)
             for i in range(5):
                 chat._log(
-                    user_message=f"msg{i}", assistant_response=f"resp{i}",
-                    model="t", temperature=0.5, max_tokens=10,
-                    session_id="s", user_id="u", tokens_generated=1, duration_ms=1,
+                    user_message=f"msg{i}",
+                    assistant_response=f"resp{i}",
+                    model="t",
+                    temperature=0.5,
+                    max_tokens=10,
+                    session_id="s",
+                    user_id="u",
+                    tokens_generated=1,
+                    duration_ms=1,
                 )
             result = chat.get_recent_responses(limit=2)
             assert len(result) == 2
@@ -134,9 +147,15 @@ class TestChatDomain:
             chat = ChatDomain(log_dir=tmp)
             for i in range(3):
                 chat._log(
-                    user_message=f"msg{i}", assistant_response=f"resp{i}",
-                    model="gpt2", temperature=0.5, max_tokens=10,
-                    session_id="s", user_id="u", tokens_generated=5 + i, duration_ms=10 + i,
+                    user_message=f"msg{i}",
+                    assistant_response=f"resp{i}",
+                    model="gpt2",
+                    temperature=0.5,
+                    max_tokens=10,
+                    session_id="s",
+                    user_id="u",
+                    tokens_generated=5 + i,
+                    duration_ms=10 + i,
                 )
             stats = chat.get_stats()
             assert stats["total"] == 3
@@ -151,7 +170,7 @@ class TestChatDomain:
 
 
 # =============================================================================
-# CompanionSystem Tests (domains/companion.py)
+# CompanionSystem Tests (domain/companion.py)
 # =============================================================================
 
 

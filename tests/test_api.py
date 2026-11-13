@@ -2,13 +2,13 @@
 SloughGPT API Server Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
-import torch
 
 
 class TestHealthEndpoint:
@@ -28,10 +28,12 @@ class TestHealthEndpoint:
 
     def test_health_check(self):
         """Test health check can be called."""
-        # Simple test that the function exists
-        from domains.inference.engine import InferenceEngine
+        # Simple test that the server state singleton exists
+        from domain.infrastructure._internal.server_state import get_server_state
 
-        assert InferenceEngine is not None
+        state = get_server_state()
+        assert state is not None
+        assert hasattr(state, "uptime_seconds") or hasattr(state, "uptime")
 
 
 class TestInferenceEndpoints:
@@ -39,15 +41,15 @@ class TestInferenceEndpoints:
 
     def test_generate_request_validation(self):
         """Test generate request validation."""
+
         from pydantic import BaseModel
-        from typing import Optional
 
         class GenerateRequest(BaseModel):
             prompt: str
-            max_new_tokens: Optional[int] = 100
-            temperature: Optional[float] = 0.8
-            top_k: Optional[int] = 50
-            top_p: Optional[float] = 0.9
+            max_new_tokens: int | None = 100
+            temperature: float | None = 0.8
+            top_k: int | None = 50
+            top_p: float | None = 0.9
 
         # Valid request
         req = GenerateRequest(prompt="Hello")
@@ -61,15 +63,15 @@ class TestInferenceEndpoints:
 
     def test_chat_request_validation(self):
         """Test chat request validation."""
+
         from pydantic import BaseModel
-        from typing import List
 
         class ChatMessage(BaseModel):
             role: str
             content: str
 
         class ChatRequest(BaseModel):
-            messages: List[ChatMessage]
+            messages: list[ChatMessage]
             max_new_tokens: int = 100
 
         # Valid request
@@ -89,25 +91,26 @@ class TestQuantizationEndpoints:
 
     def test_quantize_endpoint_params(self):
         """Test quantize endpoint parameters."""
+
         from pydantic import BaseModel
-        from typing import Optional
 
         class QuantizeRequest(BaseModel):
             model_name: str
             quantization_type: str  # fp16, int8, int4
-            device: Optional[str] = "cpu"
+            device: str | None = "cpu"
 
         req = QuantizeRequest(model_name="gpt2", quantization_type="fp16")
         assert req.quantization_type == "fp16"
 
     def test_quantization_type_validation(self):
-        """Test quantization type enum values."""
-        from domains.inference.quantization import QuantizationType
+        """Test quantization modes and dtypes exposed by Quantine."""
+        from domain.infrastructure._internal.quantization import QuantDtype, Quantine, QuantMode
 
-        valid_types = [qt.value for qt in QuantizationType]
-        assert "fp16" in valid_types
-        assert "int8" in valid_types
-        assert "int4" in valid_types
+        assert "symmetric" in [m.value for m in QuantMode]
+        assert "asymmetric" in [m.value for m in QuantMode]
+        assert "int8" in [d.value for d in QuantDtype]
+        assert "int4" in [d.value for d in QuantDtype]
+        assert Quantine is not None
 
 
 class TestBenchmarkEndpoints:
@@ -115,14 +118,14 @@ class TestBenchmarkEndpoints:
 
     def test_benchmark_request(self):
         """Test benchmark request structure."""
+
         from pydantic import BaseModel
-        from typing import Optional
 
         class BenchmarkRequest(BaseModel):
             model_name: str
             prompt: str = "The quick brown fox"
-            max_new_tokens: Optional[int] = 50
-            num_runs: Optional[int] = 10
+            max_new_tokens: int | None = 50
+            num_runs: int | None = 10
 
         req = BenchmarkRequest(model_name="gpt2", num_runs=5)
         assert req.num_runs == 5
@@ -133,15 +136,15 @@ class TestTrainingEndpoints:
 
     def test_training_request(self):
         """Test training request structure."""
+
         from pydantic import BaseModel
-        from typing import Optional
 
         class TrainingRequest(BaseModel):
             dataset: str
-            epochs: Optional[int] = 5
-            batch_size: Optional[int] = 32
-            learning_rate: Optional[float] = 1e-3
-            use_lora: Optional[bool] = False
+            epochs: int | None = 5
+            batch_size: int | None = 32
+            learning_rate: float | None = 1e-3
+            use_lora: bool | None = False
 
         req = TrainingRequest(dataset="shakespeare", epochs=3)
         assert req.epochs == 3
@@ -154,7 +157,7 @@ class TestTrainingEndpoints:
             "config": {
                 "epochs": 3,
                 "batch_size": 32,
-            }
+            },
         }
 
         assert "job_id" in response
@@ -166,13 +169,13 @@ class TestExperimentEndpoints:
 
     def test_create_experiment(self):
         """Test experiment creation request."""
+
         from pydantic import BaseModel
-        from typing import Optional
 
         class CreateExperiment(BaseModel):
             name: str
-            description: Optional[str] = None
-            tags: Optional[list] = None
+            description: str | None = None
+            tags: list | None = None
 
         exp = CreateExperiment(name="test_exp", tags=["test"])
         assert exp.name == "test_exp"
@@ -195,14 +198,14 @@ class TestExportEndpoints:
 
     def test_export_request(self):
         """Test export request structure."""
+
         from pydantic import BaseModel
-        from typing import Optional, List
 
         class ExportRequest(BaseModel):
             model_name: str
             format: str  # torch, onnx, safetensors
-            output_path: Optional[str] = None
-            quantize: Optional[str] = None  # fp16, int8, int4
+            output_path: str | None = None
+            quantize: str | None = None  # fp16, int8, int4
 
         req = ExportRequest(model_name="gpt2", format="onnx")
         assert req.format == "onnx"
@@ -212,19 +215,20 @@ class TestAPIIntegration:
     """Integration tests for API."""
 
     def test_endpoints_exist(self):
-        """Test that all endpoint functions exist."""
-        # These should exist in the server
-        from domains.inference.quantization import quantize_model
-        from domains.inference.engine import InferenceEngine
-        from domains.ml_infrastructure.benchmarking import benchmark_model
+        """Test that key domain functions exist."""
+        from domain.inference._internal.native.engine import NativeEngine
+        from domain.infrastructure._internal.quantization import (
+            quantize_state_dict,
+            quantized_linear,
+        )
 
-        assert callable(quantize_model)
-        assert callable(InferenceEngine)
-        assert callable(benchmark_model)
+        assert callable(quantize_state_dict)
+        assert callable(quantized_linear)
+        assert NativeEngine is not None
 
     def test_error_handling(self):
         """Test error handling in requests."""
-        from pydantic import ValidationError, BaseModel
+        from pydantic import BaseModel, ValidationError
 
         class StrictRequest(BaseModel):
             name: str

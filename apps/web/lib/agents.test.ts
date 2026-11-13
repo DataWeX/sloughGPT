@@ -25,4 +25,20 @@ describe('agents', () => {
       expect(agent.id).toBe(key)
     }
   })
+
+  it('has at least 5 agents', () => {
+    expect(Object.keys(AGENTS).length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('each agent has unique id', () => {
+    const ids = Object.values(AGENTS).map(a => a.id)
+    const uniqueIds = new Set(ids)
+    expect(uniqueIds.size).toBe(ids.length)
+  })
+
+  it('each agent has non-empty instructions', () => {
+    for (const agent of Object.values(AGENTS)) {
+      expect(agent.instructions.length).toBeGreaterThan(0)
+    }
+  })
 })

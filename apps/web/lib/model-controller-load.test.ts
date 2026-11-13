@@ -1,0 +1,63 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('./auth', () => ({
+  useAuthStore: {
+    getState: () => ({ token: null as string | null }),
+  },
+}))
+
+vi.mock('./config', () => ({
+  PUBLIC_API_URL: 'http://127.0.0.1:9',
+}))
+
+import { setupApiMocks, apiClient } from './__test-helper'
+setupApiMocks()
+
+import { modelController } from './model-controller'
+
+describe('modelController.load', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs /models/load with model_id and default device', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', model: 'gpt2', model_type: 'gpt2' })
+
+    await modelController.load('gpt2')
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/models/load',
+      { model_id: 'gpt2', device: 'auto' },
+    )
+  })
+
+  it('throws when server returns status error', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'error', error: 'CUDA OOM' })
+
+    await expect(modelController.load('huge')).rejects.toThrow('CUDA OOM')
+  })
+
+  it('passes custom device', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', model: 'gpt2' })
+    await modelController.load('gpt2', 'cpu')
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/models/load',
+      { model_id: 'gpt2', device: 'cpu' },
+    )
+  })
+
+  it('returns loaded status', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', model: 'gpt2', model_type: 'gpt2' })
+    const result = await modelController.load('gpt2')
+    expect(result.status).toBe('loaded')
+  })
+
+  it('returns model_id in response', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', model_id: 'qwen' })
+    const result = await modelController.load('qwen')
+    expect(result.model_id).toBe('qwen')
+  })
+
+  it('throws on network error', async () => {
+    apiClient.apiPost.mockRejectedValue(new Error('connection refused'))
+    await expect(modelController.load('gpt2')).rejects.toThrow('connection refused')
+  })
+})

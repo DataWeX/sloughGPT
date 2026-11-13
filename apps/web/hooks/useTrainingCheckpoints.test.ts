@@ -1,13 +1,14 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockListCheckpoints, mockListBuilds, mockList, mockLoadCheckpoint, mockDeleteCheckpoint } = vi.hoisted(() => ({
-  mockListCheckpoints: vi.fn(),
-  mockListBuilds: vi.fn(),
-  mockList: vi.fn(),
-  mockLoadCheckpoint: vi.fn(),
-  mockDeleteCheckpoint: vi.fn(),
-}))
+const { mockListCheckpoints, mockListBuilds, mockList, mockLoadCheckpoint, mockDeleteCheckpoint } =
+  vi.hoisted(() => ({
+    mockListCheckpoints: vi.fn(),
+    mockListBuilds: vi.fn(),
+    mockList: vi.fn(),
+    mockLoadCheckpoint: vi.fn(),
+    mockDeleteCheckpoint: vi.fn(),
+  }))
 
 vi.mock('@/lib/controllers', () => ({
   trainingJobsController: {
@@ -84,7 +85,7 @@ describe('useTrainingCheckpoints', () => {
     mockLoadCheckpoint.mockRejectedValue(new Error('fail'))
     const { result } = renderHook(() => useTrainingCheckpoints())
     await result.current.handleLoadCheckpoint('cp1', addToast)
-    expect(addToast).toHaveBeenCalledWith('Failed to load trained version', 'error')
+    expect(addToast).toHaveBeenCalledWith('Could not load trained version: fail', 'error')
   })
 
   it('handleDeleteCheckpoint with confirm deletes and shows toast', async () => {
@@ -93,11 +94,18 @@ describe('useTrainingCheckpoints', () => {
     mockDeleteCheckpoint.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingCheckpoints())
     await waitFor(() => {
-      act(() => result.current.setCheckpoints([{ name: 'cp1', soul: 'default' }, { name: 'cp2', soul: 'default' }]))
+      act(() =>
+        result.current.setCheckpoints([
+          { name: 'cp1', soul: 'default' },
+          { name: 'cp2', soul: 'default' },
+        ]),
+      )
     })
     await result.current.handleDeleteCheckpoint('cp1', addToast)
     expect(mockDeleteCheckpoint).toHaveBeenCalledWith('cp1')
-    await waitFor(() => expect(result.current.checkpoints).toEqual([{ name: 'cp2', soul: 'default' }]))
+    await waitFor(() =>
+      expect(result.current.checkpoints).toEqual([{ name: 'cp2', soul: 'default' }]),
+    )
     expect(addToast).toHaveBeenCalledWith('Deleted cp1', 'success')
   })
 

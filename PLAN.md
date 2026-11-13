@@ -165,10 +165,10 @@ def convert_to_slnc(model_id: str, output_path: str):
 
 | File | Action |
 |------|--------|
-| `domains/infrastructure/slnc_format.py` | NEW — header spec, converter, layout math |
-| `domains/infrastructure/slnc_loader.py` | NEW — mmap loader |
-| `domains/infrastructure/numpy_engine.py` | MODIFY — use mmap loader |
-| `domains/inference/slonet_provider.py` | MODIFY — use mmap loader |
+| `domain/infrastructure/slnc_format.py` | NEW — header spec, converter, layout math |
+| `domain/infrastructure/slnc_loader.py` | NEW — mmap loader |
+| `domain/infrastructure/_internal/numpy_engine.py` | MODIFY — use mmap loader |
+| `domain/inference/_internal/slonet_provider.py` | MODIFY — use mmap loader |
 | `tests/test_slnc_format.py` | NEW — converter + loader tests |
 
 ### Risks

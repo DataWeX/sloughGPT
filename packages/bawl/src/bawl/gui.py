@@ -6,11 +6,10 @@ Tabs: Page, Crawl, Sitemap, Settings.
 
 import threading
 import tkinter as tk
-from tkinter import ttk, scrolledtext, filedialog
-from typing import Optional
+from tkinter import filedialog, scrolledtext, ttk
 
-from .parse import parse, Page
 from .crawl import crawl as _crawl
+from .parse import Page, parse
 from .sitemap import parse as parse_sitemap
 from .store import save as _save
 
@@ -38,8 +37,9 @@ class App:
         self._sitemap_tab(nb)
         self._settings_tab(nb)
         self._status_var = tk.StringVar(value="Ready")
-        bar = ttk.Label(self.root, textvariable=self._status_var,
-                        relief="sunken", anchor="w", padding=(6, 2))
+        bar = ttk.Label(
+            self.root, textvariable=self._status_var, relief="sunken", anchor="w", padding=(6, 2)
+        )
         bar.pack(fill="x", padx=6, pady=(0, 6))
 
     # ---- helpers ----
@@ -64,8 +64,7 @@ class App:
         ttk.Button(f, text="Save to file", command=cmd).pack(side="right")
 
     def _text_area(self, parent):
-        t = scrolledtext.ScrolledText(parent, wrap="word",
-                                       font=("Menlo", 11), relief="flat")
+        t = scrolledtext.ScrolledText(parent, wrap="word", font=("Menlo", 11), relief="flat")
         t.pack(fill="both", expand=True, pady=(0, 0))
         return t
 
@@ -111,9 +110,12 @@ class App:
 
         ttk.Separator(tab, orient="horizontal").pack(fill="x", padx=8, pady=8)
         ttk.Label(tab, text="About", font=("", 11, "bold")).pack(anchor="w", padx=8)
-        ttk.Label(tab, text="bawl v0.1 — zero-dependency web crawler. "
-                  "Uses stdlib only (urllib, html.parser, tkinter).",
-                  wraplength=600).pack(anchor="w", padx=8, pady=4)
+        ttk.Label(
+            tab,
+            text="bawl v0.1 — zero-dependency web crawler. "
+            "Uses stdlib only (urllib, html.parser, tkinter).",
+            wraplength=600,
+        ).pack(anchor="w", padx=8, pady=4)
 
     def _rate(self):
         try:
@@ -133,8 +135,9 @@ class App:
         tab = ttk.Frame(nb)
         nb.add(tab, text="  Page  ")
         self._page_url_v, _, self._page_btn = self._url_row(tab, "Fetch", self._page_go)
-        self._page_save_btn = ttk.Button(tab, text="Save to file",
-                                          command=self._page_save, state="disabled")
+        self._page_save_btn = ttk.Button(
+            tab, text="Save to file", command=self._page_save, state="disabled"
+        )
         self._page_save_btn.pack(anchor="e", pady=(0, 2))
         self._page_txt = self._text_area(tab)
         self._page_pb = self._progress(tab)
@@ -142,8 +145,9 @@ class App:
     def _page_save(self):
         if not self._latest_pages:
             return
-        path = filedialog.asksaveasfilename(defaultextension=".jsonl",
-                                             filetypes=[("JSONL", "*.jsonl"), ("All", "*")])
+        path = filedialog.asksaveasfilename(
+            defaultextension=".jsonl", filetypes=[("JSONL", "*.jsonl"), ("All", "*")]
+        )
         if not path:
             return
         for p in self._latest_pages:
@@ -167,7 +171,7 @@ class App:
         page = parse(url, timeout=self._timeout(), rate=self._rate())
         self.root.after(0, self._page_done, page, url)
 
-    def _page_done(self, page: Optional[Page], url: str):
+    def _page_done(self, page: Page | None, url: str):
         self._page_pb.stop()
         self._page_pb.pack_forget()
         self._page_btn.config(state="normal")
@@ -213,8 +217,9 @@ class App:
         ttk.Spinbox(ctrl, from_=1, to=1000, textvariable=mv, width=5).pack(side="left", padx=2)
         self._crawl_max_v = mv
 
-        self._crawl_save_btn = ttk.Button(tab, text="Save to file",
-                                           command=self._crawl_save, state="disabled")
+        self._crawl_save_btn = ttk.Button(
+            tab, text="Save to file", command=self._crawl_save, state="disabled"
+        )
         self._crawl_save_btn.pack(anchor="e", pady=(0, 2))
         self._crawl_txt = self._text_area(tab)
         self._crawl_pb = self._progress(tab)
@@ -222,8 +227,9 @@ class App:
     def _crawl_save(self):
         if not self._latest_pages:
             return
-        path = filedialog.asksaveasfilename(defaultextension=".jsonl",
-                                             filetypes=[("JSONL", "*.jsonl"), ("All", "*")])
+        path = filedialog.asksaveasfilename(
+            defaultextension=".jsonl", filetypes=[("JSONL", "*.jsonl"), ("All", "*")]
+        )
         if not path:
             return
         for p in self._latest_pages:
@@ -242,14 +248,18 @@ class App:
         self._crawl_pb.pack(fill="x", pady=(2, 4))
         self._crawl_pb.start(10)
         self._status(f"Crawling {url} depth={depth} max={mp} ...")
-        t = threading.Thread(target=self._crawl_worker,
-                             args=(url, depth, mp), daemon=True)
+        t = threading.Thread(target=self._crawl_worker, args=(url, depth, mp), daemon=True)
         t.start()
 
     def _crawl_worker(self, url, depth, mp):
-        pages = _crawl(url, depth=depth, max_pages=mp,
-                       rate=self._rate(), timeout=self._timeout(),
-                       same_domain=True)
+        pages = _crawl(
+            url,
+            depth=depth,
+            max_pages=mp,
+            rate=self._rate(),
+            timeout=self._timeout(),
+            same_domain=True,
+        )
         self.root.after(0, self._crawl_done, pages)
 
     def _crawl_done(self, pages):
@@ -288,11 +298,13 @@ class App:
         ttk.Spinbox(ctrl, from_=0, to=500, textvariable=nv, width=5).pack(side="left", padx=2)
         ttk.Label(ctrl, text="URLs").pack(side="left", padx=(2, 8))
         self._sitemap_n_v = nv
-        self._sitemap_crawl_btn = ttk.Button(ctrl, text="Crawl from sitemap",
-                                              command=self._sitemap_crawl, state="disabled")
+        self._sitemap_crawl_btn = ttk.Button(
+            ctrl, text="Crawl from sitemap", command=self._sitemap_crawl, state="disabled"
+        )
         self._sitemap_crawl_btn.pack(side="left")
-        self._sitemap_save_btn = ttk.Button(tab, text="Save to file",
-                                             command=self._sitemap_save, state="disabled")
+        self._sitemap_save_btn = ttk.Button(
+            tab, text="Save to file", command=self._sitemap_save, state="disabled"
+        )
         self._sitemap_save_btn.pack(anchor="e", pady=(0, 2))
         self._sitemap_txt = self._text_area(tab)
         self._sitemap_pb = self._progress(tab)
@@ -300,8 +312,9 @@ class App:
     def _sitemap_save(self):
         if not self._latest_pages:
             return
-        path = filedialog.asksaveasfilename(defaultextension=".jsonl",
-                                             filetypes=[("JSONL", "*.jsonl"), ("All", "*")])
+        path = filedialog.asksaveasfilename(
+            defaultextension=".jsonl", filetypes=[("JSONL", "*.jsonl"), ("All", "*")]
+        )
         if not path:
             return
         for p in self._latest_pages:
@@ -360,8 +373,7 @@ class App:
         self._sitemap_pb.pack(fill="x", pady=(2, 4))
         self._sitemap_pb.start(10)
         self._status(f"Crawling {len(targets)} URLs from sitemap ...")
-        t = threading.Thread(target=self._sitemap_crawl_worker,
-                             args=(targets,), daemon=True)
+        t = threading.Thread(target=self._sitemap_crawl_worker, args=(targets,), daemon=True)
         t.start()
 
     def _sitemap_crawl_worker(self, targets):

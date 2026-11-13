@@ -19,11 +19,6 @@ classifiers = [
 ]
 dependencies = []
 
-[project.scripts]
-mogdb = "mogdb.server:main"
-mogdb-server = "mogdb.server:main"
-mogdb-client = "mogdb.client_cli:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 

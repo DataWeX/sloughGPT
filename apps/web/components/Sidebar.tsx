@@ -1,232 +1,185 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Button } from '@sloughgpt/strui'
-import {
-  IconChat,
-  IconClose,
-  IconModels,
-  IconSearch,
-  IconSettings,
-  IconActivity,
-  IconCompare,
-  IconTraining,
-  IconExport,
-  IconAlert,
-  IconBrain,
-} from '@/components/icons/NavIcons'
-import { IconChevronDown } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
+import Link from '@/vite/next-compat/link'
+import { usePathname } from '@/vite/next-compat/navigation'
+import { cn, Button } from '@sloughgpt/strui'
+import { IconClose } from '@/components/icons/NavIcons'
+import { ManMark } from '@/components/brand/ManMark'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
-import { CustomDropdown } from './CustomDropdown'
-import { useLocale, LOCALES } from '@/hooks/useLocale'
+import { TrainingIndicator } from './TrainingIndicator'
+import { ConsciousnessSidebarWidget } from './consciousness/ConsciousnessSidebarWidget'
+import { useLocale } from '@/hooks/useLocale'
+import { NAV_SECTIONS, SIDEBAR_ICONS } from '@/lib/navigation'
 
-const workspaceItems = [
-  { path: '/chat', key: 'nav.chat', Icon: IconChat },
-  { path: '/training', key: 'nav.training', Icon: IconTraining },
-  { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
-] as const
-
-const toolsItems = [
-  { path: '/datasets', key: 'nav.datasets', Icon: IconBrain },
-  { path: '/export', key: 'nav.export', Icon: IconExport },
-  { path: '/compare', key: 'nav.compare', Icon: IconCompare },
-  { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
-] as const
-
-const systemItems = [
-  { path: '/models', key: 'nav.models', Icon: IconModels },
-  { path: '/errors', key: 'nav.errors', Icon: IconAlert },
-  { path: '/settings', key: 'nav.settings', Icon: IconSettings },
-] as const
-
-/** Sidebar list — smaller than home quick-action tiles */
-const NAV_ICON = 'h-[1.125rem] w-[1.125rem] shrink-0'
+const NAV_ICON = 'h-4 w-4 shrink-0'
 
 export type SidebarVariant = 'desktop' | 'drawer'
 
 export type SidebarProps = {
   variant?: SidebarVariant
-  /** Called after choosing a nav link (e.g. close mobile drawer). */
+  collapsed?: boolean
+  onToggleCollapse?: () => void
   onNavigate?: () => void
-  /** Close control for drawer variant. */
   onClose?: () => void
 }
 
-export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarProps) {
+export function Sidebar({
+  variant = 'desktop',
+  collapsed = false,
+  onToggleCollapse: _onToggleCollapse,
+  onNavigate,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname()
   const isDrawer = variant === 'drawer'
+  const isCollapsed = collapsed && !isDrawer
   const { t } = useLocale()
 
   const navLinkClass = (active: boolean) =>
     cn(
-      'group relative flex min-h-[2.5rem] items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ease-smooth',
+      'group relative flex min-h-10 items-center gap-2.5 rounded-lg py-1.5 text-[11px] transition-colors duration-200 ease-smooth',
+      isCollapsed ? 'justify-center px-2' : 'px-2.5',
       active
         ? 'bg-primary/[0.13] font-medium text-primary dark:bg-primary/[0.11]'
-: 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
-  )
+        : 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
+    )
 
   const afterNav = onNavigate ? () => onNavigate() : undefined
 
   return (
-    <aside
-      className={cn(
-        'sl-sidebar-surface flex shrink-0 flex-col',
-        isDrawer
-          ? 'h-full w-full min-w-0 pb-[max(0px,env(safe-area-inset-bottom))]'
-          : 'h-dvh w-[var(--sidebar-width)]',
-      )}
-      aria-label="Main navigation"
-    >
-      <div
+    <div className="relative flex h-dvh min-w-0 flex-1">
+      <aside
         className={cn(
-          'flex h-[3.25rem] shrink-0 items-center border-b border-border/30 dark:border-border/50',
-          isDrawer ? 'gap-1 px-2' : 'px-3',
+          'sl-sidebar-surface flex flex-col w-full min-w-0 overflow-hidden',
+          isDrawer ? 'h-full pb-[max(0px,env(safe-area-inset-bottom))]' : 'h-dvh',
         )}
+        data-collapsed={isCollapsed ? 'true' : undefined}
+        aria-label="Main navigation"
       >
-        {isDrawer ? (
-          <Button variant="menu" size="icon" aria-label={t('sidebar.close')} onClick={onClose}>
-            <IconClose className="h-5 w-5" aria-hidden />
-          </Button>
-        ) : null}
-        <Link
-          href="/"
-          className="flex min-w-0 flex-1 items-center gap-3 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={t('sidebar.home')}
-          onClick={afterNav}
+        <div
+          className={cn(
+            'flex h-[var(--app-mobile-header-h)] shrink-0 items-center border-b border-border/30 dark:border-border/50',
+            isDrawer ? 'gap-1 px-2' : isCollapsed ? 'w-fit justify-center px-2' : 'px-3',
+          )}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/60 font-mono text-sm font-bold leading-none tracking-tight text-primary-foreground shadow-sm">
-            S
-          </div>
-          <div className="flex min-w-0 flex-col justify-center gap-0.5 leading-none">
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground">{t('app.name')}</span>
-            {!isDrawer && (
-              <span className="text-[0.625rem] uppercase leading-tight tracking-wider text-muted-foreground">
-                {t('app.console')}
-              </span>
+          {isDrawer ? (
+            <Button variant="menu" size="icon" aria-label={t('sidebar.close')} onClick={onClose}>
+              <IconClose className="h-5 w-5" aria-hidden />
+            </Button>
+          ) : null}
+          <Link
+            href="/"
+            className="flex min-w-0 flex-1 items-center gap-3 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t('sidebar.home')}
+            onClick={afterNav}
+          >
+            <ManMark />
+            {!isCollapsed && (
+              <div className="flex min-w-0 flex-col justify-center gap-px leading-none">
+                <span className="truncate text-[11px] font-semibold tracking-tight text-foreground">
+                  {t('app.name')}
+                </span>
+                {!isDrawer && (
+                  <span className="text-[8px] uppercase leading-tight tracking-wider text-muted-foreground">
+                    {t('app.console')}
+                  </span>
+                )}
+              </div>
             )}
-          </div>
-        </Link>
-      </div>
-
-      <nav
-        className="flex min-h-0 flex-1 flex-col p-3"
-        aria-label="Primary"
-      >
-        <div className={cn("min-h-0 flex-1 overscroll-contain", isDrawer ? "overflow-y-auto scrollbar-hide" : "overflow-y-auto")}>
-          <p
-            className="mb-2 px-3 text-xs font-medium text-muted-foreground"
-            id="sidebar-workspace-heading"
-          >
-            {t('sidebar.workspace')}
-          </p>
-          <ul className="space-y-1" aria-labelledby="sidebar-workspace-heading">
-            {workspaceItems.map((item) => {
-              const active = routeMatchesPath(pathname, item.path)
-              return (
-                <li key={item.path}>
-                  <Link
-                    href={item.path}
-                    aria-current={active ? 'page' : undefined}
-                    className={navLinkClass(active)}
-                    onClick={afterNav}
-                  >
-                    <item.Icon
-                      className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{t(item.key)}</span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-
-          <p
-            className="mb-2 mt-4 px-3 text-xs font-medium text-muted-foreground"
-            id="sidebar-tools-heading"
-          >
-            {t('sidebar.tools')}
-          </p>
-          <ul className="space-y-1" aria-labelledby="sidebar-tools-heading">
-            {toolsItems.map((item) => {
-              const active = routeMatchesPath(pathname, item.path)
-              return (
-                <li key={item.path}>
-                  <Link
-                    href={item.path}
-                    aria-current={active ? 'page' : undefined}
-                    className={navLinkClass(active)}
-                    onClick={afterNav}
-                  >
-                    <item.Icon
-                      className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{t(item.key)}</span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-
-          <p
-            className="mb-2 mt-4 px-3 text-xs font-medium text-muted-foreground"
-            id="sidebar-system-heading"
-          >
-            {t('sidebar.system')}
-          </p>
-          <ul className="space-y-1" aria-labelledby="sidebar-system-heading">
-            {systemItems.map((item) => {
-              const active = routeMatchesPath(pathname, item.path)
-              return (
-                <li key={item.path}>
-                  <Link
-                    href={item.path}
-                    aria-current={active ? 'page' : undefined}
-                    className={navLinkClass(active)}
-                    onClick={afterNav}
-                  >
-                    <item.Icon
-                      className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{t(item.key)}</span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+          </Link>
         </div>
-      </nav>
 
-      <div className="shrink-0 space-y-1 border-t border-border/50 px-3 py-3">
-        <ThemeSwitcher />
-        <CustomDropdown
-          align="start"
-          trigger={
-            <button className="flex items-center justify-between gap-2 w-full px-3 py-2 hover:bg-accent/50 rounded-lg transition-colors cursor-pointer text-sm">
-              <span className="h-7 w-7 shrink-0 rounded-full bg-primary text-primary-foreground text-sm font-medium flex items-center justify-center">
-                A
-              </span>
-              <span className="flex-1 truncate text-sm text-left">{t('sidebar.account')}</span>
-              <IconChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
-            </button>
-          }
-          items={[
-            {
-              label: `${t('sidebar.signOut')} (offline)`,
-              onClick: () => {
-                import('@/lib/toast-store').then(({ useToastStore }) =>
-                  useToastStore.getState().addToast('Auth is running in offline mode. Sign-in coming soon.')
-                ).catch(() => {})
-              },
-            },
-          ]}
-        />
-      </div>
-    </aside>
+        <nav
+          className={cn('flex min-h-0 flex-1 flex-col', isCollapsed ? 'w-fit p-2' : 'p-3')}
+          aria-label="Primary"
+        >
+          <div
+            className={cn(
+              'min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide',
+              isCollapsed && 'w-fit',
+            )}
+          >
+            {(() => {
+              // Longest-prefix match so /workspace/members highlights Members, not Dashboard
+              const allRoutes = NAV_SECTIONS.flatMap((s) => s.routes)
+              let bestPath: string | null = null
+              let bestLen = -1
+              for (const route of allRoutes) {
+                if (routeMatchesPath(pathname, route.path) && route.path.length > bestLen) {
+                  bestPath = route.path
+                  bestLen = route.path.length
+                }
+              }
+              return NAV_SECTIONS.map((section, si) => (
+                <div key={si}>
+                  {si > 0 && (
+                    <div className="my-2 border-t border-border/30 dark:border-border/40" />
+                  )}
+                  {!isCollapsed && (
+                    <p className="mb-1 mt-2.5 px-2.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground first:mt-0.5">
+                      {t(section.labelKey)}
+                    </p>
+                  )}
+                  <ul className="space-y-0.5">
+                    {section.routes.map((route) => {
+                      const active = route.path === bestPath
+                      const RouteIcon = SIDEBAR_ICONS[route.path]
+                      return (
+                        <li key={route.path}>
+                          <Link
+                            href={route.path}
+                            prefetch={false}
+                            aria-current={active ? 'page' : undefined}
+                            className={navLinkClass(active)}
+                            onClick={afterNav}
+                            title={isCollapsed ? t(route.labelKey) : undefined}
+                          >
+                            {RouteIcon && (
+                              <RouteIcon
+                                className={cn(
+                                  NAV_ICON,
+                                  active ? 'opacity-100' : 'opacity-90 dark:opacity-80',
+                                )}
+                                aria-hidden
+                              />
+                            )}
+                            {!isCollapsed && (
+                              <span className="flex-1 truncate">{t(route.labelKey)}</span>
+                            )}
+                          </Link>
+                        </li>
+                      )
+                    })}
+                    {!isCollapsed && t('nav.section.ai') === t(section.labelKey) && (
+                      <li className="mt-0.5">
+                        <ConsciousnessSidebarWidget />
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ))
+            })()}
+          </div>
+        </nav>
+
+        {!isDrawer && (
+          <div
+            className={cn(
+              'shrink-0 border-t border-border/50 px-2.5 py-2.5',
+              isCollapsed && 'w-fit',
+            )}
+          >
+            {!isCollapsed && <TrainingIndicator />}
+            <ThemeSwitcher />
+          </div>
+        )}
+        {isDrawer && (
+          <div className="shrink-0 border-t border-border/50 px-2.5 py-2.5">
+            <TrainingIndicator />
+          </div>
+        )}
+      </aside>
+    </div>
   )
 }

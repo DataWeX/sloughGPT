@@ -52,11 +52,11 @@ data:
             },
             "textMode": "auto"
           },
-          "title": "Audit log entries",
+          "title": "Inferences total",
           "type": "stat",
           "targets": [
             {
-              "expr": "sloughgpt_audit_logs_total{job=~\"sloughgpt.*\"}",
+              "expr": "sloughgpt_inferences_total{job=~\"sloughgpt.*\"}",
               "refId": "A"
             }
           ]
@@ -97,7 +97,7 @@ data:
             },
             "textMode": "auto"
           },
-          "title": "CPU usage (host)",
+          "title": "CPU usage",
           "type": "stat",
           "targets": [
             {
@@ -142,7 +142,7 @@ data:
             },
             "textMode": "auto"
           },
-          "title": "Memory % (host)",
+          "title": "Memory %",
           "type": "stat",
           "targets": [
             {
@@ -185,11 +185,11 @@ data:
             },
             "textMode": "auto"
           },
-          "title": "WebSocket connections",
+          "title": "Tokens generated",
           "type": "stat",
           "targets": [
             {
-              "expr": "sloughgpt_websocket_connections{job=~\"sloughgpt.*\"}",
+              "expr": "sloughgpt_tokens_generated_total{job=~\"sloughgpt.*\"}",
               "refId": "A"
             }
           ]
@@ -230,7 +230,7 @@ data:
                   { "color": "green", "value": null }
                 ]
               },
-              "unit": "reqpm"
+              "unit": "short"
             }
           },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
@@ -239,12 +239,12 @@ data:
             "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
             "tooltip": { "mode": "single", "sort": "none" }
           },
-          "title": "Rate limit ceiling (req/min)",
+          "title": "Requests by path",
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sloughgpt_rate_limit_requests{job=~\"sloughgpt.*\"}",
-              "legendFormat": "limit",
+              "expr": "sloughgpt_requests_total{job=~\"sloughgpt.*\"}",
+              "legendFormat": "{{path}}",
               "refId": "A"
             }
           ]
@@ -409,17 +409,17 @@ data:
             "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
             "tooltip": { "mode": "single", "sort": "none" }
           },
-          "title": "WS connections & rate-limit clients",
+          "title": "Inferences & tokens",
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sloughgpt_websocket_connections{job=~\"sloughgpt.*\"}",
-              "legendFormat": "websockets",
+              "expr": "sloughgpt_inferences_total{job=~\"sloughgpt.*\"}",
+              "legendFormat": "inferences",
               "refId": "A"
             },
             {
-              "expr": "sloughgpt_active_clients{job=~\"sloughgpt.*\"}",
-              "legendFormat": "active_clients",
+              "expr": "sloughgpt_tokens_generated_total{job=~\"sloughgpt.*\"}",
+              "legendFormat": "tokens",
               "refId": "B"
             }
           ]

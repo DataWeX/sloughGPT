@@ -1,10 +1,12 @@
 import React, {useState, useCallback} from 'react';
 import {FlatList, TextInput, Keyboard, Pressable} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
+import {useHapticPress} from '../hooks/useHapticPress';
 
 interface SearchResult {
   sessionId: string;
@@ -15,12 +17,13 @@ interface SearchResult {
 }
 
 export function SearchScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const {loadSession} = useChatStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const accent = theme.color9?.val || '#7C52C4';
+  const accent = colors.primary;
+  const hapticPress = useHapticPress();
 
   const handleSearch = useCallback(async (text: string) => {
     setQuery(text);
@@ -72,25 +75,25 @@ export function SearchScreen() {
 
         <YStack
           marginHorizontal={16}
-          backgroundColor="rgba(124, 82, 196, 0.04)"
+          backgroundColor={colors.primaryAlpha(0.04)}
           borderRadius={10}
           paddingHorizontal={14}
           borderWidth={0.5}
-          borderColor="rgba(124, 82, 196, 0.12)"
+          borderColor={colors.primaryAlpha(0.12)}
           alignItems="center">
-          <Icon name="search" size={16} color={(theme.color10?.val || '#9B95A8')} />
+          <Icon name="search" size={16} color={colors.textMuted} />
           <TextInput
-            style={{flex: 1, fontSize: 14, color: '#1A1625', paddingVertical: 10, marginLeft: 8}}
+            style={{flex: 1, fontSize: 14, color: colors.text, paddingVertical: 10, marginLeft: 8}}
             value={query}
             onChangeText={handleSearch}
             placeholder="Search across all conversations..."
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor={colors.textMuted}
             autoFocus
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <Pressable onPress={() => handleSearch('')}>
-              <Icon name="x" size={16} color={(theme.color10?.val || '#9B95A8')} />
+            <Pressable onPress={hapticPress('light', () => handleSearch(''))} accessible={true} accessibilityRole="button" accessibilityLabel="Clear search">
+              <Icon name="x" size={16} color={colors.textMuted} />
             </Pressable>
           )}
         </YStack>
@@ -112,6 +115,9 @@ export function SearchScreen() {
           keyExtractor={(item, i) => `${item.sessionId}-${item.role}-${i}`}
           keyboardDismissMode="on-drag"
           contentContainerStyle={{paddingHorizontal: 16, paddingTop: 12, gap: 8}}
+          removeClippedSubviews
+          maxToRenderPerBatch={10}
+          windowSize={11}
           renderItem={({item}) => (
             <YStack
               backgroundColor="$background"
@@ -119,7 +125,7 @@ export function SearchScreen() {
               padding={14}
               borderWidth={0.5}
               borderColor="$borderColor"
-              onPress={() => handleResultPress(item)}>
+              onPress={hapticPress('selection', () => handleResultPress(item))}>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
                 <Text fontSize={11} fontWeight="600" color="$color9" flex={1} numberOfLines={1}>
                   {item.sessionTitle || 'Untitled'}

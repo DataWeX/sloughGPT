@@ -3,13 +3,14 @@
 Quick training example - Train a small model in minutes.
 
 For production runs with ``config.yaml`` + CLI overrides (same stack, merged hyperparameters),
-use ``python3 cli.py train --help`` (see ``apps/cli/README.md``).
+use ``sloughgpt train --help`` (see ``apps/cli/README.md``).
 
-Periodic ``step_*.pt`` under the trainer ``checkpoint_dir`` embeds ``stoi`` / ``itos`` /
-``chars`` for fair ``cli.py eval``; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+Periodic ``<dataset>_<timestamp>.soul`` checkpoints under the trainer ``checkpoint_dir`` embed
+``stoi`` / ``itos`` / ``chars`` for fair ``sloughgpt eval``; see ``docs/policies/CONTRIBUTING.md``
+(*Checkpoint vocabulary*).
 """
 
-from domains.training.train_pipeline import SloughGPTTrainer
+from domain.training._internal.train_pipeline import SloughGPTTrainer
 
 
 def main():
@@ -19,7 +20,7 @@ def main():
 
     # Create trainer with small config for quick training
     trainer = SloughGPTTrainer(
-        data_path='datasets/shakespeare/input.txt',
+        data_path='data/shakespeare/input.txt',
         n_embed=128,
         n_layer=4,
         n_head=4,
@@ -41,9 +42,9 @@ def main():
         print(f"\nPrompt: {prompt}")
         print(f"Generated: {text[:200]}...")
 
-    # Save
-    trainer.save("models/quick_model.pt")
-    print("\nModel saved!")
+    # Save (path without extension — trainer appends .soul)
+    trainer.save("models/quick_model")
+    print("\nModel saved as models/quick_model.soul!")
 
 
 if __name__ == "__main__":

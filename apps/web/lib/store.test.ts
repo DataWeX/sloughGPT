@@ -1,33 +1,40 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const localStorageMock = (() => {
-  let store = new Map<string, string>()
-  return {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => store.set(key, value),
-    removeItem: (key: string) => store.delete(key),
-    clear: () => store.clear(),
-    get length() { return store.size },
-    key: (i: number) => [...store.keys()][i] ?? null,
+const { chatDBMock } = vi.hoisted(() => {
+  const chatDBMock = {
+    getKV: vi.fn().mockResolvedValue(undefined),
+    setKV: vi.fn().mockResolvedValue(undefined),
+    deleteKV: vi.fn().mockResolvedValue(undefined),
   }
-})()
+  return { chatDBMock }
+})
 
-vi.stubGlobal('localStorage', localStorageMock)
+vi.mock('@/lib/db', () => ({
+  chatDB: chatDBMock,
+}))
 
-import { useAppStore, getKnowledgeContext } from './store'
+import { useAppStore, DEFAULT_SETTINGS } from './store'
 
 beforeEach(() => {
-  useAppStore.setState({ settings: useAppStore.getInitialState().settings, injectedKnowledge: [] })
+  useAppStore.setState({ settings: DEFAULT_SETTINGS, injectedKnowledge: [] })
+  chatDBMock.getKV.mockClear()
+  chatDBMock.setKV.mockClear()
+  chatDBMock.deleteKV.mockClear()
 })
 
 describe('useAppStore', () => {
   it('has default settings', () => {
     const { settings } = useAppStore.getState()
     expect(settings.apiUrl).toBe('http://localhost:8000')
-    expect(settings.defaultModel).toBe('gpt2')
-    expect(settings.defaultTemp).toBe(0.8)
+    expect(settings.defaultTemp).toBe(0.7)
     expect(settings.theme).toBe('light')
     expect(settings.streaming).toBe(true)
+  })
+
+  it('has default connection-banner timing flags', () => {
+    const { settings } = useAppStore.getState()
+    expect(settings.bannerGraceMs).toBe(5_000)
+    expect(settings.bannerHoldMs).toBe(4_000)
   })
 
   it('starts with empty knowledge', () => {
@@ -41,14 +48,24 @@ describe('useAppStore', () => {
       const { settings } = useAppStore.getState()
       expect(settings.defaultTemp).toBe(0.5)
       expect(settings.theme).toBe('dark')
-      expect(settings.defaultModel).toBe('gpt2')
     })
 
     it('preserves unchanged fields', () => {
-      useAppStore.getState().updateSettings({ defaultModel: 'llama' })
+      useAppStore.getState().updateSettings({ defaultMaxTokens: 500 })
       const { settings } = useAppStore.getState()
-      expect(settings.defaultModel).toBe('llama')
+      expect(settings.defaultMaxTokens).toBe(500)
       expect(settings.theme).toBe('light')
+    })
+
+    it('persists settings to MogDB', () => {
+      vi.useFakeTimers()
+      useAppStore.getState().updateSettings({ defaultTemp: 0.5 })
+      vi.advanceTimersByTime(500)
+      expect(chatDBMock.setKV).toHaveBeenCalledWith(
+        'app-settings',
+        expect.objectContaining({ defaultTemp: 0.5 }),
+      )
+      vi.useRealTimers()
     })
   })
 
@@ -66,6 +83,14 @@ describe('useAppStore', () => {
       useAppStore.getState().addKnowledge('fact 1')
       useAppStore.getState().addKnowledge('fact 2')
       expect(useAppStore.getState().injectedKnowledge).toHaveLength(2)
+    })
+
+    it('persists knowledge to MogDB', () => {
+      useAppStore.getState().addKnowledge('test fact')
+      expect(chatDBMock.setKV).toHaveBeenCalledWith(
+        'app-knowledge',
+        expect.arrayContaining([expect.objectContaining({ content: 'test fact' })]),
+      )
     })
   })
 
@@ -88,6 +113,17 @@ describe('useAppStore', () => {
       useAppStore.getState().removeKnowledge('nonexistent')
       expect(useAppStore.getState().injectedKnowledge).toHaveLength(1)
     })
+
+    it('persists removal to MogDB', () => {
+      useAppStore.getState().addKnowledge('fact 1')
+      useAppStore.getState().addKnowledge('fact 2')
+      const idToRemove = useAppStore.getState().injectedKnowledge[0].id
+      useAppStore.getState().removeKnowledge(idToRemove)
+      expect(chatDBMock.setKV).toHaveBeenCalledWith(
+        'app-knowledge',
+        expect.arrayContaining([expect.objectContaining({ content: 'fact 2' })]),
+      )
+    })
   })
 
   describe('clearKnowledge', () => {
@@ -97,33 +133,11 @@ describe('useAppStore', () => {
       useAppStore.getState().clearKnowledge()
       expect(useAppStore.getState().injectedKnowledge).toEqual([])
     })
-  })
-})
 
-describe('getKnowledgeContext', () => {
-  it('returns empty string when no knowledge', () => {
-    const result = getKnowledgeContext()
-    expect(result).toBe('')
-  })
-
-  it('includes customContext', () => {
-    useAppStore.getState().updateSettings({ customContext: 'You are a helpful assistant.' })
-    const result = getKnowledgeContext()
-    expect(result).toContain('You are a helpful assistant.')
-    expect(result).toMatch(/^\n\n\[IMPORTANT KNOWLEDGE/)
-  })
-
-  it('includes injected knowledge items', () => {
-    useAppStore.getState().addKnowledge('Paris is the capital of France')
-    const result = getKnowledgeContext()
-    expect(result).toContain('Paris is the capital of France')
-  })
-
-  it('combines customContext and injected knowledge', () => {
-    useAppStore.getState().updateSettings({ customContext: 'Be concise.' })
-    useAppStore.getState().addKnowledge('The sky is blue')
-    const result = getKnowledgeContext()
-    expect(result).toContain('Be concise.')
-    expect(result).toContain('The sky is blue')
+    it('clears knowledge from MogDB', () => {
+      useAppStore.getState().addKnowledge('fact 1')
+      useAppStore.getState().clearKnowledge()
+      expect(chatDBMock.deleteKV).toHaveBeenCalledWith('app-knowledge')
+    })
   })
 })

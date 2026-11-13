@@ -1,0 +1,564 @@
+"""Tests for inference router endpoints (non-streaming, sessions, suggestions, tools, operations, context)."""
+
+import json
+import uuid
+from unittest.mock import MagicMock, patch
+
+from infrastructure.contract import REGISTRY
+
+from apps.api.server.tests.test_support import get_test_client
+
+client = get_test_client()
+
+
+class TestInferenceRoot:
+    def test_root_returns_status(self):
+        resp = client.get("/")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["name"] == "SloughGPT API"
+        assert body["version"] == "1.0.0"
+        assert body["status"] == "running"
+
+    def test_root_has_endpoints_dict(self):
+        resp = client.get("/")
+        body = resp.json()["data"]
+        assert "endpoints" in body
+        assert isinstance(body["endpoints"], dict)
+
+
+class TestInfoEndpoints:
+    def test_info_returns_model_info(self):
+        resp = client.get("/info")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "model" in body
+        assert "loaded" in body["model"]
+
+    def test_info_soul_returns_dict(self):
+        resp = client.get("/info/soul")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert isinstance(body, dict)
+
+
+class TestSuggestions:
+    def test_suggestions_returns_list(self):
+        resp = client.get("/chat/suggestions")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert isinstance(body, list)
+        assert len(body) >= 4
+
+    def test_chat_suggestions_returns_same(self):
+        resp1 = client.get("/chat/suggestions")
+        resp2 = client.get("/chat/suggestions")
+        assert resp1.json()["data"] == resp2.json()["data"]
+
+    def test_suggestions_have_text_and_icon(self):
+        resp = client.get("/chat/suggestions")
+        for item in resp.json()["data"]:
+            assert "text" in item
+            assert "icon" in item
+
+
+class TestChatTools:
+    def test_list_tools_returns_dict(self):
+        resp = client.get("/chat/tools")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "tools" in body
+        assert isinstance(body["tools"], list)
+
+
+class TestProviders:
+    def test_list_providers_returns_dict(self):
+        resp = client.get("/providers")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert isinstance(body["data"], dict)
+
+    def test_list_providers_survives_unserialisable_metadata(self):
+        """A plugin's odd metadata must not take the whole listing down.
+
+        This is the regression test for `GET /providers` answering
+        500 E_SERIALIZATION in production. `list_model_providers` already
+        guards each provider with a try/except, but that guard sits *inside*
+        the method: a metadata value holding a datetime or an engine handle is
+        well-formed Python, so nothing raises there. It fails later, in the
+        response encoder, outside the guard — by which point the handler has
+        returned and no per-provider degradation can happen.
+
+        The previous test here asserted only `isinstance(body["data"], dict)`
+        with an **empty** registry, so it passed on `{}` and could not have
+        caught this however many times it ran.
+
+        A provider is a plugin; one returning something unserialisable is a
+        normal state, not an exceptional one, so the listing degrades that
+        field instead of failing.
+        """
+        import datetime
+
+        from domain.models._internal.provider import _providers, register_provider
+
+        class _Caps:
+            chat = True
+            streaming = True
+            embedding = False
+            vision = False
+
+        class _OddProvider:
+            model_id = "odd-model"
+            capabilities = _Caps
+            metadata = {"loaded_at": datetime.datetime.now(), "handle": object()}
+
+        register_provider("slonet-native", _OddProvider())
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, (
+                f"one plugin's metadata took the listing down: {resp.text[:200]}"
+            )
+            data = resp.json()["data"]
+            entry = data["slonet-native"]
+            assert entry["model_id"] == "odd-model"
+            # coerced to something the encoder can carry, not dropped
+            assert isinstance(entry["metadata"]["loaded_at"], str)
+            assert "handle" in entry["metadata"]
+        finally:
+            _providers.pop("slonet-native", None)
+
+
+class TestSessionCRUD:
+    def test_create_session(self):
+        resp = client.post("/chat/sessions", json={"name": "test session"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert "session_id" in body["data"]
+
+    def test_create_session_with_id(self):
+        sid = f"test_{uuid.uuid4().hex[:8]}"
+        resp = client.post("/chat/sessions", json={"session_id": sid, "name": "custom id"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["session_id"] == sid
+
+    def test_list_sessions(self):
+        resp = client.get("/chat/sessions")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert isinstance(body["data"], list)
+
+    def test_list_sessions_filter_archived(self):
+        resp = client.get("/chat/sessions?archived=false")
+        assert resp.status_code == 200
+        assert isinstance(resp.json()["data"], list)
+
+    def test_get_current_session(self):
+        resp = client.get("/chat/sessions/current")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+
+    def test_upsert_session(self):
+        sid = f"upsert_{uuid.uuid4().hex[:8]}"
+        client.post("/chat/sessions", json={"session_id": sid, "name": "orig"})
+        resp = client.put(f"/chat/sessions/{sid}", json={"name": "updated"})
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "saved"
+
+    def test_delete_session_not_found(self):
+        resp = client.delete(f"/chat/sessions/nonexistent_{uuid.uuid4().hex[:8]}")
+        assert resp.status_code == 404
+
+    def test_delete_session_clears_slonet_kv(self):
+        """Deleting a session drops its cross-turn KV state on the provider."""
+        from domain.models._internal.provider import _providers, register_provider
+
+        class _FakeProvider:
+            def __init__(self):
+                self.cleared = []
+
+            def clear_session(self, session_id):
+                self.cleared.append(session_id)
+
+        fake = _FakeProvider()
+        register_provider("slonet-native", fake)
+        try:
+            sid = f"kvdel_{uuid.uuid4().hex[:8]}"
+            client.post("/chat/sessions", json={"session_id": sid, "name": "kv"})
+            resp = client.delete(f"/chat/sessions/{sid}")
+            assert resp.status_code == 200
+            assert sid in fake.cleared
+        finally:
+            _providers.pop("slonet-native", None)
+
+    def test_delete_session_without_provider_still_succeeds(self):
+        """KV clear is best-effort — delete works even with no slonet provider."""
+        from domain.models._internal.provider import _providers
+
+        _providers.pop("slonet-native", None)
+        sid = f"kvmiss_{uuid.uuid4().hex[:8]}"
+        client.post("/chat/sessions", json={"session_id": sid, "name": "kv"})
+        resp = client.delete(f"/chat/sessions/{sid}")
+        assert resp.status_code == 200
+
+    def test_search_sessions_empty_query(self):
+        resp = client.get("/chat/sessions/search?q=")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"] == []
+
+    def test_search_sessions_with_query(self):
+        resp = client.get("/chat/sessions/search?q=test")
+        assert resp.status_code == 200
+        assert isinstance(resp.json()["data"], list)
+
+    def test_search_sessions_shares_one_index_with_system_search(self):
+        """Extraction invariant: the legacy endpoint and the system-wide
+        search adapter must read ONE cache, not two copies of the
+        session corpus."""
+        import routers.inference as inference_mod
+
+        from domain.search.registry import get_registry
+        from domain.search.session_index import get_session_index
+
+        assert inference_mod._session_search_index is get_session_index()
+        adapter = get_registry().get("sessions")
+        assert adapter is not None
+        assert adapter._resolve() is get_session_index()
+
+
+class TestSessionMetadataIndex:
+    """Regressions for the /chat/sessions metadata index (card 6b728f97)."""
+
+    @staticmethod
+    def _router():
+        from main import app
+
+        def walk(routes):
+            for r in routes:
+                inner = getattr(r, "original_router", None)
+                if inner is not None and hasattr(inner, "routes"):
+                    yield from walk(inner.routes)
+                else:
+                    yield r
+
+        for r in walk(app.routes):
+            ep = getattr(r, "endpoint", None)
+            if getattr(r, "path", None) == "/chat/sessions" and getattr(ep, "__self__", None):
+                return ep.__self__
+        raise AssertionError("inference router instance not found on /chat/sessions")
+
+    def test_large_session_survives_metadata_index(self, tmp_path, monkeypatch):
+        # >4KB session files truncated the 4KB header read; json.loads on the
+        # prefix raised and the except clause silently dropped the session.
+        fat = {
+            "id": "fat_session_4kb",
+            "name": "",
+            "created_at": "2026-10-23T00:00:00",
+            "updated_at": "2026-10-23T00:00:00",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "How do I configure the gateway?\n" + ("context " * 400),
+                },
+                {
+                    "role": "assistant",
+                    "content": "Use the gateway config file.\n" + ("detail " * 400),
+                },
+            ],
+        }
+        session_file = tmp_path / "fat_session_4kb.json"
+        session_file.write_text(json.dumps(fat), encoding="utf-8")
+        assert session_file.stat().st_size > 4096
+        router = self._router()
+        monkeypatch.setattr(router, "_SESSIONS_DIR", tmp_path)
+        router._session_metadata_cache = None
+        router._session_metadata_cache_ts = 0
+        try:
+            rows = router._build_session_metadata_index()
+        finally:
+            router._session_metadata_cache = None
+            router._session_metadata_cache_ts = 0
+        by_id = {row["id"]: row for row in rows}
+        assert "fat_session_4kb" in by_id
+        # Name derives from the FIRST message's first line via the shared helper.
+        assert by_id["fat_session_4kb"]["name"] == "How do I configure the gateway?"
+        assert by_id["fat_session_4kb"]["message_count"] == 2
+
+    def test_save_session_invalidates_metadata_index(self):
+        router = self._router()
+        router._session_metadata_cache = [{"id": "stale"}]
+        router._save_session(f"sess_inv_{uuid.uuid4().hex[:8]}", {"messages": []})
+        assert router._session_metadata_cache is None
+
+    def test_derive_session_name_rules(self):
+        derive = self._router()._derive_session_name
+        assert derive([{"content": "Topic line\nlong body"}], "sid") == "Topic line"
+        assert derive([{"content": ""}], "sid") == "sid"
+        assert derive([], "sid") == "sid"
+        assert derive([{"content": "x" * 80}], "sid") == "x" * 60
+
+
+class TestContextEndpoints:
+    def test_inspect_context(self):
+        resp = client.get("/context/inspect")
+        assert resp.status_code == 200
+
+    def test_get_facts(self):
+        resp = client.get("/context/facts")
+        assert resp.status_code == 200
+
+    def test_reset_context(self):
+        resp = client.post("/context/reset")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body.get("reset") == "session"
+
+    def test_reset_context_all(self):
+        resp = client.post("/context/reset?all=true")
+        assert resp.status_code == 200
+        assert resp.json()["data"].get("reset") == "all"
+
+
+class TestGenerateRequiresModel:
+    def test_generate_returns_503_without_model(self):
+        resp = client.post("/inference/generate", json={"prompt": "hello"})
+        assert resp.status_code == 503
+
+    def test_generate_stream_returns_error_without_model(self):
+        resp = client.post("/inference/generate/stream", json={"prompt": "hello"})
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+
+
+class TestChatRequiresModel:
+    def test_chat_reports_missing_model_as_stream_error(self):
+        """POST /chat is streaming-only, so a turn that cannot start is reported inside the stream.
+
+        ``test_support`` no-ops ReadinessGateMiddleware for this suite (so
+        schema-validation tests stay observable), which is why the answer here
+        is an SSE error frame rather than a status. In the deployed app the
+        gate answers 503 *before* the handler for /chat when no model is
+        materialized — that contract is pinned in
+        tests/server/test_readiness_gate.py.
+        """
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        assert "No model loaded" in resp.text
+
+
+class TestVoiceEndpoints:
+    def test_voice_upload_requires_audio(self):
+        from io import BytesIO
+
+        files = {"file": ("test.txt", BytesIO(b"not audio"), "text/plain")}
+        resp = client.post("/chat/voice/test_session", files=files)
+        assert resp.status_code == 400
+
+    def test_get_voice_audio_not_found(self):
+        resp = client.get("/chat/audio/nonexistent/nonexistent.m4a")
+        assert resp.status_code in (403, 404)
+
+
+class TestSchemaValidation:
+    def test_generate_missing_prompt(self):
+        resp = client.post("/inference/generate", json={})
+        assert resp.status_code == 422
+
+    def test_chat_missing_messages(self):
+        resp = client.post("/chat", json={})
+        assert resp.status_code == 422
+
+    def test_chat_empty_messages_list(self):
+        """An empty list is semantic validation, and semantics live in the turn.
+
+        Pydantic can only enforce that ``messages`` is present at the wire
+        level; "contains a user message" is the turn's own gate, so the failure
+        arrives as an SSE error frame like every other in-turn failure rather
+        than as 400/422. Which gate fires first depends on load state (this
+        suite has no model, so readiness wins) — the frame is the contract.
+        """
+        resp = client.post("/chat", json={"messages": []})
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        assert '"status": "error"' in resp.text
+        assert "No model loaded" in resp.text or "No user message" in resp.text
+
+    def test_generate_temperature_out_of_range(self):
+        resp = client.post("/inference/generate", json={"prompt": "hi", "temperature": 5.0})
+        assert resp.status_code == 422
+
+
+class TestContextStoreFact:
+    @patch("routers.inference._instance._get_context_core")
+    def test_store_fact_success(self, mock_get_ctx):
+        ctx = MagicMock()
+        mock_get_ctx.return_value = ctx
+        resp = client.post("/context/fact", params={"key": "capital", "value": "London"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["stored"] == "capital"
+        ctx.store_fact.assert_called_once_with("capital", "London")
+
+    @patch("routers.inference._instance._get_context_core")
+    def test_store_fact_no_context(self, mock_get_ctx):
+        mock_get_ctx.return_value = None
+        resp = client.post("/context/fact", params={"key": "k", "value": "v"})
+        assert resp.status_code in (500, 503)
+
+
+class TestContextGetFactsWithQuery:
+    @patch("routers.inference._instance._get_context_core")
+    def test_get_facts_with_query(self, mock_get_ctx):
+        ctx = MagicMock()
+        ctx.search_semantic.return_value = [{"key": "k1", "score": 0.9}]
+        mock_get_ctx.return_value = ctx
+        resp = client.get("/context/facts", params={"query": "capital"})
+        assert resp.status_code == 200
+        ctx.search_semantic.assert_called_once_with("capital")
+
+
+class TestSessionGetSingle:
+    def test_get_session_not_found(self):
+        resp = client.get(f"/chat/sessions/missing_{uuid.uuid4().hex[:8]}")
+        assert resp.status_code == 404
+
+
+class TestOperations:
+    def test_list_operations(self):
+        resp = client.get("/operations")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "operations" in body
+        assert "counts" in body
+
+    def test_list_operations_with_type_filter(self):
+        resp = client.get("/operations", params={"type": "training"})
+        assert resp.status_code == 200
+
+
+class TestCancelOperation:
+    def test_cancel_nonexistent_operation(self):
+        resp = client.post(f"/cancel/{uuid.uuid4().hex[:12]}")
+        assert resp.status_code == 404
+
+
+class TestCancelAllOperations:
+    def test_cancel_all_returns_empty(self):
+        resp = client.post("/cancel-all")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "cancelled" in body
+        assert isinstance(body["cancelled"], list)
+
+    def test_cancel_all_with_type_filter(self):
+        resp = client.post("/cancel-all", params={"type": "training"})
+        assert resp.status_code == 200
+
+
+class TestPurgeOperations:
+    def test_purge_returns_count(self):
+        resp = client.post("/operations/purge")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "purged" in body
+        assert "elapsed_ms" in body
+
+    def test_purge_with_custom_age(self):
+        resp = client.post("/operations/purge", params={"max_age_s": 60.0})
+        assert resp.status_code == 200
+
+
+class TestChatControl:
+    def test_control_cancel_no_active_stream(self):
+        resp = client.post(
+            "/chat/control",
+            json={"session_id": "test_session", "action": "cancel"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["cancelled"] is False
+
+    def test_control_approve_stores(self):
+        resp = client.post(
+            "/chat/control",
+            json={
+                "session_id": "test_session",
+                "action": "approve",
+                "tool_name": "web_search",
+                "approved": True,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["stored"] is True
+
+    def test_control_context_stores(self):
+        resp = client.post(
+            "/chat/control",
+            json={
+                "session_id": "test_session",
+                "action": "context",
+                "context": "extra context info",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["stored"] is True
+
+    def test_control_invalid_action(self):
+        resp = client.post(
+            "/chat/control",
+            json={"session_id": "s", "action": "invalid"},
+        )
+        assert resp.status_code == 422
+
+
+class TestDeleteSessionThenGet:
+    def test_get_deleted_session_returns_404(self):
+        sid = f"delget_{uuid.uuid4().hex[:8]}"
+        client.post("/chat/sessions", json={"session_id": sid, "name": "temp"})
+        client.delete(f"/chat/sessions/{sid}")
+        resp = client.get(f"/chat/sessions/{sid}")
+        assert resp.status_code == 404
+
+
+class TestSchemaValidationExtended:
+    def test_chat_control_missing_session_id(self):
+        resp = client.post("/chat/control", json={"action": "cancel"})
+        assert resp.status_code == 422
+
+    def test_chat_control_missing_action(self):
+        resp = client.post("/chat/control", json={"session_id": "s"})
+        assert resp.status_code == 422
+
+
+class TestSessionsDescriptorProjection:
+    """The chat.sessions.list descriptor must project an honest registry row."""
+
+    def test_chat_sessions_list_registered(self):
+        routes = {(r["method"], r["path"]): r for r in REGISTRY.routes()}
+        entry = routes[("GET", "/chat/sessions")]
+        assert entry["name"] == "chat.sessions.list"
+        assert entry["auth_scope"] == "authenticated"
+        assert entry["idempotent"] is True
+        assert entry["module"] == "routers.inference"
+        # params: JSON Schema projection of the declared query params (archived)
+        assert set(entry["params"]["properties"]) == {"archived"}
+        # result derives from SessionModel — the five index fields, always present
+        items = entry["result"]["items"]
+        props = items["properties"]
+        for field in ("id", "name", "created_at", "updated_at", "message_count"):
+            assert field in props, f"SessionModel missing {field}"
+
+    def test_chat_sessions_list_served_route_matches_descriptor(self):
+        resp = client.get("/chat/sessions")
+        assert resp.status_code == 200
+        rows = resp.json()["data"]
+        assert isinstance(rows, list)
+        # Wire rows carry exactly the SessionModel fields (extra="allow" lets
+        # the index grow, but every model field must be present per row).
+        for row in rows[:3]:
+            for field in ("id", "name", "created_at", "updated_at", "message_count"):
+                assert field in row, f"row missing {field}"

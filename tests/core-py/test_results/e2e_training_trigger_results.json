@@ -1,0 +1,7 @@
+[
+  {
+    "test": "e2e_training_config_elements",
+    "passed": false,
+    "detail": "elements={'has_method': True, 'has_epochs': False, 'has_lr': False, 'has_batch': False}"
+  }
+]

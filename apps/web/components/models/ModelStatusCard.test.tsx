@@ -9,7 +9,7 @@ describe('ModelStatusCard', () => {
 
   const base = {
     isOnline: true,
-    health: { model_loaded: true, model_type: 'gpt2', inference_count: 42 },
+    health: { status: 'healthy', model_loaded: true, model_type: 'gpt2', inference_count: 42, summary: 'ok' },
     currentSoul: 'friendly',
     activeCheckpoint: null,
     modelsCount: 5,
@@ -34,7 +34,8 @@ describe('ModelStatusCard', () => {
 
   it('shows loading state in KPIs when loading', () => {
     render(<ModelStatusCard {...base} modelsLoading soulsLoading checkpointsLoading />)
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1)
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows checkpoints count', () => {

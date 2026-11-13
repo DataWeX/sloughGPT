@@ -1,0 +1,187 @@
+'use client'
+
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import { Input, Spinner } from '@sloughgpt/strui'
+import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
+import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
+import { truncate } from '@/lib/conversations-utils'
+
+interface SearchResult {
+  session: ChatSession
+  matches: DBChatMessage[]
+}
+
+interface ConversationSearchProps {
+  open: boolean
+  onClose: () => void
+  onNavigate: (sessionId: string) => void
+}
+
+function snippet(content: string, query: string, maxLen = 100): React.ReactNode {
+  const q = query.toLowerCase()
+  const idx = content.toLowerCase().indexOf(q)
+  if (idx === -1) return truncate(content, maxLen)
+  const start = Math.max(0, idx - 40)
+  const end = Math.min(content.length, idx + q.length + 40)
+  let s = content.slice(start, end)
+  if (start > 0) s = `…${s}`
+  if (end < content.length) s = `${s}…`
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = s.split(new RegExp(`(${escaped})`, 'gi'))
+  return parts.map((part, i) =>
+    part.toLowerCase() === q ? (
+      <mark key={i} className="bg-primary/20 rounded px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  )
+}
+
+export const ConversationSearch = memo(function ConversationSearch({
+  open,
+  onClose,
+  onNavigate,
+}: ConversationSearchProps) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const doSearch = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      setResults([])
+      return
+    }
+    setLoading(true)
+    try {
+      const local = await chatDB.searchAllSessions(q)
+      setResults(local)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('')
+      setResults([])
+      return
+    }
+    inputRef.current?.focus()
+  }, [open])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doSearch(query), 200)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [query, doSearch])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') onClose()
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/40" />
+      <div
+        className="relative z-10 w-full max-w-xl mx-4 bg-background rounded-xl border border-border shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Search all conversations"
+      >
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
+          <IconSearch className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+          <Input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search all conversations…"
+            className="border-0 shadow-none h-8 text-sm px-0 focus-visible:ring-0"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('')
+                setResults([])
+                inputRef.current?.focus()
+              }}
+              className="active:bg-muted text-muted-foreground hover:text-foreground p-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              aria-label="Clear"
+            >
+              <IconX className="h-4 w-4" />
+            </button>
+          )}
+          <kbd className="hidden sm:inline-flex text-xs text-muted-foreground/50 border border-border/40 rounded px-1.5 py-0.5 font-mono">
+            Esc
+          </kbd>
+        </div>
+
+        <div
+          className="max-h-[50vh] min-h-[12rem] overflow-y-auto p-2"
+          aria-busy={loading}
+          aria-live="polite"
+        >
+          {loading && (
+            <div className="flex items-center justify-center py-8">
+              <Spinner size="sm" />
+            </div>
+          )}
+
+          {!loading && query && results.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No results for &ldquo;{query}&rdquo;
+            </p>
+          )}
+
+          {!loading && results.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground/60 px-1.5 py-1 uppercase tracking-wider font-medium tabular-nums">
+                {results.length} conversation{results.length !== 1 ? 's' : ''} found
+              </p>
+              {results.map((r) => (
+                <button
+                  type="button"
+                  key={r.session.id}
+                  onClick={() => {
+                    onNavigate(r.session.id)
+                    onClose()
+                  }}
+                  className="active:bg-muted w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <IconMessage className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium truncate">{r.session.name}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium shrink-0 tabular-nums">
+                      {r.matches.length} match{r.matches.length !== 1 ? 'es' : ''}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground/70 leading-relaxed pl-5.5">
+                    {snippet(r.matches[0]?.content || r.session.name, query)}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!query && !loading && (
+            <div className="py-8 text-center">
+              <IconSearch className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground/50">
+                Type to search across all conversations
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+})

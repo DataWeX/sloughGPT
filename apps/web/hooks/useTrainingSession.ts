@@ -1,405 +1,604 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { trainingJobsController } from '@/lib/controllers'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { notify } from '@/lib/notify'
+import { useState, useCallback, useEffect } from 'react'
+import { trainingFacade } from '@/lib/training-facade'
 
-export interface TrainingSessionState {
-  phase: string
-  loss: number | null
-  progress: number
-  epoch: number
-  totalEpochs: number
-  message: string
-  startTime: number | null
-  lossHistory: { step: number; loss: number }[]
-  evalResult: string | null
-  finetunedModelPath: string | null
-  finetunedModelLoss: number | null
+const jobsApi = trainingFacade.jobs
+const turboApi = trainingFacade.turbo
+import { operationsStore } from '@/lib/operations-store'
+import {
+  appShellStore,
+  readTraining,
+  writeTraining,
+  isTrainingActive,
+  type TrainingShellState,
+  type TrainingToastFn,
+} from '@/lib/app-shell'
+import { logger, trackEvent } from '@/lib/dev-log'
+import { extractErrorMessage } from '@/lib/error-utils'
+import type { TrainingJob } from '@/lib/training-controller'
+import { useTrainingPolling } from './useTrainingPolling'
+import { useTrainingStream } from './useTrainingStream'
+
+const _log = logger.child('training-session')
+
+export interface UseTrainingSessionReturn extends TrainingShellState {
+  trainingRunning: boolean
+  turboRunning: boolean
+  paused: boolean
+  turboPhase: Exclude<TrainingShellState['phase'], 'TRAINING'> | 'training'
+  turboResult: {
+    status: string
+    final_loss: number | null
+    checkpoint: string | null
+    model_path: string | null
+    total_steps: number
+  } | null
+  turboError: string | null
+  turboProgress: number
+  turboGlobalStep: number
+  turboTotalSteps: number
+  turboStepsPerSec: number | null
+  turboEta: number | null
+  turboElapsedSeconds: number | null
+  turboLoss: number | null
   distillCheckpoint: string | null
   distillFinalLoss: number | null
   distillEpochs: number | null
-  turboPhase: 'idle' | 'training' | 'complete' | 'error'
-  turboResult: { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null
-  turboError: string | null
-  unifiedModelPath: string | null
-  unifiedFinalLoss: number | null
-  unifiedTotalSteps: number | null
-  unifiedElapsed: number | null
-  visualOutputDir: string | null
-  visualSouPath: string | null
-}
-
-export interface UseTrainingSessionReturn extends TrainingSessionState {
+  avgQuality: number | null
+  dataQuality: {
+    avg_quality: number
+    repetition_rate: number
+    diversity: number
+    language_quality: number
+  } | null
+  finetunedModelPath: string | null
+  finetunedModelLoss: number | null
   setPhase: (p: string) => void
   setLoss: (l: number | null) => void
   setProgress: (p: number) => void
   setEpoch: (e: number) => void
   setTotalEpochs: (t: number) => void
+  setGlobalStep: (s: number) => void
+  setTotalSteps: (s: number) => void
+  setEta: (e: number | null) => void
+  setStepsPerSec: (s: number | null) => void
+  setElapsedSeconds: (e: number | null) => void
   setMessage: (m: string) => void
   setLossHistory: (h: { step: number; loss: number }[]) => void
   setEvalResult: (r: string | null) => void
-  setFinetunedModelPath: (p: string | null) => void
-  setFinetunedModelLoss: (l: number | null) => void
-  setDistillCheckpoint: (c: string | null) => void
-  setDistillFinalLoss: (l: number | null) => void
-  setDistillEpochs: (e: number | null) => void
-  setTurboPhase: (p: 'idle' | 'training' | 'complete' | 'error') => void
-  setTurboResult: (r: { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null) => void
-  setTurboError: (e: string | null) => void
-  trainingRunning: boolean
   resetTraining: () => void
   stopTraining: () => void
-  pauseTraining: () => Promise<void>
-  resumeTraining: () => Promise<void>
-  paused: boolean
-  startSSETraining: (body: Record<string, unknown>, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onCheckpointUpdate?: () => void) => void
-  startFineTune: (params: {
-    model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean
-  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onComplete?: () => void) => void
-  startVisualTraining: (params: {
-    dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean
-  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onComplete?: () => void) => void
-  startTurboTrain: (datasetId: string, config: {
-    epochs: number; lr: number; embed: number; heads: number; layers: number
-  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => void
-  turboRunning: boolean
-  startUnifiedTraining: (config: {
-    method?: string; dataset?: string; epochs?: number; batchSize?: number; lr?: number
-    distill?: boolean; useLoRA?: boolean; hfModel?: string; skipGenerate?: boolean
-    skipDistill?: boolean; skipTrain?: boolean; skipEvaluate?: boolean; skipDeploy?: boolean
-  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => void
+  pauseTraining: (addToast?: TrainingToastFn) => Promise<void>
+  resumeTraining: (addToast?: TrainingToastFn) => Promise<void>
+  startFineTune: (
+    params: {
+      model: string
+      dataset: string
+      epochs: number
+      batchSize: number
+      lr: number
+      useLoRA: boolean
+      loraRank?: number
+      loraAlpha?: number
+    },
+    addToast: TrainingToastFn,
+    onComplete?: () => void,
+  ) => void
+  startVisualTraining: (
+    params: {
+      dataset: string
+      visionEncoder: string
+      llm: string
+      stage1Epochs: number
+      stage2Epochs: number
+      useLoRA: boolean
+    },
+    addToast: TrainingToastFn,
+    onComplete?: () => void,
+  ) => void
+  startTurboTrain: (
+    datasetId: string,
+    config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
+    addToast: TrainingToastFn,
+    experimentId?: string,
+  ) => void
+  stopTurboTrain: () => void
+  startSSETraining: (
+    body: Record<string, unknown>,
+    addToast: TrainingToastFn,
+    onCheckpointUpdate?: () => void,
+  ) => void
+  closeStream: () => void
+  startStandardPoll: (
+    jobId: string,
+    opts?: {
+      addToast?: TrainingToastFn
+      onComplete?: (job: TrainingJob) => void
+      completeMessage?: string
+    },
+  ) => void
 }
 
-export function useTrainingSession(): UseTrainingSessionReturn {
-  const ftPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const visualPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
+function useShellTraining(): TrainingShellState {
+  const [training, setTraining] = useState<TrainingShellState>(() => readTraining())
   useEffect(() => {
+    // Subscribe with shallow equality check to avoid re-renders when
+    // the same field values are written (common with batched writes).
+    return appShellStore.subscribe((s) => {
+      const next = s.training
+      setTraining((prev) => {
+        // Shallow compare — skip update if all fields are equal
+        if (
+          prev.phase === next.phase &&
+          prev.loss === next.loss &&
+          prev.progress === next.progress &&
+          prev.epoch === next.epoch &&
+          prev.totalEpochs === next.totalEpochs &&
+          prev.globalStep === next.globalStep &&
+          prev.totalSteps === next.totalSteps &&
+          prev.stepsPerSec === next.stepsPerSec &&
+          prev.eta === next.eta &&
+          prev.elapsedSeconds === next.elapsedSeconds &&
+          prev.jobId === next.jobId &&
+          prev.method === next.method &&
+          prev.error === next.error &&
+          prev.message === next.message &&
+          prev.checkpoint === next.checkpoint &&
+          prev.finalLoss === next.finalLoss &&
+          prev.modelPath === next.modelPath &&
+          prev.avgQuality === next.avgQuality &&
+          prev.lossHistory === next.lossHistory &&
+          prev.visualOutputDir === next.visualOutputDir &&
+          prev.visualSouPath === next.visualSouPath &&
+          prev.finetunedModelPath === next.finetunedModelPath &&
+          prev.finetunedModelLoss === next.finetunedModelLoss &&
+          prev.dataQuality === next.dataQuality &&
+          prev.distillCheckpoint === next.distillCheckpoint &&
+          prev.distillFinalLoss === next.distillFinalLoss &&
+          prev.distillEpochs === next.distillEpochs
+        ) {
+          return prev
+        }
+        return next
+      })
+    })
+  }, [])
+  return training
+}
+
+/**
+ * Orchestrator hook for training. Composes useTrainingPolling.
+ * Owns: shell subscription, reconciliation, control functions, backward-compat aliases.
+ */
+export function useTrainingSession(): UseTrainingSessionReturn {
+  const training = useShellTraining()
+  const { startStandardPoll, startTurboPoll, clearAllPolls } = useTrainingPolling()
+  const { startSSETraining, closeStream } = useTrainingStream()
+
+  const trainingRunning = isTrainingActive(training)
+  const turboRunning = training.method === 'turbo' && trainingRunning
+
+  // Reconcile with server on mount
+  useEffect(() => {
+    let cancelled = false
+    const reconcile = async () => {
+      const shell = readTraining()
+      if (isTrainingActive(shell)) {
+        _log.info('Shell has active training, verifying with server', {
+          phase: shell.phase,
+          method: shell.method,
+        })
+        // Verify server actually has this training running before trusting localStorage
+        try {
+          const [turboStatus, jobs] = await Promise.all([
+            turboApi.status().catch(() => null),
+            shell.jobId ? jobsApi.get(shell.jobId).catch(() => null) : Promise.resolve(null),
+          ])
+          if (cancelled) return
+
+          const turboRunning = turboStatus?.status === 'running'
+          const jobRunning = jobs?.status === 'running'
+
+          if (!turboRunning && !jobRunning) {
+            // Server has no active training — stale localStorage state, clear it
+            _log.info('Shell training is stale (server has no active training), clearing')
+            appShellStore.getState().resetTraining()
+            notify.toast(
+              'Previous training session expired — server was restarted',
+              'info',
+              undefined,
+              undefined,
+              'training-session-expired',
+            )
+            return
+          }
+
+          // Server confirms training is active — start polling
+          if (shell.method === 'turbo' || (shell.method === 'slonet' && !shell.jobId)) {
+            startTurboPoll()
+          } else if (shell.jobId) {
+            startStandardPoll(shell.jobId)
+          }
+        } catch (e: unknown) {
+          _log.warning('Could not verify training state with server', {
+            error: e instanceof Error ? e.message : String(e),
+          })
+          // On verification failure, clear stale state to avoid phantom training
+          appShellStore.getState().resetTraining()
+          notify.toast('Could not verify training status — showing idle state', 'info')
+        }
+        return
+      }
+      try {
+        const [turboStatus, jobs] = await Promise.all([
+          turboApi.status().catch((e) => {
+            _log.debug('Could not fetch turbo status', {
+              error: e instanceof Error ? e.message : String(e),
+            })
+            return null
+          }),
+          jobsApi.list().catch((e) => {
+            _log.debug('Could not fetch training jobs', {
+              error: e instanceof Error ? e.message : String(e),
+            })
+            return []
+          }),
+        ])
+        if (cancelled) return
+        if (turboStatus?.status === 'running') {
+          _log.info('Server has active turbo training, restoring to shell')
+          writeTraining({
+            phase: 'TRAINING',
+            method: 'turbo',
+            loss: turboStatus.loss ?? null,
+            progress: turboStatus.progress ?? 0,
+            globalStep: turboStatus.global_step ?? 0,
+            totalSteps: turboStatus.total_steps ?? 0,
+            stepsPerSec: turboStatus.steps_per_sec ?? null,
+            eta: turboStatus.eta_s ?? null,
+            elapsedSeconds: turboStatus.elapsed_s ?? null,
+            jobId: turboStatus.job_id ?? null,
+            avgQuality: turboStatus.avg_quality ?? null,
+            message: turboStatus.paused ? 'Paused' : '',
+          })
+          startTurboPoll()
+          return
+        }
+        const runningJob = jobs.find((j) => j.status === 'running')
+        if (runningJob) {
+          _log.info('Server has active standard training, restoring to shell', {
+            jobId: runningJob.id,
+          })
+          writeTraining({
+            phase: 'TRAINING',
+            method: (runningJob.method as TrainingShellState['method']) ?? 'slonet',
+            loss: runningJob.loss ?? runningJob.train_loss ?? null,
+            progress: runningJob.progress ?? 0,
+            epoch: runningJob.current_epoch ?? 0,
+            totalEpochs: runningJob.epochs ?? 0,
+            globalStep: runningJob.global_step ?? 0,
+            totalSteps: runningJob.total_steps ?? 0,
+            stepsPerSec: runningJob.steps_per_sec ?? null,
+            eta: runningJob.eta_s ?? null,
+            elapsedSeconds: runningJob.elapsed_s ?? null,
+            jobId: runningJob.id,
+          })
+          startStandardPoll(runningJob.id)
+          return
+        }
+        if (turboStatus?.status === 'complete') {
+          writeTraining({
+            phase: 'complete',
+            method: 'turbo',
+            progress: 100,
+            checkpoint: (turboStatus.result?.checkpoint as string) ?? null,
+            finalLoss: (turboStatus.result?.final_loss as number) ?? null,
+            modelPath: (turboStatus.result?.model_path as string) ?? null,
+            avgQuality:
+              (turboStatus.result?.avg_quality as number) ?? turboStatus.avg_quality ?? null,
+            dataQuality:
+              (turboStatus.result?.data_quality as TrainingShellState['dataQuality']) ?? null,
+          })
+        }
+      } catch (e: unknown) {
+        logger.warning('Could not reconcile training service', {
+          exception: String((e instanceof Error ? e.message : e) || e),
+        })
+      }
+    }
+    reconcile()
     return () => {
-      if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
-      if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
+      cancelled = true
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Warn before leaving during active training
+  useEffect(() => {
+    if (!trainingRunning) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [trainingRunning])
+
+  const resetTraining = useCallback(() => {
+    appShellStore.getState().resetTraining()
+    clearAllPolls()
+  }, [clearAllPolls])
+
+  const stopTraining = useCallback(() => {
+    jobsApi.stopAutoTrain().catch((e) => logger.warning('Could not stop training', e))
+    operationsStore
+      .getState()
+      .cancelAll('training')
+      .catch((e) =>
+        logger.warning('Could not cancel all training', { exception: String(e?.message || e) }),
+      )
+    resetTraining()
+    trackEvent('training_stopped', { method: training.method })
+  }, [resetTraining, training.method])
+
+  const pauseTraining = useCallback(async (addToast?: TrainingToastFn) => {
+    try {
+      await turboApi.pause()
+      writeTraining({ message: 'Paused' })
+    } catch (e: unknown) {
+      const msg = extractErrorMessage(e, 'Could not pause')
+      _log.warning('Could not pause', { error: msg })
+      addToast?.(msg, 'error')
+      writeTraining({ message: msg })
     }
   }, [])
 
-  const [phase, setPhase] = useState('idle')
-  const [loss, setLoss] = useState<number | null>(null)
-  const [progress, setProgress] = useState(0)
-  const [epoch, setEpoch] = useState(0)
-  const [totalEpochs, setTotalEpochs] = useState(0)
-  const [message, setMessage] = useState('')
-  const [startTime, setStartTime] = useState<number | null>(null)
-  const [lossHistory, setLossHistory] = useState<{ step: number; loss: number }[]>([])
-  const [evalResult, setEvalResult] = useState<string | null>(null)
-
-  const [finetunedModelPath, setFinetunedModelPath] = useState<string | null>(null)
-  const [finetunedModelLoss, setFinetunedModelLoss] = useState<number | null>(null)
-  const [distillCheckpoint, setDistillCheckpoint] = useState<string | null>(null)
-  const [distillFinalLoss, setDistillFinalLoss] = useState<number | null>(null)
-  const [distillEpochs, setDistillEpochs] = useState<number | null>(null)
-
-  const [turboPhase, setTurboPhase] = useState<'idle' | 'training' | 'complete' | 'error'>('idle')
-  const [turboResult, setTurboResult] = useState<{ status: string; final_loss?: number; total_steps?: number; model_path?: string } | null>(null)
-  const [turboError, setTurboError] = useState<string | null>(null)
-
-  const [unifiedModelPath, setUnifiedModelPath] = useState<string | null>(null)
-  const [unifiedFinalLoss, setUnifiedFinalLoss] = useState<number | null>(null)
-  const [unifiedTotalSteps, setUnifiedTotalSteps] = useState<number | null>(null)
-  const [unifiedElapsed, setUnifiedElapsed] = useState<number | null>(null)
-
-  const [visualOutputDir, setVisualOutputDir] = useState<string | null>(null)
-  const [visualSouPath, setVisualSouPath] = useState<string | null>(null)
-
-  const [paused, setPaused] = useState(false)
-  const esRef = useRef<EventSource | null>(null)
-
-  const trainingRunning = phase !== 'idle' && phase !== 'complete' && phase !== 'error'
-
-  const resetTraining = useCallback(() => {
-    setPaused(false)
-    setFinetunedModelPath(null); setFinetunedModelLoss(null)
-    setDistillCheckpoint(null); setDistillFinalLoss(null); setDistillEpochs(null)
-    setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
-    setVisualOutputDir(null); setVisualSouPath(null)
-    setPhase('idle'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
-    setMessage(''); setLossHistory([]); setEvalResult(null)
+  const resumeTraining = useCallback(async (addToast?: TrainingToastFn) => {
+    try {
+      await turboApi.resume()
+      writeTraining({ message: '' })
+    } catch (e: unknown) {
+      const msg = extractErrorMessage(e, 'Could not resume')
+      _log.warning('Could not resume', { error: msg })
+      addToast?.(msg, 'error')
+      writeTraining({ message: msg })
+    }
   }, [])
 
-  const stopTraining = useCallback(() => {
-    esRef.current?.close(); esRef.current = null
-    if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
-    if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
-    trainingJobsController.stopAutoTrain().catch(() => {})
-    trainingJobsController.stopUnified().catch(() => {})
+  const startFineTune = useCallback(
+    (
+      params: {
+        model: string
+        dataset: string
+        epochs: number
+        batchSize: number
+        lr: number
+        useLoRA: boolean
+        loraRank?: number
+        loraAlpha?: number
+      },
+      addToast: TrainingToastFn,
+      onComplete?: () => void,
+    ) => {
+      appShellStore.getState().resetTraining()
+      writeTraining({ phase: 'TRAINING', method: 'hf' })
+      trackEvent('training_started', { method: 'hf', model: params.model, dataset: params.dataset })
+      jobsApi
+        .finetune({
+          model_path: params.model,
+          dataset: params.dataset,
+          epochs: params.epochs,
+          batch_size: params.batchSize,
+          learning_rate: params.lr,
+          rank: params.loraRank ?? 8,
+          alpha: params.loraAlpha ?? 16.0,
+        })
+        .then((resp) => {
+          const jobId = resp.job_id as string
+          addToast('LoRA training queued', 'info')
+          writeTraining({ totalEpochs: params.epochs, jobId })
+          operationsStore
+            .getState()
+            .fetch()
+            .catch((e) =>
+              _log.debug('Could not fetch operations', {
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            )
+          startStandardPoll(jobId, { addToast, onComplete })
+        })
+        .catch(() => addToast('Something went wrong starting training', 'error'))
+    },
+    [startStandardPoll],
+  )
+
+  const startVisualTraining = useCallback(
+    (
+      params: {
+        dataset: string
+        visionEncoder: string
+        llm: string
+        stage1Epochs: number
+        stage2Epochs: number
+        useLoRA: boolean
+      },
+      addToast: TrainingToastFn,
+      onComplete?: () => void,
+    ) => {
+      appShellStore.getState().resetTraining()
+      writeTraining({ phase: 'TRAINING', method: 'hf' })
+      trackEvent('training_started', { method: 'visual', dataset: params.dataset })
+      jobsApi
+        .visualTrain({
+          dataset: params.dataset,
+          vision_encoder: params.visionEncoder,
+          llm: params.llm,
+          stage1_epochs: params.stage1Epochs,
+          stage2_epochs: params.stage2Epochs,
+          use_lora: params.useLoRA,
+          name: `visual-${params.dataset}-${Date.now()}`,
+        })
+        .then((resp) => {
+          const jobId = resp.job_id as string
+          addToast(resp.message || 'Image model training queued', 'info')
+          writeTraining({ totalEpochs: params.stage1Epochs + params.stage2Epochs, jobId })
+          operationsStore
+            .getState()
+            .fetch()
+            .catch((e) =>
+              _log.debug('Could not fetch operations', {
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            )
+          startStandardPoll(jobId, {
+            addToast,
+            completeMessage: 'Image model training complete',
+            onComplete: (job) => {
+              writeTraining({
+                visualOutputDir: job.output_dir ?? null,
+                visualSouPath: job.sou_path ?? null,
+              })
+              onComplete?.()
+            },
+          })
+        })
+        .catch(() => addToast('Something went wrong starting image model training', 'error'))
+    },
+    [startStandardPoll],
+  )
+
+  const startTurboTrain = useCallback(
+    (
+      datasetId: string,
+      config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
+      addToast: TrainingToastFn,
+      experimentId?: string,
+    ) => {
+      // Request notification permission on first training start
+      if (
+        typeof window !== 'undefined' &&
+        'Notification' in window &&
+        Notification.permission === 'default'
+      ) {
+        Notification.requestPermission()
+      }
+
+      clearAllPolls()
+      appShellStore.getState().resetTraining()
+      writeTraining({ phase: 'TRAINING', method: 'turbo' })
+      trackEvent('training_started', { method: 'turbo', dataset_id: datasetId })
+      turboApi
+        .start({
+          dataset_id: datasetId,
+          epochs: config.epochs,
+          learning_rate: config.lr,
+          n_embed: config.embed,
+          n_head: config.heads,
+          n_layer: config.layers,
+          experiment_id: experimentId,
+        })
+        .then((result) => {
+          if (result.status === 'error') {
+            writeTraining({
+              error: result.message || 'Could not start turbo training',
+              phase: 'error',
+            })
+            return
+          }
+          addToast('Training started', 'info')
+          operationsStore
+            .getState()
+            .fetch()
+            .catch((e) =>
+              _log.debug('Could not fetch operations', {
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            )
+          startTurboPoll(addToast)
+        })
+        .catch((e: unknown) => {
+          writeTraining({
+            error: extractErrorMessage(e, 'Could not start turbo training'),
+            phase: 'error',
+          })
+        })
+    },
+    [clearAllPolls, startTurboPoll],
+  )
+
+  const stopTurboTrain = useCallback(() => {
+    turboApi.stop().catch((e) => logger.warning('Could not stop turbo training', e))
+    operationsStore
+      .getState()
+      .cancelAll('training')
+      .catch((e) =>
+        _log.debug('Could not cancel all training ops', {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      )
     resetTraining()
+    trackEvent('training_stopped', { method: 'turbo' })
   }, [resetTraining])
 
-  const pauseTraining = useCallback(async () => {
-    try {
-      await trainingJobsController.pauseTraining()
-      setPaused(true)
-    } catch { /* ignore */ }
-  }, [])
-
-  const resumeTraining = useCallback(async () => {
-    try {
-      await trainingJobsController.resumeTraining()
-      setPaused(false)
-    } catch { /* ignore */ }
-  }, [])
-
-  const startSSETraining = useCallback((
-    body: Record<string, unknown>,
-    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
-    onCheckpointUpdate?: () => void,
-  ) => {
-    esRef.current?.close(); esRef.current = null
-    trainingJobsController.startAutoTrain(body).then(() => {
-      setPhase('TRAINING'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
-      setMessage(''); setLossHistory([]); setEvalResult(null); setStartTime(Date.now())
-      const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
-      esRef.current = es
-      es.onmessage = (e) => {
-        try {
-          const env = JSON.parse(e.data)
-          if (env.stream !== 'auto-train') return
-          setPhase(env.phase || 'TRAINING')
-          if (env.data?.loss != null) {
-            setLoss(env.data.loss)
-            setLossHistory(prev => {
-              const last = prev[prev.length - 1]
-              const step = (last?.step ?? 0) + 1
-              return prev.length > 200 ? prev.slice(-200) : [...prev, { step, loss: env.data.loss }]
-            })
-          }
-          if (env.data?.progress != null) setProgress(env.data.progress)
-          if (env.meta?.epoch != null) setEpoch(env.meta.epoch)
-          if (env.meta?.total_epochs != null) setTotalEpochs(env.meta.total_epochs)
-          if (env.message) setMessage(env.message)
-          if (env.data?.eval_report) setEvalResult(env.data.eval_report)
-          if (env.status === 'complete') {
-            es.close(); esRef.current = null
-            if (env.data?.checkpoint) setDistillCheckpoint(env.data.checkpoint)
-            if (env.data?.final_loss != null) setDistillFinalLoss(env.data.final_loss)
-            if (env.data?.epochs != null) setDistillEpochs(env.data.epochs)
-            setPhase('complete')
-            addToast('Training complete', 'success')
-            onCheckpointUpdate?.()
-          }
-          if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast('Training failed', 'error') }
-        } catch (err) { console.error('[training] SSE parse error:', err) }
-      }
-      let esRetries = 0
-      es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
-          es.close(); esRef.current = null; setPhase('error')
-          addToast('Connection lost during training', 'error')
-        } else { esRetries++ }
-      }
-    }).catch(() => addToast('Failed to start training', 'error'))
-  }, [])
-
-  const startFineTune = useCallback((
-    params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean },
-    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
-    onComplete?: () => void,
-  ) => {
-    setFinetunedModelPath(null); setFinetunedModelLoss(null)
-    trainingJobsController.startHFFineTune({
-      model: params.model,
-      dataset: params.dataset,
-      name: `${params.model}-${Date.now()}`,
-      epochs: params.epochs,
-      batch_size: params.batchSize,
-      learning_rate: params.lr,
-      use_lora: params.useLoRA,
-      lora_rank: 8,
-    }).then(resp => {
-      const jobId = resp.job_id
-      addToast(resp.message || 'Training queued', 'info')
-      setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.epochs)
-      const pollId = setInterval(async () => {
-        try {
-          const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
-          const jobs = await resp2.json()
-          const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
-          if (!myJob) { clearInterval(pollId); ftPollRef.current = null; return }
-          if (myJob.status === 'completed') {
-            clearInterval(pollId); ftPollRef.current = null
-            setPhase('complete'); setProgress(100)
-            setFinetunedModelPath(myJob.result?.model_path || '')
-            setFinetunedModelLoss(myJob.result?.final_loss || myJob.loss || null)
-            addToast('Training complete', 'success')
-            onComplete?.()
-          } else if (myJob.status === 'failed') {
-            clearInterval(pollId); ftPollRef.current = null; setPhase('error')
-            addToast(myJob.error || 'Training failed', 'error')
-          } else if (myJob.loss != null) {
-            setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
-          }
-        } catch { clearInterval(pollId); ftPollRef.current = null }
-      }, 3000)
-      ftPollRef.current = pollId
-      setTimeout(() => { clearInterval(pollId); ftPollRef.current = null }, 300000)
-    }).catch(() => addToast('Something went wrong starting training', 'error'))
-  }, [])
-
-  const startVisualTraining = useCallback((
-    params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean },
-    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
-    onComplete?: () => void,
-  ) => {
-    setFinetunedModelPath(null); setFinetunedModelLoss(null)
-    trainingJobsController.startVisualTrain({
-      dataset: params.dataset,
-      vision_encoder: params.visionEncoder,
-      llm: params.llm,
-      stage1_epochs: params.stage1Epochs,
-      stage2_epochs: params.stage2Epochs,
-      use_lora: params.useLoRA,
-      name: `visual-${params.dataset}-${Date.now()}`,
-    }).then(resp => {
-      const jobId = resp.job_id
-      addToast(resp.message || 'Image model training queued', 'info')
-      setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.stage1Epochs + params.stage2Epochs)
-      const pollId = setInterval(async () => {
-        try {
-          const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
-          const jobs = await resp2.json()
-          const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
-          if (!myJob) {             clearInterval(pollId); visualPollRef.current = null; return }
-          if (myJob.status === 'completed') {
-            clearInterval(pollId); visualPollRef.current = null; setPhase('complete'); setProgress(100)
-            setFinetunedModelPath(myJob.model_path || '')
-            setFinetunedModelLoss(myJob.loss || null)
-            setVisualOutputDir(myJob.output_dir || null)
-            setVisualSouPath(myJob.sou_path || null)
-            addToast('Image model training complete', 'success')
-            onComplete?.()
-          } else if (myJob.status === 'failed') {
-            clearInterval(pollId); visualPollRef.current = null; setPhase('error')
-            addToast(myJob.error || 'Image model training failed', 'error')
-          } else if (myJob.loss != null) {
-            setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
-            setMessage(myJob.stage || '')
-          }
-        } catch { clearInterval(pollId); visualPollRef.current = null }
-      }, 3000)
-      visualPollRef.current = pollId
-      setTimeout(() => { clearInterval(pollId); visualPollRef.current = null }, 600000)
-    }).catch(() => addToast('Something went wrong starting image model training', 'error'))
-  }, [])
-
-  const startTurboTrain = useCallback((
-    datasetId: string,
-    config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
-    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
-  ) => {
-    setTurboPhase('training'); setTurboResult(null); setTurboError(null)
-    trainingJobsController.startTurboTrain({
-      dataset_id: datasetId,
-      epochs: config.epochs,
-      learning_rate: config.lr,
-      n_embed: config.embed,
-      n_head: config.heads,
-      n_layer: config.layers,
-    }).then(result => {
-      if (result.status === 'error') {
-        setTurboError(result.message || 'Training failed'); setTurboPhase('error')
-      } else {
-        setTurboResult(result); setTurboPhase('complete')
-        addToast('Turbo training complete!', 'success')
-      }
-    }).catch((e: any) => {
-      setTurboError(e?.message || 'Training request failed'); setTurboPhase('error')
-    })
-  }, [])
-
-  const startUnifiedTraining = useCallback((
-    config: {
-      method?: string; dataset?: string; epochs?: number; batchSize?: number; lr?: number
-      distill?: boolean; useLoRA?: boolean; hfModel?: string; skipGenerate?: boolean
-      skipDistill?: boolean; skipTrain?: boolean; skipEvaluate?: boolean; skipDeploy?: boolean
-    },
-    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
-  ) => {
-    esRef.current?.close(); esRef.current = null
-    setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
-    trainingJobsController.startUnified({
-      method: config.method,
-      data_path: config.dataset,
-      dataset_name: config.dataset,
-      epochs: config.epochs ?? 5,
-      batch_size: config.batchSize ?? 64,
-      learning_rate: config.lr ?? 1e-3,
-      distill: config.distill ?? false,
-      use_lora: config.useLoRA ?? true,
-      lora_rank: 8,
-      hf_model_name: config.hfModel,
-      skip_generate: config.skipGenerate,
-      skip_distill: config.skipDistill,
-      skip_train: config.skipTrain,
-      skip_evaluate: config.skipEvaluate,
-      skip_deploy: config.skipDeploy,
-    }).then(() => {
-      setPhase('GENERATE_DATA'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
-      setMessage(''); setLossHistory([]); setEvalResult(null); setStartTime(Date.now())
-      const es = new EventSource(`${PUBLIC_API_URL}/training/unified-stream`)
-      esRef.current = es
-      es.onmessage = (e) => {
-        try {
-          const env = JSON.parse(e.data)
-          if (env.stream !== 'unified-train') return
-          setPhase(env.phase || 'TRAIN')
-          if (env.data?.loss != null) {
-            setLoss(env.data.loss)
-            setLossHistory(prev => {
-              const last = prev[prev.length - 1]
-              const step = (last?.step ?? 0) + 1
-              return prev.length > 200 ? prev.slice(-200) : [...prev, { step, loss: env.data.loss }]
-            })
-          }
-          if (env.data?.progress != null) setProgress(env.data.progress)
-          if (env.meta?.epoch != null) setEpoch(env.meta.epoch)
-          if (env.meta?.total_epochs != null) setTotalEpochs(env.meta.total_epochs)
-          if (env.message) setMessage(env.message)
-          if (env.data?.eval_report) setEvalResult(env.data.eval_report)
-          if (env.status === 'complete') {
-            es.close(); esRef.current = null
-            if (env.data?.model_path) setUnifiedModelPath(env.data.model_path)
-            if (env.data?.final_loss != null) setUnifiedFinalLoss(env.data.final_loss)
-            if (env.data?.total_steps != null) setUnifiedTotalSteps(env.data.total_steps)
-            if (env.data?.elapsed != null) setUnifiedElapsed(env.data.elapsed)
-            setPhase('complete')
-            addToast('Unified training complete', 'success')
-          }
-          if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast(env.message || 'Something went wrong during training', 'error') }
-        } catch (err) { console.error('[training] SSE parse error:', err) }
-      }
-      let esRetries = 0
-      es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
-          es.close(); esRef.current = null; setPhase('error')
-          addToast('Connection lost during training', 'error')
-        } else { esRetries++ }
-      }
-    }).catch(() => addToast('Something went wrong starting training', 'error'))
-  }, [])
-
   return {
-    phase, loss, progress, epoch, totalEpochs, message, startTime, lossHistory, evalResult,
-    finetunedModelPath, finetunedModelLoss, distillCheckpoint, distillFinalLoss, distillEpochs,
-    turboPhase, turboResult, turboError,
-    unifiedModelPath, unifiedFinalLoss, unifiedTotalSteps, unifiedElapsed,
-    visualOutputDir, visualSouPath,
-    paused,
-    setPhase, setLoss, setProgress, setEpoch, setTotalEpochs, setMessage,
-    setLossHistory, setEvalResult,
-    setFinetunedModelPath, setFinetunedModelLoss,
-    setDistillCheckpoint, setDistillFinalLoss, setDistillEpochs,
-    setTurboPhase, setTurboResult, setTurboError,
-    trainingRunning, turboRunning: turboPhase === 'training',
-    resetTraining, stopTraining, pauseTraining, resumeTraining,
-    startSSETraining, startFineTune, startVisualTraining, startTurboTrain, startUnifiedTraining,
+    ...training,
+    trainingRunning,
+    turboRunning,
+    paused: training.message === 'Paused',
+    turboPhase:
+      training.phase === 'TRAINING'
+        ? training.method === 'turbo'
+          ? 'training'
+          : 'idle'
+        : training.phase,
+    turboResult:
+      training.method === 'turbo'
+        ? {
+            status: training.phase,
+            final_loss: training.finalLoss,
+            checkpoint: training.checkpoint,
+            model_path: training.modelPath,
+            total_steps: training.totalSteps,
+          }
+        : null,
+    turboError: training.error,
+    turboProgress: training.progress,
+    turboGlobalStep: training.globalStep,
+    turboTotalSteps: training.totalSteps,
+    turboStepsPerSec: training.stepsPerSec,
+    turboEta: training.eta,
+    turboElapsedSeconds: training.elapsedSeconds,
+    turboLoss: training.loss,
+    distillCheckpoint: training.checkpoint,
+    distillFinalLoss: training.finalLoss,
+    distillEpochs: training.totalEpochs ?? null,
+    avgQuality: training.avgQuality ?? null,
+    dataQuality: training.dataQuality ?? null,
+    finetunedModelPath: training.modelPath,
+    finetunedModelLoss: training.finalLoss,
+    setPhase: (p: string) => writeTraining({ phase: p as TrainingShellState['phase'] }),
+    setLoss: (l: number | null) => writeTraining({ loss: l }),
+    setProgress: (p: number) => writeTraining({ progress: p }),
+    setEpoch: (e: number) => writeTraining({ epoch: e }),
+    setTotalEpochs: (t: number) => writeTraining({ totalEpochs: t }),
+    setGlobalStep: (s: number) => writeTraining({ globalStep: s }),
+    setTotalSteps: (s: number) => writeTraining({ totalSteps: s }),
+    setEta: (e: number | null) => writeTraining({ eta: e }),
+    setStepsPerSec: (s: number | null) => writeTraining({ stepsPerSec: s }),
+    setElapsedSeconds: (e: number | null) => writeTraining({ elapsedSeconds: e }),
+    setMessage: (m: string) => writeTraining({ message: m }),
+    setLossHistory: (h: { step: number; loss: number }[]) => writeTraining({ lossHistory: h }),
+    setEvalResult: (r: string | null) => writeTraining({ evalResult: r }),
+    resetTraining,
+    stopTraining,
+    pauseTraining,
+    resumeTraining,
+    startFineTune,
+    startVisualTraining,
+    startTurboTrain,
+    stopTurboTrain,
+    startSSETraining,
+    closeStream,
+    startStandardPoll,
   }
 }

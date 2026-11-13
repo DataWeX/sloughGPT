@@ -1,0 +1,282 @@
+"""
+Token Tree API Router — thin wrapper around TokenizerEngine (token-tree surface).
+
+Business logic lives in domain.training.tokenizer_engine → TokenTreeManager.
+This router only exposes engine methods as HTTP endpoints:
+
+- ``GET  /token-tree/stats``  — tree summary statistics.
+- ``GET  /token-tree/vocab``  — paged vocabulary entries.
+- ``GET  /token-tree/merges`` — most frequent BPE merge rules.
+- ``GET  /token-tree/saved``  — list saved trees.
+- ``POST /token-tree/save``   — save the current tree under a name.
+- ``POST /token-tree/load``   — load a saved tree as the current tree.
+- ``DELETE /token-tree/saved/{name}`` — delete a saved tree.
+- ``POST /token-tree/train``  — train on a corpus (or the built-in default).
+- ``POST /token-tree/similar`` — nearest-neighbor tokens via generated embeddings.
+
+- ``POST /token-tree/embedding`` — inspect a token's generated embedding vector.
+- ``POST /token-tree/encode`` — tree-walk encode text to ids.
+- ``POST /token-tree/path`` — trace the encoder's greedy trie walk step by step.
+- ``POST /token-tree/decode`` — decode ids to text.
+- ``POST /token-tree/lineage`` — merge lineage down to character leaves.
+- ``GET  /token-tree/matrix`` — embedding-matrix overview summary.
+- ``POST /token-tree/compare`` — diff two saved trees (overlap + examples).
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.training.tokenizer_engine import get_token_tree_manager
+
+
+class TrainTreeRequest(BaseModel):
+    texts: list[str] = Field(default=[], max_length=1000)
+    vocab_size: int = Field(default=512, ge=32, le=100000)
+    embed_dim: int = Field(default=16, ge=0, le=4096)
+    min_frequency: int = Field(default=2, ge=1, le=10000)
+
+
+class SimilarRequest(BaseModel):
+    token: str = Field(max_length=256)
+    top_k: int = Field(default=5, ge=1, le=100)
+
+
+class TokenTextRequest(BaseModel):
+    text: str = Field(max_length=50000)
+
+
+class TokenIdsRequest(BaseModel):
+    ids: list[int] = Field(max_length=10000)
+
+
+class LineageRequest(BaseModel):
+    token: str = Field(max_length=256)
+
+
+class EmbeddingRequest(BaseModel):
+    token: str = Field(max_length=256)
+    top_k: int = Field(default=8, ge=1, le=64)
+
+
+class TreeNameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+
+
+class CompareTreesRequest(BaseModel):
+    a: str = Field(min_length=1, max_length=64)
+    b: str = Field(min_length=1, max_length=64)
+    top_k: int = Field(default=10, ge=1, le=100)
+
+
+class TokenTreeRouter:
+    """Registers the /token-tree endpoints against TokenTreeManager."""
+
+    def __init__(self) -> None:
+        """Build the router and register all routes."""
+        self.router = APIRouter(prefix="/token-tree", tags=["token-tree"])
+        self._register_routes()
+
+    def _register_routes(self) -> None:
+        self.router.add_api_route("/stats", self.get_stats, methods=["GET"])
+        self.router.add_api_route("/vocab", self.get_vocab, methods=["GET"])
+        self.router.add_api_route("/merges", self.get_merges, methods=["GET"])
+        self.router.add_api_route("/saved", self.get_saved, methods=["GET"])
+        self.router.add_api_route("/save", self.save_tree, methods=["POST"])
+        self.router.add_api_route("/load", self.load_tree, methods=["POST"])
+        self.router.add_api_route("/saved/{name}", self.delete_saved_tree, methods=["DELETE"])
+        self.router.add_api_route("/train", self.train_tree, methods=["POST"])
+        self.router.add_api_route("/similar", self.similar, methods=["POST"])
+        self.router.add_api_route("/embedding", self.embedding, methods=["POST"])
+        self.router.add_api_route("/encode", self.encode, methods=["POST"])
+        self.router.add_api_route("/path", self.path, methods=["POST"])
+        self.router.add_api_route("/decode", self.decode, methods=["POST"])
+        self.router.add_api_route("/lineage", self.lineage, methods=["POST"])
+        self.router.add_api_route("/matrix", self.matrix, methods=["GET"])
+        self.router.add_api_route("/compare", self.compare, methods=["POST"])
+
+    @endpoint("token_tree.stats")
+    def get_stats(self) -> dict:
+        """Return summary statistics of the current token tree."""
+        return success_response(data=get_token_tree_manager().stats())
+
+    @endpoint("token_tree.vocab")
+    def get_vocab(
+        self,
+        limit: int = Query(default=50, ge=1, le=500),
+        offset: int = Query(default=0, ge=0),
+    ) -> dict:
+        """Return a paged slice of the current tree's vocabulary."""
+        return success_response(
+            data=get_token_tree_manager().vocab_entries(
+                offset=offset,
+                limit=limit,
+            )
+        )
+
+    @endpoint("token_tree.merges")
+    def get_merges(
+        self,
+        top_n: int = Query(default=20, ge=1, le=200),
+        query: str = Query(default="", max_length=128),
+    ) -> dict:
+        """Return the most frequent BPE merge rules of the current tree."""
+        mgr = get_token_tree_manager()
+        if query:
+            data = mgr.search_merges(query=query, limit=top_n)
+        else:
+            data = mgr.top_merges(top_n=top_n)
+        return success_response(data=data)
+
+    @endpoint("token_tree.saved")
+    def get_saved(self) -> dict:
+        """List saved token trees."""
+        return success_response(data={"trees": get_token_tree_manager().list_saved()})
+
+    @endpoint("token_tree.save")
+    def save_tree(
+        self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Save the current tree under a name in the save directory."""
+        try:
+            saved = get_token_tree_manager().save(req.name)
+        except ValueError as exc:
+            raise_error(
+                f"Invalid token tree name {req.name!r}: {exc}", "E_VALIDATION", status_code=422
+            )
+        return success_response(data=saved)
+
+    @endpoint("token_tree.load")
+    def load_tree(
+        self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Load a saved tree and make it the current tree."""
+        try:
+            loaded = get_token_tree_manager().load(req.name)
+        except FileNotFoundError:
+            raise_error(f"No saved token tree named {req.name!r}", "E_NOT_FOUND", status_code=404)
+        except ValueError as exc:
+            raise_error(
+                f"Invalid token tree name {req.name!r}: {exc}", "E_VALIDATION", status_code=422
+            )
+        return success_response(data=loaded)
+
+    @endpoint("token_tree.delete")
+    def delete_saved_tree(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Delete a saved tree's sidecar files."""
+        try:
+            deleted = get_token_tree_manager().delete_saved(name)
+        except ValueError as exc:
+            raise_error(f"Invalid token tree name {name!r}: {exc}", "E_VALIDATION", status_code=422)
+        if not deleted:
+            raise_error(f"No saved token tree named {name!r}", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("token_tree.delete", resource=name)
+        return success_response(data={"name": name, "deleted": True})
+
+    @endpoint("token_tree.train")
+    def train_tree(
+        self, req: TrainTreeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Train a token tree on the provided corpus."""
+        mgr = get_token_tree_manager()
+        texts = req.texts if req.texts else None
+        if texts:
+            tree = mgr.train(
+                texts,
+                vocab_size=req.vocab_size,
+                min_frequency=req.min_frequency,
+                embed_dim=req.embed_dim,
+            )
+        else:
+            tree = mgr.get_tree(vocab_size=req.vocab_size, embed_dim=req.embed_dim)
+        stats = tree.stats()
+        return success_response(
+            data={
+                "status": "trained",
+                "vocab_size": stats["vocab_size"],
+                "embedding_points": stats["embedding_points"],
+                "embedding_compression_ratio": stats["embedding_compression_ratio"],
+                "embed_dim": stats["embed_dim"],
+            }
+        )
+
+    @endpoint("token_tree.similar")
+    def similar(
+        self, req: SimilarRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Return ranked nearest-neighbor tokens for a query token."""
+        data = get_token_tree_manager().similar(req.token, top_k=req.top_k)
+        return success_response(data=data)
+
+    @endpoint("token_tree.embedding")
+    def embedding(
+        self, req: EmbeddingRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Inspect a token's generated embedding vector."""
+        try:
+            data = get_token_tree_manager().embedding_info(req.token, top_k=req.top_k)
+        except ValueError as exc:
+            raise_error(f"Token embeddings are not enabled: {exc}", "E_VALIDATION", status_code=422)
+        return success_response(data=data)
+
+    @endpoint("token_tree.encode")
+    def encode(
+        self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Encode text into token ids by walking the tree."""
+        return success_response(data=get_token_tree_manager().encode(req.text))
+
+    @endpoint("token_tree.path")
+    def path(
+        self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Trace the encoder's greedy trie walk over text."""
+        return success_response(data=get_token_tree_manager().path(req.text))
+
+    @endpoint("token_tree.decode")
+    def decode(
+        self, req: TokenIdsRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Decode a list of token ids back to text."""
+        return success_response(data=get_token_tree_manager().decode(req.ids))
+
+    @endpoint("token_tree.lineage")
+    def lineage(
+        self, req: LineageRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Render a token's merge lineage down to character leaves."""
+        data = get_token_tree_manager().lineage(req.token)
+        return success_response(data=data)
+
+    @endpoint("token_tree.matrix")
+    def matrix(
+        self,
+        top_k: int = Query(default=8, ge=1, le=64),
+    ) -> dict:
+        """Return an embedding-matrix overview for the current tree."""
+        return success_response(
+            data=get_token_tree_manager().matrix_summary(
+                top_k=top_k,
+            )
+        )
+
+    @endpoint("token_tree.compare")
+    def compare(
+        self, req: CompareTreesRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Diff two saved trees without changing the current tree."""
+        data = get_token_tree_manager().compare(req.a, req.b, top_n=req.top_k)
+        return success_response(data=data)
+
+
+router = TokenTreeRouter().router

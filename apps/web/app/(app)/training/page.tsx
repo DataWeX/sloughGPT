@@ -1,63 +1,72 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Button } from '@sloughgpt/strui'
-import { Card, CardContent } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
-import { Tabs } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
+import { useSearchParams } from '@/vite/next-compat/navigation'
+import Link from '@/vite/next-compat/link'
+import { PageContainer } from '@/components/PageContainer'
+import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
 import { datasetController } from '@/lib/controllers'
+import { trainingJobsController } from '@/lib/training-controller'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
-import { OutputCard } from '@/components/OutputCard'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
-
+import { useApiReady } from '@/hooks/useLiveStatus'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
-import { JobHistoryCard } from '@/components/training/JobHistoryCard'
-import { CheckpointsCard } from '@/components/training/CheckpointsCard'
-import { TrainingFormCard } from '@/components/training/TrainingFormCard'
-import { TrainFromSessionsCard } from '@/components/training/TrainFromSessionsCard'
-import { TrainingDataCard } from '@/components/training/TrainingDataCard'
-import { EvalReportCard } from '@/components/training/EvalReportCard'
+import { TrainingPipeline } from '@/components/training/TrainingPipeline'
+import { LiveFeedStream } from '@/components/training/LiveFeedStream'
+import { QuickTrainCard } from '@/components/training/QuickTrainCard'
+import { StopTrainingButton } from '@/components/training/StopTrainingButton'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const initialLoadDone = useRef(false)
   const session = useTrainingSession()
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
+  const [pipelineStep, setPipelineStep] = useState<'data' | 'configure' | 'train' | 'results'>(
+    'data',
+  )
+  const [completedSteps, setCompletedSteps] = useState<
+    Set<'data' | 'configure' | 'train' | 'results'>
+  >(new Set())
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
+  useRefreshShortcut(() => {
+    void datasets.fetchDatasets()
+    void checkpoints.fetchCheckpoints()
+    void checkpoints.fetchJobs()
+  })
 
-  const [activeTab, setActiveTab] = useState('train')
-
-  // ===== Visibility-based polling pause =====
+  // Pause checkpoint polling when page is hidden
   const visibilityRef = useRef<boolean>(true)
-
-  // ===== Loading timeout: show retry suggestion if data doesn't load in 15s =====
-  const [loadingTimedOut, setLoadingTimedOut] = useState(false)
-  useEffect(() => {
-    if (checkpoints.loadingCheckpoints || checkpoints.loadingJobs) {
-      setLoadingTimedOut(false)
-      const t = setTimeout(() => setLoadingTimedOut(true), 15000)
-      return () => clearTimeout(t)
+  const ready = useApiReady()
+  const tickRef = useRef<() => void>(() => {})
+  tickRef.current = () => {
+    if (visibilityRef.current) {
+      void checkpoints.fetchCheckpoints()
+      const hasRunning = form.allJobs.some((j) => j.status === 'running')
+      if (hasRunning) void checkpoints.fetchJobs()
     }
-  }, [checkpoints.loadingCheckpoints, checkpoints.loadingJobs])
-
-  // Warn before leaving during active training
+  }
   useEffect(() => {
-    if (!session.trainingRunning) return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault() }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [session.trainingRunning])
+    if (!ready) return
+    const onVisibility = () => {
+      visibilityRef.current = !document.hidden
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    const id = setInterval(() => tickRef.current(), 10000)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [ready])
 
   useEffect(() => {
     void datasets.fetchDatasets()
@@ -70,125 +79,208 @@ export default function TrainingPage() {
       initialLoadDone.current = true
       datasets.setSelectedDataset(datasets.datasets[0].id)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Pause checkpoint polling when page is hidden
-  useEffect(() => {
-    const onVisibility = () => { visibilityRef.current = !document.hidden }
-    document.addEventListener('visibilitychange', onVisibility)
-    let id: ReturnType<typeof setInterval>
-    const tick = () => {
-      if (visibilityRef.current) {
-        void checkpoints.fetchCheckpoints()
-        const hasRunning = form.allJobs.some(j => j.status === 'running')
-        if (hasRunning) void checkpoints.fetchJobs()
-      }
-    }
-    id = setInterval(tick, 10000)
-    return () => {
-      clearInterval(id)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [checkpoints, form.allJobs])
+  }, [searchParams])
 
   useEffect(() => {
+    let active = true
     if (datasets.selectedDataset && form.inputMode === 'dataset') {
-      datasetController.preview(datasets.selectedDataset, 3).then(datasets.setDatasetPreview).catch(() => datasets.setDatasetPreview(null))
+      datasetController
+        .preview(datasets.selectedDataset, 3)
+        .then((preview) => {
+          if (active) datasets.setDatasetPreview(preview)
+        })
+        .catch(() => {
+          if (active) datasets.setDatasetPreview(null)
+        })
     } else {
       datasets.setDatasetPreview(null)
     }
-  }, [datasets, form.inputMode])
+    return () => {
+      active = false
+    }
+  }, [datasets.selectedDataset, form.inputMode])
 
-  const runningJob = form.allJobs.find(j => j.status === 'running')
-  const completedCount = form.allJobs.filter(j => j.status === 'completed').length
+  // Browser notification on training completion
+  const prevJobStatusesRef = useRef<Map<string, string>>(new Map())
+  useEffect(() => {
+    const prev = prevJobStatusesRef.current
+    for (const job of form.allJobs) {
+      const prevStatus = prev.get(job.id)
+      if (prevStatus === 'running' && job.status === 'completed') {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Training Complete', {
+            body: `${job.name || 'Training job'} finished successfully`,
+            icon: '/favicon.svg',
+          })
+        }
+      }
+    }
+    const next = new Map<string, string>()
+    for (const job of form.allJobs) {
+      next.set(job.id, job.status)
+    }
+    prevJobStatusesRef.current = next
+  }, [form.allJobs])
 
-  const TABS = [
-    { value: 'train', label: 'Train' },
-    { value: 'history', label: 'History', count: checkpoints.checkpoints.length || undefined },
-  ]
+  const requestNotificationPermission = () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }
+  useEffect(() => {
+    requestNotificationPermission()
+  }, [])
+
+  // Prefer real server jobs over phantom optimistic pending-* entries so
+  // Stop targets an id the backend knows (pending-* 404s).
+  const runningJob =
+    form.allJobs.find((j) => j.status === 'running' && !j.id.startsWith('pending-')) ??
+    form.allJobs.find((j) => j.status === 'running')
+  const completedCount = form.allJobs.filter((j) => j.status === 'completed').length
+  const runningCount = form.allJobs.filter((j) => j.status === 'running').length
+
+  // Hero status: the one thing the eye lands on.
+  const liveTraining = session.turboRunning || runningJob != null
+  const heroTone = liveTraining
+    ? 'primary'
+    : session.turboPhase === 'complete'
+      ? 'success'
+      : session.turboPhase === 'error'
+        ? 'destructive'
+        : 'muted'
+  const heroText = liveTraining
+    ? `Training live — ${Math.round(session.turboProgress)}%${session.turboLoss != null ? ` · loss ${session.turboLoss.toFixed(4)}` : ''}`
+    : session.turboPhase === 'complete'
+      ? 'Training finished — review results below'
+      : session.turboPhase === 'error'
+        ? `Training failed — ${session.turboError ?? 'see details below'}`
+        : 'No active training — configure a run below'
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        className="items-start"
-        left={<AppRouteHeaderLead title="Teach me" subtitle="Teach your agent from your data" />}
-        right={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>
-          </div>
-        }
+    <PageContainer
+      title="Teach me"
+      subtitle="Teach your agent from your data"
+      className="items-start"
+      loading={checkpoints.loadingJobs && form.allJobs.length === 0}
+      headerRight={
+        <div className="flex items-center gap-2">
+          {runningJob && (
+            <StopTrainingButton
+              onStop={async () => {
+                // Phantom optimistic entry: no backend job exists, so broadcast
+                // stop-all (always succeeds) and clear local state instead of 404ing.
+                if (runningJob.id.startsWith('pending-')) {
+                  await trainingJobsController.stopAutoTrain()
+                  form.clearOptimisticJobs()
+                  session.resetTraining()
+                  void checkpoints.fetchJobs()
+                  return
+                }
+                try {
+                  await trainingJobsController.stop(runningJob.id)
+                } catch {
+                  // Job vanished server-side (restart/purge) — still stop-all + reset
+                  // so the UI doesn't stick on "Could not stop training".
+                  await trainingJobsController.stopAutoTrain()
+                  form.clearOptimisticJobs()
+                  session.resetTraining()
+                }
+                void checkpoints.fetchJobs()
+              }}
+              addToast={addToast}
+            />
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void checkpoints.fetchJobs()
+              void checkpoints.fetchCheckpoints()
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
+      }
+    >
+      {/* Hero: live training status — click through to the job's live view */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-2 rounded-lg border border-border/40 bg-card/50 px-3 py-2"
+      >
+        <StatusDot tone={heroTone} pulse={liveTraining} />
+        {runningJob && !runningJob.id.startsWith('pending-') ? (
+          <Link
+            href={`/training/job/${runningJob.id}`}
+            className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+          >
+            {heroText}
+          </Link>
+        ) : (
+          <p className="text-sm text-muted-foreground">{heroText}</p>
+        )}
+      </div>
+
+      {/* At-a-glance counts — Active jobs links into the running job's live view */}
+      <KpiGrid columns={4}>
+        <StatCard label="Datasets" value={datasets.datasets.length} numeric />
+        {runningJob && !runningJob.id.startsWith('pending-') ? (
+          <Link
+            href={`/training/job/${runningJob.id}`}
+            aria-label={`Open live view for ${runningJob.name || runningJob.id}`}
+            className="rounded-lg transition-shadow hover:shadow-sm focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <StatCard label="Active jobs" value={runningCount} numeric />
+          </Link>
+        ) : (
+          <StatCard label="Active jobs" value={runningCount} numeric />
+        )}
+        <StatCard label="Finished jobs" value={completedCount} numeric />
+        <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />
+      </KpiGrid>
+
+      {/* 3-step pipeline */}
+      <SectionHeader title="Guided setup" description="Data, configure, train, results." />
+      <TrainingPipeline
+        form={form}
+        datasets={datasets}
+        session={session}
+        checkpoints={checkpoints}
+        onTest={() => test.setTestDialogOpen(true)}
+        addToast={addToast}
+        step={pipelineStep}
+        onStepChange={setPipelineStep}
+        completedSteps={completedSteps}
+        onStepComplete={(id) => setCompletedSteps((prev) => new Set(prev).add(id))}
       />
 
-      <div className="space-y-4">
-        {/* Stats */}
-        <KpiGrid columns={4}>
-          <StatCard label="Training runs" value={form.allJobs.length} />
-          <StatCard label="Running" value={runningJob ? 1 : 0} />
-          <StatCard label="Completed" value={completedCount} />
-          <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
-        </KpiGrid>
+      {/* Quick train alternative */}
+      <FoldSection heading="Fast train alternative">
+        <QuickTrainCard datasets={datasets} session={session} addToast={addToast} />
+      </FoldSection>
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onChange={setActiveTab} tabs={TABS} />
-
-        {/* Tab: Train */}
-        {activeTab === 'train' && (
-          <div className="space-y-4">
-            <TrainingFormCard
-              form={form}
-              datasets={datasets}
-              session={session}
-              checkpoints={checkpoints}
-              onTest={() => test.setTestDialogOpen(true)}
-            />
-
-            <TrainFromSessionsCard />
-
-            <TrainingDataCard />
-
-            {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && form.allJobs.length === 0 && (
-              <Card className="border-dashed py-8">
-                <CardContent className="text-center space-y-3">
-                  <p className="text-sm text-muted-foreground">No training activity yet.</p>
-                  <div className="text-xs text-muted-foreground/70 space-y-1.5 max-w-sm mx-auto text-left">
-                    <p>Pick a dataset above and click <span className="font-medium text-foreground">Start training</span></p>
-                    <p>Use <span className="font-medium text-foreground">Paste text</span> to train on your own content</p>
-                    <p>Conversation-format data (JSONL) trains better than plain text</p>
-                    <p>Small datasets (5-10 samples) work for personality fine-tuning</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
-
-        {/* Tab: History */}
-        {activeTab === 'history' && (
-          <div className="space-y-4">
-            <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
-
-            <EvalReportCard />
-
-            <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
-          </div>
-        )}
-      </div>
-
-      {/* Server Output */}
-      <div className="mt-4">
-        <OutputCard />
-      </div>
+      {/* Live feed + job activity stream */}
+      <SectionHeader
+        title="Live stream"
+        description="Feed arrivals and job activity, as they happen."
+      />
+      <LiveFeedStream />
 
       <TestModelDialog
         open={test.testDialogOpen}
         prompt={test.testPrompt}
-        output={test.testOutput}
+        result={test.testResult}
         loading={test.testLoading}
+        streaming={test.testStreaming}
+        streamingText={test.testStreamingText}
+        responseFormat={test.responseFormat}
         onClose={() => test.setTestDialogOpen(false)}
         onPromptChange={test.setTestPrompt}
         onGenerate={test.handleTestModel}
         onClear={test.clearTest}
+        onResponseFormatChange={test.setResponseFormat}
       />
-    </div>
+    </PageContainer>
   )
 }

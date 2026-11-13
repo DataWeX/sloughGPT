@@ -3,13 +3,13 @@ Tests for Training Status & Checkpoint Management
 """
 
 import pytest
-from domains.training.status import (
-    TrainingStage,
+
+from domain.training._internal.status import (
     CompletionStatus,
     StageStatus,
     TrainingCompletionReport,
+    TrainingStage,
     TrainingStatusTracker,
-    CheckpointManager,
 )
 
 
@@ -37,7 +37,7 @@ class TestTrainingStatusTracker:
             rlhf_epochs=4,
         )
 
-        assert tracker.report.completion_status == CompletionStatus.IN_PROGRESS
+        assert tracker.report.completion_status == CompletionStatus.LIVE
         assert tracker.report.pretraining is not None
         assert tracker.report.federated is not None
         assert tracker.report.rlhf is not None
@@ -74,9 +74,9 @@ class TestTrainingStatusTracker:
         """Test recording checkpoints."""
         tracker = TrainingStatusTracker("test_model")
 
-        tracker.record_checkpoint("checkpoint_step100.pt", 100, 0.5)
+        tracker.record_checkpoint("checkpoint_step100.soul", 100, 0.5)
 
-        assert tracker.report.checkpoint_path == "checkpoint_step100.pt"
+        assert tracker.report.checkpoint_path == "checkpoint_step100.soul"
         assert tracker.report.last_checkpoint_step == 100
         assert len(tracker.checkpoints) == 1
 
@@ -84,22 +84,22 @@ class TestTrainingStatusTracker:
         """Test completion check."""
         tracker = TrainingStatusTracker("test_model")
 
-        assert tracker.report.is_complete() == False
+        assert not tracker.report.is_complete()
 
         tracker.report.completion_status = CompletionStatus.COMPLETED
 
-        assert tracker.report.is_complete() == True
+        assert tracker.report.is_complete()
 
     def test_can_resume(self):
         """Test resume capability check."""
         tracker = TrainingStatusTracker("test_model")
 
-        assert tracker.report.can_resume() == False
+        assert not tracker.report.can_resume()
 
-        tracker.report.completion_status = CompletionStatus.IN_PROGRESS
-        tracker.report.checkpoint_path = "checkpoint.pt"
+        tracker.report.completion_status = CompletionStatus.LIVE
+        tracker.report.checkpoint_path = "checkpoint.soul"
 
-        assert tracker.report.can_resume() == True
+        assert tracker.report.can_resume()
 
     def test_progress_summary(self):
         """Test progress summary."""

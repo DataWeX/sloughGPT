@@ -1,6 +1,11 @@
 {
-  "extends": "next/core-web-vitals",
-  "rules": {
-    "@next/next/no-img-element": "off"
-  }
+  "extends": "@sloughgpt/eslint-config/react",
+  "overrides": [
+    {
+      "files": ["components/kanban3d/**"],
+      "rules": {
+        "react/no-unknown-property": "off"
+      }
+    }
+  ]
 }

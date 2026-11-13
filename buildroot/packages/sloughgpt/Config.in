@@ -1,0 +1,38 @@
+config BR2_PACKAGE_SLOUGHPGT
+	bool "sloughgpt"
+	help
+	  SloughGPT shell and AI networking processor.
+	  
+	  Provides the Dait operating system shell, kernel,
+	  and AI processing capabilities for the sloughGPT platform.
+
+if BR2_PACKAGE_SLOUGHPGT
+
+config BR2_PACKAGE_SLOUGHPGT_SHELL
+	bool "Dait Shell"
+	default y
+	help
+	  Enable the Dait interactive shell with TUI support.
+
+config BR2_PACKAGE_SLOUGHPGT_KERNEL
+	bool "Dait Kernel"
+	default y
+	help
+	  Enable the Dait kernel with process scheduling,
+	  memory management, and system calls.
+
+config BR2_PACKAGE_SLOUGHPGT_VM
+	bool "x86 VM Support"
+	default y
+	help
+	  Enable the x86 virtual machine for running
+	  legacy applications and training workloads.
+
+config BR2_PACKAGE_SLOUGHPGT_NEURAL
+	bool "Neural Engine"
+	default y
+	help
+	  Enable the neural processing engine for
+	  AI inference and training.
+
+endif # BR2_PACKAGE_SLOUGHPGT

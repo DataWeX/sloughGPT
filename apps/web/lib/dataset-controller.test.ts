@@ -10,245 +10,267 @@ vi.mock('./config', () => ({
   PUBLIC_API_URL: 'http://127.0.0.1:9',
 }))
 
+import { PUBLIC_API_URL } from './config'
+
 import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
-import { datasetController } from './dataset-controller'
+import {
+  datasetController,
+  humanizeDatasetName,
+  isTrainingCorpus,
+  toGitHubCloneUrl,
+} from './dataset-controller'
+
+describe('isTrainingCorpus', () => {
+  it('keeps dataset and untagged entries', () => {
+    expect(isTrainingCorpus({ kind: 'dataset' })).toBe(true)
+    expect(isTrainingCorpus({ kind: undefined })).toBe(true)
+    expect(isTrainingCorpus({ kind: null as unknown as string })).toBe(true)
+  })
+
+  it('rejects adapter/system/media kinds', () => {
+    expect(isTrainingCorpus({ kind: 'adapter' })).toBe(false)
+    expect(isTrainingCorpus({ kind: 'system' })).toBe(false)
+    expect(isTrainingCorpus({ kind: 'media' })).toBe(false)
+  })
+})
+
+describe('humanizeDatasetName', () => {
+  it('replaces underscores and hyphens with spaces', () => {
+    expect(humanizeDatasetName('mental_health-chat')).toBe('Mental Health Chat')
+  })
+
+  it('strips storage-backend suffixes', () => {
+    expect(humanizeDatasetName('knowledge_graph_json')).toBe('Knowledge Graph')
+    expect(humanizeDatasetName('Auth-Mogdb')).toBe('Auth')
+    expect(humanizeDatasetName('errors_json')).toBe('Errors')
+    expect(humanizeDatasetName('model_catalog_json')).toBe('Model Catalog')
+  })
+
+  it('title-cases lowercase words only', () => {
+    expect(humanizeDatasetName('tinyshakespeare')).toBe('Tinyshakespeare')
+    expect(humanizeDatasetName('Api Conversations')).toBe('Api Conversations')
+    expect(humanizeDatasetName('ultrachat_200k')).toBe('Ultrachat 200k')
+  })
+
+  it('returns original when empty after cleanup', () => {
+    expect(humanizeDatasetName('_')).toBe('_')
+    expect(humanizeDatasetName('')).toBe('')
+  })
+})
 
 describe('datasetController.list', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-  it('GETs /datasets and returns rows', async () => {
-    apiClient.apiGet.mockResolvedValue({ datasets: [{ id: 'ds1', name: 'shakespeare', source: 'local', size: 12345, samples: 100, type: 'text', created_at: '2026-01-01' }] })
+  it('GET /datasets and returns rows', async () => {
+    const mockData = {
+      datasets: [
+        {
+          id: 'ds1',
+          name: 'shakespeare',
+          source: 'local',
+          size: 12345,
+          samples: 100,
+          type: 'text',
+          created_at: '2026-01-01',
+        },
+      ],
+    }
+    apiClient.apiGet.mockResolvedValue(mockData)
+
     const rows = await datasetController.list()
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets')
     expect(rows).toHaveLength(1)
     expect(rows[0].id).toBe('ds1')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets')
+    expect(rows[0].name).toBe('shakespeare')
   })
 
   it('handles empty datasets', async () => {
     apiClient.apiGet.mockResolvedValue({ datasets: [] })
+
     const rows = await datasetController.list()
     expect(rows).toEqual([])
   })
 
-  it('returns empty when datasets field missing', async () => {
-    apiClient.apiGet.mockResolvedValue({})
-    const rows = await datasetController.list()
-    expect(rows).toEqual([])
-  })
-
-  it('throws on API error', async () => {
+  it('throws when GET /datasets is not ok', async () => {
     apiClient.apiGet.mockRejectedValue(new Error('502'))
+
     await expect(datasetController.list()).rejects.toThrow('502')
   })
 })
 
-describe('datasetController.get', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs /datasets/{id}', async () => {
-    apiClient.apiGet.mockResolvedValue({ id: 'ds1', name: 'shakespeare', source: 'local', size: 12345, created_at: '2026-01-01' })
-    const result = await datasetController.get('ds1')
-    expect(result).not.toBeNull()
-    expect(result!.name).toBe('shakespeare')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/ds1')
+describe('datasetController.search', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
   })
 
-  it('returns null on error', async () => {
-    apiClient.apiGet.mockRejectedValue(new Error('404'))
-    const result = await datasetController.get('nonexistent')
-    expect(result).toBeNull()
-  })
-})
+  it('GETs /datasets/search with the query and returns results', async () => {
+    const results = [
+      { id: 'ds2', name: 'shakespeare', source: 'local', size: 10, created_at: '2026-01-02' },
+    ]
+    apiClient.apiGet.mockResolvedValue({ results, count: 1 })
 
-describe('datasetController.create', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+    const rows = await datasetController.search('shakes')
 
-  it('POSTs to /datasets', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: 'ds2', name: 'my-data', source: 'manual', size: 0, created_at: '2026-01-01' })
-    const result = await datasetController.create({ name: 'my-data' })
-    expect(result.name).toBe('my-data')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets', { name: 'my-data' })
-  })
-})
-
-describe('datasetController.delete', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('DELETEs /datasets/{id}', async () => {
-    apiClient.apiDelete.mockResolvedValue({})
-    await datasetController.delete('ds1')
-    expect(apiClient.apiDelete).toHaveBeenCalledWith('/datasets/ds1')
-  })
-})
-
-describe('datasetController.addData', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /datasets/{id}/data with strings', async () => {
-    apiClient.apiPost.mockResolvedValue({})
-    await datasetController.addData('ds1', ['line1', 'line2'])
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/ds1/data', { data: ['line1', 'line2'] })
-  })
-})
-
-describe('datasetController.update', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('PATCHes /datasets/{id}', async () => {
-    apiClient.apiPatch.mockResolvedValue({ id: 'ds1', name: 'renamed', source: 'local', size: 100, created_at: '2026-01-01' })
-    const result = await datasetController.update('ds1', { name: 'renamed' })
-    expect(result.name).toBe('renamed')
-    expect(apiClient.apiPatch).toHaveBeenCalledWith('/datasets/ds1', { name: 'renamed' })
-  })
-})
-
-describe('datasetController.preview', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs /datasets/{id}/preview', async () => {
-    const preview = { dataset_id: 'ds1', samples: [{ path: 'file.txt', language: 'en', content: 'hello', size: 5 }], total_samples: 1, total_chars: 5, languages: { en: 1 } }
-    apiClient.apiGet.mockResolvedValue(preview)
-    const result = await datasetController.preview('ds1', 5)
-    expect(result.total_samples).toBe(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/ds1/preview?limit=5')
-  })
-})
-
-describe('datasetController.searchGitHubRepos', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs /datasets/search/github', async () => {
-    apiClient.apiGet.mockResolvedValue({ repos: [{ id: 'r1', name: 'repo', full_name: 'user/repo', description: 'desc', stars: 10, url: 'https://github.com/user/repo', language: 'Python' }] })
-    const result = await datasetController.searchGitHubRepos('python')
-    expect(result.repos).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search/github', { q: 'python', limit: '10' })
-  })
-})
-
-describe('datasetController.searchBooks', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs /datasets/search/books', async () => {
-    apiClient.apiGet.mockResolvedValue({ books: [{ key: 'b1', title: 'Moby Dick', author: 'Melville', isbn: '123', year: 1851, cover: null }] })
-    const result = await datasetController.searchBooks('moby', 5)
-    expect(result.books).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search/books', { q: 'moby', limit: '5' })
-  })
-})
-
-describe('datasetController.imports', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('importFromGitHub POSTs /datasets/import/github', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'ds1', message: 'ok', output_path: '/tmp' })
-    const r = await datasetController.importFromGitHub({ url: 'https://github.com/user/repo', name: 'repo' })
-    expect(r.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/github', { url: 'https://github.com/user/repo', name: 'repo' })
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search?q=shakes')
+    expect(rows).toEqual(results)
   })
 
-  it('importFromHuggingFace POSTs /datasets/import/huggingface', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'ds2', message: 'ok', output_path: '/tmp' })
-    const r = await datasetController.importFromHuggingFace({ dataset_id: 'imdb', name: 'my-imdb' })
-    expect(r.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/huggingface', { dataset_id: 'imdb', name: 'my-imdb' })
+  it('encodes special characters in the query', async () => {
+    apiClient.apiGet.mockResolvedValue({ results: [], count: 0 })
+
+    await datasetController.search('s&p 500 dataset')
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search?q=s%26p%20500%20dataset')
   })
 
-  it('importFromURL POSTs /datasets/import/url', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'ds3', message: 'ok', output_path: '/tmp' })
-    const r = await datasetController.importFromURL({ url: 'https://data.gov/sample.jsonl', name: 'gov-data' })
-    expect(r.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/url', { url: 'https://data.gov/sample.jsonl', name: 'gov-data' })
-  })
+  it('returns empty array when no results key', async () => {
+    apiClient.apiGet.mockResolvedValue({})
 
-  it('importFromLocal POSTs /datasets/import/local', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'ds4', message: 'ok', output_path: '/tmp' })
-    const r = await datasetController.importFromLocal({ path: '/data/txt', name: 'local-data' })
-    expect(r.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/local', { path: '/data/txt', name: 'local-data' })
-  })
+    const rows = await datasetController.search('nothing')
 
-  it('importFromKaggle POSTs /datasets/import/kaggle', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'ds5', message: 'ok', output_path: '/tmp' })
-    const r = await datasetController.importFromKaggle({ dataset: 'user/dataset', name: 'kaggle-data' })
-    expect(r.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/kaggle', { dataset: 'user/dataset', name: 'kaggle-data' })
-  })
-
-  it('importFromCSV POSTs /datasets/import/csv', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'ds6', message: 'ok', output_path: '/tmp' })
-    const r = await datasetController.importFromCSV({ url: 'https://example.com/data.csv', name: 'csv-data', delimiter: ';' })
-    expect(r.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/csv', { url: 'https://example.com/data.csv', name: 'csv-data', delimiter: ';' })
-  })
-
-  it('importFromISBN POSTs /datasets/import/isbn', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'ds7', message: 'ok', output_path: '/tmp' })
-    const r = await datasetController.importFromISBN({ isbn: '9780141036144', name: '1984-book' })
-    expect(r.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/isbn', { isbn: '9780141036144', name: '1984-book' })
-  })
-
-  it('batchImport POSTs /datasets/import/batch', async () => {
-    apiClient.apiPost.mockResolvedValue({ imported: 2, errors: [] })
-    const r = await datasetController.batchImport(['src1', 'src2'])
-    expect(r.imported).toBe(2)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/import/batch', { sources: ['src1', 'src2'] })
+    expect(rows).toEqual([])
   })
 })
 
 describe('datasetController.export', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-  it('fetches blob from /datasets/{id}/export', async () => {
-    const fakeBlob = new Blob(['data,a,b\n1,2,3'])
-    global.fetch = vi.fn().mockResolvedValue({ blob: () => fakeBlob })
-    const result = await datasetController.export('ds1', 'csv')
-    expect(result).toBe(fakeBlob)
-    expect(global.fetch).toHaveBeenCalledWith('http://127.0.0.1:9/datasets/ds1/export', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'csv' }),
+  it('POSTs to /datasets/{id}/export and returns the blob', async () => {
+    const blob = new Blob(['{"a":1}'], { type: 'application/json' })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await datasetController.export('ds1', 'jsonl')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${PUBLIC_API_URL}/datasets/ds1/export`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ format: 'jsonl' }),
+      }),
+    )
+    expect(result).toBe(blob)
+    vi.unstubAllGlobals()
+  })
+
+  it('defaults to jsonl format', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob() })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await datasetController.export('ds1')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${PUBLIC_API_URL}/datasets/ds1/export`,
+      expect.objectContaining({ body: JSON.stringify({ format: 'jsonl' }) }),
+    )
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('datasetController versioning', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('creates a version via POST /datasets/{id}/versions', async () => {
+    apiClient.apiPost.mockResolvedValue({ timestamp: '20260801120000', message: 'Version created' })
+
+    const res = await datasetController.createVersion('ds1')
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/ds1/versions')
+    expect(res.timestamp).toBe('20260801120000')
+  })
+
+  it('lists versions via GET /datasets/{id}/versions', async () => {
+    apiClient.apiGet.mockResolvedValue({ versions: ['20260801120000', '20260801110000'], count: 2 })
+
+    const res = await datasetController.listVersions('ds1')
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/ds1/versions')
+    expect(res.versions).toHaveLength(2)
+    expect(res.count).toBe(2)
+  })
+
+  it('restores a version via POST /datasets/{id}/versions/{timestamp}', async () => {
+    apiClient.apiPost.mockResolvedValue({ success: true, message: 'Version restored' })
+
+    const res = await datasetController.restoreVersion('ds1', '20260801120000')
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/ds1/versions/20260801120000')
+    expect(res.success).toBe(true)
+  })
+})
+
+describe('toGitHubCloneUrl', () => {
+  it('expands a bare owner/repo slug into an https clone URL', () => {
+    expect(toGitHubCloneUrl('qt/qt')).toBe('https://github.com/qt/qt')
+  })
+
+  it('strips a trailing .git before expanding', () => {
+    expect(toGitHubCloneUrl('torvalds/linux.git')).toBe('https://github.com/torvalds/linux')
+  })
+
+  it('passes an existing https URL through unchanged', () => {
+    expect(toGitHubCloneUrl('https://github.com/qt/qt')).toBe('https://github.com/qt/qt')
+  })
+
+  it('passes an ssh-style git@ URL through unchanged', () => {
+    expect(toGitHubCloneUrl('git@github.com:qt/qt.git')).toBe('git@github.com:qt/qt.git')
+  })
+
+  it('trims surrounding whitespace', () => {
+    expect(toGitHubCloneUrl('  qt/qt  ')).toBe('https://github.com/qt/qt')
+  })
+
+  it('leaves non-slug input untouched for the backend to validate', () => {
+    expect(toGitHubCloneUrl('not-a-repo')).toBe('not-a-repo')
+  })
+})
+
+describe('datasetController.importFromGitHub', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('normalizes a bare owner/repo slug before POSTing', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      success: true,
+      dataset_id: 'qt',
+      message: 'ok',
+      output_path: '',
     })
-  })
-})
 
-describe('datasetController.convertToMessages', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+    await datasetController.importFromGitHub({ url: 'qt/qt', name: 'qt' })
 
-  it('POSTs to /datasets/convert-to-messages', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'ok', new_dataset_id: 'ds2', total_conversations: 5 })
-    const r = await datasetController.convertToMessages('ds1', 'You are helpful.')
-    expect(r.total_conversations).toBe(5)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/convert-to-messages?dataset_id=ds1&system_prompt=You%20are%20helpful.')
-  })
-})
-
-describe('datasetController.getStats', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs /datasets/{id}/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({ format: 'jsonl', samples: 100, chars: 5000, avg_length: 50, has_messages: false, sample_preview: [], lines: 100, suggested_method: 'distill', file_type: 'jsonl' })
-    const r = await datasetController.getStats('ds1')
-    expect(r.samples).toBe(100)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/ds1/stats')
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/datasets/import/github',
+      expect.objectContaining({ url: 'https://github.com/qt/qt', name: 'qt' }),
+      expect.anything(),
+    )
   })
 
-  it('encodes special characters in id', async () => {
-    apiClient.apiGet.mockResolvedValue({ format: 'text', samples: 0, chars: 0, avg_length: 0, has_messages: false, sample_preview: [], lines: 0, suggested_method: '', file_type: '' })
-    await datasetController.getStats('ds/path')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/ds%2Fpath/stats')
-  })
-})
-
-describe('datasetController.createFromChat', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /datasets/from-chat', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'ok', dataset_id: 'ds1', name: 'chat-export', messages_exported: 3 })
-    const r = await datasetController.createFromChat({ messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }], name: 'chat-export' })
-    expect(r.messages_exported).toBe(3)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/from-chat', {
-      messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }], name: 'chat-export',
+  it('keeps an explicit https URL as-is', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      success: true,
+      dataset_id: 'qt',
+      message: 'ok',
+      output_path: '',
     })
+
+    await datasetController.importFromGitHub({ url: 'https://github.com/qt/qt', name: 'qt' })
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/datasets/import/github',
+      expect.objectContaining({ url: 'https://github.com/qt/qt' }),
+      expect.anything(),
+    )
   })
 })

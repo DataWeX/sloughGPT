@@ -1,8 +1,7 @@
-/** FastAPI backend base URL for the Next.js app (client bundles). */
-export const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-/** API endpoint path - use direct backend URL to avoid proxy issues with streaming */
-export const API_CHAT_ENDPOINT = `${PUBLIC_API_URL}/chat/stream`
-
-/** localStorage key for user-injected knowledge snippets */
-export const KNOWLEDGE_STORAGE_KEY = 'man_injected_knowledge'
+/** FastAPI backend base URL for the app (client bundles).
+ *
+ * `??` (not `||`) so an explicit empty value survives: `npm run build:vite`
+ * builds same-origin, where the gateway relays the API — a `||` fallback to
+ * `http://localhost:8000` there would reintroduce a second origin (CORS) for
+ * every request the static site makes. */
+export const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'

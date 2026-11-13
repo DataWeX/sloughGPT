@@ -1,17 +1,8 @@
 'use client'
 
-const STORAGE_KEY = 'man_quick_prompts'
+import { chatDB, type QuickPrompt as DBQuickPrompt } from '@/lib/db'
 
-export interface QuickPrompt {
-  id: string
-  name: string
-  description: string
-  prompt: string
-  icon: string
-  category: 'writing' | 'coding' | 'planning' | 'learning' | 'custom'
-  createdAt: number
-  updatedAt: number
-}
+export type QuickPrompt = DBQuickPrompt
 
 interface PromptEntry {
   name: string
@@ -42,36 +33,35 @@ function applyPrompt(template: string, text: string): string {
 
 let cached: QuickPrompt[] | null = null
 
-function loadAll(): QuickPrompt[] {
+async function ensureInit(): Promise<QuickPrompt[]> {
   if (cached) return cached
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      cached = JSON.parse(raw) as QuickPrompt[]
-      return cached
-    }
-  } catch {}
+  const stored = await chatDB.getPrompts()
+  if (stored.length > 0) {
+    cached = stored
+    return cached
+  }
   const defaults: QuickPrompt[] = DEFAULT_PROMPTS.map((p, i) => ({
     id: `default-${i}`,
     ...p,
     createdAt: 0,
     updatedAt: 0,
   }))
+  await chatDB.importPrompts(defaults)
   cached = defaults
   return cached
 }
 
-function persist(prompts: QuickPrompt[]) {
-  cached = prompts
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prompts)) } catch {}
+async function initPrompts(): Promise<void> {
+  cached = null
+  await ensureInit()
 }
 
-export function listPrompts(): QuickPrompt[] {
-  return loadAll()
+export async function listPrompts(): Promise<QuickPrompt[]> {
+  return ensureInit()
 }
 
-export function listPromptsByCategory(): Record<string, QuickPrompt[]> {
-  const all = loadAll()
+export async function listPromptsByCategory(): Promise<Record<string, QuickPrompt[]>> {
+  const all = await ensureInit()
   const grouped: Record<string, QuickPrompt[]> = {}
   for (const p of all) {
     if (!grouped[p.category]) grouped[p.category] = []
@@ -80,44 +70,51 @@ export function listPromptsByCategory(): Record<string, QuickPrompt[]> {
   return grouped
 }
 
-export function getPrompt(id: string): QuickPrompt | undefined {
-  return loadAll().find(p => p.id === id)
+export async function getPrompt(id: string): Promise<QuickPrompt | undefined> {
+  const all = await ensureInit()
+  return all.find(p => p.id === id)
 }
 
-export function createPrompt(entry: Omit<QuickPrompt, 'id' | 'createdAt' | 'updatedAt'>): QuickPrompt {
+export async function createPrompt(entry: Omit<QuickPrompt, 'id' | 'createdAt' | 'updatedAt'>): Promise<QuickPrompt> {
   const prompt: QuickPrompt = {
     ...entry,
     id: `prompt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }
-  const all = loadAll()
-  all.push(prompt)
-  persist(all)
+  await chatDB.savePrompt(prompt)
+  cached = null
   return prompt
 }
 
-export function updatePrompt(id: string, updates: Partial<Omit<QuickPrompt, 'id' | 'createdAt'>>): QuickPrompt | undefined {
-  const all = loadAll()
+export async function updatePrompt(id: string, updates: Partial<Omit<QuickPrompt, 'id' | 'createdAt'>>): Promise<QuickPrompt | undefined> {
+  const all = await ensureInit()
   const idx = all.findIndex(p => p.id === id)
   if (idx === -1) return undefined
   all[idx] = { ...all[idx], ...updates, updatedAt: Date.now() }
-  persist(all)
+  await chatDB.savePrompt(all[idx])
+  cached = all
   return all[idx]
 }
 
-export function deletePrompt(id: string): boolean {
-  const all = loadAll()
+export async function deletePrompt(id: string): Promise<boolean> {
+  const all = await ensureInit()
   const filtered = all.filter(p => p.id !== id)
   if (filtered.length === all.length) return false
-  persist(filtered)
+  await chatDB.deletePrompt(id)
+  cached = filtered
   return true
 }
 
-export function resetToDefaults() {
-  persist([])
+export async function resetToDefaults(): Promise<QuickPrompt[]> {
+  await chatDB.clearPrompts()
   cached = null
-  return listPrompts()
+  return ensureInit()
 }
 
-export { applyPrompt }
+export { applyPrompt, initPrompts }
+
+/** Reset module-level cache. For test use only. */
+export function __resetPromptCache(): void {
+  cached = null
+}

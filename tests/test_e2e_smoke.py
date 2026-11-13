@@ -11,6 +11,7 @@ Generation-dependent endpoints are skipped when no model is loaded.
 Run: ``pytest tests/test_e2e_smoke.py -v``
 """
 
+import json
 import os
 
 # Disable background services so lifespan completes quickly.
@@ -46,10 +47,11 @@ def model_loaded(client):
     in a background task and may not be complete when the lifespan yields).
     """
     import time
+
     deadline = time.time() + 20
     while time.time() < deadline:
         resp = client.get("/health")
-        data = resp.json()
+        data = resp.json().get("data", {})
         if data.get("model_loaded"):
             return True
         time.sleep(1)
@@ -60,12 +62,19 @@ class TestHealth:
     def test_health_returns_200(self, client):
         resp = client.get("/health")
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "healthy"
+        payload = resp.json()
+        assert payload["status"] == "success"
+        # 'degraded' is a first-class health state (hook errors, high failure
+        # rate, and — decisively in CI — model autoload: no .slnc/.soul for
+        # Qwen2.5-0.5B and no network, so health stays degraded by design).
+        # The smoke's contract is the envelope + an answerable endpoint;
+        # a strict 'healthy' assertion needs the live-stack asset environment
+        # (journey tests), not the merge gate.
+        assert payload["data"]["status"] in ("healthy", "degraded")
 
     def test_health_fields(self, client):
         resp = client.get("/health")
-        data = resp.json()
+        data = resp.json()["data"]
         for field in ("model_loaded", "model_type", "inference_count"):
             assert field in data, f"Missing field: {field}"
 
@@ -77,14 +86,15 @@ class TestSouls:
     def test_list_souls(self, client):
         resp = client.get("/souls")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "souls" in data
-        assert isinstance(data["souls"], list)
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert isinstance(payload["data"], list)
+        assert "current_soul" in payload["meta"]
 
     def test_current_soul(self, client):
         resp = client.get("/souls/current")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert isinstance(data, dict)
         assert "name" in data or "soul" in data
 
@@ -93,62 +103,71 @@ class TestModels:
     def test_list_models(self, client):
         resp = client.get("/models")
         assert resp.status_code == 200
-        models = resp.json()
+        models = resp.json()["data"]
         assert isinstance(models, list)
 
     def test_models_hf(self, client):
         resp = client.get("/models/hf")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "models" in data
-        assert isinstance(data["models"], list)
+        models = resp.json()["data"]
+        assert isinstance(models, list)
 
 
 class TestChatSessions:
     def test_sessions_list(self, client):
         resp = client.get("/chat/sessions")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "sessions" in data
-        assert isinstance(data["sessions"], list)
+        sessions = resp.json()["data"]
+        assert isinstance(sessions, list)
 
     def test_create_session(self, client):
         resp = client.post("/chat/sessions", json={"session_id": "e2e-test-session"})
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "created"
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert payload["data"]["session_id"] == "e2e-test-session"
 
 
 class TestChatGenerate:
     """Generation endpoints — only tested when a model is loaded."""
 
-    def test_chat_non_streaming(self, client, model_loaded):
-        if not model_loaded:
-            pytest.skip("No model loaded")
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hello"}],
-            "max_tokens": 20,
-        })
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "message" in data
+    def test_chat_folding_client_recovers_reply(self, client, model_loaded):
+        """A caller wanting a complete reply folds the stream at its own edge.
 
-    def test_chat_stream(self, client, model_loaded):
+        POST /chat streams — there is no non-streaming sibling, because a second
+        URL would re-advertise streaming as a choice. The fold belongs to the
+        client: read the token frames, stop at the closing frame.
+        """
         if not model_loaded:
             pytest.skip("No model loaded")
-        resp = client.post("/chat/stream", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "max_tokens": 20,
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
+
+        frames = [
+            json.loads(line[6:]) for line in resp.text.splitlines() if line.startswith("data: ")
+        ]
+        assert frames, "POST /chat must emit SSE frames"
+        folded = "".join(f.get("data", {}).get("token", "") for f in frames)
+        assert folded.strip(), "a folding client must recover a non-empty reply"
+        assert frames[-1]["status"] == "complete", "the closing frame ends the stream"
 
     def test_generate(self, client, model_loaded):
         if not model_loaded:
             pytest.skip("No model loaded")
-        resp = client.post("/inference/generate", json={
-            "prompt": "Hello", "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate",
+            json={
+                "prompt": "Hello",
+                "max_new_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "text" in data
@@ -156,9 +175,13 @@ class TestChatGenerate:
     def test_generate_stream(self, client, model_loaded):
         if not model_loaded:
             pytest.skip("No model loaded")
-        resp = client.post("/inference/generate/stream", json={
-            "prompt": "Hi", "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate/stream",
+            json={
+                "prompt": "Hi",
+                "max_new_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
@@ -181,11 +204,13 @@ class TestTokenizer:
 
 class TestAutoTrain:
     def test_list_checkpoints(self, client):
-        resp = client.get("/auto-train/checkpoints")
+        # /auto-train/checkpoints was retired; the live route is
+        # /training/checkpoints and returns the standard envelope.
+        resp = client.get("/training/checkpoints")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "checkpoints" in data
-        assert isinstance(data["checkpoints"], list)
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert isinstance(payload["data"], list)
 
 
 class TestWorkflow:

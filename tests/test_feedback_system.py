@@ -17,11 +17,6 @@ _SERVER_DIR = _REPO_ROOT / "apps" / "api" / "server"
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 
-_PKGS_DIR = _REPO_ROOT / "packages" / "core-py"
-if str(_PKGS_DIR) not in sys.path:
-    sys.path.insert(0, str(_PKGS_DIR))
-
-
 pytestmark = pytest.mark.slow
 
 TestClient = pytest.importorskip("fastapi.testclient").TestClient
@@ -31,7 +26,8 @@ TestClient = pytest.importorskip("fastapi.testclient").TestClient
 def client():
     from main import app
 
-    return app, TestClient(app)
+    with TestClient(app) as test_client:
+        yield app, test_client
 
 
 def test_feedback_record(client):
@@ -94,8 +90,8 @@ def test_meta_weights_stats(client):
     response = test_client.get("/meta-weights/stats")
     assert response.status_code == 200
     data = response.json()
-    assert "db_stats" in data
-    assert "feedback_total" in data["db_stats"]
+    assert "db_stats" in data["data"]
+    assert "feedback_total" in data["data"]["db_stats"]
 
 
 def test_user_adapters_list(client):
@@ -105,7 +101,7 @@ def test_user_adapters_list(client):
     response = test_client.get("/user-adapters")
     assert response.status_code == 200
     data = response.json()
-    assert "stats" in data or "adapters" in data
+    assert "stats" in data["data"] or "adapters" in data["data"]
 
 
 def test_user_adapters_aggregate(client):
@@ -131,7 +127,7 @@ def test_user_adapters_prune(client):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "pruned"
+    assert data["data"]["status"] == "pruned"
 
 
 def test_workflow_status(client):
@@ -141,8 +137,8 @@ def test_workflow_status(client):
     response = test_client.get("/workflow/status")
     assert response.status_code == 200
     data = response.json()
-    assert "running" in data
-    assert "stats" in data
+    assert "running" in data["data"]
+    assert "stats" in data["data"]
 
 
 def test_workflow_start_stop(client):
@@ -180,7 +176,7 @@ def test_export_training(client):
     assert response.status_code == 200
     data = response.json()
     assert "pairs_count" in data
-    assert "filepath" in data
+    assert "file" in data
 
 
 def test_export_training_invalid(client):

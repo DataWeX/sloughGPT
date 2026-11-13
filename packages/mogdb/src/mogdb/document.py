@@ -3,7 +3,7 @@
 import hashlib
 import secrets
 import time
-from typing import Any, Dict
+from typing import Any
 
 
 def ObjectId() -> str:
@@ -18,11 +18,11 @@ def ObjectId() -> str:
     return f"{t:08x}{r}"
 
 
-class Document(Dict[str, Any]):
+class Document(dict[str, Any]):
     """A dict subclass representing a single MogDB document.
 
     Every document has a reserved ``_id`` field (auto-generated if missing)
-    and an internal ``_created`` timestamp.
+    and ``_created`` / ``_updated`` timestamps.
     """
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -31,7 +31,8 @@ class Document(Dict[str, Any]):
             self["_id"] = ObjectId()
         if "_created" not in self:
             self["_created"] = time.time()
-        self["_updated"] = time.time()
+        if "_updated" not in self:
+            self["_updated"] = time.time()
 
     @property
     def id(self) -> str:
@@ -45,6 +46,6 @@ class Document(Dict[str, Any]):
         raw = json.dumps(clean, sort_keys=True, default=str)
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
-    def copy_data(self) -> Dict[str, Any]:
+    def copy_data(self) -> dict[str, Any]:
         """Return a plain dict copy with all fields."""
         return dict(self)

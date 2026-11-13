@@ -1,0 +1,32 @@
+"""context — Context managers for model behavior steering.
+
+Public API:
+    TraitWeightsConfig, PersonalityManager, MemoryManager, StyleManager, TaskManager
+    ConsciousnessManager, get_trait_config, reset_trait_config
+"""
+
+from __future__ import annotations
+
+from domain.context._internal.managers import (
+    ConsciousnessManager,
+    MemoryManager,
+    PersonalityManager,
+    StyleManager,
+    TaskManager,
+    TraitWeightsConfig,
+    ensure_managers,
+    get_trait_config,
+    reset_trait_config,
+)
+
+__all__ = [
+    "TraitWeightsConfig",
+    "PersonalityManager",
+    "MemoryManager",
+    "StyleManager",
+    "TaskManager",
+    "ConsciousnessManager",
+    "ensure_managers",
+    "get_trait_config",
+    "reset_trait_config",
+]

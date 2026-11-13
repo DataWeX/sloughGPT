@@ -1,93 +1,131 @@
-import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
+/**
+ * Files Controller — API for file management.
+ *
+ * Usage:
+ *   import { filesController } from '@/lib/files-controller'
+ *   const files = await filesController.list()
+ *   await filesController.upload(formData)
+ */
 
-export interface FileItem {
+import { apiGet, apiPost, apiDelete } from './http-client'
+
+export interface FileEntry {
   id: string
   filename: string
-  extension: string
-  size_bytes: number
-  uploaded_at: number
-  tags: string[]
+  size: number
+  content_type: string
+  uploaded_at: string
+  ingested: boolean
+  chunk_count?: number
+  extension?: string
+  tags?: string[]
 }
 
-export interface FileDetail {
+export interface FileDetail extends FileEntry {
+  chars?: number
+  pages?: number
+  text?: string
+}
+
+export interface SearchResult {
+  results: FileEntry[]
+  count?: number
+}
+
+export interface ImportJob {
+  job_id: string
+}
+
+export interface ImportStatus {
+  job_id: string
+  state: 'running' | 'done' | 'error'
+  filename: string
+  done: number // decoded bytes on disk
+  total: number // decoded total; 0 = unknown → indeterminate
+  pct: number
+  wire_bytes?: number | null
+  saved_bytes?: number | null
+  content_encoding?: string
+  error?: string | null
+}
+
+interface BackendFileItem {
   id: string
   filename: string
-  extension: string
-  size_bytes: number
-  chars: number
-  pages: number
-  uploaded_at: number
-  tags: string[]
-  text: string
+  extension?: string
+  size_bytes?: number
+  uploaded_at: string | number
+  tags?: string[]
 }
 
-export interface UploadResponse {
-  id: string
-  filename: string
-  chars: number
-  pages: number
-  size_bytes: number
+function mapFileEntry(f: BackendFileItem): FileEntry {
+  return {
+    id: f.id,
+    filename: f.filename,
+    size: f.size_bytes ?? 0,
+    content_type: f.extension ?? 'unknown',
+    uploaded_at: String(f.uploaded_at),
+    ingested: (f.tags?.length ?? 0) > 0,
+    extension: f.extension,
+    tags: f.tags,
+  }
 }
 
-export interface FileListResponse {
-  files: FileItem[]
-  total: number
+class FilesController {
+  async list(): Promise<FileEntry[]> {
+    const data = await apiGet<{ files?: BackendFileItem[] } | BackendFileItem[]>('/files/')
+    if (!data) return []
+    const raw = Array.isArray(data) ? data : (data.files ?? [])
+    return raw.map(mapFileEntry)
+  }
+
+  async upload(formData: FormData): Promise<{ filename?: string }> {
+    return apiPost('/files/upload', formData, { raw: true })
+  }
+
+  /** Start a background import of a remote URL; poll `importStatus(job_id)`. */
+  async startImport(url: string): Promise<ImportJob> {
+    return apiPost('/files/import', { url })
+  }
+
+  async importStatus(jobId: string): Promise<ImportStatus> {
+    return apiGet(`/files/import/${jobId}`)
+  }
+
+  async delete(id: string): Promise<void> {
+    return apiDelete(`/files/${id}`)
+  }
+
+  async deleteBatch(ids: string[]): Promise<void> {
+    await Promise.all(ids.map((id) => apiDelete(`/files/${id}`)))
+  }
+
+  async ingest(id: string): Promise<void> {
+    return apiPost(`/files/${id}/ingest`)
+  }
+
+  async search(query: string): Promise<FileEntry[]> {
+    const data = await apiGet<{ files?: BackendFileItem[] }>(
+      `/files/search?q=${encodeURIComponent(query)}`,
+    )
+    if (!data) return []
+    return (data.files ?? []).map(mapFileEntry)
+  }
+
+  async getDetail(id: string): Promise<FileDetail | null> {
+    try {
+      const data = await apiGet<Record<string, unknown>>(`/files/${id}`)
+      if (!data) return null
+      return {
+        ...mapFileEntry(data as unknown as BackendFileItem),
+        chars: data.chars as number | undefined,
+        pages: data.pages as number | undefined,
+        text: data.text as string | undefined,
+      }
+    } catch {
+      return null
+    }
+  }
 }
 
-export interface IngestResponse {
-  id: string
-  filename: string
-  chars: number
-  facts_stored: number
-}
-
-export const filesController = {
-  async list(sort?: string, order?: string, tag?: string): Promise<FileListResponse> {
-    const params = new URLSearchParams()
-    if (sort) params.set('sort', sort)
-    if (order) params.set('order', order)
-    if (tag) params.set('tag', tag)
-    const qs = params.toString()
-    return apiGet<FileListResponse>(`/files${qs ? `?${qs}` : ''}`)
-  },
-
-  async extract(file: File): Promise<FileDetail> {
-    const { id } = await this.upload(file)
-    return this.get(id)
-  },
-
-  async upload(file: File, tags?: string[]): Promise<UploadResponse> {
-    const fd = new FormData()
-    fd.append('file', file)
-    if (tags?.length) fd.append('tags', JSON.stringify(tags))
-    return apiPost<UploadResponse>('/files/upload', fd, { raw: true })
-  },
-
-  async get(fileId: string): Promise<FileDetail> {
-    return apiGet<FileDetail>(`/files/${fileId}`)
-  },
-
-  async delete(fileId: string): Promise<void> {
-    return apiDelete(`/files/${fileId}`)
-  },
-
-  async search(q: string, tag?: string): Promise<FileListResponse> {
-    const params = new URLSearchParams({ q })
-    if (tag) params.set('tag', tag)
-    return apiGet<FileListResponse>(`/files/search?${params}`)
-  },
-
-  async ingest(fileId: string): Promise<IngestResponse> {
-    return apiPost<IngestResponse>(`/files/${fileId}/ingest`)
-  },
-
-  formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  },
-
-  formatDate(ts: number): string {
-    return new Date(ts * 1000).toLocaleString()
-  },
-}
+export const filesController = new FilesController()

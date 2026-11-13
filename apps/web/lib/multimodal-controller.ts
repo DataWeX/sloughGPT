@@ -3,6 +3,7 @@ import { apiGet, apiPost } from './http-client'
 export interface MultimodalCapabilities {
   speech_to_text: boolean
   image_caption: boolean
+  vqa: boolean
   speech_model: string | null
   vision_model: string | null
   images_learned: number
@@ -48,6 +49,7 @@ interface UnifiedStatus {
   engine: {
     speech_to_text: boolean
     image_caption: boolean
+    vqa: boolean
     speech_model: string | null
     vision_model: string | null
     status: string
@@ -66,8 +68,8 @@ interface UnifiedStatus {
     last_accuracy: number
   }
   batch: TrainingStatus
-  dpo: { status: string; last_run: string | null; result: any; accepted_count: number; rejected_count: number }
-  video: { status: string; job_id: string | null; current_epoch: number; current_step: number; total_steps: number; current_loss: number | null; result: any; error: string | null }
+  dpo: { status: string; last_run: string | null; result: { status?: string; steps?: number; avg_loss?: number; ppl_before?: number; ppl_after?: number; ppl_delta_pct?: number; pairs_trained?: number; elapsed_seconds?: number; error?: string } | null; accepted_count: number; rejected_count: number }
+  video: { status: string; job_id: string | null; current_epoch: number; current_step: number; total_steps: number; current_loss: number | null; result: { output_dir?: string; final_loss?: number } | null; error: string | null }
 }
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
@@ -81,10 +83,11 @@ export const multimodalController = {
   },
 
   async getCapabilities(): Promise<MultimodalCapabilities> {
-    const s = await this.getStatus() as UnifiedStatus
+    const s = await this.getStatus()
     return {
       speech_to_text: s.engine.speech_to_text,
       image_caption: s.engine.image_caption,
+      vqa: s.engine.vqa,
       speech_model: s.engine.speech_model,
       vision_model: s.engine.vision_model,
       images_learned: s.learning.images_learned,
@@ -97,7 +100,7 @@ export const multimodalController = {
   },
 
   async getLearningProgress(): Promise<LearningProgress> {
-    const s = await this.getStatus() as UnifiedStatus
+    const s = await this.getStatus()
     return {
       images_learned: s.learning.images_learned,
       trained: s.learning.trained,
@@ -107,7 +110,7 @@ export const multimodalController = {
   },
 
   async getTrainingReport(): Promise<TrainingReport> {
-    const s = await this.getStatus() as UnifiedStatus
+    const s = await this.getStatus()
     return {
       images_learned: s.learning.images_learned,
       vocab_size: s.learning.vocab_size,
@@ -123,18 +126,27 @@ export const multimodalController = {
   },
 
   async getTrainingStatus(): Promise<TrainingStatus> {
-    const s = await this.getStatus() as UnifiedStatus
+    const s = await this.getStatus()
     return s.batch
   },
 
-  async getDPOStatus(): Promise<{ status: string; accepted_count: number; rejected_count: number; result?: any }> {
-    const s = await this.getStatus() as UnifiedStatus
+  async getDPOStatus(): Promise<{ status: string; accepted_count: number; rejected_count: number; result?: Record<string, unknown> | null }> {
+    const s = await this.getStatus()
     return s.dpo
   },
 
   async getVideoStatus(): Promise<{ status: string; job_id: string | null; current_epoch: number; current_step: number; total_steps: number; current_loss: number | null }> {
-    const s = await this.getStatus() as UnifiedStatus
+    const s = await this.getStatus()
     return s.video
+  },
+
+  async uploadPDF(file: File, question?: string, opts?: { perPage?: boolean; maxNewTokens?: number }): Promise<{ analysis: string }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('question', question || 'Analyze this document and summarize its contents.')
+    fd.append('per_page', String(opts?.perPage ?? false))
+    if (opts?.maxNewTokens != null) fd.append('max_new_tokens', String(opts.maxNewTokens))
+    return apiPost('/multimodal/pdf/upload', fd, { raw: true })
   },
 
   async trainImage(dataUrl: string, fileName?: string, label?: string): Promise<{ status: string; caption: string; confidence: number; images_learned: number; accuracy: number; supervised: boolean }> {
@@ -198,5 +210,27 @@ export const multimodalController = {
 
   async resetModel(): Promise<{ status: string; message: string }> {
     return apiPost('/multimodal/reset')
+  },
+
+  async askQuestion(file: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('question', question)
+    return apiPost('/multimodal/ask', fd, { raw: true })
+  },
+
+  async detectObjects(file: File): Promise<{ objects: Array<{ label: string; bbox: number[]; confidence: number }> }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    return apiPost('/multimodal/detect', fd, { raw: true })
+  },
+
+  async analyzePdf(file: File, question?: string, opts?: { perPage?: boolean; maxNewTokens?: number }): Promise<{ analysis: string; filename: string; pages_analyzed: number; method: string }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('question', question || 'Analyze this document and summarize its contents.')
+    fd.append('per_page', String(opts?.perPage ?? false))
+    if (opts?.maxNewTokens != null) fd.append('max_new_tokens', String(opts.maxNewTokens))
+    return apiPost('/multimodal/pdf/upload', fd, { raw: true })
   },
 }

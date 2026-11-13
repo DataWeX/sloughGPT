@@ -1,95 +1,131 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock auth store – token not needed for tokenizer endpoints
-vi.mock('./auth', () => ({
-  useAuthStore: {
-    getState: () => ({ token: null as string | null }),
-  },
+let mockApiGet: ReturnType<typeof vi.fn>
+let mockApiPost: ReturnType<typeof vi.fn>
+
+vi.mock('@/lib/http-client', () => ({
+  apiGet: (...args: unknown[]) => mockApiGet(...args),
+  apiPost: (...args: unknown[]) => mockApiPost(...args),
 }))
 
-// Mock config – avoid real network calls
-vi.mock('./config', () => ({
-  PUBLIC_API_URL: 'http://127.0.0.1:9',
-}))
+const { tokenizerController } = await import('@/lib/tokenizer-controller')
 
-import { setupApiMocks, apiClient } from './__test-helper'
-setupApiMocks()
-
-import { tokenizerController } from './tokenizer-controller'
-
-describe('tokenizerController.getStats', () => {
-  beforeEach(() => vi.clearAllMocks())
-  it('GETs /tokenizer/stats and returns typed data', async () => {
-    const mock = { vocab_size: 32000, base_chars: 256, merged_subwords: 31744, special_tokens: 6, total_merges: 1000 }
-    apiClient.apiGet.mockResolvedValue(mock)
-    const result = await tokenizerController.getStats()
-    expect(result.vocab_size).toBe(32000)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/tokenizer/stats')
+describe('tokenizerController', () => {
+  beforeEach(() => {
+    mockApiGet = vi.fn()
+    mockApiPost = vi.fn()
   })
-})
 
-describe('tokenizerController.tokenize', () => {
-  beforeEach(() => vi.clearAllMocks())
-  it('POSTs /tokenizer/tokenize with text', async () => {
-    const mock = { tokens: ['Hello'], ids: [123] }
-    apiClient.apiPost.mockResolvedValue(mock)
-    const result = await tokenizerController.tokenize('Hello')
-    expect(result.ids).toEqual([123])
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/tokenizer/tokenize', { text: 'Hello' })
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
-})
 
-describe('tokenizerController.detokenize', () => {
-  beforeEach(() => vi.clearAllMocks())
-  it('POSTs /tokenizer/detokenize with ids', async () => {
-    const mock = { text: 'World' }
-    apiClient.apiPost.mockResolvedValue(mock)
-    const result = await tokenizerController.detokenize([456])
-    expect(result.text).toBe('World')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/tokenizer/detokenize', { ids: [456] })
+  describe('getStats', () => {
+    it('fetches tokenizer stats', async () => {
+      mockApiGet.mockResolvedValue({ vocab_size: 256, base_chars: 128, merged_subwords: 128, special_tokens: 0, total_merges: 128, trained: true })
+      const result = await tokenizerController.getStats()
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/stats')
+      expect(result.vocab_size).toBe(256)
+      expect(result.trained).toBe(true)
+    })
+
+    it('propagates errors', async () => {
+      mockApiGet.mockRejectedValue(new Error('fail'))
+      await expect(tokenizerController.getStats()).rejects.toThrow('fail')
+    })
   })
-})
 
-describe('tokenizerController.getVocab', () => {
-  beforeEach(() => vi.clearAllMocks())
-  it('GETs /tokenizer/vocab with query params', async () => {
-    const mock = { entries: [], total: 0, offset: 0, limit: 20 }
-    apiClient.apiGet.mockResolvedValue(mock)
-    const result = await tokenizerController.getVocab(20, 5)
-    expect(result.limit).toBe(20)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/tokenizer/vocab?limit=20&offset=5')
+  describe('tokenize', () => {
+    it('posts text for tokenization', async () => {
+      mockApiPost.mockResolvedValue({ tokens: ['hello', ' world'], ids: [1, 2] })
+      const result = await tokenizerController.tokenize('hello world')
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/tokenize', { text: 'hello world' })
+      expect(result.tokens).toEqual(['hello', ' world'])
+      expect(result.ids).toEqual([1, 2])
+    })
   })
-})
 
-describe('tokenizerController.getMerges', () => {
-  beforeEach(() => vi.clearAllMocks())
-  it('GETs /tokenizer/merges with default limit', async () => {
-    const mock = { merges: [], total: 0 }
-    apiClient.apiGet.mockResolvedValue(mock)
-    const result = await tokenizerController.getMerges()
-    expect(result.total).toBe(0)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/tokenizer/merges?limit=30')
+  describe('detokenize', () => {
+    it('posts ids for detokenization', async () => {
+      mockApiPost.mockResolvedValue({ text: 'hello world' })
+      const result = await tokenizerController.detokenize([1, 2])
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/detokenize', { ids: [1, 2] })
+      expect(result.text).toBe('hello world')
+    })
   })
-})
 
-describe('tokenizerController.getSamples', () => {
-  beforeEach(() => vi.clearAllMocks())
-  it('GETs /tokenizer/sample', async () => {
-    const mock = { samples: [{ word: 'test', ids: [1], tokens: ['t'], count: 10 }] }
-    apiClient.apiGet.mockResolvedValue(mock)
-    const result = await tokenizerController.getSamples()
-    expect(result.samples[0].word).toBe('test')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/tokenizer/sample')
+  describe('getVocab', () => {
+    it('fetches vocab with default params', async () => {
+      mockApiGet.mockResolvedValue({ entries: [], total: 100 })
+      await tokenizerController.getVocab()
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/vocab?limit=50&offset=0')
+    })
+
+    it('fetches vocab with custom params', async () => {
+      mockApiGet.mockResolvedValue({ entries: [], total: 100 })
+      await tokenizerController.getVocab(10, 20)
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/vocab?limit=10&offset=20')
+    })
   })
-})
 
-describe('tokenizerController.train', () => {
-  beforeEach(() => vi.clearAllMocks())
-  it('POSTs to /tokenizer/train with vocab size', async () => {
-    const mock = { status: 'ok' }
-    apiClient.apiPost.mockResolvedValue(mock)
-    const result = await tokenizerController.train(1024)
-    expect(result.status).toBe('ok')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/tokenizer/train', { vocab_size: 1024, texts: undefined })
+  describe('getMerges', () => {
+    it('fetches merges with default limit', async () => {
+      mockApiGet.mockResolvedValue({ merges: [], total: 50 })
+      await tokenizerController.getMerges()
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/merges?limit=30')
+    })
+
+    it('fetches merges with custom limit', async () => {
+      mockApiGet.mockResolvedValue({ merges: [], total: 50 })
+      await tokenizerController.getMerges(100)
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/merges?limit=100')
+    })
+  })
+
+  describe('getSamples', () => {
+    it('fetches sample words', async () => {
+      mockApiGet.mockResolvedValue({ samples: [{ word: 'hello', ids: [1], tokens: ['hel', 'lo'], count: 5 }] })
+      const result = await tokenizerController.getSamples()
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/sample')
+      expect(result.samples).toHaveLength(1)
+      expect(result.samples[0].word).toBe('hello')
+    })
+  })
+
+  describe('train', () => {
+    it('trains tokenizer with params', async () => {
+      mockApiPost.mockResolvedValue({ status: 'ok', corpus_size: 1000, stats: { vocab_size: 256 } })
+      const result = await tokenizerController.train({ vocab_size: 256, texts: ['hello'] })
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/train', { vocab_size: 256, texts: ['hello'] })
+      expect(result.status).toBe('ok')
+      expect(result.corpus_size).toBe(1000)
+    })
+  })
+
+  describe('pretokenize', () => {
+    it('posts text for pretokenization', async () => {
+      mockApiPost.mockResolvedValue({ chunks: ['hello', 'world'] })
+      const result = await tokenizerController.pretokenize('hello world')
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/pretokenize', { text: 'hello world' })
+      expect(result).toEqual({ chunks: ['hello', 'world'] })
+    })
+  })
+
+  describe('decompose', () => {
+    it('posts text for decomposition', async () => {
+      mockApiPost.mockResolvedValue({ morphemes: ['un', 'believ', 'able'] })
+      const result = await tokenizerController.decompose('unbelievable')
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/decompose', { text: 'unbelievable' })
+      expect(result).toEqual({ morphemes: ['un', 'believ', 'able'] })
+    })
+  })
+
+  describe('analyze', () => {
+    it('posts texts for analysis', async () => {
+      mockApiPost.mockResolvedValue({ results: [{}] })
+      const result = await tokenizerController.analyze(['hello', 'world'])
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/analyze', { texts: ['hello', 'world'] })
+      expect(result).toEqual({ results: [{}] })
+    })
   })
 })

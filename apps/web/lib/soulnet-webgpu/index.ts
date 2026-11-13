@@ -16,6 +16,7 @@
  */
 
 import { SoulNetWebGPU } from './engine'
+import type { SoulNetConfig } from './engine'
 export type { SoulNetConfig } from './engine'
 export { SoulNetWebGPU }
 import { SoulTransformerWebGPU } from './transformer-engine'
@@ -77,14 +78,14 @@ export class SoulEngineWorker {
     })
   }
 
-  load(url: string, config: Record<string, unknown>): Promise<unknown> {
+  load(url: string, config: SoulNetConfig): Promise<unknown> {
     return this._send('loaded', { url, config })
   }
 
-  generate(prompt: string, maxTokens: number, temperature = 1.0): SoulNetGenerator {
+  generate(prompt: string, maxTokens: number, temperature = 1.0, eosToken = 0): SoulNetGenerator {
     const worker = this.worker!
     const resolvers: ((value: IteratorResult<string>) => void)[] = []
-    worker.postMessage({ type: 'generate', prompt, maxTokens, temperature })
+    worker.postMessage({ type: 'generate', prompt, maxTokens, temperature, eosToken })
 
     worker.onmessage = (e: MessageEvent) => {
       if (e.data.type === 'token') {
@@ -115,6 +116,11 @@ export class SoulEngineWorker {
   }
 
   destroy(): void {
+    // Reject all pending promises so callers don't hang forever
+    for (const [, resolve] of this.resolvers) {
+      resolve({ value: undefined, done: true } as IteratorResult<string>)
+    }
+    this.resolvers.clear()
     this.worker?.terminate()
     this.worker = null
   }

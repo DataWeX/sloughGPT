@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { Slider } from '@sloughgpt/strui'
 import { deriveArchetype } from './PersonalitySummary'
+import { SOUL_GROUPS } from './soul-constants'
 
 interface TraitEditorProps {
   traitWeights: Record<string, Record<string, number>>
@@ -10,11 +11,7 @@ interface TraitEditorProps {
   onReset: () => void
 }
 
-const GROUPS: { key: string; label: string; color: string }[] = [
-  { key: 'personality', label: 'Personality', color: '#8b5cf6' },
-  { key: 'cognition', label: 'Cognition', color: '#3b82f6' },
-  { key: 'emotion', label: 'Emotion', color: '#ec4899' },
-]
+const GROUPS = SOUL_GROUPS
 
 function formatTraitName(name: string): string {
   return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -41,7 +38,7 @@ export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEdit
   }
 
   return (
-    <div className="space-y-4" data-testid="trait-editor">
+    <div className="space-y-4">
       {/* Live archetype badge */}
       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
         <span className="text-[11px] text-muted-foreground">Archetype</span>

@@ -3,44 +3,43 @@
 Built-in replacement for external DB dependencies. Uses an append-only
 JSONL journal with periodic compaction for persistence and durability.
 
-Quick start (embedded)::
+Quick start::
 
     from mogdb import MogDB
 
     db = MogDB("data/mogdb")
     users = db.collection("users")
     users.insert_one({"name": "Alice", "age": 30})
-
-Quick start (client-server)::
-
-    from mogdb import MogDBClient
-
-    client = MogDBClient("localhost", 27017)
-    client.connect()
-    client.auth("password")
-    users = client.collection("users")
     result = users.find({"age": {"$gt": 25}})
-    client.close()
+
+With JSON sync (MogDB engine + JSON backup)::
+
+    db = MogDB("data/mogdb", sync_dir="data/mogdb_json")
+    users = db.collection("users")
+    users.insert_one({"name": "Bob"})
+    # -> data/mogdb/users.journal.jsonl (engine)
+    # -> data/mogdb_json/users.json (human-readable sync)
 """
 
+from .cache import QueryCache, get_query_cache
+from .collection import ASCENDING, DESCENDING, Collection
 from .database import MogDB
-from .collection import Collection
 from .document import Document, ObjectId
-from .query import match_document
 from .index import Index, SortedIndex
-from .client import MogDBClient, MogDBError, RemoteCollection
-from .server import MogDBServer
+from .json_sync import SyncableCollection
+from .query import match_document
 
 __all__ = [
     "MogDB",
     "Collection",
+    "SyncableCollection",
     "Document",
     "ObjectId",
     "match_document",
     "Index",
     "SortedIndex",
-    "MogDBClient",
-    "MogDBError",
-    "RemoteCollection",
-    "MogDBServer",
+    "ASCENDING",
+    "DESCENDING",
+    "QueryCache",
+    "get_query_cache",
 ]

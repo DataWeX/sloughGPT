@@ -23,7 +23,10 @@ const { mockApiGet, mockApiPost, mockApiPut, mockApiDelete, mockApiPatch }
   }))
 
 // Hoisted mock – runs at top level, before any imports
-vi.mock('./http-client', () => {
+vi.mock('./http-client', async () => {
+  // Preserve the real streaming/utility exports (streamSSE reads global fetch,
+  // which streaming tests stub) while mocking the axios-style REST surface.
+  const actual = await vi.importActual<typeof import('./http-client')>('./http-client')
   const makeClient = () => ({
     defaults: { baseURL: 'http://127.0.0.1:9' },
     get: vi.fn(),
@@ -37,6 +40,7 @@ vi.mock('./http-client', () => {
 
   return {
     __esModule: true,
+    ...actual,
     apiGet: mockApiGet,
     apiPost: mockApiPost,
     apiPut: mockApiPut,
@@ -78,4 +82,44 @@ export const apiClient = {
   apiPut: mockApiPut,
   apiDelete: mockApiDelete,
   apiPatch: mockApiPatch,
+}
+
+export function createMockController() {
+  return {
+    getStatus: vi.fn().mockResolvedValue({}),
+    getSelfModel: vi.fn().mockResolvedValue({}),
+    getQualia: vi.fn().mockResolvedValue({}),
+    reflect: vi.fn().mockResolvedValue({}),
+    updateConfig: vi.fn().mockResolvedValue({}),
+    getTrainingStatus: vi.fn().mockResolvedValue({}),
+    startTraining: vi.fn().mockResolvedValue({}),
+    evaluate: vi.fn().mockResolvedValue({}),
+    getEpisodeHistory: vi.fn().mockResolvedValue({ episodes: [], total: 0 }),
+    getQualiaHistory: vi.fn().mockResolvedValue({ history: [] }),
+    getBeliefsHistory: vi.fn().mockResolvedValue({ beliefs: [] }),
+    submitFeedback: vi.fn().mockResolvedValue({}),
+    seedData: vi.fn().mockResolvedValue({}),
+    getPersonality: vi.fn().mockResolvedValue({}),
+    updatePersonality: vi.fn().mockResolvedValue({}),
+    resetPersonality: vi.fn().mockResolvedValue({}),
+    clearEpisodes: vi.fn().mockResolvedValue({}),
+    resetBeliefs: vi.fn().mockResolvedValue({}),
+    getPersonalityHistory: vi.fn().mockResolvedValue({}),
+    getPersonalityPresets: vi.fn().mockResolvedValue({}),
+    applyPersonalityPreset: vi.fn().mockResolvedValue({}),
+    getPersonalityConflicts: vi.fn().mockResolvedValue({}),
+    listPersonas: vi.fn().mockResolvedValue({}),
+    savePersona: vi.fn().mockResolvedValue({}),
+    getPersona: vi.fn().mockResolvedValue({}),
+    activatePersona: vi.fn().mockResolvedValue({}),
+    deletePersona: vi.fn().mockResolvedValue({}),
+    healthCheck: vi.fn().mockResolvedValue({}),
+    backup: vi.fn().mockResolvedValue({}),
+    restore: vi.fn().mockResolvedValue({}),
+    downloadBackup: vi.fn().mockResolvedValue({}),
+    importBackup: vi.fn().mockResolvedValue({}),
+    getStats: vi.fn().mockResolvedValue({}),
+    batch: vi.fn().mockResolvedValue({}),
+    connectStream: vi.fn().mockReturnValue(vi.fn()),
+  }
 }

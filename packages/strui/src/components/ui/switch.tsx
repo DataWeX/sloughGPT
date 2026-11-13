@@ -57,8 +57,9 @@ const Switch = forwardRef<HTMLInputElement, SwitchProps>(
           onClick={handleClick}
           className={cn(
             'peer inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-            'disabled:cursor-not-allowed disabled:opacity-50',
+            'hover:brightness-110',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+            'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100',
             trackSizes,
             isChecked ? 'bg-primary' : 'bg-muted',
           )}
@@ -66,6 +67,7 @@ const Switch = forwardRef<HTMLInputElement, SwitchProps>(
           <span
             className={cn(
               'pointer-events-none block rounded-full bg-white shadow-md ring-0 transition-transform duration-200',
+              'disabled:opacity-40',
               thumbSizes,
               thumbTranslate,
             )}
@@ -88,7 +90,7 @@ const Switch = forwardRef<HTMLInputElement, SwitchProps>(
             htmlFor={id}
             className={cn(
               'text-sm text-foreground select-none',
-              disabled && 'cursor-not-allowed opacity-50',
+              disabled && 'cursor-not-allowed opacity-40',
             )}
           >
             {label}

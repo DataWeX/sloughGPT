@@ -1,351 +1,192 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
-import { Skeleton } from '@sloughgpt/strui'
-import { Input } from '@sloughgpt/strui'
-import { trainingController } from '@/lib/controllers'
-import { useToastStore } from '@/lib/toast-store'
-import type { TrainingDataStats, TrainingPair } from '@/lib/training-controller'
+import { useState, useEffect, useCallback, memo, useRef } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
+import { trainingJobsController, type TrainingPair, type TrainingDataStats } from '@/lib/training-controller'
 
-export function TrainingDataCard() {
-  const addToast = useToastStore(s => s.addToast)
+interface Props {
+  addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+}
+
+export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Props) {
   const [stats, setStats] = useState<TrainingDataStats | null>(null)
   const [pairs, setPairs] = useState<TrainingPair[]>([])
-  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [qualityFilter, setQualityFilter] = useState<string>('all')
-  const [sessionFilter, setSessionFilter] = useState<string>('all')
-  const [allSessions, setAllSessions] = useState<string[]>([])
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(0)
-  const pageSize = 20
+  const [total, setTotal] = useState(0)
+  const limit = 20
+
+  const activeRef = useRef(true)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
-      const minQuality = qualityFilter === 'all' ? undefined
-        : qualityFilter === 'high' ? 4
-        : qualityFilter === 'mid' ? 2
-        : 0
-      const [s, p] = await Promise.all([
-        trainingController.getTrainingStats(),
-        trainingController.listTrainingPairs({
-          limit: pageSize,
-          offset: page * pageSize,
-          min_quality: minQuality,
-          session_id: sessionFilter === 'all' ? undefined : sessionFilter,
-          search: search || undefined,
-        }),
+      const [statsResult, pairsResult] = await Promise.all([
+        trainingJobsController.getTrainingStats(),
+        trainingJobsController.listTrainingPairs({ limit, offset: page * limit, search: search || undefined }),
       ])
-      setStats(s)
-      setPairs(p.pairs)
-      setTotal(p.total)
-      // Collect unique session IDs from all pairs for filter dropdown
-      const sessionIds = new Set(allSessions)
-      p.pairs.forEach(pair => { if (pair.session_id) sessionIds.add(pair.session_id) })
-      setAllSessions(Array.from(sessionIds).sort())
+      if (activeRef.current) {
+        setStats(statsResult)
+        setPairs(pairsResult.pairs ?? [])
+        setTotal(pairsResult.total ?? 0)
+      }
     } catch {
-      // might not be available
+      if (activeRef.current) {
+        addToast('Failed to load training data', 'error')
+        setError('Could not load training data')
+        setStats(null)
+        setPairs([])
+      }
     } finally {
-      setLoading(false)
+      if (activeRef.current) setLoading(false)
     }
-  }, [page, qualityFilter, sessionFilter, search]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, search, addToast])
 
-  useEffect(() => { void fetchData() }, [fetchData])
+  useEffect(() => {
+    activeRef.current = true
+    void fetchData()
+    return () => { activeRef.current = false }
+  }, [fetchData])
+
+  const handleSearch = useCallback(() => {
+    setPage(0)
+    void fetchData()
+  }, [fetchData])
 
   const handleDelete = useCallback(async (id: string) => {
     try {
-      await trainingController.deletePair(id)
-      setPairs(prev => prev.filter(p => p.id !== id))
-      setStats(prev => prev ? { ...prev, total: prev.total - 1, pending: prev.pending - 1 } : prev)
+      await trainingJobsController.deletePair(id)
       addToast('Pair deleted', 'success')
-    } catch {
-      addToast('Delete failed', 'error')
-    }
-  }, [addToast])
-
-  const handleExport = useCallback(async () => {
-    try {
-      const blob = await trainingController.exportTrainingPairs({
-        min_quality: qualityFilter === 'all' ? undefined
-          : qualityFilter === 'high' ? 4
-          : qualityFilter === 'mid' ? 2
-          : 0,
-        session_id: sessionFilter === 'all' ? undefined : sessionFilter,
-        limit: 5000,
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'training_pairs.jsonl'
-      a.click()
-      URL.revokeObjectURL(url)
-      addToast('Exported training pairs', 'success')
-    } catch {
-      addToast('Export failed', 'error')
-    }
-  }, [addToast, qualityFilter, sessionFilter])
-
-  const handleDeleteSynced = useCallback(async () => {
-    try {
-      const result = await trainingController.deleteSyncedPairs()
-      addToast(`Deleted ${result.count} synced pairs`, 'success')
       void fetchData()
     } catch {
-      addToast('Delete failed', 'error')
+      addToast('Could not delete pair', 'error')
     }
   }, [addToast, fetchData])
 
-  const handleBulkDelete = useCallback(async () => {
-    if (selectedIds.size === 0) return
+  const handleUpdateQuality = useCallback(async (id: string, quality: number) => {
     try {
-      const result = await trainingController.deletePairsBulk(Array.from(selectedIds))
-      addToast(`Deleted ${result.count} pairs`, 'success')
-      setSelectedIds(new Set())
+      await trainingJobsController.updatePairQuality(id, quality)
+      addToast('Quality updated', 'success')
       void fetchData()
     } catch {
-      addToast('Bulk delete failed', 'error')
+      addToast('Could not update quality', 'error')
     }
-  }, [addToast, fetchData, selectedIds])
+  }, [addToast, fetchData])
 
-  const togglePair = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
+  const handleDeleteSynced = useCallback(async () => {
+    try {
+      const result = await trainingJobsController.deleteSyncedPairs()
+      addToast(`Deleted ${result.count} synced pairs`, 'success')
+      void fetchData()
+    } catch {
+      addToast('Could not delete synced pairs', 'error')
+    }
+  }, [addToast, fetchData])
 
-  const toggleAll = useCallback(() => {
-    setSelectedIds(prev => {
-      if (prev.size === pairs.length) return new Set()
-      return new Set(pairs.map(p => p.id))
-    })
-  }, [pairs])
-
-  if (loading && !stats) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Training data</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-20 w-full" />
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (!stats) return null
-
-  const totalPages = Math.ceil(total / pageSize)
+  const totalPages = Math.ceil(total / limit)
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Training data</CardTitle>
-        <div className="flex items-center gap-2">
-          {selectedIds.size > 0 && (
-            <Button size="sm" variant="ghost" className="h-6 text-[11px] text-destructive hover:text-destructive" onClick={() => void handleBulkDelete()}>
-              Delete {selectedIds.size} selected
-            </Button>
-          )}
-          {stats.total > 0 && (
-            <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => void handleExport()}>
-              Export JSONL
-            </Button>
-          )}
-          {stats.synced > 0 && (
-            <Button size="sm" variant="ghost" className="h-6 text-[11px] text-destructive hover:text-destructive" onClick={() => void handleDeleteSynced()}>
-              Clear synced ({stats.synced})
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => void fetchData()}>
-            Refresh
-          </Button>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Training data ({total})</CardTitle>
+          <div className="flex gap-2">
+            {stats && stats.synced > 0 && (
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={handleDeleteSynced} aria-label="Delete all synced training data">
+                Delete synced ({stats.synced})
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => void fetchData()} aria-label="Refresh training data">Refresh</Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Stats row */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground/70">
-          <span>Total: {stats.total}</span>
-          <span>Pending: {stats.pending}</span>
-          <span>Synced: {stats.synced}</span>
-          <span>Used: {stats.used}</span>
-        </div>
-
-        {/* Quality breakdown */}
-        {Object.keys(stats.by_quality).length > 0 && (
-          <>
-            <div className="flex flex-wrap gap-1">
-              {Object.entries(stats.by_quality).sort(([a], [b]) => Number(a) - Number(b)).map(([q, count]) => (
-                <span key={q} className="inline-flex items-center gap-1 rounded-full border border-border/40 px-2 py-0.5 text-[10px] text-muted-foreground/70">
-                  {Number(q).toFixed(1)}: {count}
-                </span>
-              ))}
+        {loading && !stats ? (
+          <p className="text-xs text-muted-foreground">Loading...</p>
+        ) : error ? (
+          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchData()} />
+        ) : stats ? (
+          <div className="grid grid-cols-4 gap-2">
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.total}</p>
             </div>
-            {stats.total > 0 && (
-              <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-                {(['-1', '0', '1', '2', '3', '4', '5'] as const).map(q => {
-                  const count = stats.by_quality[q] || 0
-                  if (count === 0) return null
-                  const pct = (count / stats.total) * 100
-                  const color = Number(q) >= 4 ? 'bg-success/70' : Number(q) >= 2 ? 'bg-primary/50' : 'bg-muted-foreground/30'
-                  return <div key={q} className={`${color} transition-all`} style={{ width: `${pct}%` }} />
-                })}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Quality summary */}
-        {stats.total > 0 && (() => {
-          const high = (stats.by_quality['4'] || 0) + (stats.by_quality['5'] || 0)
-          const mid = (stats.by_quality['2'] || 0) + (stats.by_quality['3'] || 0)
-          const low = (stats.by_quality['-1'] || 0) + (stats.by_quality['0'] || 0) + (stats.by_quality['1'] || 0)
-          const highPct = Math.round((high / stats.total) * 100)
-          return (
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground/60">
-              <span>{highPct}% high quality</span>
-              {stats.synced > 0 && <span>{Math.round((stats.synced / stats.total) * 100)}% synced</span>}
-              {stats.used > 0 && <span>{stats.used} used in training</span>}
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Pending</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.pending}</p>
             </div>
-          )
-        })()}
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0) }}
-            placeholder="Search pairs..."
-            className="h-7 text-[11px] max-w-[200px]"
-          />
-          <div className="flex gap-1">
-            {(['all', 'high', 'mid', 'low'] as const).map(q => (
-              <button
-                key={q}
-                className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
-                  qualityFilter === q
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-muted-foreground/70 hover:text-foreground'
-                }`}
-                onClick={() => { setQualityFilter(q); setPage(0) }}
-              >
-                {q === 'all' ? 'All' : q === 'high' ? 'Q≥4' : q === 'mid' ? 'Q≥2' : 'Q<2'}
-              </button>
-            ))}
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Synced</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.synced}</p>
+            </div>
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Used</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.used}</p>
+            </div>
           </div>
-          {allSessions.length > 1 && (
-            <select
-              value={sessionFilter}
-              onChange={e => { setSessionFilter(e.target.value); setPage(0) }}
-              className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] text-foreground"
-            >
-              <option value="all">All sessions</option>
-              {allSessions.map(sid => (
-                <option key={sid} value={sid}>{sid.slice(0, 12)}...</option>
-              ))}
-            </select>
-          )}
+        ) : null}
+
+        <div className="flex gap-2">
+          <Input
+            placeholder="Search pairs..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            className="h-8 text-xs"
+          />
+          <Button size="sm" variant="ghost" onClick={handleSearch} aria-label="Search training pairs">Search</Button>
         </div>
 
-        {/* Pairs list */}
-        {pairs.length > 0 && (
-          <div className="space-y-2">
-            <button
-              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setExpanded(!expanded)}
-            >
-              {expanded ? 'Hide' : 'Show'} pairs ({total} total)
-            </button>
-            {expanded && (
-              <>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {pairs.length > 1 && (
-                    <label className="flex items-center gap-2 text-[11px] text-muted-foreground/70 cursor-pointer py-0.5">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.size === pairs.length && pairs.length > 0}
-                        onChange={toggleAll}
-                        className="h-3 w-3 rounded border-border"
-                      />
-                      Select all ({pairs.length})
-                    </label>
-                  )}
-                  {pairs.map(pair => (
-                    <div key={pair.id} className="rounded-lg border border-border/40 p-2 text-[11px] space-y-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2 min-w-0 flex-1">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(pair.id)}
-                            onChange={() => togglePair(pair.id)}
-                            className="h-3 w-3 rounded border-border mt-0.5 shrink-0"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-foreground font-medium truncate">{pair.user_msg}</p>
-                            <p className="text-muted-foreground/70 truncate">{pair.assistant_msg}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[10px] text-muted-foreground/50">Q:{pair.quality.toFixed(1)}</span>
-                          <button
-                            className="text-muted-foreground/40 hover:text-destructive transition-colors"
-                            onClick={() => void handleDelete(pair.id)}
-                            aria-label="Delete pair"
-                          >
-                            x
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-muted-foreground/50">
-                      Page {page + 1} of {totalPages}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-5 text-[10px]"
-                        disabled={page === 0}
-                        onClick={() => setPage(p => p - 1)}
-                      >
-                        Prev
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-5 text-[10px]"
-                        disabled={page >= totalPages - 1}
-                        onClick={() => setPage(p => p + 1)}
-                      >
-                        Next
-                      </Button>
+        {loading ? (
+          <p className="text-xs text-muted-foreground">Loading pairs...</p>
+        ) : pairs.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No training pairs found.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {pairs.map(p => (
+              <div key={p.id} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-[11px] text-muted-foreground/60 truncate">User: {p.user_msg}</p>
+                    <p className="text-xs truncate">{p.assistant_msg}</p>
+                    <div className="flex gap-2 text-[10px] text-muted-foreground/50">
+                      <span>Quality: {p.quality}</span>
+                      <span>{new Date(p.timestamp).toLocaleDateString()}</span>
                     </div>
                   </div>
-                )}
-              </>
-            )}
+                  <div className="flex items-center gap-1">
+                    <Select value={String(p.quality)} onValueChange={v => void handleUpdateQuality(p.id, Number(v))}>
+                      <SelectTrigger className="h-6 w-12 text-[10px]" aria-label="Quality rating">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map(q => <SelectItem key={q} value={String(q)}>{q}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={() => void handleDelete(p.id)} aria-label={`Delete training pair ${p.id.slice(0, 8)}`}>
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
-        {pairs.length === 0 && stats.total === 0 && (
-          <p className="text-xs text-muted-foreground/50">
-            No training data yet. Train from conversations or chat to generate pairs.
-          </p>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Page {page + 1} of {totalPages}</span>
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)} aria-label="Previous page">Prev</Button>
+              <Button size="sm" variant="ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} aria-label="Next page">Next</Button>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>
   )
-}
+})

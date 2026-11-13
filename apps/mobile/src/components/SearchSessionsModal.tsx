@@ -7,7 +7,9 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {TamaguiProvider} from '../theme/TamaguiProvider';
+import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {triggerHaptic} from '../services/haptics';
 import {Icon} from '../components/Icon';
@@ -20,7 +22,7 @@ interface Props {
 }
 
 export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) {
-  const theme = useTheme();
+  const colors = useColors();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,8 +39,8 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
     }
   }, [visible]);
 
-  const accent = theme.color9?.val || '#7C52C4';
-  const mutedColor = theme.color10?.val || '#9B95A8';
+  const accent = colors.primary;
+  const mutedColor = colors.textMuted;
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
@@ -79,10 +81,10 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
 
   const renderMatch = (match: SearchMatch, idx: number) => (
     <XStack key={idx} gap={8} paddingVertical={2}>
-      <Text fontSize={11} fontWeight="600" letterSpacing={0.2} color="$color9" minWidth={60}>
+      <Text fontSize={11} fontWeight="600" letterSpacing={0.2} color={colors.primary} minWidth={60}>
         {match.role === 'user' ? 'You' : 'Assistant'}:
       </Text>
-      <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color11" flex={1} numberOfLines={2}>
+      <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color={colors.textMuted} flex={1} numberOfLines={2}>
         {match.content}
       </Text>
     </XStack>
@@ -90,9 +92,10 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
+      <TamaguiProvider>
+      <YStack flex={1} backgroundColor={colors.overlay(0.4)} justifyContent="flex-end">
         <YStack
-          backgroundColor="$background"
+          backgroundColor={colors.background}
           borderTopLeftRadius={24}
           borderTopRightRadius={24}
           maxHeight="85%"
@@ -103,13 +106,13 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
             paddingHorizontal={20}
             paddingVertical={14}
             borderBottomWidth={0.5}
-            borderBottomColor="$borderColor">
-            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">
+            borderBottomColor={colors.border}>
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>
               Search Conversations
             </Text>
             <Pressable onPress={onClose}>
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={16} color={colors.textSecondary} />
               </YStack>
             </Pressable>
           </XStack>
@@ -125,14 +128,14 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
               autoCapitalize="none"
               autoCorrect={false}
               style={{
-                backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                backgroundColor: colors.primaryAlpha(0.04),
                 borderRadius: 10,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
                 fontSize: 14,
-                color: '#1A1625',
+                color: colors.text,
                 borderWidth: 0.5,
-                borderColor: 'rgba(124, 82, 196, 0.12)',
+                borderColor: colors.primaryAlpha(0.12),
               }}
             />
           </YStack>
@@ -143,7 +146,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
 
           {searched && !loading && results.length === 0 && (
             <YStack alignItems="center" paddingVertical={48}>
-              <Text fontSize={15} fontWeight="400" color="$color10">
+              <Text fontSize={15} fontWeight="400" color={colors.textSecondary}>
                 {query.trim() ? 'No results found' : 'Type to search'}
               </Text>
             </YStack>
@@ -154,12 +157,12 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
             keyExtractor={item => item.id}
             renderItem={({item}) => (
               <Pressable onPress={() => handleSelect(item.id)}>
-                <YStack paddingHorizontal={16} paddingVertical={12} borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                <YStack paddingHorizontal={16} paddingVertical={12} borderBottomWidth={0.5} borderBottomColor={colors.border}>
                   <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
-                    <Text fontSize={15} fontWeight="600" color="$color" flex={1} marginRight={8} numberOfLines={1}>
+                    <Text fontSize={15} fontWeight="600" color={colors.text} flex={1} marginRight={8} numberOfLines={1}>
                       {item.name || 'Untitled'}
                     </Text>
-                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color9">
+                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color={colors.primary}>
                       {item.match_count} {item.match_count === 1 ? 'match' : 'matches'}
                     </Text>
                   </XStack>
@@ -172,6 +175,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
           />
         </YStack>
       </YStack>
+      </TamaguiProvider>
     </Modal>
   );
 }

@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {PUBLIC_API_URL, API_CHAT_ENDPOINT, KNOWLEDGE_STORAGE_KEY} from './config'
+import {PUBLIC_API_URL} from './config'
 
 describe('config', () => {
   it('PUBLIC_API_URL defaults to localhost', () => {
@@ -7,13 +7,20 @@ describe('config', () => {
     expect(typeof PUBLIC_API_URL).toBe('string')
   })
 
-  it('API_CHAT_ENDPOINT includes /chat/stream', () => {
-    expect(API_CHAT_ENDPOINT).toContain('/chat/stream')
-    expect(API_CHAT_ENDPOINT).toBe(PUBLIC_API_URL + '/chat/stream')
+  it('PUBLIC_API_URL is a valid URL', () => {
+    expect(PUBLIC_API_URL).toMatch(/^https?:\/\//)
   })
 
-  it('KNOWLEDGE_STORAGE_KEY is defined', () => {
-    expect(KNOWLEDGE_STORAGE_KEY).toBeTruthy()
-    expect(typeof KNOWLEDGE_STORAGE_KEY).toBe('string')
+  it('PUBLIC_API_URL ends with no trailing slash', () => {
+    expect(PUBLIC_API_URL.endsWith('/')).toBe(false)
+  })
+
+  it('PUBLIC_API_URL contains port 8000', () => {
+    expect(PUBLIC_API_URL).toContain('8000')
+  })
+
+  it('PUBLIC_API_URL is exported as a constant', () => {
+    expect(typeof PUBLIC_API_URL).toBe('string')
+    expect(PUBLIC_API_URL.length).toBeGreaterThan(0)
   })
 })

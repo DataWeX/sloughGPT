@@ -3,34 +3,19 @@ SloughGPT SDK Tests
 Unit tests for the Python SDK.
 """
 
-import os
 import sys
-import json
-import time
-import tempfile
 import unittest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 _REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "sdk-py"))
 
 from sloughgpt_sdk import (
-    SloughGPTClient,
     ChatMessage,
     GenerateRequest,
-    GenerationResult,
-    APIKeyManager,
-    APIKey,
-    KeyTier,
-    WebhookManager,
-    WebhookEvent,
-    BillingManager,
-    BillingCycle,
-    Plan,
-    Subscription,
-    UsageDashboard,
+    SloughGPTClient,
 )
 
 
@@ -71,8 +56,8 @@ class TestGenerateRequest(unittest.TestCase):
         req = GenerateRequest(prompt="Hello")
         self.assertEqual(req.prompt, "Hello")
         self.assertEqual(req.max_new_tokens, 100)
-        self.assertEqual(req.temperature, 0.8)
-        self.assertEqual(req.top_p, 0.9)
+        self.assertEqual(req.temperature, 0.7)
+        self.assertEqual(req.top_p, 0.85)
 
     def test_custom_values(self):
         """Test custom request values."""
@@ -94,397 +79,10 @@ class TestGenerateRequest(unittest.TestCase):
         self.assertEqual(data["max_new_tokens"], 50)
 
 
-class TestAPIKeyManager(unittest.TestCase):
-    """Tests for API key management."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.manager = APIKeyManager(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_create_key(self):
-        """Test creating an API key."""
-        key, key_data = self.manager.create_key(name="Test Key")
-
-        self.assertTrue(key.startswith("sk_"))
-        self.assertIsNotNone(key_data)
-        self.assertEqual(key_data.name, "Test Key")
-        self.assertEqual(key_data.tier, KeyTier.FREE)
-        self.assertTrue(key_data.is_active)
-
-    def test_create_key_with_tier(self):
-        """Test creating key with specific tier."""
-        key, key_data = self.manager.create_key(
-            name="Pro Key",
-            tier=KeyTier.PRO,
-        )
-
-        self.assertEqual(key_data.tier, KeyTier.PRO)
-        self.assertEqual(key_data.quota_daily, 10000)
-
-    def test_validate_key(self):
-        """Test validating an API key."""
-        key, key_data = self.manager.create_key(name="Test")
-
-        is_valid, reason, validated_key = self.manager.validate_key(key)
-
-        self.assertTrue(is_valid)
-        self.assertEqual(reason, "OK")
-        self.assertIsNotNone(validated_key)
-
-    def test_validate_invalid_key(self):
-        """Test validating an invalid key."""
-        is_valid, reason, key = self.manager.validate_key("invalid_key")
-
-        self.assertFalse(is_valid)
-        self.assertEqual(reason, "Invalid API key")
-        self.assertIsNone(key)
-
-    def test_revoke_key(self):
-        """Test revoking an API key."""
-        key, key_data = self.manager.create_key(name="Test")
-
-        result = self.manager.revoke_key(key_data.key_id)
-
-        self.assertTrue(result)
-
-        is_valid, reason, _ = self.manager.validate_key(key)
-        self.assertFalse(is_valid)
-        self.assertEqual(reason, "API key is deactivated")
-
-    def test_record_usage(self):
-        """Test recording usage."""
-        key, key_data = self.manager.create_key(name="Test")
-
-        result = self.manager.record_usage(key, requests_count=5)
-
-        self.assertTrue(result)
-
-        stats = self.manager.get_usage_stats(key_data.key_id)
-        self.assertEqual(stats["total_requests"], 5)
-
-    def test_list_keys(self):
-        """Test listing keys."""
-        self.manager.create_key(name="Key 1")
-        self.manager.create_key(name="Key 2")
-
-        keys = self.manager.list_keys()
-
-        self.assertEqual(len(keys), 2)
-
-    def test_rotate_key(self):
-        """Test key rotation."""
-        key1, key_data1 = self.manager.create_key(name="Test")
-
-        new_key, new_key_data = self.manager.rotate_key(key_data1.key_id)
-
-        self.assertNotEqual(key1, new_key)
-        self.assertEqual(new_key_data.name, "Test")
-
-        is_valid, _, _ = self.manager.validate_key(key1)
-        self.assertFalse(is_valid)
-
-        is_valid, _, _ = self.manager.validate_key(new_key)
-        self.assertTrue(is_valid)
-
-
-class TestWebhookManager(unittest.TestCase):
-    """Tests for webhook management."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.manager = WebhookManager(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_create_webhook(self):
-        """Test creating a webhook."""
-        webhook = self.manager.create_webhook(
-            url="https://example.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-
-        self.assertTrue(webhook.id.startswith("wh_"))
-        self.assertEqual(webhook.url, "https://example.com/webhook")
-        self.assertIn(WebhookEvent.KEY_CREATED, webhook.events)
-        self.assertTrue(webhook.is_active)
-
-    def test_get_webhook(self):
-        """Test getting a webhook."""
-        webhook = self.manager.create_webhook(
-            url="https://example.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-
-        retrieved = self.manager.get_webhook(webhook.id)
-
-        self.assertIsNotNone(retrieved)
-        self.assertEqual(retrieved.id, webhook.id)
-
-    def test_list_webhooks(self):
-        """Test listing webhooks."""
-        self.manager.create_webhook(
-            url="https://example1.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-        self.manager.create_webhook(
-            url="https://example2.com/webhook",
-            events=[WebhookEvent.QUOTA_EXCEEDED],
-        )
-
-        webhooks = self.manager.list_webhooks()
-        self.assertEqual(len(webhooks), 2)
-
-        filtered = self.manager.list_webhooks(WebhookEvent.KEY_CREATED)
-        self.assertEqual(len(filtered), 1)
-
-    def test_delete_webhook(self):
-        """Test deleting a webhook."""
-        webhook = self.manager.create_webhook(
-            url="https://example.com/webhook",
-            events=[WebhookEvent.KEY_CREATED],
-        )
-
-        result = self.manager.delete_webhook(webhook.id)
-
-        self.assertTrue(result)
-        self.assertIsNone(self.manager.get_webhook(webhook.id))
-
-    def test_verify_signature(self):
-        """Test signature verification."""
-        payload = '{"test": "data"}'
-        secret = "test_secret"
-
-        signature = WebhookManager._generate_signature(payload, secret)
-
-        self.assertTrue(signature.startswith("sha256="))
-        self.assertTrue(WebhookManager.verify_signature(signature, payload, secret))
-        self.assertFalse(WebhookManager.verify_signature("invalid", payload, secret))
-
-
-class TestBillingManager(unittest.TestCase):
-    """Tests for billing management."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.manager = BillingManager(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_default_plans(self):
-        """Test that default plans are created."""
-        plans = self.manager.list_plans()
-
-        self.assertGreaterEqual(len(plans), 4)
-
-        plan_ids = [p.id for p in plans]
-        self.assertIn("free", plan_ids)
-        self.assertIn("starter", plan_ids)
-        self.assertIn("pro", plan_ids)
-        self.assertIn("enterprise", plan_ids)
-
-    def test_create_customer(self):
-        """Test creating a customer."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        self.assertTrue(customer["id"].startswith("cus_"))
-        self.assertEqual(customer["email"], "test@example.com")
-        self.assertEqual(customer["name"], "Test User")
-
-    def test_create_subscription(self):
-        """Test creating a subscription."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        subscription = self.manager.create_subscription(
-            customer_id=customer["id"],
-            plan_id="pro",
-            billing_cycle=BillingCycle.MONTHLY,
-        )
-
-        self.assertTrue(subscription.id.startswith("sub_"))
-        self.assertEqual(subscription.plan_id, "pro")
-        self.assertEqual(subscription.billing_cycle, BillingCycle.MONTHLY)
-        self.assertTrue(subscription.is_active())
-
-    def test_cancel_subscription(self):
-        """Test cancelling a subscription."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        subscription = self.manager.create_subscription(
-            customer_id=customer["id"],
-            plan_id="pro",
-        )
-
-        result = self.manager.cancel_subscription(subscription.id)
-
-        self.assertTrue(result)
-        self.assertFalse(subscription.is_active())
-
-    def test_record_usage(self):
-        """Test recording usage."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        record = self.manager.record_usage(
-            customer_id=customer["id"],
-            key_id="sk_test",
-            requests=10,
-            tokens=500,
-        )
-
-        self.assertTrue(record.id.startswith("use_"))
-        self.assertEqual(record.requests, 10)
-        self.assertEqual(record.tokens_used, 500)
-
-    def test_get_customer_subscription(self):
-        """Test getting customer subscription."""
-        customer = self.manager.create_customer(
-            email="test@example.com",
-            name="Test User",
-        )
-
-        subscription = self.manager.create_subscription(
-            customer_id=customer["id"],
-            plan_id="pro",
-        )
-
-        retrieved = self.manager.get_customer_subscription(customer["id"])
-
-        self.assertIsNotNone(retrieved)
-        self.assertEqual(retrieved.id, subscription.id)
-
-
-class TestUsageDashboard(unittest.TestCase):
-    """Tests for usage dashboard."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        self.temp_file.close()
-        self.dashboard = UsageDashboard(storage_path=self.temp_file.name)
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        try:
-            os.unlink(self.temp_file.name)
-        except:
-            pass
-
-    def test_record_request(self):
-        """Test recording a request."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            tokens=100,
-            latency_ms=50,
-            success=True,
-        )
-
-        metrics = self.dashboard.get_metrics("1d")
-
-        self.assertEqual(metrics.total_requests, 1)
-        self.assertEqual(metrics.total_tokens, 100)
-
-    def test_get_metrics(self):
-        """Test getting metrics."""
-        for i in range(5):
-            self.dashboard.record_request(
-                key_id="sk_test",
-                customer_id="cus_test",
-                tokens=100,
-                latency_ms=50,
-            )
-
-        metrics = self.dashboard.get_metrics("1d")
-
-        self.assertEqual(metrics.total_requests, 5)
-        self.assertEqual(metrics.total_tokens, 500)
-        self.assertGreater(metrics.success_rate, 0)
-
-    def test_get_usage_breakdown(self):
-        """Test getting usage breakdown."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            endpoint="/generate",
-        )
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            endpoint="/chat",
-        )
-
-        breakdown = self.dashboard.get_usage_breakdown("1d", "endpoint")
-
-        self.assertEqual(len(breakdown), 2)
-
-    def test_generate_report(self):
-        """Test generating a report."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            tokens=100,
-        )
-
-        report = self.dashboard.generate_report("7d")
-
-        self.assertIn("metrics", report)
-        self.assertIn("breakdown", report)
-        self.assertIn("top_customers", report)
-        self.assertIn("top_keys", report)
-
-    def test_export_csv(self):
-        """Test CSV export."""
-        self.dashboard.record_request(
-            key_id="sk_test",
-            customer_id="cus_test",
-            tokens=100,
-        )
-
-        csv = self.dashboard.export_csv("1d")
-
-        self.assertIn("timestamp", csv)
-        self.assertIn("customer_id", csv)
-        self.assertIn("sk_test", csv)
-
-
 class TestSloughGPTClient(unittest.TestCase):
     """Tests for the SloughGPT client."""
 
-    @patch('requests.Session')
+    @patch("requests.Session")
     def test_client_initialization(self, mock_session):
         """Test client initialization."""
         client = SloughGPTClient(base_url="http://localhost:8000")
@@ -492,7 +90,7 @@ class TestSloughGPTClient(unittest.TestCase):
         self.assertEqual(client.base_url, "http://localhost:8000")
         self.assertEqual(client.timeout, 30)
 
-    @patch('requests.Session')
+    @patch("requests.Session")
     def test_client_with_api_key(self, mock_session):
         """Test client with API key."""
         client = SloughGPTClient(
@@ -625,13 +223,13 @@ class TestNewSDKMethods(unittest.TestCase):
 
         client = SloughGPTClient()
 
-        self.assertTrue(hasattr(client, 'start_training'))
-        self.assertTrue(hasattr(client, 'get_training_status'))
-        self.assertTrue(hasattr(client, 'list_training_jobs'))
-        self.assertTrue(hasattr(client, 'delete_training_job'))
-        self.assertTrue(hasattr(client, 'stop_training'))
-        self.assertTrue(hasattr(client, 'pause_training'))
-        self.assertTrue(hasattr(client, 'resume_training'))
+        self.assertTrue(hasattr(client, "start_training"))
+        self.assertTrue(hasattr(client, "get_training_status"))
+        self.assertTrue(hasattr(client, "list_training_jobs"))
+        self.assertTrue(hasattr(client, "delete_training_job"))
+        self.assertTrue(hasattr(client, "stop_training"))
+        self.assertTrue(hasattr(client, "pause_training"))
+        self.assertTrue(hasattr(client, "resume_training"))
 
     def test_async_client_exported(self):
         """AsyncSloughGPTClient is public API (README lists it)."""
@@ -676,14 +274,10 @@ class TestNewSDKMethods(unittest.TestCase):
             "m",
             "d",
             weight_decay=0.02,
-            use_mixed_precision=True,
-            mixed_precision_dtype="fp16",
             scheduler="linear",
             device="cpu",
         )
         self.assertEqual(payload["weight_decay"], 0.02)
-        self.assertTrue(payload["use_mixed_precision"])
-        self.assertEqual(payload["mixed_precision_dtype"], "fp16")
         self.assertEqual(payload["scheduler"], "linear")
         self.assertEqual(payload["device"], "cpu")
 
@@ -693,11 +287,11 @@ class TestNewSDKMethods(unittest.TestCase):
 
         client = SloughGPTClient()
 
-        self.assertTrue(hasattr(client, 'create_experiment'))
-        self.assertTrue(hasattr(client, 'list_experiments'))
-        self.assertTrue(hasattr(client, 'get_experiment'))
-        self.assertTrue(hasattr(client, 'log_metric'))
-        self.assertTrue(hasattr(client, 'log_param'))
+        self.assertTrue(hasattr(client, "create_experiment"))
+        self.assertTrue(hasattr(client, "list_experiments"))
+        self.assertTrue(hasattr(client, "get_experiment"))
+        self.assertTrue(hasattr(client, "log_metric"))
+        self.assertTrue(hasattr(client, "log_param"))
 
     def test_rate_limit_methods_exist(self):
         """Test rate limit methods exist on client."""
@@ -705,8 +299,8 @@ class TestNewSDKMethods(unittest.TestCase):
 
         client = SloughGPTClient()
 
-        self.assertTrue(hasattr(client, 'get_rate_limit_status'))
-        self.assertTrue(hasattr(client, 'check_rate_limit'))
+        self.assertTrue(hasattr(client, "get_rate_limit_status"))
+        self.assertTrue(hasattr(client, "check_rate_limit"))
 
     def test_personality_methods_exist(self):
         """Test personality methods exist on client."""
@@ -714,16 +308,15 @@ class TestNewSDKMethods(unittest.TestCase):
 
         client = SloughGPTClient()
 
-        self.assertTrue(hasattr(client, 'get_personalities'))
-        self.assertTrue(hasattr(client, 'set_personality'))
-
+        self.assertTrue(hasattr(client, "get_personalities"))
+        self.assertTrue(hasattr(client, "set_personality"))
 
 
 class TestNewSDKEndpoints(unittest.TestCase):
     """Integration tests for all new SDK endpoints (mocked HTTP)."""
 
     def setUp(self):
-        self.client_patcher = patch('requests.Session.request')
+        self.client_patcher = patch("requests.Session.request")
         self.mock_request = self.client_patcher.start()
         self.mock_response = MagicMock()
         self.mock_response.ok = True
@@ -736,240 +329,294 @@ class TestNewSDKEndpoints(unittest.TestCase):
 
     def _client(self):
         from sloughgpt_sdk import SloughGPTClient
+
         return SloughGPTClient()
 
     def _assert_called(self, method, path):
-        self.assertEqual(len(self.mock_request.call_args_list), 1,
-                         f"Expected 1 call, got {len(self.mock_request.call_args_list)}")
+        self.assertEqual(
+            len(self.mock_request.call_args_list),
+            1,
+            f"Expected 1 call, got {len(self.mock_request.call_args_list)}",
+        )
         args, kwargs = self.mock_request.call_args
         self.assertEqual(args[0], method, f"Expected method {method}, got {args[0]}")
         url = str(args[1])
         self.assertIn(path, url, f"Path {path} not in URL {url}")
-        self.assertIn('timeout', kwargs)
-        self.assertIn('verify', kwargs)
+        self.assertIn("timeout", kwargs)
+        self.assertIn("verify", kwargs)
 
     # === Souls ===
 
     def test_list_souls(self):
         self._client().list_souls()
-        self._assert_called('GET', '/souls')
+        self._assert_called("GET", "/souls")
 
     def test_get_current_soul(self):
         self._client().get_current_soul()
-        self._assert_called('GET', '/souls/current')
+        self._assert_called("GET", "/souls/current")
 
     def test_switch_soul(self):
-        self._client().switch_soul('friendly')
-        self._assert_called('POST', '/souls/switch/friendly')
+        self._client().switch_soul("friendly")
+        self._assert_called("POST", "/souls/switch")
+        call_body = self.mock_request.call_args[1].get("json", {})
+        self.assertEqual(call_body.get("name"), "friendly")
 
     def test_switch_soul_with_checkpoint(self):
-        self._client().switch_soul('friendly', 'ckpt-v2')
-        self._assert_called('POST', '/souls/switch/friendly')
-        call_body = self.mock_request.call_args[1].get('json', {})
-        self.assertEqual(call_body.get('checkpoint_name'), 'ckpt-v2')
+        self._client().switch_soul("friendly", "ckpt-v2")
+        self._assert_called("POST", "/souls/switch")
+        call_body = self.mock_request.call_args[1].get("json", {})
+        self.assertEqual(call_body.get("name"), "friendly")
+        self.assertEqual(call_body.get("checkpoint_name"), "ckpt-v2")
 
     # === Knowledge ===
 
     def test_list_knowledge(self):
         self._client().list_knowledge()
-        self._assert_called('GET', '/knowledge')
+        self._assert_called("GET", "/knowledge")
 
     def test_add_knowledge(self):
-        self._client().add_knowledge('Paris is capital', 'geo')
-        self._assert_called('POST', '/knowledge')
+        self._client().add_knowledge("Paris is capital", "geo")
+        self._assert_called("POST", "/knowledge")
 
     def test_delete_knowledge(self):
-        self._client().delete_knowledge('k1')
-        self._assert_called('DELETE', '/knowledge/k1')
+        self._client().delete_knowledge("k1")
+        self._assert_called("DELETE", "/knowledge/k1")
 
     def test_search_knowledge(self):
-        self._client().search_knowledge('paris')
-        self._assert_called('GET', '/knowledge/search')
+        self._client().search_knowledge("paris")
+        self._assert_called("GET", "/knowledge/search")
 
     def test_get_knowledge_stats(self):
         self._client().get_knowledge_stats()
-        self._assert_called('GET', '/knowledge/stats')
+        self._assert_called("GET", "/knowledge/stats")
 
     def test_get_knowledge_topics(self):
         self._client().get_knowledge_topics()
-        self._assert_called('GET', '/knowledge/topics')
+        self._assert_called("GET", "/knowledge/topics")
 
     def test_ingest_knowledge_url(self):
-        self._client().ingest_knowledge_url('https://example.com')
-        self._assert_called('POST', '/knowledge/ingest-url')
+        self._client().ingest_knowledge_url("https://example.com")
+        self._assert_called("POST", "/knowledge/ingest-url")
 
     # === Tokenizer ===
 
     def test_get_tokenizer_stats(self):
         self._client().get_tokenizer_stats()
-        self._assert_called('GET', '/tokenizer/stats')
+        self._assert_called("GET", "/tokenizer/stats")
 
     def test_tokenize(self):
-        self._client().tokenize('hello world')
-        self._assert_called('POST', '/tokenizer/tokenize')
+        self._client().tokenize("hello world")
+        self._assert_called("POST", "/tokenizer/tokenize")
 
     def test_train_tokenizer(self):
-        self._client().train_tokenizer('training text', 32000)
-        self._assert_called('POST', '/tokenizer/train')
+        self._client().train_tokenizer("training text", 32000)
+        self._assert_called("POST", "/tokenizer/train")
 
     # === System ===
 
     def test_get_system_metrics(self):
         self._client().get_system_metrics()
-        self._assert_called('GET', '/system/metrics')
+        self._assert_called("GET", "/system/metrics")
 
     def test_get_system_info(self):
         self._client().get_system_info()
-        self._assert_called('GET', '/system/info')
+        self._assert_called("GET", "/system/info")
 
     def test_get_system_disk(self):
         self._client().get_system_disk()
-        self._assert_called('GET', '/system/disk')
+        self._assert_called("GET", "/system/disk")
 
     # === Companion ===
 
     def test_get_companion_prompt(self):
         self._client().get_companion_prompt()
-        self._assert_called('GET', '/companion/prompt')
+        self._assert_called("GET", "/companion/prompt")
 
     def test_list_companion_presets(self):
         self._client().list_companion_presets()
-        self._assert_called('GET', '/companion/presets')
+        self._assert_called("GET", "/companion/presets")
 
     # === Generation endpoints ===
 
     def test_generate_uses_inference_path(self):
-        self._client().generate('hello')
-        self._assert_called('POST', '/inference/generate')
+        self._client().generate("hello")
+        self._assert_called("POST", "/inference/generate")
 
     def test_generate_stream_uses_inference_path(self):
         self.mock_response.iter_lines.return_value = []
-        list(self._client().generate_stream('hello'))
-        self._assert_called('POST', '/inference/generate/stream')
+        list(self._client().generate_stream("hello"))
+        self._assert_called("POST", "/inference/generate/stream")
 
     # === Training Control ===
 
     def test_stop_training(self):
         self._client().stop_training()
-        self._assert_called('POST', '/training/control/stop')
+        self._assert_called("POST", "/training/control/stop")
 
     def test_pause_training(self):
         self._client().pause_training()
-        self._assert_called('POST', '/training/control/pause')
+        self._assert_called("POST", "/training/control/pause")
 
     def test_resume_training(self):
         self._client().resume_training()
-        self._assert_called('POST', '/training/control/resume')
+        self._assert_called("POST", "/training/control/resume")
 
     def test_delete_training_job(self):
-        self._client().delete_training_job('job-1')
-        self._assert_called('DELETE', '/training/jobs/job-1')
+        self._client().delete_training_job("job-1")
+        self._assert_called("DELETE", "/training/jobs/job-1")
 
     def test_get_training_recovery_stats(self):
         self._client().get_training_recovery_stats()
-        self._assert_called('GET', '/recovery/stats')
+        self._assert_called("GET", "/recovery/stats")
 
     # === Auto-Train ===
 
     def test_start_auto_train(self):
-        self._client().start_auto_train({'soul': 'friendly'})
-        self._assert_called('POST', '/auto-train/start')
+        self._client().start_auto_train({"soul": "friendly"})
+        self._assert_called("POST", "/training/start")
 
     def test_stop_auto_train(self):
         self._client().stop_auto_train()
-        self._assert_called('POST', '/auto-train/stop')
+        self._assert_called("POST", "/training/stop")
 
     def test_get_auto_train_status(self):
         self._client().get_auto_train_status()
-        self._assert_called('GET', '/auto-train/status')
+        self._assert_called("GET", "/settings/training/auto-train/status")
 
     def test_list_auto_train_checkpoints(self):
         self._client().list_auto_train_checkpoints()
-        self._assert_called('GET', '/auto-train/checkpoints')
+        self._assert_called("GET", "/training/checkpoints")
 
     def test_delete_auto_train_checkpoint(self):
-        self._client().delete_auto_train_checkpoint('ckpt-1')
-        self._assert_called('DELETE', '/auto-train/checkpoints/ckpt-1')
+        self._client().delete_auto_train_checkpoint("ckpt-1")
+        self._assert_called("DELETE", "/training/checkpoints/ckpt-1")
 
     def test_load_auto_train_checkpoint(self):
-        self._client().load_auto_train_checkpoint('ckpt-1')
-        self._assert_called('POST', '/auto-train/checkpoints/ckpt-1/load')
+        self._client().load_auto_train_checkpoint("ckpt-1")
+        self._assert_called("POST", "/training/checkpoints/ckpt-1/load")
 
     # === Feedback / Workflow ===
 
     def test_record_feedback(self):
-        self._client().record_feedback('s1', 'm1', 1)
-        self._assert_called('POST', '/feedback/workflow-record')
+        self._client().record_feedback("s1", "m1", 1)
+        self._assert_called("POST", "/feedback/workflow-record")
 
     def test_get_feedback_stats(self):
         self._client().get_feedback_stats()
-        self._assert_called('GET', '/feedback/stats/summary')
+        self._assert_called("GET", "/feedback/stats/summary")
 
     def test_get_workflow_status(self):
         self._client().get_workflow_status()
-        self._assert_called('GET', '/workflow/status')
+        self._assert_called("GET", "/workflow/status")
 
     # === Sessions ===
 
     def test_save_session_context(self):
-        self._client().save_session_context('sess-1', {'ctx': 'data'})
-        self._assert_called('POST', '/session/sess-1/context')
+        self._client().save_session_context("sess-1", {"ctx": "data"})
+        self._assert_called("POST", "/session/sess-1/context")
 
     def test_get_session_messages(self):
-        self._client().get_session_messages('sess-1')
-        self._assert_called('GET', '/session/sess-1/messages')
+        self._client().get_session_messages("sess-1")
+        self._assert_called("GET", "/session/sess-1/messages")
 
     # === Models ===
 
     def test_unload_model(self):
         self._client().unload_model()
-        self._assert_called('POST', '/models/unload')
+        self._assert_called("POST", "/models/unload")
 
     def test_get_current_model(self):
         self._client().get_current_model()
-        self._assert_called('GET', '/models/current')
+        self._assert_called("GET", "/models/current")
 
     # === Datasets ===
 
     def test_import_dataset_local(self):
-        self._client().import_dataset_local('/path', 'ds')
-        self._assert_called('POST', '/datasets/import/local')
+        self._client().import_dataset_local("/path", "ds")
+        self._assert_called("POST", "/datasets/import/local")
 
     def test_import_dataset_github(self):
-        self._client().import_dataset_github('user/repo', 'ds')
-        self._assert_called('POST', '/datasets/import/github')
+        self._client().import_dataset_github("user/repo", "ds")
+        self._assert_called("POST", "/datasets/import/github")
 
     def test_import_dataset_url(self):
-        self._client().import_dataset_url('https://example.com', 'ds')
-        self._assert_called('POST', '/datasets/import/url')
+        self._client().import_dataset_url("https://example.com", "ds")
+        self._assert_called("POST", "/datasets/import/url")
 
     # === Benchmark ===
 
     def test_get_benchmark_metrics(self):
         self._client().get_benchmark_metrics()
-        self._assert_called('GET', '/benchmark/metrics')
+        self._assert_called("GET", "/benchmark/metrics")
 
     def test_get_benchmark_stats(self):
         self._client().get_benchmark_stats()
-        self._assert_called('GET', '/benchmark/stats')
+        self._assert_called("GET", "/benchmark/stats")
 
     # === Security ===
 
     def test_get_audit_log(self):
         self._client().get_audit_log()
-        self._assert_called('GET', '/security/audit')
+        self._assert_called("GET", "/security/audit")
+
+    def test_get_security_keys(self):
+        self._client().get_security_keys()
+        self._assert_called("GET", "/security/keys")
+
+    def test_get_security_keys_unwraps_keys_field(self):
+        self.mock_response.json.return_value = {
+            "status": "success",
+            "data": {"keys": [{"id": "k1"}]},
+        }
+        result = self._client().get_security_keys()
+        self.assertEqual(result, [{"id": "k1"}])
+
+    def test_get_security_keys_accepts_flat_list(self):
+        self.mock_response.json.return_value = [{"id": "k1"}]
+        result = self._client().get_security_keys()
+        self.assertEqual(result, [{"id": "k1"}])
+
+    # === Registry ===
+
+    def test_list_registry_models(self):
+        self._client().list_registry_models()
+        self._assert_called("GET", "/registry/models")
+
+    def test_list_registry_models_unwraps_models_field(self):
+        self.mock_response.json.return_value = {
+            "status": "success",
+            "data": {"models": [{"model_id": "gpt2"}], "count": 1},
+        }
+        result = self._client().list_registry_models()
+        self.assertEqual(result, [{"model_id": "gpt2"}])
+
+    def test_get_registry_model(self):
+        self._client().get_registry_model("gpt2")
+        self._assert_called("GET", "/registry/models/gpt2")
+
+    def test_get_registry_best(self):
+        self.mock_response.json.return_value = {
+            "status": "success",
+            "data": {"models": 2, "loaded": 1},
+        }
+        result = self._client().get_registry_best()
+        self.assertEqual(result, {"models": 2, "loaded": 1})
+
+    def test_get_registry_stats(self):
+        self._client().get_registry_stats()
+        self._assert_called("GET", "/registry/stats")
 
     # === Detailed Health ===
 
     def test_detailed_health(self):
         self._client().detailed_health()
-        self._assert_called('GET', '/health/detailed')
+        self._assert_called("GET", "/health/detailed")
 
     # === Set personality uses companion endpoint ===
 
     def test_set_personality_uses_companion(self):
-        self._client().set_personality('friendly')
-        self._assert_called('POST', '/companion/personality')
+        self._client().set_personality("friendly")
+        self._assert_called("POST", "/companion/personality")
 
 
 if __name__ == "__main__":

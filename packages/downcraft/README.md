@@ -2,6 +2,8 @@
 
 Generic HTTP/HTTPS downloader with **cross-session resume** via HTTP `Range` headers. Survives power loss, process crashes, and days-long gaps between sessions.
 
+Optional **LZ4 compression** support for bandwidth savings.
+
 ## Quick start
 
 ```bash
@@ -10,8 +12,8 @@ pip install downcraft
 # Download any URL
 downcraft url https://example.com/bigfile.iso /tmp/bigfile.iso
 
-# Or a HuggingFace model
-downcraft hf Qwen/Qwen2.5-0.5B-Instruct
+# Download with compression (server sends LZ4)
+downcraft url https://example.com/bigfile.iso.lz4 /tmp/bigfile.iso --compressed
 
 # Check status
 downcraft status https://example.com/bigfile.iso
@@ -19,6 +21,20 @@ downcraft status https://example.com/bigfile.iso
 # List all tracked downloads
 downcraft list
 ```
+
+Every download reports what it cost **on the wire** vs what it delivered:
+
+```
+✓ Done — 8 MB in 2s
+  ↳ wire 2.1 MB · saved 74% (5.9 MB less) · gzip
+```
+
+Savings come from edge compression the server actually applied
+(`gzip`/`zstd`/`lz4` — we advertise `Accept-Encoding` on every request and
+decode to identity before writing, so resume/verify stay in one byte-space).
+If a compressed response arrives without `Content-Length` the wire size is
+unrecoverable after transparent decoding, so the report says _unknown_
+instead of inventing a number.
 
 ## How resume works
 
@@ -28,6 +44,122 @@ downcraft list
 4. Server sends only remaining bytes → appended to `.sgpart`
 5. On completion → atomically renames to final filename
 
+**Byte-space invariant**: `.sgpart` size, `Range` offsets, `Content-Range`
+responses and `state.json` `bytes_downloaded` are all measured in _decoded_
+(identity) bytes — compressed wire bytes are never persisted, including for
+gzip/zstd/lz4 responses. On every retry the resume offset is re-derived from
+disk (never reused from the previous attempt), so a partially-written chunk
+can never be duplicated or skipped.
+
+## Compression
+
+Install with compression support:
+
+```bash
+pip install downcraft[compress]
+```
+
+### Compress a file
+
+```bash
+downcraft compress input.bin output.lz4
+downcraft compress input.bin output.lz4 --level 9  # higher compression
+```
+
+### Decompress a file
+
+```bash
+downcraft decompress input.lz4 output.bin
+```
+
+### Check if a file is compressed
+
+```bash
+downcraft peek file.lz4
+```
+
+### Server-side: serve files with compression
+
+```python
+from downcraft import CompressedFileServer
+
+server = CompressedFileServer()
+response_data = server.serve("/path/to/model.bin")
+# Use response_data["iterator"] with StreamingResponse
+```
+
+### Client-side: download with decompression
+
+```python
+from downcraft import download
+
+# Download compressed file (auto-decompresses)
+result = download(
+    "https://example.com/model.bin.lz4",
+    "/tmp/model.bin",
+    compressed=True,
+)
+```
+
+Decoding is **response-driven**: any `Content-Type: application/x-lz4`
+response is stream-decoded to identity before writing, with or without
+`compressed=True` (the flag additionally advertises
+`Accept-Encoding: zstd, gzip, lz4` so an edge gateway may answer with
+zstd/gzip — those are decoded to identity too, so resume stays consistent).
+
+### Resume + integrity for compressed downloads
+
+- Range requests are answered in **identity byte-space** and relay the
+  original SLZ4 header checksum as `X-SLZ4-SHA256`.
+- After a resumed download the relayed header checksum is verified against
+  the completed file (mismatch → the `.sgpart` is discarded, no mixed
+  versions), then the caller's SHA-256 (`download.verify`) as with any
+  other download — both run **before** the atomic rename.
+- SLZ4 header/integrity failures discard the partial and raise
+  `DownloadError`; a mid-stream truncation keeps the decoded prefix and the
+  next attempt resumes from it.
+
+Benchmark: `scripts/benchmark_downcraft_compression.py` — codec
+throughput/ratio (identity vs SLZ4 levels vs gzip/zstd) plus end-to-end
+`download_file` runs including interrupted-and-resumed downloads.
+
+### Auto-detect compression
+
+```python
+from downcraft import auto_decompress, is_compressed_file
+
+# Auto-detect and decompress
+auto_decompress("file.lz4", "file.bin")
+
+# Check if a file is compressed
+if is_compressed_file("file.lz4"):
+    print("File is LZ4 compressed")
+```
+
+### Direct compression/decompression
+
+```python
+from downcraft import (
+    compress_bytes, decompress_bytes,
+    compress_file, decompress_file,
+    compress_stream, decompress_stream,
+)
+
+# Bytes
+compressed, result = compress_bytes(b"hello world")
+decompressed, _ = decompress_bytes(compressed)
+
+# Files
+compress_file("input.bin", "output.lz4")
+decompress_file("output.lz4", "restored.bin")
+
+# Streams
+import io
+src = io.BytesIO(b"data")
+dst = io.BytesIO()
+compress_stream(src, dst)
+```
+
 ## Python API
 
 ```python
@@ -36,6 +168,10 @@ from downcraft import download
 # Generic URL
 result = download("https://example.com/bigfile.iso", "/tmp/bigfile.iso")
 print(result["status"])  # "complete"
+print(result["wire_bytes"], result["saved_bytes"], result["saved_pct"])
+# Bandwidth accounting for this call: wire vs decoded bytes, savings %,
+# and the content coding seen ("gzip", "zstd", "lz4", "identity").
+# saved_bytes/saved_pct are None when the wire size couldn't be measured.
 
 # With progress callback
 def on_progress(downloaded, total, speed_bps):
@@ -44,26 +180,27 @@ def on_progress(downloaded, total, speed_bps):
 
 download("https://...", "/tmp/file", on_progress=on_progress)
 
-# HuggingFace model (requires huggingface-hub)
-from downcraft import download_hf_model
-
-result = download_hf_model("gpt2")
-print(result["cache_dir"])  # path to HF cache
+# Lower-level primitives
+from downcraft.downloader import download_file, DownloadError
+from downcraft.state import get_state
+from downcraft.verify import verify_file
 ```
 
 ## CLI
 
-| Command | Description |
-|---------|-------------|
-| `downcraft url <url> <dest>` | Download any file |
-| `downcraft hf <model_id>` | Download HF model |
-| `downcraft status <key>` | Check download status |
-| `downcraft list` | List all tracked |
-| `downcraft verify <key>` | Verify integrity |
+| Command                                   | Description                     |
+| ----------------------------------------- | ------------------------------- |
+| `downcraft url <url> <dest>`              | Download any file               |
+| `downcraft url <url> <dest> --compressed` | Download with LZ4 decompression |
+| `downcraft status <key>`                  | Check download status           |
+| `downcraft list`                          | List all tracked                |
+| `downcraft compress <src> <dest>`         | Compress file with LZ4          |
+| `downcraft decompress <src> <dest>`       | Decompress LZ4 file             |
+| `downcraft peek <file>`                   | Check if file is compressed     |
 
 ## Dependencies
 
 - **requests** (required) — HTTP with Range header support
-- **huggingface-hub** (optional) — only needed for HF model commands
+- **lz4** (optional) — Compression support
 
-Install with HF support: `pip install downcraft[hf]`
+Install: `pip install downcraft` or `pip install downcraft[compress]`

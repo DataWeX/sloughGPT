@@ -62,6 +62,10 @@ const DEFAULT_PROMPTS: QuickPrompt[] = [
 
 let cached: QuickPrompt[] | null = null;
 
+export function _resetCache() {
+  cached = null;
+}
+
 async function load(): Promise<QuickPrompt[]> {
   if (cached) return cached;
   try {
@@ -71,8 +75,8 @@ async function load(): Promise<QuickPrompt[]> {
       return cached!;
     }
   } catch {}
-  // First time — seed with defaults
-  cached = DEFAULT_PROMPTS;
+  // First time — seed with defaults (clone to avoid mutation)
+  cached = DEFAULT_PROMPTS.map(p => ({...p}));
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cached));
   return cached;
 }

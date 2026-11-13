@@ -8,13 +8,14 @@ const STORAGE_KEY = '@sloughgpt/settings';
 
 const DEFAULTS = {
   theme: 'system',
-  fontFamily: 'dm-sans',
+  fontFamily: 'outfit',
   fontSizeScale: 1.0,
-  temperature: 0.8,
+  accentColor: 'violet',
+  temperature: 0.7,
   maxTokens: 256,
-  topP: 0.9,
-  topK: 50,
-  repetitionPenalty: 1.2,
+  topP: 0.85,
+  topK: 40,
+  repetitionPenalty: 1.15,
   memoryContext: '',
   apiUrl: 'http://localhost:8000',
   chatBackground: '',
@@ -39,13 +40,13 @@ describe('initial state', () => {
   it('has correct default values', () => {
     const s = useSettingsStore.getState();
     expect(s.theme).toBe('system');
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.fontFamily).toBe('outfit');
     expect(s.fontSizeScale).toBe(1.0);
-    expect(s.temperature).toBe(0.8);
+    expect(s.temperature).toBe(0.7);
     expect(s.maxTokens).toBe(256);
-    expect(s.topP).toBe(0.9);
-    expect(s.topK).toBe(50);
-    expect(s.repetitionPenalty).toBe(1.2);
+    expect(s.topP).toBe(0.85);
+    expect(s.topK).toBe(40);
+    expect(s.repetitionPenalty).toBe(1.15);
     expect(s.apiUrl).toBe('http://localhost:8000');
   });
 });
@@ -60,7 +61,7 @@ describe('hydration', () => {
     expect(s.theme).toBe('dark');
     expect(s.temperature).toBe(0.5);
     // Non-overridden fields remain at defaults
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.fontFamily).toBe('outfit');
   });
 });
 
@@ -99,7 +100,7 @@ describe('update', () => {
     expect(s.topK).toBe(20);
     // Unchanged
     expect(s.theme).toBe('system');
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.fontFamily).toBe('outfit');
   });
 
   it('persists merged state to AsyncStorage', () => {
@@ -116,9 +117,9 @@ describe('reset', () => {
     useSettingsStore.getState().update({temperature: 0.1, theme: 'dark'});
     useSettingsStore.getState().reset();
     const s = useSettingsStore.getState();
-    expect(s.temperature).toBe(0.8);
-    expect(s.theme).toBe('system');
-    expect(s.fontFamily).toBe('dm-sans');
+    expect(s.temperature).toBe(0.7);
+    expect(s.theme).toBe('dark');
+    expect(s.fontFamily).toBe('outfit');
   });
 
   it('removes saved settings from AsyncStorage', () => {

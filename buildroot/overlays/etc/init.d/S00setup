@@ -1,0 +1,30 @@
+#!/bin/sh
+# SloughGPT init script - mount filesystems
+
+# Mount proc
+mount -t proc proc /proc
+
+# Mount sysfs
+mount -t sysfs sysfs /sys
+
+# Mount devpts
+mount -t devpts devpts /dev/pts
+
+# Mount tmpfs for /tmp
+mount -t tmpfs tmpfs /tmp
+
+# Mount devtmpfs
+mount -t devtmpfs devtmpfs /dev
+
+# Set hostname
+hostname sloughgpt
+
+# Setup loopback
+ifconfig lo 127.0.0.1 netmask 255.0.0.0 up
+
+# Start syslog
+syslogd -O /var/log/messages
+
+# Start console
+echo "SloughGPT v0.1.0"
+echo "Booting Dait OS..."

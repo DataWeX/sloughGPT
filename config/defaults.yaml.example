@@ -1,0 +1,50 @@
+# SloughGPT example config — copy to defaults.yaml and edit.
+# All keys are optional; omitted keys use defaults shown below.
+
+model:
+  name: "Qwen/Qwen2.5-0.5B-Instruct"
+  device: "auto"
+  max_length: 1024
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  repetition_penalty: 1.1
+  max_new_tokens: 200
+  use_slonet: false
+  autoload: true
+  use_flash_attention: false
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "INFO"
+  reload: false
+  request_timeout: 60.0
+  inference_pool_size: 2
+
+features:
+  auto_workflow: true
+  health_monitor: true
+  health_interval: 300
+  watchdog: true
+  web: false
+  auto_download: false
+
+auth:
+  jwt_algorithm: "HS256"
+  jwt_expiration_hours: 24
+  api_keys_enabled: false
+  auth_required: false
+
+tracking:
+  provider: "none"
+  wandb_project: "sloughgpt"
+
+embedding:
+  provider: "n_gram"
+
+storage:
+  data_dir: "data"
+  datasets_dir: "data"
+  models_dir: "models"
+  checkpoint_dir: "models/auto-training"

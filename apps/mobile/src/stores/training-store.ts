@@ -1,4 +1,5 @@
 import {create} from 'zustand';
+import {api} from '../services/api-client';
 import {
   startTraining,
   stopTraining,
@@ -8,11 +9,24 @@ import {
   loadCheckpoint,
   listDatasets,
   streamTraining,
-  startHFFineTune,
+  startLoraFinetune,
   listTrainingJobs,
+  deleteTrainingJob,
+  stopTrainingJob,
+  listFineTunedModels,
+  loadFineTunedModel,
+  deleteFineTunedModel,
+  loadAdapter,
+  unloadAdapter,
+  importDatasetUrl,
+  importDatasetGithub,
+  importDatasetHuggingface,
+  importDatasetCsv,
   type TrainConfig,
   type Checkpoint,
   type Dataset,
+  type FineTunedModel,
+  type TrainingJob,
 } from '../services/training-service';
 
 export type TrainPhase =
@@ -48,6 +62,8 @@ interface TrainingState {
   epoch: number;
   totalEpochs: number;
   steps: number;
+  stepsPerSec: number | null;
+  eta: number | null;
   checkpoint: string | null;
   error: string | null;
   checkpoints: Checkpoint[];
@@ -56,23 +72,46 @@ interface TrainingState {
   method: TrainingMethod;
   hfOpts: HFTrainingOpts;
   hfJobId: string | null;
-  hfJobs: any[];
+  hfJobs: TrainingJob[];
   hfFinetunedPath: string | null;
+  finetunedModels: FineTunedModel[];
+  adapterLoaded: boolean;
 
   setConfig: (partial: Partial<TrainConfig>) => void;
   setHfOpts: (partial: Partial<HFTrainingOpts>) => void;
   setMethod: (m: TrainingMethod) => void;
   start: () => Promise<void>;
-  startHFFineTune: () => Promise<void>;
+  startLoraFinetune: () => Promise<void>;
   stop: () => Promise<void>;
   refresh: () => Promise<void>;
+  refreshFinetunedModels: () => Promise<void>;
   loadCheckpoint: (name: string) => Promise<void>;
   deleteCheckpoint: (name: string) => Promise<void>;
+  deleteJob: (jobId: string) => Promise<void>;
+  stopJob: (jobId: string) => Promise<void>;
+  loadFinetunedModel: (name: string) => Promise<void>;
+  deleteFinetunedModel: (name: string) => Promise<void>;
+  loadAdapterModel: (path: string) => Promise<void>;
+  unloadAdapterModel: () => Promise<void>;
+  importDataset: (source: string, name: string, type: 'url' | 'github' | 'huggingface' | 'csv') => Promise<void>;
   clearError: () => void;
+  rehydrate: () => Promise<void>;
 }
 
 let abortController: AbortController | null = null;
 let hfPollTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Cleanup SSE + poll timers — call on screen unmount. */
+export function cleanupTraining() {
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+  if (hfPollTimer) {
+    clearInterval(hfPollTimer);
+    hfPollTimer = null;
+  }
+}
 
 const defaultConfig: TrainConfig = {
   epochs: 10,
@@ -100,6 +139,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   epoch: 0,
   totalEpochs: 10,
   steps: 0,
+  stepsPerSec: null,
+  eta: null,
   checkpoint: null,
   error: null,
   checkpoints: [],
@@ -110,6 +151,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   hfJobId: null,
   hfJobs: [],
   hfFinetunedPath: null,
+  finetunedModels: [],
+  adapterLoaded: false,
 
   setConfig: partial => set(s => ({config: {...s.config, ...partial}})),
   setHfOpts: partial => set(s => ({hfOpts: {...s.hfOpts, ...partial}})),
@@ -118,7 +161,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   start: async () => {
     const state = get();
     if (state.method === 'finetune') {
-      await get().startHFFineTune();
+      await get().startLoraFinetune();
       return;
     }
 
@@ -137,6 +180,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       epoch: 0,
       totalEpochs: cfg.epochs,
       steps: 0,
+      stepsPerSec: null,
+      eta: null,
       checkpoint: null,
       error: null,
     });
@@ -152,10 +197,9 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
     try {
       for await (const event of streamTraining(abortController.signal)) {
-        const raw = event.raw || {};
-        const rawPhase = raw.phase as string | undefined;
-        const rawStatus = raw.status as string | undefined;
-        const rawData = (raw.data || {}) as Record<string, any>;
+        const rawPhase = event.phase;
+        const rawStatus = event.status;
+        const rawData = (event.data || {}) as Record<string, any>;
 
         if (rawPhase) {
           set({phase: rawPhase as TrainPhase});
@@ -168,10 +212,12 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             loss: Number(rawData.loss),
             steps: Number(step),
             epoch: Number(ep),
+            stepsPerSec: rawData.steps_per_sec != null ? Number(rawData.steps_per_sec) : s.stepsPerSec,
+            eta: rawData.eta_s != null ? Number(rawData.eta_s) : s.eta,
             lossHistory: [
               ...s.lossHistory,
               {step: Number(step), value: Number(rawData.loss)},
-            ],
+            ].slice(-200),
           }));
         }
 
@@ -204,7 +250,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
 
         if (rawStatus === 'error') {
-          const msg = raw.message || rawData.error || 'Training failed';
+          const msg = event.message || rawData.error || 'Training failed';
           set({phase: 'FAILED', error: String(msg), running: false});
           break;
         }
@@ -221,14 +267,14 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     }
   },
 
-  startHFFineTune: async () => {
+  startLoraFinetune: async () => {
     const {hfOpts, config} = get();
     const dataset = hfOpts.dataset || config.dataset_id;
     if (!dataset) {
       set({error: 'Select a dataset for fine-tuning'});
       return;
     }
-    const model = hfOpts.model || 'gpt2';
+    const modelPath = hfOpts.model || 'models/gpt2.slnc';
 
     set({
       phase: 'TRAINING',
@@ -237,51 +283,67 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       epoch: 0,
       totalEpochs: hfOpts.epochs,
       steps: 0,
+      stepsPerSec: null,
+      eta: null,
       error: null,
       hfFinetunedPath: null,
     });
 
     try {
-      const result = await startHFFineTune({
-        model,
+      const result = await startLoraFinetune({
+        model_path: modelPath,
         dataset,
+        rank: hfOpts.lora_rank,
         epochs: hfOpts.epochs,
         batch_size: hfOpts.batch_size,
         learning_rate: hfOpts.learning_rate,
-        use_lora: hfOpts.use_lora,
-        lora_rank: hfOpts.lora_rank,
       });
       const jobId = result.job_id;
       set({hfJobId: jobId});
 
-      // Poll for completion
       hfPollTimer = setInterval(async () => {
         try {
           const jobs = await listTrainingJobs();
-          const job = (jobs || []).find((j: any) => j.job_id === jobId || j.id === jobId);
+          const job = (jobs || []).find(
+            (j: TrainingJob) => j.job_id === jobId || j.id === jobId,
+          );
           if (!job) return;
 
           const jobStatus = job.status || '';
           const jobPhase = job.phase || 'TRAINING';
           set({
-            phase: jobPhase === 'complete' ? 'COMPLETE' : jobPhase === 'failed' ? 'FAILED' : 'TRAINING' as TrainPhase,
-            steps: job.steps || job.global_step || get().steps,
-            epoch: job.epoch || job.current_epoch || get().epoch,
-            loss: job.loss ?? job.final_loss ?? get().loss,
+            phase:
+              jobPhase === 'complete'
+                ? 'COMPLETE'
+                : jobPhase === 'failed'
+                ? 'FAILED'
+                : ('TRAINING' as TrainPhase),
+            steps: job.global_step || get().steps,
+            epoch: job.current_epoch || get().epoch,
+            loss: job.loss ?? job.eval_loss ?? get().loss,
             hfJobs: jobs || [],
           });
 
-          if (job.model_path) {
-            set({hfFinetunedPath: job.model_path});
+          const path = (job as any).output_dir || (job as any).model_path;
+          if (path) {
+            set({hfFinetunedPath: path});
           }
 
           if (jobStatus === 'completed' || jobPhase === 'complete') {
-            set({phase: 'COMPLETE', running: false, loss: job.final_loss ?? job.loss ?? get().loss});
+            set({
+              phase: 'COMPLETE',
+              running: false,
+              loss: job.eval_loss ?? job.loss ?? get().loss,
+            });
             clearInterval(hfPollTimer!);
             hfPollTimer = null;
             get().refresh();
           } else if (jobStatus === 'failed' || jobPhase === 'failed') {
-            set({phase: 'FAILED', error: job.error || 'Fine-tuning failed', running: false});
+            set({
+              phase: 'FAILED',
+              error: job.error || 'Fine-tuning failed',
+              running: false,
+            });
             clearInterval(hfPollTimer!);
             hfPollTimer = null;
           }
@@ -297,6 +359,12 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       if (hfPollTimer) {
         clearInterval(hfPollTimer);
         hfPollTimer = null;
+      }
+      const jobId = get().hfJobId;
+      if (jobId) {
+        try {
+          await stopTrainingJob(jobId);
+        } catch {}
       }
       set({phase: 'idle', running: false, hfJobId: null});
       return;
@@ -325,6 +393,13 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     } catch {}
   },
 
+  refreshFinetunedModels: async () => {
+    try {
+      const result = await listFineTunedModels();
+      set({finetunedModels: result.models || []});
+    } catch {}
+  },
+
   loadCheckpoint: async (name: string) => {
     try {
       await loadCheckpoint(name);
@@ -343,5 +418,128 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     }
   },
 
+  deleteJob: async (jobId: string) => {
+    try {
+      await deleteTrainingJob(jobId);
+      await get().refresh();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  stopJob: async (jobId: string) => {
+    try {
+      await stopTrainingJob(jobId);
+      await get().refresh();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  loadFinetunedModel: async (name: string) => {
+    try {
+      await loadFineTunedModel(name);
+      set({adapterLoaded: true});
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  deleteFinetunedModel: async (name: string) => {
+    try {
+      await deleteFineTunedModel(name);
+      await get().refreshFinetunedModels();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  loadAdapterModel: async (path: string) => {
+    try {
+      await loadAdapter(path);
+      set({adapterLoaded: true});
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  unloadAdapterModel: async () => {
+    try {
+      await unloadAdapter();
+      set({adapterLoaded: false});
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  importDataset: async (source: string, name: string, type: 'url' | 'github' | 'huggingface' | 'csv') => {
+    try {
+      switch (type) {
+        case 'url':
+          await importDatasetUrl(source, name || undefined);
+          break;
+        case 'github':
+          await importDatasetGithub(source, name || undefined);
+          break;
+        case 'huggingface':
+          await importDatasetHuggingface(source, name || undefined);
+          break;
+        case 'csv':
+          await importDatasetCsv(source, name || undefined);
+          break;
+      }
+      await get().refresh();
+    } catch (err: any) {
+      set({error: err.message});
+      throw err;
+    }
+  },
+
   clearError: () => set({error: null}),
+
+  rehydrate: async () => {
+    const state = get();
+    if (state.phase !== 'idle' && state.running) return;
+
+    try {
+      const jobs = await listTrainingJobs();
+      const running = Array.isArray(jobs) ? jobs.find((j: any) => j.status === 'running') : null;
+      if (running) {
+        set({
+          phase: 'TRAINING',
+          running: true,
+          loss: running.loss ?? null,
+          epoch: running.current_epoch ?? 0,
+          totalEpochs: running.epochs ?? 0,
+          steps: running.global_step ?? 0,
+        });
+
+        abortController = new AbortController();
+        try {
+          for await (const event of streamTraining(abortController.signal)) {
+            const rawPhase = event.phase;
+            const rawStatus = event.status;
+            const rawData = (event.data || {}) as Record<string, any>;
+            if (rawPhase) set({phase: rawPhase as TrainPhase});
+            if (rawData.loss !== undefined) {
+              set(s => ({
+                loss: Number(rawData.loss),
+                steps: Number(rawData.step ?? rawData.global_step ?? s.steps),
+                epoch: Number(rawData.epoch ?? rawData.current_epoch ?? s.epoch),
+                lossHistory: [...s.lossHistory, {step: Number(rawData.step ?? 0), value: Number(rawData.loss)}].slice(-200),
+              }));
+            }
+            if (rawStatus === 'complete') {
+              set({phase: 'COMPLETE', running: false});
+              break;
+            }
+            if (rawStatus === 'error') {
+              set({phase: 'FAILED', error: String(event.message || 'Training failed'), running: false});
+              break;
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  },
 }));

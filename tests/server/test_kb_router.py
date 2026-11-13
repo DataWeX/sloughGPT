@@ -1,0 +1,583 @@
+"""
+Tests for the knowledge base router.
+"""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from infrastructure.exception_handlers import register_all_handlers
+
+from apps.api.server.routers.kb import router
+
+
+@pytest.fixture
+def app():
+    _app = FastAPI()
+    register_all_handlers(_app)
+    _app.include_router(router)
+    return _app
+
+
+@pytest.fixture
+def client(app):
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture(autouse=True)
+def _mock_rag_service():
+    """Prevent real RAG service initialization in any kb test that hits an add/ingest path."""
+    with patch("domain.cognition._internal.rag_service.get_rag_service") as m:
+        m.return_value = MagicMock()
+        yield m
+
+
+@pytest.fixture(autouse=True)
+def _reset_engine():
+    """Reset the KnowledgeEngine singleton so cached memory doesn't leak between tests."""
+    from domain.knowledge.engine import get_knowledge_engine
+
+    engine = get_knowledge_engine()
+    engine._memory = None
+    engine._ingestor = None
+    engine._filter = None
+    yield
+
+
+class TestListKnowledge:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_returns_empty_list(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = []
+        resp = client.get("/knowledge")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_returns_list_of_items(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = [
+            {
+                "id": "1",
+                "content": "fact 1",
+                "topic": "general",
+                "source": "manual",
+                "importance": 0.5,
+                "score": 1.0,
+            },
+            {
+                "id": "2",
+                "content": "fact 2",
+                "topic": "code",
+                "source": "manual",
+                "importance": 0.7,
+                "score": 1.0,
+            },
+        ]
+        resp = client.get("/knowledge")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 2
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_respects_pagination(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = [
+            {
+                "id": str(i),
+                "content": f"f{i}",
+                "topic": "general",
+                "source": "manual",
+                "importance": 0.5,
+                "score": 1.0,
+            }
+            for i in range(10)
+        ]
+        resp = client.get("/knowledge", params={"limit": 3, "offset": 2})
+        assert resp.status_code == 200
+        ids = [it["id"] for it in resp.json()]
+        assert ids == ["2", "3", "4"]
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_default_field_fill(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = [{"id": "x"}]
+        resp = client.get("/knowledge")
+        item = resp.json()[0]
+        assert item["topic"] == "general"
+        assert item["importance"] == 0.5
+        assert item["score"] == 0.0
+
+    def test_invalid_pagination_params_422(self, client):
+        assert client.get("/knowledge", params={"limit": 0}).status_code == 422
+        assert client.get("/knowledge", params={"offset": -1}).status_code == 422
+        assert client.get("/knowledge", params={"limit": 99999}).status_code == 422
+
+
+class TestAddKnowledge:
+    @patch("domain.knowledge.get_knowledge_memory")
+    @patch("domain.infrastructure._internal.truth_labeler.get_truth_labeler")
+    def test_adds_knowledge(self, mock_get_label, mock_get_mem, client):
+        labeler = mock_get_label.return_value
+        labeler.label.return_value = MagicMock(label="factual")
+        mem = mock_get_mem.return_value
+        mem.add_fact.return_value = True
+        resp = client.post("/knowledge", json={"content": "Earth is round"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "stored"
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    @patch("domain.infrastructure._internal.truth_labeler.get_truth_labeler")
+    def test_adds_knowledge_with_topic(self, mock_get_label, mock_get_mem, client):
+        labeler = mock_get_label.return_value
+        labeler.label.return_value = MagicMock(label="factual")
+        mem = mock_get_mem.return_value
+        mem.add_fact.return_value = True
+        resp = client.post("/knowledge", json={"content": "Python is a language", "topic": "code"})
+        assert resp.status_code == 200
+
+
+class TestBulkIngest:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_bulk_ingest_returns_report(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem._vector_store.query_sync.return_value = []
+        mem.add_facts.return_value = 2
+        resp = client.post(
+            "/knowledge/bulk-ingest",
+            json={
+                "items": ["first fact long enough here", "second fact long enough here"],
+                "topic": "imported",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "completed"
+        assert data["added"] == 2
+        assert data["errors"] == 0
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_bulk_ingest_uses_batch_path(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem._vector_store.query_sync.return_value = []
+        mem.add_facts.return_value = 2
+        client.post(
+            "/knowledge/bulk-ingest",
+            json={"items": ["first fact long enough here", "second fact long enough here"]},
+        )
+        mem.add_facts.assert_called_once()
+
+    def test_bulk_ingest_empty_items(self, client):
+        with patch("domain.knowledge.get_knowledge_memory"):
+            resp = client.post("/knowledge/bulk-ingest", json={"items": []})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "completed"
+        assert data["added"] == 0
+
+
+class TestSearchKnowledge:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_searches(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.search.return_value = [{"id": "1", "content": "test", "score": 0.9}]
+        resp = client.get("/knowledge/search?query=test")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 1
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_search_empty_results(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.search.return_value = []
+        resp = client.get("/knowledge/search?query=nonexistent")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 0
+
+
+class TestKnowledgeStats:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_returns_stats(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = [{"topic": "general", "source": "manual", "importance": 0.5}]
+        resp = client.get("/knowledge/stats")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["total_items"] == 1
+
+
+class TestDeleteKnowledge:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_deletes_existing(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.delete.return_value = True
+        resp = client.delete("/knowledge/some-id")
+        assert resp.status_code == 200
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_returns_404_for_missing(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.delete.side_effect = Exception("Item not found")
+        resp = client.delete("/knowledge/nonexistent")
+        assert resp.status_code == 404
+
+
+class TestListTopics:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_returns_topics(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_topics.return_value = {"topics": [{"name": "general", "count": 1}], "total": 1}
+        resp = client.get("/knowledge/topics")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["total"] >= 1
+
+
+class TestGetContext:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_returns_context(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.get_context_string.return_value = "context"
+        mem.list_all.return_value = [{"id": "1"}]
+        resp = client.get("/knowledge/context")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["count"] == 1
+
+
+class TestSuggestTopic:
+    def test_suggests_topic(self, client):
+        resp = client.post("/knowledge/suggest-topic", json={"content": "function def foo"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["topic"] == "code"
+
+
+class TestLabelText:
+    @patch("domain.infrastructure.truth_labeler.get_truth_labeler")
+    def test_labels_text(self, mock_get_label, client):
+        labeler = mock_get_label.return_value
+        labeler.label.return_value = MagicMock(to_dict=lambda: {"label": "factual"})
+        resp = client.get("/knowledge/label?text=hello")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["label"] == "factual"
+
+
+class TestBatchDelete:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_batch_delete(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.delete.return_value = True
+        resp = client.post("/knowledge/batch-delete", json={"ids": ["id1", "id2"]})
+        assert resp.status_code == 200
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_batch_delete_empty(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.delete_by_id.return_value = True
+        resp = client.post("/knowledge/batch-delete", json={"ids": []})
+        assert resp.status_code == 200
+
+
+class TestCheckDuplicate:
+    @patch("domain.knowledge.DuplicateDetector")
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_check_duplicate(self, mock_get_mem, mock_detector_cls, client):
+        mem = mock_get_mem.return_value
+        mem._vector_store = MagicMock()
+        mem._get_embedding = MagicMock()
+        dup = mock_detector_cls.return_value
+        dup.check.return_value = (False, None, 0.0)
+        resp = client.post("/knowledge/check-duplicate", json={"content": "Earth is round"})
+        assert resp.status_code == 200
+
+
+class TestKnowledgeGaps:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_knowledge_gaps(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = []
+        resp = client.get("/knowledge/gaps")
+        assert resp.status_code == 200
+
+
+class TestUpdateKnowledge:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_updates_existing_item(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = [
+            {"id": "abc", "content": "old", "topic": "docs", "source": "manual", "importance": 0.5}
+        ]
+        mem.delete_by_id.return_value = True
+        mem.add_fact.return_value = True
+        resp = client.patch("/knowledge/abc", json={"content": "new content", "topic": "code"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "updated"
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_update_missing_item_returns_404(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = [{"id": "other"}]
+        resp = client.patch("/knowledge/ghost", json={"content": "x"})
+        assert resp.status_code == 404
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_update_partial_fields_keep_existing(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.list_all.return_value = [
+            {
+                "id": "abc",
+                "content": "keep this",
+                "topic": "docs",
+                "source": "manual",
+                "url": "u",
+                "timestamp": 5.0,
+                "importance": 0.5,
+            }
+        ]
+        mem.delete_by_id.return_value = True
+        mem.add_fact.return_value = True
+        resp = client.patch("/knowledge/abc", json={"importance": 0.9})
+        assert resp.status_code == 200
+        added = mem.add_fact.call_args.args[0]
+        assert added.content == "keep this"
+        assert added.topic == "docs"
+        assert added.importance == 0.9
+        assert added.url == "u"
+        assert added.timestamp == 5.0
+
+
+class TestAddKnowledgeEdge:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_duplicate_content_reports_duplicate(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.add_fact.return_value = False
+        resp = client.post("/knowledge", json={"content": "duplicate text"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["status"] == "duplicate"
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    @patch("domain.infrastructure._internal.truth_labeler.get_truth_labeler")
+    def test_auto_tag_always_along(self, mock_get_label, mock_get_mem, client):
+        labeler = mock_get_label.return_value
+        labeler.label.return_value = MagicMock(label="factual")
+        mem = mock_get_mem.return_value
+        mem.add_fact.return_value = True
+        resp = client.post("/knowledge", json={"content": "import os function", "auto_tag": True})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["topic"] != "general"
+
+    def test_empty_content_is_422(self, client):
+        resp = client.post("/knowledge", json={"content": ""})
+        assert resp.status_code == 422
+
+
+class TestBatchIngest:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_batch_ingest_stores(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.add_fact.return_value = True
+        resp = client.post("/knowledge/batch", json={"items": [{"content": "a"}, {"content": "b"}]})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["stored"] == 2
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_batch_ingest_skips_duplicates(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.add_fact.side_effect = [True, False]
+        resp = client.post(
+            "/knowledge/batch", json={"items": [{"content": "a"}, {"content": "dup"}]}
+        )
+        assert resp.json()["data"]["stored"] == 1
+
+
+class TestRelatedKnowledge:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_related_excludes_self(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.get_related.return_value = [
+            {
+                "id": "def",
+                "content": "b",
+                "topic": "general",
+                "source": "manual",
+                "importance": 0.5,
+                "score": 0.8,
+            },
+        ]
+        resp = client.get("/knowledge/abc/related")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["count"] == 1
+        assert data["items"][0]["id"] == "def"
+
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_related_missing_item_404(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.get_related.side_effect = Exception("Item not found")
+        resp = client.get("/knowledge/ghost/related")
+        assert resp.status_code == 404
+
+
+class TestIngestUrl:
+    def test_blocked_scheme_is_400(self, client):
+        resp = client.post("/knowledge/ingest-url", json={"url": "file:///etc/passwd"})
+        assert resp.status_code == 400
+
+    def test_internal_host_is_400(self, client):
+        resp = client.post("/knowledge/ingest-url", json={"url": "http://127.0.0.1/admin"})
+        assert resp.status_code == 400
+
+    def test_no_scheme_is_400(self, client):
+        resp = client.post("/knowledge/ingest-url", json={"url": "example.com/foo"})
+        assert resp.status_code == 400
+
+    @patch("domain.knowledge.get_knowledge_ingestor")
+    def test_https_ingest_ok(self, mock_get_ingestor, client):
+        ing = mock_get_ingestor.return_value
+        ing.ingest_url.return_value = {
+            "status": "ok",
+            "new_facts": 3,
+            "title": "T",
+            "content_length": 100,
+        }
+        resp = client.post("/knowledge/ingest-url", json={"url": "https://example.com/foo"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["new_facts"] == 3
+
+    @patch("domain.infrastructure._internal.errors.classify_exception")
+    @patch("domain.infrastructure._internal.errors.emit_error_event")
+    @patch("domain.knowledge.get_knowledge_ingestor")
+    def test_ingestor_exception_maps_to_http(self, mock_get_ing, mock_emit, mock_classify, client):
+        mock_get_ing.side_effect = RuntimeError("boom")
+        err = MagicMock()
+        err.http_status = 503
+        err.user_message = "upstream failed"
+        err.code = "E_UPSTREAM"
+        err.details = {}
+        mock_classify.return_value = err
+        resp = client.post("/knowledge/ingest-url", json={"url": "https://example.com/foo"})
+        assert resp.status_code == 503
+        assert mock_emit.call_count == 1
+
+
+class TestLabelMethods:
+    def test_label_text_empty_query_422(self, client):
+        resp = client.get("/knowledge/label")
+        assert resp.status_code == 422
+
+    @patch("domain.infrastructure.truth_labeler.get_truth_labeler")
+    def test_label_text_error_returns_500(self, mock_get_label, client):
+        mock_get_label.side_effect = RuntimeError("broken")
+        resp = client.get("/knowledge/label?text=hello")
+        assert resp.status_code == 500
+
+
+class TestMethodChecks:
+    def test_knowledge_put_not_allowed(self, client):
+        assert client.put("/knowledge/abc").status_code == 405
+
+    def test_knowledge_search_wrong_method_405(self, client):
+        assert client.post("/knowledge/search").status_code == 405
+
+
+def _make_minimal_pdf(text: str) -> bytes:
+    """Hand-built single-page PDF with correct xref (extractable text)."""
+    content = f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode()
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>"
+        ),
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, obj in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_pos = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n".encode()
+    out += b"0000000000 65535 f \n"
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += (
+        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF"
+    ).encode()
+    return bytes(out)
+
+
+class TestIngestFile:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_ingest_text_file(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.add_facts.return_value = 1
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={
+                "file": (
+                    "notes.txt",
+                    b"Slough is a town. The river runs through it.",
+                    "text/plain",
+                )
+            },
+            data={"topic": "imported"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "imported"
+        assert data["filename"] == "notes.txt"
+        assert data["total_chunks"] >= 1
+        mem.add_facts.assert_called_once()
+
+    def test_ingest_docx_rejected_400(self, client):
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={"file": ("report.docx", b"PK\x03\x04junk", "application/octet-stream")},
+        )
+        assert resp.status_code == 400
+        assert "Word" in resp.text
+
+    @patch("apps.api.server.routers.kb.KBRouter._extract_pdf_text")
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_ingest_pdf_uses_extractor(self, mock_get_mem, mock_extract, client):
+        mock_extract.return_value = (
+            "Lease agreement text. The move-out notice period is 30 days. " * 3
+        )
+        mem = mock_get_mem.return_value
+        mem.add_facts.return_value = 1
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake-bytes", "application/pdf")},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["filename"] == "lease.pdf"
+        assert data["total_chunks"] >= 1
+        mock_extract.assert_called_once_with(b"%PDF-1.4 fake-bytes")
+
+    @patch("apps.api.server.routers.kb.KBRouter._extract_pdf_text")
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_ingest_pdf_blank_text_400(self, mock_get_mem, mock_extract, client):
+        mock_extract.return_value = "   \n  "
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={"file": ("blank.pdf", b"%PDF-1.4", "application/pdf")},
+        )
+        assert resp.status_code == 400
+
+    def test_extract_pdf_text_real_pypdf(self):
+        import importlib.util
+
+        # fitz/pypdf/PyPDF2 are undeclared optional deps; extraction is
+        # covered by mocked tests above. Skip when none is installed
+        # instead of failing on the environment.
+        if not any(importlib.util.find_spec(m) for m in ("fitz", "pypdf", "PyPDF2")):
+            pytest.skip("no optional PDF library installed (fitz/pypdf/PyPDF2)")
+
+        from apps.api.server.routers.kb import KBRouter
+
+        pdf = _make_minimal_pdf("Hello Slough lease agreement")
+        text = KBRouter._extract_pdf_text(pdf)
+        assert "Hello Slough lease agreement" in text

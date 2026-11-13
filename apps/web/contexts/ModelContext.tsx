@@ -1,19 +1,25 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  type ReactNode,
+} from 'react'
 import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
+import type { ModelInfo } from '@/lib/types'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
+import { useBootstrap } from '@/contexts/BootstrapContext'
+import { logger, trackEvent } from '@/lib/dev-log'
+import { extractErrorMessage } from '@/lib/error-utils'
 
-export interface ModelInfo {
-  id: string
-  name: string
-  type: string
-  loaded: boolean
-  sizeMb?: number
-  params?: string
-  description?: string
-  tags?: string[]
-}
+const _log = logger.child('model-context')
+
+export type { ModelInfo } from '@/lib/types'
 
 export interface ModelContextValue {
   models: ModelInfo[]
@@ -23,7 +29,10 @@ export interface ModelContextValue {
   loadingModelId: string | null
   error: string | null
 
-  loadModel: (modelId: string, opts?: { mode?: string; device?: string }) => Promise<{ success: boolean; error?: string }>
+  loadModel: (
+    modelId: string,
+    opts?: { mode?: string; device?: string },
+  ) => Promise<{ success: boolean; error?: string }>
   loadModelPath: (path: string) => Promise<{ success: boolean; error?: string }>
   unloadModel: (modelId: string) => Promise<{ success: boolean; error?: string }>
   refreshModels: () => Promise<void>
@@ -40,36 +49,79 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [health, setHealth] = useState<HealthStatus | null>(null)
 
+  // Subscribe to live health SSE for instant model status updates
+  const { health: liveHealth, connectionStatus } = useLiveStatus()
+
   const refreshHealth = useCallback(async () => {
     try {
       const h = await modelController.getHealth()
       setHealth(h)
-    } catch { setHealth(null) }
+    } catch {
+      setHealth(null)
+    }
   }, [])
+
+  // Sync live health into local health state for immediate UI updates
+  useEffect(() => {
+    if (liveHealth && connectionStatus === 'connected') {
+      setHealth({
+        status: liveHealth.health_status || 'healthy',
+        model_loaded: liveHealth.model_loaded,
+        model_type: liveHealth.model_type || '',
+        summary: liveHealth.health_summary,
+        inference_count: liveHealth.inference_count,
+        is_inferencing: liveHealth.is_inferencing,
+      })
+    }
+  }, [liveHealth, connectionStatus])
 
   const isModelLoaded = health !== null && health.model_loaded
 
   const refreshModels = useCallback(async () => {
     try {
       const fetchedModels = await modelController.list()
-      setModels(fetchedModels.map(m => ({
+      setModels(
+        fetchedModels.map((m) => ({
+          id: m.id,
+          name: m.name,
+          type: m.type || 'huggingface',
+          loaded: m.loaded ?? false,
+          size_mb: m.size_mb,
+          size_gb: m.size_gb,
+          params: m.params,
+          description: m.description,
+          tags: m.tags,
+        })),
+      )
+    } catch (err) {
+      _log.error('Could not fetch models', { exception: String(err) })
+    }
+  }, [])
+
+  // Initial model list rides in the /bootstrap payload (one request per
+  // app load) — no dedicated mount fetch. Actions (load/unload) still
+  // refresh through the controller for post-mutation freshness.
+  const { data: bootstrap } = useBootstrap()
+  const seededRef = useRef(false)
+  useEffect(() => {
+    if (seededRef.current) return
+    const list = bootstrap?.members.models
+    if (!list) return
+    seededRef.current = true
+    setModels(
+      list.map((m) => ({
         id: m.id,
         name: m.name,
         type: m.type || 'huggingface',
         loaded: m.loaded ?? false,
-        sizeMb: m.size_mb,
+        size_mb: m.size_mb,
+        size_gb: m.size_gb,
         params: m.params,
         description: m.description,
         tags: m.tags,
-      })))
-    } catch (err) {
-      console.error('Failed to fetch models:', err)
-    }
-  }, [])
-
-  useEffect(() => {
-    void refreshModels()
-  }, [refreshModels])
+      })),
+    )
+  }, [bootstrap])
 
   useEffect(() => {
     if (health && health.model_loaded && health.model_type) {
@@ -77,75 +129,91 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     }
   }, [health])
 
-  const loadModel = useCallback(async (
-    modelId: string,
-    opts?: { mode?: string; device?: string }
-  ): Promise<{ success: boolean; error?: string }> => {
-    setLoading(true)
-    setLoadingModelId(modelId)
-    setError(null)
+  const loadModel = useCallback(
+    async (
+      modelId: string,
+      opts?: { mode?: string; device?: string },
+    ): Promise<{ success: boolean; error?: string }> => {
+      setLoading(true)
+      setLoadingModelId(modelId)
+      setError(null)
 
-    try {
-      await modelController.load(modelId, opts?.device)
-      await refreshModels()
-      await refreshHealth()
-      return { success: true }
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error'
-      setError(error)
-      return { success: false, error }
-    } finally {
-      setLoading(false)
-      setLoadingModelId(null)
-    }
-  }, [refreshModels, refreshHealth])
-
-  const loadModelPath = useCallback(async (path: string): Promise<{ success: boolean; error?: string }> => {
-    setLoading(true)
-    setLoadingModelId(path)
-    setError(null)
-
-    try {
-      const data = await modelController.loadModelPath(path)
-      if (data && (data as any).error) {
-        const error = String((data as any).error)
+      try {
+        const data = await modelController.load(modelId, opts?.device)
+        if (data && (data.status === 'error' || data.error)) {
+          const error = String(data.error ?? data.status)
+          setError(error)
+          return { success: false, error }
+        }
+        await refreshModels()
+        await refreshHealth()
+        trackEvent('model_loaded', { model_id: modelId })
+        return { success: true }
+      } catch (err) {
+        const error = extractErrorMessage(err)
         setError(error)
         return { success: false, error }
+      } finally {
+        setLoading(false)
+        setLoadingModelId(null)
       }
+    },
+    [refreshModels, refreshHealth],
+  )
 
-      await refreshModels()
-      await refreshHealth()
-      return { success: true }
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error'
-      setError(error)
-      return { success: false, error }
-    } finally {
-      setLoading(false)
-      setLoadingModelId(null)
-    }
-  }, [refreshModels, refreshHealth])
+  const loadModelPath = useCallback(
+    async (path: string): Promise<{ success: boolean; error?: string }> => {
+      setLoading(true)
+      setLoadingModelId(path)
+      setError(null)
 
-  const unloadModel = useCallback(async (modelId: string): Promise<{ success: boolean; error?: string }> => {
-    setLoading(true)
-    setLoadingModelId(modelId)
-    setError(null)
+      try {
+        const data = await modelController.loadModelPath(path)
+        if (data && data.error) {
+          const error = String(data.error)
+          setError(error)
+          return { success: false, error }
+        }
 
-    try {
-      await modelController.unloadModel(modelId)
+        await refreshModels()
+        await refreshHealth()
+        return { success: true }
+      } catch (err) {
+        const error = extractErrorMessage(err)
+        setError(error)
+        return { success: false, error }
+      } finally {
+        setLoading(false)
+        setLoadingModelId(null)
+      }
+    },
+    [refreshModels, refreshHealth],
+  )
 
-      await refreshModels()
-      await refreshHealth()
-      return { success: true }
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error'
-      setError(error)
-      return { success: false, error }
-    } finally {
-      setLoading(false)
-      setLoadingModelId(null)
-    }
-  }, [refreshModels, refreshHealth])
+  const unloadModel = useCallback(
+    async (modelId: string): Promise<{ success: boolean; error?: string }> => {
+      setLoading(true)
+      setLoadingModelId(modelId)
+      setError(null)
+
+      try {
+        await modelController.unloadModel()
+
+        await refreshModels()
+        await refreshHealth()
+        trackEvent('model_unloaded', { model_id: modelId })
+        return { success: true }
+      } catch (err) {
+        const error = extractErrorMessage(err)
+        setError(error)
+        return { success: false, error }
+      } finally {
+        setLoading(false)
+        setLoadingModelId(null)
+      }
+    },
+    [refreshModels, refreshHealth],
+  )
 
   const clearError = useCallback(() => {
     setError(null)
@@ -165,11 +233,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     clearError,
   }
 
-  return (
-    <ModelContext.Provider value={value}>
-      {children}
-    </ModelContext.Provider>
-  )
+  return <ModelContext.Provider value={value}>{children}</ModelContext.Provider>
 }
 
 export function useModels(): ModelContextValue {
@@ -190,15 +254,15 @@ export function useCurrentModel(): { modelId: string | null; isLoaded: boolean }
 
 export function useModelById(modelId: string): ModelInfo | undefined {
   const { models } = useModels()
-  return models.find(m => m.id === modelId)
+  return models.find((m) => m.id === modelId)
 }
 
 export function useLocalModels(): ModelInfo[] {
   const { models } = useModels()
-  return models.filter(m => m.type === 'local')
+  return models.filter((m) => m.type === 'local')
 }
 
 export function useHuggingFaceModels(): ModelInfo[] {
   const { models } = useModels()
-  return models.filter(m => m.type === 'huggingface')
+  return models.filter((m) => m.type === 'huggingface')
 }

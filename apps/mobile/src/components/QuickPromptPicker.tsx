@@ -5,7 +5,9 @@ import {
   FlatList,
   TextInput,
 } from 'react-native';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {TamaguiProvider} from '../theme/TamaguiProvider';
+import {useColors} from '../theme/colors';
 import {
   getQuickPromptsByCategory,
   addQuickPrompt,
@@ -24,14 +26,14 @@ interface Props {
 }
 
 export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
-  const theme = useTheme();
+  const colors = useColors();
   const [prompts, setPrompts] = useState<QuickPrompt[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPrompt, setNewPrompt] = useState('');
 
-  const accent = theme.color9?.val || '#7C52C4';
+  const accent = colors.primary;
 
   useEffect(() => {
     if (visible) {
@@ -68,9 +70,10 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <YStack flex={1} backgroundColor="rgba(0,0,0,0.5)" justifyContent="flex-end">
+      <TamaguiProvider>
+      <YStack flex={1} backgroundColor={colors.overlay(0.5)} justifyContent="flex-end">
         <YStack
-          backgroundColor="$background"
+          backgroundColor={colors.background}
           borderTopLeftRadius={24}
           borderTopRightRadius={24}
           maxHeight="80%"
@@ -81,12 +84,12 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             paddingHorizontal={20}
             paddingTop={14}
             paddingBottom={8}>
-            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>
               Quick Prompts
             </Text>
-            <Pressable onPress={onClose}>
+            <Pressable onPress={onClose} accessible accessibilityRole="button" accessibilityLabel="Close quick prompts">
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={16} color={colors.textSecondary} />
               </YStack>
             </Pressable>
           </XStack>
@@ -104,14 +107,14 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
                   paddingHorizontal={12}
                   paddingVertical={5}
                   borderRadius={999}
-                  backgroundColor={category === c ? accent : '$background'}
+                  backgroundColor={category === c ? accent : colors.background}
                   borderWidth={0.5}
-                  borderColor={category === c ? accent : '$borderColor'}>
+                  borderColor={category === c ? accent : colors.border}>
                   <Text
                     fontSize={11}
                     fontWeight="500"
                     letterSpacing={0.2}
-                    color={category === c ? 'white' : '$color11'}>
+                    color={category === c ? 'white' : colors.textMuted}>
                     {c.charAt(0).toUpperCase() + c.slice(1)}
                   </Text>
                 </YStack>
@@ -126,12 +129,12 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             contentContainerStyle={{paddingHorizontal: 16, gap: 4}}
             renderItem={({item: p}) => (
               <Pressable onPress={() => handleSelect(p)} onLongPress={() => handleDelete(p.id)}>
-                <YStack backgroundColor="$background" borderRadius={10} padding={12} borderWidth={0.5} borderColor="$borderColor">
+                <YStack backgroundColor={colors.background} borderRadius={10} padding={12} borderWidth={0.5} borderColor={colors.border}>
                   <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
-                    <Text fontSize={15} fontWeight="600" color="$color">
+                    <Text fontSize={15} fontWeight="600" color={colors.text}>
                       {p.title}
                     </Text>
-                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color10" textTransform="capitalize">
+                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color={colors.textSecondary} textTransform="capitalize">
                       {p.category}
                     </Text>
                   </XStack>
@@ -139,7 +142,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
                     fontSize={11}
                     fontWeight="500"
                     letterSpacing={0.2}
-                    color="$color11"
+                    color={colors.textMuted}
                     lineHeight={18}
                     numberOfLines={2}>
                     {p.prompt}
@@ -148,7 +151,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
               </Pressable>
             )}
             ListEmptyComponent={
-              <Text fontSize={15} fontWeight="400" color="$color10" textAlign="center" paddingVertical={24}>
+              <Text fontSize={15} fontWeight="400" color={colors.textSecondary} textAlign="center" paddingVertical={24}>
                 No prompts yet. Tap + to add one.
               </Text>
             }
@@ -171,36 +174,36 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             <YStack paddingHorizontal={16} paddingTop={8} gap={8}>
               <TextInput
                 placeholder="Title"
-                placeholderTextColor="#9B95A8"
+                placeholderTextColor={colors.textMuted}
                 value={newTitle}
                 onChangeText={setNewTitle}
                 style={{
                   fontSize: 14,
-                  backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                  backgroundColor: colors.primaryAlpha(0.04),
                   borderRadius: 10,
                   paddingHorizontal: 14,
                   paddingVertical: 10,
-                  color: '#1A1625',
+                  color: colors.text,
                   borderWidth: 0.5,
-                  borderColor: 'rgba(124, 82, 196, 0.12)',
+                  borderColor: colors.primaryAlpha(0.12),
                 }}
               />
               <TextInput
                 placeholder="Prompt text (use {variable} for placeholders)"
-                placeholderTextColor="#9B95A8"
+                placeholderTextColor={colors.textMuted}
                 value={newPrompt}
                 onChangeText={setNewPrompt}
                 multiline
                 numberOfLines={3}
                 style={{
                   fontSize: 14,
-                  backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                  backgroundColor: colors.primaryAlpha(0.04),
                   borderRadius: 10,
                   paddingHorizontal: 14,
                   paddingVertical: 10,
-                  color: '#1A1625',
+                  color: colors.text,
                   borderWidth: 0.5,
-                  borderColor: 'rgba(124, 82, 196, 0.12)',
+                  borderColor: colors.primaryAlpha(0.12),
                   minHeight: 80,
                   textAlignVertical: 'top',
                 }}
@@ -219,6 +222,7 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
           )}
         </YStack>
       </YStack>
+      </TamaguiProvider>
     </Modal>
   );
 }

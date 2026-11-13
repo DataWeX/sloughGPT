@@ -1,0 +1,355 @@
+'use client'
+
+import { useRef, useCallback, useEffect, useState, memo } from 'react'
+import { ImagePreview, type ImageAttachment } from './ImageUpload'
+import { ChatInputRow } from './ChatInputRow'
+import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
+import {
+  useConsciousnessStatus,
+  getConsciousnessLevelLabel,
+  getQualiaMood,
+} from '@/hooks/useConsciousnessStatus'
+import { useLocale } from '@/hooks/useLocale'
+import { consciousnessController } from '@/lib/consciousness-controller'
+import {
+  IconChat,
+  IconEdit,
+  IconBrain,
+  IconVision,
+  IconSearch,
+  IconBolt,
+  IconDocument,
+  IconMic,
+  IconSparkle,
+  cn,
+} from '@sloughgpt/strui'
+import { Waves } from 'lucide-react'
+import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
+import type { ChatCommand } from '@/lib/chat-commands'
+import { MODE_ACCENT, type ChatMode } from '@/features/chat/components/toolbar/ModeBar'
+
+const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
+  chat: { label: 'Chat', icon: <IconChat className="h-3 w-3" /> },
+  write: { label: 'Write', icon: <IconEdit className="h-3 w-3" /> },
+  rewrite: { label: 'Rewrite', icon: <IconSparkle className="h-3 w-3" /> },
+  translate: { label: 'Translate', icon: <IconVision className="h-3 w-3" /> },
+  brainstorm: { label: 'Brainstorm', icon: <IconBolt className="h-3 w-3" /> },
+  decide: { label: 'Decide', icon: <IconBrain className="h-3 w-3" /> },
+  explain: { label: 'Explain', icon: <IconSearch className="h-3 w-3" /> },
+  wellness: { label: 'Wellness', icon: <Waves className="h-3 w-3" /> },
+  create: { label: 'Create', icon: <IconVision className="h-3 w-3" /> },
+  read: { label: 'Read', icon: <IconDocument className="h-3 w-3" /> },
+  talk: { label: 'Talk', icon: <IconMic className="h-3 w-3" /> },
+}
+
+const HISTORY_KEY = 'chat-input-history'
+const MAX_HISTORY = 50
+
+function loadHistory(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveHistory(history: string[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY)))
+}
+
+export interface ChatInputProps {
+  value: string
+  onChange: (value: string) => void
+  onSend: () => void
+  onStop?: () => void
+  onCancel?: () => void
+  loading: boolean
+  streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
+  streamingToolName?: string
+  health: ApiHealthSnapshot
+  chatMode?: ChatMode
+  images?: ImageAttachment[]
+  onAddImage?: (dataUrl: string) => void
+  onRemoveImage?: (id: string) => void
+  onAudioRecorded?: (blob: Blob) => void
+  onAudioTranscript?: (text: string) => void
+  onGeneratedImage?: (dataUrl: string, prompt: string) => void
+  onPDFAnalysis?: (analysis: string, filename: string) => void
+  onPDFError?: (error: string) => void
+  onExecuteCommand?: (cmd: ChatCommand, args: string[]) => void
+}
+
+export const ChatInput = memo(function ChatInput({
+  value,
+  onChange,
+  onSend,
+  onStop,
+  onCancel,
+  loading,
+  streamingStatus = 'generating',
+  streamingToolName,
+  health,
+  chatMode = 'chat',
+  images = [],
+  onAddImage,
+  onRemoveImage,
+  onAudioRecorded,
+  onAudioTranscript,
+  onGeneratedImage,
+  onPDFAnalysis,
+  onPDFError,
+  onExecuteCommand,
+}: ChatInputProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null!)
+  const pendingSendRef = useRef(false)
+  const [history, setHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [draft, setDraft] = useState('')
+  const { status: consciousnessStatus } = useConsciousnessStatus()
+  const { t } = useLocale()
+  const [personas, setPersonas] = useState<{ id: string; name: string; values: any }[]>([])
+  const [activePersona, setActivePersona] = useState<string | null>(null)
+
+  const fetchPersonas = useCallback(async () => {
+    try {
+      const result = await consciousnessController.listPersonas()
+      setPersonas(
+        (result.personas ?? []).map((p) => ({ id: p.id, name: p.name, values: p.personality })),
+      )
+    } catch {
+      // Personas endpoint may not exist
+    }
+  }, [])
+
+  useEffect(() => {
+    setHistory(loadHistory())
+    fetchPersonas()
+  }, [fetchPersonas])
+
+  const handleSend = useCallback(() => {
+    if (value.trim()) {
+      const newHistory = [...history, value.trim()]
+      saveHistory(newHistory)
+      setHistory(newHistory)
+      setHistoryIndex(-1)
+      setDraft('')
+      onSend()
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+      }
+    }
+  }, [onSend, value, history])
+
+  const handleVoiceTranscript = useCallback(
+    (text: string) => {
+      onChange(value ? `${value} ${text}` : text)
+      pendingSendRef.current = true
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`
+      }
+    },
+    [value, onChange],
+  )
+
+  useEffect(() => {
+    if (pendingSendRef.current && value.trim().length > 0) {
+      pendingSendRef.current = false
+      onSend()
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    } else if (pendingSendRef.current && value.trim().length === 0) {
+      pendingSendRef.current = false
+    }
+  }, [value, onSend])
+
+  const handleAddImage = useCallback(
+    (dataUrl: string) => {
+      if (onAddImage) {
+        onAddImage(dataUrl)
+      }
+    },
+    [onAddImage],
+  )
+
+  const handleRemoveImage = useCallback(
+    (id: string) => {
+      if (onRemoveImage) {
+        onRemoveImage(id)
+      }
+    },
+    [onRemoveImage],
+  )
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'ArrowUp' && !e.shiftKey && value === '' && history.length > 0) {
+        e.preventDefault()
+        const newIndex = historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1)
+        if (historyIndex === -1) setDraft(value)
+        setHistoryIndex(newIndex)
+        onChange(history[newIndex])
+      } else if (e.key === 'ArrowDown' && !e.shiftKey && historyIndex !== -1) {
+        e.preventDefault()
+        if (historyIndex === history.length - 1) {
+          setHistoryIndex(-1)
+          onChange(draft)
+        } else {
+          const newIndex = historyIndex + 1
+          setHistoryIndex(newIndex)
+          onChange(history[newIndex])
+        }
+      } else if (e.key === 'Escape' && historyIndex !== -1) {
+        setHistoryIndex(-1)
+        onChange(draft)
+      }
+    },
+    [value, history, historyIndex, draft, onChange],
+  )
+
+  const handlePersonaChange = useCallback(async (personaId: string) => {
+    if (!personaId) {
+      setActivePersona(null)
+      return
+    }
+    try {
+      await consciousnessController.activatePersona(personaId)
+      setActivePersona(personaId)
+    } catch {
+      // activate failed
+    }
+  }, [])
+
+  const isDisabled = loading || health === 'offline'
+  const hasModel =
+    health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
+  const placeholder =
+    health === 'offline'
+      ? 'Service offline...'
+      : hasModel
+        ? 'Type a message...'
+        : 'Loading model...'
+  const hasContent = value.trim().length > 0 || images.length > 0
+
+  const modeConfig = MODE_CONFIG[chatMode] || MODE_CONFIG.chat
+  const isNonChatMode = chatMode !== 'chat'
+
+  return (
+    <section
+      aria-label="Chat input"
+      className="shrink-0 bg-background/95 backdrop-blur-sm px-4 sm:px-6 pb-2 pt-1"
+      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+    >
+      <div className="mx-auto">
+        {loading && (
+          <div className="flex justify-center pb-1">
+            {(streamingStatus === 'tool_call' || streamingStatus === 'error') && (
+              <StreamingIndicator status={streamingStatus} toolName={streamingToolName} />
+            )}
+          </div>
+        )}
+
+        {images.length > 0 && (
+          <div className="flex gap-2 flex-wrap pb-2" aria-label="Attached images">
+            {images.map((img) => (
+              <ImagePreview key={img.id} image={img} onRemove={handleRemoveImage} />
+            ))}
+          </div>
+        )}
+
+        <div className="relative">
+          {isNonChatMode && (
+            <div className="flex items-center gap-1.5 pb-1.5">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors',
+                  MODE_ACCENT,
+                )}
+              >
+                {modeConfig.icon}
+                {modeConfig.label}
+              </span>
+              <span className="text-[10px] text-muted-foreground/30">·</span>
+            </div>
+          )}
+          <ChatInputRow
+            value={value}
+            onChange={onChange}
+            onSend={handleSend}
+            onStop={onStop}
+            onCancel={onCancel}
+            loading={loading}
+            disabled={isDisabled}
+            placeholder={placeholder}
+            textareaRef={textareaRef}
+            onImage={handleAddImage}
+            onTranscript={handleVoiceTranscript}
+            onAudioRecorded={onAudioRecorded}
+            onAudioTranscript={onAudioTranscript}
+            onGeneratedImage={onGeneratedImage}
+            onPDFAnalysis={onPDFAnalysis}
+            onPDFError={onPDFError}
+            hasContent={hasContent}
+            onExecuteCommand={onExecuteCommand}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+
+        {!loading && !value && hasModel && (
+          <div
+            className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/40 pt-1"
+            aria-hidden="true"
+          >
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Enter</kbd>
+              <span>send</span>
+            </span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">
+                Shift+Enter
+              </kbd>
+              <span>newline</span>
+            </span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">/</kbd>
+              <span>commands</span>
+            </span>
+            {consciousnessStatus && consciousnessStatus.enabled && (
+              <>
+                <span className="text-muted-foreground/20">·</span>
+                <span
+                  className="flex items-center gap-1 text-primary/60"
+                  title={`Consciousness ${getConsciousnessLevelLabel(consciousnessStatus.level)}: ${getQualiaMood(consciousnessStatus.current_qualia)}`}
+                >
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  <span>{getConsciousnessLevelLabel(consciousnessStatus.level)}</span>
+                </span>
+              </>
+            )}
+            {personas.length > 0 && (
+              <>
+                <span className="text-muted-foreground/20">·</span>
+                <select
+                  value={activePersona ?? ''}
+                  onChange={(e) => handlePersonaChange(e.target.value)}
+                  title={t('chat.switchPersona')}
+                  className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary/70 outline-none cursor-pointer hover:bg-primary/20 transition-colors"
+                >
+                  <option value="">{t('chat.defaultPersona')}</option>
+                  {personas.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+})

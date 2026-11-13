@@ -3,6 +3,8 @@
  * Supports text files, code files, and images.
  */
 
+import {Alert, Linking} from 'react-native';
+
 let DocumentPicker: any;
 try {
   DocumentPicker = require('expo-document-picker');
@@ -33,24 +35,34 @@ const CODE_EXTENSIONS = [
 
 export async function pickDocument(): Promise<PickedFile | null> {
   if (!DocumentPicker) {
-    throw new Error('Document picker not available. Install expo-document-picker.');
+    Alert.alert(
+      'File picker unavailable',
+      'Document picker is not installed on this device.',
+    );
+    return null;
   }
 
-  const result = await DocumentPicker.getDocumentAsync({
-    type: '*/*',
-    copyToCacheDirectory: true,
-    multiple: false,
-  });
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
 
-  if (result.canceled || !result.assets?.[0]) return null;
+    if (result.canceled || !result.assets?.[0]) return null;
 
-  const asset = result.assets[0];
-  return {
-    name: asset.name,
-    uri: asset.uri,
-    mimeType: asset.mimeType || 'application/octet-stream',
-    size: asset.size || 0,
-  };
+    const asset = result.assets[0];
+    return {
+      name: asset.name,
+      uri: asset.uri,
+      mimeType: asset.mimeType || 'application/octet-stream',
+      size: asset.size || 0,
+    };
+  } catch (err: any) {
+    const msg = err?.message || 'Could not open file picker.';
+    Alert.alert('File pick failed', msg);
+    return null;
+  }
 }
 
 export function isTextFile(file: PickedFile): boolean {

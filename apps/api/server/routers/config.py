@@ -1,26 +1,68 @@
 """
 Config Router - MVC View layer
 """
-from fastapi import APIRouter
 
-from schemas.config import ConfigUpdate
+import logging
+
 from controllers.config import get_config_controller
-from schemas.common import success_response
+from fastapi import APIRouter, Depends
+from infrastructure.auth import require_auth_if_enabled
+from schemas.common import endpoint, safe_audit_log, success_response
+from schemas.config import ConfigUpdate
 
-router = APIRouter(prefix="/config", tags=["config"])
-
-
-@router.get("/generation")
-async def get_generation_config():
-    """Get current generation config"""
-    ctrl = get_config_controller()
-    return success_response(data=ctrl.get_generation_config())
+logger = logging.getLogger("slo.routers.config")
 
 
-@router.put("/generation")
-@router.patch("/generation")
-async def update_generation_config(req: ConfigUpdate):
-    """Update generation config"""
-    ctrl = get_config_controller()
-    updates = {k: v for k, v in req.model_dump().items() if v is not None}
-    return success_response(data=ctrl.update_generation_config(**updates))
+class ConfigRouter:
+    """Router for application configuration."""
+
+    def __init__(self):
+        self.router = APIRouter(prefix="/config", tags=["config"])
+        self._register_routes()
+
+    def _register_routes(self):
+        self.router.add_api_route("/generation", self.get_generation_config, methods=["GET"])
+        self.router.add_api_route(
+            "/generation",
+            self.update_generation_config,
+            methods=["PUT"],
+            operation_id="update_generation_config_put",
+        )
+        self.router.add_api_route(
+            "/generation",
+            self.update_generation_config,
+            methods=["PATCH"],
+            operation_id="update_generation_config_patch",
+        )
+
+    @endpoint("config.get_generation")
+    async def get_generation_config(self) -> dict:
+        """Return the current generation configuration (temperature, top_p, etc)."""
+        logger.warning(
+            "DEPRECATED: GET /config/generation is deprecated. Use GET /settings/generation instead."
+        )
+        ctrl = get_config_controller()
+        result = ctrl.get_generation_config()
+        return success_response(data=result)
+
+    @endpoint("config.update_generation")
+    async def update_generation_config(
+        self, req: ConfigUpdate, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Update the generation configuration with partial field changes."""
+        logger.warning(
+            "DEPRECATED: PATCH /config/generation is deprecated. Use PATCH /settings/generation instead."
+        )
+        ctrl = get_config_controller()
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        result = ctrl.update_generation_config(**updates)
+        safe_audit_log(
+            "config.generation.save",
+            resource="generation",
+            detail=str(updates),
+            **{k: str(v) for k, v in updates.items()},
+        )
+        return success_response(data=result)
+
+
+router = ConfigRouter().router

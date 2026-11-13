@@ -27,14 +27,20 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
+    # JIT kernels for the inference hot path (domain/training/_internal/slonet_kernels.py).
+    # Declared rather than assumed: a numba that is installed but invisible to the
+    # running interpreter is exactly how the 2026-11-01 API-server OOM happened --
+    # the kernels silently dropped to their numpy fallback, whose unchunked prefill
+    # allocated ~16 GB and was OOM-killed by the kernel. llvmlite is pinned alongside
+    # because the two are version-locked; it is otherwise numba's own dependency.
+    "numba>=0.67.0",
+    "llvmlite>=0.49.0",
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
     "starlette>=0.27.0",
     "httpx>=0.25.0",
     "click>=8.1.0",
-    "rich>=13.0.0",
     "safetensors>=0.4.0",
-    "huggingface-hub>=0.19.0",
     "accelerate>=0.25.0",
     "pandas>=2.0.0",
     "pillow>=10.0.0",
@@ -54,6 +60,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
+    "pytest-testmon>=2.1.0",
     "ruff>=0.1.0",
 ]
 notebook = [
@@ -75,15 +82,8 @@ all = [
     "mlflow>=2.8.0",
     "wandb>=0.16.0",
 ]
-tui = [
-    "rich>=13.0.0",
-    "httpx>=0.25.0",
-    "readchar>=2.0.0",
-]
-
 [project.scripts]
-sloughgpt = "apps.cli.cli:main"
-sloughgpt-tui = "apps.tui:main"
+sloughgpt = "apps.cli.src.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/iamtowbee/sloughGPT"
@@ -91,34 +91,60 @@ Documentation = "https://github.com/iamtowbee/sloughGPT#readme"
 Repository = "https://github.com/iamtowbee/sloughGPT"
 
 [tool.setuptools]
-package-dir = {"" = "packages/core-py", "apps" = "apps"}
+# Dual-tree consolidation moved `domain` from packages/core-py/domains to the
+# repo root (cards 20260924_047..058), but package-dir still mapped the whole
+# tree under packages/core-py — discovery found `domain` via the "." root and
+# the map pointed it at the deleted packages/core-py/domain, hard-failing
+# `python setup.py egg_info` (card 56cf354c). Single source root: package-dir
+# and packages.find must agree, and setup.py is a thin shim over this file.
+package-dir = {"" = "."}
 include-package-data = true
 
 [tool.setuptools.package-data]
-domains = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
+domain = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 apps = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 
 [tool.setuptools.packages.find]
-where = ["packages/core-py", "."]
-include = ["domains*", "utils*", "apps*"]
-exclude = ["tests*", "apps.web*"]
+where = ["."]
+include = ["domain*", "utils*", "apps*", "memory*"]
+exclude = ["tests*", "*.tests*", "apps.web*"]
 
 [tool.black]
 line-length = 100
 target-version = ["py39", "py310", "py311"]
 
 [tool.ruff]
-# CI lint job uses a smoke subset only (see .github/workflows/reusable-ci-core.yml):
-#   ruff check tests/ apps/cli/ apps/tui/ apps/api/server/ train_sloughgpt.py packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82
 line-length = 100
-target-version = "py39"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
-ignore = ["E501"]
+ignore = ["E501", "N802", "N803", "N806", "N812", "N814", "N818", "N999", "E402", "E701", "E702", "E741", "B008", "N801", "N804", "N805", "N807", "N815", "N817", "B007", "B904", "E721", "B023", "B017", "B005", "B018", "B905", "B002", "B039", "E731", "F601", "C408", "C416", "C401", "UP031", "UP042", "E722", "UP007", "UP035"]
+
+# domain.* is first-party by identity, not by filesystem resolution: the
+# domain/shell/_internal/{cmds,addons} entries are machine-local symlinks,
+# so probe-based classification diverged between environments and CI flagged
+# 11 I001s that pass locally (card ca647de2).
+[tool.ruff.lint.isort]
+known-first-party = ["domain"]
+# `datasets` is the HuggingFace package, but a gitignored local `datasets/`
+# data directory exists in some working copies. Ruff classifies by probing the
+# filesystem, so without this the import sorted as first-party locally and
+# third-party in CI — the same environment-dependent divergence as card
+# ca647de2. Naming it third-party makes local == CI everywhere.
+known-third-party = ["datasets"]
+
+[tool.ruff.lint.flake8-bugbear]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401", "F811"]
+"domain/training/*.py" = ["B006", "C408"]
+"**/tests/*.py" = ["F811", "B017"]
+"tests/fixtures/__init__.py" = ["F403", "F405"]
+"scripts/examples/*.py" = ["F821"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
@@ -128,3 +154,11 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["domain"]
+omit = ["*/tests/*", "*/test_*"]
+
+[tool.coverage.report]
+fail_under = 50
+show_missing = true

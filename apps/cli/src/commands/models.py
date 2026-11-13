@@ -1,62 +1,72 @@
 """
 Model commands - Model listing, export, and soul management.
 """
-import sys
-import os
+
 import json
 from pathlib import Path
-from typing import Optional
 
-from core.printer import printer
-from utils.formatting import format_size, format_number, truncate
+from domain.logging import get_global
+
+log = get_global()
+from utils.formatting import format_number, format_size
+
+
+def _fmt_model_option(model_id: str, display: str) -> str:
+    """Format a model option for InteractivePrompt.select()."""
+    return f"{model_id}  ({display})"
+
+
+def _parse_model_option(option: str) -> str:
+    """Extract model_id from a formatted option string."""
+    return option.split("  (")[0]
 
 
 def cmd_models(args):
     """List available models. Use subcommands for info, download, compare, personalities."""
-    from ..cli import _local_soul_candidate_paths
+    from utils.helpers import local_soul_candidate_paths
 
     models_dir = Path("models")
 
-    printer.header("Available Models")
+    log.header("Available Models")
 
     # Slo files
-    printer.section("Soul Files (.soul)")
-    soul_files = _local_soul_candidate_paths(models_dir)
+    log.section("Soul Files (.soul)")
+    soul_files = local_soul_candidate_paths(models_dir)
     if soul_files:
         rows = []
         for f in soul_files:
             size = f.stat().st_size
             rows.append([f.name, format_size(size)])
-        printer.table(["Name", "Size"], rows)
+        log.table(["Name", "Size"], rows)
     else:
-        printer.info("No soul files found")
+        log.info("No soul files found")
 
-    # PyTorch checkpoints
-    printer.section("PyTorch Checkpoints (.pt)")
-    pt_files = list(models_dir.glob("*.pt"))
-    if pt_files:
+    # Compiled models (.slnc mmap format)
+    log.section("Compiled Models (.slnc)")
+    slnc_files = sorted(models_dir.rglob("*.slnc")) if models_dir.is_dir() else []
+    if slnc_files:
         rows = []
-        for f in sorted(pt_files):
+        for f in slnc_files:
             size = f.stat().st_size
             rows.append([f.name, format_size(size)])
-        printer.table(["Name", "Size"], rows)
+        log.table(["Name", "Size"], rows)
     else:
-        printer.info("No .pt files found")
+        log.info("No .slnc files found")
 
     # SafeTensors
-    printer.section("SafeTensors (.safetensors)")
+    log.section("SafeTensors (.safetensors)")
     st_files = list(models_dir.glob("*.safetensors"))
     if st_files:
         rows = []
         for f in sorted(st_files):
             size = f.stat().st_size
             rows.append([f.name, format_size(size)])
-        printer.table(["Name", "Size"], rows)
+        log.table(["Name", "Size"], rows)
     else:
-        printer.info("No .safetensors files found")
+        log.info("No .safetensors files found")
 
-    printer.blank()
-    printer.section("Available Architectures")
+    log.blank()
+    log.section("Available Architectures")
     architectures = [
         ("gpt2", "GPT-2", "124M params"),
         ("gpt2-medium", "GPT-2 Medium", "355M params"),
@@ -64,148 +74,325 @@ def cmd_models(args):
         ("llama", "LLaMA", "Meta model"),
         ("phi", "Phi", "Microsoft model"),
     ]
-    printer.table(["ID", "Name", "Info"], architectures)
+    log.table(["ID", "Name", "Info"], architectures)
 
 
 def _cmd_models_info(args):
-    """Show model checkpoint info."""
-    import torch
+    """Show .soul checkpoint info."""
+    import numpy as np
+
+    from domain.training._internal.slonet import import_from_sou
 
     model_path = Path(args.model)
     if not model_path.exists():
-        printer.error(f"Model not found: {model_path}")
+        log.error(f"Model not found: {model_path}")
         return
 
-    printer.header(f"Model: {model_path}")
+    log.header(f"Model: {model_path}")
 
-    checkpoint = torch.load(str(model_path), weights_only=False, map_location="cpu")
+    try:
+        net = import_from_sou(str(model_path))
+    except Exception as e:
+        log.error(f"Failed to load: {e}")
+        return
 
-    if "model" in checkpoint:
-        model = checkpoint["model"]
-        if hasattr(model, "state_dict"):
-            state = model.state_dict()
-            printer.key_value("State Dict Keys", str(len(state)))
-            total_params = sum(p.numel() for p in state.values() if isinstance(p, torch.Tensor))
-            printer.key_value("Parameters", f"{total_params:,}")
-        elif isinstance(model, dict):
-            printer.key_value("Model Dict Keys", str(len(model)))
-            total_params = sum(p.numel() for p in model.values() if isinstance(p, torch.Tensor))
-            printer.key_value("Parameters", f"{total_params:,}")
+    log.key_value("Soul Name", getattr(net, "soul_name", "?"))
+    if getattr(net, "soul_traits", None):
+        log.key_value("Traits", str(net.soul_traits))
+    params = list(net.parameters())
+    total_params = sum(int(np.prod(p.shape)) for p in params)
+    log.key_value("Parameters", f"{total_params:,}")
 
-    if "chars" in checkpoint:
-        printer.key_value("Vocab Size", str(len(checkpoint["chars"])))
-    if "stoi" in checkpoint:
-        printer.key_value("Char-to-int Map", str(len(checkpoint["stoi"])))
-    if "itos" in checkpoint:
-        printer.key_value("Int-to-char Map", str(len(checkpoint["itos"])))
-    if "training_info" in checkpoint:
-        info = checkpoint["training_info"]
-        if isinstance(info, dict):
-            for k, v in info.items():
-                printer.key_value(str(k), str(v))
+    meta = getattr(net, "metadata", None) or {}
+    for k in ("vocab_size", "n_embed", "n_layer", "n_head", "block_size"):
+        if meta.get(k) is not None:
+            log.key_value(k.replace("n_", "Num "), str(meta[k]))
+    if meta.get("tokenizer"):
+        log.key_value("Tokenizer", str(meta["tokenizer"].get("type", "?")))
+    training = meta.get("training") or {}
+    for k, v in training.items():
+        log.key_value(str(k), str(v))
+
+
+def _interactive_download_select():
+    """Show an interactive fuzzy-searchable list of popular HuggingFace models.
+
+    Queries the HuggingFace Hub API for trending text-generation models,
+    displays them in an interactive selector with arrow keys and type-to-filter,
+    and returns the selected model ID. Returns None if the user cancels.
+
+    Returns:
+        Selected model ID string, or None if cancelled.
+    """
+    import requests
+
+    log.step("Fetching popular models from HuggingFace Hub...")
+
+    try:
+        resp = requests.get(
+            "https://huggingface.co/api/models",
+            params={
+                "pipeline_tag": "text-generation",
+                "sort": "downloads",
+                "direction": "-1",
+                "limit": 50,
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            log.error(f"Failed to fetch models: HTTP {resp.status_code}")
+            return None
+        raw_models = resp.json()
+    except Exception as e:
+        log.error(f"Failed to fetch models: {e}")
+        return None
+
+    # Build list: (display_name, model_id, downloads)
+    model_list = []
+    for m in raw_models:
+        mid = m.get("modelId") or m.get("id", "")
+        if not mid:
+            continue
+        downloads = m.get("downloads", 0)
+        m.get("tags", [])
+        # Short display: model name + download count
+        dl_str = f"{downloads:,}" if downloads else "?"
+        model_list.append((f"{mid}  ({dl_str} downloads)", mid, downloads))
+
+    if not model_list:
+        log.info("No models found")
+        return None
+
+    # Sort by downloads descending
+    model_list.sort(key=lambda x: x[2], reverse=True)
+
+    # Build formatted options for InteractivePrompt
+    from domain.shell._internal.interactive import InteractivePrompt
+    from domain.shell._internal.io import ConsoleIO
+
+    io = ConsoleIO()
+    prompt = InteractivePrompt(io)
+
+    options = [_fmt_model_option(mid, display) for display, mid, _ in model_list]
+    result = prompt.select("Download Model from HuggingFace", options)
+
+    if not result:
+        log.info("Selection cancelled")
+        return None
+
+    model_id = _parse_model_option(result)
+    log.success(f"Selected: {model_id}")
+    return model_id
 
 
 def _cmd_models_download(args):
-    """Download a HuggingFace model with progress tracking."""
-    import sys
-    import time
-    from pathlib import Path
+    """Download a HuggingFace model with size confirmation and live progress.
 
-    printer.header("Download Model")
-    printer.key_value("Model ID", args.model_id)
-    printer.blank()
+    Enforces the bandwidth policy: queries HuggingFace Hub for model size,
+    shows the estimate, and requires user confirmation for downloads over
+    50 MB. Use ``--yes`` or ``SLO_AUTO_DOWNLOAD=1`` to skip the prompt.
+
+    Shows a live progress bar with percentage, speed, ETA, and current
+    filename. Ctrl+C cancels gracefully.
+
+    If no model_id is provided, shows an interactive fuzzy-searchable list
+    of popular text-generation models from HuggingFace Hub.
+
+    Side effects:
+        - May download model files to HF cache directory
+        - Prints to stdout via ANSI progress bars
+    """
+    from core.permissions import PermissionsManager
+    from utils.progress import ProgressBar
+
+    # ── Interactive model selection if no model_id ──────────
+    if not getattr(args, "model_id", None):
+        model_id = _interactive_download_select()
+        if not model_id:
+            return
+        args.model_id = model_id
+
+    log.header("Download Model")
+    log.key_value("Model ID", args.model_id)
+    log.blank()
 
     try:
-        from domains.training.huggingface.model_map import get_model_info
-        from domains.infrastructure.download_manager import get_download_manager
         import asyncio
 
-        info = get_model_info(args.model_id)
-        if info:
-            printer.key_value("Name", info.name)
-            printer.key_value("Description", info.description)
-            printer.key_value("Parameters", f"{info.params:,}")
-            printer.key_value("Context", str(info.context_length))
-            printer.blank()
+        from domain.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
 
         if mgr.is_cached(args.model_id):
-            printer.success(f"Model already cached: {args.model_id}")
+            log.success(f"Model already cached: {args.model_id}")
             return
 
-        printer.step("Starting download...")
+        # ── Confirmation gate ──────────────────────────────
+        pm = PermissionsManager(auto_yes=getattr(args, "yes", False))
+        if not pm.confirm_download(args.model_id):
+            log.info("Download cancelled by user")
+            return
+
+        # ── Live progress bar ──────────────────────────────
+        bar = ProgressBar(total=100, desc="Downloading", width=30, show_eta=True)
+        current_file = ""
 
         def _render_progress(progress_dict):
-            status = progress_dict.get("status", "")
+            nonlocal current_file
             pct = progress_dict.get("percentage", 0)
-            speed = progress_dict.get("speed_mb_per_sec", 0)
-            eta = progress_dict.get("eta_seconds", 0)
-            current_file = progress_dict.get("current_file", "")
-            downloaded_gb = progress_dict.get("bytes_downloaded", 0) / (1024 ** 3)
-            total_gb = progress_dict.get("total_bytes", 0) / (1024 ** 3)
-
-            bar_width = 40
-            filled = int(bar_width * min(pct, 100) / 100)
-            bar = "█" * filled + "░" * (bar_width - filled)
-
-            sys.stdout.write("\r")
-            sys.stdout.write(f"  [{bar}] {pct:5.1f}%  {downloaded_gb:.2f}/{total_gb:.2f} GB  {speed:.1f} MB/s")
-            if eta > 0:
-                sys.stdout.write(f"  ETA: {int(eta)}s")
-            if current_file:
-                sys.stdout.write(f"\n  ↳ {current_file}")
-            sys.stdout.flush()
+            fname = progress_dict.get("current_file", "")
+            if fname:
+                current_file = fname.split("/")[-1][:40]
+            bar.desc = current_file or "Downloading"
+            bar.set_progress(int(pct))
 
         async def _do_download():
             mgr.on_progress(args.model_id, _render_progress)
-            result = await mgr.download(args.model_id)
-            return result
+            bar.start()
+            try:
+                result = await mgr.download(args.model_id)
+                return result
+            finally:
+                bar.finish()
 
         result = asyncio.run(_do_download())
-        sys.stdout.write("\n\n")
 
         if result.get("status") == "complete":
-            printer.success(f"Downloaded in {result.get('elapsed_seconds', '?')}s → {result.get('cache_dir', '')}")
+            log.success(
+                f"Downloaded in {result.get('elapsed_seconds', '?')}s "
+                f"-> {result.get('cache_dir', '')}"
+            )
         elif result.get("status") == "failed":
-            printer.error(f"Download failed: {result.get('error', 'unknown error')}")
+            log.error(f"Download failed: {result.get('error', 'unknown error')}")
         elif result.get("status") == "cancelled":
-            printer.warn("Download cancelled")
+            log.warning("Download cancelled")
     except KeyboardInterrupt:
-        printer.warn("Download interrupted by user")
+        log.warning("Download interrupted by user")
         try:
-            from domains.infrastructure.download_manager import get_download_manager
-            get_download_manager().cancel(args.model_id)
-        except Exception:
+            mgr = get_download_manager()
+            mgr.cancel(args.model_id)
+        except (OSError, AttributeError):
             pass
     except Exception as e:
-        printer.error(f"Download failed: {e}")
+        log.error(f"Download failed: {e}")
+
+
+def _cmd_models_status(args):
+    """Show status of all cached/downloaded HuggingFace models.
+
+    Scans the HuggingFace cache directory for downloaded models, shows
+    their sizes, and indicates whether each has been converted to .slnc
+    format. Useful for managing disk space and verifying downloads.
+    """
+
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    if not hf_cache.exists():
+        log.info("No HuggingFace cache found")
+        log.key_value("Cache path", str(hf_cache))
+        return
+
+    # Scan for model directories
+    models = []
+    for entry in sorted(hf_cache.iterdir()):
+        if not entry.name.startswith("models--") or not entry.is_dir():
+            continue
+        model_id = entry.name[len("models--") :].replace("--", "/")
+
+        # Calculate total size of weight files
+        total_bytes = 0
+        file_count = 0
+        has_slnc = False
+        has_safetensors = False
+
+        for f in entry.rglob("*"):
+            if not f.is_file():
+                continue
+            try:
+                size = f.stat().st_size
+            except OSError:
+                continue
+            if size < 1024:
+                continue
+            if f.suffix in (".safetensors", ".bin", ".slnc", ".onnx"):
+                total_bytes += size
+                file_count += 1
+                if f.suffix == ".slnc":
+                    has_slnc = True
+                if f.suffix == ".safetensors":
+                    has_safetensors = True
+
+        if total_bytes == 0:
+            continue
+
+        # Determine format status
+        if has_slnc:
+            status = ".slnc"
+        elif has_safetensors:
+            status = "safetensors"
+        else:
+            status = "other"
+
+        models.append(
+            {
+                "id": model_id,
+                "size": total_bytes,
+                "files": file_count,
+                "status": status,
+            }
+        )
+
+    if not models:
+        log.info("No cached models found")
+        log.key_value("Cache path", str(hf_cache))
+        return
+
+    # Sort by size descending
+    models.sort(key=lambda m: m["size"], reverse=True)
+
+    total_cache = sum(m["size"] for m in models)
+
+    log.header(f"Cached Models ({len(models)} models, {format_size(total_cache)} total)")
+
+    log.table(
+        ["Model", "Size", "Files", "Format"],
+        [[m["id"], format_size(m["size"]), str(m["files"]), m["status"]] for m in models],
+        align=["l", "r", "r", "l"],
+    )
+
+    log.blank()
+    log.key_value("Cache", str(hf_cache))
 
 
 def _cmd_models_compare(args):
     """Compare benchmark results or models."""
-    printer.header("Model Comparison")
+    log.header("Model Comparison")
 
     # Compare benchmark results
     benchmarks_dir = Path("data/experiments/benchmarks")
     if benchmarks_dir.exists():
         benchmarks = list(benchmarks_dir.glob("*.json"))
         if benchmarks:
-            printer.section("Benchmark Results")
+            log.section("Benchmark Results")
             rows = []
             for bf in sorted(benchmarks)[:5]:
                 with open(bf) as f:
                     data = json.load(f)
-                rows.append([
-                    data.get("model", "unknown")[:18],
-                    f'{data.get("tokens_per_second", 0):.2f}',
-                    f'{data.get("latency_ms", 0):.1f}',
-                    f'{data.get("memory_mb", 0):.1f}',
-                ])
-            printer.table(["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"], rows, align=["l", "r", "r", "r"])
+                rows.append(
+                    [
+                        data.get("model", "unknown")[:18],
+                        f"{data.get('tokens_per_second', 0):.2f}",
+                        f"{data.get('latency_ms', 0):.1f}",
+                        f"{data.get('memory_mb', 0):.1f}",
+                    ]
+                )
+            log.table(
+                ["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"],
+                rows,
+                align=["l", "r", "r", "r"],
+            )
 
     # Compare models
-    printer.section("Model Specifications")
+    log.section("Model Specifications")
     model_specs = [
         ("gpt2", "124M", "~250MB", "Fast"),
         ("gpt2-medium", "355M", "~700MB", "Medium"),
@@ -214,73 +401,63 @@ def _cmd_models_compare(args):
         ("mistral-7b", "7.3B", "~14GB", "Slow"),
         ("llama-2-7b", "7B", "~13GB", "Slow"),
     ]
-    printer.table(["Model", "Params", "Size", "Speed"], model_specs)
+    log.table(["Model", "Params", "Size", "Speed"], model_specs)
 
-    printer.blank()
-    printer.info("Run benchmarks: cli.py eval --checkpoint <path> --benchmark")
+    log.blank()
+    log.info("Run benchmarks: cli.py eval --checkpoint <path> --benchmark")
 
 
 def _cmd_models_personalities(args):
     """List available personalities."""
     try:
-        from domains.ai_personality import PERSONALITIES
+        from domain.ai_personality import PERSONALITIES
     except ImportError:
-        printer.error("Personalities module not found")
+        log.error("Personalities module not found")
         return
 
-    printer.header("Available Personalities")
+    log.header("Available Personalities")
     rows = []
     for ptype, personality in PERSONALITIES.items():
-        rows.append([ptype.value.upper(), personality.name, personality.description[:50], ", ".join(personality.traits)])
-    printer.table(["Type", "Name", "Description", "Traits"], rows)
+        rows.append(
+            [
+                ptype.value.upper(),
+                personality.name,
+                personality.description[:50],
+                ", ".join(personality.traits),
+            ]
+        )
+    log.table(["Type", "Name", "Description", "Traits"], rows)
 
 
 def cmd_export_cli(args):
-    """Export model to different formats."""
-    import torch
-    from domains.training.export import export_model, list_export_formats, ExportConfig
-    from domains.models import SloughGPTModel
+    """Export a .soul model to different formats."""
+    import numpy as np
 
-    printer.header("Model Export")
+    from domain.training._internal.export import ExportConfig, export_model, list_export_formats
+
+    log.header("Model Export")
 
     # List formats
-    printer.section("Supported Formats")
+    log.section("Supported Formats")
     formats = list_export_formats()
     for fmt, desc in formats.items():
-        printer.key_value(fmt, desc)
+        log.key_value(fmt, desc)
 
     model_path = Path(args.model)
     if not model_path.exists():
-        printer.error(f"Model not found: {args.model}")
+        log.error(f"Model not found: {args.model}")
         return
 
-    printer.blank()
-    printer.step(f"Loading: {args.model}")
-    checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+    log.blank()
+    log.step(f"Loading: {args.model}")
+    from domain.training._internal.slonet import import_from_sou
 
-    if isinstance(checkpoint, dict) and "model" in checkpoint:
-        state_dict = checkpoint["model"]
-        metadata = checkpoint.get("metadata", {})
-    else:
-        state_dict = checkpoint
-        metadata = {}
+    net = import_from_sou(str(model_path))
+    metadata = dict(getattr(net, "metadata", None) or {})
+    metadata.setdefault("name", getattr(net, "soul_name", "SloughGPT"))
 
-    vocab_size = metadata.get("vocab_size", 256)
-    n_embed = metadata.get("n_embed", 256)
-    n_layer = metadata.get("n_layer", 6)
-    n_head = metadata.get("n_head", 8)
-    block_size = metadata.get("block_size", 128)
-
-    model = SloughGPTModel(
-        vocab_size=vocab_size,
-        n_embed=n_embed,
-        n_layer=n_layer,
-        n_head=n_head,
-        block_size=block_size,
-    )
-    model.load_state_dict(state_dict)
-
-    printer.success(f"Loaded: {format_number(model.num_parameters())} parameters")
+    total_params = sum(int(np.prod(p.shape)) for p in net.parameters())
+    log.success(f"Loaded: {format_number(total_params)} parameters")
 
     output_path = args.output or str(model_path.with_suffix(""))
 
@@ -302,8 +479,6 @@ def cmd_export_cli(args):
     if args.soul_name:
         meta_with_name["name"] = args.soul_name
 
-    from domains.training.export import ExportConfig
-
     config = ExportConfig(
         input_path=args.model,
         output_path=output_path,
@@ -315,25 +490,25 @@ def cmd_export_cli(args):
         n_ctx=args.n_ctx if hasattr(args, "n_ctx") else 2048,
     )
 
-    printer.blank()
-    printer.section("Export Configuration")
-    printer.key_value("Format", args.format)
-    printer.key_value("Quantization", args.quantization or "N/A")
-    printer.key_value("Sequence Length", str(args.seq_len))
-    printer.key_value("Output", output_path)
+    log.blank()
+    log.section("Export Configuration")
+    log.key_value("Format", args.format)
+    log.key_value("Quantization", args.quantization or "N/A")
+    log.key_value("Sequence Length", str(args.seq_len))
+    log.key_value("Output", output_path)
 
-    printer.blank()
-    printer.step("Exporting...")
-    results = export_model(config, model=model)
+    log.blank()
+    log.step("Exporting...")
+    results = export_model(config, model=net)
 
     if results:
-        printer.blank()
-        printer.success("Export successful!")
+        log.blank()
+        log.success("Export successful!")
         for fmt, path in results.items():
             file_size = Path(path).stat().st_size if Path(path).exists() else 0
-            printer.key_value(fmt, f"{path} ({format_size(file_size)})")
+            log.key_value(fmt, f"{path} ({format_size(file_size)})")
     else:
-        printer.error("Export failed")
+        log.error("Export failed")
 
 
 def cmd_soul(args):
@@ -350,186 +525,163 @@ def cmd_soul(args):
             )
             if resp.status_code == 200:
                 data = resp.json()
-                printer.header("Slo Loaded")
-                printer.key_value("Name", data.get("soul_name", "unknown"))
-                printer.key_value("Lineage", data.get("lineage", "unknown"))
-                printer.key_value("Born", data.get("born_at", ""))
-                printer.blank()
-                printer.section("Generation Params")
+                log.header("Slo Loaded")
+                log.key_value("Name", data.get("soul_name", "unknown"))
+                log.key_value("Lineage", data.get("lineage", "unknown"))
+                log.key_value("Born", data.get("born_at", ""))
+                log.blank()
+                log.section("Generation Params")
                 for k, v in data.get("generation_params", {}).items():
-                    printer.key_value(k, str(v))
-                printer.section("Personality")
+                    log.key_value(k, str(v))
+                log.section("Personality")
                 for k, v in data.get("personality", {}).items():
-                    printer.key_value(k, str(v))
+                    log.key_value(k, str(v))
             else:
-                printer.error(f"Failed: {resp.json()}")
+                log.error(f"Failed: {resp.json()}")
         except Exception as e:
-            printer.error(str(e))
+            log.error(str(e))
         return
 
     if args.info:
-        from domains.inference.slo_format import SouParser
+        from domain.inference._internal.slo_format import SouParser
 
         try:
             soul = SouParser.load(args.info)
-            printer.header(f"Slo: {soul.name}")
-            printer.key_value("Version", soul.version)
-            printer.key_value("Lineage", soul.lineage)
-            printer.key_value("Born", soul.born_at)
-            printer.key_value("Tags", ", ".join(soul.tags))
-            printer.blank()
-            printer.section("Personality")
+            log.header(f"Slo: {soul.name}")
+            log.key_value("Version", soul.version)
+            log.key_value("Lineage", soul.lineage)
+            log.key_value("Born", soul.born_at)
+            log.key_value("Tags", ", ".join(soul.tags))
+            log.blank()
+            log.section("Personality")
             if soul.personality:
                 for k, v in soul.personality.to_dict().items():
-                    printer.key_value(k, str(v))
-            printer.section("Behavior")
+                    log.key_value(k, str(v))
+            log.section("Behavior")
             if soul.behavior:
                 for k, v in soul.behavior.to_dict().items():
-                    printer.key_value(k, str(v))
+                    log.key_value(k, str(v))
         except Exception as e:
-            printer.error(str(e))
+            log.error(str(e))
         return
 
     if args.create:
-        from domains.inference.slo_format import create_soul_profile, export_to_sou, SouParser
-        from domains.models import SloughGPTModel
-        import torch
+        from domain.inference._internal.slo_format import SouParser, create_soul_profile
+        from domain.training._internal.slonet import export_to_sou, import_from_sou
 
         soul = create_soul_profile(
             name=args.name or "SloughGPT-Slo",
-            base_model="nanogpt",
+            base_model="slonet",
             training_dataset=args.dataset or "",
             epochs_trained=args.epochs or 0,
-            lineage=args.lineage or "nanogpt",
+            lineage=args.lineage or "slonet",
             tags=args.tags.split(",") if args.tags else ["sloughgpt", "soul"],
         )
 
         if args.model:
-            checkpoint = torch.load(args.model, weights_only=False, map_location="cpu")
-            state_dict = checkpoint.get("model_state_dict") or checkpoint.get("model") or checkpoint
-            cfg = checkpoint.get("config") or {}
-            n_embed = cfg.get("n_embed", 256)
-            n_layer = cfg.get("n_layer", 6)
-            n_head = cfg.get("n_head", 8)
-            block_size = cfg.get("block_size", 128)
-            vocab_size = cfg.get("vocab_size", 256)
-
-            model = SloughGPTModel(
-                vocab_size=vocab_size,
-                n_embed=n_embed,
-                n_layer=n_layer,
-                n_head=n_head,
-                block_size=block_size,
+            net = import_from_sou(args.model)
+            export_to_sou(
+                net,
+                args.create,
+                metadata={
+                    "soul_profile": soul.to_dict() if hasattr(soul, "to_dict") else str(soul),
+                    "name": soul.name,
+                },
             )
-            model.load_state_dict(state_dict, strict=False)
-            export_to_sou(model, args.create, soul_profile=soul)
-            printer.success(f"Created: {args.create}")
+            log.success(f"Created: {args.create}")
         else:
             SouParser.save(soul, args.create)
-            printer.success(f"Created: {args.create}")
+            log.success(f"Created: {args.create}")
 
 
 def cmd_benchmark(args):
-    """Run performance benchmarks on models."""
-    import torch
-    import time
+    """Benchmark a .soul checkpoint using pure-numpy SloNet inference."""
     import statistics
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import time
 
-    device = args.device
-    if device == "auto":
-        if torch.cuda.is_available():
-            device = "cuda"
-        elif torch.backends.mps.is_available():
-            device = "mps"
-        else:
-            device = "cpu"
+    import numpy as np
 
-    printer.header(f"Benchmark - {args.model}")
-    printer.key_value("Device", device)
+    from domain.inference._internal.slonet_provider import SloNetChatProvider
+    from domain.training._internal.slonet import _get_accelerator
 
-    if device == "mps" and not torch.backends.mps.is_available():
-        printer.warning("MPS not available, falling back to CPU")
-        device = "cpu"
+    acc = _get_accelerator()
+    backend = acc.name if acc is not None else "cpu"
 
-    printer.step("Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    log.header(f"Benchmark - {args.model}")
+    log.key_value("Backend", backend)
+    log.key_value("Device", getattr(acc, "device_name", "CPU") if acc is not None else "CPU")
 
-    printer.step("Loading model...")
+    if not Path(args.model).exists():
+        log.error(f"Checkpoint not found: {args.model}")
+        return
+
+    log.step("Loading checkpoint...")
     start_time = time.time()
-    model = AutoModelForCausalLM.from_pretrained(args.model)
-    model = model.to(device)
-    model.eval()
+    provider = SloNetChatProvider.from_soul(args.model, model_id="bench")
     load_time = time.time() - start_time
-    params = sum(p.numel() for p in model.parameters())
-    printer.key_value("Load Time", f"{load_time:.1f}s")
-    printer.key_value("Parameters", f"{params:,}")
+    net = provider._get_model()
+    params = sum(int(np.prod(p.shape)) for p in net.parameters())
+    log.key_value("Load Time", f"{load_time:.1f}s")
+    log.key_value("Parameters", f"{params:,}")
 
-    input_ids = tokenizer.encode(args.prompt, return_tensors="pt").to(device)
-    prompt_length = input_ids.shape[1]
-
-    printer.step("Warming up...")
-    with torch.no_grad():
-        _ = model.generate(input_ids, max_new_tokens=10, do_sample=False)
+    log.step("Warming up...")
+    provider.generate(args.prompt, max_new_tokens=10)
 
     if args.test in ("all", "latency"):
-        printer.section("Latency Test")
+        log.section("Latency Test")
         latencies = []
-        for i in range(args.runs):
+        for _ in range(args.runs):
             start = time.perf_counter()
-            with torch.no_grad():
-                _ = model.generate(input_ids, max_new_tokens=args.tokens, do_sample=False)
+            provider.generate(args.prompt, max_new_tokens=args.tokens)
             elapsed = (time.perf_counter() - start) * 1000
             latencies.append(elapsed)
         latencies.sort()
         p50 = latencies[int(len(latencies) * 0.50)]
         p95 = latencies[int(len(latencies) * 0.95)]
         avg = statistics.mean(latencies)
-        printer.key_value("P50", f"{p50:.1f}ms")
-        printer.key_value("P95", f"{p95:.1f}ms")
-        printer.key_value("Mean", f"{avg:.1f}ms")
+        log.key_value("P50", f"{p50:.1f}ms")
+        log.key_value("P95", f"{p95:.1f}ms")
+        log.key_value("Mean", f"{avg:.1f}ms")
 
     if args.test in ("all", "throughput"):
-        printer.section("Throughput Test")
+        log.section("Throughput Test")
         throughputs = []
-        for i in range(min(args.runs, 5)):
+        for _ in range(min(args.runs, 5)):
             start = time.perf_counter()
-            with torch.no_grad():
-                output = model.generate(input_ids, max_new_tokens=args.tokens, do_sample=False)
+            text = provider.generate(args.prompt, max_new_tokens=args.tokens)
             elapsed = time.perf_counter() - start
-            tokens = output.shape[1]
-            tps = tokens / elapsed
+            tokenizer = getattr(provider, "_tokenizer", None)
+            n_tokens = len(tokenizer.encode(text)) if tokenizer is not None else len(text)
+            tps = n_tokens / elapsed if elapsed > 0 else 0.0
             throughputs.append(tps)
         if throughputs:
-            printer.key_value("Average", f"{statistics.mean(throughputs):.1f} tok/s")
+            log.key_value("Average", f"{statistics.mean(throughputs):.1f} tok/s")
 
-    printer.blank()
-    printer.success("Benchmark complete!")
+    log.blank()
+    log.success("Benchmark complete!")
 
 
 def _cmd_models_select(args):
     """Interactive model selector with fuzzy search."""
-    import curses
+
     import requests
 
     base_url = f"http://{args.host}:{args.port}"
 
     # Fetch available models
-    printer.step("Fetching available models...")
+    log.step("Fetching available models...")
     try:
         resp = requests.get(f"{base_url}/models/hf", timeout=10)
         hf_models = resp.json() if resp.status_code == 200 else []
     except Exception as e:
-        printer.warn(f"HuggingFace models: {e}")
+        log.warning(f"HuggingFace models: {e}")
         hf_models = []
 
     try:
         resp = requests.get(f"{base_url}/models", timeout=10)
         local_models = resp.json() if resp.status_code == 200 else []
     except Exception as e:
-        printer.warn(f"Local models: {e}")
+        log.warning(f"Local models: {e}")
         local_models = []
 
     # Build model list: (display_name, model_id, source)
@@ -547,112 +699,42 @@ def _cmd_models_select(args):
             model_list.append((name, mid, "local"))
 
     if not model_list:
-        printer.info("No models available. Use 'model download <id>' to add one.")
+        log.info("No models available. Use 'model download <id>' to add one.")
         return
 
     model_list.sort(key=lambda x: x[0].lower())
-    printer.success(f"Found {len(model_list)} models")
+    log.success(f"Found {len(model_list)} models")
 
-    # ── curses interactive selector ──
-    def _run_selector(stdscr):
-        curses.curs_set(0)
-        curses.use_default_colors()
-        stdscr.nodelay(False)
+    # Build formatted options for InteractivePrompt
+    from domain.shell._internal.interactive import InteractivePrompt
+    from domain.shell._internal.io import ConsoleIO
 
-        height, width = stdscr.getmaxyx()
-        query = ""
-        selected = 0
-        scroll_offset = 0
+    io = ConsoleIO()
+    prompt = InteractivePrompt(io)
 
-        while True:
-            stdscr.clear()
-            # Header
-            stdscr.addstr(0, 0, " SloughGPT Model Selector ", curses.A_REVERSE)
-            stdscr.addstr(2, 0, f" Search: {query}")
-            stdscr.addstr(3, 0, "─" * min(width - 1, 60))
+    options = [
+        _fmt_model_option(mid, f"{name} [{'HF' if src == 'hf' else 'LOCAL'}]")
+        for name, mid, src in model_list
+    ]
+    result = prompt.select("SloughGPT Model Selector", options)
 
-            # Filter models
-            filtered = [(n, i, s) for n, i, s in model_list
-                        if query.lower() in n.lower() or query.lower() in i.lower()]
-
-            if not filtered:
-                stdscr.addstr(5, 0, " No matching models")
-                key = stdscr.getch()
-                if key == 27:  # ESC
-                    return None
-                elif key in (10, 13):  # Enter
-                    continue
-                elif key == 263 or key == 127:  # Backspace
-                    query = query[:-1]
-                elif 32 <= key <= 126:
-                    query += chr(key)
-                continue
-
-            # Ensure selected index is valid
-            selected = min(selected, len(filtered) - 1)
-            if selected < scroll_offset:
-                scroll_offset = selected
-            if selected >= scroll_offset + height - 6:
-                scroll_offset = selected - height + 7
-
-            # Draw list
-            max_display = height - 6
-            for i, (name, mid, src) in enumerate(filtered[scroll_offset:scroll_offset + max_display]):
-                line_y = 5 + i
-                prefix = "▸ " if i + scroll_offset == selected else "  "
-                src_tag = " [HF]" if src == "hf" else " [LOCAL]"
-                label = f"{prefix}{name}{src_tag}"
-                if len(label) > width - 1:
-                    label = label[:width - 4] + "..."
-                if i + scroll_offset == selected:
-                    stdscr.addstr(line_y, 0, label, curses.A_REVERSE)
-                else:
-                    stdscr.addstr(line_y, 0, label)
-
-            # Footer
-            stdscr.addstr(height - 1, 0, f" {len(filtered)} matches  ↑↓ navigate  Enter select  ESC cancel  / search")
-
-            key = stdscr.getch()
-            if key == 27:  # ESC
-                return None
-            elif key in (10, 13):  # Enter
-                return filtered[selected]
-            elif key == 259:  # Up
-                selected = max(0, selected - 1)
-            elif key == 258:  # Down
-                selected = min(len(filtered) - 1, selected + 1)
-            elif key == 338 or key == 261:  # PageDown / Right
-                selected = min(len(filtered) - 1, selected + 10)
-            elif key == 339 or key == 260:  # PageUp / Left
-                selected = max(0, selected - 10)
-            elif key == 263 or key == 127:  # Backspace
-                query = query[:-1]
-            elif 32 <= key <= 126:
-                query += chr(key)
-
-    try:
-        result = curses.wrapper(_run_selector)
-    except Exception as e:
-        printer.error(f"Selector error: {e}")
+    if not result:
+        log.info("Selection cancelled")
         return
 
-    if result is None:
-        printer.info("Selection cancelled")
-        return
-
-    name, model_id, source = result
-    printer.success(f"Selected: {name} ({model_id})")
+    model_id = _parse_model_option(result)
+    log.success(f"Selected: {model_id}")
 
     # Load the model
-    printer.step(f"Loading {model_id}...")
+    log.step(f"Loading {model_id}...")
     try:
         resp = requests.post(f"{base_url}/models/load", json={"model_id": model_id}, timeout=120)
         if resp.status_code == 200:
-            printer.success(f"Loaded {model_id}")
+            log.success(f"Loaded {model_id}")
         else:
-            printer.error(f"Load failed: {resp.json().get('detail', resp.text)}")
+            log.error(f"Load failed: {resp.json().get('detail', resp.text)}")
     except Exception as e:
-        printer.error(f"Load error: {e}")
+        log.error(f"Load error: {e}")
 
 
 def register(subparsers):
@@ -665,7 +747,9 @@ def register(subparsers):
     models_sub = models_parser.add_subparsers(dest="models_cmd", metavar="SUBCOMMAND")
 
     # Select (interactive)
-    models_select = models_sub.add_parser("select", help="Interactive model selector with fuzzy search")
+    models_select = models_sub.add_parser(
+        "select", help="Interactive model selector with fuzzy search"
+    )
     models_select.add_argument("--host", default="localhost", help="API host")
     models_select.add_argument("--port", type=int, default=8000, help="API port")
     models_select.set_defaults(func=_cmd_models_select)
@@ -680,9 +764,26 @@ def register(subparsers):
     info_parser.set_defaults(func=_cmd_models_info)
 
     # Download
-    download_parser = models_sub.add_parser("download", help="Download model from HuggingFace")
-    download_parser.add_argument("model_id", help="HuggingFace model ID (e.g., gpt2)")
+    download_parser = models_sub.add_parser(
+        "download", help="Download model from HuggingFace (interactive if no model given)"
+    )
+    download_parser.add_argument(
+        "model_id",
+        nargs="?",
+        default=None,
+        help="HuggingFace model ID (e.g., gpt2) — omit for interactive selection",
+    )
+    download_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Override: skip confirmation for this download (default from config: confirm on/off)",
+    )
     download_parser.set_defaults(func=_cmd_models_download)
+
+    # Status
+    status_parser = models_sub.add_parser("status", help="Show cached/downloaded models with sizes")
+    status_parser.set_defaults(func=_cmd_models_status)
 
     # Compare
     compare_parser = models_sub.add_parser("compare", help="Compare models or benchmarks")
@@ -700,20 +801,39 @@ def register(subparsers):
         "export",
         help="Export model to different formats",
     )
-    export_parser.add_argument("model", nargs="?", default="models/sloughgpt.pt", help="Input model")
+    export_parser.add_argument(
+        "model", nargs="?", default="models/sloughgpt.soul", help="Input model (.soul)"
+    )
     export_parser.add_argument("--output", "-o", help="Output path")
     export_parser.add_argument(
-        "--format", "-f",
+        "--format",
+        "-f",
         default="safetensors",
-        choices=["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "torch", "torchscript", "sou", "all"],
+        choices=[
+            "safetensors",
+            "safetensors_bf16",
+            "onnx",
+            "gguf_q4_k_m",
+            "gguf_fp16",
+            "gguf_q5_k_m",
+            "gguf_q8_0",
+            "sou",
+            "all",
+        ],
         help="Export format",
     )
-    export_parser.add_argument("--quantize", dest="quantization", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"])
+    export_parser.add_argument(
+        "--quantize", dest="quantization", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"]
+    )
     export_parser.add_argument("--seq-len", type=int, default=128, help="Sequence length for ONNX")
     export_parser.add_argument("--opset", type=int, default=17, help="ONNX opset")
-    export_parser.add_argument("--ctx", type=int, dest="n_ctx", default=2048, help="Context length for GGUF")
+    export_parser.add_argument(
+        "--ctx", type=int, dest="n_ctx", default=2048, help="Context length for GGUF"
+    )
     export_parser.add_argument("--soul-name", type=str, default=None, help="Slo name")
-    export_parser.add_argument("--metadata", type=str, nargs="+", default=None, help="Metadata KEY=VALUE")
+    export_parser.add_argument(
+        "--metadata", type=str, nargs="+", default=None, help="Metadata KEY=VALUE"
+    )
     export_parser.set_defaults(func=cmd_export_cli)
 
     # Slo
@@ -733,25 +853,44 @@ def register(subparsers):
     soul_parser.set_defaults(func=cmd_soul)
 
     # Benchmark
-    bench_parser = subparsers.add_parser("benchmark", help="Run performance benchmarks")
-    bench_parser.add_argument("--model", "-m", default="gpt2", help="Model to benchmark")
-    bench_parser.add_argument("--device", "-d", default="auto", choices=["auto", "cpu", "cuda", "mps"], help="Device")
-    bench_parser.add_argument("--test", "-t", default="all", choices=["all", "latency", "throughput"], help="Test type")
+    bench_parser = subparsers.add_parser(
+        "benchmark", help="Run performance benchmarks on a .soul checkpoint"
+    )
+    bench_parser.add_argument(
+        "--model", "-m", default="models/sloughgpt.soul", help="Path to .soul checkpoint"
+    )
+    bench_parser.add_argument(
+        "--test", "-t", default="all", choices=["all", "latency", "throughput"], help="Test type"
+    )
     bench_parser.add_argument("--runs", "-r", type=int, default=10, help="Number of runs")
     bench_parser.add_argument("--tokens", "-k", type=int, default=50, help="Max new tokens")
-    bench_parser.add_argument("--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt")
+    bench_parser.add_argument(
+        "--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt"
+    )
     bench_parser.set_defaults(func=cmd_benchmark)
 
     # Standalone aliases for backward compat (forward to models subcommands)
-    hf_download_parser = subparsers.add_parser("hf-download", help="Download model from HuggingFace")
+    hf_download_parser = subparsers.add_parser(
+        "hf-download", help="Download model from HuggingFace"
+    )
     hf_download_parser.add_argument("model_id", help="HuggingFace model ID")
+    hf_download_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Override: skip confirmation for this download (default from config: confirm on/off)",
+    )
     hf_download_parser.set_defaults(func=_cmd_models_download)
 
     info_parser = subparsers.add_parser("info", help="Show model checkpoint info")
-    info_parser.add_argument("model", nargs="?", default="models/sloughgpt.pt", help="Checkpoint path")
+    info_parser.add_argument(
+        "model", nargs="?", default="models/sloughgpt.soul", help="Checkpoint path"
+    )
     info_parser.set_defaults(func=_cmd_models_info)
 
-    personalities_parser = subparsers.add_parser("personalities", help="List built-in personalities")
+    personalities_parser = subparsers.add_parser(
+        "personalities", help="List built-in personalities"
+    )
     personalities_parser.set_defaults(func=_cmd_models_personalities)
 
     compare_parser = subparsers.add_parser("compare", help="Compare models or benchmarks")

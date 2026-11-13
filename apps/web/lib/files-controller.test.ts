@@ -1,112 +1,142 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-vi.mock('./auth', () => ({
-  useAuthStore: {
-    getState: () => ({ token: null as string | null }),
-  },
-}))
-
-vi.mock('./config', () => ({
-  PUBLIC_API_URL: 'http://127.0.0.1:9',
-}))
-
-import { setupApiMocks, apiClient } from './__test-helper'
-setupApiMocks()
-
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { filesController } from './files-controller'
+import * as http from './http-client'
+
+vi.mock('./http-client', () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  apiDelete: vi.fn(),
+}))
+
+const apiGet = vi.mocked(http.apiGet)
+const apiPost = vi.mocked(http.apiPost)
+const apiDelete = vi.mocked(http.apiDelete)
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('filesController', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  const backendFiles = [
+    {
+      id: '1',
+      filename: 'test.txt',
+      extension: 'txt',
+      size_bytes: 100,
+      uploaded_at: '2026-01-01',
+      tags: ['doc'],
+    },
+    {
+      id: '2',
+      filename: 'data.csv',
+      extension: 'csv',
+      size_bytes: 200,
+      uploaded_at: '2026-01-02',
+      tags: [],
+    },
+  ]
 
-  it('list GETs /files', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [{ id: '1', filename: 'test.txt' }], total: 1 })
+  it('list returns mapped files from array response', async () => {
+    apiGet.mockResolvedValue(backendFiles)
     const result = await filesController.list()
-    expect(result.files.length).toBe(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files')
+    expect(result[0].id).toBe('1')
+    expect(result[0].size).toBe(100)
+    expect(result[0].content_type).toBe('txt')
+    expect(apiGet).toHaveBeenCalledWith('/files/')
   })
 
-  it('list passes sort/order/tag params', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [], total: 0 })
-    await filesController.list('name', 'asc', 'code')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files?sort=name&order=asc&tag=code')
+  it('list handles {files} response', async () => {
+    apiGet.mockResolvedValue({ files: backendFiles })
+    const result = await filesController.list()
+    expect(result).toHaveLength(2)
+    expect(result[0].id).toBe('1')
   })
 
-  it('upload POSTs multipart form data', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '1', filename: 'test.txt', chars: 100, pages: 1, size_bytes: 200 })
-    const file = new File(['hello'], 'test.txt', { type: 'text/plain' })
-    const result = await filesController.upload(file)
-    expect(result.id).toBe('1')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/files/upload', expect.any(FormData), { raw: true })
+  it('list handles empty response', async () => {
+    apiGet.mockResolvedValue(undefined)
+    const result = await filesController.list()
+    expect(result).toEqual([])
   })
 
-  it('upload passes tags in form data', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '2', filename: 'doc.txt', chars: 50, pages: 1, size_bytes: 100 })
-    const file = new File(['data'], 'doc.txt')
-    await filesController.upload(file, ['code', 'docs'])
-    const callArgs = apiClient.apiPost.mock.calls[0][1] as FormData
-    expect(callArgs.get('tags')).toBe('["code","docs"]')
+  it('upload calls apiPost with raw option', async () => {
+    const formData = new FormData()
+    apiPost.mockResolvedValue({ filename: 'test.txt' })
+    const result = await filesController.upload(formData)
+    expect(result).toEqual({ filename: 'test.txt' })
+    expect(apiPost).toHaveBeenCalledWith('/files/upload', formData, { raw: true })
   })
 
-  it('get GETs /files/{id}', async () => {
-    apiClient.apiGet.mockResolvedValue({ id: '1', filename: 'test.txt', extension: '.txt', size_bytes: 200, chars: 100, pages: 1, uploaded_at: 1000, tags: [], text: 'hello' })
-    const result = await filesController.get('1')
-    expect(result.filename).toBe('test.txt')
-    expect(result.text).toBe('hello')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/1')
+  it('delete calls apiDelete with correct path', async () => {
+    apiDelete.mockResolvedValue(undefined)
+    await filesController.delete('abc-123')
+    expect(apiDelete).toHaveBeenCalledWith('/files/abc-123')
   })
 
-  it('delete DELETEs /files/{id}', async () => {
-    apiClient.apiDelete.mockResolvedValue(undefined)
-    await filesController.delete('1')
-    expect(apiClient.apiDelete).toHaveBeenCalledWith('/files/1')
+  it('ingest calls apiPost with correct path', async () => {
+    apiPost.mockResolvedValue(undefined)
+    await filesController.ingest('abc-123')
+    expect(apiPost).toHaveBeenCalledWith('/files/abc-123/ingest')
   })
 
-  it('search GETs /files/search', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [{ id: '1', filename: 'test.txt' }], total: 1 })
-    const result = await filesController.search('hello')
-    expect(result.files.length).toBe(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/search?q=hello')
+  it('search calls apiGet with encoded query', async () => {
+    apiGet.mockResolvedValue({ files: [backendFiles[0]] })
+    const result = await filesController.search('hello world')
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('1')
+    expect(apiGet).toHaveBeenCalledWith('/files/search?q=hello%20world')
   })
 
-  it('search passes tag param', async () => {
-    apiClient.apiGet.mockResolvedValue({ files: [], total: 0 })
-    await filesController.search('hello', 'code')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/search?q=hello&tag=code')
+  it('search handles {files} response', async () => {
+    apiGet.mockResolvedValue({ files: backendFiles })
+    const result = await filesController.search('test')
+    expect(result).toHaveLength(2)
   })
 
-  it('ingest POSTs /files/{id}/ingest', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '1', filename: 'test.txt', chars: 100, facts_stored: 5 })
-    const result = await filesController.ingest('1')
-    expect(result.facts_stored).toBe(5)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/files/1/ingest')
+  it('search handles empty/undefined response', async () => {
+    apiGet.mockResolvedValue(undefined)
+    const result = await filesController.search('test')
+    expect(result).toEqual([])
   })
 
-  it('extract uploads then gets file detail', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: '1', filename: 'test.txt', chars: 100, pages: 1, size_bytes: 200 })
-    apiClient.apiGet.mockResolvedValue({ id: '1', filename: 'test.txt', extension: '.txt', size_bytes: 200, chars: 100, pages: 1, uploaded_at: 1000, tags: [], text: 'extracted content' })
-    const file = new File(['hello'], 'test.txt')
-    const result = await filesController.extract(file)
-    expect(result.text).toBe('extracted content')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/files/upload', expect.any(FormData), { raw: true })
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/files/1')
+  it('startImport posts the url and returns the job id', async () => {
+    apiPost.mockResolvedValue({ job_id: 'abc123' })
+    const result = await filesController.startImport('https://example.com/a.txt')
+    expect(apiPost).toHaveBeenCalledWith('/files/import', { url: 'https://example.com/a.txt' })
+    expect(result.job_id).toBe('abc123')
   })
 
-  describe('formatSize', () => {
-    it('returns B for small sizes', () => {
-      expect(filesController.formatSize(500)).toBe('500 B')
+  it('importStatus reads status from the job route', async () => {
+    apiGet.mockResolvedValue({
+      job_id: 'abc123',
+      state: 'done',
+      filename: 'a.txt',
+      done: 100,
+      total: 100,
+      pct: 100,
+      wire_bytes: 40,
+      saved_bytes: 60,
+      content_encoding: 'gzip',
+      error: null,
     })
-    it('returns KB for medium sizes', () => {
-      expect(filesController.formatSize(2048)).toBe('2.0 KB')
-    })
-    it('returns MB for large sizes', () => {
-      expect(filesController.formatSize(5 * 1024 * 1024)).toBe('5.0 MB')
-    })
+    const result = await filesController.importStatus('abc123')
+    expect(apiGet).toHaveBeenCalledWith('/files/import/abc123')
+    expect(result.state).toBe('done')
+    expect(result.wire_bytes).toBe(40)
+    expect(result.saved_bytes).toBe(60)
   })
 
-  describe('formatDate', () => {
-    it('formats unix timestamp', () => {
-      const result = filesController.formatDate(0)
-      expect(result).toContain('1970')
+  it('importStatus surfaces a running job with unknown total', async () => {
+    apiGet.mockResolvedValue({
+      job_id: 'abc123',
+      state: 'running',
+      filename: 'a.txt',
+      done: 0,
+      total: 0,
+      pct: 0,
+      error: null,
     })
+    const result = await filesController.importStatus('abc123')
+    expect(result.state).toBe('running')
+    expect(result.total).toBe(0)
   })
 })

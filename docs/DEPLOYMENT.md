@@ -63,6 +63,18 @@ docker compose -f infra/docker/docker-compose.yml --profile vector up -d weaviat
 docker compose -f infra/docker/docker-compose.yml up -d api redis prometheus grafana
 ```
 
+### 7. Static frontend through the gateway (recommended)
+
+```bash
+cd apps/web && npm run build:vite     # → apps/web/dist-vite (same-origin build)
+# restart the gateway so it picks the build up as its document root
+```
+
+One origin (gateway `:8080`) serves the shell, relays the API and streams SSE —
+no Node server in the path and no CORS. Deep links get `index.html`; data
+requests relay to the sidecar; the shell still loads when the API is down.
+`main.py --web` is retired (it no longer spawns Next).
+
 ## Environment Configuration
 
 Copy `.env.example` to `.env` and configure:
@@ -106,7 +118,7 @@ helm upgrade --install sloughgpt ./infra/k8s/helm/sloughgpt/ -n sloughgpt --crea
 ### Generation
 - `POST /generate` - Text generation
 - `POST /generate/stream` - Streaming generation
-- `POST /chat/stream` - Chat completion
+- `POST /chat` - Chat completion (SSE streaming — the endpoint's only state)
 
 ### Model
 - `GET /models` - List models
@@ -143,11 +155,11 @@ kubectl scale deployment sloughgpt-api --replicas=3
 
 ```bash
 # Set in .env
-MAN_JWT_SECRET=your-64-char-secret
+SLO_JWT_SECRET=your-64-char-secret
 
 # Or use API keys
-MAN_API_KEY=your-api-key
-MAN_API_KEYS=key1,key2
+SLO_API_KEY=your-api-key
+SLO_API_KEYS=key1,key2
 ```
 
 ## Monitoring
@@ -186,7 +198,7 @@ docker stats
 
 ```bash
 # Force CPU inference
-MAN_FORCE_CPU=true
+SLO_FORCE_CPU=true
 
 # Use a smaller model in settings
 
@@ -200,10 +212,30 @@ nvidia-smi
 # Inference defaults to CPU on MPS to avoid memory issues
 ```
 
+## Free Cloud Deployment
+
+If you don't want to run anything locally, these free tiers can host SloughGPT.
+
+### Frontend — Cloudflare Pages
+- Free, unlimited bandwidth, global CDN.
+- Deploys from GitHub; sets `NEXT_PUBLIC_API_URL` in the dashboard.
+
+### Backend — Render.com
+- Free web service with Docker.
+- URL: `https://<service-name>.onrender.com`
+- Note: 512MB RAM limit; use a quantized or small model.
+
+### Backend — Fly.io
+- Free tier: 3 shared VMs, 160GB outbound/month.
+- Note: 256MB RAM per VM; only viable with 4-bit quantization or a tiny model.
+
+### Important: model size
+The default model checkpoint is ~2.5GB unquantized. Free tiers cannot hold that in memory. For free hosting, use a smaller model or 4-bit quantization.
+
 ## Production Checklist
 
-- [ ] Set secure MAN_JWT_SECRET
-- [ ] Configure API keys (MAN_API_KEY)
+- [ ] Set secure SLO_JWT_SECRET
+- [ ] Configure API keys (SLO_API_KEY)
 - [ ] Enable HTTPS/SSL
 - [ ] Setup monitoring
 - [ ] Configure backups
