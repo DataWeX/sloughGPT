@@ -297,6 +297,84 @@ class TestChatStreamCancel:
         assert isinstance(seen["cancel_event"], threading.Event)
 
 
+class TestStreamTurnBareProbeGates:
+    """Quick-probe flags must gate the context/consciousness pipeline.
+
+    QuickActions "Test model" posts ``use_consciousness=false,
+    use_context_core=false, use_rag=false, session_id='quick-test'``
+    (card 20261112_140010). Before the fix ``stream_turn`` ignored the
+    first two: the consciousness reflection narrative was prepended
+    unconditionally and the 0.5B model answered the narrative instead of
+    the probe; the ContextCore frame also ignored the wire flag that the
+    non-streaming ``chat()`` honored.
+    """
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch(
+        "apps.api.server.routers.inference._apply_consciousness_reflection",
+        new_callable=AsyncMock,
+    )
+    @patch("apps.api.server.routers.inference._build_context_frame", new_callable=AsyncMock)
+    def test_bare_probe_flags_skip_context_and_consciousness(
+        self, mock_frame, mock_reflect, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        mock_frame.return_value = (None, {})
+
+        async def _reflect(messages, corr_id):
+            return messages
+
+        mock_reflect.side_effect = _reflect
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        async def _stream(messages, **kw):
+            yield "ok"
+
+        mock_prov = MagicMock()
+        mock_prov.chat_stream = _stream
+        mock_get_provider.return_value = mock_prov
+
+        # Bare probe: neither pipeline stage may run.
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello!"}],
+                "session_id": "quick-test",
+                "use_consciousness": False,
+                "use_context_core": False,
+                "use_rag": False,
+            },
+        )
+        assert resp.status_code == 200
+        assert not mock_reflect.called, (
+            "use_consciousness=false but _apply_consciousness_reflection still ran"
+        )
+        assert not mock_frame.called, (
+            "use_context_core=false but the ContextCore frame was still built"
+        )
+        assert not mock_enrich.called, (
+            "use_context_core=false but knowledge enrichment still ran"
+        )
+
+        # Defaults (True) keep the production pipeline wired in.
+        mock_frame.reset_mock()
+        mock_reflect.reset_mock()
+        mock_enrich.reset_mock()
+        resp = client.post(
+            "/chat",
+            json={"messages": [{"role": "user", "content": "Hi"}], "session_id": "probe-default"},
+        )
+        assert resp.status_code == 200
+        mock_reflect.assert_called_once()
+        mock_frame.assert_called_once()
+        mock_enrich.assert_called_once()
+
+
 class TestChat:
     """POST /chat"""
 

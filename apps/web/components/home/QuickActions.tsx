@@ -86,6 +86,14 @@ export function QuickActions({
                 try {
                   for await (const token of chatController.stream('Hello!', {
                     waitForModel: true,
+                    // Bare probe: no consciousness reflection, ContextCore
+                    // frame or RAG narrative — and its own session so the
+                    // probe stops polluting the shared 'default' history,
+                    // KV and caches (card 20261112_140010).
+                    session_id: 'quick-test',
+                    use_consciousness: false,
+                    use_context_core: false,
+                    use_rag: false,
                   })) {
                     if (!streamingRef.current) break
                     accumulated += token

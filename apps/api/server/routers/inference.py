@@ -957,7 +957,11 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("Entity extraction failed: %s", e)
 
-    # Consciousness post-processing (narrative surfaced by the caller)
+    # Consciousness post-processing (narrative surfaced by the caller).
+    # Same use_consciousness gate as the pre-gen narrative: a bare probe must
+    # not ingest its exchange into the episode store nor surface a reflection.
+    if not req.use_consciousness:
+        return {"narrative": "", "level": 0}
     return _consciousness_post_process(user_msg, full_response)
 
 
@@ -2147,16 +2151,19 @@ class InferenceRouter:
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
 
-        # Context frame — memory/rag layers via ContextCore, gated on the memory
-        # service holding at least one fact (the gate travels with the frame
-        # builder: empty memory means skip the frame entirely).
+        # Context frame — memory/rag layers via ContextCore, gated on the wire
+        # flag first (use_context_core was previously honored only by the
+        # non-streaming chat(); stream_turn ignored it — card 20261112_140010),
+        # then on the memory service holding at least one fact (the gate travels
+        # with the frame builder: empty memory means skip the frame entirely).
         frame = None
-        try:
-            frame, _context_info = await _build_context_frame(
-                self._get_context_core(), session_id, user_msg, corr_id="stream"
-            )
-        except Exception as e:
-            logger.debug("Context frame build failed: %s", e)
+        if req.use_context_core:
+            try:
+                frame, _context_info = await _build_context_frame(
+                    self._get_context_core(), session_id, user_msg, corr_id="stream"
+                )
+            except Exception as e:
+                logger.debug("Context frame build failed: %s", e)
 
         frame_context = []
         if frame:
@@ -2175,9 +2182,11 @@ class InferenceRouter:
             )
 
         # Knowledge enrichment — only when the frame carried no memory/rag
-        # layer content; facts learned live feed the prompt otherwise.
+        # layer content; facts learned live feed the prompt otherwise. Shares
+        # the use_context_core gate: with context off there is no frame to
+        # fall back from, and a bare probe must not pull learned facts either.
         knowledge_retrieved = []
-        if not frame_context:
+        if req.use_context_core and not frame_context:
             try:
                 enrichment = await asyncio.wait_for(
                     asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
@@ -2224,7 +2233,12 @@ class InferenceRouter:
 
         # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
         # main's chat-pipeline wiring onto the stream_turn restructure).
-        messages = await _apply_consciousness_reflection(messages, "-")
+        # Gated on the wire flag: a bare probe (QuickActions "Test model",
+        # use_consciousness=false) must not receive the reflection system
+        # message — the 0.5B model answered the narrative instead of the
+        # probe (card 20261112_140010).
+        if req.use_consciousness:
+            messages = await _apply_consciousness_reflection(messages, "-")
 
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
@@ -2294,7 +2308,12 @@ class InferenceRouter:
                 session_id,
                 _chat_start_dt,
                 req,
-                self._get_context_core(),
+                # Resolve only when the turn opted into the context stack:
+                # first resolution wires ContextCore (incl. its consciousness
+                # engine) — a bare probe must not drag that in (quick-test
+                # card). None changes nothing downstream: add_response is
+                # gated on req.use_context_core anyway.
+                self._get_context_core() if req.use_context_core else None,
                 self._bg_tasks_lock,
                 self._BG_TASKS,
                 self._bg_tasks_lock_discard,

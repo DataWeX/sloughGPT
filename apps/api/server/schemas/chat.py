@@ -46,6 +46,10 @@ class ChatRequest(BaseModel):
     use_rag: bool = Field(
         default=True, description="Use production RAG for document-grounded responses"
     )
+    use_consciousness: bool = Field(
+        default=True,
+        description="Run the consciousness reflection pipeline for this turn",
+    )
     agent_id: str | None = Field(default=None, description="Agent ID for role-play instructions")
 
     def model_post_init(self, __context: Any) -> None:
@@ -90,6 +94,7 @@ class ChatRequest(BaseModel):
             agent_id=self.agent_id,
             use_context_core=self.use_context_core,
             use_rag=self.use_rag,
+            use_consciousness=self.use_consciousness,
             cancel_event=cancel_event,
             model_fields_set=fields_set,
         )
