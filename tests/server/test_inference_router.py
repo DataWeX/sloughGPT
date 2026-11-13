@@ -357,10 +357,14 @@ class TestStreamTurnBareProbeGates:
         assert not mock_frame.called, (
             "use_context_core=false but the ContextCore frame was still built"
         )
+        assert not mock_enrich.called, (
+            "use_context_core=false but knowledge enrichment still ran"
+        )
 
         # Defaults (True) keep the production pipeline wired in.
         mock_frame.reset_mock()
         mock_reflect.reset_mock()
+        mock_enrich.reset_mock()
         resp = client.post(
             "/chat",
             json={"messages": [{"role": "user", "content": "Hi"}], "session_id": "probe-default"},
@@ -368,6 +372,7 @@ class TestStreamTurnBareProbeGates:
         assert resp.status_code == 200
         mock_reflect.assert_called_once()
         mock_frame.assert_called_once()
+        mock_enrich.assert_called_once()
 
 
 class TestChat:
