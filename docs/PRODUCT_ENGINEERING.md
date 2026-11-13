@@ -1,0 +1,367 @@
+# Product Engineering Map
+
+Source of truth for what we build, why, and how it maps to code.
+Reference this BEFORE writing any new feature, router, or page.
+
+**Primary persona:** Alex the Hobbyist (see `USER_PERSONA.md`)
+**User flows:** See `UX_FLOWS.md`
+
+---
+
+## The model (model, not net)
+
+sloughGPT is a general-AI **model**, not a pile of layers. SloNet (pure-NumPy
+Tensor/autograd, SloTransformer, TokenTree, `.soul`/`.slnc`) is machinery in
+service of the model — never the definition of it. The model is defined by:
+
+- **Capabilities** — what it can do (converse, remember, use tools, learn).
+- **I/O contract** — declared inputs/outputs, versioned with the weights.
+- **Evals** — reproducible checks that prove each capability per release.
+- **Versioning** — weights + tokenizer + contract ship as one unit.
+
+Borrowed weights (HF conversion, distillation) are bootstrap, not destination.
+New work must move at least one of owned architecture, owned objective
+(beyond next-token prediction), owned data toward the model — or say why not.
+
+---
+
+## CCGT fairness rule (Cognitive, Core, Gateway, Training)
+
+The only four domains. Every piece ships all four or it doesn't ship:
+
+| Domain        | Question it answers                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| **Cognitive** | How does this integrate with reasoning, memory, souls, attention?                                   |
+| **Core**      | Where does it live in the serving core (engine, providers, KV, queues)?                             |
+| **Gateway**   | How is this exposed and optimized at the edge (filtering, streaming relay, timeouts, load shaping)? |
+| **Training**  | How is this learned or improved (objective, data, loop)?                                            |
+
+No Core-only work that leaves the other three behind. The gateway is a
+domain, not plumbing — it is how we optimize the core infra stack's exposure,
+so it must be built well: generic byte-relay, zero-buffer streaming, strict
+filters, never duplicated model logic.
+
+---
+
+## Engine-first
+
+`InferenceEngine` + `SloNetServer` is the core everything flows through.
+Harden it before adding features. Perf budgets are acceptance gates:
+
+- Facade dispatch overhead: sub-millisecond (respond/stream).
+- KV-cache session reuse across turns; prefix-stable prompts where possible.
+- Zero-buffer token streaming end to end; per-route timeouts.
+- Benchmark before/after (`scripts/benchmark_latency.py`,
+  `scripts/benchmark_kv_cache.py`); >20% regression reverts.
+
+---
+
+## Client / core separation
+
+Clients (web, CLI, mobile, SDK) stay out of core infra so both sides stay
+writable — and the Gateway domain, which owns edge optimization, talks to core
+only through the same stable interfaces:
+
+- Web → FastAPI over HTTP, exclusively via `http-client.ts`
+  (`apiGet/apiPost/...`) — never raw `fetch`, never `domain/*` imports.
+- API server → engine over the length-prefixed TCP protocol
+  (`inference_protocol.py`) via `InferenceClient`, or in-process through the
+  provider registry — never by reaching into engine internals.
+- Gateway → core as a generic byte-relay with filters (no model logic
+  duplicated at the edge); same interface discipline as any client.
+- No client imports from `domain.*_internal*`; no core file imports from
+  `apps/web`, `apps/cli`, or `apps/gateway`.
+
+### Three-tier deployment (shell-core seam, card `ad4f5ec2`)
+
+One domain core, two runtimes, one contract:
+
+| Tier        | Who                               | Talks to the core via                 | Serves                        |
+| ----------- | --------------------------------- | ------------------------------------- | ----------------------------- |
+| **Model**   | `sloughgpt` shell binary, scripts | in-process `domain/` calls (default)  | itself; `--remote` demotes it |
+| **Cloud**   | API server (`api start`)          | HTTP only (auth, SSE, sessions)       | web UI + remote clients       |
+| **Clients** | web, mobile, SDK, CLI             | the one descriptor-projected contract | —                             |
+
+The shell is part of the model tier: every shell command dispatches to an
+in-process handler (`domain/shell/_internal/local_api.py`) and needs no
+server. `MAN_API_URL` or `shell --remote` flips the whole process to remote
+mode, where the same commands ride HTTP to an API server instead. The API
+server never imports shell code; clients never import `domain.*`.
+
+---
+
+## Core Features (what Alex actually uses)
+
+| #   | Feature       | What Alex does                         | Domain module                 | API prefix                       | Frontend page |
+| --- | ------------- | -------------------------------------- | ----------------------------- | -------------------------------- | ------------- |
+| 1   | **Chat**      | Talks to AI, AI remembers              | `chat`, `memory`, `companion` | `/chat`, `/memory`, `/companion` | `/chat`       |
+| 2   | **Train**     | Picks data, clicks train, sees results | `training`                    | `/training`                      | `/training`   |
+| 3   | **Datasets**  | Imports data to train on               | `training` (DatasetManager)   | `/datasets`                      | `/datasets`   |
+| 4   | **Models**    | Switches between trained models        | `models`, `inference`         | `/models`, `/infer`              | `/models`     |
+| 5   | **Souls**     | Gives AI a personality                 | `soul`, `ai_personality`      | `/souls`                         | `/souls`      |
+| 6   | **Knowledge** | AI learns from files/docs              | `knowledge`                   | `/knowledge`                     | `/knowledge`  |
+| 7   | **Tools**     | Writing, translate, rewrite, etc.      | `tools`                       | `/tools`                         | `/tools`      |
+
+## Power User Features (Alex might discover later)
+
+| #   | Feature       | What Alex does                | Domain module | API prefix   | Frontend page |
+| --- | ------------- | ----------------------------- | ------------- | ------------ | ------------- |
+| 8   | **Benchmark** | Checks if model improved      | `benchmark`   | `/benchmark` | `/benchmark`  |
+| 9   | **Feedback**  | Rates AI responses, AI learns | `feedback`    | `/feedback`  | `/feedback`   |
+| 10  | **Settings**  | Tweak behavior                | `settings`    | `/settings`  | `/settings`   |
+
+## System Features (Alex never sees)
+
+| #   | Feature        | What it does    | Domain module    | API prefix | Frontend page |
+| --- | -------------- | --------------- | ---------------- | ---------- | ------------- |
+| 11  | **Shell**      | Terminal access | `shell`          | `/shell`   | `/shell`      |
+| 12  | **VM**         | Linux VM        | `shell`          | `/vm`      | `/vm`         |
+| 13  | **Monitoring** | System health   | `infrastructure` | `/system`  | `/monitoring` |
+| 14  | **Developer**  | API调试         | `infrastructure` | `/infer`   | `/developer`  |
+
+## Experimental / Not Yet Integrated
+
+| #   | Feature              | Status     | Domain module          | Notes                                                                                                                                                                 |
+| --- | -------------------- | ---------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 15  | **Consciousness**    | Wired      | `consciousness`        | Level-gated post-gen wiring (SloEngine hook + router `_run_post_gen_tasks`); narrative via reasoning_chain + `CONSCIOUSNESS` SSE; 27 sub-pages still need flow review |
+| 16  | **Voice**            | Partial    | `voice`                | TTS works, phoneme encode works; router imports the `domain.voice` facade                                                                                             |
+| 17  | **Phoneme Learning** | Over-built | `voice` (phoneme)      | 47 components, 12 tabs — needs flow restructure                                                                                                                       |
+| 18  | **Tokenizer**        | Over-built | `training` (tokenizer) | 9 tabs, 12 sub-cards — needs consolidation                                                                                                                            |
+| 19  | **Companion**        | Built      | `companion`            | AI companion with personality                                                                                                                                         |
+| 20  | **Agents**           | Built      | `agents`               | Agentic tool execution                                                                                                                                                |
+
+---
+
+## Feature-Level API Rule
+
+Each feature must have a **single engine/service class** in its domain module that
+wraps all capabilities. The router delegates to this engine. The frontend calls
+feature-level endpoints, not implementation-level endpoints.
+
+### Good examples (reference these)
+
+**Tools** — `domain/tools/`:
+
+```
+ToolsEngine
+  ├── get_tool_profiles() → list of available tools
+  ├── render_prompt(tool_id, params) → rendered prompt
+  └── generate(tool_id, params, callbacks) → streamed output
+
+Router: GET /tools, POST /tools/{id}/generate
+Frontend: tools-controller.ts → 1 page with tool selector
+```
+
+**Collections** — `domain/collections/`:
+
+```
+Registry
+  ├── list_pipelines()
+  ├── create_pipeline(config)
+  ├── run_pipeline(id)
+  └── get_stats()
+
+Router: GET /collections, POST /collections/create, POST /collections/run
+Frontend: collections page (single page)
+```
+
+### Bad examples (fix these)
+
+> **Status 2026-11-09 (card `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`, routers out of `domain.*_internal*`):** every route-surface module is now facade-clean — `routers/`, `controllers/`, and feature-package sub-routers. Re-measured 2026-11-09: **8 of 66 route-surface files** still imported `_internal` (all in `training/`: distill, execution, from_feedback, jobs_api, legacy, lora, turbo_endpoints, visual — 33 sites), migrated 1:1 through the `domain.training` / `domain.feedback` / `domain.infrastructure` facades. The rule is executable and structural: `test_layer_conformance.py` AST-scans every production module that constructs an `APIRouter`, applies a route decorator, or calls `add_api_route` — the directory list that missed these 8 is gone, and the `world_render` agreed zone is dropped to empty (verified clean). Voice/tokenizer/token_tree/kb were fixed earlier (2026-09-29 note below); `self_train`/`lora_eval` were clean when measured. The three "bad examples" remain as pattern illustrations of the pre-fix state.
+
+**Voice** — 3 routers, domain bypassed:
+
+```
+voice.py router → imports from domain.multimodal._internal.tts (WRONG)
+tokenizer.py router → imports from domain.training._internal.tokenizer_manager (WRONG)
+token_tree.py router → imports from domain.training._internal.token_tree_manager (WRONG)
+
+Should be:
+VoiceEngine → wraps TTS + phoneme + recognition from domain.voice
+TokenizerEngine → wraps tokenizer from domain.training
+Single router per engine, not per implementation module
+```
+
+**Knowledge** — 1 monolith router, domain bypassed:
+
+```
+kb.py (1399 lines) → imports from domain.learner._internal.knowledge (WRONG)
+7 features inline: CRUD, RAG, training, spaced repetition, files, categorization, adapter
+
+Should be:
+KnowledgeEngine → wraps KnowledgeMemory + KnowledgeIngestor + DataFilter from domain.knowledge
+Router delegates to engine methods
+```
+
+**Training** — 7 routers, no unifying engine:
+
+```
+training/router.py, training/{self_train,lora_eval,cloud_training}.py,
+tokenizer.py, token_tree.py → all import from domain.training._internal.* (WRONG)
+
+Should be:
+TrainingEngine → wraps DatasetManager + TrainingPipeline + ModelManager from domain.training
+Single /training router with sub-paths for each feature
+```
+
+---
+
+## Router Playbook
+
+How to build a Python API router in this repo. FastAPI's `@router.get` /
+`@router.post` decorators are the right idiom — the rules are about what lives
+in the handler, not the decorator. Endpoint inventory: [`routers.md`](routers.md).
+Before adding a capability at all, the contract-first pattern in
+[`TRANSPORT_PROJECTIONS.md`](TRANSPORT_PROJECTIONS.md) applies (descriptor →
+projected route, not a new endpoint project). Philosophy:
+[`PYTHON_FIRST.md`](PYTHON_FIRST.md) §4 "Web router is just plumbing".
+
+**1. One package per feature.** `apps/api/server/<feature>/{router.py, schemas.py, ...}`
+— reference: `apps/api/server/training/`.
+
+**2. Handler = HTTP only.** Parse/validate → call the engine → envelope.
+Zero business logic, zero `_internal` imports (`grep -c _internal` must be 0):
+
+```python
+from schemas.common import raise_error, safe_audit_log, success_response
+from domain.training import get_training_engine   # facade; function-local, lazy
+
+
+@router.delete("/training/checkpoints/{name}")
+async def training_delete_checkpoint(name: str):
+    engine = get_training_engine()
+    if not engine.is_valid_checkpoint_name(name):
+        raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
+    deleted = await engine.delete_checkpoint(name)
+    if deleted:
+        safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
+    return success_response(data={"deleted": deleted, "name": name})
+```
+
+**3. One engine per feature** (rule above). Engines may import `_internal` —
+they own the domain. Routers never do.
+
+**4. Error classification.**
+
+- Request problem (bad input, missing resource) → `raise_error(msg, "E_*", status_code=...)`
+  at the edge; no exception machinery.
+- Unexpected exception → let it bubble to the endpoint, then
+  `classify_and_raise(e, source="feature.op")`.
+- Expected domain failure → engine returns an envelope with
+  `metadata.code = "E_*"`; router passes it through.
+
+**5. Envelopes + audit.** Always `success_response(data=...)` from
+`schemas.common`; durable side effects get `safe_audit_log(...)`.
+
+**6. Async.** `async def` endpoints; blocking work runs via the training
+executor or an engine-managed thread — never block the event loop.
+
+**7. Registration.** Add to `get_all_routers()` in
+`apps/api/server/routers/__init__.py` (health/status register pre-lifespan).
+
+**8. Tests patch the facade.** Patch `domain.<feature>.get_x` / the engine
+method — the symbol the router actually looks up — never router-module
+symbols: renaming a router import breaks `mock.patch("training.router.x")`
+fixtures with `AttributeError` at setup (see `test_training_recovery_router.py`).
+
+**9. Controllers proxy; they never reach `_internal`.** The seam is
+router → controller → engine → domain. `apps/api/server/controllers/*`
+carry a router's import rule: public `domain.<feature>` facades only
+(`from domain.training import get_training_executor`), never
+`domain.*._internal.*` — orchestration shared between routers lives in a
+controller, but its imports are governed exactly like a router's. Both
+layers are checked by an AST import scan in
+`tests/test_layer_conformance.py`, which since card `20261101_140447`
+scans the **structural** route surface — every production module that
+constructs an `APIRouter`, applies a route decorator, or calls
+`add_api_route`, feature packages included (the directory list missed
+`training/`'s 8 sub-routers) — with **no agreed zones left** (shell/vm/
+api_keys merged away; `world_render` verified clean, zone emptied);
+controllers allow none.
+
+**Facade binding rule.** Names the API layer reads must resolve LAZILY
+from a facade (`_LAZY_IMPORTS` + `__getattr__`), never eagerly at facade
+import: eager binding freezes the pre-patch object and silently defeats
+tests that patch `domain.<feature>._internal.<module>..<name>`, while a
+lazy lookup re-reads the attribute at call time so BOTH patch styles
+(`domain.training.get_state` and
+`domain.training._internal.service.get_state`) keep working. When a name
+has more than one historical read point (e.g. `get_state`, re-exported by
+`_internal.service` from `_internal.state`), map the facade to the module
+the tests actually patch.
+
+**Checklist:** conformance green (`pytest tests/test_layer_conformance.py`)
+→ registered → ruff → router's tests green.
+
+---
+
+## UI Design Rules (from USER_PERSONA.md)
+
+1. **One-click training** — Default settings work for 90% of cases
+2. **Jargon-free** — Never say "LoRA", "GRPO", "KL coefficient" in UI
+3. **Progressive disclosure** — Results first, details on click, expert settings behind toggle
+4. **Plain language** — "Training complete! Your AI now knows Shakespeare" not "loss=1.2345"
+5. **Visual, not numerical** — Loss chart with down arrow = good
+6. **Features are flows, not tools** — Don't expose 12 phoneme tools, expose a pronunciation learning flow
+7. **One app-wide banner** — journey-blocking alerts (training failed, backend down) go through the global banner system (`useBannerStore` + `<GlobalBanner />` in `AppLayout`) so they survive navigation; toasts only for transient confirmations
+
+---
+
+## Route Map (what exists vs what should exist)
+
+### Current: 73 frontend pages, 58 routers
+
+### Target: ~20 frontend pages, ~15 routers
+
+**Status legend:** ✅ done / 🔧 partial (nav-level) / ⏳ pending
+
+| Target Page   | Current Pages That Merge                                                                   | Routers That Merge                                                            | Status                                                                                                                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/chat`       | `/chat` (already clean)                                                                    | `inference.py`                                                                | ✅                                                                                                                                                                                                                                         |
+| `/training`   | `/training` + `/self-train` + `/lora-eval` + `/auto-train` + `/datasets` + 12 sub-pages    | `training/router.py` (incl. `self_train.py` + `lora_eval.py` + `cloud_training.py` sub-routers) | ✅ nav-level: sidebar keeps `/training` + `/training/runs`; `/self-train` `/learn` `/auto-train` 307 → `/training` (`redirects.ts`, redirect rows pinned in `visual-headers.cy.ts`), no sub-page stragglers — router consolidation ✅ 2026-11-09 (card `20261101_154058`: the three routers moved into `training/` as descriptor projections, manifest 46→43, hand-built baseline −10, paths byte-identical; stale `/auto-train` `/self-train` + training sub-page `SIDEBAR_ICONS` entries shrunk)                                                                                                                                                      |
+| `/datasets`   | `/datasets` + `/dataset/[id]`                                                              | `datasets.py`                                                                 | ✅                                                                                                                                                                                                                                         |
+| `/models`     | `/models` + `/model/[id]` + `/infer` + `/registry`                                         | `models.py` + `infer.py` + `registry.py`                                      | ✅                                                                                                                                                                                                                                         |
+| `/souls`      | `/souls` + `/personality` + `/companion`                                                   | `souls.py` + `companion.py`                                                   | ✅ frontend done: `/personality` folded into `/souls` (Personality tab, 307 for `/personality`, card 20261101_154055); router done: `companion.py` merged verbatim into `souls.py` (same card)                                             |
+| `/knowledge`  | `/knowledge` + `/kb` + `/docstore` + `/learn`                                              | `kb.py` + `learner.py`                                                        | ✅ frontend done: [id] detail composed into /knowledge as a ?id=-driven fold (card-3 pattern; list click pushes /knowledge?id=), /kb + /docstore + /memory 307s already pinned, visual-headers redirect-source rows deduped (card 20261101_154056); router done: `learner.py` merged verbatim into `kb.py` (same card) |
+| `/tools`      | `/tools` + `/writing` + `/rewrite` + `/translate` + `/explain` + `/brainstorm` + `/decide` | `tools.py` (already clean)                                                    | ✅ all 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), API-only `tools.py`                                                                                                                                                    |
+| `/benchmark`  | `/benchmark` + `/experiments`                                                              | `benchmark.py` + `experiments.py`                                             | ✅ nav-level: headless — no nav/sidebar entry (commit `04fe3b283`); page kept as a hidden deep-link surface (whats-new link, Power-User discovery) alongside the headless `POST /benchmark/score` + `config/bench_weights.yaml` API for Maya/Jon CI gating                                                                                                                                                      |
+| `/feedback`   | `/feedback` + `/meta-weights` + `/workflow`                                                | `feedback.py` + `meta_weights.py` + `workflow.py`                             | ✅ nav-level: kept in sidebar (Venn center for Maya/Jon) — `/feedback` page + nav entry present                                                                                                                                                                                              |
+| `/settings`   | `/settings` + `/admin` + `/security` + `/api-keys` + `/rate-limit`                         | `settings.py` + `security.py`                                                 | ✅ frontend done: /admin,/security,/api-keys,/rate-limit pages removed earlier (redirects pinned), visual-headers dedupe (card 20261101_154056); router done: `security.py` + `api_keys.py` merged verbatim into `settings.py` (same card) |
+| `/shell`      | `/shell` + `/vm` + `/developer`                                                            | `shell.py` + `vm.py`                                                          | ✅ frontend done: /vm page removed (redirect + contract pinned), VM folded into /developer as its 7th tab, visual-headers dedupe (card 20261101_154057); router done: `vm.py` merged verbatim into `shell.py` (same card)                  |
+| `/voice`      | `/voice` + `/phoneme` + `/tokenizer` + `/token-tree`                                       | `voice.py` + `tokenizer.py` + `token_tree.py`                                 | ✅ nav-level: `/voice` page removed → 307 `/chat?mode=talk` (`redirects.ts`, pinned by `redirect-plugin.test.ts`), no nav entry; phoneme split to model-capability card `20261108_152007`                                                                                                                                                             |
+| `/memory`     | `/memory` (already clean)                                                                  | `memory.py`                                                                   | ✅                                                                                                                                                                                                                                         |
+| `/files`      | `/files` + `/images`                                                                       | `files.py` (images.py merged in)                                              | ✅ frontend done: images page absorbed into `/files` (307 for `/images`, card 7839a7c6); router done: `images.py` merged verbatim into `files.py` (card 20261101_154058)                                                                   |
+| `/monitoring` | `/monitoring` + `/errors` + `/session`                                                     | `system.py` (errors.py + session.py merged in)                                | ✅ frontend done: session views composed onto `/monitoring` (Load Session → inspector grid + messages, card 20261101_154058); router done: `errors.py` + `session.py` merged verbatim into `system.py` (same card)                         |
+
+> **Persona rule for benchmarking (from USER_PERSONA.md):** `/benchmark` has no entry in Alex's sidebar (he gets an inline training verdict) and is not part of Alex's journeys — the `/benchmark` page exists only as a hidden deep-link surface (whats-new link, Power-User discovery), while `POST /benchmark/score` + `config/bench_weights.yaml` is the headless API for Maya/Jon CI gating (USER_PERSONA.md marks it ❌ hidden for Alex, ✅ core for Maya/Jon). Do not reintroduce a benchmark page into the sidebar.
+
+---
+
+## Dead Code to Remove
+
+| What                            | Why                                       | Action                                                                                               |
+| ------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `routers/metrics.py`            | No frontend consumer, infrastructure-only | Delete or move to internal                                                                           |
+| `routers/collections.py`        | No frontend page or controller            | Delete (feature unused)                                                                              |
+| `routers/feeds.py`              | RSS feeds, no web frontend consumer       | Move to internal or delete                                                                           |
+| `routers/api_keys.py`           | Duplicate of `security.py` (same prefix)  | ✅ done (card `20261101_154056`): merged with `security.py` into `settings.py`, both modules deleted |
+| `routers/session_store.py`      | Utility module, not a router              | Move to `controllers/` or `infrastructure/`                                                          |
+| Phoneme: 47 components          | Over-built for Alex's needs               | Keep components, restructure page into flow                                                          |
+| Tokenizer: 9 tabs, 12 sub-cards | Over-built                                | Consolidate into 2-3 sections                                                                        |
+| Consciousness: 27 sub-pages     | Engine wired; pages still over-built      | Keep pages, review flows against UX_FLOWS.md                                                         |
+
+---
+
+## Build Order (what to do next)
+
+1. **Write this doc** ✅ (you're reading it)
+2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed
+3. **Feature engines** ✅ — VoiceEngine, KnowledgeEngine, TrainingEngine (ToolsEngine pattern) + `get_*_engine` facade exports, routers wired
+4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across the whole route surface — enforced by `tests/test_layer_conformance.py`, structural since card `20261101_140447`: feature-package sub-routers included, no agreed zones remain; facade lazy exports added for heavy symbols; tests may patch facade or `_internal` paths — lazy binding keeps both visible)
+5. **UI flows** ✅ (2026-11-08) — knowledge + training restructured to follow UX_FLOWS.md: knowledge = ReadMyFilesCard hero + `?id=` detail fold (cards `20260924_058`, `20261101_154056`); training = "Teach me" 3-step pipeline with progressive disclosure + plain-language guard (`training-plain-language.test.tsx` — "Training round" never "Epoch", LoRA-free adapter surface; loss numbers stay per the 3-Click Flow, user ruling 2026-11-08). **Phoneme split out** to card `20261108_152007` — user ruling: it is *model* capability (voice/TTS/tokenizer infra), not a dictionary/learning UI; journey charter decision lives there, not here.
+6. **Consciousness** ✅ — wire cognitive engine to inference pipeline (SloEngine post-gen hook + router single process, level-gated via `ConsciousnessConfig.level`; narrative surfaced through `reasoning_chain` and `CONSCIOUSNESS complete` SSE)
+7. **Test** ✅ (2026-11-09) — verify all user journeys pass: `test_user_journeys.py` **103 passed** against this checkout's live stack (card `20261101_140446`, run with `SLO_WEB_URL`/`SLO_API_URL` — the default `:5173` pointed at a foreign session's tree, caught and re-run; skip-if-unreachable + dead-port negative control prove the env drives the target), avion `test_journeys.py` **3 passed** (FakeBackend), `run_journey_tests.py` **8/8 API + 8/8 Playwright** (exit 0, `--base-url` this checkout's vite). DoD 4 in `ROADMAP.md` closes with this card.
+
+---
+
+_This doc is the source of truth. When in doubt, reference it. When building, follow it._

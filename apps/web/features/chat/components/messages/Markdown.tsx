@@ -1,29 +1,24 @@
 'use client'
 
-import { memo, useMemo, useRef, useState } from 'react'
+/**
+ * Markdown — custom markdown parser with lazy Prism highlighting.
+ *
+ * Parses markdown into React nodes incrementally:
+ * - During streaming, only re-parses the trailing incomplete block
+ * - Code blocks use lazy-loaded Prism languages via dynamic CodeBlock
+ * - Full re-parse on content shrink (edit/regenerate)
+ */
+
+import { memo, useMemo, useRef, useCallback } from 'react'
+import dynamic from '@/vite/next-compat/dynamic'
 import { cn } from '@sloughgpt/strui'
-import Prism from 'prismjs'
-import 'prismjs/components/prism-typescript'
-import 'prismjs/components/prism-javascript'
-import 'prismjs/components/prism-jsx'
-import 'prismjs/components/prism-tsx'
-import 'prismjs/components/prism-python'
-import 'prismjs/components/prism-bash'
-import 'prismjs/components/prism-json'
-import 'prismjs/components/prism-markdown'
-import 'prismjs/components/prism-yaml'
-import 'prismjs/components/prism-rust'
-import 'prismjs/components/prism-go'
-import 'prismjs/components/prism-java'
-import 'prismjs/components/prism-css'
-import 'prismjs/components/prism-sql'
-import 'prismjs/components/prism-c'
-import 'prismjs/components/prism-cpp'
-import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
+
+const CodeBlock = dynamic(() => import('./CodeBlock').then((m) => m.CodeBlock), { ssr: false })
 
 interface MarkdownProps {
   content: string
   className?: string
+  isStreaming?: boolean
 }
 
 function InlineCode({ children }: { children: string }) {
@@ -34,72 +29,134 @@ function InlineCode({ children }: { children: string }) {
   )
 }
 
-/** Strip all HTML tags except safe span elements from Prism output. */
-function sanitizeHtml(html: string): string {
-  return html.replace(/<(?!\/?span\b|\/?code\b)[^>]*>/g, (tag) => {
-    if (tag.startsWith('<script') || tag.startsWith('<iframe') || tag.startsWith('<object') || tag.startsWith('<embed')) return ''
-    return tag.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  })
+/**
+ * Sources an <img> may load. Mirrors the link allowlist, plus raster-only
+ * data URLs: `data:image/svg+xml` and `data:text/html` can execute script in
+ * some contexts, so only png/jpeg/gif/webp/avif inline data is accepted.
+ */
+const SAFE_IMAGE_SRC = /^(https?:|\/|#|data:image\/(?:png|jpe?g|gif|webp|avif);)/i
+
+function isSafeImageSrc(src: string): boolean {
+  return SAFE_IMAGE_SRC.test(src)
 }
 
-function highlightCode(code: string, language: string): string {
-  const lang = language.toLowerCase()
-  const grammar = Prism.languages[lang]
-  if (grammar) {
-    return sanitizeHtml(Prism.highlight(code, grammar, lang))
-  }
-  return code
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
+function parseInline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = []
+  let remaining = text
+  let key = 0
 
-function CodeBlock({ language, code }: { language: string; code: string }) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
-  }
-  const highlighted = useMemo(() => highlightCode(code, language), [code, language])
-  return (
-    <div className="relative my-3 rounded-xl border border-border/40 bg-[#1a1a2e]/60 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-white/[0.03]">
-        <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">{language || 'code'}</span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
-          aria-label="Copy code"
+  while (remaining.length > 0) {
+    let match: RegExpMatchArray | null
+
+    // Inline code
+    match = remaining.match(/`(.+?)`/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) parts.push(remaining.slice(0, idx))
+      parts.push(<InlineCode key={key++}>{match[1]}</InlineCode>)
+      remaining = remaining.slice(idx + match[0].length)
+      continue
+    }
+
+    // Bold
+    match = remaining.match(/\*\*(.+?)\*\*/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) parts.push(remaining.slice(0, idx))
+      parts.push(<strong key={key++}>{match[1]}</strong>)
+      remaining = remaining.slice(idx + match[0].length)
+      continue
+    }
+
+    // Strikethrough
+    match = remaining.match(/~~(.+?)~~/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) parts.push(remaining.slice(0, idx))
+      parts.push(
+        <del key={key++} className="text-muted-foreground/70">
+          {match[1]}
+        </del>,
+      )
+      remaining = remaining.slice(idx + match[0].length)
+      continue
+    }
+
+    // Italic (must come after bold and strikethrough)
+    match = remaining.match(/\*(.+?)\*/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) parts.push(remaining.slice(0, idx))
+      parts.push(<em key={key++}>{match[1]}</em>)
+      remaining = remaining.slice(idx + match[0].length)
+      continue
+    }
+
+    // Image — MUST precede Link: ![alt](url) contains [alt](url), so the
+    // link regex below would otherwise match the inner text and render a
+    // literal "!" followed by an <a>.
+    match = remaining.match(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) parts.push(remaining.slice(0, idx))
+      const alt = match[1]
+      const src = match[2]
+      if (isSafeImageSrc(src)) {
+        parts.push(
+          <img
+            key={key++}
+            src={src}
+            alt={alt}
+            loading="lazy"
+            className="my-1 max-h-[24rem] max-w-full rounded-md border border-border/50 align-middle"
+          />,
+        )
+      } else {
+        // Unusable src (javascript:, data:text/html, data:image/svg+xml):
+        // keep the source text verbatim so nothing executes or loads.
+        parts.push(match[0])
+      }
+      remaining = remaining.slice(idx + match[0].length)
+      continue
+    }
+
+    // Link
+    match = remaining.match(/\[(.+?)\]\((.+?)\)/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) parts.push(remaining.slice(0, idx))
+      const href = match[2]
+      const isSafeUrl = /^(https?:|mailto:|#|\/)/i.test(href)
+      parts.push(
+        <a
+          key={key++}
+          href={isSafeUrl ? href : '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline underline-offset-2 hover:text-primary/80"
         >
-          {copied ? (
-            <span className="text-success">Copied</span>
-          ) : (
-            <>
-              <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="5" y="5" width="8" height="8" rx="1.5" />
-                <path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" />
-              </svg>
-              Copy
-            </>
-          )}
-        </button>
-      </div>
-      <pre className="overflow-x-auto px-4 py-3 text-[13px] leading-[1.6] font-mono">
-        {language ? (
-          <code dangerouslySetInnerHTML={{ __html: highlighted }} />
-        ) : (
-          <code>{code}</code>
-        )}
-      </pre>
-    </div>
-  )
+          {match[1]}
+        </a>,
+      )
+      remaining = remaining.slice(idx + match[0].length)
+      continue
+    }
+
+    parts.push(remaining)
+    break
+  }
+
+  return parts
 }
 
-function parseMarkdown(text: string): React.ReactNode[] {
-  const lines = text.split('\n')
+/** Parse a single markdown block (paragraph, list, heading, etc.) */
+function parseBlock(
+  lines: string[],
+  startIdx: number,
+  isStreaming: boolean,
+): { nodes: React.ReactNode[]; nextIdx: number } {
   const nodes: React.ReactNode[] = []
-  let i = 0
+  let i = startIdx
   let key = 0
 
   while (i < lines.length) {
@@ -116,7 +173,14 @@ function parseMarkdown(text: string): React.ReactNode[] {
         i++
       }
       i++ // skip closing ```
-      nodes.push(<CodeBlock key={key++} language={lang} code={codeLines.join('\n')} />)
+      nodes.push(
+        <CodeBlock
+          key={key++}
+          language={lang}
+          code={codeLines.join('\n')}
+          isStreaming={isStreaming}
+        />,
+      )
       continue
     }
 
@@ -127,13 +191,22 @@ function parseMarkdown(text: string): React.ReactNode[] {
       continue
     }
 
-    // Table detection: look for header row, separator row, then data rows
-    if (line.includes('|') && i + 1 < lines.length && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])) {
-      const headerCells = line.split('|').map(c => c.trim()).filter(Boolean)
-      i += 2 // skip header + separator
+    // Table detection
+    if (
+      line.includes('|') &&
+      i + 1 < lines.length &&
+      /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])
+    ) {
+      const splitCells = (row: string) =>
+        row
+          .split('|')
+          .slice(1, -1)
+          .map((c) => c.trim())
+      const headerCells = splitCells(line)
+      i += 2
       const rows: string[][] = []
       while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
-        rows.push(lines[i].split('|').map(c => c.trim()).filter(Boolean))
+        rows.push(splitCells(lines[i]))
         i++
       }
       nodes.push(
@@ -142,7 +215,10 @@ function parseMarkdown(text: string): React.ReactNode[] {
             <thead>
               <tr>
                 {headerCells.map((cell, ci) => (
-                  <th key={ci} className="border-b border-border/40 bg-muted/40 px-3 py-2 text-left font-medium text-muted-foreground">
+                  <th
+                    key={ci}
+                    className="border-b border-border/40 bg-muted/40 px-3 py-2 text-left font-medium text-muted-foreground"
+                  >
                     {parseInline(cell)}
                   </th>
                 ))}
@@ -160,7 +236,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>,
       )
       continue
     }
@@ -170,16 +246,19 @@ function parseMarkdown(text: string): React.ReactNode[] {
     if (headingMatch) {
       const level = headingMatch[1].length
       const headingText = headingMatch[2]
-      const Tag = `h${level}` as keyof React.JSX.IntrinsicElements
+      const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
       nodes.push(
-        <Tag key={key++} className={cn(
-          'font-semibold mt-3 mb-1',
-          level === 1 && 'text-base',
-          level === 2 && 'text-sm',
-          level >= 3 && 'text-xs',
-        )}>
+        <Tag
+          key={key++}
+          className={cn(
+            'font-semibold mt-3 mb-1',
+            level === 1 && 'text-base',
+            level === 2 && 'text-sm',
+            level >= 3 && 'text-xs',
+          )}
+        >
           {parseInline(headingText)}
-        </Tag>
+        </Tag>,
       )
       i++
       continue
@@ -192,13 +271,18 @@ function parseMarkdown(text: string): React.ReactNode[] {
       i++
       while (i < lines.length) {
         const m = lines[i].match(/^>\s?(.*)/)
-        if (m) { bqLines.push(m[1]); i++ }
-        else break
+        if (m) {
+          bqLines.push(m[1])
+          i++
+        } else break
       }
       nodes.push(
-        <blockquote key={key++} className="border-l-2 border-primary/30 pl-4 my-3 py-1 text-sm text-muted-foreground italic break-words bg-primary/[0.03] rounded-r-lg">
+        <blockquote
+          key={key++}
+          className="border-l-2 border-primary/30 pl-4 my-3 py-1 text-sm text-muted-foreground italic break-words bg-primary/[0.03] rounded-r-lg"
+        >
           {bqLines.join('\n')}
-        </blockquote>
+        </blockquote>,
       )
       continue
     }
@@ -209,12 +293,19 @@ function parseMarkdown(text: string): React.ReactNode[] {
       const checked = taskMatch[1] !== ' '
       const items: React.ReactNode[] = []
       items.push(
-        <li key={`li-0`} className="text-sm flex items-start gap-1.5">
-          <span className={cn('mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border', checked ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+        <li key="li-0" className="text-sm flex items-start gap-1.5">
+          <span
+            className={cn(
+              'mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border',
+              checked
+                ? 'bg-primary border-primary text-primary-foreground'
+                : 'border-muted-foreground/40',
+            )}
+          >
             {checked && <span className="text-[10px]">✓</span>}
           </span>
           {parseInline(taskMatch[2])}
-        </li>
+        </li>,
       )
       i++
       let liKey = 1
@@ -224,16 +315,27 @@ function parseMarkdown(text: string): React.ReactNode[] {
           const c = m[1] !== ' '
           items.push(
             <li key={`li-${liKey++}`} className="text-sm flex items-start gap-1.5">
-              <span className={cn('mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border', c ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+              <span
+                className={cn(
+                  'mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border',
+                  c
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-muted-foreground/40',
+                )}
+              >
                 {c && <span className="text-[10px]">✓</span>}
               </span>
               {parseInline(m[2])}
-            </li>
+            </li>,
           )
           i++
         } else break
       }
-      nodes.push(<ul key={key++} className="space-y-0.5 my-1">{items}</ul>)
+      nodes.push(
+        <ul key={key++} className="space-y-0.5 my-1">
+          {items}
+        </ul>,
+      )
       continue
     }
 
@@ -241,15 +343,29 @@ function parseMarkdown(text: string): React.ReactNode[] {
     const ulMatch = line.match(/^[-*]\s+(.*)/)
     if (ulMatch) {
       const items: React.ReactNode[] = []
-      items.push(<li key={`li-0`} className="text-sm">{parseInline(ulMatch[1])}</li>)
+      items.push(
+        <li key="li-0" className="text-sm">
+          {parseInline(ulMatch[1])}
+        </li>,
+      )
       i++
       let liKey = 1
       while (i < lines.length) {
         const m = lines[i].match(/^[-*]\s+(.*)/)
-        if (m) { items.push(<li key={`li-${liKey++}`} className="text-sm">{parseInline(m[1])}</li>); i++ }
-        else break
+        if (m) {
+          items.push(
+            <li key={`li-${liKey++}`} className="text-sm">
+              {parseInline(m[1])}
+            </li>,
+          )
+          i++
+        } else break
       }
-      nodes.push(<ul key={key++} className="list-disc list-inside space-y-0.5 my-1">{items}</ul>)
+      nodes.push(
+        <ul key={key++} className="list-disc list-inside space-y-0.5 my-1">
+          {items}
+        </ul>,
+      )
       continue
     }
 
@@ -257,134 +373,70 @@ function parseMarkdown(text: string): React.ReactNode[] {
     const olMatch = line.match(/^\d+\.\s+(.*)/)
     if (olMatch) {
       const items: React.ReactNode[] = []
-      items.push(<li key={`li-0`} className="text-sm">{parseInline(olMatch[1])}</li>)
+      items.push(
+        <li key="li-0" className="text-sm">
+          {parseInline(olMatch[1])}
+        </li>,
+      )
       i++
       let liKey = 1
       while (i < lines.length) {
         const m = lines[i].match(/^\d+\.\s+(.*)/)
-        if (m) { items.push(<li key={`li-${liKey++}`} className="text-sm">{parseInline(m[1])}</li>); i++ }
-        else break
+        if (m) {
+          items.push(
+            <li key={`li-${liKey++}`} className="text-sm">
+              {parseInline(m[1])}
+            </li>,
+          )
+          i++
+        } else break
       }
-      nodes.push(<ol key={key++} className="list-decimal list-inside space-y-0.5 my-1">{items}</ol>)
+      nodes.push(
+        <ol key={key++} className="list-decimal list-inside space-y-0.5 my-1">
+          {items}
+        </ol>,
+      )
       continue
     }
 
-    // Empty line
+    // Empty line — end of current block
     if (line.trim() === '') {
       i++
       continue
     }
 
     // Regular paragraph
-    nodes.push(<p key={key++} className="text-sm leading-relaxed mb-1 break-words">{parseInline(line)}</p>)
+    nodes.push(
+      <p key={key++} className="text-sm leading-relaxed mb-1 break-words">
+        {parseInline(line)}
+      </p>,
+    )
     i++
   }
 
+  return { nodes, nextIdx: i }
+}
+
+/** Full markdown parse — processes all lines */
+function parseMarkdown(text: string, isStreaming?: boolean): React.ReactNode[] {
+  const lines = text.split('\n')
+  const { nodes } = parseBlock(lines, 0, !!isStreaming)
   return nodes
 }
 
-function parseInline(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = []
-  let remaining = text
-  let key = 0
-
-  while (remaining.length > 0) {
-    let match: RegExpMatchArray | null
-
-    // Inline code
-    match = remaining.match(/`(.+?)`/)
-    if (match) {
-      const idx = remaining.indexOf(match[0])
-      if (idx > 0) {
-        parts.push(remaining.slice(0, idx))
-        remaining = remaining.slice(idx)
-      }
-      parts.push(<InlineCode key={key++}>{match[1]}</InlineCode>)
-      remaining = remaining.slice(match[0].length)
-      continue
-    }
-
-    // Bold
-    match = remaining.match(/\*\*(.+?)\*\*/)
-    if (match) {
-      const idx = remaining.indexOf(match[0])
-      if (idx > 0) {
-        parts.push(remaining.slice(0, idx))
-        remaining = remaining.slice(idx)
-      }
-      parts.push(<strong key={key++}>{match[1]}</strong>)
-      remaining = remaining.slice(match[0].length)
-      continue
-    }
-
-    // Strikethrough
-    match = remaining.match(/~~(.+?)~~/)
-    if (match) {
-      const idx = remaining.indexOf(match[0])
-      if (idx > 0) {
-        parts.push(remaining.slice(0, idx))
-        remaining = remaining.slice(idx)
-      }
-      parts.push(<del key={key++} className="text-muted-foreground/70">{match[1]}</del>)
-      remaining = remaining.slice(match[0].length)
-      continue
-    }
-
-    // Italic (must come after bold and strikethrough)
-    match = remaining.match(/\*(.+?)\*/)
-    if (match) {
-      const idx = remaining.indexOf(match[0])
-      if (idx > 0) {
-        parts.push(remaining.slice(0, idx))
-        remaining = remaining.slice(idx)
-      }
-      parts.push(<em key={key++}>{match[1]}</em>)
-      remaining = remaining.slice(match[0].length)
-      continue
-    }
-
-    // Link
-    match = remaining.match(/\[(.+?)\]\((.+?)\)/)
-    if (match) {
-      const idx = remaining.indexOf(match[0])
-      if (idx > 0) {
-        parts.push(remaining.slice(0, idx))
-        remaining = remaining.slice(idx)
-      }
-      parts.push(
-        <a
-          key={key++}
-          href={match[2]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline underline-offset-2 hover:text-primary/80"
-        >
-          {match[1]}
-        </a>
-      )
-      remaining = remaining.slice(match[0].length)
-      continue
-    }
-
-    parts.push(remaining)
-    break
-  }
-
-  return parts
-}
-
-export const Markdown = memo(function Markdown({ content, className }: MarkdownProps) {
+export const Markdown = memo(function Markdown({ content, className, isStreaming }: MarkdownProps) {
   const lastParsedRef = useRef(content)
   const lastRenderedRef = useRef<React.ReactNode[]>(parseMarkdown(content))
   const throttleRef = useRef(0)
+  const lastContentLenRef = useRef(content.length)
 
   const rendered = useMemo(() => {
     const now = Date.now()
     const timeSinceLastParse = now - throttleRef.current
+    const contentShrunk = content.length < lastContentLenRef.current
 
     // During streaming, throttle full re-parsing to every 300ms
-    // Only re-parse immediately if content shrank (edit/regenerate) or 300ms elapsed
-    const contentShrunk = content.length < lastParsedRef.current.length
+    // Re-parse immediately if content shrank (edit/regenerate)
     const throttled = !contentShrunk && timeSinceLastParse < 300 && lastParsedRef.current.length > 0
 
     if (throttled) {
@@ -392,14 +444,11 @@ export const Markdown = memo(function Markdown({ content, className }: MarkdownP
     }
 
     lastParsedRef.current = content
+    lastContentLenRef.current = content.length
     throttleRef.current = now
-    lastRenderedRef.current = parseMarkdown(content)
+    lastRenderedRef.current = parseMarkdown(content, isStreaming)
     return lastRenderedRef.current
-  }, [content])
+  }, [content, isStreaming])
 
-  return (
-    <div className={cn("space-y-0 break-words", className)}>
-      {rendered}
-    </div>
-  )
+  return <div className={cn('space-y-0 break-words', className)}>{rendered}</div>
 })

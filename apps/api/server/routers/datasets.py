@@ -14,7 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.ssrf import validate_url_not_private as _validate_url_not_private
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 from schemas.datasets import (
     BatchImportRequest,
     CSVImportRequest,
@@ -51,6 +57,7 @@ class DatasetsRouter:
         self._import_locks_lock = asyncio.Lock()
         self._DATASET_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
         from mogdb.cache import QueryCache
+
         self._cache = QueryCache(ttl_seconds=5.0, max_entries=32)
         self._register_routes()
 
@@ -153,7 +160,7 @@ class DatasetsRouter:
 
     def _get_data_importer(self):
         """Get DataImporter configured to save to the repo datasets directory."""
-        from domains.training.data_import import DataImporter
+        from domain.training import DataImporter
 
         return DataImporter(output_dir=str(self._DATASETS_DIR))
 
@@ -252,7 +259,7 @@ class DatasetsRouter:
             raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
         async with lock:
             try:
-                from domains.training.data_import import RepoImporter
+                from domain.training import RepoImporter
 
                 importer = RepoImporter()
                 _t0 = time.monotonic()
@@ -297,7 +304,7 @@ class DatasetsRouter:
             raise_error(f"Import already in progress for '{name}'", "E_INFRA_BUSY")
         async with lock:
             try:
-                from domains.training.data_import import HuggingFaceImporter
+                from domain.training import HuggingFaceImporter
 
                 importer = HuggingFaceImporter()
                 _t0 = time.monotonic()
@@ -358,7 +365,7 @@ class DatasetsRouter:
             raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
         async with lock:
             try:
-                from domains.training.data_import import URLImporter
+                from domain.training import URLImporter
 
                 importer = URLImporter()
                 _t0 = time.monotonic()
@@ -552,7 +559,7 @@ class DatasetsRouter:
             try:
                 import threading
 
-                from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+                from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
                 _cancel_event = threading.Event()
                 _cm = get_cancel_manager()
@@ -572,7 +579,7 @@ class DatasetsRouter:
                     name = source.name or f"batch_{i}"
                     try:
                         if source.type == "url" and source.url:
-                            from domains.training.data_import import URLImporter
+                            from domain.training import URLImporter
 
                             importer = URLImporter()
                             result = importer.import_from_url(
@@ -586,7 +593,7 @@ class DatasetsRouter:
                                 path=source.path, name=name, extensions=source.extensions
                             )
                         elif source.type == "github" and source.url:
-                            from domains.training.data_import import RepoImporter
+                            from domain.training import RepoImporter
 
                             importer = RepoImporter()
                             result = importer.import_from_github(
@@ -595,7 +602,7 @@ class DatasetsRouter:
                                 output_dir=str(self._DATASETS_DIR),
                             )
                         elif source.type == "huggingface" and source.dataset_id:
-                            from domains.training.data_import import HuggingFaceImporter
+                            from domain.training import HuggingFaceImporter
 
                             importer = HuggingFaceImporter()
                             result = importer.download_dataset(
@@ -625,7 +632,7 @@ class DatasetsRouter:
 
                 if cm_op:
                     try:
-                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        from domain.infrastructure.cancel_manager import get_cancel_manager
 
                         get_cancel_manager().finish(cm_op)
                     except Exception as exc:
@@ -633,7 +640,7 @@ class DatasetsRouter:
             except Exception as e:
                 if cm_op:
                     try:
-                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        from domain.infrastructure.cancel_manager import get_cancel_manager
 
                         get_cancel_manager().finish(cm_op, error=str(e))
                     except Exception as exc:
@@ -668,7 +675,7 @@ class DatasetsRouter:
     ) -> dict:
         """Search books by title or ISBN via Open Library."""
         try:
-            from domains.training.data_import import BooksSearch
+            from domain.training import BooksSearch
 
             searcher = BooksSearch()
             results = searcher.search(q, limit)
@@ -694,7 +701,7 @@ class DatasetsRouter:
             Calls the GitHub Search API via GitHubSearch.search_repos().
         """
         try:
-            from domains.training.data_import import GitHubSearch
+            from domain.training import GitHubSearch
 
             searcher = GitHubSearch()
             items = searcher.search_repos(q, limit)
@@ -722,7 +729,7 @@ class DatasetsRouter:
     ) -> dict:
         """Import book by ISBN. Fetches full text if available on Project Gutenberg."""
         try:
-            from domains.training.data_import import ISBNImporter
+            from domain.training import ISBNImporter
 
             importer = ISBNImporter(output_dir=str(self._DATASETS_DIR))
             _t0 = time.monotonic()
@@ -1084,7 +1091,11 @@ class DatasetsRouter:
 
             data_path = Path(info["path"])
             if data_path.is_dir():
-                candidates = [data_path / "input.txt", data_path / "corpus.jsonl", data_path / "train.txt"]
+                candidates = [
+                    data_path / "input.txt",
+                    data_path / "corpus.jsonl",
+                    data_path / "train.txt",
+                ]
                 input_file = next((c for c in candidates if c.exists()), None)
             else:
                 input_file = data_path
@@ -1096,9 +1107,11 @@ class DatasetsRouter:
                 lambda: input_file.read_text(encoding="utf-8", errors="replace")[:500_000]
             )
 
-            from domains.training.quality_scorer import compute_data_quality
+            from domain.training.engine import get_training_engine
 
-            metrics = await asyncio.to_thread(compute_data_quality, raw)
+            engine = get_training_engine()
+            result = engine.score_quality([{"content": raw}])
+            metrics = result.data if result.success else {"avg_quality": 0}
 
             # Add file stats
             metrics["file_size_bytes"] = input_file.stat().st_size

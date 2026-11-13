@@ -7,7 +7,7 @@ import logging
 from controllers.config import get_config_controller
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
+from schemas.common import endpoint, safe_audit_log, success_response
 from schemas.config import ConfigUpdate
 
 logger = logging.getLogger("slo.routers.config")

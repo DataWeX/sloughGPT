@@ -1,46 +1,55 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { cn, Switch, Button, Slider, Spinner } from '@sloughgpt/strui'
+import { notify } from '@/lib/notify'
+import { useCallback, useEffect, useMemo, useState, memo } from 'react'
+import Link from '@/vite/next-compat/link'
+import { cn, Switch, Button, Spinner } from '@sloughgpt/strui'
 import { IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
-import { StatusBanner } from '@/components/composed/StatusBanner'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
-import { useToastStore } from '@/lib/toast-store'
 import { useChatMemory } from './useChatMemory'
 import { useMemoryData } from '@/hooks/useMemoryData'
+import { MemoryAddForm } from './MemoryAddForm'
+import { MemoryEditForm } from './MemoryEditForm'
 
 const MAX_VISIBLE = 8
 
-export function MemoryTab() {
-  const addToast = useToastStore(s => s.addToast)
+export const MemoryTab = memo(function MemoryTab() {
+  const addToast = notify.toast
   const {
-    stats, items, loading, searched, searchResults,
-    setSearch, search, fetchData, setSearchResults, setSearched, setItems,
+    stats,
+    items,
+    loading,
+    searched,
+    searchResults,
+    setSearch,
+    search,
+    fetchData,
+    setSearchResults,
+    setSearched,
+    setItems,
   } = useMemoryData()
 
   const {
-    highlightedId, copiedId, consolidateMsg, consolidating,
-    handleCopy, handleConsolidate, highlightItem, pendingSseFact, consumePendingSseFact,
+    highlightedId,
+    copiedId,
+    consolidateMsg,
+    consolidating,
+    handleCopy,
+    handleConsolidate,
+    highlightItem,
+    pendingSseFact,
+    consumePendingSseFact,
   } = useChatMemory(fetchData)
 
   const [toggling, setToggling] = useState(false)
   const [pendingClear, setPendingClear] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
-  const [newContent, setNewContent] = useState('')
-  const [newTopic, setNewTopic] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
   const [activeTopic, setActiveTopic] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null)
-  const [editContent, setEditContent] = useState('')
-  const [editTopic, setEditTopic] = useState('')
-  const [editImportance, setEditImportance] = useState(0.5)
-  const [savingEdit, setSavingEdit] = useState(false)
-  const [editError, setEditError] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
 
   useEffect(() => {
     if (pendingSseFact) {
@@ -67,79 +76,36 @@ export function MemoryTab() {
 
   const browseList = useMemo(() => {
     const base = [...items]
-    return base.sort((a, b) => sortOrder === 'newest' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp)
+    return base.sort((a, b) =>
+      sortOrder === 'newest' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp,
+    )
   }, [items, sortOrder])
 
   const topicFiltered = useMemo(() => {
     const base = searchResults !== null ? searchResults : browseList
     if (!activeTopic) return base
-    return base.filter(i => i.topic === activeTopic)
+    return base.filter((i) => i.topic === activeTopic)
   }, [browseList, searchResults, activeTopic])
 
   const displayed = showAll ? topicFiltered : topicFiltered.slice(0, MAX_VISIBLE)
 
-  const handleAdd = useCallback(async () => {
-    if (!newContent.trim()) return
-    setAdding(true)
-    setAddError(null)
-    try {
-      const result = await memoryController.store(newContent, newTopic.trim() || 'manual')
-      if (result.stored) {
-        const content = newContent.trim()
-        setNewContent('')
-        setNewTopic('')
-        setShowAdd(false)
-        await fetchData()
-        highlightItem(content, items)
-      } else {
-        setAddError('Already remembered (or memory is disabled)')
-      }
-    } catch {
-      setAddError('Could not store fact')
-    } finally {
-      setAdding(false)
-    }
-  }, [newContent, newTopic, fetchData, items, highlightItem])
-
   const startEdit = useCallback((item: MemoryItem) => {
     setShowAdd(false)
     setEditingItem(item)
-    setEditContent(item.content)
-    setEditTopic(item.topic || '')
-    setEditImportance(typeof item.importance === 'number' ? item.importance : 0.5)
-    setEditError(null)
   }, [])
 
-  const handleSaveEdit = useCallback(async () => {
-    if (!editingItem || !editContent.trim()) return
-    setSavingEdit(true)
-    setEditError(null)
-    try {
-      const result = await memoryController.update(editingItem.id, editContent, editTopic, editImportance)
-      if (result.updated > 0) {
-        setEditingItem(null)
+  const deleteItem = useCallback(
+    async (item: MemoryItem) => {
+      setItems((prev) => prev.filter((i) => i.id !== item.id))
+      setSearchResults(searchResults?.filter((i) => i.id !== item.id) ?? null)
+      try {
+        await memoryController.delete(item.id)
+      } catch {
         await fetchData()
-      } else if (result.duplicate) {
-        setEditError('That fact already exists in memory')
-      } else {
-        setEditError('Memory item not found')
       }
-    } catch {
-      setEditError('Could not update memory item')
-    } finally {
-      setSavingEdit(false)
-    }
-  }, [editingItem, editContent, editTopic, editImportance, fetchData])
-
-  const deleteItem = useCallback(async (item: MemoryItem) => {
-    setItems(prev => prev.filter(i => i.id !== item.id))
-    setSearchResults(searchResults?.filter(i => i.id !== item.id) ?? null)
-    try {
-      await memoryController.delete(item.id)
-    } catch {
-      await fetchData()
-    }
-  }, [searchResults, fetchData, setItems, setSearchResults])
+    },
+    [searchResults, fetchData, setItems, setSearchResults],
+  )
 
   const clearAll = useCallback(async () => {
     setPendingClear(false)
@@ -150,32 +116,42 @@ export function MemoryTab() {
     }
   }, [fetchData])
 
-  const toggleEnabled = useCallback(async (next: boolean) => {
-    setToggling(true)
-    try {
-      await memoryController.setEnabled(next)
-      await fetchData()
-    } finally {
-      setToggling(false)
-    }
-  }, [fetchData])
+  const toggleEnabled = useCallback(
+    async (next: boolean) => {
+      setToggling(true)
+      try {
+        await memoryController.setEnabled(next)
+        await fetchData()
+      } finally {
+        setToggling(false)
+      }
+    },
+    [fetchData],
+  )
 
   const enabled = stats?.enabled ?? true
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
           <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <span className={cn('inline-block h-1.5 w-1.5 rounded-full', enabled ? 'bg-success' : 'bg-muted-foreground/50')} />
-            {enabled ? `${stats?.total_facts ?? items.length} fact${(stats?.total_facts ?? items.length) !== 1 ? 's' : ''}` : 'Memory off'}
+            <span
+              className={cn(
+                'inline-block h-1.5 w-1.5 rounded-full',
+                enabled ? 'bg-success' : 'bg-muted-foreground/50',
+              )}
+            />
+            {enabled
+              ? `${stats?.total_facts ?? items.length} fact${(stats?.total_facts ?? items.length) !== 1 ? 's' : ''}`
+              : 'Memory off'}
           </span>
           {enabled && items.length > 0 && (
             <button
               type="button"
               onClick={handleConsolidate}
               disabled={consolidating}
-              className="text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
               title="Merge near-duplicate facts"
             >
               {consolidating ? 'Consolidating…' : 'Consolidate'}
@@ -184,7 +160,9 @@ export function MemoryTab() {
         </div>
         <div className="flex items-center gap-0.5">
           <div className="flex items-center gap-1 mr-1 pr-1.5 border-r border-border/60">
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Remember</span>
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+              Remember
+            </span>
             <Switch
               size="sm"
               checked={enabled}
@@ -197,7 +175,7 @@ export function MemoryTab() {
             type="button"
             onClick={fetchData}
             disabled={loading}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
             aria-label="Refresh memory"
           >
             <Spinner className="h-3 w-3" />
@@ -206,7 +184,7 @@ export function MemoryTab() {
             type="button"
             onClick={() => setPendingClear(true)}
             disabled={items.length === 0}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
             aria-label="Clear memory"
           >
             <IconTrash className="h-3 w-3" />
@@ -223,16 +201,16 @@ export function MemoryTab() {
               <IconSearch className="h-3 w-3 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search memory..."
                 aria-label="Search memory"
-                className="w-full h-7 pl-7 pr-6 rounded border border-border/40 bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+                className="w-full h-7 pl-7 pr-6 rounded border border-border/40 bg-background text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:border-primary/50"
               />
               {search && (
                 <button
                   type="button"
                   onClick={() => setSearch('')}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Clear search"
                 >
                   <IconX className="h-3 w-3" />
@@ -243,7 +221,10 @@ export function MemoryTab() {
               size="sm"
               variant="outline"
               className="h-7 shrink-0 text-[10px] px-2"
-              onClick={() => { setShowAdd(v => !v); setAddError(null); setEditingItem(null) }}
+              onClick={() => {
+                setShowAdd((v) => !v)
+                setEditingItem(null)
+              }}
             >
               {showAdd ? 'Close' : '+ Store'}
             </Button>
@@ -251,7 +232,7 @@ export function MemoryTab() {
               size="sm"
               variant="ghost"
               className="h-7 shrink-0 text-[10px] px-1.5 gap-1"
-              onClick={() => setSortOrder(o => o === 'newest' ? 'oldest' : 'newest')}
+              onClick={() => setSortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
               disabled={searchResults !== null}
               title={searchResults !== null ? 'Search results use relevance order' : undefined}
               aria-label="Toggle memory sort order"
@@ -262,45 +243,46 @@ export function MemoryTab() {
           </div>
 
           {showAdd && (
-            <div className="space-y-1.5 rounded border border-border/40 p-2">
-              <textarea
-                value={newContent}
-                onChange={e => setNewContent(e.target.value)}
-                placeholder="Type a fact the AI should remember..."
-                aria-label="New memory fact"
-                className="w-full h-14 resize-none rounded border border-border/40 bg-background p-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-              />
-              <div className="flex items-center gap-1.5">
-                <input
-                  value={newTopic}
-                  onChange={e => setNewTopic(e.target.value)}
-                  placeholder="topic"
-                  aria-label="Memory fact topic"
-                  className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-[10px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-                />
-                <Button size="sm" className="h-6 text-[10px] px-2" disabled={!newContent.trim() || adding} onClick={handleAdd}>
-                  {adding ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
-              {addError && <StatusBanner variant="error" message={addError} dismissible={false} />}
-            </div>
+            <MemoryAddForm
+              onAdded={() => {
+                setShowAdd(false)
+                fetchData()
+              }}
+              highlightItem={highlightItem}
+              items={items}
+            />
           )}
 
           {topics.length > 0 && (
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 -mx-1 px-1" aria-label="Filter by topic">
+            <div
+              className="flex items-center gap-1 overflow-x-auto pb-0.5 -mx-1 px-1"
+              aria-label="Filter by topic"
+            >
               <button
                 type="button"
                 onClick={() => setActiveTopic(null)}
-                className={cn('shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === null ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
+                className={cn(
+                  'shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                  activeTopic === null
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                )}
               >
                 All
               </button>
-              {topics.map(topic => (
+              {topics.map((topic) => (
                 <button
                   key={topic}
                   type="button"
                   onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
-                  className={cn('shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === topic ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
+                  className={cn(
+                    'shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                    activeTopic === topic
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                  )}
                 >
                   {topic}
                 </button>
@@ -309,51 +291,14 @@ export function MemoryTab() {
           )}
 
           {editingItem && (
-            <div className="space-y-1.5 rounded border border-primary/40 p-2">
-              <p className="text-[10px] font-medium text-muted-foreground flex items-center gap-1.5">
-                <IconEdit className="h-3 w-3" />
-                Edit memory fact
-              </p>
-              <textarea
-                value={editContent}
-                onChange={e => setEditContent(e.target.value)}
-                aria-label="Edit memory fact text"
-                className="w-full h-14 resize-none rounded border border-border/40 bg-background p-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-              />
-              <div className="flex items-center gap-1.5">
-                <input
-                  value={editTopic}
-                  onChange={e => setEditTopic(e.target.value)}
-                  placeholder={editingItem.topic || 'topic'}
-                  aria-label="Edit memory fact topic"
-                  className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-[10px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Slider
-                  label="Importance"
-                  value={[editImportance]}
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  showValue
-                  formatValue={(v) => v.toFixed(1)}
-                  onValueChange={([v]) => setEditImportance(v)}
-                  size="sm"
-                  className="flex-1"
-                  aria-label="Edit memory fact importance"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button size="sm" className="h-6 text-[10px] px-2" disabled={!editContent.trim() || savingEdit} onClick={handleSaveEdit}>
-                  {savingEdit ? 'Saving…' : 'Save'}
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setEditingItem(null)}>
-                  Cancel
-                </Button>
-              </div>
-              {editError && <StatusBanner variant="error" message={editError} dismissible={false} />}
-            </div>
+            <MemoryEditForm
+              item={editingItem}
+              onSaved={() => {
+                setEditingItem(null)
+                fetchData()
+              }}
+              onCancelled={() => setEditingItem(null)}
+            />
           )}
         </>
       )}
@@ -370,7 +315,7 @@ export function MemoryTab() {
           <button
             type="button"
             onClick={() => setSearch('')}
-            className="mt-1 text-[10px] text-primary hover:underline"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-[10px] text-primary hover:underline"
             aria-label="Clear search"
           >
             Clear search
@@ -384,12 +329,17 @@ export function MemoryTab() {
         </p>
       ) : (
         <>
-          <ul className="space-y-1 max-h-60 overflow-y-auto">
-            {displayed.map(item => (
-              <li key={item.id} className={cn(
-                'group flex items-start justify-between gap-2 p-2 rounded bg-muted/30 border text-xs leading-relaxed transition-colors',
-                item.id === highlightedId ? 'border-primary/60 bg-primary/10' : 'border-border/40',
-              )}>
+          <ul className="space-y-1">
+            {displayed.map((item) => (
+              <li
+                key={item.id}
+                className={cn(
+                  'group flex items-start justify-between gap-2 p-2 rounded bg-muted/30 border text-xs leading-relaxed transition-colors',
+                  item.id === highlightedId
+                    ? 'border-primary/60 bg-primary/10'
+                    : 'border-border/40',
+                )}
+              >
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-1">
                     <span
@@ -408,18 +358,27 @@ export function MemoryTab() {
                       {item.content.length > 160 ? item.content.slice(0, 160) + '…' : item.content}
                     </span>
                     {copiedId === item.id && (
-                      <span className="shrink-0 text-[9px] text-success font-medium pt-0.5">Copied</span>
+                      <span className="shrink-0 text-[9px] text-success font-medium pt-0.5">
+                        Copied
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     {item.topic && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{item.topic}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                        {item.topic}
+                      </span>
                     )}
                     {item.source && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{item.source}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                        {item.source}
+                      </span>
                     )}
                     {typeof item.importance === 'number' && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium" title="Importance score">
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
+                        title="Importance score"
+                      >
                         importance {item.importance.toFixed(1)}
                       </span>
                     )}
@@ -435,12 +394,14 @@ export function MemoryTab() {
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
                   {typeof item.score === 'number' && searchResults !== null && (
-                    <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">{item.score.toFixed(2)}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">
+                      {item.score.toFixed(2)}
+                    </span>
                   )}
                   <button
                     type="button"
                     onClick={() => startEdit(item)}
-                    className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
                     aria-label="Edit memory item"
                   >
                     <IconEdit className="h-3 w-3" />
@@ -448,7 +409,7 @@ export function MemoryTab() {
                   <button
                     type="button"
                     onClick={() => deleteItem(item)}
-                    className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
                     aria-label="Delete memory item"
                   >
                     <IconTrash className="h-3 w-3" />
@@ -460,8 +421,8 @@ export function MemoryTab() {
           {searchResults === null && topicFiltered.length > MAX_VISIBLE && (
             <button
               type="button"
-              onClick={() => setShowAll(v => !v)}
-              className="block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
+              onClick={() => setShowAll((v) => !v)}
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
               aria-expanded={showAll}
             >
               {showAll ? 'Show fewer' : `Show all ${topicFiltered.length}`}
@@ -473,8 +434,22 @@ export function MemoryTab() {
       {pendingClear && (
         <div className="flex items-center gap-1 border-t border-border/30 pt-2">
           <span className="text-[10px] text-muted-foreground flex-1">Clear all stored memory?</span>
-          <Button variant="destructive" size="sm" className="h-6 text-[10px] px-2" onClick={clearAll}>Clear</Button>
-          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setPendingClear(false)}>Cancel</Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={clearAll}
+          >
+            Clear
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={() => setPendingClear(false)}
+          >
+            Cancel
+          </Button>
         </div>
       )}
 
@@ -487,4 +462,4 @@ export function MemoryTab() {
       </Link>
     </div>
   )
-}
+})

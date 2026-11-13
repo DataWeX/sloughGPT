@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import {
   DropdownMenu,
@@ -29,7 +30,7 @@ const TEMP_OPTIONS = [0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0]
 const MAX_TOKEN_OPTIONS = [50, 100, 150, 200, 300, 400, 500, 750, 1000]
 const DEFAULT_MODELS = ['gpt2', 'gpt2-medium', 'gpt2-large', 'distilgpt2']
 
-export function ChatSettings({
+export const ChatSettings = memo(function ChatSettings({
   isOpen,
   model,
   temperature,
@@ -138,4 +139,4 @@ export function ChatSettings({
       </div>
     </section>
   )
-}
+})

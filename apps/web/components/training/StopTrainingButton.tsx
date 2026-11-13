@@ -3,6 +3,7 @@
 import { useState, useCallback, memo } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { formatToastError } from '@/lib/error-utils'
 
 interface StopTrainingButtonProps {
   onStop: () => Promise<void>
@@ -27,8 +28,8 @@ export const StopTrainingButton = memo(function StopTrainingButton({
     try {
       await onStop()
       addToast('Training stopped', 'success')
-    } catch {
-      addToast('Could not stop training', 'error')
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not stop training'), 'error')
     } finally {
       setStopping(false)
       setShowConfirm(false)

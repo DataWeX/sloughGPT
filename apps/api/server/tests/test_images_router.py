@@ -1,6 +1,6 @@
 """Tests for images router endpoints."""
 
-from tests.test_support import get_test_client
+from apps.api.server.tests.test_support import get_test_client
 
 client = get_test_client()
 
@@ -113,9 +113,34 @@ class TestGenerateImage:
 
 class TestHexToRgb:
     def test_hex_conversion(self):
-        from routers.images import hex_to_rgb
+        from routers.files import hex_to_rgb
 
         assert hex_to_rgb("#ff0000") == (255, 0, 0)
         assert hex_to_rgb("#00ff00") == (0, 255, 0)
         assert hex_to_rgb("#0000ff") == (0, 0, 255)
         assert hex_to_rgb("ffffff") == (255, 255, 255)
+
+
+class TestFilesFacadeAbsorbsImages:
+    """The /files facade serves the merged /images routes (card 20261101_154058).
+
+    images.py is folded into files.py: one module-level router exposes both
+    the /files/* and /images/* paths, and routers.images no longer exists.
+    """
+
+    def test_files_router_serves_both_prefixes(self):
+        from fastapi import FastAPI
+        from routers.files import router as files_router
+
+        app = FastAPI()
+        app.include_router(files_router)
+        paths = set(app.openapi()["paths"])
+        # files routes keep working
+        assert {"/files", "/files/search", "/files/upload"} <= paths
+        # merged image routes are served from the same aggregate
+        assert {"/images/gallery", "/images/generate", "/images/styles"} <= paths
+
+    def test_images_module_is_gone(self):
+        import importlib.util
+
+        assert importlib.util.find_spec("routers.images") is None

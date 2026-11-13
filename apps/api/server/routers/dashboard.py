@@ -2,7 +2,7 @@
 Dashboard Router — SSE live stream and REST endpoint for the CLI monitor.
 
 Aggregates health data, active processes, and recent events into a single
-stream consumed by ``sloughgpt monitor``.
+stream consumed by ``sloughgpt logs --dashboard``.
 
 Endpoints:
     GET /dashboard/stream  — SSE: full snapshot every 2 seconds
@@ -20,7 +20,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, endpoint, success_response
+from schemas.common import endpoint, success_response
 
 logger = logging.getLogger("slo.dashboard")
 
@@ -82,7 +82,7 @@ def _get_active_processes() -> dict:
 
     # Auto-train turbo
     try:
-        from domains.training.service import get_turbo_lock, get_turbo_state
+        from domain.training import get_turbo_lock, get_turbo_state
 
         with get_turbo_lock():
             turbo = dict(get_turbo_state())
@@ -109,7 +109,7 @@ def _get_active_processes() -> dict:
 
     # Active downloads
     try:
-        from domains.infrastructure.download_manager import get_download_manager
+        from domain.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         downloads = mgr.list_downloads()
@@ -150,16 +150,18 @@ def _get_health_summary() -> dict:
     """Fast health summary from existing sources."""
     try:
         import psutil
-        import state as server_state
 
-        model_loaded = server_state.model is not None or server_state.provider is not None
-        model_type = getattr(server_state, "model_type", None) or ""
-        uptime = server_state.uptime_seconds
-        req_count = server_state.request_count
-        err_count = server_state.error_count
-        tps = server_state.get_tokens_per_second()
-        avg_lat = server_state.get_avg_latency()
-        rpm = server_state.get_requests_per_minute()
+        from domain.infrastructure.server_state import get_server_state
+
+        ss = get_server_state()
+        model_loaded = ss.model.get() is not None or ss.provider.get() is not None
+        model_type = ss.model_type.get() if ss.model_type.get() else ""
+        uptime = ss.uptime_seconds
+        req_count = ss.request_count
+        err_count = ss.error_count
+        tps = ss.get_tokens_per_second()
+        avg_lat = ss.get_avg_latency()
+        rpm = ss.get_requests_per_minute()
 
         mem = psutil.virtual_memory()
         cpu = psutil.cpu_percent(interval=0)
@@ -188,7 +190,7 @@ def _get_health_summary() -> dict:
 
 def _build_snapshot() -> dict:
     """Build a single dashboard snapshot."""
-    from domains.infrastructure.event_buffer import get_event_buffer
+    from domain.infrastructure import get_event_buffer
 
     return {
         "stream": "dashboard",
@@ -209,37 +211,142 @@ class DashboardRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/dashboard", tags=["dashboard"])
         self.SNAPSHOT_INTERVAL = 2.0
+        # Same contract as health's HEALTH_SNAPSHOT_STALL_S: a build that has
+        # not returned by 3x the cadence is reported, not waited on forever.
+        self.DASHBOARD_SNAPSHOT_STALL_S = self.SNAPSHOT_INTERVAL * 3
         self._register_routes()
 
     def _register_routes(self):
         self.router.add_api_route("/stream", self.dashboard_stream, methods=["GET"])
         self.router.add_api_route("/events", self.dashboard_events, methods=["GET"])
+        self.router.add_api_route("/summary", self.dashboard_summary, methods=["GET"])
 
-    async def dashboard_stream(self, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
+    @endpoint("dashboard.summary")
+    async def dashboard_summary(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Quick system summary: health, services, active processes."""
+        health = _get_health_summary()
+        processes = _get_active_processes()
+
+        services_ok = 0
+        services_total = 0
+        try:
+            from domain.training import TrainingOutcomeTracker
+
+            tracker = TrainingOutcomeTracker()
+            stats = tracker.get_stats()
+            services_total += 1
+            if stats.get("total_runs", 0) >= 0:
+                services_ok += 1
+        except Exception:
+            services_total += 1
+
+        try:
+            from domain.settings import get_settings
+
+            get_settings()
+            services_total += 1
+            services_ok += 1
+        except Exception:
+            services_total += 1
+
+        return success_response(
+            data={
+                "health": health,
+                "active_processes": len(processes),
+                "processes": processes,
+                "services": {"total": services_total, "healthy": services_ok},
+            }
+        )
+
+    async def dashboard_stream(
+        self, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> StreamingResponse:
         """SSE endpoint pushing dashboard snapshots every 2 seconds."""
 
         async def generate() -> AsyncGenerator[str, None]:
+            # Same shape as health.health_stream, whose comment carries the full
+            # derivation. In short: `_build_snapshot` is synchronous and
+            # unbounded, so awaiting it inline lets one wedged build silence
+            # this stream with no signal at all — and on a dashboard, silence
+            # reads as "idle", never as "broken". Building in ONE long-lived
+            # task polled through `shield` means a timed-out wait cannot
+            # accumulate pool threads, and the `task.done()` check below stops a
+            # build that lands during a timed-out cycle from being discarded
+            # (that combination stalls the stream forever while re-spawning a
+            # thread on every completed build).
+            task: asyncio.Task | None = None
+
+            def _frame(payload: dict) -> str:
+                return "data: " + json.dumps(payload, default=str) + "\n\n"
+
+            def _stall_frame() -> str:
+                waited = self.DASHBOARD_SNAPSHOT_STALL_S
+                return _frame(
+                    {
+                        "stream": "dashboard",
+                        "phase": "STALL",
+                        # "working", not "error": the stream is alive and the
+                        # snapshot may yet return. Clients keying on `status`
+                        # are unaffected; readers of `phase` get the signal.
+                        "status": "working",
+                        "data": {
+                            "stalled": True,
+                            "waited_seconds": round(waited, 1),
+                            "interval_seconds": self.SNAPSHOT_INTERVAL,
+                        },
+                        "message": (
+                            f"dashboard snapshot has not returned in {waited:.0f}s; "
+                            "a subsystem is likely blocked"
+                        ),
+                    }
+                )
+
+            def _error_frame(exc: Exception) -> str:
+                return _frame(
+                    {
+                        "stream": "dashboard",
+                        "phase": "ERROR",
+                        "status": "error",
+                        "data": {"error": str(exc)},
+                        "message": str(exc),
+                    }
+                )
+
             while True:
                 if await request.is_disconnected():
                     break
+
+                if task is None:
+                    task = asyncio.create_task(asyncio.to_thread(_build_snapshot))
+
                 try:
-                    snapshot = await asyncio.to_thread(_build_snapshot)
-                    yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
-                except Exception as e:
-                    logger.warning("Dashboard snapshot failed: %s", e)
-                    yield (
-                        "data: "
-                        + json.dumps(
-                            {
-                                "stream": "dashboard",
-                                "phase": "ERROR",
-                                "status": "error",
-                                "data": {"error": str(e)},
-                                "message": str(e),
-                            }
-                        )
-                        + "\n\n"
+                    snapshot = await asyncio.wait_for(
+                        asyncio.shield(task), timeout=self.DASHBOARD_SNAPSHOT_STALL_S
                     )
+                    frame = _frame(snapshot)
+                    task = None  # consumed — the next cycle starts a new build
+                except TimeoutError:
+                    if not task.done():
+                        logger.warning(
+                            "Dashboard snapshot stalled after %.1fs",
+                            self.DASHBOARD_SNAPSHOT_STALL_S,
+                        )
+                        frame = _stall_frame()
+                    else:
+                        # Finished during this cycle's wait: take the result
+                        # rather than throwing it away and building again.
+                        try:
+                            frame = _frame(await task)
+                        except Exception as exc:
+                            logger.warning("Dashboard snapshot failed: %s", exc)
+                            frame = _error_frame(exc)
+                        task = None
+                except Exception as exc:
+                    logger.warning("Dashboard snapshot failed: %s", exc)
+                    frame = _error_frame(exc)
+                    task = None
+
+                yield frame
                 await asyncio.sleep(self.SNAPSHOT_INTERVAL)
 
         return StreamingResponse(
@@ -253,9 +360,11 @@ class DashboardRouter:
         )
 
     @endpoint("dashboard.events")
-    async def dashboard_events(self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def dashboard_events(
+        self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Return the last N dashboard events as JSON."""
-        from domains.infrastructure.event_buffer import get_event_buffer
+        from domain.infrastructure import get_event_buffer
 
         events = get_event_buffer().recent(n)
         return success_response(data={"events": events, "count": len(events)})

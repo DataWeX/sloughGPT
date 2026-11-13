@@ -14,6 +14,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import builtins
 import logging
 import time
 from collections.abc import Callable
@@ -48,7 +49,7 @@ class InferencePool:
         if cls._instance is None:
             async with cls._lock:
                 if cls._instance is None:
-                    from domains.infrastructure.resource_manager import get_resource_manager
+                    from domain.infrastructure.resource_manager import get_resource_manager
 
                     rm = get_resource_manager()
                     import os
@@ -98,13 +99,13 @@ class InferencePool:
                 loop.run_in_executor(self._executor, lambda: fn(*args, **kwargs)),
                 timeout=timeout or self._queue_timeout,
             )
-        except asyncio.TimeoutError:
+        except builtins.TimeoutError:
             logger.warning(
                 "InferencePool task timed out (fn=%s)",
                 getattr(fn, "__name__", str(fn)),
                 extra={"tag": "INFRA"},
             )
-            raise TimeoutError("Inference task timed out")
+            raise TimeoutError("Inference task timed out") from None
         finally:
             self._semaphore.release()
 

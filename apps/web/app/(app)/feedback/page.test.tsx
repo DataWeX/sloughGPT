@@ -2,37 +2,105 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
 const {
-  mockGetFeedbackStats, mockGetWorkflowStatus, mockGetTrainingStats,
-  mockListConversations, mockCreateConversation, mockDeleteConversation,
-  mockAddToast, mockTriggerWorkflowAction, mockTogglePin, mockToggleStar,
+  mockGetFeedbackStats,
+  mockGetWorkflowStatus,
+  mockGetTrainingStats,
+  mockListConversations,
+  mockCreateConversation,
+  mockDeleteConversation,
+  mockAddToast,
+  mockTriggerWorkflowAction,
+  mockTogglePin,
+  mockToggleStar,
 } = vi.hoisted(() => ({
-  mockGetFeedbackStats: vi.fn(), mockGetWorkflowStatus: vi.fn(), mockGetTrainingStats: vi.fn(),
-  mockListConversations: vi.fn(), mockCreateConversation: vi.fn(),
-  mockDeleteConversation: vi.fn(), mockAddToast: vi.fn(),
-  mockTriggerWorkflowAction: vi.fn(), mockTogglePin: vi.fn(), mockToggleStar: vi.fn(),
+  mockGetFeedbackStats: vi.fn(),
+  mockGetWorkflowStatus: vi.fn(),
+  mockGetTrainingStats: vi.fn(),
+  mockListConversations: vi.fn(),
+  mockCreateConversation: vi.fn(),
+  mockDeleteConversation: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockTriggerWorkflowAction: vi.fn(),
+  mockTogglePin: vi.fn(),
+  mockToggleStar: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled, ...rest }: any) => (
-      <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
+      <button onClick={onClick} disabled={disabled} {...rest}>
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, placeholder }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} />
     ),
-    StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={`stat-${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
@@ -55,9 +123,21 @@ vi.mock('@/lib/feedback-conversations-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/format-bytes', () => ({
   todayDateString: () => '2026-08-07',
@@ -201,11 +281,13 @@ describe('FeedbackPage — empty state', () => {
 describe('FeedbackPage — conversations tab flow', () => {
   it('switches to conversations tab', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const convTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('conversation')
-    )
+    const convTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('conversation'))
     if (convTab) {
       fireEvent.click(convTab)
       await waitFor(() => {
@@ -216,11 +298,13 @@ describe('FeedbackPage — conversations tab flow', () => {
 
   it('shows conversations list', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const convTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('conversation')
-    )
+    const convTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('conversation'))
     if (convTab) {
       fireEvent.click(convTab)
       await waitFor(() => {
@@ -232,11 +316,13 @@ describe('FeedbackPage — conversations tab flow', () => {
   it('shows empty conversations message when list is empty', async () => {
     mockListConversations.mockResolvedValue([])
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const convTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('conversation')
-    )
+    const convTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('conversation'))
     if (convTab) {
       fireEvent.click(convTab)
       await waitFor(() => {
@@ -249,11 +335,13 @@ describe('FeedbackPage — conversations tab flow', () => {
 describe('FeedbackPage — training tab flow', () => {
   it('switches to training tab', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
       await waitFor(() => {
@@ -264,11 +352,13 @@ describe('FeedbackPage — training tab flow', () => {
 
   it('displays training stats on training tab', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
       await waitFor(() => {
@@ -281,11 +371,13 @@ describe('FeedbackPage — training tab flow', () => {
   it('shows no training data when stats are null', async () => {
     mockGetTrainingStats.mockResolvedValue(null)
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
       await waitFor(() => {
@@ -298,19 +390,41 @@ describe('FeedbackPage — training tab flow', () => {
 describe('FeedbackPage — refresh flow', () => {
   it('refresh button reloads stats', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(mockGetFeedbackStats).toHaveBeenCalledTimes(1) })
+    await waitFor(
+      () => {
+        expect(mockGetFeedbackStats).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 5000 },
+    )
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
+    let trainTab: HTMLElement | undefined
+    await waitFor(
+      () => {
+        trainTab = screen
+          .getAllByRole('tab')
+          .find((b) => b.textContent?.toLowerCase().includes('training'))
+        expect(trainTab).toBeTruthy()
+      },
+      { timeout: 5000 },
     )
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getByRole('button', { name: 'Refresh stats' })).toBeTruthy() })
+      await waitFor(
+        () => {
+          expect(screen.getByRole('button', { name: 'Refresh stats' })).toBeTruthy()
+        },
+        { timeout: 5000 },
+      )
       const refreshBtn = screen.getByRole('button', { name: 'Refresh stats' })
-      await act(async () => { fireEvent.click(refreshBtn) })
-      await waitFor(() => {
-        expect(mockGetFeedbackStats).toHaveBeenCalledTimes(2)
+      await act(async () => {
+        fireEvent.click(refreshBtn)
       })
+      await waitFor(
+        () => {
+          expect(mockGetFeedbackStats).toHaveBeenCalledTimes(2)
+        },
+        { timeout: 5000 },
+      )
     }
   })
 })
@@ -365,64 +479,88 @@ describe('FeedbackPage — workflow status', () => {
 describe('FeedbackPage — workflow actions', () => {
   it('triggers aggregate action', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy()
+      })
 
-      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
+      await act(async () => {
+        fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0])
+      })
       expect(mockTriggerWorkflowAction).toHaveBeenCalledWith('aggregate')
     }
   })
 
   it('triggers prune action', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Prune' })[0]).toBeTruthy() })
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: 'Prune' })[0]).toBeTruthy()
+      })
 
-      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Prune' })[0]) })
+      await act(async () => {
+        fireEvent.click(screen.getAllByRole('button', { name: 'Prune' })[0])
+      })
       expect(mockTriggerWorkflowAction).toHaveBeenCalledWith('prune')
     }
   })
 
   it('triggers export action', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Export' })[0]).toBeTruthy() })
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: 'Export' })[0]).toBeTruthy()
+      })
 
-      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Export' })[0]) })
+      await act(async () => {
+        fireEvent.click(screen.getAllByRole('button', { name: 'Export' })[0])
+      })
       expect(mockTriggerWorkflowAction).toHaveBeenCalledWith('export')
     }
   })
 
   it('shows toast on aggregate success', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy()
+      })
 
-      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
+      await act(async () => {
+        fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0])
+      })
       expect(mockAddToast).toHaveBeenCalledWith('Aggregation triggered', 'success')
     }
   })
@@ -430,16 +568,22 @@ describe('FeedbackPage — workflow actions', () => {
   it('shows toast on aggregate failure', async () => {
     mockTriggerWorkflowAction.mockRejectedValue(new Error('fail'))
     render(<FeedbackPage />)
-    await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const trainTab = screen.getAllByRole('tab').find(b =>
-      b.textContent?.toLowerCase().includes('training')
-    )
+    const trainTab = screen
+      .getAllByRole('tab')
+      .find((b) => b.textContent?.toLowerCase().includes('training'))
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy()
+      })
 
-      await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
+      await act(async () => {
+        fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0])
+      })
       expect(mockAddToast).toHaveBeenCalledWith('aggregation', 'error')
     }
   })

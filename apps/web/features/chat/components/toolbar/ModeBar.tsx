@@ -1,42 +1,81 @@
 'use client'
 
 import { useState, memo, type JSX, type ReactNode } from 'react'
-import { IconChat, IconEdit, IconBrain, IconVision, IconSearch, IconBolt, IconDocument, IconMic, IconChevronDown, cn } from '@sloughgpt/strui'
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
+  IconChat,
+  IconEdit,
+  IconBrain,
+  IconVision,
+  IconSearch,
+  IconBolt,
+  IconDocument,
+  IconMic,
+  IconSparkle,
+  cn,
 } from '@sloughgpt/strui'
+import { Waves } from 'lucide-react'
 
-export type ChatMode = 'chat' | 'write' | 'rewrite' | 'decide' | 'explain' | 'translate' | 'brainstorm' | 'wellness' | 'create' | 'read' | 'talk'
+export type ChatMode =
+  | 'chat'
+  | 'write'
+  | 'rewrite'
+  | 'decide'
+  | 'explain'
+  | 'translate'
+  | 'brainstorm'
+  | 'wellness'
+  | 'create'
+  | 'read'
+  | 'talk'
+
+// Single-accent language: every mode wears the same primary tint — only the
+// active tab/chip carries color. The accent is declared exactly once here and
+// consumed by the tab bar, the composer chip, and EmptyState tiles, so mode
+// colors can never drift apart again.
+export const MODE_ACCENT = 'bg-primary/10 text-primary border-primary/20'
 
 const MODES: { value: ChatMode; label: string; icon: ReactNode }[] = [
   { value: 'chat', label: 'Chat', icon: <IconChat className="h-3.5 w-3.5" /> },
   { value: 'write', label: 'Write', icon: <IconEdit className="h-3.5 w-3.5" /> },
-  { value: 'rewrite', label: 'Rewrite', icon: <IconEdit className="h-3.5 w-3.5" /> },
-  { value: 'decide', label: 'Decide', icon: <IconBrain className="h-3.5 w-3.5" /> },
-  { value: 'explain', label: 'Explain', icon: <IconSearch className="h-3.5 w-3.5" /> },
+  { value: 'rewrite', label: 'Rewrite', icon: <IconSparkle className="h-3.5 w-3.5" /> },
   { value: 'translate', label: 'Translate', icon: <IconVision className="h-3.5 w-3.5" /> },
   { value: 'brainstorm', label: 'Brainstorm', icon: <IconBolt className="h-3.5 w-3.5" /> },
-  { value: 'wellness', label: 'Wellness', icon: <IconBrain className="h-3.5 w-3.5" /> },
+  { value: 'decide', label: 'Decide', icon: <IconBrain className="h-3.5 w-3.5" /> },
+  { value: 'explain', label: 'Explain', icon: <IconSearch className="h-3.5 w-3.5" /> },
+  { value: 'wellness', label: 'Wellness', icon: <Waves className="h-3.5 w-3.5" /> },
   { value: 'create', label: 'Create', icon: <IconVision className="h-3.5 w-3.5" /> },
   { value: 'read', label: 'Read', icon: <IconDocument className="h-3.5 w-3.5" /> },
   { value: 'talk', label: 'Talk', icon: <IconMic className="h-3.5 w-3.5" /> },
 ]
 
 const TONES = ['Friendly', 'Professional', 'Funny', 'Short', 'Detailed'] as const
+
+/** Human-readable labels per mode — derived from MODES so the tabs and any
+ *  chip/badge outside ModeBar can never drift apart. */
+export const MODE_LABELS: Record<ChatMode, string> = Object.fromEntries(
+  MODES.map((m) => [m.value, m.label]),
+) as Record<ChatMode, string>
+
 const TYPES = ['Email', 'Social Post', 'Story', 'Poem', 'Letter', 'Note'] as const
 const DECIDE_STRUCTURES = ['Pros & Cons', 'Comparison', 'Simple Verdict', 'Deep Analysis'] as const
 const DIFFICULTIES = ['Simple', 'Moderate', 'Expert'] as const
 const LANG_PAIRS = ['EN→ES', 'EN→FR', 'EN→DE', 'EN→ZH', 'EN→JA', 'ES→EN', 'FR→EN'] as const
-const BRAINSTORM_TOPICS = ['Name Ideas', 'Weekend Plans', 'Gift Ideas', 'Solve a Problem', 'Plan an Event'] as const
+const BRAINSTORM_TOPICS = [
+  'Name Ideas',
+  'Weekend Plans',
+  'Gift Ideas',
+  'Solve a Problem',
+  'Plan an Event',
+] as const
 const WELLNESS_TYPES = ['Sleep Story', 'Meditation', 'Breathing', 'Affirmation'] as const
 const CREATE_STYLES = ['Realistic', 'Cartoon', 'Watercolor', 'Sketch', 'Fantasy'] as const
-const REWRITE_OPTIONS = ['Fix Grammar', 'Make Shorter', 'Make Friendlier', 'Make Professional', 'Sound Like Me'] as const
+const REWRITE_OPTIONS = [
+  'Fix Grammar',
+  'Make Shorter',
+  'Make Friendlier',
+  'Make Professional',
+  'Sound Like Me',
+] as const
 
 interface ModeBarProps {
   mode: ChatMode
@@ -61,16 +100,26 @@ interface ModeBarProps {
   onCreateStyleChange: (style: string) => void
 }
 
-function SubOptionPill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+function SubOptionPill({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "px-2 py-0.5 rounded text-[11px] transition-all",
+        'px-2 py-0.5 rounded-md text-[11px] transition-all duration-150',
         active
-          ? "bg-foreground/10 text-foreground font-medium"
-          : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
+          ? 'bg-foreground/10 text-foreground font-medium shadow-sm'
+          : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+        'active:bg-muted',
       )}
       aria-pressed={active}
     >
@@ -79,20 +128,63 @@ function SubOptionPill({ active, label, onClick }: { active: boolean; label: str
   )
 }
 
-function SubOptions({ mode, tone, type, rewriteStyle, decideStructure, difficulty, langPair, brainstormTopic, wellnessType, createStyle,
-  onToneChange, onTypeChange, onRewriteStyleChange, onDecideStructureChange, onDifficultyChange, onLangPairChange, onBrainstormTopicChange, onWellnessTypeChange, onCreateStyleChange,
-}: Pick<ModeBarProps, 'mode' | 'tone' | 'type' | 'rewriteStyle' | 'decideStructure' | 'difficulty' | 'langPair' | 'brainstormTopic' | 'wellnessType' | 'createStyle' | 'onToneChange' | 'onTypeChange' | 'onRewriteStyleChange' | 'onDecideStructureChange' | 'onDifficultyChange' | 'onLangPairChange' | 'onBrainstormTopicChange' | 'onWellnessTypeChange' | 'onCreateStyleChange'>) {
+function SubOptions({
+  mode,
+  tone,
+  type,
+  rewriteStyle,
+  decideStructure,
+  difficulty,
+  langPair,
+  brainstormTopic,
+  wellnessType,
+  createStyle,
+  onToneChange,
+  onTypeChange,
+  onRewriteStyleChange,
+  onDecideStructureChange,
+  onDifficultyChange,
+  onLangPairChange,
+  onBrainstormTopicChange,
+  onWellnessTypeChange,
+  onCreateStyleChange,
+}: Pick<
+  ModeBarProps,
+  | 'mode'
+  | 'tone'
+  | 'type'
+  | 'rewriteStyle'
+  | 'decideStructure'
+  | 'difficulty'
+  | 'langPair'
+  | 'brainstormTopic'
+  | 'wellnessType'
+  | 'createStyle'
+  | 'onToneChange'
+  | 'onTypeChange'
+  | 'onRewriteStyleChange'
+  | 'onDecideStructureChange'
+  | 'onDifficultyChange'
+  | 'onLangPairChange'
+  | 'onBrainstormTopicChange'
+  | 'onWellnessTypeChange'
+  | 'onCreateStyleChange'
+>) {
   if (mode === 'write') {
     return (
-      <div className="flex items-center gap-3 px-3 py-1 border-b border-border/20 bg-muted/5">
+      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
         <div className="flex items-center gap-1">
-          <span className="text-[11px] text-muted-foreground/60">Tone</span>
-          {TONES.map(t => <SubOptionPill key={t} active={tone === t} label={t} onClick={() => onToneChange(t)} />)}
+          <span className="text-[10px] text-muted-foreground/40 font-medium">Tone</span>
+          {TONES.map((t) => (
+            <SubOptionPill key={t} active={tone === t} label={t} onClick={() => onToneChange(t)} />
+          ))}
         </div>
-        <div className="w-px h-3 bg-border/20" />
+        <div className="w-px h-3 bg-border/15" />
         <div className="flex items-center gap-1">
-          <span className="text-[11px] text-muted-foreground/60">Type</span>
-          {TYPES.map(t => <SubOptionPill key={t} active={type === t} label={t} onClick={() => onTypeChange(t)} />)}
+          <span className="text-[10px] text-muted-foreground/40 font-medium">Type</span>
+          {TYPES.map((t) => (
+            <SubOptionPill key={t} active={type === t} label={t} onClick={() => onTypeChange(t)} />
+          ))}
         </div>
       </div>
     )
@@ -100,35 +192,75 @@ function SubOptions({ mode, tone, type, rewriteStyle, decideStructure, difficult
 
   if (mode === 'rewrite') {
     return (
-      <div className="flex items-center gap-3 px-3 py-1 border-b border-border/20 bg-muted/5">
+      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
         <div className="flex items-center gap-1">
-          <span className="text-[11px] text-muted-foreground/60">Action</span>
-          {REWRITE_OPTIONS.map(o => <SubOptionPill key={o} active={rewriteStyle === o} label={o} onClick={() => onRewriteStyleChange(o)} />)}
+          <span className="text-[10px] text-muted-foreground/40 font-medium">Action</span>
+          {REWRITE_OPTIONS.map((o) => (
+            <SubOptionPill
+              key={o}
+              active={rewriteStyle === o}
+              label={o}
+              onClick={() => onRewriteStyleChange(o)}
+            />
+          ))}
         </div>
       </div>
     )
   }
 
-  const optionMap: Record<string, { label: string; options: readonly string[]; value: string; onChange: (v: string) => void }[]> = {
-    decide: [{ label: 'Output', options: DECIDE_STRUCTURES, value: decideStructure, onChange: onDecideStructureChange }],
-    explain: [{ label: 'Level', options: DIFFICULTIES, value: difficulty, onChange: onDifficultyChange }],
+  const optionMap: Record<
+    string,
+    { label: string; options: readonly string[]; value: string; onChange: (v: string) => void }[]
+  > = {
+    decide: [
+      {
+        label: 'Output',
+        options: DECIDE_STRUCTURES,
+        value: decideStructure,
+        onChange: onDecideStructureChange,
+      },
+    ],
+    explain: [
+      { label: 'Level', options: DIFFICULTIES, value: difficulty, onChange: onDifficultyChange },
+    ],
     translate: [{ label: 'To', options: LANG_PAIRS, value: langPair, onChange: onLangPairChange }],
-    brainstorm: [{ label: 'Topic', options: BRAINSTORM_TOPICS, value: brainstormTopic, onChange: onBrainstormTopicChange }],
-    wellness: [{ label: 'Type', options: WELLNESS_TYPES, value: wellnessType, onChange: onWellnessTypeChange }],
-    create: [{ label: 'Style', options: CREATE_STYLES, value: createStyle, onChange: onCreateStyleChange }],
+    brainstorm: [
+      {
+        label: 'Topic',
+        options: BRAINSTORM_TOPICS,
+        value: brainstormTopic,
+        onChange: onBrainstormTopicChange,
+      },
+    ],
+    wellness: [
+      {
+        label: 'Type',
+        options: WELLNESS_TYPES,
+        value: wellnessType,
+        onChange: onWellnessTypeChange,
+      },
+    ],
+    create: [
+      { label: 'Style', options: CREATE_STYLES, value: createStyle, onChange: onCreateStyleChange },
+    ],
   }
 
   const groups = optionMap[mode]
   if (!groups) return null
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1 border-b border-border/20 bg-muted/5">
+    <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
       {groups.map((g, i) => (
         <div key={g.label} className="flex items-center gap-1">
-          {i > 0 && <div className="w-px h-3 bg-border/20 mr-2" />}
-          <span className="text-[11px] text-muted-foreground/60">{g.label}</span>
-          {g.options.map(opt => (
-            <SubOptionPill key={opt} active={g.value === opt} label={opt} onClick={() => g.onChange(opt)} />
+          {i > 0 && <div className="w-px h-3 bg-border/15 mr-2" />}
+          <span className="text-[10px] text-muted-foreground/40 font-medium">{g.label}</span>
+          {g.options.map((opt) => (
+            <SubOptionPill
+              key={opt}
+              active={g.value === opt}
+              label={opt}
+              onClick={() => g.onChange(opt)}
+            />
           ))}
         </div>
       ))}
@@ -137,45 +269,78 @@ function SubOptions({ mode, tone, type, rewriteStyle, decideStructure, difficult
 }
 
 export const ModeBar = memo(function ModeBar({
-  mode, tone, type, rewriteStyle, decideStructure, difficulty, langPair, brainstormTopic, wellnessType, createStyle,
-  onModeChange, onToneChange, onTypeChange, onRewriteStyleChange, onDecideStructureChange, onDifficultyChange, onLangPairChange, onBrainstormTopicChange, onWellnessTypeChange, onCreateStyleChange,
+  mode,
+  tone,
+  type,
+  rewriteStyle,
+  decideStructure,
+  difficulty,
+  langPair,
+  brainstormTopic,
+  wellnessType,
+  createStyle,
+  onModeChange,
+  onToneChange,
+  onTypeChange,
+  onRewriteStyleChange,
+  onDecideStructureChange,
+  onDifficultyChange,
+  onLangPairChange,
+  onBrainstormTopicChange,
+  onWellnessTypeChange,
+  onCreateStyleChange,
 }: ModeBarProps): JSX.Element {
-  const [open, setOpen] = useState(false)
-  const current = MODES.find(m => m.value === mode) ?? MODES[0]
+  const current = MODES.find((m) => m.value === mode) ?? MODES[0]
 
   return (
     <>
-      <div className="flex items-center px-3 py-1.5 border-b border-border/20 bg-muted/5" role="group" aria-label="Chat mode">
-        <DropdownMenu open={open} onOpenChange={setOpen}>
-          <DropdownMenuTrigger className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-muted-foreground/70 hover:text-foreground hover:bg-muted/20 transition-all border border-transparent hover:border-border/20">
-            <span>{current.icon}</span>
-            <span>{current.label}</span>
-            <IconChevronDown className="w-3 h-3 opacity-40" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuLabel className="text-[11px] text-muted-foreground/60">Mode</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={mode} onValueChange={(v) => {
-              if (MODES.some(m => m.value === v)) onModeChange(v as ChatMode)
-            }}>
-              {MODES.map(m => (
-                <DropdownMenuRadioItem key={m.value} value={m.value} className="text-xs gap-2">
-                  <span>{m.icon}</span>
-                  <span>{m.label}</span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div
+        className="flex items-center gap-1 px-3 py-1.5 border-b border-border/15 bg-muted/20 overflow-x-auto scrollbar-none"
+        role="tablist"
+        aria-label="Chat mode"
+      >
+        {MODES.map((m) => (
+          <button
+            key={m.value}
+            type="button"
+            role="tab"
+            aria-selected={m.value === mode}
+            onClick={() => onModeChange(m.value)}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-150 whitespace-nowrap shrink-0',
+              m.value === mode
+                ? cn('shadow-sm border', MODE_ACCENT)
+                : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30 border border-transparent',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              'active:bg-muted',
+            )}
+          >
+            <span className="shrink-0">{m.icon}</span>
+            <span>{m.label}</span>
+          </button>
+        ))}
       </div>
 
       <SubOptions
-        mode={mode} tone={tone} type={type} rewriteStyle={rewriteStyle} decideStructure={decideStructure}
-        difficulty={difficulty} langPair={langPair} brainstormTopic={brainstormTopic}
-        wellnessType={wellnessType} createStyle={createStyle}
-        onToneChange={onToneChange} onTypeChange={onTypeChange} onRewriteStyleChange={onRewriteStyleChange}
-        onDecideStructureChange={onDecideStructureChange} onDifficultyChange={onDifficultyChange}
-        onLangPairChange={onLangPairChange} onBrainstormTopicChange={onBrainstormTopicChange}
-        onWellnessTypeChange={onWellnessTypeChange} onCreateStyleChange={onCreateStyleChange}
+        mode={mode}
+        tone={tone}
+        type={type}
+        rewriteStyle={rewriteStyle}
+        decideStructure={decideStructure}
+        difficulty={difficulty}
+        langPair={langPair}
+        brainstormTopic={brainstormTopic}
+        wellnessType={wellnessType}
+        createStyle={createStyle}
+        onToneChange={onToneChange}
+        onTypeChange={onTypeChange}
+        onRewriteStyleChange={onRewriteStyleChange}
+        onDecideStructureChange={onDecideStructureChange}
+        onDifficultyChange={onDifficultyChange}
+        onLangPairChange={onLangPairChange}
+        onBrainstormTopicChange={onBrainstormTopicChange}
+        onWellnessTypeChange={onWellnessTypeChange}
+        onCreateStyleChange={onCreateStyleChange}
       />
     </>
   )

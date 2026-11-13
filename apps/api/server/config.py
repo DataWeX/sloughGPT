@@ -22,10 +22,10 @@ from dataclasses import dataclass, field
 class GenerationConfig:
     """Production defaults for text generation. All overridable via env vars."""
 
-    temperature: float = 0.8
-    top_p: float = 0.9
-    top_k: int = 50
-    repetition_penalty: float = 1.2
+    temperature: float = 0.7
+    top_p: float = 0.85
+    top_k: int = 40
+    repetition_penalty: float = 1.15
     max_new_tokens: int = 200
     max_context_length: int = 1024
 
@@ -35,11 +35,11 @@ class GenerationConfig:
             return os.getenv(canonical, os.getenv(legacy, default))
 
         return cls(
-            temperature=float(_env("SLO_TEMPERATURE", "SLOUGHGT_TEMPERATURE", "0.8")),
-            top_p=float(_env("SLO_TOP_P", "SLOUGHGT_TOP_P", "0.9")),
-            top_k=int(_env("SLO_TOP_K", "SLOUGHGT_TOP_K", "50")),
+            temperature=float(_env("SLO_TEMPERATURE", "SLOUGHGT_TEMPERATURE", "0.7")),
+            top_p=float(_env("SLO_TOP_P", "SLOUGHGT_TOP_P", "0.85")),
+            top_k=int(_env("SLO_TOP_K", "SLOUGHGT_TOP_K", "40")),
             repetition_penalty=float(
-                _env("SLO_REPETITION_PENALTY", "SLOUGHGT_REPETITION_PENALTY", "1.2")
+                _env("SLO_REPETITION_PENALTY", "SLOUGHGT_REPETITION_PENALTY", "1.15")
             ),
             max_new_tokens=int(_env("SLO_MAX_NEW_TOKENS", "SLOUGHGT_MAX_NEW_TOKENS", "200")),
             max_context_length=int(
@@ -79,7 +79,6 @@ class ServerConfig:
         120.0  # timeout for register_generate() calls (env: SLO_REGISTER_GENERATE_TIMEOUT)
     )
     streaming_skip_paths: tuple[str, ...] = (
-        "/chat/stream",
         "/training/stream",
         "/session/",
         "/generate/stream",
@@ -92,6 +91,14 @@ class ServerConfig:
     watchdog_poll_seconds: int = 15
     watchdog_max_failures: int = 3
     watchdog_grace_seconds: int = 120
+
+    # Boot-time auto-resume of interrupted training jobs (decision
+    # 20261102_001425): default OFF — an infra reboot must never surprise
+    # whoever restarted the server with GPU burn. When on, the policy in
+    # training/auto_resume.py still caps at one concurrent resume and
+    # skips jobs without a loadable checkpoint, and every decision emits
+    # a process notification (legible automation).
+    auto_resume: bool = False
 
     enable_workflow: bool = True
     enable_health_monitor: bool = True
@@ -146,6 +153,7 @@ class ServerConfig:
                 os.getenv("SLO_REGISTER_GENERATE_TIMEOUT", "120.0")
             ),
             enable_watchdog=os.getenv("SLO_WATCHDOG", "true").lower() == "true",
+            auto_resume=os.getenv("SLO_AUTO_RESUME", "false").lower() in ("1", "true", "yes"),
             native_soul_path=os.getenv("SLO_NATIVE_SOUL_PATH", "").strip(),
             enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower()
             in ("1", "true", "yes"),
@@ -220,7 +228,10 @@ def set_memory_pressure_thresholds(
     emergency: float | None = None,
 ) -> None:
     """Set runtime memory pressure thresholds (persists until restart)."""
-    global _runtime_memory_pressure_warning, _runtime_memory_pressure_critical, _runtime_memory_pressure_emergency
+    global \
+        _runtime_memory_pressure_warning, \
+        _runtime_memory_pressure_critical, \
+        _runtime_memory_pressure_emergency
     if warning is not None:
         _runtime_memory_pressure_warning = warning
     if critical is not None:

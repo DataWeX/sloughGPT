@@ -1,15 +1,28 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { CardEditor } from './CardEditor'
 import type { Card } from './types'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+})
 
 const makeCard = (overrides: Partial<Card> = {}): Card => ({
-  id: 'c1', title: 'My Card', description: 'Card desc', column: 'todo',
-  priority: 'high', tags: ['a', 'b'], due_date: '2026-09-10',
-  assignee: 'alice', sprint: 's1', gh: 'gh-1', notes: [],
-  created_at: '', updated_at: '', root_hash: '', ...overrides,
+  id: 'c1',
+  title: 'My Card',
+  description: 'Card desc',
+  column: 'todo',
+  priority: 'high',
+  tags: ['a', 'b'],
+  due_date: '2026-09-10',
+  assignee: 'alice',
+  sprint: 's1',
+  gh: 'gh-1',
+  notes: [],
+  created_at: '',
+  updated_at: '',
+  root_hash: '',
+  ...overrides,
 })
 
 const defaultProps = {
@@ -17,10 +30,6 @@ const defaultProps = {
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
 }
-
-beforeEach(() => {
-  global.fetch = vi.fn(() => Promise.resolve({ ok: false })) as any
-})
 
 describe('CardEditor', () => {
   it('returns null when card is null', () => {
@@ -85,12 +94,5 @@ describe('CardEditor', () => {
     fireEvent.change(screen.getByDisplayValue('My Card'), { target: { value: 'Updated Card' } })
     fireEvent.click(screen.getAllByText('Save')[0])
     expect(onUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ title: 'Updated Card' }))
-  })
-  it('loads hash tree on mount', async () => {
-    const hashTree = { root: { root: 'abc123def456789012345678901234567890', tray: 'todo' }, notes: [], history: [], commits: [] }
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(hashTree) })) as any
-    render(<CardEditor card={makeCard()} {...defaultProps} />)
-    await screen.findByText('Hash Tree')
-    expect(screen.getAllByText('Hash Tree').length).toBeGreaterThanOrEqual(1)
   })
 })

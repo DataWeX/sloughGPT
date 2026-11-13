@@ -57,7 +57,7 @@ export const ChatInputField = memo(function ChatInputField({ value, onChange, on
   return (
     <>
       <Textarea
-        ref={textareaRef}
+        ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

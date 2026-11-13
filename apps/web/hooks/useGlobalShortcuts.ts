@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { SHORTCUT_TO_PATH } from '@/lib/navigation'
 
 export function useGlobalShortcuts() {
@@ -10,7 +10,8 @@ export function useGlobalShortcuts() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      const isInput =
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
       const ctrl = e.ctrlKey || e.metaKey
 
       // If shortcuts dialog is open, close it before a non-? shortcut action
@@ -83,6 +84,14 @@ export function useGlobalShortcuts() {
         e.preventDefault()
         // `?` toggles the dialog itself — no closeIfOpen needed, toggle-shortcuts handles it
         window.dispatchEvent(new CustomEvent('toggle-shortcuts'))
+      }
+
+      // Toggle dark mode: Ctrl+Shift+M
+      if (ctrl && e.shiftKey && e.key === 'M') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('toggle-dark-mode'))
+        return
       }
     }
 

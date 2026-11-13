@@ -1,7 +1,7 @@
 """
 Token-tree commands - train, encode, decode, and query a TokenTree tokenizer.
 
-All commands are thin wrappers over the core ``domains.training.token_tree``
+All commands are thin wrappers over the core ``domain.training._internal.token_tree``
 module (infrastructure before endpoints): training materializes BPE merges as
 a tree, and every query handler (encode/decode/similar/lineage/embedding/
 path) descends the tree or its Point-generated embeddings.
@@ -11,12 +11,12 @@ from pathlib import Path
 
 import numpy as np
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 
-from domains.training.token_tree import TokenTree
-from domains.training.token_tree_manager import get_token_tree_manager
+from domain.training._internal.token_tree import TokenTree
+from domain.training._internal.token_tree_manager import get_token_tree_manager
 
 
 def _resolve_corpus_file(path_or_name: str) -> Path:

@@ -11,13 +11,14 @@ Usage:
 import fnmatch
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, Optional
+from typing import Any
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 from .fetch import AGENT
-from .parse import parse, Page
+from .parse import Page, parse
 
 _robots: dict[str, RobotFileParser] = {}
 
@@ -78,7 +79,9 @@ def _normalize(url: str) -> str:
 
 def _same_origin(url_a: str, url_b: str) -> bool:
     """Check if two normalized URLs share the same scheme+netloc."""
-    return urlparse(url_a).netloc.lower().lstrip("www.") == urlparse(url_b).netloc.lower().lstrip("www.")
+    return urlparse(url_a).netloc.lower().lstrip("www.") == urlparse(url_b).netloc.lower().lstrip(
+        "www."
+    )
 
 
 def _check_robots(url: str, user_agent: str = AGENT) -> bool:
@@ -160,10 +163,14 @@ def _check_filters(url: str, include: list[str], exclude: list[str]) -> bool:
     return True
 
 
-def _links_from_page(page: Page, base_url: str, domain: str,
-                     same_domain: bool,
-                     include: Optional[list[str]] = None,
-                     exclude: Optional[list[str]] = None) -> list[str]:
+def _links_from_page(
+    page: Page,
+    base_url: str,
+    domain: str,
+    same_domain: bool,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+) -> list[str]:
     """Extract and normalize same-origin links from a page.
 
     Args:
@@ -208,11 +215,11 @@ def crawl(
     timeout: int = 15,
     same_domain: bool = True,
     respect_robots: bool = True,
-    on_page: Optional[Callable[[Page], None]] = None,
+    on_page: Callable[[Page], None] | None = None,
     workers: int = 5,
     dedup: bool = False,
-    include: Optional[list[str]] = None,
-    exclude: Optional[list[str]] = None,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
 ) -> list[Page]:
     """Crawl URLs recursively from a seed URL. Uses a thread pool for concurrent fetching.
 
@@ -244,7 +251,7 @@ def crawl(
     results: list[Page] = []
     seed_norm = _normalize(seed)
     domain = urlparse(seed).netloc.lower().lstrip("www.")
-    dedup_lock: Optional[Any] = threading.Lock() if dedup else None
+    dedup_lock: Any | None = threading.Lock() if dedup else None
     include = include or []
     exclude = exclude or []
 
@@ -309,7 +316,9 @@ def crawl(
                     continue
 
                 if level < depth:
-                    for link_url in _links_from_page(page, url, domain, same_domain, include, exclude):
+                    for link_url in _links_from_page(
+                        page, url, domain, same_domain, include, exclude
+                    ):
                         if link_url not in visited and len(results) + len(next_level) < max_pages:
                             next_level.append((link_url, level + 1))
                             visited.add(link_url)
@@ -324,11 +333,11 @@ def crawl_urls(
     *,
     rate: float = 0.5,
     timeout: int = 15,
-    on_page: Optional[Callable[[Page], None]] = None,
+    on_page: Callable[[Page], None] | None = None,
     workers: int = 5,
     dedup: bool = False,
-    include: Optional[list[str]] = None,
-    exclude: Optional[list[str]] = None,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
 ) -> list[Page]:
     """Fetch a list of URLs concurrently (non-recursive).
 

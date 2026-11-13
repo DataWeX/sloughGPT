@@ -8,8 +8,8 @@
  */
 
 import { memo, useMemo } from 'react'
-import { cn } from '@sloughgpt/strui'
 import { Markdown } from './messages/Markdown'
+import { MessageFrame } from './messages/MessageFrame'
 import { ToolCallPanel } from './messages/ToolCallPanel'
 import { StreamingIndicator } from './StreamingIndicator'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
@@ -51,7 +51,7 @@ function ThinkingBlock() {
 function StreamingCursor() {
   return (
     <span
-      className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse"
+      className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse motion-reduce:animate-none"
       aria-hidden="true"
     />
   )
@@ -61,8 +61,11 @@ function ImageGrid({ images }: { images: ImageAttachment[] }) {
   if (!images || images.length === 0) return null
   return (
     <div className="flex flex-wrap gap-2 mb-2">
-      {images.map(img => (
-        <div key={img.id} className="relative rounded-lg overflow-hidden border border-border/40 max-w-[240px]">
+      {images.map((img) => (
+        <div
+          key={img.id}
+          className="relative rounded-lg overflow-hidden border border-border/40 max-w-[240px]"
+        >
           <img
             src={img.dataUrl}
             alt={img.name}
@@ -90,9 +93,13 @@ function HighlightedContent({ content, query }: { content: string; query?: strin
   return (
     <>
       {parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase()
-          ? <mark key={i} className="bg-primary/20 rounded px-0.5">{part}</mark>
-          : part
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} className="bg-primary/20 rounded px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
       )}
     </>
   )
@@ -116,9 +123,7 @@ export const MessageRenderer = memo(function MessageRenderer({
 
     // User messages — plain text with highlighting
     if (role === 'user') {
-      return (
-        <HighlightedContent content={content} query={searchQuery} />
-      )
+      return <HighlightedContent content={content} query={searchQuery} />
     }
 
     // Assistant messages — markdown with streaming cursor
@@ -131,46 +136,49 @@ export const MessageRenderer = memo(function MessageRenderer({
   }, [content, role, isStreaming, searchQuery])
 
   return (
-    <div className={cn('space-y-1', className)}>
-      {/* Images */}
-      <ImageGrid images={images || []} />
+    <MessageFrame
+      role={role}
+      className={className}
+      footer={
+        metadata ? (
+          <>
+            {metadata.model && <span>{metadata.model}</span>}
+            {metadata.tokens != null && <span> · {metadata.tokens} tokens</span>}
+            {metadata.latencyMs != null && <span> · {metadata.latencyMs}ms</span>}
+          </>
+        ) : undefined
+      }
+    >
+      <div className="space-y-1">
+        {/* Images */}
+        <ImageGrid images={images || []} />
 
-      {/* Tool calls */}
-      {toolCalls && toolCalls.length > 0 && (
-        <ToolCalls events={toolCalls} />
-      )}
+        {/* Tool calls */}
+        {toolCalls && toolCalls.length > 0 && <ToolCalls events={toolCalls} />}
 
-      {/* Reasoning (thinking) */}
-      {reasoning && (
-        <details className="text-xs text-muted-foreground border border-border/30 rounded-lg p-2">
-          <summary className="cursor-pointer hover:text-foreground transition-colors">
-            Reasoning
-          </summary>
-          <div className="mt-1.5 font-mono text-[11px] whitespace-pre-wrap opacity-70">
-            {reasoning}
+        {/* Reasoning (thinking) */}
+        {reasoning && (
+          <details className="text-xs text-muted-foreground border border-border/30 rounded-lg p-2">
+            <summary className="cursor-pointer hover:text-foreground transition-colors">
+              Reasoning
+            </summary>
+            <div className="mt-1.5 font-mono text-[11px] whitespace-pre-wrap opacity-70">
+              {reasoning}
+            </div>
+          </details>
+        )}
+
+        {/* Main content */}
+        {renderedContent}
+
+        {/* Error indicator */}
+        {isError && (
+          <div className="text-xs text-destructive mt-1 flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+            Response interrupted
           </div>
-        </details>
-      )}
-
-      {/* Main content */}
-      {renderedContent}
-
-      {/* Error indicator */}
-      {isError && (
-        <div className="text-xs text-destructive mt-1 flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
-          Response interrupted
-        </div>
-      )}
-
-      {/* Metadata (subtle) */}
-      {metadata && (
-        <div className="text-[9px] text-muted-foreground/40 font-mono mt-0.5">
-          {metadata.model && <span>{metadata.model}</span>}
-          {metadata.tokens != null && <span> · {metadata.tokens} tokens</span>}
-          {metadata.latencyMs != null && <span> · {metadata.latencyMs}ms</span>}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </MessageFrame>
   )
 })

@@ -5,9 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -15,20 +13,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from mogdb.sync import (
     SyncResult,
-    _content_hash,
     _cast_csv_value,
+    _content_hash,
+    _load_csv,
     _load_json,
     _load_jsonl,
-    _load_csv,
+    preview_from_files,
+    sync_from_csv,
     sync_from_files,
     sync_from_json,
     sync_from_jsonl,
-    sync_from_csv,
-    preview_from_files,
 )
 
-
 # ── SyncResult ──────────────────────────────────────────────────────
+
 
 class TestSyncResult:
     def test_defaults(self):
@@ -60,6 +58,7 @@ class TestSyncResult:
 
 # ── _content_hash ───────────────────────────────────────────────────
 
+
 class TestContentHash:
     def test_same_content_same_hash(self):
         assert _content_hash({"a": 1, "b": 2}) == _content_hash({"a": 1, "b": 2})
@@ -79,6 +78,7 @@ class TestContentHash:
 
 
 # ── _cast_csv_value ─────────────────────────────────────────────────
+
 
 class TestCastCsvValue:
     def test_empty_string(self):
@@ -119,6 +119,7 @@ class TestCastCsvValue:
 
 # ── _load_json ──────────────────────────────────────────────────────
 
+
 class TestLoadJson:
     def test_loads_array(self, tmp_path):
         path = tmp_path / "data.json"
@@ -153,6 +154,7 @@ class TestLoadJson:
 
 # ── _load_jsonl ─────────────────────────────────────────────────────
 
+
 class TestLoadJsonl:
     def test_loads_jsonl(self, tmp_path):
         path = tmp_path / "data.jsonl"
@@ -171,6 +173,7 @@ class TestLoadJsonl:
 
 
 # ── _load_csv ───────────────────────────────────────────────────────
+
 
 class TestLoadCsv:
     def test_loads_csv(self, tmp_path):
@@ -192,6 +195,7 @@ class TestLoadCsv:
 
 # ── sync_from_files ─────────────────────────────────────────────────
 
+
 class TestSyncFromFiles:
     def _mock_collection(self, existing=None):
         coll = MagicMock()
@@ -200,10 +204,14 @@ class TestSyncFromFiles:
 
     def test_inserts_new_documents(self, tmp_path):
         path = tmp_path / "data.json"
-        path.write_text(json.dumps([
-            {"email": "a@test.com", "name": "Alice"},
-            {"email": "b@test.com", "name": "Bob"},
-        ]))
+        path.write_text(
+            json.dumps(
+                [
+                    {"email": "a@test.com", "name": "Alice"},
+                    {"email": "b@test.com", "name": "Bob"},
+                ]
+            )
+        )
         coll = self._mock_collection()
         result = sync_from_files(coll, str(path), "email")
         assert result.inserted == 2
@@ -289,11 +297,15 @@ class TestSyncFromFiles:
     def test_mixed_operations(self, tmp_path):
         """Insert new, update changed, keep unchanged."""
         path = tmp_path / "data.json"
-        path.write_text(json.dumps([
-            {"id": "a", "val": 1},    # unchanged
-            {"id": "b", "val": 99},   # updated
-            {"id": "c", "val": 3},    # new
-        ]))
+        path.write_text(
+            json.dumps(
+                [
+                    {"id": "a", "val": 1},  # unchanged
+                    {"id": "b", "val": 99},  # updated
+                    {"id": "c", "val": 3},  # new
+                ]
+            )
+        )
         existing = [
             {"_id": "1", "id": "a", "val": 1},
             {"_id": "2", "id": "b", "val": 2},
@@ -306,6 +318,7 @@ class TestSyncFromFiles:
 
 
 # ── preview_from_files ───────────────────────────────────────────────
+
 
 class TestPreviewFromFiles:
     def _mock_collection(self, existing=None):
@@ -327,11 +340,15 @@ class TestPreviewFromFiles:
 
     def test_matches_sync_plan(self, tmp_path):
         path = tmp_path / "data.json"
-        path.write_text(json.dumps([
-            {"id": "a", "val": 1},    # unchanged
-            {"id": "b", "val": 99},   # updated
-            {"id": "c", "val": 3},    # new
-        ]))
+        path.write_text(
+            json.dumps(
+                [
+                    {"id": "a", "val": 1},  # unchanged
+                    {"id": "b", "val": 99},  # updated
+                    {"id": "c", "val": 3},  # new
+                ]
+            )
+        )
         existing = [
             {"_id": "1", "id": "a", "val": 1},
             {"_id": "2", "id": "b", "val": 2},
@@ -361,6 +378,7 @@ class TestPreviewFromFiles:
 
 
 # ── Convenience aliases ─────────────────────────────────────────────
+
 
 class TestConvenienceAliases:
     def test_sync_from_json(self, tmp_path):

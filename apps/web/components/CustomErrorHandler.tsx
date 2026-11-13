@@ -8,6 +8,7 @@ import { addGlobalError } from '@/lib/error-store'
 import { reportError } from '@/lib/error-reporter'
 import { extractErrorMessage, formatStackTrace, getErrorType } from '@/lib/error-utils'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
+import { MAN_FULL_NAME } from '@/components/brand/ManMark'
 
 interface CustomErrorHandlerProps {
   error: Error & { digest?: string }
@@ -51,16 +52,17 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
     }
   }
 
-  const isNetworkError = errorMessage.toLowerCase().includes('fetch') ||
-                         errorMessage.toLowerCase().includes('network') ||
-                         errorMessage.toLowerCase().includes('econnrefused') ||
-                         errorMessage.toLowerCase().includes('could not fetch')
+  const isNetworkError =
+    errorMessage.toLowerCase().includes('fetch') ||
+    errorMessage.toLowerCase().includes('network') ||
+    errorMessage.toLowerCase().includes('econnrefused') ||
+    errorMessage.toLowerCase().includes('could not fetch')
 
-  const isAuthError = errorMessage.includes('401') ||
-                      errorMessage.toLowerCase().includes('unauthorized')
+  const isAuthError =
+    errorMessage.includes('401') || errorMessage.toLowerCase().includes('unauthorized')
 
-  const isNotFoundError = errorMessage.includes('404') ||
-                          errorMessage.toLowerCase().includes('not found')
+  const isNotFoundError =
+    errorMessage.includes('404') || errorMessage.toLowerCase().includes('not found')
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -72,10 +74,13 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
             </div>
             <div className="flex-1 min-w-0">
               <CardTitle className="text-xs flex items-center gap-1.5">
-                {isNetworkError ? 'Connection Error' :
-                 isAuthError ? 'Authentication Error' :
-                 isNotFoundError ? 'Page Not Found' :
-                 'Something went wrong'}
+                {isNetworkError
+                  ? 'Connection Error'
+                  : isAuthError
+                    ? 'Authentication Error'
+                    : isNotFoundError
+                      ? 'Page Not Found'
+                      : 'Something went wrong'}
                 {errorType && (
                   <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
                     {errorType}
@@ -100,14 +105,20 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
             <div className="rounded-md bg-muted p-2 text-[10px] font-mono space-y-2 max-h-56 overflow-y-auto">
               {digest && (
                 <div>
-                  <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">Digest</span>
-                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">{digest}</pre>
+                  <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">
+                    Digest
+                  </span>
+                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">
+                    {digest}
+                  </pre>
                 </div>
               )}
               {stackFrames.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">Stack Trace</span>
+                    <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">
+                      Stack Trace
+                    </span>
                     <button
                       type="button"
                       onClick={copyToClipboard}
@@ -127,7 +138,9 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               {error.stack && stackFrames.length === 0 && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">Raw Stack</span>
+                    <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">
+                      Raw Stack
+                    </span>
                     <button
                       type="button"
                       onClick={copyToClipboard}
@@ -137,7 +150,9 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
                       {copied ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">{error.stack}</pre>
+                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">
+                    {error.stack}
+                  </pre>
                 </div>
               )}
             </div>
@@ -150,7 +165,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
             </Button>
             <Button
               variant="outline"
-              onClick={() => window.location.href = '/'}
+              onClick={() => (window.location.href = '/')}
               className="flex-1 h-7 text-[11px]"
               size="sm"
             >
@@ -164,6 +179,8 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               Check your internet connection and try again. The service might be unreachable.
             </p>
           )}
+
+          <p className="text-[9px] text-muted-foreground/60 text-center">{MAN_FULL_NAME}</p>
         </CardContent>
       </Card>
     </div>

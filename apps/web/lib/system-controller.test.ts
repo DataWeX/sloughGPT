@@ -141,13 +141,17 @@ describe('systemController.getOutput', () => {
     const result = await systemController.getOutput()
     expect(result.lines).toHaveLength(1)
     expect(result.lines[0].text).toBe('test log')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/output?n=100', undefined, { silent: true })
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/output?n=100', undefined, {
+      silent: true,
+    })
   })
 
   it('GETs /system/output with custom n', async () => {
     apiClient.apiGet.mockResolvedValue({ lines: [], size: 0, seq: 0 })
     await systemController.getOutput(50)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/output?n=50', undefined, { silent: true })
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/output?n=50', undefined, {
+      silent: true,
+    })
   })
 })
 
@@ -161,7 +165,14 @@ describe('systemController.getExecutorStatus', () => {
       max_workers: 2,
       total_tracked: 5,
       jobs: [
-        { job_id: 'j1', status: 'running', tree_id: 'test', submitted_at: 1, elapsed_s: 2.5, cancel_requested: false },
+        {
+          job_id: 'j1',
+          status: 'running',
+          tree_id: 'test',
+          submitted_at: 1,
+          elapsed_s: 2.5,
+          cancel_requested: false,
+        },
       ],
     }
     apiClient.apiGet.mockResolvedValue(mockExecutor)
@@ -174,7 +185,13 @@ describe('systemController.getExecutorStatus', () => {
   })
 
   it('returns uninitialized state when executor not created', async () => {
-    apiClient.apiGet.mockResolvedValue({ initialized: false, active_jobs: 0, max_workers: 0, total_tracked: 0, jobs: [] })
+    apiClient.apiGet.mockResolvedValue({
+      initialized: false,
+      active_jobs: 0,
+      max_workers: 0,
+      total_tracked: 0,
+      jobs: [],
+    })
     const result = await systemController.getExecutorStatus()
     expect(result.initialized).toBe(false)
   })
@@ -212,7 +229,9 @@ describe('systemController.getInferencePoolStatus', () => {
     const result = await systemController.getInferencePoolStatus()
     expect(result.initialized).toBe(true)
     expect(result.max_workers).toBe(4)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/inference-pool', undefined, { silent: true })
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/inference-pool', undefined, {
+      silent: true,
+    })
   })
 })
 
@@ -220,11 +239,18 @@ describe('systemController.getProcessGuardStatus', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('GETs /models/process-guard', async () => {
-    apiClient.apiGet.mockResolvedValue({ enabled: false, active: false, model_id: null, health: null })
+    apiClient.apiGet.mockResolvedValue({
+      enabled: false,
+      active: false,
+      model_id: null,
+      health: null,
+    })
     const result = await systemController.getProcessGuardStatus()
     expect(result.enabled).toBe(false)
     expect(result.active).toBe(false)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/models/process-guard', undefined, { silent: true })
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/models/process-guard', undefined, {
+      silent: true,
+    })
   })
 })
 
@@ -233,9 +259,185 @@ describe('systemController.setProcessGuardEnabled', () => {
 
   it('POSTs to /models/process-guard with enabled flag', async () => {
     const { apiPost } = await import('./http-client')
-    vi.mocked(apiPost).mockResolvedValue({ enabled: true, active: false, model_id: 'gpt2', health: null })
+    vi.mocked(apiPost).mockResolvedValue({
+      enabled: true,
+      active: false,
+      model_id: 'gpt2',
+      health: null,
+    })
     const result = await systemController.setProcessGuardEnabled(true)
     expect(result.enabled).toBe(true)
     expect(apiPost).toHaveBeenCalledWith('/models/process-guard', { enabled: true })
+  })
+})
+
+describe('systemController.getBattery', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('GETs /system/battery with status, control, and advice', async () => {
+    const mockBattery = {
+      status: {
+        level: 64,
+        is_charging: false,
+        is_plugged: true,
+        health: 'Good',
+        capacity: -1,
+        voltage_mv: 7400,
+        current_ma: -400,
+        time_to_full_min: null,
+        time_to_empty_min: 240,
+        source: 'simulated',
+        name: 'SIM0',
+        level_band: 'ok',
+        updated_at: 1,
+        cycle_count: 12,
+        energy_full: 48000000,
+        energy_full_design: 50000000,
+        health_percent: 96,
+      },
+      control: {
+        supported: true,
+        writable: true,
+        path: '/sys/BAT0/charge_control_end_threshold',
+        current_limit: 80,
+        reason: 'ready',
+        start_supported: true,
+        start_path: '/sys/BAT0/charge_control_start_threshold',
+        current_floor: 40,
+        incumbent: null,
+      },
+      advice: {
+        limit: 80,
+        action: 'maintain',
+        reason: 'Battery 64% — on battery (optimal range 20–80%).',
+      },
+      policy: {
+        enabled: true,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+        file: '/root/.config/chargectl/policy.json',
+        error: null,
+        explain: 'policy on — holding 40-80%',
+      },
+      daemon: {
+        present: true,
+        active: true,
+        pid: 99,
+        age_seconds: 4,
+        owned: true,
+        dry_run: false,
+        last_action: 'set_ceiling',
+        last_value: 80,
+        last_reason: 're-asserting 80%',
+        last_outcome: 'charge threshold set to 80%',
+        explain: 'policy on — holding 40-80%',
+      },
+    }
+    apiClient.apiGet.mockResolvedValue(mockBattery)
+    const result = await systemController.getBattery()
+    expect(result.status.level).toBe(64)
+    expect(result.control.supported).toBe(true)
+    expect(result.advice.action).toBe('maintain')
+    expect(result.policy.band).toBe('40-80')
+    expect(result.daemon.active).toBe(true)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/battery', undefined, { silent: true })
+  })
+})
+
+describe('systemController.setBatteryLimit', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('POSTs /system/battery/limit with the requested percent', async () => {
+    const mockResult = {
+      applied: true,
+      supported: true,
+      limit: 80,
+      reason: 'charge capped at 80%',
+      path: '/sys/BAT0/charge_control_end_threshold',
+      floor_limit: null,
+    }
+    apiClient.apiPost.mockResolvedValue(mockResult)
+    const result = await systemController.setBatteryLimit(80)
+    expect(result.applied).toBe(true)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/system/battery/limit?percent=80', undefined, {
+      silent: true,
+    })
+  })
+})
+
+describe('systemController.setBatteryPolicy', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('PUTs only the fields that were provided', async () => {
+    const mockResult = {
+      ok: true,
+      error: null,
+      policy: {
+        enabled: true,
+        floor: 45,
+        ceiling: 70,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '45-70',
+      },
+      file: '/root/.config/chargectl/policy.json',
+      explain: 'policy on — holding 45-70%',
+    }
+    apiClient.apiPut.mockResolvedValue(mockResult)
+
+    const result = await systemController.setBatteryPolicy({
+      enabled: true,
+      floor: 45,
+      ceiling: 70,
+    })
+    expect(result.ok).toBe(true)
+    expect(result.policy.band).toBe('45-70')
+    expect(apiClient.apiPut).toHaveBeenCalledWith(
+      '/system/battery/policy?enabled=true&floor=45&ceiling=70',
+      undefined,
+      { silent: true },
+    )
+  })
+
+  it('omits unset fields so a partial update keeps the rest', async () => {
+    apiClient.apiPut.mockResolvedValue({
+      ok: true,
+      error: null,
+      policy: {
+        enabled: false,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+      },
+    })
+    await systemController.setBatteryPolicy({ enabled: false })
+    expect(apiClient.apiPut).toHaveBeenCalledWith(
+      '/system/battery/policy?enabled=false',
+      undefined,
+      { silent: true },
+    )
+  })
+
+  it('surfaces a rejected band instead of throwing', async () => {
+    apiClient.apiPut.mockResolvedValue({
+      ok: false,
+      error: 'floor (90%) must be below ceiling (60%)',
+      policy: {
+        enabled: true,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+      },
+    })
+    const result = await systemController.setBatteryPolicy({ floor: 90, ceiling: 60 })
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('floor')
   })
 })

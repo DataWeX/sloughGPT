@@ -5,8 +5,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SERVER_DIR = _REPO_ROOT / "apps" / "api" / "server"
 if str(_SERVER_DIR) not in sys.path:

@@ -10,15 +10,12 @@
 const PAGES = [
   { path: '/', name: 'home' },
   { path: '/chat', name: 'chat' },
-  { path: '/models', name: 'models' },
   { path: '/training', name: 'training' },
   { path: '/datasets', name: 'datasets' },
   { path: '/settings', name: 'settings' },
   { path: '/monitoring', name: 'monitoring' },
   { path: '/knowledge', name: 'knowledge' },
-  { path: '/memory', name: 'memory' },
   { path: '/shell', name: 'shell' },
-  { path: '/vm', name: 'vm' },
   { path: '/companion', name: 'companion' },
   { path: '/agents', name: 'agents' },
   { path: '/collections', name: 'collections' },
@@ -29,25 +26,20 @@ const PAGES = [
   { path: '/self-train', name: 'self-train' },
   { path: '/lora-eval', name: 'lora-eval' },
   { path: '/meta-weights', name: 'meta-weights' },
-  { path: '/rate-limit', name: 'rate-limit' },
   { path: '/benchmark', name: 'benchmark' },
   { path: '/feedback', name: 'feedback' },
-  { path: '/images', name: 'images' },
+  // /images was absorbed into /files (card 7839a7c6) — it now 307s to /files,
+  // which has its own row below, so a separate screenshot would only duplicate it.
   { path: '/files', name: 'files' },
-  { path: '/docstore', name: 'docstore' },
-  { path: '/kb', name: 'kb' },
   { path: '/vector', name: 'vector' },
   { path: '/workflow', name: 'workflow' },
   { path: '/world', name: 'world' },
   { path: '/registry', name: 'registry' },
-  { path: '/security', name: 'security' },
-  { path: '/admin', name: 'admin' },
   { path: '/session', name: 'session' },
   { path: '/evaluate', name: 'evaluate' },
   { path: '/experiments', name: 'experiments' },
   { path: '/export', name: 'export' },
   { path: '/adapters', name: 'adapters' },
-  { path: '/learn', name: 'learn' },
   { path: '/voice', name: 'voice' },
   { path: '/multimodal', name: 'multimodal' },
   { path: '/compare', name: 'compare' },
@@ -64,8 +56,13 @@ describe('Visual — AppRouteHeader across all pages', () => {
     it(`header: ${name} (${path})`, () => {
       cy.visit(path, { failOnStatusCode: false })
       cy.get('body').then(($body) => {
-        if ($body.find('[class*="sl-page-header"], [class*="app-route-header"], header, nav').length > 0) {
-          cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot(`headers/${name}`)
+        if (
+          $body.find('[class*="sl-page-header"], [class*="app-route-header"], header, nav').length >
+          0
+        ) {
+          cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+            .first()
+            .screenshot(`headers/${name}`)
         } else {
           cy.screenshotPage(`headers/${name}-fullpage`)
         }
@@ -82,16 +79,25 @@ describe('Visual — Header responsive breakpoints', () => {
 
   it('header at desktop (1280px)', () => {
     cy.viewport(1280, 800)
-    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot('headers/responsive-desktop')
+    // At desktop width the mobile nav collapses to zero height and matches
+    // first in DOM order — skip hidden candidates.
+    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .filter(':visible')
+      .first()
+      .screenshot('headers/responsive-desktop')
   })
 
   it('header at tablet (768px)', () => {
     cy.viewport(768, 1024)
-    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot('headers/responsive-tablet')
+    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .first()
+      .screenshot('headers/responsive-tablet')
   })
 
   it('header at mobile (375px)', () => {
     cy.viewport(375, 667)
-    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot('headers/responsive-mobile')
+    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .first()
+      .screenshot('headers/responsive-mobile')
   })
 })

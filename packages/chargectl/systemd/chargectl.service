@@ -1,0 +1,44 @@
+# chargectl — enforce the battery charge policy on a fixed interval.
+#
+# The charge threshold is state that decays: a reboot, an AC re-plug or a vendor
+# driver resets it, so something has to keep putting it back. That something is this
+# unit. It reads ~/.config/chargectl/policy.json (override with CHARGECTL_POLICY) and
+# records what it did in $CHARGECTL_STATE so the app can show it.
+#
+# Install:
+#   sudo make charge-svc                       (system unit, needs root)
+#   make charge-svc-user                       (user unit, no root — dev/VM)
+# or by hand:
+#   sudo install -m 644 packages/chargectl/systemd/chargectl.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now chargectl
+#
+# Both make targets rewrite ExecStart to this checkout's .venv/bin/chargectl when it
+# exists, so the installed unit runs exactly the code you are looking at, and they
+# check the obvious failure modes first (systemctl present, running as root, unit
+# file present, console script present).
+#
+# A machine with no charge threshold (most VMs/containers) ticks in dry-run and
+# exits 0 — the unit stays active, it just never writes anything.
+
+[Unit]
+Description=chargectl battery charge policy daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/chargectl daemon
+Restart=on-failure
+RestartSec=5
+Environment=CHARGECTL_POLICY=/etc/chargectl/policy.json
+Environment=CHARGECTL_STATE=/var/lib/chargectl/state.json
+# Threshold writes need root; everything else is read-only.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+# `-` so a host missing one of these paths still starts (dry run instead of a
+# failed start) — which is what a VM or a container looks like.
+ReadWritePaths=-/sys/class/power_supply -/etc/chargectl -/var/lib/chargectl
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

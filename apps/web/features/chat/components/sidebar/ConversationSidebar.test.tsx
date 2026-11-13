@@ -2,9 +2,19 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/link', () => ({
-  default: ({ children, href, onClick }: { children: React.ReactNode; href: string; onClick?: () => void }) => (
-    <a href={href} onClick={onClick}>{children}</a>
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({
+    children,
+    href,
+    onClick,
+  }: {
+    children: React.ReactNode
+    href: string
+    onClick?: () => void
+  }) => (
+    <a href={href} onClick={onClick}>
+      {children}
+    </a>
   ),
 }))
 
@@ -13,14 +23,24 @@ vi.mock('@/lib/download-utils', () => ({
 }))
 
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
+    C.displayName = `Icon${name}`
+    return C
+  }
   return {
     cn: vi.fn((...args: any[]) => args.join(' ')),
     Button: ({ children, onClick, variant, size, className }: any) => (
-      <button onClick={onClick} className={className} data-variant={variant} data-size={size}>{children}</button>
+      <button onClick={onClick} className={className} data-variant={variant} data-size={size}>
+        {children}
+      </button>
     ),
     IconPlus: iconMock('plus'),
-    IconStar: ({ filled }: any) => <span data-testid="icon-star" data-filled={String(filled)}>star</span>,
+    IconStar: ({ filled }: any) => (
+      <span data-testid="icon-star" data-filled={String(filled)}>
+        star
+      </span>
+    ),
     IconPin: iconMock('pin'),
     IconChat: iconMock('chat'),
     IconChevronRight: iconMock('chevron-right'),
@@ -35,14 +55,63 @@ vi.mock('@sloughgpt/strui', () => {
     IconCopy: iconMock('copy'),
     IconDot: iconMock('dot'),
     IconDotOutline: iconMock('dot-outline'),
-    AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialog: ({ open, onOpenChange, children }: any) =>
+      open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
     AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
     AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
     AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
     AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    AlertDialogAction: ({ children, onClick, ...props }: any) => (
+      <button onClick={onClick} {...props}>
+        {children}
+      </button>
+    ),
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
@@ -50,7 +119,9 @@ const { chatDBMock } = vi.hoisted(() => {
   const kv: Record<string, string> = {}
   const chatDBMock = {
     getKV: vi.fn(async (key: string) => kv[key] ?? undefined),
-    setKV: vi.fn(async (key: string, value: string) => { kv[key] = value }),
+    setKV: vi.fn(async (key: string, value: string) => {
+      kv[key] = value
+    }),
   }
   return { chatDBMock }
 })
@@ -89,7 +160,10 @@ describe('ConversationSidebar', () => {
     onClose,
   }
 
-  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
   afterEach(cleanup)
 
   it('renders desktop sidebar', () => {
@@ -97,6 +171,27 @@ describe('ConversationSidebar', () => {
     const aside = document.querySelector('aside')
     expect(aside).toBeDefined()
     expect(aside!.className).toContain('hidden lg:flex')
+  })
+
+  it('reserves a left gutter for the nav bookmark tab when expanded', () => {
+    // AppLayout's nav collapse tab floats over this panel as a sticker
+    // (z-40) and is --nav-tab-protrusion wide. The expanded desktop panel
+    // docks it in a gutter made of the SAME token, so the tab never covers
+    // row titles or steals their clicks at vertical center, and the two
+    // widths cannot drift apart.
+    render(<ConversationSidebar {...defaultProps} />)
+    const aside = document.querySelector('aside')
+    expect(aside!.className).toContain('pl-[var(--nav-tab-protrusion)]')
+    expect(aside!.className).toContain(
+      'w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))]',
+    )
+  })
+
+  it('drops the gutter when collapsed (width must be 0, no padding)', () => {
+    render(<ConversationSidebar {...defaultProps} collapsed />)
+    const aside = document.querySelector('aside')
+    expect(aside!.className).toContain('w-0')
+    expect(aside!.className).not.toContain('pl-[var(--nav-tab-protrusion)]')
   })
 
   it('shows empty state message', () => {
@@ -156,14 +251,17 @@ describe('ConversationSidebar', () => {
         {...defaultProps}
         conversations={conversations}
         currentConversationId="1"
-      />
+      />,
     )
     const convEl = screen.getByText('Conversation 1').closest('[role="button"]')
     expect(convEl?.className).toContain('bg-primary/10')
   })
 
   it('filters conversations by search', () => {
-    const conversations = [createConv('1', { name: 'Apple pie' }), createConv('2', { name: 'Banana bread' })]
+    const conversations = [
+      createConv('1', { name: 'Apple pie' }),
+      createConv('2', { name: 'Banana bread' }),
+    ]
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
     const searchInput = screen.getByLabelText('Search conversations')
     fireEvent.change(searchInput, { target: { value: 'Apple' } })
@@ -186,7 +284,7 @@ describe('ConversationSidebar', () => {
         {...defaultProps}
         conversations={conversations}
         onDeleteConversation={onDeleteConversation}
-      />
+      />,
     )
     const deleteBtn = screen.getByLabelText('Delete Conversation 1')
     fireEvent.click(deleteBtn)
@@ -203,7 +301,7 @@ describe('ConversationSidebar', () => {
         {...defaultProps}
         conversations={conversations}
         onDeleteConversation={onDeleteConversation}
-      />
+      />,
     )
     const deleteBtn = screen.getByLabelText('Delete Conversation 1')
     fireEvent.click(deleteBtn)
@@ -266,26 +364,34 @@ describe('ConversationSidebar', () => {
 
   it('displays truncated message preview', () => {
     const longText = 'A'.repeat(50)
-    const conversations = [createConv('1', {
-      messages: [{ id: 'm1', role: 'user', content: longText, timestamp: Date.now() }],
-    })]
+    const conversations = [
+      createConv('1', {
+        messages: [{ id: 'm1', role: 'user', content: longText, timestamp: Date.now() }],
+      }),
+    ]
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
     const expected = 'A'.repeat(36) + '…'
     expect(screen.getByText(expected)).toBeDefined()
   })
 
   it('hides message preview when last message has no content', () => {
-    const conversations = [createConv('1', {
-      messages: [{ id: 'm1', role: 'user', content: '', timestamp: Date.now() }],
-    })]
-    const { container } = render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const conversations = [
+      createConv('1', {
+        messages: [{ id: 'm1', role: 'user', content: '', timestamp: Date.now() }],
+      }),
+    ]
+    const { container } = render(
+      <ConversationSidebar {...defaultProps} conversations={conversations} />,
+    )
     const lineClamp = container.querySelector('.line-clamp-1')
     expect(lineClamp).toBeNull()
   })
 
   it('double-clicking conversation name opens rename input', () => {
     const conversations = [createConv('1')]
-    const { container } = render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const { container } = render(
+      <ConversationSidebar {...defaultProps} conversations={conversations} />,
+    )
     const nameEl = screen.getByText('Conversation 1')
     fireEvent.doubleClick(nameEl)
     const input = container.querySelector('input[aria-label="Rename conversation"]')
@@ -300,10 +406,12 @@ describe('ConversationSidebar', () => {
         {...defaultProps}
         conversations={conversations}
         onRenameConversation={onRename}
-      />
+      />,
     )
     fireEvent.doubleClick(screen.getByText('Conversation 1'))
-    const input = container.querySelector('input[aria-label="Rename conversation"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Rename conversation"]',
+    ) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Renamed' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onRename).toHaveBeenCalledWith('1', 'Renamed')
@@ -317,10 +425,12 @@ describe('ConversationSidebar', () => {
         {...defaultProps}
         conversations={conversations}
         onRenameConversation={onRename}
-      />
+      />,
     )
     fireEvent.doubleClick(screen.getByText('Original'))
-    const input = container.querySelector('input[aria-label="Rename conversation"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Rename conversation"]',
+    ) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Changed' } })
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(onRename).not.toHaveBeenCalled()
@@ -393,7 +503,9 @@ describe('ConversationSidebar', () => {
     cleanup()
 
     // Second render: sort should persist from chatDB as 'name' (non-default)
-    chatDBMock.getKV.mockImplementation(async (key: string) => key === 'sloughgpt:sidebar-sort' ? 'name' : '')
+    chatDBMock.getKV.mockImplementation(async (key: string) =>
+      key === 'sloughgpt:sidebar-sort' ? 'name' : '',
+    )
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
     await vi.waitFor(() => {
       const sortBtn = screen.getByLabelText('Sort conversations')

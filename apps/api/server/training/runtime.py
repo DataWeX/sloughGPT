@@ -93,7 +93,24 @@ class TrainingRuntime:
     def _ensure_row(self, job_id: str, job: dict[str, Any], config: dict[str, Any] | None) -> None:
         """Create a store row for the job if it does not already exist."""
         store = self._get_store()
-        if store.get(job_id) is not None:
+        existing = store.get(job_id)
+        if existing is not None:
+            # Backfill: register() hands the authoritative request snapshot; a
+            # row that already exists with an EMPTY config (persisted from the
+            # configless in-memory job dict before register ran) is incomplete,
+            # not intentional. Recovery reads the config column to rebuild
+            # trainer kwargs — an empty one silently falls back to defaults
+            # (job_1438982c). A non-empty config is first-registration-wins.
+            if config and not existing.get("config"):
+                try:
+                    store.update(job_id, config=dict(config))
+                except Exception as e:
+                    logger.warning(
+                        "JobStore config backfill failed for %s: %s",
+                        job_id,
+                        e,
+                        extra={"tag": "TRAIN"},
+                    )
             return
         cfg = config if config is not None else job.get("config")
         if not isinstance(cfg, dict):
@@ -171,7 +188,7 @@ class TrainingRuntime:
     def _signal_auto_train_cancel(self) -> None:
         """Set the service-layer cancel events for auto-train and turbo."""
         try:
-            from domains.training.service import get_cancel_event, get_turbo_cancel_event
+            from domain.training._internal.service import get_cancel_event, get_turbo_cancel_event
 
             ev = get_cancel_event()
             if ev is not None:
@@ -184,7 +201,9 @@ class TrainingRuntime:
                 try:
                     tev.set()
                 except Exception as exc:
-                    logger.debug("Failed to set turbo cancel event: %s", exc, extra={"tag": "TRAIN"})
+                    logger.debug(
+                        "Failed to set turbo cancel event: %s", exc, extra={"tag": "TRAIN"}
+                    )
         except Exception as e:
             logger.debug("Auto-train cancel signal failed: %s", e, extra={"tag": "TRAIN"})
 
@@ -217,7 +236,12 @@ class TrainingRuntime:
                 try:
                     ev.set()
                 except Exception as exc:
-                    logger.debug("Failed to set cancel event for job %s: %s", jid, exc, extra={"tag": "TRAIN"})
+                    logger.debug(
+                        "Failed to set cancel event for job %s: %s",
+                        jid,
+                        exc,
+                        extra={"tag": "TRAIN"},
+                    )
                 cooperative.append(jid)
 
         # Jobs without a cooperative cancel event (e.g. SSE auto-train) cannot
@@ -350,7 +374,7 @@ def get_training_runtime() -> TrainingRuntime:
 def _register_runtime_with_core() -> None:
     """Register this runtime as the implementation for the core protocol."""
     try:
-        from domains.training.runtime_protocol import set_training_runtime
+        from domain.training._internal.runtime_protocol import set_training_runtime
 
         set_training_runtime(_runtime or get_training_runtime())
     except ImportError:

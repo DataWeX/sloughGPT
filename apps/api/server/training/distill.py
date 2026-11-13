@@ -1,24 +1,30 @@
 """Knowledge distillation route — distill.
 
 Extracted from execution.py to keep each module focused.
+Descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{status, job_id, message}`` is served unwrapped
+(``envelope=False``), byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
 
 import logging
-import random as _random
 import threading
 from pathlib import Path
 from typing import Any
 
-from domains.shared import find_repo_root
-from domains.training.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
+from domain.shared import find_repo_root
+from domain.training import get_training_executor
+
 from .controller import get_training_controller
-from .helpers import _finish_job, _run_async
+from .helpers import _finish_job, _run_async, notify_push
 from .jobs import training_jobs
 from .schemas import DistillStartRequest
 from .webhooks import notify_training_event
@@ -30,7 +36,6 @@ router = APIRouter(tags=["training-distill"])
 _MAX_DATA_READ_BYTES = 200_000  # 200 KB max for distillation data
 
 
-@router.post("/training/distill")
 async def start_distillation(
     request: DistillStartRequest,
     auth_user: dict = Depends(require_auth_if_enabled),
@@ -73,9 +78,9 @@ async def start_distillation(
 
     # Pre-flight quality gate
     try:
-        from domains.training.quality_scorer import compute_data_quality
+        from domain.training.engine import get_training_engine
 
-        quality = compute_data_quality(data_str[:200_000])
+        quality = get_training_engine().compute_data_quality(data_str[:200_000])
         avg_q = quality.get("avg_quality", 0)
         tox_r = quality.get("toxicity_rate", 0)
 
@@ -94,7 +99,8 @@ async def start_distillation(
                 details=quality,
             )
     except Exception as e:
-        from schemas.common import AppError
+        from domain.infrastructure import AppError
+
         if isinstance(e, AppError):
             raise
         logger.debug("Distill quality gate check failed (proceeding): %s", e)
@@ -120,7 +126,7 @@ async def start_distillation(
     training_jobs[job_id] = job
 
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
@@ -144,9 +150,11 @@ async def start_distillation(
             _random.seed(42)
             np.random.seed(42)
 
-            from domains.infrastructure.model_registry import get_model_registry
+            from domain.infrastructure import (
+                get_model_registry as _get_model_registry,
+            )
 
-            registry = get_model_registry()
+            registry = _get_model_registry()
             server = registry.get(request.teacher_model) if registry else None
 
             slonet_provider = None
@@ -156,9 +164,11 @@ async def start_distillation(
                 teacher_model = server._model_ref
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
             else:
-                from domains.infrastructure.server_state import get_server_state
+                from domain.infrastructure import (
+                    get_server_state as _get_server_state,
+                )
 
-                provider = get_server_state().model.get()
+                provider = _get_server_state().model.get()
                 if (
                     provider is not None
                     and getattr(provider, "model_id", None) == request.teacher_model
@@ -187,7 +197,7 @@ async def start_distillation(
             itos = {i: c for c, i in stoi.items()}
             vocab_size = len(stoi)
 
-            from domains.models import SloughGPTModel
+            from domain.models import SloughGPTModel
 
             student = SloughGPTModel(
                 vocab_size=vocab_size,
@@ -215,7 +225,11 @@ async def start_distillation(
 
             MIN_SAMPLES = 10
             if len(inputs_list) < MIN_SAMPLES:
-                _finish_job(job_id, "failed", f"Not enough training samples: {len(inputs_list)} (minimum {MIN_SAMPLES})")
+                _finish_job(
+                    job_id,
+                    "failed",
+                    f"Not enough training samples: {len(inputs_list)} (minimum {MIN_SAMPLES})",
+                )
                 return
 
             inputs_np = np.array(inputs_list, dtype=np.int64)
@@ -253,7 +267,10 @@ async def start_distillation(
                 teacher_model, teacher_tokenizer, slonet=slonet_provider is not None
             )
 
-            from domains.training.distillation import DistillationConfig, DistillationTrainer
+            from domain.training import (
+                DistillationConfig,
+                DistillationTrainer,
+            )
 
             distill_cfg = DistillationConfig(
                 temperature=request.temperature,
@@ -304,7 +321,7 @@ async def start_distillation(
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
             ckpt_path = output_dir / f"{safe_stem}_distilled.soul"
 
-            from domains.training.slonet import export_to_sou
+            from domain.training import export_to_sou
 
             export_to_sou(
                 student,
@@ -360,16 +377,13 @@ async def start_distillation(
                 )
             except Exception as e:
                 logger.debug("Training completion webhook failed: %s", e)
-            # Push notification
-            try:
-                from domains.mobile.notifications import get_notification_service
-
-                get_notification_service().send_notification_sync(
-                    title="Distillation Complete",
-                    body=f"Student model saved: {ckpt_path.name} (loss: {epoch_losses[-1]:.4f})" if epoch_losses else "Distillation complete",
-                )
-            except Exception as e:
-                logger.debug("Training completion push notification failed: %s", e)
+            # Push notification (off-thread via notify_push).
+            notify_push(
+                title="Distillation Complete",
+                body=f"Student model saved: {ckpt_path.name} (loss: {epoch_losses[-1]:.4f})"
+                if epoch_losses
+                else "Distillation complete",
+            )
 
         except Exception as e:
             logger.exception("Distillation job %s failed", job_id, extra={"tag": "TRAIN"})
@@ -389,16 +403,11 @@ async def start_distillation(
                 )
             except Exception as exc:
                 logger.debug("Training failure webhook failed: %s", exc)
-            # Push notification
-            try:
-                from domains.mobile.notifications import get_notification_service
-
-                get_notification_service().send_notification_sync(
-                    title="Distillation Failed",
-                    body=f"Error: {str(e)[:100]}",
-                )
-            except Exception as exc:
-                logger.debug("Training failure push notification failed: %s", exc)
+            # Push notification (off-thread via notify_push).
+            notify_push(
+                title="Distillation Failed",
+                body=f"Error: {str(e)[:100]}",
+            )
 
     executor = get_training_executor()
     executor.submit(_run_distill, job_id)
@@ -408,3 +417,32 @@ async def start_distillation(
         "job_id": job_id,
         "message": f"Distillation started: teacher={request.teacher_model} epochs={request.epochs}",
     }
+
+
+# ── Descriptor projection (card 20261104_151036) ───────────────────────
+
+SPEC_DISTILL = ToolSpec(
+    name="training.distill.start",
+    description="Knowledge distillation: teach a compact SloNet LSTM student from a teacher HF model.",
+    parameters=params_from_model(DistillStartRequest),
+    execute=start_distillation,
+    auth_scope="authenticated",
+    idempotent=False,
+    result={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "job_id": {"type": "string"},
+            "message": {"type": "string"},
+        },
+    },
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_DISTILL,
+        RouteSpec(path="/training/distill", envelope=False),
+        start_distillation,
+    )
+)

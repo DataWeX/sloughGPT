@@ -19,7 +19,8 @@ Usage::
 
 import threading
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 
 class QueryCache:
@@ -43,7 +44,7 @@ class QueryCache:
         self._cache: dict[str, tuple[float, Any]] = {}
         self._lock = threading.Lock()
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get a cached value by key. Returns None if missing or expired."""
         entry = self._cache.get(key)
         if entry is None:
@@ -112,7 +113,7 @@ class QueryCache:
 
 
 # Module-level singleton for convenience
-_default_cache: Optional[QueryCache] = None
+_default_cache: QueryCache | None = None
 _default_lock = threading.Lock()
 
 

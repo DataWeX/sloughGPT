@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from '@/vite/next-compat/server'
 import { getAllTags } from '../helpers'
 
 export async function GET(request: Request) {
@@ -7,9 +7,6 @@ export async function GET(request: Request) {
     const tags = getAllTags(workspaceId)
     return NextResponse.json({ tags })
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to read tags' },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: 'Failed to read tags' }, { status: 500 })
   }
 }

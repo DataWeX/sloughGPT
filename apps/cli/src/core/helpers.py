@@ -5,21 +5,35 @@ CLI helpers — Docker, banner, output, and utility functions.
 import json
 import os
 import subprocess
-import sys
-import time
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
 
 from .framework import (
-    BOLD as _BOLD, DIM as _DIM, CYAN as _CYAN,
-    GREEN as _GREEN, YELLOW as _YELLOW, RED as _RED,
-    echo, click,
+    BOLD as _BOLD,
+)
+from .framework import (
+    CYAN as _CYAN,
+)
+from .framework import (
+    DIM as _DIM,
+)
+from .framework import (
+    GREEN as _GREEN,
+)
+from .framework import (
+    RED as _RED,
+)
+from .framework import (
+    YELLOW as _YELLOW,
+)
+from .framework import (
+    click,
+    echo,
 )
 
 
 def ns(**kwargs):
     """Create a SimpleNamespace from keyword arguments."""
     from types import SimpleNamespace
+
     return SimpleNamespace(**kwargs)
 
 
@@ -28,7 +42,7 @@ def output(data, *, raw=False, json_output=False, **kwargs):
     if json_output or raw:
         echo(json.dumps(data, indent=2, default=str))
         return data
-    
+
     if isinstance(data, dict):
         for key, value in data.items():
             if isinstance(value, (dict, list)):
@@ -41,7 +55,7 @@ def output(data, *, raw=False, json_output=False, **kwargs):
             echo(f"• {item}")
     else:
         echo(str(data))
-    
+
     return data
 
 
@@ -57,10 +71,9 @@ def verbose(message, **kwargs):
 
 def docker_action(action, service=None, **kwargs):
     """Execute a Docker action (up, down, restart, logs, status)."""
-    from .version import format_version_display
-    
+
     docker_compose = os.environ.get("DOCKER_COMPOSE", "docker-compose")
-    
+
     if action == "status":
         cmd = [docker_compose, "ps"]
     elif action == "up":
@@ -82,7 +95,7 @@ def docker_action(action, service=None, **kwargs):
     else:
         echo(f"{_RED}Unknown action: {action}{_RESET}")
         return False
-    
+
     echo(f"{_CYAN}$ {' '.join(cmd)}{_RESET}")
     try:
         subprocess.run(cmd, check=True)
@@ -98,10 +111,10 @@ def docker_action(action, service=None, **kwargs):
 def show_welcome_banner(version_info=None):
     """Show the welcome banner with version info."""
     from .version import format_version_display
-    
+
     if version_info is None:
         version_info = format_version_display()
-    
+
     echo(f"""
 {_BOLD}{_CYAN}╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
@@ -121,9 +134,9 @@ def show_welcome_banner(version_info=None):
 
 def show_server_status(host="localhost", port=8000):
     """Show the current server status."""
-    import urllib.request
     import urllib.error
-    
+    import urllib.request
+
     url = f"http://{host}:{port}/health"
     try:
         with urllib.request.urlopen(url, timeout=2) as response:
@@ -154,6 +167,7 @@ def get_base_url(ctx):
 def api_get(ctx, path, **kwargs):
     """Make API GET request with timeout."""
     import requests
+
     timeout = get_timeout(ctx)
     r = requests.get(f"{get_base_url(ctx)}{path}", timeout=timeout, **kwargs)
     return r
@@ -162,6 +176,7 @@ def api_get(ctx, path, **kwargs):
 def api_post(ctx, path, **kwargs):
     """Make API POST request with timeout."""
     import requests
+
     timeout = get_timeout(ctx)
     r = requests.post(f"{get_base_url(ctx)}{path}", timeout=timeout, **kwargs)
     return r
@@ -170,6 +185,7 @@ def api_post(ctx, path, **kwargs):
 def api_delete(ctx, path, **kwargs):
     """Make API DELETE request with timeout."""
     import requests
+
     timeout = get_timeout(ctx)
     r = requests.delete(f"{get_base_url(ctx)}{path}", timeout=timeout, **kwargs)
     return r
@@ -187,8 +203,17 @@ _RESET = "\033[0m"
 
 
 __all__ = [
-    "ns", "output", "confirm", "verbose",
-    "docker_action", "show_welcome_banner", "show_server_status",
-    "get_timeout", "get_base_url", "api_get", "api_post", "api_delete",
+    "ns",
+    "output",
+    "confirm",
+    "verbose",
+    "docker_action",
+    "show_welcome_banner",
+    "show_server_status",
+    "get_timeout",
+    "get_base_url",
+    "api_get",
+    "api_post",
+    "api_delete",
     "output_json",
 ]

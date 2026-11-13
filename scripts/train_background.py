@@ -6,11 +6,12 @@ Run with:
 
 Monitors training and writes progress to /tmp/sloughgpt-training.log.
 """
-import sys
-import os
-import time
+
 import json
 import logging
+import os
+import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "core-py"))
 
@@ -26,7 +27,7 @@ logger = logging.getLogger("train_bg")
 
 
 def main():
-    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+    from domain.training.train_pipeline import SloughGPTTrainer, TrainerConfig
 
     data_path = "datasets/api_conversations/input.txt"
     if not os.path.exists(data_path):
@@ -65,10 +66,14 @@ def main():
     elapsed = time.time() - start
 
     logger.info("Training complete in %.1fs", elapsed)
-    logger.info("Result: %s", json.dumps(
-        {k: v for k, v in (result.items() if isinstance(result, dict) else {"result": str(result)}.items())},
-        default=str, indent=2,
-    ))
+    logger.info(
+        "Result: %s",
+        json.dumps(
+            dict(result.items() if isinstance(result, dict) else {"result": str(result)}.items()),
+            default=str,
+            indent=2,
+        ),
+    )
 
 
 if __name__ == "__main__":

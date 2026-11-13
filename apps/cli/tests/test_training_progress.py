@@ -1,11 +1,11 @@
 """Tests for the CLI TrainingProgressBar component."""
-import sys
+
 import os
-import pytest
+import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from utils.training_progress import TrainingProgressBar, SPARK_CHARS
+from utils.training_progress import SPARK_CHARS, TrainingProgressBar
 
 
 def _info(**overrides):
@@ -133,7 +133,9 @@ class TestRendering:
     def test_line_contains_stats(self, monkeypatch):
         monkeypatch.setattr("utils.training_progress._is_terminal", lambda: False)
         bar = TrainingProgressBar(total_steps=100)
-        bar.update(_info(global_step=50, epoch=2, train_loss=3.25, eval_loss=3.5, learning_rate=0.0005))
+        bar.update(
+            _info(global_step=50, epoch=2, train_loss=3.25, eval_loss=3.5, learning_rate=0.0005)
+        )
         line = bar.last_line
         assert "step 50/100" in line
         assert "ep 2/3" in line
@@ -171,7 +173,9 @@ class TestRendering:
     def test_throttle_skips_rapid_updates(self, monkeypatch, capsys):
         monkeypatch.setattr("utils.training_progress._is_terminal", lambda: False)
         fake_now = {"t": 100.0}
-        monkeypatch.setattr("utils.training_progress.time", type("T", (), {"time": lambda: fake_now["t"]}))
+        monkeypatch.setattr(
+            "utils.training_progress.time", type("T", (), {"time": lambda: fake_now["t"]})
+        )
         bar = TrainingProgressBar(total_steps=100)
         bar.update(_info(global_step=10, progress_percent=10))
         fake_now["t"] = 100.1  # within throttle window (0.5s non-tty)

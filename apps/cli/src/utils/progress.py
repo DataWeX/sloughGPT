@@ -4,11 +4,10 @@ Progress bars and spinners for CLI operations.
 Provides visual feedback for long-running operations.
 Uses raw ANSI escape codes for terminal-formatted progress bars with ETA, speed, and color.
 """
-import os
+
 import sys
-import time
 import threading
-from typing import Optional, Callable
+import time
 
 
 def _is_terminal() -> bool:
@@ -185,7 +184,7 @@ class Spinner:
 
 def progress_iter(
     iterable,
-    total: Optional[int] = None,
+    total: int | None = None,
     desc: str = "",
     width: int = 40,
 ) -> ProgressBar:

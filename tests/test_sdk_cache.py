@@ -1,4 +1,5 @@
 """Coverage for sloughgpt_sdk.cache."""
+
 import os
 import sys
 from pathlib import Path
@@ -9,7 +10,7 @@ import pytest
 _REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "sdk-py"))
 
-from sloughgpt_sdk.cache import DiskCache, InMemoryCache, CacheEntry, cached  # noqa: E402
+from sloughgpt_sdk.cache import CacheEntry, DiskCache, InMemoryCache, cached  # noqa: E402
 
 
 class TestCacheEntry:
@@ -120,9 +121,7 @@ class TestInMemoryCache:
 
     def test_generate_key_deterministic(self):
         cache = InMemoryCache()
-        assert cache._generate_key("x", [1], foo="bar") == cache._generate_key(
-            "x", [1], foo="bar"
-        )
+        assert cache._generate_key("x", [1], foo="bar") == cache._generate_key("x", [1], foo="bar")
 
     def test_evict_oldest_empty_cache_is_noop(self):
         cache = InMemoryCache()
@@ -174,7 +173,7 @@ class TestDiskCache:
         path = cache._get_path("a")
         assert os.path.exists(path)
         with patch("sloughgpt_sdk.cache.time.time") as t:
-            t.return_value = 10 ** 12
+            t.return_value = 10**12
             assert cache.get("a") is None
         assert os.path.exists(path) is False
         assert cache.stats["misses"] == 1

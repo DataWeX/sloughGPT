@@ -7,28 +7,45 @@ BaseHTTPMiddleware, JSONResponse 429, header injection.
 Supports per-workspace rate limiting when auth is enabled.
 """
 
-from domains.infrastructure.rate_limiter import (
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from domain.infrastructure.rate_limiter import (
     RATE_LIMIT_HEADER_LIMIT,
     RATE_LIMIT_HEADER_REMAINING,
     RateLimiter,
 )
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 
-
-# Per-route rate limits: path prefix -> (max_requests, window_seconds)
+# Per-route rate limits: path -> (max_requests, window_seconds)
 # Expensive GPU/CPU endpoints get much lower limits.
 _ROUTE_LIMITS: dict[str, tuple[int, int]] = {
-    "/chat/stream": (10, 60),
+    "/chat": (10, 60),  # POST /chat — the generation entry point (and its only state)
     "/chat/voice": (5, 60),
     "/inference/generate/stream": (10, 60),
     "/inference/generate": (20, 60),
     "/inference/embed": (30, 60),
     "/models/load": (2, 120),
     "/models/unload": (2, 120),
-    "/training/": (3, 60),
+    "/training/start": (3, 60),
+    "/training/control/start": (3, 60),
+    "/training/turbo-start": (3, 60),
+    "/training/from-sessions-start": (3, 60),
+    "/training/stop": (5, 60),
+    "/training/control/stop": (5, 60),
+    "/training/status": (60, 60),
+    "/training/log": (60, 60),
+    "/training/checkpoints": (30, 60),
+    "/training/stream": (30, 60),
+    "/training/is-running": (60, 60),
     "/mobile/train": (2, 120),
+    "/models/": (30, 60),  # model file serving (GET)
 }
+
+# Keys matched as a complete path rather than a prefix. ``/chat`` must not fan
+# its strict limit out onto the cheap siblings under it (``/chat/sessions``,
+# ``/chat/health``, keystroke-driven search), and the generation endpoint
+# itself has no subpaths to lose.
+_EXACT_ROUTE_KEYS = frozenset({"/chat"})
 
 # Per-workspace rate limit multiplier (workspace_id -> multiplier)
 # Default is 1x. Workspace admins can be granted higher limits.
@@ -68,7 +85,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     Applies to all routes except health probes (always allowed).
     Localhost requests (127.0.0.1 / ::1) get 10x the limit.
-    Expensive endpoints (chat/stream, inference, model load) get
+    Expensive endpoints (chat, inference, model load) get
     separate, stricter limits to prevent GPU OOM.
     When auth is enabled, rate limits are also tracked per workspace.
     Exceeding ``max_requests`` in ``window_seconds`` returns 429 with
@@ -88,9 +105,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._workspace_limiters: dict[str, RateLimiter] = {}
 
     def _match_route(self, path: str) -> tuple[str | None, RateLimiter | None]:
-        """Find matching route-specific limiter."""
+        """Find matching route-specific limiter.
+
+        Keys in ``_EXACT_ROUTE_KEYS`` match the whole path; everything else
+        matches as a prefix (``/chat/voice/...``, ``/training/...``).
+        """
         for prefix, limiter in self._route_limiters.items():
-            if path.startswith(prefix):
+            if prefix in _EXACT_ROUTE_KEYS:
+                matched = path == prefix
+            else:
+                matched = path.startswith(prefix)
+            if matched:
                 return prefix, limiter
         return None, None
 

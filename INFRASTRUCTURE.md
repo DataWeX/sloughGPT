@@ -7,13 +7,13 @@ Each builds on the previous.
 
 | Layer | Issue | Status | Built |
 |-------|-------|--------|-------|
-| Task Queue | — | ✅ | `domains/infrastructure/task_queue.py` |
-| Event Bus | [#36](https://github.com/DataWeX/sloughGPT/issues/36) | ✅ | `domains/infrastructure/event_bus.py` |
-| Config System | [#31](https://github.com/DataWeX/sloughGPT/issues/31) | ✅ | `domains/infrastructure/config.py` |
-| Error Taxonomy | [#35](https://github.com/DataWeX/sloughGPT/issues/35) | ✅ | `domains/infrastructure/errors.py` |
-| Rate Limiter | [#32](https://github.com/DataWeX/sloughGPT/issues/32) | ✅ | `domains/infrastructure/rate_limiter.py` |
-| Data Repository | [#34](https://github.com/DataWeX/sloughGPT/issues/34) | ✅ | `domains/infrastructure/repository.py` |
-| Lifecycle Manager | [#33](https://github.com/DataWeX/sloughGPT/issues/33) | ✅ | `domains/infrastructure/lifecycle.py` |
+| Task Queue | — | ✅ | `domain/infrastructure/task_queue.py` |
+| Event Bus | [#36](https://github.com/DataWeX/sloughGPT/issues/36) | ✅ | `domain/infrastructure/_internal/event_bus.py` |
+| Config System | [#31](https://github.com/DataWeX/sloughGPT/issues/31) | ✅ | `domain/infrastructure/_internal/config.py` |
+| Error Taxonomy | [#35](https://github.com/DataWeX/sloughGPT/issues/35) | ✅ | `domain/infrastructure/_internal/errors.py` |
+| Rate Limiter | [#32](https://github.com/DataWeX/sloughGPT/issues/32) | ✅ | `domain/infrastructure/rate_limiter.py` |
+| Data Repository | [#34](https://github.com/DataWeX/sloughGPT/issues/34) | ✅ | `domain/infrastructure/repository.py` |
+| Lifecycle Manager | [#33](https://github.com/DataWeX/sloughGPT/issues/33) | ✅ | `domain/infrastructure/_internal/lifecycle.py` |
 
 ## Why These Exist
 

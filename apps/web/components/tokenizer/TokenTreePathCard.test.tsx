@@ -13,10 +13,22 @@ vi.mock('@/lib/token-tree-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
-    selector({ addToast: mocks.mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
+      selector({ addToast: mocks.mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@sloughgpt/strui', () => ({
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -27,6 +39,50 @@ vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Chip: ({ label }: { label: string }) => <span>{label}</span>,
   IconSearch: () => <span />,
+
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { TokenTreePathCard } from './TokenTreePathCard'
@@ -49,7 +105,9 @@ describe('TokenTreePathCard', () => {
   it('renders the text input with a default', () => {
     render(<TokenTreePathCard />)
     expect(screen.getByLabelText('Text to trace')).toBeDefined()
-    expect((screen.getByLabelText('Text to trace') as HTMLInputElement).value).toBe('the quick brown fox')
+    expect((screen.getByLabelText('Text to trace') as HTMLInputElement).value).toBe(
+      'the quick brown fox',
+    )
   })
 
   it('traces a path and renders steps with tokens and ids', async () => {
@@ -69,7 +127,9 @@ describe('TokenTreePathCard', () => {
   it('disables the button for a blank text', () => {
     render(<TokenTreePathCard />)
     fireEvent.change(screen.getByLabelText('Text to trace'), { target: { value: '   ' } })
-    expect((screen.getByRole('button', { name: /^Trace$/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /^Trace$/ }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
   })
 
   it('traces on Enter key', async () => {
@@ -83,7 +143,9 @@ describe('TokenTreePathCard', () => {
     mocks.mockPath.mockRejectedValue(new Error('boom'))
     render(<TokenTreePathCard />)
     fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
-    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not trace the token path', 'error'))
+    await waitFor(() =>
+      expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not trace the token path', 'error'),
+    )
   })
 
   it('renders step numbers as #1, #2, etc.', async () => {
@@ -104,7 +166,12 @@ describe('TokenTreePathCard', () => {
 
   it('shows tracing... while loading', async () => {
     let resolvePromise: any
-    mocks.mockPath.mockImplementation(() => new Promise(r => { resolvePromise = r }))
+    mocks.mockPath.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolvePromise = r
+        }),
+    )
     render(<TokenTreePathCard />)
     fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
     expect(screen.getByText('Tracing...')).toBeDefined()

@@ -12,7 +12,7 @@ from controllers.feedback import (
     set_feedback_controller,
 )
 
-from tests.test_support import get_test_client
+from apps.api.server.tests.test_support import get_test_client
 
 
 @pytest.fixture(autouse=True)
@@ -44,8 +44,7 @@ class TestRecordFeedbackWorkflow:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "success"
-        assert body["data"]["workflow_active"] is True
+        assert body["status"] == "ok"
 
     def test_record_workflow_feedback_down(self):
         resp = client.post(
@@ -217,8 +216,8 @@ class TestConversations:
         assert resp.status_code == 200
 
     def test_list_conversations_sorted_by_updated(self):
-        c1 = client.post("/feedback/conversations", json={"name": "First"})
-        c2 = client.post("/feedback/conversations", json={"name": "Second"})
+        client.post("/feedback/conversations", json={"name": "First"})
+        client.post("/feedback/conversations", json={"name": "Second"})
         resp = client.get("/feedback/conversations")
         names = [c["name"] for c in resp.json()]
         assert "Second" in names

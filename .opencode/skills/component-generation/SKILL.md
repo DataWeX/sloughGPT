@@ -6,22 +6,47 @@ description: Generate React components that match the existing @sloughgpt/strui 
 # Component Generation Skill
 
 ## When to Use
+
 - Creating new UI components
 - Adding new page sections
 - Scaffolding feature components
 - Any time a new `.tsx` file is created in `apps/web/`
 
+## Existing Pages Reference
+
+The web app has the following page directories under `apps/web/app/(app)/`:
+
+| Directory        | Description                     |
+| ---------------- | ------------------------------- |
+| `chat/`          | Main chat interface             |
+| `training/`      | Model training interface        |
+| `models/`        | Model management                |
+| `datasets/`      | Dataset management              |
+| `consciousness/` | Consciousness system (26 pages) |
+| `agents/`        | Agent management                |
+| `souls/`         | Personality management          |
+| `settings/`      | Application settings            |
+| `benchmark/`     | Performance benchmarking        |
+| `monitoring/`    | System monitoring               |
+| `brainstorm/`    | AI brainstorming assistant      |
+| `decide/`        | Decision-making helper          |
+| `explain/`       | Simple explanations             |
+| `rewrite/`       | Text rewriting & polish         |
+| `translate/`     | Text translation                |
+| `wellness/`      | Wellness & relaxation           |
+| `writing/`       | Writing assistant               |
+
 ## Framework Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 14+ (App Router) |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS v3 + CSS custom properties |
-| Component library | `@sloughgpt/strui` (shadcn/ui-based) |
-| State | Zustand + React contexts |
-| Testing | Vitest + @testing-library/react |
-| Icons | `@/components/icons/NavIcons` (re-exports from strui) |
+| Layer             | Technology                                            |
+| ----------------- | ----------------------------------------------------- |
+| Framework         | Vite + React SPA (React Router)                       |
+| Language          | TypeScript (strict)                                   |
+| Styling           | Tailwind CSS v3 + CSS custom properties               |
+| Component library | `@sloughgpt/strui` (shadcn/ui-based)                  |
+| State             | Zustand + React contexts                              |
+| Testing           | Vitest + @testing-library/react                       |
+| Icons             | `@/components/icons/NavIcons` (re-exports from strui) |
 
 ## Component Structure
 
@@ -40,12 +65,19 @@ interface MyComponentProps {
   onAction?: () => void
 }
 
-export function MyComponent({ title, description, variant = 'default', onAction }: MyComponentProps) {
+export function MyComponent({
+  title,
+  description,
+  variant = 'default',
+  onAction,
+}: MyComponentProps) {
   return (
     <div className="space-y-2">
       <h3 className="text-base font-medium">{title}</h3>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
-      <Button variant={variant} onClick={onAction}>Action</Button>
+      <Button variant={variant} onClick={onAction}>
+        Action
+      </Button>
     </div>
   )
 }
@@ -116,9 +148,12 @@ interface CardProps {
 }
 
 // Event handlers — typed explicitly
-const handleClick = useCallback((id: string) => {
-  onSelect(id)
-}, [onSelect])
+const handleClick = useCallback(
+  (id: string) => {
+    onSelect(id)
+  },
+  [onSelect],
+)
 
 // State — typed explicitly
 const [items, setItems] = useState<Item[]>([])
@@ -137,9 +172,7 @@ const inputRef = useRef<HTMLInputElement>(null)
   <CardHeader>
     <CardTitle className="text-base">Title</CardTitle>
   </CardHeader>
-  <CardContent className="space-y-3">
-    {/* Content */}
-  </CardContent>
+  <CardContent className="space-y-3">{/* Content */}</CardContent>
 </Card>
 ```
 
@@ -147,13 +180,13 @@ const inputRef = useRef<HTMLInputElement>(null)
 
 ```tsx
 <div className="space-y-2">
-  {items.map(item => (
+  {items.map((item) => (
     <div
       key={item.id}
       className={cn(
         'group flex items-center gap-3 rounded-lg border p-3 transition-colors',
         'border-border/60 hover:bg-muted/50',
-        selected && 'bg-primary/[0.08] border-primary/40'
+        selected && 'bg-primary/[0.08] border-primary/40',
       )}
     >
       <div className="min-w-0 flex-1">
@@ -181,36 +214,35 @@ const inputRef = useRef<HTMLInputElement>(null)
 ### Loading State Pattern
 
 ```tsx
-{loading ? (
-  <div className="space-y-2">
-    <Skeleton className="h-28 rounded-lg" />
-    <Skeleton className="h-28 rounded-lg" />
-  </div>
-) : (
-  <div>{/* Content */}</div>
-)}
+{
+  loading ? (
+    <div className="space-y-2">
+      <Skeleton className="h-28 rounded-lg" />
+      <Skeleton className="h-28 rounded-lg" />
+    </div>
+  ) : (
+    <div>{/* Content */}</div>
+  )
+}
 ```
 
 ### Error State Pattern
 
 ```tsx
-<ErrorBanner
-  message="Failed to load data"
-  onRetry={handleRetry}
-/>
+<ErrorBanner message="Failed to load data" onRetry={handleRetry} />
 ```
 
 ## File Naming
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Page | `page.tsx` | `app/(app)/models/page.tsx` |
-| Component | `PascalCase.tsx` | `components/ModelCard.tsx` |
-| Composed component | `kebab-case.tsx` | `components/training/LossChart.tsx` |
-| Hook | `use*.ts` | `hooks/useModelLoader.ts` |
-| Controller | `*-controller.ts` | `lib/model-controller.ts` |
-| Test | `*.test.tsx` | `components/ModelCard.test.tsx` |
-| Context | `*Context.tsx` | `contexts/ModelContext.tsx` |
+| Type               | Pattern           | Example                             |
+| ------------------ | ----------------- | ----------------------------------- |
+| Page               | `page.tsx`        | `app/(app)/models/page.tsx`         |
+| Component          | `PascalCase.tsx`  | `components/ModelCard.tsx`          |
+| Composed component | `kebab-case.tsx`  | `components/training/LossChart.tsx` |
+| Hook               | `use*.ts`         | `hooks/useModelLoader.ts`           |
+| Controller         | `*-controller.ts` | `lib/model-controller.ts`           |
+| Test               | `*.test.tsx`      | `components/ModelCard.test.tsx`     |
+| Context            | `*Context.tsx`    | `contexts/ModelContext.tsx`         |
 
 ## Test Pattern
 
@@ -246,12 +278,12 @@ describe('MyComponent', () => {
 
 ## Anti-Patterns
 
-| Anti-Pattern | Fix |
-|-------------|-----|
-| Inline styles (`style={{ color: 'red' }}`) | Use Tailwind classes |
-| Hardcoded colors (`#7c52c4`) | Use design tokens (`text-primary`) |
-| `any` type | Use explicit types |
-| `useEffect` for derived state | Use `useMemo` instead |
-| Prop drilling > 2 levels | Use context or Zustand |
-| Barrel exports in components/ | Import directly from file |
-| `console.log` in production | Remove or use dev-only logger |
+| Anti-Pattern                               | Fix                                |
+| ------------------------------------------ | ---------------------------------- |
+| Inline styles (`style={{ color: 'red' }}`) | Use Tailwind classes               |
+| Hardcoded colors (`#7c52c4`)               | Use design tokens (`text-primary`) |
+| `any` type                                 | Use explicit types                 |
+| `useEffect` for derived state              | Use `useMemo` instead              |
+| Prop drilling > 2 levels                   | Use context or Zustand             |
+| Barrel exports in components/              | Import directly from file          |
+| `console.log` in production                | Remove or use dev-only logger      |

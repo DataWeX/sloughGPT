@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -121,3 +122,68 @@ def test_sloughgpt_colab_notebook_is_valid_nbformat_v4_with_smoke_hooks() -> Non
     assert "_asyncio_run" in blob
     assert blob.count("def _asyncio_run(coro):") == 1
     assert blob.count("from concurrent.futures import ThreadPoolExecutor") == 1
+
+
+def test_colab_export_to_sou_importable_via_public_shim() -> None:
+    """The Save/Export cell imports ``domain.training._internal.export.export_to_sou``.
+
+    Regression guard: ``domain/training/_internal/export.py``'s ``__all__`` must
+    re-export ``export_to_sou`` (and the ``packages/core-py`` shim, its
+    signature, and ``weights_only``/``soul_profile`` kwargs) or the notebook's
+    export cell dies at the import line before writing the ``.soul`` file.
+    """
+    root = _repo_root()
+    code = (
+        f"import sys; sys.path.insert(0, {str(root / 'packages' / 'core-py')!r});"
+        "import inspect;"
+        "from domain.training._internal.export import export_to_sou;"
+        "params = list(inspect.signature(export_to_sou).parameters);"
+        "assert 'weights_only' in params and 'soul_profile' in params, params;"
+        "print(export_to_sou.__name__, export_to_sou.__module__)"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "export_to_sou domain.training._internal.export" in proc.stdout
+
+
+def test_serve_ui_launcher_present_and_help_runs() -> None:
+    """scripts/serve_ui.py is the notebook's Serve entry point (card 85e15cc4)."""
+    root = _repo_root()
+    launcher = root / "scripts" / "serve_ui.py"
+    assert launcher.is_file(), f"missing {launcher}"
+    proc = subprocess.run(
+        [sys.executable, str(launcher), "--help"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+        cwd=str(root),
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "serve_ui" in proc.stdout
+    assert "--no-web" in proc.stdout
+    assert "one URL" in proc.stdout
+
+
+def test_notebook_serve_section_uses_serve_ui_not_bare_popen() -> None:
+    """The Serve cells call the supervised launcher, not an unwaited Popen.
+
+    Regression guard for the old cell: ``subprocess.Popen(..., DEVNULL)``
+    with no readiness — a dead server looked alive and the web UI (:5173)
+    was never launched at all.
+    """
+    path = _repo_root() / "sloughgpt_colab.ipynb"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    blob = _colab_cell_sources(data)
+    assert "import serve_ui" in blob
+    assert "serve_ui.start()" in blob
+    assert "serve_ui.stop()" in blob
+    assert "localhost:5173" in blob
+    assert "Popen(" not in blob, "Serve cell regressed to a bare Popen"
+    assert "DEVNULL" not in blob, "Serve cell regressed to DEVNULL output"

@@ -2,10 +2,14 @@
 Status Router - Overall service health and info
 """
 
-from datetime import datetime, timezone
+from __future__ import annotations
+
+from datetime import datetime
 
 from fastapi import APIRouter
-from schemas.common import classify_and_raise, endpoint, success_response
+from schemas.common import endpoint, success_response
+
+from domain.shared import utc_now_iso
 
 
 class StatusRouter:
@@ -27,7 +31,7 @@ class StatusRouter:
             data={
                 "status": "healthy",
                 "uptime_seconds": uptime,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
 
@@ -40,11 +44,12 @@ class StatusRouter:
         """
         checks = {}
         import logging
+
         _log = logging.getLogger("slo.status")
 
         # Check database connectivity
         try:
-            from domains.feedback.database import get_feedback_db
+            from domain.feedback import get_feedback_db
 
             db = get_feedback_db()
             checks["database"] = db is not None
@@ -52,14 +57,24 @@ class StatusRouter:
             _log.warning("Readiness check: database unavailable: %s", exc)
             checks["database"] = False
 
-        # Check inference engine
+        # Check generation — the product's one language-API contract
+        # (domain.inference.generation: hosted / soul / engine transports).
+        #
+        # Deliberately NOT `domain.inference.get_engine`: that dlopen()s the
+        # platform-native .so/.dylib, which is outside this contract and has
+        # no production consumer other than this probe. Gating readiness on it
+        # reported not-ready on any host lacking the compiled lib — and the
+        # Linux .so is gitignored, so a fresh clone never has it, making
+        # /ready permanently false on Linux while generation itself was fine.
         try:
-            from domains.inference.native.engine import get_engine
+            from domain.inference import generation as generation_entry
 
-            engine = get_engine()
-            checks["inference"] = engine is not None
+            checks["inference"] = all(
+                callable(getattr(generation_entry, name, None))
+                for name in ("hosted", "soul", "engine")
+            )
         except Exception as exc:
-            _log.warning("Readiness check: inference engine unavailable: %s", exc)
+            _log.warning("Readiness check: generation unavailable: %s", exc)
             checks["inference"] = False
 
         ready = all(checks.values()) if checks else True

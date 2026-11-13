@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, waitFor } from '@testing-library/react'
 
 const { mockUpdateSettings, mockAddToast, mockSetLocale, mockDeleteKV } = vi.hoisted(() => ({
   mockUpdateSettings: vi.fn(),
@@ -42,6 +42,7 @@ vi.mock('@/lib/toast-store', () => ({
 
 vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => ({ healthLegacy: null }),
+  liveStatusStore: { subscribe: vi.fn() },
 }))
 
 vi.mock('@/hooks/useLocale', () => ({
@@ -58,14 +59,39 @@ vi.mock('@/lib/system-controller', () => ({
     getMetrics: vi.fn().mockResolvedValue(null),
     getDisk: vi.fn().mockResolvedValue(null),
     getInfo: vi.fn().mockResolvedValue(null),
-    getProcessGuardStatus: vi.fn().mockResolvedValue({ enabled: false, active: false, model_id: null, health: null }),
-    setProcessGuardEnabled: vi.fn().mockResolvedValue({ enabled: true, active: false, model_id: null, health: null }),
+    getProcessGuardStatus: vi
+      .fn()
+      .mockResolvedValue({ enabled: false, active: false, model_id: null, health: null }),
+    setProcessGuardEnabled: vi
+      .fn()
+      .mockResolvedValue({ enabled: true, active: false, model_id: null, health: null }),
   },
 }))
 
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
     getHealth: vi.fn().mockResolvedValue({ status: 'healthy', model_loaded: true }),
+  },
+}))
+
+vi.mock('@/lib/settings-controller', () => ({
+  settingsController: {
+    getProviderApi: vi.fn().mockResolvedValue({
+      enabled: false,
+      api_url: '',
+      model: 'gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: false,
+    }),
+    updateProviderApi: vi.fn().mockResolvedValue({
+      enabled: false,
+      api_url: '',
+      model: 'gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: false,
+    }),
   },
 }))
 
@@ -120,7 +146,7 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/theme-storage', () => ({
   PALETTE_IDS: ['noir-violet', 'ocean'],
-  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', 'ocean': 'Ocean' },
+  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', ocean: 'Ocean' },
 }))
 
 vi.mock('@/lib/config', () => ({
@@ -162,6 +188,26 @@ describe('SettingsPage', () => {
   it('renders Connection section', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders the Connection banner card with both timing flags', () => {
+    render(<SettingsPage />)
+    expect(screen.getByTestId('settings-connection-banner')).toBeTruthy()
+    expect(screen.getByText('Drop notice delay')).toBeTruthy()
+    expect(screen.getByText('Reconnected confirmation')).toBeTruthy()
+  })
+
+  it('shows the default flag timings on the Connection banner card', () => {
+    render(<SettingsPage />)
+    // Defaults: 5.0s grace, 4.0s hold — rendered by the page's formatValue.
+    expect(screen.getAllByText('5.0s').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('4.0s').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders External model provider card', async () => {
+    render(<SettingsPage />)
+    expect(screen.getAllByText('External model provider').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => expect(screen.getByLabelText('Endpoint URL')).toBeTruthy())
   })
 
   it('renders API URL input with default value', () => {
@@ -225,7 +271,9 @@ describe('SettingsPage', () => {
 
   it('renders collapsible message length control', () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
 
   it('renders Process isolation card', () => {

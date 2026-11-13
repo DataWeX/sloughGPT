@@ -15,9 +15,16 @@ from fastapi import APIRouter, Depends
 
 logger = logging.getLogger(__name__)
 
-from domains.infrastructure.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.infrastructure import AppError
 
 
 def _numpy_perplexity(model, ids):
@@ -97,6 +104,8 @@ class BenchmarkRouter:
         self.router.add_api_route("/responses", self.get_logged_responses, methods=["GET"])
         self.router.add_api_route("/stats", self.get_tracker_stats, methods=["GET"])
         self.router.add_api_route("/history/clear", self.clear_history, methods=["POST"])
+        self.router.add_api_route("/program", self.get_program, methods=["GET"])
+        self.router.add_api_route("/score", self.score_results, methods=["POST"])
         self.router.add_api_route("/{model_id}", self.get_benchmark_by_id, methods=["GET"])
 
     def _get_model_metrics(self, model: str) -> dict[str, Any]:
@@ -118,7 +127,8 @@ class BenchmarkRouter:
         """
         try:
             from controllers.models import get_models_controller
-            from domains.infrastructure.server_state import get_server_state
+
+            from domain.infrastructure.server_state import get_server_state
 
             ctrl = get_models_controller()
             provider = get_server_state().model.get()
@@ -165,38 +175,15 @@ class BenchmarkRouter:
 
     @endpoint("benchmark.get_model_metrics")
     async def get_model_metrics(self, model: str = "gpt2") -> dict:
-        """Return real-time metrics for the currently loaded model.
-
-        Args:
-            model: Model ID string used for label only; the actual
-                metrics come from whatever provider is loaded in
-                ServerState. Defaults to "gpt2".
-
-        Returns:
-            Success envelope containing inference_count, total_tokens,
-            tokens_per_second, memory_mb, and num_parameters.
-
-        Side effects:
-            Reads the ServerState singleton for the active provider.
-            Reads the ModelsController for inference counters.
-            Returns model_loaded=False if no provider is resident.
-        """
+        """Return real-time metrics for the currently loaded model."""
+        result = self._get_model_metrics(model)
+        return success_response(data=result)
 
     @endpoint("benchmark.get_benchmark_by_id")
     async def get_benchmark_by_id(self, model_id: str) -> dict:
-        """Return benchmark results for a specific model.
-
-        Args:
-            model_id: Model identifier (e.g. "gpt2", "Qwen/Qwen2.5-0.5B-Instruct").
-
-        Returns:
-            Success envelope containing model metrics including
-            coherence, repetition, perplexity, avg_length, and
-            inference stats.
-
-        Side effects:
-            Reads the ServerState singleton for the active provider.
-        """
+        """Return benchmark results for a specific model."""
+        result = self._get_model_metrics(model_id)
+        return success_response(data=result)
 
     @endpoint("benchmark.calculate_perplexity")
     async def calculate_perplexity(
@@ -221,7 +208,7 @@ class BenchmarkRouter:
         """
         _t0 = _time.monotonic()
         try:
-            from domains.infrastructure.server_state import get_server_state
+            from domain.infrastructure.server_state import get_server_state
 
             provider = get_server_state().model.get()
             if provider is None:
@@ -271,7 +258,7 @@ class BenchmarkRouter:
         """
         _t0 = _time.monotonic()
         try:
-            from domains import get_benchmark_domain
+            from domain import get_benchmark_domain
 
             bench = get_benchmark_domain()
             result = bench.evaluate_latest(limit=limit)
@@ -295,7 +282,7 @@ class BenchmarkRouter:
         """Get recent logged responses for review."""
         _t0 = _time.monotonic()
         try:
-            from domains.feedback.response_tracker import get_response_tracker
+            from domain.feedback import get_response_tracker
 
             tracker = get_response_tracker()
             responses = tracker.get_responses(limit=limit, model=model)
@@ -332,7 +319,7 @@ class BenchmarkRouter:
         """Get response tracker statistics - uses BenchmarkDomain."""
         _t0 = _time.monotonic()
         try:
-            from domains import get_benchmark_domain
+            from domain import get_benchmark_domain
 
             bench = get_benchmark_domain()
             result = bench.get_stats()
@@ -348,6 +335,61 @@ class BenchmarkRouter:
     @endpoint("benchmark.clear_history")
     async def clear_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear benchmark history and logged responses."""
+        from domain import get_benchmark_domain
+
+        bench = get_benchmark_domain()
+        bench.clear_history()
+        return success_response(data={"cleared": True})
+
+    @endpoint("benchmark.get_program")
+    async def get_program(self) -> dict:
+        """Return current weighted program (config/bench_weights.yaml)."""
+        from pathlib import Path
+
+        from domain.benchmark.weighted import BenchProgram
+
+        cfg = Path(__file__).resolve().parents[4] / "config" / "bench_weights.yaml"
+        if not cfg.exists():
+            cfg = Path(__file__).resolve().parents[3] / "config" / "bench_weights.yaml"
+        try:
+            prog = BenchProgram.from_yaml(cfg) if cfg.exists() else BenchProgram()
+            return success_response(data=prog.to_dict())
+        except Exception as e:
+            classify_and_raise(e, source="benchmark.get_program")
+
+    @endpoint("benchmark.score_results")
+    async def score_results(self, payload: dict) -> dict:
+        """Score raw results with weighted programmable logic.
+
+        Body: { results: {latency_p99: 120, recall_at_5: 0.92, ...}, program?: {...} }
+        If program omitted, uses config/bench_weights.yaml.
+        """
+        from pathlib import Path
+
+        from domain.benchmark.weighted import BenchProgram, score_benchmarks
+
+        try:
+            results = payload.get("results") or payload
+            # allow top-level metrics directly
+            if "results" in payload and isinstance(payload["results"], dict):
+                results = payload["results"]
+            prog_dict = payload.get("program")
+            if prog_dict:
+                prog = BenchProgram.from_dict(prog_dict)
+            else:
+                cfg = Path(__file__).resolve().parents[4] / "config" / "bench_weights.yaml"
+                if not cfg.exists():
+                    cfg = Path(__file__).resolve().parents[3] / "config" / "bench_weights.yaml"
+                prog = BenchProgram.from_yaml(cfg) if cfg.exists() else BenchProgram()
+            scored = score_benchmarks(
+                prog, {k: float(v) for k, v in results.items() if isinstance(v, (int, float))}
+            )
+            safe_audit_log(
+                "benchmark.score", resource="weighted", detail=f"score={scored['score']:.1f}"
+            )
+            return success_response(data=scored)
+        except Exception as e:
+            classify_and_raise(e, source="benchmark.score_results")
 
 
 router = BenchmarkRouter().router

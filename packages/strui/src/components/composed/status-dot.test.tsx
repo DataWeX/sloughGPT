@@ -19,4 +19,10 @@ describe('StatusDot', () => {
     const html = renderToStaticMarkup(<StatusDot label="Online" showLabel />)
     expect(html).toContain('Online')
   })
+
+  it('maps the accent tone to a semantic token', () => {
+    expect(STATUS_DOT_TONE_CLASSES.accent).toBe('bg-accent')
+    const html = renderToStaticMarkup(<StatusDot tone="accent" />)
+    expect(html).toContain('bg-accent')
+  })
 })

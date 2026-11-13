@@ -2,24 +2,22 @@
 Tests for the health router — health, liveness, readiness, startup-progress, debug, model, summary.
 """
 
-import sys
-import asyncio
 import json
+import sys
+import time
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.health import router
 
 SERVER_DIR = str(Path(__file__).resolve().parents[2] / "apps/api/server")
 if SERVER_DIR not in sys.path:
     sys.path.insert(0, SERVER_DIR)
-
-import state as _server_state
 
 
 @pytest.fixture
@@ -74,7 +72,9 @@ class TestHealth:
     def test_health_returns_basic(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_basic_health.return_value = {
-            "status": "healthy", "model_loaded": True, "model_type": "gpt2",
+            "status": "healthy",
+            "model_loaded": True,
+            "model_type": "gpt2",
         }
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/health")
@@ -87,7 +87,9 @@ class TestHealth:
     def test_health_model_not_loaded(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_basic_health.return_value = {
-            "status": "healthy", "model_loaded": False, "model_type": None,
+            "status": "healthy",
+            "model_loaded": False,
+            "model_type": None,
         }
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/health")
@@ -224,7 +226,7 @@ class TestDebugInfo:
 class TestModelHealth:
     """GET /health/model"""
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback.get_health_monitor")
     def test_model_health_no_model(self, mock_get_mon, client):
         mon = MagicMock()
         mon._model = None
@@ -234,9 +236,10 @@ class TestModelHealth:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback.get_health_monitor")
     def test_model_health_with_model(self, mock_get_mon, client):
         import state as _state
+
         _state.model = "gpt2"
         _state.tokenizer = "tok"
         mon = MagicMock()
@@ -250,19 +253,20 @@ class TestModelHealth:
             _state.model = None
             _state.tokenizer = None
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback.get_health_monitor")
     def test_model_health_error(self, mock_get_mon, client):
         mock_get_mon.side_effect = RuntimeError("monitor down")
         resp = client.get("/health/model")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback.get_health_monitor")
     def test_model_health_ok_with_stats(self, mock_get_mon, client):
         mon = MagicMock()
         mon._model = None
         mon.get_stats.return_value = {"inference_count": 42, "latency_ms": 5}
         mock_get_mon.return_value = mon
         import state as _state
+
         _state.model = None
         _state.tokenizer = None
         resp = client.get("/health/model")
@@ -271,13 +275,14 @@ class TestModelHealth:
         assert body["inference_count"] == 42
         assert body["latency_ms"] == 5
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback.get_health_monitor")
     def test_model_health_registers_state_model(self, mock_get_mon, client):
         mon = MagicMock()
         mon._model = None
         mon.get_stats.return_value = {"inference_count": 0}
         mock_get_mon.return_value = mon
         import state as _state
+
         _state.model = "gpt2"
         _state.tokenizer = "tok"
         try:
@@ -327,7 +332,12 @@ class TestHealthSummary:
     def test_summary_has_diagnoses(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_detailed_health.return_value = _make_detailed(
-            health_score={"score": 60, "status": "degraded", "summary": "High CPU", "diagnoses": ["CPU at 95%"]}
+            health_score={
+                "score": 60,
+                "status": "degraded",
+                "summary": "High CPU",
+                "diagnoses": ["CPU at 95%"],
+            }
         )
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/health/summary")
@@ -357,8 +367,10 @@ class TestHealthStream:
         ctrl.get_detailed_health.return_value["is_inferencing"] = True
         ctrl.get_detailed_health.return_value["inference_count"] = 7
         mock_get_ctrl.return_value = ctrl
-        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
-             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+        with (
+            patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])),
+            patch("asyncio.sleep", new=AsyncMock(return_value=None)),
+        ):
             with client.stream("GET", "/health/stream") as resp:
                 assert resp.status_code == 200
                 assert resp.headers["content-type"].startswith("text/event-stream")
@@ -379,13 +391,149 @@ class TestHealthStream:
         ctrl = MagicMock()
         ctrl.get_detailed_health.side_effect = RuntimeError("boom")
         mock_get_ctrl.return_value = ctrl
-        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
-             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+        with (
+            patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])),
+            patch("asyncio.sleep", new=AsyncMock(return_value=None)),
+        ):
             with client.stream("GET", "/health/stream") as resp:
                 assert resp.status_code == 200
                 body = resp.read()
                 assert b'"phase": "ERROR"' in body
                 assert b'"error": "boom"' in body
+
+
+class TestHealthStreamStallVisibility:
+    """`/health/stream` must say so out loud when a subsystem check wedges.
+
+    `_build_health_snapshot` -> `get_detailed_health()` is synchronous and
+    unbounded. Awaited inline (the pre-`fix/health-stream-stall-visibility`
+    shape) a blocked check stalled the stream with no signal at all — and this
+    is the one stream an observer most needs to tell apart from a dead process.
+
+    These tests use real timing rather than the `patch("asyncio.sleep")` trick
+    above, because the timing *is* the behaviour under test.
+    """
+
+    @pytest.fixture
+    def fast_stream(self):
+        """Shrink the cadence and stall bound so this runs in milliseconds.
+
+        The instance is anonymous — `router = HealthRouter().router` throws it
+        away — but the bound method still sits on the route, so `__self__`
+        recovers it.
+        """
+        route = next(r for r in router.routes if getattr(r, "name", "") == "health_stream")
+        inst = route.endpoint.__self__
+        saved = (inst.HEALTH_STREAM_INTERVAL, inst.HEALTH_SNAPSHOT_STALL_S)
+        inst.HEALTH_STREAM_INTERVAL = 0.02
+        inst.HEALTH_SNAPSHOT_STALL_S = 0.1
+        yield inst
+        inst.HEALTH_STREAM_INTERVAL, inst.HEALTH_SNAPSHOT_STALL_S = saved
+
+    @staticmethod
+    def _frames(client, cycles):
+        """Collect `cycles` SSE frames from /health/stream."""
+        with patch(
+            "fastapi.Request.is_disconnected",
+            new=AsyncMock(side_effect=[False] * cycles + [True]),
+        ):
+            with client.stream("GET", "/health/stream") as resp:
+                assert resp.status_code == 200
+                body = resp.read().decode()
+        return [
+            json.loads(ln[6:])
+            for ln in body.replace("\r\n", "\n").split("\n")
+            if ln.startswith("data: ")
+        ]
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_snapshot_merely_late_is_not_reported_as_stall(
+        self, mock_get_ctrl, client, fast_stream
+    ):
+        """A build slower than the cadence but inside the bound is just late."""
+        ctrl = MagicMock()
+
+        def slow_but_fine():
+            time.sleep(0.05)  # > interval (0.02), < stall bound (0.1)
+            return {"stream": "health", "phase": "HEALTH", "status": "working", "data": {}}
+
+        ctrl.get_detailed_health.side_effect = slow_but_fine
+        mock_get_ctrl.return_value = ctrl
+
+        frames = self._frames(client, 4)
+        assert frames, "stream produced nothing"
+        assert all(f["phase"] == "HEALTH" for f in frames), (
+            f"a late-but-bounded snapshot was misreported: {[f['phase'] for f in frames]}"
+        )
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_wedged_check_reports_stall_and_spawns_exactly_one_build(
+        self, mock_get_ctrl, client, fast_stream
+    ):
+        """The anti-leak pin: many stall frames, one build.
+
+        `wait_for(asyncio.to_thread(...))` abandons the future, not the thread,
+        so retrying it every cycle spawns a fresh pool thread per cycle
+        (measured 2->3->4->5 over four cycles). Shielding one task keeps it at
+        exactly one — asserted here by call count, which is what actually
+        matters, rather than by counting threads.
+        """
+        ctrl = MagicMock()
+        calls = {"n": 0}
+
+        def wedged():
+            calls["n"] += 1
+            time.sleep(0.6)  # far past the 0.1 stall bound
+            return {"stream": "health", "phase": "HEALTH", "status": "working", "data": {}}
+
+        ctrl.get_detailed_health.side_effect = wedged
+        mock_get_ctrl.return_value = ctrl
+
+        frames = self._frames(client, 5)
+        assert frames, "stream produced nothing"
+        assert all(f["phase"] == "STALL" for f in frames), (
+            f"expected stalls while wedged: {[f['phase'] for f in frames]}"
+        )
+        assert calls["n"] == 1, (
+            f"a wedged check spawned {calls['n']} builds across 5 cycles; "
+            "exactly one must be in flight"
+        )
+        # The stall frame carries enough for an observer to act on.
+        first = frames[0]
+        assert first["status"] == "working", "a stall is not an error yet"
+        assert first["data"]["stalled"] is True
+        assert first["data"]["waited_seconds"] == pytest.approx(0.1)
+        assert "blocked" in first["message"]
+
+    @patch("apps.api.server.routers.health.get_health_controller")
+    def test_stream_recovers_once_the_wedged_check_returns(
+        self, mock_get_ctrl, client, fast_stream
+    ):
+        """Stall, then a snapshot — the stream must not die on a wedge.
+
+        The `task.done()` step in the generator is what makes this pass: a
+        build can finish during a cycle whose wait timed out, and without
+        consuming that result the next cycle would discard it and start again,
+        stalling forever.
+        """
+        ctrl = MagicMock()
+        state = {"first": True}
+
+        def wedges_once():
+            if state["first"]:
+                state["first"] = False
+                time.sleep(0.15)  # one cycle's worth past the bound
+            return {"stream": "health", "phase": "HEALTH", "status": "working", "data": {}}
+
+        ctrl.get_detailed_health.side_effect = wedges_once
+        mock_get_ctrl.return_value = ctrl
+
+        frames = self._frames(client, 6)
+        phases = [f["phase"] for f in frames]
+        assert "STALL" in phases, f"expected a stall first: {phases}"
+        assert "HEALTH" in phases, f"stream never recovered after the wedge: {phases}"
+        assert phases.index("STALL") < phases.index("HEALTH")
+        assert "ERROR" not in phases, "a stall must not surface as an error"
 
 
 class TestHealthMethodCoverage:
@@ -426,6 +574,3 @@ class TestHealthMethodCoverage:
     def test_stream_wrong_method_405(self, client):
         resp = client.delete("/health/stream")
         assert resp.status_code == 405
-
-
-

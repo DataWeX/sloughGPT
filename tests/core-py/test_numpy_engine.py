@@ -1,0 +1,378 @@
+"""Tests for NumpyEngine — pure NumPy inference engine with compression and KV cache."""
+
+import numpy as np
+import pytest
+
+from domain.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
+from domain.infrastructure._internal.numpy_engine import (
+    KVCache,
+    NumpyEngine,
+    _CompressedWeight,
+)
+
+QWEN_ID = "Qwen/Qwen2.5-0.5B-Instruct"
+
+
+def _is_cached(model_id: str) -> bool:
+    """Whether a model's safetensors are present in the local cache.
+
+    Uses the same resolution the ModelLoader uses (get_model_dir +
+    find_safetensors), covering both the standard HF cache layout and
+    the flat project-local models/hf-cache/hub layout.
+    """
+    return find_safetensors(get_model_dir(model_id)) is not None
+
+
+@pytest.fixture(scope="session")
+def gpt2():
+    """Load GPT-2 once for entire test session (skips if not cached)."""
+    if not _is_cached("gpt2"):
+        pytest.skip("gpt2 not cached locally")
+    return NumpyEngine.from_pretrained("gpt2")
+
+
+@pytest.fixture(scope="session")
+def gpt2_uncompressed():
+    """Load GPT-2 without compression for comparison (skips if not cached)."""
+    if not _is_cached("gpt2"):
+        pytest.skip("gpt2 not cached locally")
+    return NumpyEngine.from_pretrained("gpt2", compress=False)
+
+
+@pytest.fixture(scope="session")
+def qwen2():
+    """Load Qwen2.5 once for entire test session (from local cache)."""
+    pytest.importorskip("safetensors")
+    if not _is_cached(QWEN_ID):
+        pytest.skip(f"{QWEN_ID} not cached locally")
+    return NumpyEngine.from_pretrained(QWEN_ID)
+
+
+@pytest.fixture(scope="session")
+def qwen2_uncompressed():
+    """Load Qwen2.5 without compression (from local cache)."""
+    pytest.importorskip("safetensors")
+    if not _is_cached(QWEN_ID):
+        pytest.skip(f"{QWEN_ID} not cached locally")
+    return NumpyEngine.from_pretrained(QWEN_ID, compress=False)
+
+
+class TestNumpyEngineGPT2:
+    """GPT-2 inference tests."""
+
+    def test_arch(self, gpt2):
+        assert "gpt2" in gpt2.arch.name.lower()
+
+    def test_vocab_size(self, gpt2):
+        assert gpt2.vocab_size == 50257
+
+    def test_has_tokenizer(self, gpt2):
+        assert gpt2.tokenizer is not None
+
+    def test_forward_returns_logits(self, gpt2):
+        ids = gpt2.tokenizer.encode("Hello")
+        logits = gpt2._forward(ids)
+        assert isinstance(logits, np.ndarray)
+        assert logits.shape == (gpt2.vocab_size,)
+
+    def test_generate_returns_string(self, gpt2):
+        result = gpt2.generate("The capital of France is", max_new_tokens=5)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_generate_deterministic(self, gpt2):
+        r1 = gpt2.generate("Hello", max_new_tokens=3, temperature=0.0)
+        r2 = gpt2.generate("Hello", max_new_tokens=3, temperature=0.0)
+        assert r1 == r2
+
+    def test_info(self, gpt2):
+        info = gpt2.info()
+        assert "gpt2" in info["arch"].lower()
+        assert info["vocab_size"] == 50257
+        assert info["has_tokenizer"] is True
+        assert info["num_params"] > 0
+
+
+class TestNumpyEngineCompression:
+    """Compression tests for NumpyEngine (runs on locally-cached Qwen2.5)."""
+
+    def test_compression_enabled(self, qwen2):
+        assert qwen2._compress is True
+        assert len(qwen2._compressed_weights) > 0
+
+    def test_compression_disabled(self, qwen2_uncompressed):
+        assert qwen2_uncompressed._compress is False
+        assert len(qwen2_uncompressed._raw_weights) > 0
+
+    def test_compression_ratio(self, qwen2):
+        info = qwen2.info()
+        assert info["compressed"] is True
+        assert info["compression_ratio"] > 1.0  # At least some compression
+        assert info["raw_bytes"] > info["compressed_bytes"]
+
+    def test_get_weight_decompresses(self, qwen2):
+        weight_name = list(qwen2._compressed_weights.keys())[0]
+        weight = qwen2._get_weight(weight_name)
+        assert isinstance(weight, np.ndarray)
+        assert np.issubdtype(weight.dtype, np.floating)
+
+    def test_lru_cache(self, qwen2):
+        weight_name = list(qwen2._compressed_weights.keys())[0]
+        w1 = qwen2._get_weight(weight_name)
+        w2 = qwen2._get_weight(weight_name)
+        assert np.array_equal(w1, w2)
+
+    def test_compressed_weight_decompress(self):
+        centroids = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32)
+        assignments = np.array([0, 1, 2, 3, 0, 1, 2, 3], dtype=np.uint8)
+        compressed = _CompressedWeight(centroids, assignments, None, (8,), np.float32)
+        decompressed = compressed.decompress()
+        assert np.array_equal(decompressed, centroids[assignments])
+
+
+class TestNumpyEngineKVCache:
+    """KV cache tests for incremental decoding."""
+
+    def test_kv_cache_init(self):
+        cache = KVCache(n_layers=12)
+        assert cache.seq_len == 0
+        assert cache.get(0) is None
+
+    def test_kv_cache_update(self):
+        cache = KVCache(n_layers=2)
+        k = np.random.randn(8, 10, 64).astype(np.float32)
+        v = np.random.randn(8, 10, 64).astype(np.float32)
+
+        k_cat, v_cat = cache.update(0, k, v)
+        assert k_cat.shape == (8, 10, 64)
+        assert cache.seq_len == 10
+
+    def test_kv_cache_concatenation(self):
+        cache = KVCache(n_layers=2)
+        k1 = np.random.randn(8, 5, 64).astype(np.float32)
+        v1 = np.random.randn(8, 5, 64).astype(np.float32)
+        k2 = np.random.randn(8, 3, 64).astype(np.float32)
+        v2 = np.random.randn(8, 3, 64).astype(np.float32)
+
+        cache.update(0, k1, v1)
+        k_cat, v_cat = cache.update(0, k2, v2)
+        assert k_cat.shape == (8, 8, 64)  # 5 + 3 = 8
+        assert cache.seq_len == 8
+
+    def test_kv_cache_reset(self):
+        cache = KVCache(n_layers=2)
+        k = np.random.randn(8, 10, 64).astype(np.float32)
+        v = np.random.randn(8, 10, 64).astype(np.float32)
+        cache.update(0, k, v)
+
+        cache.reset()
+        assert cache.seq_len == 0
+        assert cache.get(0) is None
+
+    def test_generate_with_kv_cache(self, qwen2):
+        result = qwen2.generate("Hello", max_new_tokens=5, use_kv_cache=True)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_generate_without_kv_cache(self, qwen2):
+        result = qwen2.generate("Hello", max_new_tokens=5, use_kv_cache=False)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_kv_cache_matches_full_forward(self, qwen2):
+        # Both should produce same output for greedy decoding
+        r1 = qwen2.generate("Hello world", max_new_tokens=3, temperature=0.0, use_kv_cache=False)
+        r2 = qwen2.generate("Hello world", max_new_tokens=3, temperature=0.0, use_kv_cache=True)
+        # Greedy should be identical (modulo floating-point accumulation)
+        assert r1[:20] == r2[:20]  # First 20 chars should match
+
+
+class TestNumpyEngineQwen2:
+    """Qwen2 inference tests (bfloat16 loading)."""
+
+    def test_arch(self, qwen2):
+        assert "qwen" in qwen2.arch.name.lower()
+
+    def test_vocab_size(self, qwen2):
+        assert qwen2.vocab_size > 100000
+
+    def test_forward_returns_logits(self, qwen2):
+        ids = qwen2.tokenizer.encode("Hello")
+        logits = qwen2._forward(ids)
+        assert isinstance(logits, np.ndarray)
+        assert logits.shape == (qwen2.vocab_size,)
+
+    def test_generate_returns_string(self, qwen2):
+        result = qwen2.generate("The capital of France is", max_new_tokens=5)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_generate_produces_english(self, qwen2):
+        result = qwen2.generate("The capital of France is", max_new_tokens=10)
+        assert any(c.isalpha() for c in result)
+
+    def test_info(self, qwen2):
+        info = qwen2.info()
+        assert "qwen" in info["arch"].lower()
+        assert info["vocab_size"] > 100000
+
+
+class TestNumpyEngineStreaming:
+    """Streaming generation tests."""
+
+    @pytest.mark.asyncio
+    async def test_generate_stream(self, qwen2):
+        tokens = []
+        async for token in qwen2.generate_stream("Hello", max_new_tokens=5, temperature=0.0):
+            tokens.append(token)
+        assert len(tokens) > 0
+        assert all(isinstance(t, str) for t in tokens)
+
+    @pytest.mark.asyncio
+    async def test_generate_stream_yields_tokens(self, qwen2):
+        count = 0
+        async for _ in qwen2.generate_stream("Hello", max_new_tokens=5, temperature=0.0):
+            count += 1
+            if count >= 3:
+                break
+        assert count > 0
+
+
+class TestNumpyEngineErrors:
+    """Error handling tests."""
+
+    def test_missing_model_raises(self):
+        with pytest.raises(FileNotFoundError):
+            NumpyEngine.from_pretrained("nonexistent/model-xyz")
+
+
+class TestHierarchicalCompression:
+    """Tests for hierarchical centroid compression (linear function for centroids)."""
+
+    def test_linear_centroids_compressed(self):
+        """Centroids that follow a linear pattern should be stored as function."""
+        from domain.infrastructure._internal.numpy_engine import _CompressedWeight
+
+        # Create centroids that are linearly spaced (like quantiles of uniform)
+        centroids = np.linspace(-1, 1, 16).astype(np.float32)
+        assignments = np.random.randint(0, 16, size=1024).astype(np.uint8)
+        residual = np.zeros(1024, dtype=np.float16)
+
+        # Fit linear function
+        i = np.arange(16, dtype=np.float32)
+        A = np.column_stack([i, np.ones(16)])
+        result, _, _, _ = np.linalg.lstsq(A, centroids, rcond=None)
+        a, b = result
+        fitted = a * i + b
+        mse = np.mean((centroids - fitted) ** 2)
+        var = np.var(centroids)
+        accuracy = 1.0 - mse / (var + 1e-8)
+        assert accuracy > 0.98  # should be near-perfect for linear centroids
+
+        cw = _CompressedWeight(
+            centroids=centroids,
+            assignments=assignments,
+            residual=residual,
+            shape=(1024,),
+            dtype=np.float32,
+            centroid_fn="linear",
+            centroid_fn_params={"a": float(a), "b": float(b)},
+        )
+        assert cw.centroid_fn == "linear"
+        # Compressed size: 8 bytes (a, b) + assignments + residual
+        assert cw.compressed_bytes < centroids.nbytes + assignments.nbytes + residual.nbytes
+
+    def test_decompress_with_linear_centroids(self):
+        """Decompression should reconstruct correctly with linear centroids."""
+        from domain.infrastructure._internal.numpy_engine import _CompressedWeight
+
+        centroids = np.linspace(-0.5, 0.5, 16).astype(np.float32)
+        assignments = np.array([0, 5, 10, 15, 3, 7], dtype=np.uint8)
+        residual = np.zeros(6, dtype=np.float16)
+
+        i = np.arange(16, dtype=np.float32)
+        A = np.column_stack([i, np.ones(16)])
+        result, _, _, _ = np.linalg.lstsq(A, centroids, rcond=None)
+        a, b = result
+
+        cw = _CompressedWeight(
+            centroids=centroids,
+            assignments=assignments,
+            residual=residual,
+            shape=(6,),
+            dtype=np.float32,
+            centroid_fn="linear",
+            centroid_fn_params={"a": float(a), "b": float(b)},
+        )
+        decompressed = cw.decompress()
+        # Should be close to centroids[assignments]
+        expected = centroids[assignments]
+        np.testing.assert_array_almost_equal(decompressed, expected, decimal=5)
+
+    def test_raw_centroids_fallback(self):
+        """Non-linear centroids should be stored as raw array."""
+        from domain.infrastructure._internal.numpy_engine import _CompressedWeight
+
+        # Random centroids — not linear
+        centroids = np.array(
+            [0.1, -0.5, 0.9, -0.1, 0.3, 0.7, -0.8, 0.2, 0.4, -0.3, 0.6, -0.7, 0.8, -0.2, 0.5, -0.6],
+            dtype=np.float32,
+        )
+        assignments = np.random.randint(0, 16, size=512).astype(np.uint8)
+
+        cw = _CompressedWeight(
+            centroids=centroids,
+            assignments=assignments,
+            residual=None,
+            shape=(512,),
+            dtype=np.float32,
+        )
+        assert cw.centroid_fn is None
+        # Raw size: centroids + assignments
+        assert cw.compressed_bytes == centroids.nbytes + assignments.nbytes
+
+    def test_engine_uses_hierarchical_when_beneficial(self):
+        """NumpyEngine should use hierarchical compression when centroids are linear."""
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_positions": 128,
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "n_ctx": 128,
+        }
+        rng = np.random.default_rng(42)
+        # Layer norm weights are often roughly linear across neurons
+        weights = {
+            "h.0.ln_1.weight": np.linspace(0.8, 1.2, 64).astype(np.float32),
+            "h.0.ln_1.bias": rng.standard_normal(64).astype(np.float32),
+        }
+        engine = NumpyEngine(config=config, weights=weights, compress=True, n_clusters=16)
+        # The linear weight should have hierarchical compression
+        engine._compressed_weights["h.0.ln_1.weight"]
+        # Depending on accuracy threshold, may or may not use linear
+        # Just verify it works either way
+        w = engine._get_weight("h.0.ln_1.weight")
+        assert w.shape == (64,)
+
+    def test_compression_ratio_improves_with_hierarchical(self):
+        """Hierarchical compression should improve ratio for linear centroids."""
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_positions": 128,
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "n_ctx": 128,
+        }
+        # Uniform-ish weight — centroids will be linear
+        weights = {
+            "linear_w": np.linspace(-1, 1, 2048).astype(np.float32),
+            "random_w": np.random.default_rng(42).standard_normal(2048).astype(np.float32),
+        }
+        engine = NumpyEngine(config=config, weights=weights, compress=True, n_clusters=16)
+        info = engine.info()
+        assert info["raw_bytes"] > info["compressed_bytes"]
+        assert info["compression_ratio"] > 1.0

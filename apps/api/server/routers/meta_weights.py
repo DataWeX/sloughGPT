@@ -9,7 +9,13 @@ import time as _time
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 logger = logging.getLogger("slo.routers.meta_weights")
 
@@ -21,10 +27,10 @@ class GetMetaWeightsRequest(BaseModel):
 
 
 class MetaWeightResponse(BaseModel):
-    temperature: float = 0.8
-    repetition_penalty: float = 1.0
-    top_p: float = 0.9
-    top_k: int = 50
+    temperature: float = 0.7
+    repetition_penalty: float = 1.15
+    top_p: float = 0.85
+    top_k: int = 40
     style_bias: float = 0.0
     confidence_boost: float = 0.0
     based_on_samples: int = 0
@@ -52,7 +58,7 @@ class MetaWeightsRouter:
         """Get meta-weight adjustments based on similar past feedback."""
         try:
             _t0 = _time.monotonic()
-            from domains.feedback import get_meta_weight_manager as _get_manager
+            from domain.feedback import get_meta_weight_manager as _get_manager
 
             manager = _get_manager()
             if manager is None:
@@ -90,7 +96,7 @@ class MetaWeightsRouter:
     async def get_meta_weight_stats(self, req: Request) -> dict:
         """Get meta-weight system statistics."""
         try:
-            from domains.feedback import get_meta_weight_manager as _get_manager
+            from domain.feedback import get_meta_weight_manager as _get_manager
 
             manager = _get_manager()
             if manager is None:

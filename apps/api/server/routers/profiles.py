@@ -11,16 +11,17 @@ from __future__ import annotations
 
 import logging
 
-from domains.infrastructure.serving_profiles import (
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from schemas.common import endpoint, success_response
+
+from domain.infrastructure.serving_profiles import (
     apply_profile,
     detect_recommended_profile,
     get_active_profile_id,
     get_profile,
     list_profiles,
 )
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from schemas.common import endpoint, success_response
 
 logger = logging.getLogger("slo.routers.profiles")
 
@@ -58,18 +59,23 @@ class ProfilesRouter:
     @endpoint("profiles.apply")
     async def apply_profile(self, req: ApplyProfileRequest) -> dict:
         """Apply a serving profile to the running process."""
-        result = apply_profile(req.profile_id)
-        return success_response(data=result)
+        try:
+            result = apply_profile(req.profile_id)
+            return success_response(data=result)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     @endpoint("profiles.active")
     async def get_active_profile(self) -> dict:
         """Get the currently active profile ID."""
         profile_id = get_active_profile_id()
         p = get_profile(profile_id)
-        return success_response(data={
-            "active_profile_id": profile_id,
-            "profile": p.to_dict() if p else None,
-        })
+        return success_response(
+            data={
+                "active_profile_id": profile_id,
+                "profile": p.to_dict() if p else None,
+            }
+        )
 
     @endpoint("profiles.recommend")
     async def recommend_profile(self) -> dict:
@@ -78,27 +84,33 @@ class ProfilesRouter:
 
         try:
             import psutil
-            ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+
+            ram_gb = psutil.virtual_memory().total / (1024**3)
         except ImportError:
             ram_gb = multiprocessing.cpu_count() * 4  # rough estimate
 
         has_gpu = False
         try:
             import subprocess
+
             result = subprocess.run(
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                capture_output=True, text=True, timeout=5
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             has_gpu = bool(result.stdout.strip())
         except Exception:
             logger.debug("GPU detection failed (nvidia-smi not available)")
 
         recommended = detect_recommended_profile(ram_gb, has_gpu)
-        return success_response(data={
-            "recommended_profile_id": recommended,
-            "detected_ram_gb": round(ram_gb, 1),
-            "has_gpu": has_gpu,
-        })
+        return success_response(
+            data={
+                "recommended_profile_id": recommended,
+                "detected_ram_gb": round(ram_gb, 1),
+                "has_gpu": has_gpu,
+            }
+        )
 
 
 router = ProfilesRouter().router

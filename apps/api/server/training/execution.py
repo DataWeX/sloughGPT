@@ -1,7 +1,11 @@
 """Training execution routes — start, distill, lora, visual, from-feedback, builds.
 
 Each route group is extracted into its own module; this file includes them via
-``router.include_router()`` and defines the core ``start_training`` endpoint.
+``router.include_router()`` and defines the core ``start_training`` endpoint,
+which is descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{status, job_id, ...}`` is served unwrapped (``envelope=False``),
+byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
@@ -11,14 +15,16 @@ import threading
 import uuid
 from typing import Any
 
-from domains.mobile.notifications import get_notification_service
-from domains.training.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
+from domain.training import get_training_executor
+
 from .controller import get_training_controller
-from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
+from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds, notify_push
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
 from .schemas import TrainingRequest
@@ -27,6 +33,46 @@ from .webhooks import notify_training_event
 logger = logging.getLogger("slo")
 
 router = APIRouter(tags=["training-execution"])
+
+
+def _feed_spec(request: TrainingRequest) -> tuple[str, str, None, str] | None:
+    """Resolve a training-feed data_path, or None when the request isn't a feed.
+
+    Returns a ``(data_path_str, out_stem, manifest_meta, source_kind)`` tuple for
+    ``feed:<source>`` / ``http(s)://...`` dataset specs so ``start_training`` can
+    skip on-disk pre-flight: the trainer (``prepare_data`` -> ``load_feed_text``)
+    reads the feed at run time. ``out_stem`` is derived from the feed source/URL
+    so checkpoints get a stable name.
+    """
+    from domain.training import is_feed_source
+
+    dataset_str = (request.dataset or "").strip()
+    is_feed = (
+        is_feed_source(dataset_str) and request.manifest_uri is None and request.dataset_ref is None
+    )
+    if not is_feed:
+        return None
+    from .feeds import validate_feed_dataset
+
+    validate_feed_dataset(dataset_str)
+    try:
+        from urllib.parse import urlparse
+
+        if dataset_str.startswith(("http://", "https://")):
+            stem = str(urlparse(dataset_str).path.rstrip("/").split("/")[-1] or "feed")
+        else:
+            stem = dataset_str.split(":", 1)[1] or "feed"
+    except Exception:
+        stem = "feed"
+    out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem)[:80]
+    logger.info(
+        "Starting training from feed %s (stem=%s)",
+        dataset_str,
+        out_stem,
+        extra={"tag": "TRAIN"},
+    )
+    return dataset_str, out_stem, None, "feed"
+
 
 # Include legacy /train endpoints
 from .legacy import router as legacy_router
@@ -59,44 +105,65 @@ from .builds import router as builds_router
 router.include_router(builds_router)
 
 
-@router.post("/training/start")
-async def start_training(request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+async def start_training(
+    request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)
+):
     """Start a tracked training job (web UI).
 
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    from domains.training.dataset_manifest import ManifestError
+    feed_spec = _feed_spec(request)
+    if feed_spec is not None:
+        data_path_str, out_stem, manifest_meta, source_kind = feed_spec
+    else:
+        from domain.training import ManifestError
 
-    try:
-        data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
-            request.dataset,
-            request.manifest_uri,
-            request.dataset_ref,
-        )
-    except ManifestError as e:
-        raise_error(str(e), "E_BAD_REQUEST", status_code=400)
+        try:
+            data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
+                request.dataset,
+                request.manifest_uri,
+                request.dataset_ref,
+            )
+        except ManifestError as e:
+            raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
-    # Pre-flight dataset validation
+    # Pre-flight dataset validation (feed specs have no file on disk to check)
     from pathlib import Path as _P
 
     _data_path = _P(data_path_str)
-    if not _data_path.exists():
+    if feed_spec is None and not _data_path.exists():
         raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
     if _data_path.is_file():
         _size = _data_path.stat().st_size
         if _size == 0:
             raise_error("Dataset file is empty (0 bytes)", "E_BAD_REQUEST", status_code=400)
         if _size < 100:
-            raise_error(f"Dataset file is too small ({_size} bytes). Need at least 100 bytes.", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                f"Dataset file is too small ({_size} bytes). Need at least 100 bytes.",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
     elif _data_path.is_dir():
         _files = list(_data_path.rglob("*"))
-        _data_files = [f for f in _files if f.is_file() and f.suffix in (".jsonl", ".json", ".txt", ".csv", ".parquet")]
+        _data_files = [
+            f
+            for f in _files
+            if f.is_file() and f.suffix in (".jsonl", ".json", ".txt", ".csv", ".parquet")
+        ]
         if len(_data_files) == 0:
-            raise_error(f"No data files found in directory (expected .jsonl, .json, .txt, .csv, or .parquet)", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                "No data files found in directory (expected .jsonl, .json, .txt, .csv, or .parquet)",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
         _total_size = sum(f.stat().st_size for f in _data_files)
         if _total_size < 100:
-            raise_error(f"Total dataset size too small ({_total_size} bytes across {len(_data_files)} files)", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                f"Total dataset size too small ({_total_size} bytes across {len(_data_files)} files)",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
 
     # Pre-flight quality gate: check data quality before wasting compute
     try:
@@ -105,17 +172,26 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
 
         _q_path = _PQ(data_path_str)
         if _q_path.is_file():
-            _raw = await _aio.to_thread(lambda: _q_path.read_text(encoding="utf-8", errors="replace")[:200_000])
+            _raw = await _aio.to_thread(
+                lambda: _q_path.read_text(encoding="utf-8", errors="replace")[:200_000]
+            )
         elif _q_path.is_dir():
             _candidates = [_q_path / "input.txt", _q_path / "corpus.jsonl", _q_path / "train.txt"]
             _q_file = next((c for c in _candidates if c.exists()), None)
-            _raw = await _aio.to_thread(lambda: _q_file.read_text(encoding="utf-8", errors="replace")[:200_000]) if _q_file else ""
+            _raw = (
+                await _aio.to_thread(
+                    lambda: _q_file.read_text(encoding="utf-8", errors="replace")[:200_000]
+                )
+                if _q_file
+                else ""
+            )
         else:
             _raw = ""
 
         if _raw:
-            from domains.training.quality_scorer import compute_data_quality
-            _quality = await _aio.to_thread(compute_data_quality, _raw)
+            from domain.training.engine import get_training_engine as _eng
+
+            _quality = await _aio.to_thread(_eng().compute_data_quality, _raw)
             _avg = _quality.get("avg_quality", 0)
             _tox = _quality.get("toxicity_rate", 0)
 
@@ -136,7 +212,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                     details=_quality,
                 )
     except Exception as e:
-        from schemas.common import AppError
+        from domain.infrastructure import AppError
+
         if isinstance(e, AppError):
             raise
         logger.warning("Quality gate check failed (proceeding): %s", e)
@@ -145,7 +222,10 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     try:
         import asyncio as _aio
         from pathlib import Path as _PJ
-        from domains.training.train_pipeline import validate_conversation_data
+
+        from domain.training.engine import get_training_engine
+
+        validate = get_training_engine().validate_conversation_data
 
         _j_path = _PJ(data_path_str)
         _j_file = None
@@ -158,7 +238,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                     break
 
         if _j_file:
-            _result = await _aio.to_thread(validate_conversation_data, str(_j_file))
+            _result = await _aio.to_thread(validate, str(_j_file))
             if _result["error_count"] > 0 and _result["valid_count"] == 0:
                 raise_error(
                     f"Dataset has no valid conversation entries ({_result['error_count']} malformed lines). "
@@ -184,7 +264,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                         status_code=400,
                     )
     except Exception as e:
-        from schemas.common import AppError
+        from domain.infrastructure import AppError
+
         if isinstance(e, AppError):
             raise
         logger.warning("JSONL validation failed (proceeding): %s", e)
@@ -218,14 +299,14 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     controller = get_training_controller()
     controller.start(job_id, request.name or "training")
 
-    # Audit trail — training job start (char-level fine-tune)
+    # Audit trail — training job start (algo: bpe = tokenized, else char)
     try:
         from infrastructure.auth import get_audit_logger
 
         get_audit_logger().log(
             "training.start",
             resource=request.dataset.strip() if request.dataset else out_stem,
-            detail="char",
+            detail=str(request.algo or "char"),
             extra={
                 "job_id": job_id,
                 "model": request.model,
@@ -268,7 +349,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, req_snapshot)
 
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
@@ -282,8 +363,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
         logger.warning("CancelManager registration failed for %s: %s", job_id, e)
 
     def run_training(job_id_: str = jid) -> None:
-        from domains.training.train_pipeline import SloughGPTTrainer
-        from domains.training.wandb_helpers import create_training_tracker_for_api_job
+        from domain.training import SloughGPTTrainer, create_training_tracker_for_api_job
 
         tracker = None
         try:
@@ -326,7 +406,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
 
             trainer = SloughGPTTrainer(
                 data_path=data_path_for_thread,
-                **_sloughgpt_trainer_kwds(req_snapshot),
+                **_sloughgpt_trainer_kwds(req_snapshot, data_path=data_path_for_thread),
                 experiment_tracker=tracker,
             )
             result = trainer.train(
@@ -370,18 +450,15 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             except Exception as e:
                 logger.debug("Training completion webhook failed: %s", e, extra={"tag": "TRAIN"})
 
-            # Push notification to mobile devices
-            try:
-                loss = training_jobs[jid].get("loss")
-                loss_str = f"Final loss: {loss:.4f}" if loss is not None else "Training"
-                get_notification_service().send_notification_sync(
-                    title="Training Complete",
-                    body=f"{loss_str}. Checkpoint saved.",
-                    data={"screen": "Training", "job_id": jid},
-                    topics=["training"],
-                )
-            except Exception as e:
-                logger.debug("Training completion push failed: %s", e, extra={"tag": "TRAIN"})
+            # Push notification to mobile devices (off-thread via notify_push).
+            loss = training_jobs[jid].get("loss")
+            loss_str = f"Final loss: {loss:.4f}" if loss is not None else "Training"
+            notify_push(
+                title="Training Complete",
+                body=f"{loss_str}. Checkpoint saved.",
+                data={"screen": "Training", "job_id": jid},
+                topics=["training"],
+            )
         except Exception as e:
             logger.exception("Training job %s failed", jid, extra={"tag": "TRAIN"})
             _finish_job(jid, "failed", str(e))
@@ -405,16 +482,13 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             except Exception as exc:
                 logger.warning("Training failure webhook failed for %s: %s", jid, exc)
 
-            # Push notification to mobile devices
-            try:
-                get_notification_service().send_notification_sync(
-                    title="Training Failed",
-                    body=f"Job {training_jobs[jid].get('name', jid)} failed: {str(e)[:100]}",
-                    data={"screen": "Training", "job_id": jid},
-                    topics=["training"],
-                )
-            except Exception as exc:
-                logger.warning("Training failure push notification failed for %s: %s", jid, exc)
+            # Push notification to mobile devices (off-thread via notify_push).
+            notify_push(
+                title="Training Failed",
+                body=f"Job {training_jobs[jid].get('name', jid)} failed: {str(e)[:100]}",
+                data={"screen": "Training", "job_id": jid},
+                topics=["training"],
+            )
         finally:
             if tracker is not None:
                 try:
@@ -433,6 +507,38 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
         "dataset": request.dataset,
         "epochs": request.epochs,
     }
+
+
+# ── Descriptor projection (card 20261104_151036) ───────────────────────
+
+SPEC_START = ToolSpec(
+    name="training.start",
+    description="Start a tracked training job (web UI).",
+    parameters=params_from_model(TrainingRequest),
+    execute=start_training,
+    auth_scope="authenticated",
+    idempotent=False,
+    result={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "job_id": {"type": "string"},
+            "name": {"type": "string"},
+            "model": {"type": "string"},
+            "dataset": {"type": "string"},
+            "epochs": {"type": "integer"},
+        },
+    },
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_START,
+        RouteSpec(path="/training/start", envelope=False),
+        start_training,
+    )
+)
 
 
 # ── Visual Training (delegated to visual.py) ────────────────────

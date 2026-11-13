@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Pre-commit hook: warn on TODO/FIXME/HACK in committed Python files."""
+
 import sys
 
 BLOCKERS = ("FIXME", "HACK")
 WARNINGS = ("TODO",)
+
 
 def main():
     failed = False
@@ -23,6 +25,7 @@ def main():
                     if tag in stripped:
                         print(f"\033[33m{path}:{i}: {tag}\033[0m {stripped}")
     return 1 if failed else 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

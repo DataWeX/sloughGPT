@@ -30,17 +30,16 @@ from fastapi import APIRouter, FastAPI
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVER_DIR = REPO_ROOT / "apps/api/server"
-CORE_DIR = REPO_ROOT / "packages/core-py"
-for _p in (SERVER_DIR, CORE_DIR):
+for _p in (SERVER_DIR,):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 from apps.api.server.config import ServerConfig  # noqa: E402
 from apps.api.server.infrastructure.startup import (  # noqa: E402
     _PREWARM_MODEL_LOAD_IMPORTS,
-    _preload_model_imports,
-    _build_guard_for_model,
     StartupOrchestrator,
+    _build_guard_for_model,
+    _preload_model_imports,
 )
 
 
@@ -90,10 +89,14 @@ def test_phase6_routers_retries_once_on_transient_ebadf():
     """An ``OSError`` errno 9 on the first pass must be retried and recover."""
     get_all = MagicMock(side_effect=[OSError(9, "Bad file descriptor"), []])
     orch = _make_orchestrator()
-    with patch.dict(
-        sys.modules,
-        {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
-    ), patch("faulthandler.dump_traceback"), patch("traceback.print_exc"):
+    with (
+        patch.dict(
+            sys.modules,
+            {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
+        ),
+        patch("faulthandler.dump_traceback"),
+        patch("traceback.print_exc"),
+    ):
         asyncio.run(orch._phase6_routers())
     assert get_all.call_count == 2
     assert orch._routers_registered is True
@@ -103,10 +106,14 @@ def test_phase6_routers_retries_once_on_transient_partial_import():
     """A partial ``ImportError`` on the first pass must also be retried."""
     get_all = MagicMock(side_effect=[ImportError("cannot import name 'ProcessGuard'"), []])
     orch = _make_orchestrator()
-    with patch.dict(
-        sys.modules,
-        {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
-    ), patch("faulthandler.dump_traceback"), patch("traceback.print_exc"):
+    with (
+        patch.dict(
+            sys.modules,
+            {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
+        ),
+        patch("faulthandler.dump_traceback"),
+        patch("traceback.print_exc"),
+    ):
         asyncio.run(orch._phase6_routers())
     assert get_all.call_count == 2
     assert orch._routers_registered is True
@@ -116,10 +123,14 @@ def test_phase6_routers_raises_on_nontransient_error_without_retry():
     """A non-transient failure must not be masked by a retry."""
     get_all = MagicMock(side_effect=RuntimeError("boom"))
     orch = _make_orchestrator()
-    with patch.dict(
-        sys.modules,
-        {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
-    ), patch("faulthandler.dump_traceback"), patch("traceback.print_exc"):
+    with (
+        patch.dict(
+            sys.modules,
+            {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
+        ),
+        patch("faulthandler.dump_traceback"),
+        patch("traceback.print_exc"),
+    ):
         with pytest.raises(RuntimeError, match="boom"):
             asyncio.run(orch._phase6_routers())
     assert get_all.call_count == 1
@@ -159,6 +170,63 @@ def test_phase6_routers_skips_already_registered_prefixes():
 # ── Phase 2: model load ──────────────────────────────────────────────────────
 
 
+def test_phase6_warms_the_snapshot_builders_before_first_subscriber():
+    """Boot must warm every snapshot builder before anyone subscribes.
+
+    Both closures are cold and both land in-request otherwise, and they are
+    *disjoint* — warming one does not warm the other:
+
+    - ``controllers.health`` pulls 284 modules and, through
+      ``domain.slolib.get_accelerator() -> _detect_best_backend() ->
+      is_available()``, reaches the GPU stack (cupy: 279ms self, 758ms
+      cumulative): measured **804-1281ms cold vs ~0ms warm**.
+    - ``routers.dashboard._build_snapshot`` reaches its own closure
+      (``domain.infrastructure``, ``training.jobs``, the event buffer): measured
+      **1419ms cold vs 6.6ms warm** across 654 modules, with neither
+      ``controllers.health`` nor ``cupy`` in ``sys.modules`` afterwards.
+
+    So without this, the first ``/health/stream`` and first
+    ``/dashboard/stream`` subscriber each pay a cold import.
+
+    The warmup functions themselves are not run here (only branched onto the
+    tree), so this asserts the wiring rather than paying the imports in a test.
+    """
+    get_all = MagicMock(return_value=[])
+    orch = _make_orchestrator()
+    branched: list[str] = []
+
+    def _spy(processes, *args, **kwargs):
+        branched.extend(p.name for p in processes)
+        return MagicMock()  # a Stem; `_phase6_routers` ignores the return here
+
+    with (
+        patch.dict(
+            sys.modules,
+            {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
+        ),
+        patch.object(orch._bg_tree, "branch", side_effect=_spy),
+        patch("faulthandler.dump_traceback"),
+        patch("traceback.print_exc"),
+    ):
+        asyncio.run(orch._phase6_routers())
+
+    for warmup, rationale in (
+        (
+            "health-warmup",
+            "its ~1.3s cold import still lands in-request on the first /health/stream subscriber",
+        ),
+        (
+            "dashboard-warmup",
+            "its ~1.4s cold import still lands in-request on the first "
+            "/dashboard/stream subscriber, and it is a separate closure the "
+            "health warmup does not reach",
+        ),
+    ):
+        assert warmup in branched, f"boot never runs {warmup}: {rationale}; branched: {branched}"
+    # The pre-existing checkpoint warmup must survive alongside them.
+    assert "ckpt-warmup" in branched
+
+
 class TestPhase2ModelLoad:
     """_phase2_model_load — autoload disabled / lazy-guard routing."""
 
@@ -188,10 +256,13 @@ class TestPhase2ModelLoad:
     def test_lazy_guard_autoload_path(self):
         cfg = ServerConfig(autoload_model="gpt2")
         orch = StartupOrchestrator(FastAPI(), cfg)
-        with patch("apps.api.server.infrastructure.startup._preload_model_imports") as mock_preload, \
-             patch("apps.api.server.infrastructure.startup._try_lazy_guard_autoload",
-                   return_value=True) as mock_lazy, \
-             patch("apps.api.server.infrastructure.startup._sync_soul_traits") as mock_sync:
+        with (
+            patch("apps.api.server.infrastructure.startup._preload_model_imports") as mock_preload,
+            patch(
+                "apps.api.server.infrastructure.startup._try_lazy_guard_autoload", return_value=True
+            ) as mock_lazy,
+            patch("apps.api.server.infrastructure.startup._sync_soul_traits") as mock_sync,
+        ):
             asyncio.run(self._run_phase_with(orch, cfg))
         mock_preload.assert_called_once()
         mock_lazy.assert_called_once_with(cfg)
@@ -207,16 +278,20 @@ class TestPhase5ModelRegistry:
 
     def test_registry_initialized(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.infrastructure.model_registry.get_model_registry",
-                   return_value=object()) as mock_get:
+        with patch(
+            "domain.infrastructure.model_registry.get_model_registry",
+            return_value=object(),
+        ) as mock_get:
             asyncio.run(orch._phase5_model_registry())
         mock_get.assert_called_once()
         assert orch._registry is not None
 
     def test_registry_failure_does_not_raise(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.infrastructure.model_registry.get_model_registry",
-                   side_effect=RuntimeError("boom")):
+        with patch(
+            "domain.infrastructure.model_registry.get_model_registry",
+            side_effect=RuntimeError("boom"),
+        ):
             asyncio.run(orch._phase5_model_registry())
         assert orch._registry is None
 
@@ -230,10 +305,12 @@ class TestPhaseTaskQueue:
     def test_initializes_queue_and_handlers(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         q = object()
-        with patch("domains.infrastructure.task_queue.get_task_queue", return_value=q) as mock_q, \
-             patch("domains.infrastructure.training_queue.register_training_handlers") as mock_reg, \
-             patch("domains.memory.register_memory_handlers") as mock_mem, \
-             patch("domains.memory.maintenance.start_memory_maintenance") as mock_maint:
+        with (
+            patch("domain.infrastructure.task_queue.get_task_queue", return_value=q) as mock_q,
+            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
+            patch("domain.memory.register_memory_handlers") as mock_mem,
+            patch("domain.memory._internal.maintenance.start_memory_maintenance") as mock_maint,
+        ):
             asyncio.run(orch._phase_task_queue())
         mock_q.assert_called_once()
         mock_reg.assert_called_once()
@@ -243,11 +320,15 @@ class TestPhaseTaskQueue:
 
     def test_queue_failure_swallowed(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.infrastructure.task_queue.get_task_queue",
-                   side_effect=RuntimeError("boom")), \
-             patch("domains.infrastructure.training_queue.register_training_handlers") as mock_reg, \
-             patch("domains.memory.register_memory_handlers") as mock_mem, \
-             patch("domains.memory.maintenance.start_memory_maintenance") as mock_maint:
+        with (
+            patch(
+                "domain.infrastructure.task_queue.get_task_queue",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
+            patch("domain.memory.register_memory_handlers") as mock_mem,
+            patch("domain.memory._internal.maintenance.start_memory_maintenance"),
+        ):
             asyncio.run(orch._phase_task_queue())
         mock_reg.assert_called_once()
         mock_mem.assert_called_once()
@@ -261,8 +342,10 @@ class TestPhaseConfigReady:
 
     def test_config_validated(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.infrastructure.config.get_config") as mock_cfg, \
-             patch("domains.infrastructure.resource_manager.get_resource_manager") as mock_rm:
+        with (
+            patch("domain.infrastructure._internal.config.get_config") as mock_cfg,
+            patch("domain.infrastructure.resource_manager.get_resource_manager") as mock_rm,
+        ):
             rm = mock_rm.return_value
             rm.apply_blas_env.return_value = None
             rm.apply_compute_limits.return_value = None
@@ -277,14 +360,21 @@ class TestPhaseConfigReady:
 
     def test_config_failure_swallowed(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.infrastructure.config.get_config",
-                   side_effect=RuntimeError("boom")), \
-             patch("domains.infrastructure.resource_manager.get_resource_manager",
-                   side_effect=RuntimeError("boom2")):
+        with (
+            patch(
+                "domain.infrastructure._internal.config.get_config",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "domain.infrastructure.resource_manager.get_resource_manager",
+                side_effect=RuntimeError("boom2"),
+            ),
+        ):
             asyncio.run(orch._phase_config())
 
     def test_ready_updates_phase(self):
         from startup_progress import STARTUP_PHASE
+
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         asyncio.run(orch._phase_ready())
         assert STARTUP_PHASE["phase"] == "ready"
@@ -320,8 +410,7 @@ class TestShutdownHooks:
 
     def test_shutdown_jobs_failure_swallowed(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("training.job_store.get_job_store",
-                   side_effect=RuntimeError("boom")):
+        with patch("training.job_store.get_job_store", side_effect=RuntimeError("boom")):
             asyncio.run(orch._shutdown_jobs())
 
     def test_shutdown_wandb_cancels_task(self):
@@ -338,19 +427,19 @@ class TestShutdownHooks:
 
     def test_shutdown_registry_resets_metrics(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.infrastructure.model_registry.get_model_registry") as mock_get:
+        with patch("domain.infrastructure.model_registry.get_model_registry") as mock_get:
             asyncio.run(orch._shutdown_registry())
         mock_get.return_value.reset_metrics.assert_called_once()
 
     def test_shutdown_executor_shuts_down_instance(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.training.executor._instance") as mock_inst:
+        with patch("domain.training._internal.executor._instance") as mock_inst:
             asyncio.run(orch._shutdown_executor())
         mock_inst.shutdown.assert_called_once_with(wait=True)
 
     def test_shutdown_executor_no_instance(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domains.training.executor._instance", None):
+        with patch("domain.training._internal.executor._instance", None):
             asyncio.run(orch._shutdown_executor())
 
 
@@ -377,25 +466,36 @@ class TestModelLoadedGuard:
 
     def test_build_guard_missing_slnc_returns_none(self):
         cfg = ServerConfig()
-        with patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.model_resolver.get_model_dir",
-                   return_value=Path("/nonexistent-dir")) as mock_dir, \
-             patch("os.path.exists", return_value=False):
+        with (
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.get_model_dir",
+                return_value=Path("/nonexistent-dir"),
+            ) as mock_dir,
+            patch("os.path.exists", return_value=False),
+        ):
             assert _build_guard_for_model(cfg, "gpt2") is None
         mock_dir.assert_called_with("gpt2")
 
     def test_build_guard_returns_started_guard(self):
         cfg = ServerConfig()
         guard = MagicMock()
-        with patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.process_guard.ProcessGuard",
-                   return_value=guard) as mock_pg, \
-             patch("domains.infrastructure.model_resolver.get_model_dir",
-                   return_value=Path("/fake/slnc-dir")), \
-             patch("os.path.exists", return_value=True), \
-             patch("domains.infrastructure.process_guard.resolve_memory_limit_mb",
-                   return_value=512.0), \
-             patch("controllers.models.get_models_controller") as mock_ctrl:
+        with (
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
+            ) as mock_pg,
+            patch(
+                "domain.infrastructure.model_resolver.get_model_dir",
+                return_value=Path("/fake/slnc-dir"),
+            ),
+            patch("os.path.exists", return_value=True),
+            patch(
+                "domain.infrastructure.process_guard.resolve_memory_limit_mb",
+                return_value=512.0,
+            ),
+            patch("controllers.models.get_models_controller") as mock_ctrl,
+        ):
             result = _build_guard_for_model(cfg, "gpt2")
         mock_pg.assert_called_once()
         guard.start.assert_called_once()
@@ -404,9 +504,13 @@ class TestModelLoadedGuard:
 
     def test_build_guard_failure_returns_none(self):
         cfg = ServerConfig()
-        with patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.process_guard.ProcessGuard",
-                   side_effect=RuntimeError("boom")):
+        with (
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.process_guard.ProcessGuard",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
             assert _build_guard_for_model(cfg, "gpt2") is None
 
 
@@ -421,13 +525,31 @@ class TestInitLifecycle:
         lifecycle = MagicMock()
         lifecycle._startup_hooks = []
         lifecycle._shutdown_hooks = []
-        with patch("domains.infrastructure.event_bus.EventBus") as mock_bus, \
-             patch("domains.infrastructure.lifecycle.get_lifecycle_manager",
-                   return_value=lifecycle):
+        with (
+            patch("domain.infrastructure._internal.event_bus.EventBus") as mock_bus,
+            patch(
+                "domain.infrastructure._internal.lifecycle.get_lifecycle_manager",
+                return_value=lifecycle,
+            ),
+        ):
             asyncio.run(orch._init_lifecycle())
         assert orch._lifecycle is lifecycle
-        assert lifecycle.register_startup_hook.call_count == 7
-        assert lifecycle.register_shutdown_hook.call_count == 7
+        assert lifecycle.register_startup_hook.call_count == 8
+        assert lifecycle.register_shutdown_hook.call_count == 8
+        startup_names = {c.args[0].name for c in lifecycle.register_startup_hook.call_args_list}
+        assert startup_names == {
+            "task_queue",
+            "config",
+            "model_load",
+            "wandb",
+            "multimodal",
+            "model_registry",
+            "routers",
+            "agent_routines",
+        }
+        shutdown_names = {c.args[0].name for c in lifecycle.register_shutdown_hook.call_args_list}
+        assert "agent_routines_shutdown" in shutdown_names
+        assert "task_queue_shutdown" in shutdown_names
         assert lifecycle.register_gate.call_count == 2
         mock_bus.assert_called_once()
         assert orch._profile_enum is not None
@@ -435,14 +557,16 @@ class TestInitLifecycle:
     def test_skips_when_already_initialized(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         orch._lifecycle = object()
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager") as mock_get:
+        with patch("domain.infrastructure._internal.lifecycle.get_lifecycle_manager") as mock_get:
             asyncio.run(orch._init_lifecycle())
         mock_get.assert_not_called()
 
     def test_invalid_profile_falls_back_to_full(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig(), profile="bogus")
-        with patch("domains.infrastructure.event_bus.EventBus"), \
-             patch("domains.infrastructure.lifecycle.get_lifecycle_manager"):
+        with (
+            patch("domain.infrastructure._internal.event_bus.EventBus"),
+            patch("domain.infrastructure._internal.lifecycle.get_lifecycle_manager"),
+        ):
             asyncio.run(orch._init_lifecycle())
         assert orch._profile_enum.value == "full"
 
@@ -450,32 +574,84 @@ class TestInitLifecycle:
 # ── run() orchestration ───────────────────────────────────────────────────────
 
 
+async def _run_and_settle(orch, until, timeout_s: float = 180.0):
+    """Run startup, then let the post-bind task reach ``until``.
+
+    ``run()`` executes Stage CRITICAL inline and schedules READY → phase_ready
+    → BACKGROUND as a task, so the lifespan can yield (and uvicorn bind) before
+    the model finishes loading. Poll until ``until()`` is truthy (typically
+    "``_phase_ready`` was awaited") so the test waits for READY without also
+    paying for the real BACKGROUND stage, which is fire-and-forget in tests.
+    """
+    await orch.run()
+    steps = int(timeout_s / 0.05)
+    for _ in range(steps):
+        await asyncio.sleep(0.05)
+        if until():
+            return
+    raise AssertionError(f"post-bind startup task did not reach {until!r} in {timeout_s}s")
+
+
 class TestRun:
-    """run() — lifecycle start + fallback direct path."""
+    """run() — CRITICAL inline; READY + BACKGROUND run post-bind."""
+
+    def _mocked_loader(self):
+        loader = MagicMock()
+        loader.run_stage = AsyncMock()
+        return loader
+
+    def _patched_boundaries(self, loader):
+        """Patch run()'s module-level collaborators; webhook emit is async."""
+        wh = MagicMock()
+        wh.emit = AsyncMock()
+        return (
+            patch("infrastructure.staged_loader.get_staged_loader", return_value=loader),
+            patch("infrastructure.startup_terminal.get_terminal_viz"),
+            patch("infrastructure.startup_webhooks.get_webhook_manager", return_value=wh),
+            patch("infrastructure.db_pool.get_db"),
+        )
 
     def test_runs_lifecycle_and_ready(self):
-        from domains.infrastructure.lifecycle import StartupProfile
+        from domain.infrastructure._internal.lifecycle import StartupProfile
+
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         orch._profile_enum = StartupProfile.FULL
-        lifecycle = MagicMock()
-        lifecycle.start = AsyncMock(return_value=True)
-        orch._lifecycle = lifecycle
-        with patch.object(StartupOrchestrator, "_init_lifecycle", new=AsyncMock()) as mock_init, \
-             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready:
-            asyncio.run(orch.run())
-        mock_init.assert_awaited_once()
-        lifecycle.start.assert_awaited_once()
+        loader = self._mocked_loader()
+        p_loader, p_viz, p_wh, p_db = self._patched_boundaries(loader)
+        with (
+            p_loader,
+            p_viz,
+            p_wh,
+            p_db,
+            patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
+        ):
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
+        # CRITICAL runs inline so the lifespan can yield; the post-bind task
+        # then runs READY and BACKGROUND.
+        # (Count calls, not awaits: the loader mock records invocations;
+        # awaiting is the loop's business.)
+        assert loader.run_stage.call_count == 3
         mock_ready.assert_awaited_once()
         assert orch._profile_enum.value == "full"
 
     def test_lifecycle_start_false_still_ready(self):
+        # Legacy lifecycle state is irrelevant to readiness: the staged
+        # loader drives startup, so a False legacy start still ends ready.
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         lifecycle = MagicMock()
         lifecycle.start = AsyncMock(return_value=False)
         orch._lifecycle = lifecycle
-        with patch.object(StartupOrchestrator, "_init_lifecycle", new=AsyncMock()), \
-             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready:
-            asyncio.run(orch.run())
+        loader = self._mocked_loader()
+        p_loader, p_viz, p_wh, p_db = self._patched_boundaries(loader)
+        with (
+            p_loader,
+            p_viz,
+            p_wh,
+            p_db,
+            patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
+        ):
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
+        lifecycle.start.assert_not_awaited()
         mock_ready.assert_awaited_once()
 
 
@@ -512,10 +688,13 @@ class TestAutoloadNativeSoul:
         state.model = None
         state.model_type = None
         state.provider = None
-        with patch.dict("sys.modules", {"state": state}), \
-             patch("domains.inference.slonet_provider.SloNetChatProvider") as mock_provider:
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("domain.inference._internal.slonet_provider.SloNetChatProvider") as mock_provider,
+        ):
             mock_provider.from_soul.return_value = provider
             from apps.api.server.infrastructure import startup as startup_mod
+
             startup_mod._autoload_model(cfg)
         mock_provider.from_soul.assert_called_once()
         assert state.model is provider._model
@@ -531,13 +710,148 @@ class TestAutoloadNativeSoul:
         result.model_id = "gpt2"
         result.tokenizer = None
         result.provider = None
-        with patch.dict("sys.modules", {"state": state}), \
-             patch("domains.infrastructure.model_loader.ModelLoader") as mock_loader:
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("domain.infrastructure.model_loader.ModelLoader") as mock_loader,
+        ):
             mock_loader.return_value.load.return_value = result
             from apps.api.server.infrastructure import startup as startup_mod
+
             startup_mod._autoload_model(cfg)
         assert state.model is result.model
         assert startup_mod._autoload_model.__module__ == "apps.api.server.infrastructure.startup"
+
+
+# ── autoload outcome — a failure must end in a state that says so ─────────────
+
+
+class TestAutoloadOutcome:
+    """``_finish_autoload`` / ``_autoload_model`` give-up / PGQ completion.
+
+    The regression these pin: a load that produced nothing used to be
+    registered anyway, logging "Model loaded + providers registered: None"
+    and leaving GET /v1/models answering "Model still loading" forever.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _snapshot(self):
+        import state as server_state
+        from startup_progress import MODEL_LOAD_STATE
+
+        from domain.infrastructure.server_state import get_server_state
+
+        missing = object()
+        saved_state = dict(MODEL_LOAD_STATE)
+        saved = {
+            "model": getattr(server_state, "model", None),
+            "provider": getattr(server_state, "provider", None),
+            "model_type": getattr(server_state, "model_type", missing),
+            "core_model": get_server_state().model.get(),
+        }
+        MODEL_LOAD_STATE.update(status="pending", error=None)
+        try:
+            yield saved
+        finally:
+            MODEL_LOAD_STATE.clear()
+            MODEL_LOAD_STATE.update(saved_state)
+            server_state.model = saved["model"]
+            server_state.provider = saved["provider"]
+            if saved["model_type"] is missing:
+                del server_state.__dict__["model_type"]
+            else:
+                server_state.model_type = saved["model_type"]
+            get_server_state().model.set(saved["core_model"])
+
+    def test_no_materialization_records_failure_and_skips_registration(self, _snapshot):
+        import state as server_state
+        from startup_progress import MODEL_LOAD_STATE
+
+        from apps.api.server.infrastructure import startup as startup_mod
+
+        cfg = ServerConfig(autoload_model="Qwen/Qwen2.5-0.5B-Instruct")
+        server_state.model = None
+        server_state.provider = None
+
+        with (
+            patch.object(startup_mod, "_build_guard_for_model") as guard,
+            patch.object(startup_mod, "_register_loaded") as register,
+        ):
+            ok = startup_mod._finish_autoload(cfg, None)
+
+        assert ok is False
+        guard.assert_not_called()
+        register.assert_not_called()
+        assert MODEL_LOAD_STATE["status"] == "failed"
+        assert "SLO_BOOTSTRAP_HF" in MODEL_LOAD_STATE["error"]
+
+    def test_materialized_load_registers_and_marks_ready(self, _snapshot):
+        import state as server_state
+        from startup_progress import MODEL_LOAD_STATE
+
+        from apps.api.server.infrastructure import startup as startup_mod
+
+        cfg = ServerConfig(autoload_model="gpt2")
+        provider = MagicMock()
+        server_state.model = MagicMock()
+        server_state.model_type = "gpt2"
+        server_state.provider = provider
+
+        with (
+            patch.object(startup_mod, "_build_guard_for_model", return_value="guard") as guard,
+            patch.object(startup_mod, "_register_loaded") as register,
+        ):
+            ok = startup_mod._finish_autoload(cfg, provider)
+
+        assert ok is True
+        guard.assert_called_once_with(cfg, "gpt2")
+        register.assert_called_once_with(cfg, "guard", preloaded_provider=provider)
+        assert MODEL_LOAD_STATE["status"] == "ready"
+        assert MODEL_LOAD_STATE["error"] is None
+
+    def test_bootstrap_off_records_actionable_reason(self, _snapshot, monkeypatch):
+        """The give-up point stores what the readiness gate will report."""
+        import state as server_state
+        from startup_progress import MODEL_LOAD_STATE
+
+        from apps.api.server.infrastructure import startup as startup_mod
+
+        monkeypatch.delenv("SLO_BOOTSTRAP_HF", raising=False)
+        cfg = ServerConfig(autoload_model="Qwen/Qwen2.5-0.5B-Instruct", native_soul_path="")
+        server_state.model = None
+        server_state.provider = None
+
+        failed = MagicMock(success=False, error="no local model")
+        with (
+            patch("domain.infrastructure.model_loader.ModelLoader") as mock_loader,
+            patch("time.sleep"),  # exponential backoff must not stall the test
+        ):
+            mock_loader.return_value.load.return_value = failed
+            startup_mod._autoload_model(cfg)
+
+        assert MODEL_LOAD_STATE["status"] != "failed"  # caller decides terminality
+        assert "SLO_BOOTSTRAP_HF" in MODEL_LOAD_STATE["error"]
+
+    def test_completed_process_does_not_claim_success_after_failure(self, _snapshot):
+        """PGQ COMPLETED + recorded failure => staged loader reports failure."""
+        from infrastructure.staged_loader import get_staged_loader
+        from startup_progress import MODEL_LOAD_STATE
+
+        from apps.api.server.infrastructure.startup import StartupOrchestrator
+        from domain.infrastructure._internal.pugqeep.engine import ProcessStatus
+
+        MODEL_LOAD_STATE.update(
+            status="failed", error="No local weights for Qwen/Qwen2.5-0.5B-Instruct"
+        )
+        loader = get_staged_loader()
+        prev = loader.get_status()
+        proc = MagicMock(status=ProcessStatus.COMPLETED, error=None)
+        try:
+            StartupOrchestrator(FastAPI(), ServerConfig())._on_pgq_model_load_done(proc)
+            status = loader.get_status()
+            assert status["model_progress"] == 0.0
+            assert status["model_progress_message"].startswith("Model load failed")
+        finally:
+            loader.set_model_progress(prev["model_progress"], prev["model_progress_message"] or "")
 
 
 # ── shutdown() orchestration ──────────────────────────────────────────────────
@@ -554,20 +868,25 @@ class TestShutdownOrchestrator:
         with patch.object(StartupOrchestrator, "_shutdown_task_queue", new=AsyncMock()) as mock_tq:
             asyncio.run(orch.shutdown())
         lifecycle.shutdown.assert_awaited_once()
-        mock_tq.assert_not_called()
+        # Direct cleanup always runs after the lifecycle drain attempt.
+        mock_tq.assert_awaited_once()
 
     def test_lifecycle_error_falls_back_to_direct(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         lifecycle = MagicMock()
         lifecycle.shutdown = AsyncMock(side_effect=RuntimeError("drain failed"))
         orch._lifecycle = lifecycle
-        with patch.object(StartupOrchestrator, "_shutdown_task_queue", new=AsyncMock()) as mock_tq, \
-             patch.object(StartupOrchestrator, "_shutdown_jobs", new=AsyncMock()) as mock_jobs, \
-             patch.object(StartupOrchestrator, "_shutdown_wandb", new=AsyncMock()) as mock_wandb, \
-             patch.object(StartupOrchestrator, "_shutdown_registry", new=AsyncMock()) as mock_reg, \
-             patch.object(StartupOrchestrator, "_shutdown_pool", new=AsyncMock()) as mock_pool, \
-             patch.object(StartupOrchestrator, "_shutdown_executor", new=AsyncMock()) as mock_exec, \
-             patch.object(StartupOrchestrator, "_shutdown_process_guard", new=AsyncMock()) as mock_pg:
+        with (
+            patch.object(StartupOrchestrator, "_shutdown_task_queue", new=AsyncMock()) as mock_tq,
+            patch.object(StartupOrchestrator, "_shutdown_jobs", new=AsyncMock()) as mock_jobs,
+            patch.object(StartupOrchestrator, "_shutdown_wandb", new=AsyncMock()) as mock_wandb,
+            patch.object(StartupOrchestrator, "_shutdown_registry", new=AsyncMock()) as mock_reg,
+            patch.object(StartupOrchestrator, "_shutdown_pool", new=AsyncMock()) as mock_pool,
+            patch.object(StartupOrchestrator, "_shutdown_executor", new=AsyncMock()) as mock_exec,
+            patch.object(
+                StartupOrchestrator, "_shutdown_process_guard", new=AsyncMock()
+            ) as mock_pg,
+        ):
             asyncio.run(orch.shutdown())
         mock_tq.assert_awaited_once()
         mock_jobs.assert_awaited_once()
@@ -580,13 +899,17 @@ class TestShutdownOrchestrator:
     def test_fallback_runs_when_no_lifecycle(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         orch._lifecycle = None
-        with patch.object(StartupOrchestrator, "_shutdown_task_queue", new=AsyncMock()) as mock_tq, \
-             patch.object(StartupOrchestrator, "_shutdown_jobs", new=AsyncMock()) as mock_jobs, \
-             patch.object(StartupOrchestrator, "_shutdown_wandb", new=AsyncMock()) as mock_wandb, \
-             patch.object(StartupOrchestrator, "_shutdown_registry", new=AsyncMock()) as mock_reg, \
-             patch.object(StartupOrchestrator, "_shutdown_pool", new=AsyncMock()) as mock_pool, \
-             patch.object(StartupOrchestrator, "_shutdown_executor", new=AsyncMock()) as mock_exec, \
-             patch.object(StartupOrchestrator, "_shutdown_process_guard", new=AsyncMock()) as mock_pg:
+        with (
+            patch.object(StartupOrchestrator, "_shutdown_task_queue", new=AsyncMock()) as mock_tq,
+            patch.object(StartupOrchestrator, "_shutdown_jobs", new=AsyncMock()) as mock_jobs,
+            patch.object(StartupOrchestrator, "_shutdown_wandb", new=AsyncMock()) as mock_wandb,
+            patch.object(StartupOrchestrator, "_shutdown_registry", new=AsyncMock()) as mock_reg,
+            patch.object(StartupOrchestrator, "_shutdown_pool", new=AsyncMock()) as mock_pool,
+            patch.object(StartupOrchestrator, "_shutdown_executor", new=AsyncMock()) as mock_exec,
+            patch.object(
+                StartupOrchestrator, "_shutdown_process_guard", new=AsyncMock()
+            ) as mock_pg,
+        ):
             asyncio.run(orch.shutdown())
         mock_tq.assert_awaited_once()
         mock_jobs.assert_awaited_once()
@@ -605,6 +928,7 @@ class TestTryLazyGuardAutoload:
 
     def _import(self):
         from apps.api.server.infrastructure import startup as startup_mod
+
         return startup_mod
 
     def test_model_already_loaded_returns_false(self):
@@ -617,79 +941,249 @@ class TestTryLazyGuardAutoload:
         cfg = types.SimpleNamespace(
             lazy_guard_autoload=False,
             autoload_model="gpt2",
-            quantize_slonet=False, quant_bits=8, quant_mode="sym",
-            quant_clip=0.9, process_guard_memory_limit_mb=0.0,
+            quantize_slonet=False,
+            quant_bits=8,
+            quant_mode="sym",
+            quant_clip=0.9,
+            process_guard_memory_limit_mb=0.0,
         )
         with patch.dict("sys.modules", {"state": MagicMock(model=None)}):
             assert mod._try_lazy_guard_autoload(cfg) is False
 
     def test_process_guard_disabled_returns_false(self):
         mod = self._import()
-        with patch.dict("sys.modules", {"state": MagicMock(model=None)}), \
-             patch("config.get_process_guard_enabled", return_value=False):
+        with (
+            patch.dict("sys.modules", {"state": MagicMock(model=None)}),
+            patch("config.get_process_guard_enabled", return_value=False),
+        ):
             assert mod._try_lazy_guard_autoload(ServerConfig()) is False
 
     def test_no_slnc_returns_false(self):
         mod = self._import()
-        with patch.dict("sys.modules", {"state": MagicMock(model=None)}), \
-             patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.model_resolver.get_model_dir",
-                   return_value=Path("/missing")), \
-             patch("os.path.exists", return_value=False):
+        with (
+            patch.dict("sys.modules", {"state": MagicMock(model=None)}),
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.get_model_dir",
+                return_value=Path("/missing"),
+            ),
+            patch("os.path.exists", return_value=False),
+        ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
 
     def test_provider_creation_failure_returns_false(self):
         mod = self._import()
-        with patch.dict("sys.modules", {"state": MagicMock(model=None)}), \
-             patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.model_resolver.get_model_dir",
-                   return_value=Path("/fake")), \
-             patch("os.path.exists", return_value=True), \
-             patch("domains.inference.slonet_provider.SloNetChatProvider",
-                   side_effect=RuntimeError("boom")):
+        mock_slonet = MagicMock()
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.side_effect = RuntimeError("boom")
+        with (
+            patch.dict("sys.modules", {"state": MagicMock(model=None)}),
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.get_model_dir",
+                return_value=Path("/fake"),
+            ),
+            patch("os.path.exists", return_value=True),
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+        ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
 
-    def test_guard_creation_failure_returns_false(self):
+    def test_guard_creation_failure_still_succeeds(self):
         mod = self._import()
-        with patch.dict("sys.modules", {"state": MagicMock(model=None)}), \
-             patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.model_resolver.get_model_dir",
-                   return_value=Path("/fake")), \
-             patch("os.path.exists", return_value=True), \
-             patch("domains.inference.slonet_provider.SloNetChatProvider") as mock_provider, \
-             patch("domains.infrastructure.process_guard.ProcessGuard",
-                   side_effect=RuntimeError("boom")):
-            mock_provider.lazy_from_slnc.return_value = MagicMock()
-            assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
+        mock_slonet = MagicMock()
+        mock_slonet.lazy_from_slnc.return_value = MagicMock(
+            _model=MagicMock(), _tokenizer=MagicMock()
+        )
+        with (
+            patch.dict("sys.modules", {"state": MagicMock(model=None)}),
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.get_model_dir",
+                return_value=Path("/fake"),
+            ),
+            patch("os.path.exists", return_value=True),
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+            patch(
+                "domain.infrastructure.process_guard.ProcessGuard",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "domain.infrastructure.model_registry.get_model_registry",
+                return_value=MagicMock(),
+            ),
+            patch("domain.models._internal.provider.setup_providers"),
+            patch("controllers.models.get_models_controller"),
+            patch("domain.infrastructure.server_state.get_server_state"),
+            patch.object(mod, "_start_parent_preload"),
+        ):
+            assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is True
 
     def test_success_returns_true(self):
         mod = self._import()
         state = MagicMock(model=None)
         guard = MagicMock()
-        provider = MagicMock()
-        with patch.dict("sys.modules", {"state": state}), \
-             patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.model_resolver.get_model_dir",
-                   return_value=Path("/fake")), \
-             patch("os.path.exists", return_value=True), \
-             patch("domains.inference.slonet_provider.SloNetChatProvider",
-                   lazy_from_slnc=MagicMock(return_value=provider)), \
-             patch("domains.infrastructure.process_guard.ProcessGuard",
-                   return_value=guard) as mock_pg, \
-             patch("domains.infrastructure.process_guard.resolve_memory_limit_mb",
-                   return_value=64.0), \
-             patch("domains.infrastructure.model_registry.get_model_registry",
-                   return_value=MagicMock()), \
-             patch("domains.models.provider.setup_providers") as mock_setup, \
-             patch("controllers.models.get_models_controller") as mock_ctrl, \
-             patch("domains.infrastructure.server_state.get_server_state") as mock_core:
-            core = mock_core.return_value
+        provider = MagicMock(_model=MagicMock(), _tokenizer=MagicMock())
+        mock_slonet = MagicMock()
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.return_value = provider
+        mock_models = MagicMock()
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.get_model_dir",
+                return_value=Path("/fake"),
+            ),
+            patch("os.path.exists", return_value=True),
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+            patch(
+                "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
+            ) as mock_pg,
+            patch(
+                "domain.infrastructure._internal.process_guard.resolve_memory_limit_mb",
+                return_value=64.0,
+            ),
+            patch(
+                "domain.infrastructure.model_registry.get_model_registry",
+                return_value=MagicMock(),
+            ),
+            patch.dict("sys.modules", {"domain.models._internal.provider": mock_models}),
+            patch("controllers.models.get_models_controller") as mock_ctrl,
+            patch("domain.infrastructure.server_state.get_server_state"),
+            patch.object(mod, "_start_parent_preload") as mock_preload,
+        ):
             result = mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2"))
         assert result is True
         assert mock_pg.return_value is guard
         guard.start.assert_called_once()
-        mock_setup.assert_called_once()
+        mock_models.setup_providers.assert_called_once()
         mock_ctrl.return_value.adopt_process_guard.assert_called_once_with(guard, "gpt2")
+        # Header-only construction: the eager loader must never be touched, and
+        # the background materialiser is scheduled exactly once.
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.assert_called_once()
+        mock_slonet.SloNetChatProvider.from_slnc.assert_not_called()
+        mock_preload.assert_called_once_with("gpt2")
+
+    def test_lazy_construction_leaves_model_none(self):
+        """Ready must mean 'provider installed', not '2.5 GB resident'."""
+        mod = self._import()
+        state = types.SimpleNamespace(model=None, provider=None, model_type=None, tokenizer=None)
+        provider = MagicMock(_model=None, _tokenizer=MagicMock())
+        mock_slonet = MagicMock()
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.return_value = provider
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.get_model_dir",
+                return_value=Path("/fake"),
+            ),
+            patch("os.path.exists", return_value=True),
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+            patch("domain.infrastructure.process_guard.ProcessGuard", return_value=MagicMock()),
+            patch(
+                "domain.infrastructure._internal.process_guard.resolve_memory_limit_mb",
+                return_value=64.0,
+            ),
+            patch(
+                "domain.infrastructure.model_registry.get_model_registry",
+                return_value=MagicMock(),
+            ),
+            patch.dict("sys.modules", {"domain.models._internal.provider": MagicMock()}),
+            patch("controllers.models.get_models_controller"),
+            patch("domain.infrastructure.server_state.get_server_state"),
+            patch.object(mod, "_start_parent_preload"),
+        ):
+            assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is True
+        assert state.provider is provider
+        assert state.model is None
+        assert state.tokenizer is provider._tokenizer
+
+    def _reset_preload_state(self, mod):
+        """Shutdown hook tests latch the module-level flag; start each clean."""
+        mod._shutting_down.clear()
+        mod._parent_preload_timer = None
+
+    def test_preload_publishes_materialised_model(self):
+        """The background preload flips model from None to resident."""
+        mod = self._import()
+        self._reset_preload_state(mod)
+
+        class _FakeProvider:
+            def __init__(self):
+                self._model = None
+                self.calls = 0
+
+            def materialize_model(self):
+                self.calls += 1
+                self._model = object()
+                return self._model
+
+        provider = _FakeProvider()
+        state = types.SimpleNamespace(model=None, provider=provider)
+        core = MagicMock()
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("domain.infrastructure.server_state.get_server_state", return_value=core),
+        ):
+            assert mod._preload_parent_weights("gpt2") is True
+        assert provider.calls == 1
+        assert state.model is provider._model
+        core.model.set.assert_called_once_with(provider._model)
+
+    def test_preload_without_provider_returns_false(self):
+        mod = self._import()
+        self._reset_preload_state(mod)
+        state = types.SimpleNamespace(model=None, provider=None)
+        with patch.dict("sys.modules", {"state": state}):
+            assert mod._preload_parent_weights("gpt2") is False
+
+    def test_preload_skipped_when_shutting_down(self):
+        mod = self._import()
+        self._reset_preload_state(mod)
+
+        class _Provider:
+            calls = 0
+
+            def materialize_model(self):  # pragma: no cover - must not run
+                self.calls += 1
+
+        provider = _Provider()
+        state = types.SimpleNamespace(model=None, provider=provider)
+        mod._shutting_down.set()
+        try:
+            with patch.dict("sys.modules", {"state": state}):
+                assert mod._preload_parent_weights("gpt2") is False
+        finally:
+            mod._shutting_down.clear()
+        assert provider.calls == 0
+
+    def test_cancel_parent_preload_cancels_pending_timer(self):
+        mod = self._import()
+        timer = MagicMock()
+        mod._parent_preload_timer = timer
+        try:
+            assert mod._cancel_parent_preload("test") is True
+        finally:
+            mod._shutting_down.clear()
+        timer.cancel.assert_called_once()
+        assert mod._parent_preload_timer is None
+        # Idempotent: nothing pending -> False, still latches the shutdown flag.
+        assert mod._cancel_parent_preload("test") is False
+        mod._shutting_down.clear()
+
+    def test_model_loaded_gate_accepts_provider_only(self):
+        """The lifecycle gate must agree with /health on the lazy path."""
+        mod = self._import()
+        orch = mod.StartupOrchestrator(FastAPI(), ServerConfig(autoload_model="off"))
+        with patch.dict(
+            "sys.modules", {"state": types.SimpleNamespace(model=None, provider=object())}
+        ):
+            assert orch._is_model_loaded() is True
+        with patch.dict(
+            "sys.modules", {"state": types.SimpleNamespace(model=object(), provider=None)}
+        ):
+            assert orch._is_model_loaded() is True
+        with patch.dict("sys.modules", {"state": types.SimpleNamespace(model=None, provider=None)}):
+            assert orch._is_model_loaded() is False
 
 
 # ── run() direct fallback (no lifecycle) ──────────────────────────────────────
@@ -699,16 +1193,24 @@ class TestRunDirectFallback:
     """run() — profile_enum None + lifecycle None → direct phase calls."""
 
     def test_direct_fallback_runs_registry_and_routers(self):
-        orch = StartupOrchestrator(FastAPI(), ServerConfig())
+        # autoload "off" keeps Stage 2's model_ready wait from spinning 120s;
+        # heavy phases (model autoload w/ retry sleeps, wandb, multimodal) are
+        # stubbed — this test only verifies run() wires registry/routers/ready.
+        orch = StartupOrchestrator(FastAPI(), ServerConfig(autoload_model="off"))
         orch._lifecycle = None
         orch._profile_enum = None
-        with patch.object(StartupOrchestrator, "_init_lifecycle", new=AsyncMock()), \
-             patch.object(StartupOrchestrator, "_phase5_model_registry",
-                          new=AsyncMock()) as mock_reg, \
-             patch.object(StartupOrchestrator, "_phase6_routers",
-                          new=AsyncMock()) as mock_routers, \
-             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready:
-            asyncio.run(orch.run())
+        with (
+            patch.object(StartupOrchestrator, "_init_lifecycle", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase2_model_load", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase3_wandb", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase4_multimodal", new=AsyncMock()),
+            patch.object(
+                StartupOrchestrator, "_phase5_model_registry", new=AsyncMock()
+            ) as mock_reg,
+            patch.object(StartupOrchestrator, "_phase6_routers", new=AsyncMock()) as mock_routers,
+            patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
+        ):
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
         assert mock_reg.call_count == 1
         assert mock_routers.call_count == 1
         mock_ready.assert_awaited()

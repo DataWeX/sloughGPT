@@ -13,6 +13,13 @@ dependencies:
   # - torchaudio>=2.0.0
   - numpy>=1.24.0
   - scipy>=1.10.0
+  # JIT kernels for the inference hot path (slonet_kernels.py). Without these the
+  # kernels silently fall back to numpy; that fallback is memory-bounded now, but
+  # it is several times slower and its silent engagement is what hid the
+  # 2026-11-01 API-server OOM. llvmlite is numba's compiler backend and is
+  # version-locked to it.
+  - numba>=0.67.0
+  - llvmlite>=0.49.0
   - pandas>=2.0.0
   - scikit-learn>=1.3.0
 

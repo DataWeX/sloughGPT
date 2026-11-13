@@ -53,7 +53,7 @@ class ModelsController:
         """
         if device is None or device == "auto":
             try:
-                from domains.infrastructure.ml_types import auto_device
+                from domain.infrastructure.ml_types import auto_device
 
                 return auto_device()
             except ImportError:
@@ -62,7 +62,7 @@ class ModelsController:
                 )
                 return "cpu"
         try:
-            from domains.infrastructure.ml_types import _cuda_available, _mps_available
+            from domain.infrastructure.ml_types import _cuda_available, _mps_available
         except ImportError:
             logger.warning("ml_types not available, device checks disabled", extra={"tag": "MODEL"})
             _cuda_available = _mps_available = None
@@ -94,7 +94,7 @@ class ModelsController:
 
     def _infer_config(self, state_dict: dict[str, Any]) -> dict[str, Any]:
         """Infer model config from state dict"""
-        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
+        from domain.infrastructure.weight_loader import infer_arch_from_state_dict
 
         arch = infer_arch_from_state_dict(state_dict)
         return {
@@ -131,7 +131,7 @@ class ModelsController:
             return self._load_gguf_model(model_id, device)
 
         # Check if another load is in progress
-        from domains.infrastructure.model_loader import ModelLoader
+        from domain.infrastructure.model_loader import ModelLoader
 
         if ModelLoader.is_loading():
             return {
@@ -141,7 +141,7 @@ class ModelsController:
 
         # Memory pressure check — try to free idle resources before loading
         try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
 
             monitor = get_memory_pressure_monitor()
             monitor.force_cleanup()
@@ -154,9 +154,8 @@ class ModelsController:
             "Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"}
         )
         try:
-            from domains.models.provider import setup_providers
-
             from config import ServerConfig
+            from domain.models import setup_providers
 
             cfg = ServerConfig.from_env()
 
@@ -164,9 +163,8 @@ class ModelsController:
             # ProcessGuard + .slnc are available. The guard worker materializes
             # weights; the parent only loads on guard death (lazy _get_model).
             try:
-                from domains.infrastructure.safetensors_loader import _get_model_dir
-
                 from config import get_process_guard_enabled
+                from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
                 _slnc = _get_model_dir(model_id) / "model.slnc"
                 use_lazy = (
@@ -180,7 +178,7 @@ class ModelsController:
                     raise RuntimeError(
                         f"Lazy load requested for {model_id} but ProcessGuard could not be started"
                     )
-                from domains.inference.slonet_provider import SloNetChatProvider
+                from domain.inference import SloNetChatProvider
 
                 lazy_provider = SloNetChatProvider.lazy_from_slnc(
                     str(_slnc),
@@ -233,7 +231,7 @@ class ModelsController:
 
             # Auto-select precision on GPU (fp16 benchmark)
             try:
-                from domains.slolib.gpu import set_accelerator_precision
+                from domain.slolib import set_accelerator_precision
 
                 active = set_accelerator_precision("auto")
                 if active == "fp16":
@@ -253,7 +251,7 @@ class ModelsController:
         # readiness guards (``state.model is not None``) accept the loaded
         # model. state.py delegates to ServerState so only one write needed.
         try:
-            from domains.models.provider import get_provider
+            from domain.models import get_provider
 
             slonet_provider = get_provider("slonet-native") or get_provider("slonet")
             # setup_providers() logs-and-continues when the requested model fails
@@ -314,11 +312,14 @@ class ModelsController:
             return None
 
         try:
-            from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-            from domains.infrastructure.safetensors_loader import _get_model_dir
-            from domains.models.provider import attach_process_guard_to_provider
-
             from config import ServerConfig
+            from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure.process_guard import (
+                ExecutionMode,
+                ProcessGuard,
+                resolve_memory_limit_mb,
+            )
+            from domain.models import attach_process_guard_to_provider
 
             cfg = ServerConfig.from_env()
 
@@ -330,6 +331,7 @@ class ModelsController:
                 return None
 
             guard = ProcessGuard(
+                mode=ExecutionMode.SUBPROCESS,
                 slnc_path=slnc_path,
                 model_id=model_id,
                 worker_id=f"slo-{model_id.split('/')[-1]}",
@@ -394,7 +396,7 @@ class ModelsController:
         """
         # Block model loading under memory pressure to prevent OOM
         try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
 
             if not get_memory_pressure_monitor().allow_load():
                 return {
@@ -447,7 +449,7 @@ class ModelsController:
         if self._current_model:
             return self._current_model
         try:
-            from domains.infrastructure.model_registry import get_model_registry
+            from domain.infrastructure.model_registry import get_model_registry
 
             mid = get_model_registry().default_id
             if mid:
@@ -462,6 +464,16 @@ class ModelsController:
         except Exception as e:
             logger.warning("server_state.model_type lookup failed: %s", e, extra={"tag": "MODEL"})
         return None
+
+    def active_model_id(self) -> str | None:
+        """Public read-model for the currently active model id.
+
+        Order: controller state, ModelRegistry default (autoload path bypasses
+        the controller), then ``server_state.model_type``. Routers must use
+        this instead of reaching into ``_current_model`` (shared-core
+        contract: read state only through the public read-model).
+        """
+        return self._resolve_active_model_id()
 
     def adopt_process_guard(self, guard: Any, model_id: str | None = None) -> None:
         """Adopt a ProcessGuard created outside this controller (autoload path).
@@ -478,7 +490,7 @@ class ModelsController:
         self._stop_process_guard()
         self._process_guard = guard
         try:
-            from domains.models.provider import attach_process_guard_to_provider
+            from domain.models import attach_process_guard_to_provider
 
             attach_process_guard_to_provider(guard)
         except Exception as e:
@@ -608,7 +620,7 @@ class ModelsController:
         """
         # Block model loading under memory pressure to prevent OOM
         try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
 
             if not get_memory_pressure_monitor().allow_load():
                 return {
@@ -628,19 +640,28 @@ class ModelsController:
 
             cfg = ServerConfig.from_env()
 
-            from domains.infrastructure.slnc.compiler import SLNCCompiler
+            from domain.infrastructure import SLNCCompiler
 
             slnc_path = target / "model.slnc"
             if not slnc_path.exists():
                 logger.info(
                     "Compiling fine-tuned model %s to .slnc ...", model_path, extra={"tag": "MODEL"}
                 )
-                SLNCCompiler().compile_from_directory(str(target), output=str(slnc_path))
+                SLNCCompiler().compile_from_directory(
+                    str(target), output=str(slnc_path)
+                )  # float32 file, live quantize
 
             if base_model_id is None:
                 base_model_id = self._resolve_base_model_id(target)
             tokenizer_model_id = base_model_id or target.name
             model_id = identity or tokenizer_model_id
+
+            try:
+                from domain.infrastructure import try_register
+
+                try_register("model", slnc_path, name=model_id)
+            except Exception:
+                logger.debug("Model registry update skipped", exc_info=True)
 
             import state as server_state
 
@@ -648,7 +669,7 @@ class ModelsController:
 
             process_guard = self._build_process_guard_for_path(slnc_path, model_id)
 
-            from domains.models.provider import setup_providers
+            from domain.models import setup_providers
 
             setup_providers(
                 slonet_hf_id=tokenizer_model_id,
@@ -674,7 +695,7 @@ class ModelsController:
             # from the registry so the health endpoint (registry-first) reflects
             # this model instead of a stale default.
             try:
-                from domains.infrastructure.model_registry import get_model_registry
+                from domain.infrastructure.model_registry import get_model_registry
 
                 registry = get_model_registry()
                 stale = registry.default_id
@@ -724,12 +745,16 @@ class ModelsController:
         if not get_process_guard_enabled():
             return None
         try:
-            from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-
             from config import ServerConfig
+            from domain.infrastructure.process_guard import (
+                ExecutionMode,
+                ProcessGuard,
+                resolve_memory_limit_mb,
+            )
 
             cfg = ServerConfig.from_env()
             guard = ProcessGuard(
+                mode=ExecutionMode.SUBPROCESS,
                 slnc_path=str(slnc_path),
                 model_id=model_id,
                 worker_id=f"slo-{Path(model_id).name}-finetuned",
@@ -768,7 +793,7 @@ class ModelsController:
         # Resolve the active model: controller state > registry default.
         model_id = self._current_model
         try:
-            from domains.infrastructure.model_registry import get_model_registry
+            from domain.infrastructure.model_registry import get_model_registry
 
             registry = get_model_registry()
             model_id = model_id or registry.default_id
@@ -795,7 +820,7 @@ class ModelsController:
 
         # Drop cross-turn KV states — keys/values from the unloaded model are invalid
         try:
-            from domains.models.provider import get_provider
+            from domain.models import get_provider
 
             provider = get_provider("slonet-native")
             if provider is None:
@@ -807,7 +832,7 @@ class ModelsController:
 
         # Clear all providers so chat/generation fail fast until a model reloads
         try:
-            from domains.models.provider import clear_providers
+            from domain.models import clear_providers
 
             clear_providers()
         except Exception as e:
@@ -826,7 +851,7 @@ class ModelsController:
 
         # Reset the core ServerState singleton to match
         try:
-            from domains.infrastructure.server_state import get_server_state
+            from domain.infrastructure.server_state import get_server_state
 
             core = get_server_state()
             core.model.set(None)
@@ -844,7 +869,7 @@ class ModelsController:
             self._tokenizer = None
 
         try:
-            from domains.training.slonet import _get_accelerator
+            from domain.training import _get_accelerator
 
             acc = _get_accelerator()
             if acc is not None and hasattr(acc, "empty_cache"):

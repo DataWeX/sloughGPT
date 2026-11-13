@@ -1,104 +1,173 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
-const mockApiGet = vi.fn()
+const fetchBoard = vi.hoisted(() => vi.fn())
+const transitionCard = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/http-client', () => ({
-  apiGet: (...args: unknown[]) => mockApiGet(...args),
+vi.mock('@/lib/planner-client', () => ({
+  fetchBoard,
+  transitionCard,
 }))
 
-vi.mock('@/lib/auth', () => ({
-  useAuthStore: (selector?: (s: { currentWorkspace: { id: string } | null }) => unknown) => {
-    const state = { currentWorkspace: { id: 'ws-1' } }
-    return selector ? selector(state) : state
-  },
-}))
+const fixtureBoard = {
+  name: 'Main',
+  columns: [
+    { name: 'todo', label: 'Todo', wip_limit: 5, order: 0 },
+    { name: 'wip', label: 'WIP', wip_limit: 3, order: 1 },
+    { name: 'review', label: 'Review', wip_limit: 2, order: 2 },
+    { name: 'done', label: 'Done', wip_limit: 0, order: 3 },
+  ],
+  cards: [
+    {
+      id: 'card-1',
+      title: 'First task',
+      description: '',
+      column: 'todo',
+      priority: 'medium',
+      tags: ['frontend'],
+      due_date: '',
+      assignee: '',
+      sprint: '',
+      gh: '',
+      notes: [],
+      created_at: '',
+      updated_at: '',
+      root_hash: '',
+    },
+    {
+      id: 'card-2',
+      title: 'Second task',
+      description: '',
+      column: 'wip',
+      priority: 'high',
+      tags: [],
+      due_date: '',
+      assignee: '',
+      sprint: '',
+      gh: '',
+      notes: [],
+      created_at: '',
+      updated_at: '',
+      root_hash: '',
+    },
+  ],
+}
 
-import KanbanPage from './page'
+async function renderPage() {
+  const mod = await import('./page')
+  render(<mod.default />)
+  await waitFor(() => expect(fetchBoard).toHaveBeenCalled())
+  await screen.findByText('First task')
+}
 
-describe('KanbanPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockApiGet.mockResolvedValue({ data: null })
+beforeEach(() => {
+  vi.clearAllMocks()
+  fetchBoard.mockResolvedValue({ board: fixtureBoard })
+})
+
+describe('Kanban page', () => {
+  it('renders columns and cards from the board API (DOM journey)', async () => {
+    await renderPage()
+    expect(screen.getByText('First task')).toBeTruthy()
+    expect(screen.getByText('Second task')).toBeTruthy()
+    expect(screen.getByText('Todo')).toBeTruthy()
   })
 
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
+  it('selecting a card shows engine-derived adjacent targets only', async () => {
+    await renderPage()
+    fireEvent.click(screen.getByText('First task'))
+    // todo's only lane neighbour is wip — review/done must NOT be offered
+    const wipButton = await screen.findByText('→ wip')
+    expect(wipButton).toBeTruthy()
+    expect(screen.queryByText('→ review')).toBeNull()
+    expect(screen.queryByText('→ done')).toBeNull()
   })
 
-  it('renders page', async () => {
-    render(<KanbanPage />)
-    // The kanban page loads data and renders a board
-    expect(screen.getAllByText(/loading/i).length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('fetches board data on mount', async () => {
-    render(<KanbanPage />)
-    // Wait for data to load
-    await screen.findByText(/board/i, {}, { timeout: 5000 }).catch(() => {})
-    expect(mockApiGet).toHaveBeenCalled()
-  })
-
-  it('renders board and notes tabs', async () => {
-    mockApiGet.mockResolvedValue({
-      data: {
-        board: {
-          name: 'Test Board',
-          columns: [
-            { name: 'todo', wip_limit: 5, order: 0 },
-            { name: 'in_progress', wip_limit: 3, order: 1 },
-            { name: 'review', wip_limit: 2, order: 2 },
-            { name: 'done', wip_limit: 0, order: 3 },
-          ],
-          cards: [],
-        },
-        notes: [],
+  it('done cards expose no outbound moves (terminal)', async () => {
+    fetchBoard.mockResolvedValue({
+      board: {
+        ...fixtureBoard,
+        cards: [{ ...fixtureBoard.cards[1], id: 'card-d', column: 'done' }],
       },
     })
-    render(<KanbanPage />)
-    await screen.findByText(/board/i, {}, { timeout: 5000 }).catch(() => {})
-    // Board and notes tabs should be present
-    expect(screen.getAllByText(/board/i).length).toBeGreaterThanOrEqual(1)
+    const mod = await import('./page')
+    render(<mod.default />)
+    await waitFor(() => expect(fetchBoard).toHaveBeenCalled())
+    const doneCard = await screen.findByText('Second task')
+    fireEvent.click(doneCard)
+    expect(screen.queryByText('→ wip')).toBeNull()
+    expect(screen.queryByText('→ review')).toBeNull()
+    expect(screen.getByText('Cancel')).toBeTruthy()
   })
 
-  it('renders column headers when board is loaded', async () => {
-    mockApiGet.mockResolvedValue({
-      data: {
-        board: {
-          name: 'Test Board',
-          columns: [
-            { name: 'todo', wip_limit: 5, order: 0 },
-            { name: 'in_progress', wip_limit: 3, order: 1 },
-          ],
-          cards: [],
-        },
-        notes: [],
-      },
-    })
-    render(<KanbanPage />)
-    await screen.findByText(/board/i, {}, { timeout: 5000 }).catch(() => {})
-    expect(screen.getAllByText(/to do/i).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText(/in progress/i).length).toBeGreaterThanOrEqual(1)
+  it('falls back to DOM view with feedback when WebGL is unavailable', async () => {
+    await renderPage()
+    fireEvent.click(screen.getByRole('button', { name: '3D' }))
+    // jsdom has no WebGL — the toggle must refuse, explain, and keep the list
+    await screen.findByText(/WebGL is not available/)
+    expect(screen.getByText('First task')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '3D' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('renders cards when present', async () => {
-    mockApiGet.mockResolvedValue({
-      data: {
-        board: {
-          name: 'Test Board',
-          columns: [
-            { name: 'todo', wip_limit: 5, order: 0 },
-          ],
-          cards: [
-            { id: 'c1', title: 'Test Card', description: 'A test card', column: 'todo', priority: 'high', tags: [], created_at: '2024-01-01', updated_at: '2024-01-01', due_date: '', assignee: '', notes: [] },
-          ],
-        },
-        notes: [],
-      },
-    })
-    render(<KanbanPage />)
-    await screen.findByText(/board/i, {}, { timeout: 5000 }).catch(() => {})
-    expect(screen.getAllByText('Test Card').length).toBeGreaterThanOrEqual(1)
+  it('passes the live board into the 3D scene when WebGL exists', async () => {
+    const original = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({}),
+    ) as unknown as typeof HTMLCanvasElement.prototype.getContext
+
+    vi.doMock('@/components/kanban3d/KanbanScene', () => ({
+      default: ({ board }: { board: typeof fixtureBoard }) => (
+        <div data-testid="scene3d">{`${board.cards.length} cards in scene`}</div>
+      ),
+    }))
+    vi.resetModules()
+
+    try {
+      const mod = await import('./page')
+      render(<mod.default />)
+      await waitFor(() => expect(fetchBoard).toHaveBeenCalled())
+      await screen.findByText('First task')
+      fireEvent.click(screen.getByRole('button', { name: '3D' }))
+      await screen.findByTestId('scene3d')
+      expect(screen.getByText('2 cards in scene')).toBeTruthy()
+    } finally {
+      HTMLCanvasElement.prototype.getContext = original
+      vi.doUnmock('@/components/kanban3d/KanbanScene')
+      vi.resetModules()
+    }
+  })
+
+  it('3D scene selection drives the shared action bar with engine targets', async () => {
+    const original = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({}),
+    ) as unknown as typeof HTMLCanvasElement.prototype.getContext
+
+    vi.doMock('@/components/kanban3d/KanbanScene', () => ({
+      default: ({ onSelect }: { onSelect: (id: string) => void }) => (
+        <button data-testid="scene3d" onClick={() => onSelect('card-1')}>
+          pick first
+        </button>
+      ),
+    }))
+    vi.resetModules()
+
+    try {
+      const mod = await import('./page')
+      render(<mod.default />)
+      await waitFor(() => expect(fetchBoard).toHaveBeenCalled())
+      fireEvent.click(screen.getByRole('button', { name: '3D' }))
+      fireEvent.click(await screen.findByTestId('scene3d'))
+      // selecting in 3D must surface the same adjacent-targets bar as the DOM view
+      await screen.findByText('→ wip')
+      expect(screen.queryByText('→ review')).toBeNull()
+      expect(screen.queryByText('→ done')).toBeNull()
+      expect(screen.getByText('Cancel')).toBeTruthy()
+    } finally {
+      HTMLCanvasElement.prototype.getContext = original
+      vi.doUnmock('@/components/kanban3d/KanbanScene')
+      vi.resetModules()
+    }
   })
 })

@@ -10,12 +10,13 @@ import base64
 import json
 import re
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, List, Optional, Pattern, Set
+from re import Pattern
 
 
 @dataclass(frozen=True)
 class Extraction:
     """A single URL extraction result."""
+
     url: str
     source: str
     confidence: float = 1.0
@@ -25,12 +26,13 @@ class Extraction:
 # Base matcher
 # ---------------------------------------------------------------------------
 
+
 class Matcher:
     """Base class for pattern matchers."""
 
     name: str = "base"
 
-    def extract(self, html: str) -> List[Extraction]:
+    def extract(self, html: str) -> list[Extraction]:
         raise NotImplementedError
 
 
@@ -59,8 +61,8 @@ class JsVariableMatcher(Matcher):
 
     name = "js_variable"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for m in _VAR_URL_RE.finditer(html):
             url = m.group(2).strip()
             if url and not url.startswith(_JS_PREFIXES):
@@ -76,16 +78,25 @@ class JsVariableMatcher(Matcher):
 # JS redirects and meta refresh
 # ---------------------------------------------------------------------------
 
-_JS_REDIRECT_PATS: List[Pattern] = [
+_JS_REDIRECT_PATS: list[Pattern] = [
     re.compile(r'window\.location(?:\.href)?\s*=\s*["\']([^"\']+)["\']', re.I),
     re.compile(r'window\.location\.assign\s*\(\s*["\']([^"\']+)["\']', re.I),
     re.compile(r'window\.location\.replace\s*\(\s*["\']([^"\']+)["\']', re.I),
     re.compile(r'document\.location(?:\.href)?\s*=\s*["\']([^"\']+)["\']', re.I),
     re.compile(r'setTimeout\s*\(\s*["\'](?:location(?:\.href)?\s*=\s*)?["\']?([^"\']+)["\']', re.I),
-    re.compile(r'<meta[^>]+http-equiv\s*=\s*["\']refresh["\'][^>]+content\s*=\s*["\'][^"\']*url=([^"\']+)["\']', re.I),
-    re.compile(r'<meta[^>]+content\s*=\s*["\'][^"\']*url=([^"\']+)["\'][^>]+http-equiv\s*=\s*["\']refresh["\']', re.I),
+    re.compile(
+        r'<meta[^>]+http-equiv\s*=\s*["\']refresh["\'][^>]+content\s*=\s*["\'][^"\']*url=([^"\']+)["\']',
+        re.I,
+    ),
+    re.compile(
+        r'<meta[^>]+content\s*=\s*["\'][^"\']*url=([^"\']+)["\'][^>]+http-equiv\s*=\s*["\']refresh["\']',
+        re.I,
+    ),
     re.compile(r'window\.open\s*\(\s*["\']([^"\']+)["\']', re.I),
-    re.compile(r'onclick\s*=\s*["\'][^"\']*(?:location(?:\.href)?|window\.open)\s*\(\s*["\']([^"\']+)["\']', re.I),
+    re.compile(
+        r'onclick\s*=\s*["\'][^"\']*(?:location(?:\.href)?|window\.open)\s*\(\s*["\']([^"\']+)["\']',
+        re.I,
+    ),
 ]
 
 
@@ -94,8 +105,8 @@ class JsRedirectMatcher(Matcher):
 
     name = "js_redirect"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for pat in _JS_REDIRECT_PATS:
             for m in pat.finditer(html):
                 url = m.group(1).strip()
@@ -108,10 +119,16 @@ class JsRedirectMatcher(Matcher):
 # Meta tag URLs (og:url, twitter:url, canonical)
 # ---------------------------------------------------------------------------
 
-_META_URL_PATS: List[Pattern] = [
-    re.compile(r'<meta[^>]+property\s*=\s*["\']og:url["\'][^>]+content\s*=\s*["\']([^"\']+)["\']', re.I),
-    re.compile(r'<meta[^>]+content\s*=\s*["\']([^"\']+)["\'][^>]+property\s*=\s*["\']og:url["\']', re.I),
-    re.compile(r'<meta[^>]+name\s*=\s*["\']twitter:url["\'][^>]+content\s*=\s*["\']([^"\']+)["\']', re.I),
+_META_URL_PATS: list[Pattern] = [
+    re.compile(
+        r'<meta[^>]+property\s*=\s*["\']og:url["\'][^>]+content\s*=\s*["\']([^"\']+)["\']', re.I
+    ),
+    re.compile(
+        r'<meta[^>]+content\s*=\s*["\']([^"\']+)["\'][^>]+property\s*=\s*["\']og:url["\']', re.I
+    ),
+    re.compile(
+        r'<meta[^>]+name\s*=\s*["\']twitter:url["\'][^>]+content\s*=\s*["\']([^"\']+)["\']', re.I
+    ),
     re.compile(r'<link[^>]+rel\s*=\s*["\']canonical["\'][^>]+href\s*=\s*["\']([^"\']+)["\']', re.I),
 ]
 
@@ -121,8 +138,8 @@ class MetaTagMatcher(Matcher):
 
     name = "meta_tag"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for pat in _META_URL_PATS:
             for m in pat.finditer(html):
                 url = m.group(1).strip()
@@ -135,17 +152,30 @@ class MetaTagMatcher(Matcher):
 # Hidden data-* attributes (countdown, popunder, obfuscated)
 # ---------------------------------------------------------------------------
 
-_OBFUSCATED_ATTRS: FrozenSet[str] = frozenset({
-    "data-download-url", "data-real-url", "data-file", "data-link-url",
-    "data-countdown-url", "data-timer-url", "data-final-url",
-    "data-popunder", "data-pop", "data-href-real",
-    "data-action-url", "data-redirect", "data-target",
-    "data-href", "data-url", "data-download", "data-link",
-})
+_OBFUSCATED_ATTRS: frozenset[str] = frozenset(
+    {
+        "data-download-url",
+        "data-real-url",
+        "data-file",
+        "data-link-url",
+        "data-countdown-url",
+        "data-timer-url",
+        "data-final-url",
+        "data-popunder",
+        "data-pop",
+        "data-href-real",
+        "data-action-url",
+        "data-redirect",
+        "data-target",
+        "data-href",
+        "data-url",
+        "data-download",
+        "data-link",
+    }
+)
 
-_DATA_ATTR_RE: Dict[str, re.Pattern] = {
-    attr: re.compile(rf'{attr}\s*=\s*["\']([^"\']+)["\']', re.I)
-    for attr in _OBFUSCATED_ATTRS
+_DATA_ATTR_RE: dict[str, re.Pattern] = {
+    attr: re.compile(rf'{attr}\s*=\s*["\']([^"\']+)["\']', re.I) for attr in _OBFUSCATED_ATTRS
 }
 
 
@@ -154,8 +184,8 @@ class DataAttributeMatcher(Matcher):
 
     name = "data_attribute"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for attr, pat in _DATA_ATTR_RE.items():
             for m in pat.finditer(html):
                 val = m.group(1).strip()
@@ -178,10 +208,8 @@ class DataAttributeMatcher(Matcher):
 
 _ATOB_RE = re.compile(r'atob\s*\(\s*["\']([A-Za-z0-9+/=_-]{20,})["\']')
 _DECODEURIComponent_RE = re.compile(r'decodeURIComponent\s*\(\s*["\']([^"\']{10,})["\']')
-_FROMCharCode_RE = re.compile(r'String\.fromCharCode\s*\(\s*([\d,\s]+)\s*\)')
-_HEX_DATA_RE = re.compile(
-    r'(?:data-[\w-]+)\s*=\s*"((?:\\x[0-9a-fA-F]{2}){8,})"'
-)
+_FROMCharCode_RE = re.compile(r"String\.fromCharCode\s*\(\s*([\d,\s]+)\s*\)")
+_HEX_DATA_RE = re.compile(r'(?:data-[\w-]+)\s*=\s*"((?:\\x[0-9a-fA-F]{2}){8,})"')
 
 
 class ObfuscationMatcher(Matcher):
@@ -189,8 +217,8 @@ class ObfuscationMatcher(Matcher):
 
     name = "obfuscated"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
 
         for m in _ATOB_RE.finditer(html):
             try:
@@ -203,6 +231,7 @@ class ObfuscationMatcher(Matcher):
         for m in _DECODEURIComponent_RE.finditer(html):
             try:
                 import urllib.parse
+
                 decoded = urllib.parse.unquote(m.group(1))
                 if "://" in decoded or decoded.startswith("/"):
                     out.append(Extraction(url=decoded.strip(), source=self.name))
@@ -233,18 +262,25 @@ class ObfuscationMatcher(Matcher):
 # JSON blobs (framework state)
 # ---------------------------------------------------------------------------
 
-_JSON_BLOB_PATS: List[Pattern] = [
-    re.compile(r'window\.__(?:INITIAL_STATE|NUXT|NEXT_DATA|APP_DATA)__\s*=\s*(\{.+?\});', re.I | re.S),
-    re.compile(r'(?:var|let|const)\s+config\s*=\s*(\{.+?\});', re.I | re.S),
+_JSON_BLOB_PATS: list[Pattern] = [
+    re.compile(
+        r"window\.__(?:INITIAL_STATE|NUXT|NEXT_DATA|APP_DATA)__\s*=\s*(\{.+?\});", re.I | re.S
+    ),
+    re.compile(r"(?:var|let|const)\s+config\s*=\s*(\{.+?\});", re.I | re.S),
 ]
 
-_JSON_URL_KEYS: Set[str] = {
-    "downloadUrl", "contentUrl", "url", "sameAs",
-    "installUrl", "fileUrl", "actionUrl",
+_JSON_URL_KEYS: set[str] = {
+    "downloadUrl",
+    "contentUrl",
+    "url",
+    "sameAs",
+    "installUrl",
+    "fileUrl",
+    "actionUrl",
 }
 
 
-def _collect_dict_urls(d: dict, out: List[str], depth: int = 0) -> None:
+def _collect_dict_urls(d: dict, out: list[str], depth: int = 0) -> None:
     if depth > 5:
         return
     for key, val in d.items():
@@ -266,13 +302,13 @@ class JsonBlobMatcher(Matcher):
 
     name = "json_blob"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for pat in _JSON_BLOB_PATS:
             for m in pat.finditer(html):
                 try:
                     data = json.loads(m.group(1))
-                    urls: List[str] = []
+                    urls: list[str] = []
                     _collect_dict_urls(data, urls)
                     for u in urls:
                         out.append(Extraction(url=u, source=self.name))
@@ -296,13 +332,13 @@ class JsonLdMatcher(Matcher):
 
     name = "json_ld"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for m in _LD_RE.finditer(html):
             try:
                 data = json.loads(m.group(1))
                 items = data if isinstance(data, list) else [data]
-                urls: List[str] = []
+                urls: list[str] = []
                 for item in items:
                     if isinstance(item, dict):
                         _collect_dict_urls(item, urls)
@@ -336,8 +372,8 @@ class OEmbedMatcher(Matcher):
 
     name = "oembed"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for pat in (_OEMBED_LINK_RE, _OEMBED_LINK_REVERSE_RE):
             for m in pat.finditer(html):
                 endpoint = m.group(1).strip()
@@ -350,12 +386,8 @@ class OEmbedMatcher(Matcher):
 # Embedded player extraction (iframes)
 # ---------------------------------------------------------------------------
 
-_IFRAME_SRC_RE = re.compile(
-    r'<iframe[^>]+(?<![a-zA-Z-])src\s*=\s*["\']([^"\']+)["\']', re.I
-)
-_IFRAME_DATA_SRC_RE = re.compile(
-    r'<iframe[^>]+data-src\s*=\s*["\']([^"\']+)["\']', re.I
-)
+_IFRAME_SRC_RE = re.compile(r'<iframe[^>]+(?<![a-zA-Z-])src\s*=\s*["\']([^"\']+)["\']', re.I)
+_IFRAME_DATA_SRC_RE = re.compile(r'<iframe[^>]+data-src\s*=\s*["\']([^"\']+)["\']', re.I)
 
 
 class EmbeddedPlayerMatcher(Matcher):
@@ -367,8 +399,8 @@ class EmbeddedPlayerMatcher(Matcher):
 
     name = "embedded_player"
 
-    def extract(self, html: str) -> List[Extraction]:
-        out: List[Extraction] = []
+    def extract(self, html: str) -> list[Extraction]:
+        out: list[Extraction] = []
         for pat in (_IFRAME_SRC_RE, _IFRAME_DATA_SRC_RE):
             for m in pat.finditer(html):
                 url = m.group(1).strip()
@@ -381,7 +413,7 @@ class EmbeddedPlayerMatcher(Matcher):
 # Registry — all matchers in priority order
 # ---------------------------------------------------------------------------
 
-ALL_MATCHERS: List[Matcher] = [
+ALL_MATCHERS: list[Matcher] = [
     OEmbedMatcher(),
     EmbeddedPlayerMatcher(),
     JsVariableMatcher(),
@@ -394,7 +426,7 @@ ALL_MATCHERS: List[Matcher] = [
 ]
 
 
-def extract_all(html: str, *, matchers: Optional[List[Matcher]] = None) -> List[Extraction]:
+def extract_all(html: str, *, matchers: list[Matcher] | None = None) -> list[Extraction]:
     """Run all matchers on HTML and return deduplicated extractions.
 
     Args:
@@ -404,9 +436,9 @@ def extract_all(html: str, *, matchers: Optional[List[Matcher]] = None) -> List[
     Returns:
         List of Extraction sorted by confidence (best first), deduplicated by URL.
     """
-    seen: Set[str] = set()
-    out: List[Extraction] = []
-    for matcher in (matchers or ALL_MATCHERS):
+    seen: set[str] = set()
+    out: list[Extraction] = []
+    for matcher in matchers or ALL_MATCHERS:
         for ex in matcher.extract(html):
             if ex.url not in seen:
                 seen.add(ex.url)

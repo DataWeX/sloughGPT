@@ -14,15 +14,14 @@ Usage::
         # proceed with download
 """
 
+import logging
 import os
 import sys
-import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import click
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from utils.formatting import format_size
@@ -76,12 +75,13 @@ class PermissionsManager:
             self.auto_yes = True
         else:
             try:
-                from domains.infrastructure.config import get_config
+                from domain.infrastructure._internal.config import get_config
+
                 self.auto_yes = get_config().features.auto_download
             except (ImportError, AttributeError):
                 self.auto_yes = False
 
-    def estimate_model_size(self, model_id: str) -> Optional[ModelSizeEstimate]:
+    def estimate_model_size(self, model_id: str) -> ModelSizeEstimate | None:
         """Query HuggingFace Hub API for model file list and total size.
 
         Args:
@@ -91,7 +91,7 @@ class PermissionsManager:
             ModelSizeEstimate with total bytes and file list, or None on failure.
         """
         try:
-            from domains.infrastructure.hf_hub import fetch_model_info
+            from domain.infrastructure.hf_hub import fetch_model_info
 
             info = fetch_model_info(model_id)
             if info is None:
@@ -206,10 +206,10 @@ class PermissionsManager:
     def _is_cached(self, model_id: str) -> bool:
         """Check if model has weight files in HF cache."""
         try:
-            from domains.infrastructure.download_manager import (
+            from domain.infrastructure.download_manager import (
                 _cache_dir,
-                _has_weight_files,
                 _has_complete_snapshot,
+                _has_weight_files,
             )
 
             cache = _cache_dir(model_id)
@@ -237,11 +237,12 @@ class PermissionsManager:
 
     def _show_download_panel(self, estimate: ModelSizeEstimate, *, context: str = ""):
         """Display download details with ANSI formatting."""
-        import sys
 
         _tty = sys.stdout.isatty()
+
         def _c(text, code):
             return f"{code}{text}\033[0m" if _tty else text
+
         _BOLD = "\033[1m"
         _DIM = "\033[2m"
         _YELLOW = "\033[33m"
@@ -268,7 +269,6 @@ class PermissionsManager:
         if estimate.files:
             sorted_files = sorted(estimate.files, key=lambda x: x["size"], reverse=True)[:5]
             top_files = ", ".join(
-                f"{f['name'].split('/')[-1]} ({format_size(f['size'])})"
-                for f in sorted_files
+                f"{f['name'].split('/')[-1]} ({format_size(f['size'])})" for f in sorted_files
             )
             _line(f"    {_c('Largest:', _DIM)} {top_files}")

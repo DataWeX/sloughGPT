@@ -13,11 +13,11 @@ describe('Training job detail page', () => {
       const text = $body.text()
       expect(
         text.includes('Training') ||
-        text.includes('Job') ||
-        text.includes('Not Found') ||
-        text.includes('not found') ||
-        text.includes('Error')
-      ).to.be.true
+          text.includes('Job') ||
+          text.includes('Not Found') ||
+          text.includes('not found') ||
+          text.includes('Error'),
+      ).to.equal(true)
     })
   })
 

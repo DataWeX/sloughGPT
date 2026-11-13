@@ -28,6 +28,6 @@ infra/
 docs/
 scripts/
 tests/
-packages/strui/
-apps/web/
-apps/cli/
+**/node_modules
+apps/web/.next
+apps/web/dist-vite

@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
-from domains.infrastructure.errors import (
+from infrastructure.error_handler import (
+    APIErrorHandler,
+    AuthErrorHandler,
+    DefaultErrorHandler,
+    DomainErrorHandler,
+    InferenceErrorHandler,
+    ResourceErrorHandler,
+    TrainingErrorHandler,
+    ValidationErrorHandler,
+    create_default_error_handler,
+)
+
+from domain.infrastructure._internal.errors import (
     ERROR_REGISTRY,
     AppError,
     AuthError,
@@ -18,17 +30,6 @@ from domains.infrastructure.errors import (
     ValidationError,
     classify_exception,
     get_error_info,
-)
-from infrastructure.error_handler import (
-    APIErrorHandler,
-    AuthErrorHandler,
-    DefaultErrorHandler,
-    DomainErrorHandler,
-    InferenceErrorHandler,
-    ResourceErrorHandler,
-    TrainingErrorHandler,
-    ValidationErrorHandler,
-    create_default_error_handler,
 )
 
 # ── ErrorCode Registry Tests ──
@@ -246,13 +247,19 @@ class TestInferenceErrorHandler:
         handler = InferenceErrorHandler()
         error = ModelOOMError("out of memory")
         handler.handle(error)
-        assert "smaller model" in error.details.get("suggestion", "").lower() or "batch" in error.details.get("suggestion", "").lower()
+        assert (
+            "smaller model" in error.details.get("suggestion", "").lower()
+            or "batch" in error.details.get("suggestion", "").lower()
+        )
 
     def test_timeout_includes_suggestion(self):
         handler = InferenceErrorHandler()
         error = ModelTimeoutError("timed out")
         handler.handle(error)
-        assert "shorter prompt" in error.details.get("suggestion", "").lower() or "max_tokens" in error.details.get("suggestion", "").lower()
+        assert (
+            "shorter prompt" in error.details.get("suggestion", "").lower()
+            or "max_tokens" in error.details.get("suggestion", "").lower()
+        )
 
 
 # ── AuthErrorHandler Tests ──
@@ -271,7 +278,9 @@ class TestAuthErrorHandler:
         handler = AuthErrorHandler()
         error = AuthError("unauthorized", http_status=401)
         handler.handle(error)
-        assert "token" in error.user_message.lower() or "authentication" in error.user_message.lower()
+        assert (
+            "token" in error.user_message.lower() or "authentication" in error.user_message.lower()
+        )
 
     def test_403_message(self):
         handler = AuthErrorHandler()
@@ -392,6 +401,7 @@ class TestAPIErrorHandler:
 
     def test_handle_to_response_returns_json_response(self):
         from fastapi.responses import JSONResponse
+
         handler = APIErrorHandler()
         error = NotFoundError("not found")
         response = handler.handle_to_response(error)
@@ -420,8 +430,7 @@ class TestFluentChaining:
     def test_register_chaining(self):
         handler = APIErrorHandler()
         result = (
-            handler
-            .register(TrainingErrorHandler())
+            handler.register(TrainingErrorHandler())
             .register(InferenceErrorHandler())
             .register(AuthErrorHandler())
         )

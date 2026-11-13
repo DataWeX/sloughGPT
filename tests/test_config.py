@@ -2,17 +2,20 @@
 SloughGPT Config Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_cli_src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps", "cli", "src")
+_cli_src = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps", "cli", "src"
+)
 if os.path.isdir(_cli_src) and _cli_src not in sys.path:
     sys.path.insert(0, _cli_src)
 
+import tempfile
 from types import SimpleNamespace
 
 import pytest
-import tempfile
 import yaml
 
 
@@ -21,7 +24,7 @@ class TestConfigLoader:
 
     def test_load_default_config(self):
         """Test loading default config."""
-        from config_loader import load_config, Config
+        from config_loader import Config, load_config
 
         config = load_config("nonexistent.yaml")
 
@@ -35,12 +38,12 @@ class TestConfigLoader:
         from config_loader import load_config
 
         config_data = {
-            'model': {'n_embed': 128, 'n_layer': 4},
-            'training': {'epochs': 5, 'batch_size': 32},
-            'lora': {'enabled': True, 'rank': 4},
+            "model": {"n_embed": 128, "n_layer": 4},
+            "training": {"epochs": 5, "batch_size": 32},
+            "lora": {"enabled": True, "rank": 4},
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(config_data, f)
             config_path = f.name
 
@@ -305,7 +308,7 @@ class TestConfigLoader:
         assert cfg.model.soul_name == "cli soul"
 
     def test_merge_save_format_is_ignored(self):
-        from config_loader import Config, ModelConfig, CheckpointConfig, merge_args_with_config
+        from config_loader import CheckpointConfig, Config, ModelConfig, merge_args_with_config
 
         cfg = Config(
             model=ModelConfig(name="m1", soul_name="orig"),

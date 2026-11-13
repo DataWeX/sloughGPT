@@ -39,40 +39,52 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      agentsController.list().catch((e) => { logger.debug('Could not load agents for mention menu', { e }); return [] }),
-      modelController.list().catch((e) => { logger.debug('Could not load models for mention menu', { e }); return [] }),
+      agentsController.list().catch((e) => {
+        logger.debug('Could not load agents for mention menu', { e })
+        return []
+      }),
+      modelController.list().catch((e) => {
+        logger.debug('Could not load models for mention menu', { e })
+        return []
+      }),
     ]).then(([agentsRes, models]) => {
       if (cancelled) return
-      const agentItems: MentionItem[] = (Array.isArray(agentsRes) ? agentsRes : []).map((a: { id: string; name: string; description?: string }) => ({
-        id: a.id,
-        name: a.name,
-        type: 'agent' as const,
-        description: a.description,
-      }))
-      const modelItems: MentionItem[] = (models || []).map((m: { id: string; name: string; description?: string }) => ({
-        id: m.id,
-        name: m.name,
-        type: 'model' as const,
-        description: m.description,
-      }))
+      const agentItems: MentionItem[] = (Array.isArray(agentsRes) ? agentsRes : []).map(
+        (a: { id: string; name: string; description?: string }) => ({
+          id: a.id,
+          name: a.name,
+          type: 'agent' as const,
+          description: a.description,
+        }),
+      )
+      const modelItems: MentionItem[] = (models || []).map(
+        (m: { id: string; name: string; description?: string }) => ({
+          id: m.id,
+          name: m.name,
+          type: 'model' as const,
+          description: m.description,
+        }),
+      )
       setItems([...agentItems, ...modelItems])
       setLoading(false)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const query = value.startsWith('@') ? value.slice(1) : ''
 
   const scored = useMemo(() => {
-    if (!query) return items.map(item => ({ item, score: 0 }))
+    if (!query) return items.map((item) => ({ item, score: 0 }))
     return items
-      .map(item => {
+      .map((item) => {
         const nameScore = fuzzyScore(query, item.name)
         const descScore = item.description ? fuzzyScore(query, item.description) : -1
         const score = Math.max(nameScore, descScore)
         return { item, score }
       })
-      .filter(x => x.score >= 0)
+      .filter((x) => x.score >= 0)
       .sort((a, b) => b.score - a.score)
   }, [query, items])
 
@@ -95,32 +107,38 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
     }
   }, [selectedIndex])
 
-  const select = useCallback((item: MentionItem) => {
-    onInsert(`@${item.name} `)
-    onClose()
-  }, [onInsert, onClose])
+  const select = useCallback(
+    (item: MentionItem) => {
+      onInsert(`@${item.name} `)
+      onClose()
+    },
+    [onInsert, onClose],
+  )
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault()
-        setSelectedIndex(i => (i + 1) % scored.length)
-        break
-      case 'ArrowUp':
-        e.preventDefault()
-        setSelectedIndex(i => (i - 1 + scored.length) % scored.length)
-        break
-      case 'Enter':
-      case 'Tab':
-        e.preventDefault()
-        if (scored[selectedIndex]) select(scored[selectedIndex].item)
-        break
-      case 'Escape':
-        e.preventDefault()
-        onClose()
-        break
-    }
-  }, [scored, selectedIndex, select, onClose])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setSelectedIndex((i) => (i + 1) % scored.length)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setSelectedIndex((i) => (i - 1 + scored.length) % scored.length)
+          break
+        case 'Enter':
+        case 'Tab':
+          e.preventDefault()
+          if (scored[selectedIndex]) select(scored[selectedIndex].item)
+          break
+        case 'Escape':
+          e.preventDefault()
+          onClose()
+          break
+      }
+    },
+    [scored, selectedIndex, select, onClose],
+  )
 
   if (loading) return null
   if (scored.length === 0) return null
@@ -136,7 +154,9 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
       {scored.map(({ item, score }, i) => (
         <button
           key={`${item.type}-${item.id}`}
-          ref={el => { itemRefs.current[i] = el }}
+          ref={(el) => {
+            itemRefs.current[i] = el
+          }}
           type="button"
           role="option"
           aria-selected={i === selectedIndex}
@@ -144,19 +164,26 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
           onMouseEnter={() => setSelectedIndex(i)}
           className={cn(
             'flex items-center gap-3 w-full px-3 py-2 text-left transition-colors',
-            i === selectedIndex ? 'bg-accent/80 text-accent-foreground' : 'text-popover-foreground hover:bg-accent/40',
+            i === selectedIndex
+              ? 'bg-accent/80 text-accent-foreground'
+              : 'text-popover-foreground hover:bg-accent/40',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           )}
         >
-          <span className={cn(
-            'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
-            item.type === 'agent' ? 'bg-primary/15 text-primary' : 'bg-success/15 text-success'
-          )}>
+          <span
+            className={cn(
+              'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
+              item.type === 'agent' ? 'bg-primary/15 text-primary' : 'bg-success/15 text-success',
+            )}
+          >
             {item.type === 'agent' ? 'Agent' : 'Model'}
           </span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{item.name}</p>
             {item.description && (
-              <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">{item.description}</p>
+              <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">
+                {item.description}
+              </p>
             )}
           </div>
           <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums">

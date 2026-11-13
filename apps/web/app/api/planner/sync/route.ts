@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from '@/vite/next-compat/server'
 
 export async function POST() {
   // Sync is a no-op for now — notes are read directly

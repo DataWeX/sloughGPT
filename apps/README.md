@@ -2,8 +2,9 @@
 
 Runnable services and application entrypoints.
 
-- `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`.soul`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
-- `web/` — Next.js frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (*UI vs core engine*).
+- `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`.soul`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (_Checkpoint vocabulary_).
+- `web/` — Vite + React frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (_UI vs core engine_).
+- `lib/` — shared frontend TypeScript libraries for the apps (not runnable on its own). Holds the split **http-client** (`lib/*.ts`: verbs, retry/timeout policies, cache/circuit-breaker/throttler, SSE) behind the **`web/lib/http-client.ts`** facade.
 - `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`sloughgpt train`** export naming (**`--save-stem`**) and **`sloughgpt generate`** local `.soul` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias) and the line-mode REPL when run without `--tui`.
 
 ### Quick start (repo root)
@@ -12,6 +13,6 @@ Use **Node 20** locally if you can: **`nvm use`** / **`fnm use`** reads **`.nvmr
 
 1. **`./verify.sh`** — checks core paths; runs the same ruff smoke as CI when `ruff` is installed (use `python3 -m pip install -e ".[dev]"` if needed); runs **`apps/web`** **`npm run ci`** when **`node_modules`** exists. Also prints **`ci_cd.yml`** parity commands (**`test-web`**, **`test-sdk-ts`**, **`sdk-test-py`**, **`standards-schemas`**).
 2. **API:** `python3 apps/api/server/main.py`, or `cd apps/api/server && python3 -m uvicorn main:app --reload --port 8000`.
-3. **Web:** `cd apps/web && npm run dev`. Before pushing web changes, **`npm ci && npm run ci`** (matches CI job **`test-web`** in **`.github/workflows/ci_cd.yml`**). From the **repo root**, **`npm install && npm run dev:stack`** starts API + Next dev together (same as **`./scripts/dev-stack.sh`**). **`npm run test:repo-root`**, **`make test-repo-root`**, or **`python3 -m pytest tests/test_repo_root_package_json.py -q`** runs the root **`package.json`** contract tests.
+3. **Web:** `cd apps/web && npm run dev`. Before pushing web changes, **`npm ci && npm run ci`** (matches CI job **`test-web`** in **`.github/workflows/ci_cd.yml`**). From the **repo root**, **`npm install && npm run dev:stack`** starts API + Vite dev together (same as **`./scripts/dev-stack.sh`**). **`npm run test:repo-root`**, **`make test-repo-root`**, or **`python3 -m pytest tests/test_repo_root_package_json.py -q`** runs the root **`package.json`** contract tests.
 
 **Docker:** `docker compose -f infra/docker/docker-compose.yml up -d api` (see **QUICKSTART.md** / **docs/DEPLOYMENT.md** for profiles).

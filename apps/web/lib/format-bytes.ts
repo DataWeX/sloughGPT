@@ -1,6 +1,6 @@
 /** Format byte count to human-readable string (e.g. "1.5 MB"). */
 export function formatBytes(bytes: number): string {
-  if (!bytes) return '—'
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -14,7 +14,7 @@ export function formatBytes(bytes: number): string {
  */
 export function estimateTokens(text: string): number {
   if (!text) return 0
-  const words = text.split(/\s+/).filter(w => w.length > 0).length
+  const words = text.split(/\s+/).filter((w) => w.length > 0).length
   return Math.ceil(words * 1.3)
 }
 

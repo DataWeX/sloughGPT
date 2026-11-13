@@ -14,11 +14,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from controllers.datasets import DatasetsController
-from domains.infrastructure.errors import NotFoundError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from routers.datasets import DatasetsRouter
 from routers.datasets import router as datasets_router
+
+from domain.infrastructure._internal.errors import NotFoundError
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -134,11 +135,11 @@ class TestListDatasets:
 
     def test_list_with_query(self, mock_controller):
         client.get("/datasets?q=shake")
-        mock_controller.list_datasets.assert_called_with("shake", None)
+        mock_controller.list_datasets.assert_called_with("shake", None, "")
 
     def test_list_with_type_filter(self, mock_controller):
         client.get("/datasets?type=text")
-        mock_controller.list_datasets.assert_called_with(None, "text")
+        mock_controller.list_datasets.assert_called_with(None, "text", "")
 
 
 # ── GET /datasets/search ──────────────────────────────────────────────────
@@ -163,8 +164,14 @@ class TestControllerSearch:
     """Direct controller test — the router mocks the controller, so a shape
     regression (names instead of full summaries) can only be caught here."""
 
+    @pytest.fixture(autouse=True)
+    def _isolated_cache_root(self, tmp_path, monkeypatch):
+        """Point the just-cache at an empty tmp dir so the user's real cache
+        (e.g. ~/.cache/sloughgpt/external) never leaks into search results."""
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+
     def _make_controller(self, tmp_path: Path) -> DatasetsController:
-        datasets_dir = tmp_path / "datasets"
+        datasets_dir = tmp_path / "data"
         (datasets_dir / "shakespeare").mkdir(parents=True)
         (datasets_dir / "shakespeare" / "input.txt").write_text("To be or not to be.\n")
         (datasets_dir / "poetry").mkdir(parents=True)
@@ -224,7 +231,7 @@ class TestCreate:
 
     def test_create_calls_controller(self, mock_controller):
         client.post("/datasets", json={"name": "My Set", "description": "test"})
-        mock_controller.create_dataset.assert_called_with("My Set", "test")
+        mock_controller.create_dataset.assert_called_with("My Set", "test", "")
 
 
 # ── PATCH /datasets/{id} ────────────────────────────────────────────────
@@ -429,7 +436,7 @@ class TestConvertToMessages:
         router, ctrl = _make_convert_router(tmp_path, "corpus")
         _write_jsonl(router, "corpus", [{"text": "hi"}])
         with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
-            res = asyncio.run(router.convert_to_messages("corpus", "You are a poet."))
+            asyncio.run(router.convert_to_messages("corpus", "You are a poet."))
         rows = _read_rows(router, "corpus-messages")
         assert rows[0]["messages"][0] == {"role": "system", "content": "You are a poet."}
 

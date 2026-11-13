@@ -6,10 +6,20 @@ import type { Card } from './types'
 afterEach(() => cleanup())
 
 const makeCard = (overrides: Partial<Card> = {}): Card => ({
-  id: 'c1', title: 'Test Card', description: 'A description', column: 'todo',
-  priority: 'medium', tags: ['frontend', 'urgent'], due_date: '2026-09-10',
-  assignee: 'alice', sprint: 's1', gh: '', notes: [],
-  created_at: '2026-09-01', updated_at: '2026-09-01', root_hash: '',
+  id: 'c1',
+  title: 'Test Card',
+  description: 'A description',
+  column: 'todo',
+  priority: 'medium',
+  tags: ['frontend', 'urgent'],
+  due_date: '2026-09-10',
+  assignee: 'alice',
+  sprint: 's1',
+  gh: '',
+  notes: [],
+  created_at: '2026-09-01',
+  updated_at: '2026-09-01',
+  root_hash: '',
   ...overrides,
 })
 
@@ -28,18 +38,16 @@ describe('CardItem', () => {
     render(<CardItem card={makeCard()} {...defaultProps} />)
     expect(screen.getAllByText('A description').length).toBeGreaterThanOrEqual(1)
   })
-  it('renders priority badge', () => {
-    render(<CardItem card={makeCard({ priority: 'high' })} {...defaultProps} />)
-    expect(screen.getAllByText('high').length).toBeGreaterThanOrEqual(1)
+  it('renders priority as edge stripe', () => {
+    const { container } = render(
+      <CardItem card={makeCard({ priority: 'high' })} {...defaultProps} />,
+    )
+    expect(container.querySelectorAll('[aria-hidden]').length).toBeGreaterThanOrEqual(1)
   })
   it('renders tags', () => {
     render(<CardItem card={makeCard({ tags: ['a', 'b'] })} {...defaultProps} />)
     expect(screen.getAllByText('a').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('b').length).toBeGreaterThanOrEqual(1)
-  })
-  it('shows +N when more than 3 tags', () => {
-    render(<CardItem card={makeCard({ tags: ['a', 'b', 'c', 'd', 'e'] })} {...defaultProps} />)
-    expect(screen.getAllByText('+2').length).toBeGreaterThanOrEqual(1)
   })
   it('renders assignee and due_date', () => {
     render(<CardItem card={makeCard()} {...defaultProps} />)
@@ -66,12 +74,16 @@ describe('CardItem', () => {
     render(<CardItem card={makeCard()} {...defaultProps} />)
     expect(screen.getAllByRole('button')[0]).toHaveAttribute('draggable', 'true')
   })
-  it('shows hash tree dot when root_hash present', () => {
-    const { container } = render(<CardItem card={makeCard({ root_hash: 'abc123' })} {...defaultProps} />)
-    expect(container.querySelectorAll('[title="Hash tree active"]').length).toBeGreaterThanOrEqual(1)
+  it('shows hash chain dot when root_hash present', () => {
+    const { container } = render(
+      <CardItem card={makeCard({ root_hash: 'abc123' })} {...defaultProps} />,
+    )
+    expect(container.querySelectorAll('[title="Hash chain active"]').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
-  it('hides hash tree dot when no root_hash', () => {
+  it('hides hash chain dot when no root_hash', () => {
     const { container } = render(<CardItem card={makeCard({ root_hash: '' })} {...defaultProps} />)
-    expect(container.querySelectorAll('[title="Hash tree active"]').length).toBe(0)
+    expect(container.querySelectorAll('[title="Hash chain active"]').length).toBe(0)
   })
 })

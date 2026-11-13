@@ -1,0 +1,293 @@
+[
+  {
+    "ts": "2026-11-08T12:18:32+01:00",
+    "git": "89e7a6a3e",
+    "mib": 8.0,
+    "repeat": 3,
+    "rows": [
+      {
+        "row": "floor-identity",
+        "wall_s": 0.0079,
+        "dec_mibs": 1009.3,
+        "wire_mibs": 1009.3,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-identity",
+        "wall_s": 0.0124,
+        "dec_mibs": 647.0,
+        "wire_mibs": 647.0,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-identity",
+        "wall_s": 0.0384,
+        "dec_mibs": 208.5,
+        "wire_mibs": 208.5,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "floor-gzip",
+        "wall_s": 0.0577,
+        "dec_mibs": 138.7,
+        "wire_mibs": 43.2,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-gzip",
+        "wall_s": 0.07,
+        "dec_mibs": 114.3,
+        "wire_mibs": 35.6,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-gzip",
+        "wall_s": 0.0814,
+        "dec_mibs": 98.2,
+        "wire_mibs": 30.6,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      }
+    ],
+    "overhead": {
+      "identity": "pipe +57.0%  e2e +386.1%",
+      "gzip": "pipe +21.3%  e2e +41.1%"
+    },
+    "poll_us": {
+      "identity_mean_us": 983.4,
+      "identity_p95_us": 1349.5,
+      "gzip_mean_us": 939.0,
+      "gzip_p95_us": 1315.0
+    },
+    "checks_ok": true
+  },
+  {
+    "ts": "2026-11-08T12:46:54+01:00",
+    "git": "0de11cd91",
+    "mib": 8.0,
+    "repeat": 3,
+    "rows": [
+      {
+        "row": "floor-identity",
+        "wall_s": 0.0127,
+        "dec_mibs": 627.9,
+        "wire_mibs": 627.9,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-identity",
+        "wall_s": 0.0114,
+        "dec_mibs": 699.3,
+        "wire_mibs": 699.3,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-identity",
+        "wall_s": 0.0497,
+        "dec_mibs": 161.0,
+        "wire_mibs": 161.0,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "floor-gzip",
+        "wall_s": 0.0844,
+        "dec_mibs": 94.8,
+        "wire_mibs": 29.5,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-gzip",
+        "wall_s": 0.0943,
+        "dec_mibs": 84.8,
+        "wire_mibs": 26.4,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-gzip",
+        "wall_s": 0.1787,
+        "dec_mibs": 44.8,
+        "wire_mibs": 13.9,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      }
+    ],
+    "overhead": {
+      "identity": "pipe -10.2%  e2e +291.3%",
+      "gzip": "pipe +11.7%  e2e +111.7%"
+    },
+    "poll_us": {
+      "identity_mean_us": 2063.5,
+      "identity_p95_us": 3093.2,
+      "gzip_mean_us": 4833.0,
+      "gzip_p95_us": 8453.2
+    },
+    "wan": null,
+    "checks_ok": true
+  },
+  {
+    "ts": "2026-11-08T12:47:17+01:00",
+    "git": "0de11cd91",
+    "mib": 8.0,
+    "repeat": 3,
+    "rows": [
+      {
+        "row": "floor-identity",
+        "wall_s": 0.0274,
+        "dec_mibs": 291.8,
+        "wire_mibs": 291.8,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-identity",
+        "wall_s": 0.042,
+        "dec_mibs": 190.6,
+        "wire_mibs": 190.6,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-identity",
+        "wall_s": 0.1053,
+        "dec_mibs": 76.0,
+        "wire_mibs": 76.0,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "floor-gzip",
+        "wall_s": 0.2125,
+        "dec_mibs": 37.6,
+        "wire_mibs": 11.7,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-gzip",
+        "wall_s": 0.1388,
+        "dec_mibs": 57.6,
+        "wire_mibs": 17.9,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-gzip",
+        "wall_s": 0.1732,
+        "dec_mibs": 46.2,
+        "wire_mibs": 14.4,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      }
+    ],
+    "overhead": {
+      "identity": "pipe +53.3%  e2e +284.3%",
+      "gzip": "pipe -34.7%  e2e -18.5%"
+    },
+    "poll_us": {
+      "identity_mean_us": 2656.9,
+      "identity_p95_us": 5270.3,
+      "gzip_mean_us": 3647.9,
+      "gzip_p95_us": 8086.3
+    },
+    "wan": {
+      "url": "https://raw.githubusercontent.com/DataWeX/sloughGPT/main/docs/AGENT_SYNC.md",
+      "repeat": 2,
+      "row": {
+        "row": "wan-e2e",
+        "wall_s": 1.5498,
+        "dec_mibs": 0.4,
+        "wire_mibs": 0.2,
+        "saved_pct": 59.0,
+        "state": "done",
+        "pct": 100.0,
+        "done": 663741,
+        "total": 663741,
+        "encoding": "gzip",
+        "stored_sha": "8ea7ba5bf70033bbbefcac19ff954de7f5f1c925116d9acee8c2b7753dc8eca6"
+      }
+    },
+    "checks_ok": true
+  }
+]

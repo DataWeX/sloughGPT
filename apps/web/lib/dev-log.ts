@@ -1,7 +1,7 @@
 /**
  * WebLogger — structured logging for the browser frontend.
  *
- * Mirrors the Python ``domains.logging.WebLogger`` pattern.
+ * Mirrors the Python ``domain.logging.WebLogger`` pattern.
  * Routes to console.debug/log/warn/error based on level.
  * Production: only warnings and errors are emitted.
  * Development: all levels are emitted.
@@ -14,17 +14,34 @@
  *   import { logger } from '@/lib/dev-log'
  *
  *   logger.info('message sent', { session_id: 'abc' })
- *   logger.error('Could not stream', { exception: 'AbortError' })
+ *   logger.debug('stream aborted') // intentional aborts are not errors
  *   logger.child('chat').info('user typed')
  */
 
-import { PUBLIC_API_URL } from '@/lib/config'
+import { inferStateKind, isStateEventKind } from '@/lib/event-kinds'
+import { configureTransport } from '../../lib/ports'
+import { apiPost } from './http-client'
 
 export type LogTag =
-  | 'REQ' | 'AUTH' | 'MODEL' | 'SOUL' | 'TRAIN' | 'INFRA'
-  | 'START' | 'SLOW' | 'ERROR' | 'WARN' | 'OK'
-  | 'CHAT' | 'IDLE' | 'DOWNLOAD' | 'INFERENCE' | 'WORKFLOW'
-  | 'UI' | 'SYSTEM' | 'WEB'
+  | 'REQ'
+  | 'AUTH'
+  | 'MODEL'
+  | 'SOUL'
+  | 'TRAIN'
+  | 'INFRA'
+  | 'START'
+  | 'SLOW'
+  | 'ERROR'
+  | 'WARN'
+  | 'OK'
+  | 'CHAT'
+  | 'IDLE'
+  | 'DOWNLOAD'
+  | 'INFERENCE'
+  | 'WORKFLOW'
+  | 'UI'
+  | 'SYSTEM'
+  | 'WEB'
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical'
 
@@ -42,17 +59,24 @@ interface LogRecord {
 }
 
 const EVENT_TAG_MAP: Partial<Record<string, LogTag>> = {
-  model_:       'MODEL',
-  training_:    'TRAIN',
-  session_:     'CHAT',
-  stream_:      'CHAT',
-  chat_:        'CHAT',
-  webhook_:     'WORKFLOW',
-  download_:    'DOWNLOAD',
-  auth_:        'AUTH',
-  vm_:          'INFRA',
-  shell_:       'INFRA',
-  soul_:        'SOUL',
+  model_: 'MODEL',
+  training_: 'TRAIN',
+  session_: 'CHAT',
+  stream_: 'CHAT',
+  chat_: 'CHAT',
+  webhook_: 'WORKFLOW',
+  download_: 'DOWNLOAD',
+  auth_: 'AUTH',
+  vm_: 'INFRA',
+  shell_: 'INFRA',
+  soul_: 'SOUL',
+  connection_: 'SYSTEM',
+  api_connection_: 'SYSTEM',
+  startup_: 'START',
+  overlay_: 'START',
+  sse_: 'SYSTEM',
+  health_: 'SYSTEM',
+  error_lifecycle_: 'SYSTEM',
 }
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
@@ -103,17 +127,25 @@ export class LogTransport {
         clearTimeout(this._timer)
         this._timer = null
       }
-      this.flush()
+      void this.flush()
     } else {
       this._scheduleFlush()
     }
   }
 
-  flush(): void {
+  /**
+   * Flush buffered records through the http-client facade.
+   *
+   * Async because `apiPost` crosses microtasks before `fetch` fires —
+   * awaiting the returned promise means the ingest request has been issued
+   * (callers/tests that need the side effect await it; fire-and-forget
+   * sites use `void`).
+   */
+  async flush(): Promise<void> {
     if (this._batch.length === 0) return
     const now = Date.now()
     if (now - this._lastFlushAt < MIN_FLUSH_INTERVAL_MS) {
-      if (!this._timer) this._timer = setTimeout(() => this.flush(), MIN_FLUSH_INTERVAL_MS)
+      if (!this._timer) this._timer = setTimeout(() => void this.flush(), MIN_FLUSH_INTERVAL_MS)
       return
     }
     const payload = this._batch
@@ -122,22 +154,26 @@ export class LogTransport {
     this._lastFlushAt = now
 
     try {
-      void fetch(`${PUBLIC_API_URL}/errors/logs/ingest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ logs: payload }),
+      // Through the http-client facade (fetch gate, card 20261108_142919):
+      // keepalive preserves the raw fetch's page-unload semantics; silent
+      // keeps ingest failures out of the error store (we ARE the logger);
+      // skipCircuitBreaker keeps this diagnostics channel from tripping the
+      // GLOBAL breaker for all other API traffic.
+      await apiPost('/errors/logs/ingest', { logs: payload }, {
         keepalive: true,
+        silent: true,
+        skipCircuitBreaker: true,
       }).catch(() => {
         /* silent — don't loop on network errors */
       })
     } catch {
-      /* fetch unavailable or returned a non-promise — drop the flush */
+      /* transport unavailable or threw synchronously — drop the flush */
     }
   }
 
   private _scheduleFlush(): void {
     if (this._timer) return
-    this._timer = setTimeout(() => this.flush(), BATCH_INTERVAL_MS)
+    this._timer = setTimeout(() => void this.flush(), BATCH_INTERVAL_MS)
   }
 }
 
@@ -146,7 +182,7 @@ function _getSharedTransport(): LogTransport {
   if (!_sharedTransport) {
     _sharedTransport = new LogTransport()
     if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => _sharedTransport!.flush())
+      window.addEventListener('beforeunload', () => void _sharedTransport!.flush())
     }
   }
   return _sharedTransport
@@ -172,9 +208,15 @@ export class WebLogger {
     this._transport = transport ?? _getSharedTransport()
   }
 
-  get name() { return this._name }
-  get level() { return this._level }
-  set level(v: LogLevel) { this._level = v }
+  get name() {
+    return this._name
+  }
+  get level() {
+    return this._level
+  }
+  set level(v: LogLevel) {
+    this._level = v
+  }
 
   setContext(ctx: LogContext) {
     Object.assign(this._context, ctx)
@@ -193,9 +235,15 @@ export class WebLogger {
     )
   }
 
-  debug(message: string, context?: LogContext) { this._emit('debug', message, context) }
-  info(message: string, context?: LogContext) { this._emit('info', message, context) }
-  warning(message: string, context?: LogContext) { this._emit('warning', message, context) }
+  debug(message: string, context?: LogContext) {
+    this._emit('debug', message, context)
+  }
+  info(message: string, context?: LogContext) {
+    this._emit('info', message, context)
+  }
+  warning(message: string, context?: LogContext) {
+    this._emit('warning', message, context)
+  }
   error(message: string, opts?: { exception?: string } & LogContext) {
     const { exception, ...ctx } = opts || {}
     this._emit('error', message, ctx, exception)
@@ -215,13 +263,19 @@ export class WebLogger {
     try {
       return JSON.parse(raw)
     } catch {
-      return { timestamp: Date.now(), level: 'error', logger: 'unknown', message: `Failed to parse log: ${raw.slice(0, 100)}`, context: {} }
+      return {
+        timestamp: Date.now(),
+        level: 'error',
+        logger: 'unknown',
+        message: `Failed to parse log: ${raw.slice(0, 100)}`,
+        context: {},
+      }
     }
   }
 
-  /** Flush any buffered logs to the backend immediately. */
-  flush() {
-    this._transport.flush()
+  /** Flush any buffered logs to the backend immediately (awaits the POST). */
+  flush(): Promise<void> {
+    return this._transport.flush()
   }
 
   // ── Event tracking ────────────────────────────────────────────────
@@ -235,21 +289,49 @@ export class WebLogger {
 
   trackEvent(event: string, data?: Record<string, unknown>) {
     const tag = (data?.tag as LogTag) || WebLogger.inferTag(event)
-    const summary = data
-      ? Object.entries(data)
-          .filter(([k]) => k !== 'tag')
-          .map(([k, v]) => `${k}=${v}`)
-          .join(' ')
-      : ''
-
+    // Bare event name only — the backend composes `[from → to] {k=v} (req=...)`
+    // from the structured context, so each fact renders exactly once.
     const record: LogRecord = {
       level: 'info',
       logger: this._name,
-      message: summary ? `${event} ${summary}` : event,
+      message: event,
       timestamp: Date.now() / 1000,
       context: { ...data, tag },
     }
     this._transport.enqueue(record)
+
+    // Structured-across-the-board: mirror every event into the error-store
+    // state-event buffer (transitions deduped there). Lazily imported so this
+    // module never breaks collection when test files partially mock
+    // `@/lib/error-store` — missing exports are skipped via optional
+    // chaining. Callers going through `logStateEvent` (lib/state-events.ts)
+    // write the buffer first with an explicit kind; this echo then dedups to
+    // the same entry.
+    try {
+      const from = typeof data?.from === 'string' ? data.from : undefined
+      const to = typeof data?.to === 'string' ? data.to : undefined
+      const kind = isStateEventKind(data?.kind) ? data.kind : inferStateKind(event)
+      const message = record.message
+      void import('@/lib/error-store').then(
+        (m) => {
+          try {
+            m.useErrorStore?.getState?.()?.logStateEvent?.(event, {
+              kind,
+              ...(from !== undefined ? { from } : {}),
+              ...(to !== undefined ? { to } : {}),
+              message,
+            })
+          } catch {
+            /* store unavailable — backend ingest already queued */
+          }
+        },
+        () => {
+          /* store module unavailable — backend ingest already queued */
+        },
+      )
+    } catch {
+      /* never let logging break the caller */
+    }
 
     if (IS_DEV) {
       console.debug(`[${this._name}]`, event, data)
@@ -291,6 +373,12 @@ export const trackEvent = (event: string, data?: Record<string, unknown>) =>
 // ── Singleton ────────────────────────────────────────────────────────
 
 export const logger = new WebLogger('slo.web')
+
+// Self-registration: this module OWNS the app logger, so it hands it to the
+// transport rather than the transport importing it upward (apps/lib must never
+// import apps/web). A host that mocks this module simply never registers, and
+// the transport falls back to its silent port instead of throwing.
+configureTransport({ logger })
 
 /**
  * Logs only in development — keeps production consoles clean for expected API/network failures.

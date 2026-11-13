@@ -14,18 +14,25 @@ fields (``_id``, ``_created``, ``_updated``) are stripped from responses.
 
 Collections:
     sessions, pendingMessages, knowledge, bookmarks, prompts, drafts, kv,
-    errors
+    errors, message-notes
 """
 
 import logging
 import os
+import re
 from pathlib import Path as PathLib
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Path, Query
 from infrastructure.auth import require_auth_if_enabled
 from mogdb import MogDB
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 logger = logging.getLogger("slo.docstore")
 
@@ -39,24 +46,29 @@ COLLECTIONS = frozenset(
         "drafts",
         "kv",
         "errors",
+        "message-notes",
     }
 )
 
 _DEFAULT_PATH = str(PathLib(__file__).resolve().parents[4] / "data" / "docstore")
 
-_db: MogDB | None = None
-
 
 def _get_db() -> MogDB:
-    """Return the shared MogDB instance, creating it from config on first use.
+    """Return the shared MogDB instance for the docstore.
 
     The storage path comes from ``MOGDB_DOCSTORE_PATH`` (set by tests) and
     defaults to ``<repo>/data/docstore``.
     """
-    global _db
-    if _db is None:
-        _db = MogDB(os.environ.get("MOGDB_DOCSTORE_PATH", _DEFAULT_PATH))
-    return _db
+    from infrastructure.db_pool import get_db
+
+    custom_path = os.environ.get("MOGDB_DOCSTORE_PATH")
+    if custom_path:
+        # Tests may override the path — fall back to direct instantiation
+        # since the pool key is based on the default path.
+        from mogdb import MogDB as _MogDB
+
+        return _MogDB(custom_path)
+    return get_db("docstore")
 
 
 def _collection(name: str) -> Any:
@@ -78,6 +90,20 @@ class DocStoreRouter:
 
     def _register_routes(self) -> None:
         """Register all routes on this router."""
+        # message-notes: register BEFORE the generic /{collection} routes —
+        # FastAPI matches in registration order, and the frontend's
+        # /docstore/message-notes[...] calls would otherwise fall into
+        # generic collection lookup (E_UNKNOWN_COLLECTION → 404 noise).
+        self.router.add_api_route("/message-notes", self.list_message_notes, methods=["GET"])
+        self.router.add_api_route("/message-notes", self.put_message_note, methods=["POST"])
+        self.router.add_api_route(
+            "/message-notes/search", self.search_message_notes, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/message-notes/{session_id}/{message_id}",
+            self.delete_message_note,
+            methods=["DELETE"],
+        )
         self.router.add_api_route("/{collection}/bulk", self.bulk_put, methods=["POST"])
         self.router.add_api_route("/{collection}", self.list_docs, methods=["GET"])
         self.router.add_api_route("/{collection}", self.clear_collection, methods=["DELETE"])
@@ -239,6 +265,65 @@ class DocStoreRouter:
             count += 1
         safe_audit_log("docstore.bulk_put", resource=collection, detail=f"imported={count}")
         return success_response(data={"imported": count})
+
+    # ── message-notes (chat MessageNote contract, apps/web/lib/db.ts) ──────
+
+    @endpoint("docstore.message_notes.list")
+    def list_message_notes(
+        self,
+        session_id: str = Query(..., description="Chat session id"),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """All message notes for one chat session, oldest first."""
+        docs = _collection("message-notes").find({"sessionId": session_id}, sort=[("createdAt", 1)])
+        return success_response(data=[_strip_meta(d) for d in docs])
+
+    @endpoint("docstore.message_notes.put")
+    def put_message_note(
+        self,
+        body: dict[str, Any] = Body(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Create or replace a message note (client supplies ``id``)."""
+        session_id = body.get("sessionId")
+        message_id = body.get("messageId")
+        if not session_id or not message_id:
+            raise_error("sessionId and messageId are required", code="E_BAD_REQUEST")
+        note_id = str(body.get("id") or f"{session_id}:{message_id}")
+        doc = dict(body)
+        doc["_id"] = note_id
+        coll = _collection("message-notes")
+        created = coll.find_one({"_id": note_id}) is None
+        if not created:
+            coll.delete_one({"_id": note_id})
+        coll.insert_one(doc)
+        return success_response(data={"id": note_id, "created": created})
+
+    @endpoint("docstore.message_notes.delete")
+    def delete_message_note(
+        self,
+        session_id: str = Path(...),
+        message_id: str = Path(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Delete one note for a session/message pair."""
+        deleted = _collection("message-notes").delete_one(
+            {"sessionId": session_id, "messageId": message_id}
+        )
+        safe_audit_log("docstore.message_notes.delete", resource=f"{session_id}/{message_id}")
+        return success_response(data={"deleted": bool(deleted)})
+
+    @endpoint("docstore.message_notes.search")
+    def search_message_notes(
+        self,
+        q: str = Query(..., description="Substring of note content"),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Case-insensitive substring search over note content."""
+        docs = _collection("message-notes").find(
+            {"content": {"$regex": re.escape(q), "$options": "i"}}, limit=100
+        )
+        return success_response(data=[_strip_meta(d) for d in docs])
 
 
 router = DocStoreRouter().router

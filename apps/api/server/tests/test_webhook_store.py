@@ -49,8 +49,8 @@ def test_get_missing_webhook_returns_none(tmp_path):
 
 def test_list_returns_active_only_most_recent_first(tmp_path):
     store = _mk_store(tmp_path)
-    a = _register(store, url="https://a.example/hook")
-    b = _register(store, url="https://b.example/hook")
+    a = _register(store, url="https://example.com/hook-a")
+    b = _register(store, url="https://example.com/hook-b")
 
     store.unregister(a)
 
@@ -92,7 +92,7 @@ def test_get_secret_and_sign_payload(tmp_path):
 def test_get_stats_counts(tmp_path):
     store = _mk_store(tmp_path)
     a = _register(store)
-    b = _register(store)
+    _register(store)
     store.unregister(a)
 
     stats = store.get_stats()

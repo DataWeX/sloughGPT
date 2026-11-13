@@ -13,11 +13,11 @@ Usage::
 
 import json
 import logging
-import time
 import threading
-from dataclasses import dataclass, field, asdict
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -50,16 +50,16 @@ class CaptureQueue:
     """Thread-safe queue for captured URLs."""
 
     def __init__(self, max_size: int = 1000):
-        self._entries: List[CaptureEntry] = []
+        self._entries: list[CaptureEntry] = []
         self._max_size = max_size
         self._lock = threading.Lock()
-        self._listeners: List[Callable[[CaptureEntry], None]] = []
+        self._listeners: list[Callable[[CaptureEntry], None]] = []
 
     def add(self, entry: CaptureEntry) -> None:
         with self._lock:
             self._entries.append(entry)
             if len(self._entries) > self._max_size:
-                self._entries = self._entries[-self._max_size:]
+                self._entries = self._entries[-self._max_size :]
 
         for listener in self._listeners:
             try:
@@ -67,7 +67,7 @@ class CaptureQueue:
             except Exception as e:
                 logger.warning("Listener error: %s", e)
 
-    def list(self, limit: int = 50) -> List[dict]:
+    def list(self, limit: int = 50) -> list[dict]:
         with self._lock:
             entries = self._entries[-limit:]
         return [e.to_dict() for e in reversed(entries)]
@@ -95,18 +95,20 @@ def get_capture_queue() -> CaptureQueue:
 
 
 class CaptureHandler(BaseHTTPRequestHandler):
-
-    server_ref: Optional[HTTPServer] = None
+    server_ref: HTTPServer | None = None
 
     def do_GET(self):
         path = self.path.split("?")[0]
 
         if path == "/health":
-            self._respond(200, {
-                "status": "ok",
-                "captures": _capture_queue.count(),
-                "uptime": time.time() - self.server_ref._start_time if self.server_ref else 0,
-            })
+            self._respond(
+                200,
+                {
+                    "status": "ok",
+                    "captures": _capture_queue.count(),
+                    "uptime": time.time() - self.server_ref._start_time if self.server_ref else 0,
+                },
+            )
         elif path == "/captures":
             self._respond(200, _capture_queue.list(limit=50))
         else:
@@ -138,7 +140,9 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._respond(400, {"error": "missing url"})
             return
 
-        entry = CaptureEntry(url=url, title=body.get("title", ""), referrer=body.get("referrer", ""))
+        entry = CaptureEntry(
+            url=url, title=body.get("title", ""), referrer=body.get("referrer", "")
+        )
         _capture_queue.add(entry)
 
         logger.info("Captured: %s", url)
@@ -162,7 +166,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
 
 def start_capture_server(
     port: int = 6400,
-    on_capture: Optional[Callable[[CaptureEntry], None]] = None,
+    on_capture: Callable[[CaptureEntry], None] | None = None,
 ) -> HTTPServer:
     """Start the capture server."""
 

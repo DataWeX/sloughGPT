@@ -101,7 +101,7 @@ export const MessageNotes = memo(function MessageNotes({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
+            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0"
             onClick={handleStartEdit}
             title="Edit note"
             aria-label="Edit note"

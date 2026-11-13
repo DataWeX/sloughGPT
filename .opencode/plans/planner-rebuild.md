@@ -370,7 +370,7 @@ class PlannerStore:
 2. `cd apps/web && npx vitest run` — all frontend tests pass
 3. Manual: start dev server, open `/planner`, test board + notes views
 4. `cd packages/planner && python -m pytest tests/ -v` — all Python tests pass
-5. Verify sync: create a note with status=wip, run sync, card appears in in_progress
+5. Verify sync: create a note with status=wip, run sync, card appears in wip
 
 ---
 

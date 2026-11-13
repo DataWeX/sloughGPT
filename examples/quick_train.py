@@ -10,7 +10,7 @@ Periodic ``<dataset>_<timestamp>.soul`` checkpoints under the trainer ``checkpoi
 (*Checkpoint vocabulary*).
 """
 
-from domains.training.train_pipeline import SloughGPTTrainer
+from domain.training._internal.train_pipeline import SloughGPTTrainer
 
 
 def main():

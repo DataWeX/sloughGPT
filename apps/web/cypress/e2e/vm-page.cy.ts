@@ -1,12 +1,22 @@
+import { apiBase } from '../support/api-base'
+
+// /vm was folded into /developer as its VM tab (route-map card 6/7,
+// 20261101_154057): visit the survivor page, open the tab, and re-open it
+// after every reload — tab selection is component state and resets with
+// the page.
+const openVmTab = () => cy.get('[role="tab"]').contains('VM').click()
+
 describe('VM console', () => {
   beforeEach(() => {
     cy.mockAll()
     cy.mockVm()
-    cy.visit('/vm')
+    cy.visit('/developer')
+    openVmTab()
   })
 
-  it('renders the console header and default role', () => {
-    cy.contains('h1', 'VM Console').should('be.visible')
+  it('renders the console inside the /developer VM tab with default role', () => {
+    cy.contains('h1', 'Developer').should('be.visible')
+    cy.contains('button', 'Assembly Sandbox').should('be.visible')
     cy.get('select[aria-label="VM role"]').should('have.value', 'user')
   })
 
@@ -22,15 +32,36 @@ describe('VM console', () => {
   })
 
   it('runs the source and shows the result and registers', () => {
+    // Without an explicit mock the fallback replies `{}`, which the console
+    // treats as a failed run — the result panel never opens.
+    cy.intercept('POST', `${apiBase}/vm/run`, {
+      statusCode: 200,
+      body: {
+        success: true,
+        exit_code: 0,
+        steps_executed: 12,
+        elapsed_ms: 3.5,
+        output: '',
+        registers: [
+          { name: 'EAX', value: 0, hex: '0x00000000' },
+          { name: 'EBX', value: 0, hex: '0x00000000' },
+        ],
+        eip: 0,
+        eip_hex: '0x00000000',
+        status: 'halted',
+      },
+    }).as('vmRunPlain')
     cy.contains('button', 'Run').click()
     cy.contains('Result').scrollIntoView().should('be.visible')
     cy.contains('halted').should('be.visible')
     cy.contains('Registers').scrollIntoView().should('be.visible')
-    cy.contains('EAX').should('be.visible')
+    // Scope to the register row button: the role-denial warning copy also
+    // contains 'EAX' and matches first in DOM order.
+    cy.contains('button[title="Click to copy"]', 'EAX').should('be.visible')
   })
 
   it('shows the permission denied hint when a syscall returns EAX -2', () => {
-    cy.intercept('POST', 'http://localhost:8000/vm/run', {
+    cy.intercept('POST', `${apiBase}/vm/run`, {
       statusCode: 200,
       body: {
         success: true,
@@ -48,12 +79,14 @@ describe('VM console', () => {
       },
     }).as('vmRunDenied')
     cy.contains('button', 'Run').click()
-    cy.contains(/A syscall was denied for the current role/).scrollIntoView().should('be.visible')
+    cy.contains(/A syscall was denied for the current role/)
+      .scrollIntoView()
+      .should('be.visible')
     cy.contains(/require the(?: admin)? role/).should('be.visible')
   })
 
   it('shows the training result JSON card when the run returns one', () => {
-    cy.intercept('POST', 'http://localhost:8000/vm/run', {
+    cy.intercept('POST', `${apiBase}/vm/run`, {
       statusCode: 200,
       body: {
         success: true,
@@ -70,12 +103,13 @@ describe('VM console', () => {
       },
     }).as('vmRunResult')
     cy.contains('button', 'Run').click()
-    cy.contains('Training result').scrollIntoView().should('be.visible')
-    cy.contains(/final_loss.*1\.5/).should('be.visible')
+    // Scope to the success-styled pre: the sample source in the editor also
+    // mentions 'Training result', which would otherwise match first.
+    cy.get('pre.text-success').scrollIntoView().should('be.visible').should('contain', 'final_loss')
   })
 
   it('stops a running training job from the Training card', () => {
-    cy.intercept('POST', 'http://localhost:8000/vm/run', {
+    cy.intercept('POST', `${apiBase}/vm/run`, {
       statusCode: 200,
       body: {
         success: true,
@@ -90,11 +124,11 @@ describe('VM console', () => {
         training_job_id: 1,
       },
     }).as('vmRunTrain')
-    cy.intercept('GET', 'http://localhost:8000/vm/training/jobs/1', {
+    cy.intercept('GET', `${apiBase}/vm/training/jobs/1`, {
       statusCode: 200,
       body: { job_id: 1, api_job_id: 'abc-123', status: 'running', progress: 0.5, result: null },
     }).as('vmTrainingRunning')
-    cy.intercept('POST', 'http://localhost:8000/vm/training/jobs/1/stop', {
+    cy.intercept('POST', `${apiBase}/vm/training/jobs/1/stop`, {
       statusCode: 200,
       body: { status: 'stopping', job_id: 1 },
     }).as('vmTrainingStop')
@@ -108,7 +142,11 @@ describe('VM console', () => {
   it('persists the selected role and steps across reloads', () => {
     cy.get('select[aria-label="VM role"]').select('admin')
     cy.get('#vm-steps').type('{selectall}750')
+    // Edits are persisted to IndexedDB asynchronously (after hydration
+    // completes); give the write time to land before tearing the page down.
+    cy.wait(500)
     cy.reload()
+    openVmTab()
     cy.get('select[aria-label="VM role"]').should('have.value', 'admin')
     cy.get('#vm-steps').should('have.value', '750')
   })
@@ -122,7 +160,9 @@ describe('VM console', () => {
   })
 
   it('warns and switches to admin on the training launch card', () => {
-    cy.contains(/Training is denied for the user role/).scrollIntoView().should('be.visible')
+    cy.contains(/Training is denied for the user role/)
+      .scrollIntoView()
+      .should('be.visible')
     cy.contains('button', 'Switch to admin').click()
     cy.get('select[aria-label="VM role"]').should('have.value', 'admin')
     cy.contains(/Training is denied for the user role/).should('not.exist')
@@ -143,7 +183,7 @@ describe('VM console', () => {
   })
 
   it('launches a training job from the Training launch card with a dataset dropdown', () => {
-    cy.intercept('GET', 'http://localhost:8000/datasets', {
+    cy.intercept('GET', `${apiBase}/datasets`, {
       statusCode: 200,
       body: {
         datasets: [
@@ -153,10 +193,11 @@ describe('VM console', () => {
       },
     }).as('datasetsList')
     cy.reload()
+    openVmTab()
     cy.wait('@datasetsList')
     cy.get('select[aria-label="Training dataset"]').should('have.value', 'shakespeare')
 
-    cy.intercept('POST', 'http://localhost:8000/vm/run', (req) => {
+    cy.intercept('POST', `${apiBase}/vm/run`, (req) => {
       expect(req.body.source).to.contain('SYS_TRAIN_START')
       expect(req.body.source).to.contain('"dataset":"tinyshakespeare","epochs":2')
       req.reply({
@@ -175,7 +216,7 @@ describe('VM console', () => {
         },
       })
     }).as('vmRunLaunch')
-    cy.intercept('GET', 'http://localhost:8000/vm/training/jobs/1', {
+    cy.intercept('GET', `${apiBase}/vm/training/jobs/1`, {
       statusCode: 200,
       body: {
         job_id: 1,
@@ -196,7 +237,7 @@ describe('VM console', () => {
 
   it('confirms a launched training job and dismisses the note', () => {
     cy.get('select[aria-label="VM role"]').select('admin')
-    cy.intercept('POST', 'http://localhost:8000/vm/run', (req) => {
+    cy.intercept('POST', `${apiBase}/vm/run`, (req) => {
       expect(req.body.source).to.contain('SYS_TRAIN_START')
       req.reply({
         statusCode: 200,
@@ -216,13 +257,15 @@ describe('VM console', () => {
 
     cy.contains('button', 'Launch training').click()
     cy.wait('@vmRunLaunchConfirm')
-    cy.contains(/Launched training job #5/).scrollIntoView().should('be.visible')
+    cy.contains(/Launched training job #5/)
+      .scrollIntoView()
+      .should('be.visible')
     cy.contains('button', 'Dismiss').click()
     cy.contains(/Launched training job #5/).should('not.exist')
   })
 
   it('warns when a custom dataset is unknown', () => {
-    cy.intercept('GET', 'http://localhost:8000/datasets', {
+    cy.intercept('GET', `${apiBase}/datasets`, {
       statusCode: 200,
       body: {
         datasets: [
@@ -232,11 +275,14 @@ describe('VM console', () => {
       },
     }).as('datasetsFull')
     cy.reload()
+    openVmTab()
     cy.wait('@datasetsFull')
 
     cy.get('select[aria-label="Training dataset"]').select('__custom__')
     cy.get('input[aria-label="Training dataset"]').clear().type('nope')
-    cy.contains(/Unknown dataset "nope"/).scrollIntoView().should('be.visible')
+    cy.contains(/Unknown dataset "nope"/)
+      .scrollIntoView()
+      .should('be.visible')
     cy.contains(/Available: shakespeare/).should('be.visible')
   })
 })

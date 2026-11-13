@@ -56,8 +56,8 @@ Server trains directly from its own inference logs. Two approaches:
 2. **Background auto-train**: `AutoTrainer` monitors new conversations, triggers training when threshold (10) reached.
 
 ### Files Created
-- `packages/core-py/domains/training/pair_extractor.py` — `extract_pairs_from_sessions()`, `extract_pairs_from_logs()`, `write_training_text()`, `count_pairs_in_sessions()`, `count_pairs_in_logs()`
-- `packages/core-py/domains/training/auto_trainer.py` — `AutoTrainer` (background thread, threshold, interval, subprocess spawn), `start_auto_trainer_if_enabled()`, `stop_auto_trainer()`
+- `domain/training/_internal/pair_extractor.py` — `extract_pairs_from_sessions()`, `extract_pairs_from_logs()`, `write_training_text()`, `count_pairs_in_sessions()`, `count_pairs_in_logs()`
+- `domain/training/_internal/auto_trainer.py` — `AutoTrainer` (background thread, threshold, interval, subprocess spawn), `start_auto_trainer_if_enabled()`, `stop_auto_trainer()`
 - `packages/core-py/tests/test_pair_extractor.py` — 21 tests
 - `packages/core-py/tests/test_auto_trainer.py` — 17 tests
 
@@ -122,7 +122,7 @@ Server: MogDB (mobile_training_store.py) → HFFineTuner → checkpoint
 - `apps/mobile/src/stores/training-data-store.ts` — Zustand store for training pairs
 - `apps/mobile/src/stores/__tests__/training-data-store.test.ts` — 15 tests
 - `apps/mobile/src/services/__tests__/training-collector.test.ts` — 15 tests
-- `packages/core-py/domains/training/mobile_training_store.py` — MogDB store
+- `domain/training/_internal/mobile_training_store.py` — MogDB store
 - `packages/core-py/tests/test_mobile_training_store.py` — 23 tests
 - `tests/server/test_mobile_training.py` — 10 endpoint tests
 - `scripts/migrate_training_data.py` — Migrated 732 pairs from training.db → MogDB
@@ -166,9 +166,9 @@ Server: MogDB (mobile_training_store.py) → HFFineTuner → checkpoint
 - `apps/mobile/src/services/llama-rn-service.ts` — Native Metal inference via llama.rn
 - `apps/mobile/src/stores/chat-store.ts` — Chat flow with auto-training-pair collection
 - `apps/api/server/routers/mobile.py` — Mobile BFF + POST /mobile/train endpoint (MogDB-backed)
-- `packages/core-py/domains/training/mobile_training_store.py` — MogDB training data store (server-side)
-- `packages/core-py/domains/training/mobile_training_store.py` — MogDB training data store (server-side)
-- `packages/core-py/domains/training/hf_finetune.py` — HFFineTuner (server-side training)
-- `packages/core-py/domains/infrastructure/rate_limiter.py` — RateLimiter + RateLimitMiddleware
-- `packages/core-py/domains/infrastructure/metrics.py` — MetricsCollector (Prometheus)
-- `packages/core-py/domains/training/distributed.py` — DistributedTrainer wrapper
+- `domain/training/_internal/mobile_training_store.py` — MogDB training data store (server-side)
+- `domain/training/_internal/mobile_training_store.py` — MogDB training data store (server-side)
+- `domain/training/hf_finetune.py` — HFFineTuner (server-side training)
+- `domain/infrastructure/rate_limiter.py` — RateLimiter + RateLimitMiddleware
+- `domain/infrastructure/metrics.py` — MetricsCollector (Prometheus)
+- `domain/training/distributed.py` — DistributedTrainer wrapper

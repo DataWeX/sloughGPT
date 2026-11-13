@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@sloughgpt/strui'
 import { Checkbox } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -14,7 +14,7 @@ interface DownloadDialogProps {
   onCancel: () => void
 }
 
-export function DownloadDialog({
+export const DownloadDialog = memo(function DownloadDialog({
   open,
   pendingDownload,
   modelInfoMap,
@@ -62,4 +62,4 @@ export function DownloadDialog({
       </DialogContent>
     </Dialog>
   )
-}
+})

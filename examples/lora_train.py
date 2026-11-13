@@ -8,7 +8,7 @@ Native trainer ``*.soul`` checkpoints include char vocab maps; see ``docs/polici
 (*Checkpoint vocabulary*).
 """
 
-from domains.training.train_pipeline import SloughGPTTrainer
+from domain.training._internal.train_pipeline import SloughGPTTrainer
 
 
 def main():

@@ -6,6 +6,7 @@ description: Enforce the Noir Violet design system. Scans for hardcoded colors, 
 # Design System Enforcement Skill
 
 ## When to Use
+
 - Pre-commit checks on UI files
 - Reviewing PRs that touch components
 - Creating new components or pages
@@ -15,52 +16,74 @@ description: Enforce the Noir Violet design system. Scans for hardcoded colors, 
 
 ### Colors (RGB triples)
 
-| Token | Light | Dark | Tailwind |
-|-------|-------|------|----------|
-| `--primary` | `124 82 196` | `192 170 244` | `text-primary`, `bg-primary` |
-| `--accent` | `236 145 95` | `240 176 130` | `text-accent`, `bg-accent` |
-| `--success` | `52 176 125` | `72 192 140` | `text-success`, `bg-success` |
-| `--warning` | `236 168 60` | `240 192 80` | `text-warning`, `bg-warning` |
-| `--destructive` | `220 80 90` | `235 100 110` | `text-destructive`, `bg-destructive` |
-| `--background` | `248 246 252` | `17 15 24` | `bg-background` |
-| `--card` | `255 255 255` | `28 25 38` | `bg-card` |
-| `--border` | `228 224 242` | `52 46 72` | `border-border` |
-| `--muted` | `244 242 248` | `38 34 52` | `bg-muted` |
-| `--muted-foreground` | `130 122 150` | `150 140 172` | `text-muted-foreground` |
+| Token                | Light         | Dark          | Tailwind                             |
+| -------------------- | ------------- | ------------- | ------------------------------------ |
+| `--primary`          | `124 82 196`  | `192 170 244` | `text-primary`, `bg-primary`         |
+| `--accent`           | `236 145 95`  | `240 176 130` | `text-accent`, `bg-accent`           |
+| `--success`          | `52 176 125`  | `72 192 140`  | `text-success`, `bg-success`         |
+| `--warning`          | `236 168 60`  | `240 192 80`  | `text-warning`, `bg-warning`         |
+| `--destructive`      | `220 80 90`   | `235 100 110` | `text-destructive`, `bg-destructive` |
+| `--background`       | `248 246 252` | `17 15 24`    | `bg-background`                      |
+| `--card`             | `255 255 255` | `28 25 38`    | `bg-card`                            |
+| `--border`           | `228 224 242` | `52 46 72`    | `border-border`                      |
+| `--muted`            | `244 242 248` | `38 34 52`    | `bg-muted`                           |
+| `--muted-foreground` | `130 122 150` | `150 140 172` | `text-muted-foreground`              |
+
+### Chart Tokens
+
+Every chart series, progress bar, and per-item accent uses a chart or semantic token — never hex, never stock Tailwind.
+
+| Token       | Light        | Dark          | Use                                                |
+| ----------- | ------------ | ------------- | -------------------------------------------------- |
+| `--chart-1` | `124 82 196` | `192 170 244` | `stroke="var(--chart-1)"`, `fill="var(--chart-1)"` |
+| `--chart-2` | `52 176 125` | `72 192 140`  | Series 2 / success family                          |
+| `--chart-3` | `236 145 95` | `240 176 130` | Series 3 / accent family                           |
+| `--chart-4` | `90 150 220` | `100 165 240` | Series 4 / info family                             |
+| `--chart-5` | `220 80 90`  | `235 100 110` | Series 5 / destructive family                      |
+
+**Rule:** a component's color map must be token references (`const C = { a: 'var(--chart-1)' }`), never hex (`{ a: '#6366f1' }`). The theme/palette switcher only works if markup never pins a hue.
 
 ### Typography Scale
 
-| Role | Class | Size | Weight |
-|------|-------|------|--------|
-| Page title | `text-2xl md:text-3xl` | 600 | Only in `AppRouteHeaderLead` |
-| Section title | `text-base` | 500 | Card headers |
-| Body | `text-sm` | 400 | Primary content |
-| Caption | `text-xs text-muted-foreground` | 400 | Secondary info |
-| Label | `text-xs font-medium uppercase tracking-wider` | 500 | Form labels |
-| Badge | `text-[10px] font-medium` | 500 | Status badges |
+| Role          | Class                                          | Size | Weight                       |
+| ------------- | ---------------------------------------------- | ---- | ---------------------------- |
+| Page title    | `text-2xl md:text-3xl`                         | 600  | Only in `AppRouteHeaderLead` |
+| Section title | `text-base`                                    | 500  | Card headers                 |
+| Body          | `text-sm`                                      | 400  | Primary content              |
+| Caption       | `text-xs text-muted-foreground`                | 400  | Secondary info               |
+| Label         | `text-xs font-medium uppercase tracking-wider` | 500  | Form labels                  |
+| Badge         | `text-[10px] font-medium`                      | 500  | Status badges                |
 
 ### Spacing
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `sl-page` | `p-4 sm:p-6 md:p-8` | Page wrapper |
-| `max-w-4xl` | 896px | Max content width |
-| `space-y-4` | 16px | Between cards |
-| `gap-1` through `gap-4` | 4-16px | Component gaps |
+| Token                   | Value               | Usage             |
+| ----------------------- | ------------------- | ----------------- |
+| `sl-page`               | `p-4 sm:p-6 md:p-8` | Page wrapper      |
+| `max-w-4xl`             | 896px               | Max content width |
+| `space-y-4`             | 16px                | Between cards     |
+| `gap-1` through `gap-4` | 4-16px              | Component gaps    |
 
 ## Violation Scanner
 
 ### Hardcoded Colors
 
 ```bash
-# Find hex colors in components
-grep -rn '#[0-9a-fA-F]\{3,8\}' apps/web/ --include="*.tsx" --include="*.css" | grep -v 'node_modules\|\.test\.\|stories\.'
+# Find hex colors in components (comments included — the real gate,
+# apps/web/lib/design-criteria.test.ts, strips comments and ratchets)
+grep -rn '#[0-9a-fA-F]\{3,8\}' apps/web/ --include="*.tsx" --include="*.css" | grep -v 'node_modules\|\.next\|dist-vite\|\.test\.\|stories\.'
 
 # Find rgb()/rgba() not using var()
-grep -rn 'rgb(' apps/web/ --include="*.tsx" --include="*.css" | grep -v 'var(--'
+grep -rn 'rgb(' apps/web/ --include="*.tsx" --include="*.css" | grep -v 'var(--' | grep -v 'rgb(\$' | grep -v "sample: 'rgb(" | grep -v 'node_modules\|\.next\|dist-vite'
 ```
 
+The mechanical ratchet lives in `apps/web/lib/design-criteria.test.ts`
+(hex + numeric-rgb baselines, shrink-only). Run it with
+`npx vitest run lib/design-criteria.test.ts` — a new violation fails CI,
+so fix the file and delete its baseline row rather than adding rows.
+
 **Fix:** Replace with token: `text-primary`, `bg-border`, `rgb(var(--primary))`
+
+**Exempt (palette content, not chrome):** data-driven swatches rendering `rgb(\`...\`)`from a token data table — the magazine`Swatch`displays the raw triple as mono text +`aria-label`, so the literal *is* the content being documented. Literal `rgb('...')`/`rgb("...")`in style props are violations: wrap the scope in a token class (e.g.`.magazine-dark-preview`re-declares`html.dark`values) and use`rgb(var(--token))`.
 
 ### Arbitrary Spacing
 
@@ -101,34 +124,79 @@ grep -rn 'style={{' apps/web/ --include="*.tsx"
 
 **Fix:** Use Tailwind classes instead
 
+### Stock Tailwind Palette (AI-Slop Rainbow)
+
+The single biggest palette leak: pages importing Tailwind's default color wheel and washing out Noir Violet. This found 367 instances across 35 pages, concentrated in `consciousness/*`.
+
+```bash
+# All of these must be zero before a UI commit
+grep -rEo '(bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple)-(50|100|200|300|400|500|600|700|800|900|950)' \
+  apps/web/ --include="*.tsx" --include="*.css" | wc -l
+```
+
+**Fix:** semantic utility → `text-success`, `bg-warning`, `text-destructive`, `text-primary`, `border-border`. Distinct-hue series → `var(--chart-N)`.
+
+> **Do not flag the Wine Wash.** `ActiveModelBanner`'s `bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]` (and its `ActiveModelBannerSkeleton`), plus the `.sl-sidebar-surface` / `.sl-mobile-header` radial washes, are signature. They're token-tinted at 3–10% opacity. The rainbow ban targets stock-hue utilities (any `from-green-*`, full-opacity vivid gradients, `bg-gradient-to-*` with stock palette hues), never these.
+
+### Hardcoded Chart / List Color Constants
+
+```bash
+# Hex constants at top of a component (chart series, per-item maps)
+grep -rn "': '#" apps/web/ --include="*.tsx" | grep -v '.test.'
+```
+
+**Fix:** `{ a: 'var(--chart-1)' }`, `{ ok: 'var(--success)' }`, `{ bad: 'var(--destructive)' }`.
+
+### Dashboard Card Soup
+
+```bash
+# Count plain-card sections per file — 5+ plain <Card> in a row, no KpiGrid, is a flag
+grep -rEc '<Card>' apps/web/app/\(app\)/ --include="page.tsx" | sort -t: -k2 -rn | head
+```
+
+**Fix:** `KpiGrid` + `StatCard` for metrics, `SectionHeader` for grouping, `FoldSection` for secondary controls, `StatusDot` for live state, actions in `headerRight`.
+
 ## Component Checklist
 
 Before committing any UI component, verify:
 
-| Check | Pass |
-|-------|------|
-| Colors use tokens (no hex, no rgb without var) | |
-| Typography follows scale (no text-lg in body) | |
-| Spacing uses system (no arbitrary px values) | |
-| Interactive elements have hover states | |
-| Focus states use ring-2 + ring-offset-2 | |
-| Disabled states use opacity-40 | |
-| Cards use CardHeader/CardTitle/CardContent | |
-| Page uses `sl-page mx-auto max-w-4xl` | |
-| No inline styles | |
-| No console.log in production | |
-| Component has TypeScript interface for props | |
-| Component has test file | |
+| Check                                                                | Pass |
+| -------------------------------------------------------------------- | ---- |
+| Colors use tokens (no hex, no rgb without var)                       |      |
+| No stock Tailwind palette utils (`text-green-500`, `bg-red-400`…)    |      |
+| Chart series / progress bars use `var(--chart-N)` or semantic tokens |      |
+| Typography follows scale (no text-lg in body)                        |      |
+| Spacing uses system (no arbitrary px values)                         |      |
+| Interactive elements have hover states                               |      |
+| Focus states use ring-2 + ring-offset-2                              |      |
+| Disabled states use opacity-40                                       |      |
+| Metrics use `KpiGrid` + `StatCard`, not raw `Card` + `text-2xl`      |      |
+| Actions in `PageContainer headerRight`, not a body card              |      |
+| Secondary controls use `FoldSection`                                 |      |
+| Live state uses `StatusDot` (pulse)                                  |      |
+| Cards use CardHeader/CardTitle/CardContent                           |      |
+| Page uses `sl-page mx-auto max-w-4xl`                                |      |
+| No inline styles                                                     |      |
+| No console.log in production                                         |      |
+| Component has TypeScript interface for props                         |      |
+| Component has test file                                              |      |
 
 ## Anti-Patterns
 
-| Anti-Pattern | Fix |
-|-------------|-----|
-| `text-gray-500` | `text-muted-foreground` |
-| `bg-white` | `bg-card` |
-| `border-gray-200` | `border-border` |
-| `text-lg` in page body | `text-sm` or `text-base` |
-| `px-8 py-6` on page | `sl-page` class |
-| `rounded-lg` everywhere | Use appropriate radius for context |
-| No hover on button | Add `hover:bg-primary/90` |
-| Focus without ring | Add `focus-visible:ring-2 focus-visible:ring-ring` |
+| Anti-Pattern                                                        | Fix                                                                    |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `text-gray-500`                                                     | `text-muted-foreground`                                                |
+| `bg-white`                                                          | `bg-card`                                                              |
+| `border-gray-200`                                                   | `border-border`                                                        |
+| `text-green-500` / `bg-red-400` / `text-indigo-600` (stock palette) | `text-success` / `bg-destructive` / `text-primary` or `var(--chart-N)` |
+| `#6366f1` / `#22c55e` in chart series / progress bars               | `var(--chart-1)` / `bg-success`                                        |
+| `const COLORS = { k: '#hex' }` in a component                       | `{ k: 'var(--chart-N)' }`                                              |
+| `text-lg` in page body                                              | `text-sm` or `text-base`                                               |
+| `px-8 py-6` on page                                                 | `sl-page` class                                                        |
+| `rounded-lg` everywhere                                             | Use appropriate radius for context                                     |
+| Stat cards as raw `Card` + `text-2xl`                               | `KpiGrid` + `StatCard`                                                 |
+| "Actions" card in body                                              | `PageContainer headerRight`                                            |
+| Five flat cards with no hierarchy                                   | `KpiGrid`/`SectionHeader` or rethink layout                            |
+| Live dot via `bg-green-400` in a card                               | `StatusDot` (`tone="success" pulse showLabel`)                         |
+| No hover on button                                                  | Add `hover:bg-primary/90`                                              |
+| Focus without ring                                                  | Add `focus-visible:ring-2 focus-visible:ring-ring`                     |

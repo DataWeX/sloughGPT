@@ -1,11 +1,21 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi, afterEach } from 'vitest'
+import '@testing-library/jest-dom/vitest'
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 
 import { SimpleTooltip, Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
+import { Button } from './button'
 
 function stubLayout() {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    top: 0, bottom: 0, left: 0, right: 100, width: 100, height: 40, x: 0, y: 0, toJSON: () => ({}),
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 100,
+    width: 100,
+    height: 40,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
   } as DOMRect)
 }
 
@@ -46,6 +56,60 @@ describe('Tooltip', () => {
     const trigger = screen.getByTestId('trigger')
     expect(trigger.hasAttribute('aschild')).toBe(false)
     expect(trigger.hasAttribute('asChild')).toBe(false)
+  })
+
+  it('merges into the child element with asChild (single button, no nesting)', () => {
+    const { container } = render(
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button data-testid="trigger" className="mine">
+            Child
+          </button>
+        </TooltipTrigger>
+        <TooltipContent data-testid="content">Tip text</TooltipContent>
+      </Tooltip>,
+    )
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    const trigger = screen.getByTestId('trigger')
+    expect(trigger.tagName).toBe('BUTTON')
+    expect(trigger.classList.contains('mine')).toBe(true)
+    expect(trigger.textContent).toBe('Child')
+  })
+
+  it('does not wrap a Button child in a nested button when asChild', () => {
+    const { container } = render(
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button disabled data-testid="trigger">
+            Go
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent data-testid="content">Tip text</TooltipContent>
+      </Tooltip>,
+    )
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    const trigger = screen.getByTestId('trigger')
+    expect(trigger.tagName).toBe('BUTTON')
+    expect(trigger).toBeDisabled()
+    expect(trigger.getAttribute('aria-describedby')).toBeTruthy()
+  })
+
+  it('opens on hover when the trigger is a custom element via asChild', () => {
+    vi.useFakeTimers()
+    stubLayout()
+    render(
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild>
+          <button data-testid="trigger">Hover</button>
+        </TooltipTrigger>
+        <TooltipContent data-testid="content">Tip text</TooltipContent>
+      </Tooltip>,
+    )
+    fireEvent.mouseOver(screen.getByTestId('trigger'))
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(queryContent()).toBeTruthy()
   })
 
   it('recomputes position when opened from the start', () => {
@@ -256,14 +320,27 @@ describe('Tooltip', () => {
 })
 
 describe('SimpleTooltip', () => {
-  it('wraps the child in a trigger button', () => {
-    render(
+  it('merges into the child element as the trigger (no nested wrapper)', () => {
+    const { container } = render(
       <SimpleTooltip content="Copy">
-        <span>Button</span>
+        <span data-testid="child-trigger">Button</span>
       </SimpleTooltip>,
     )
-    const trigger = screen.getByText('Button').closest('button')
-    expect(trigger).toBeTruthy()
+    expect(container.querySelectorAll('button')).toHaveLength(0)
+    const trigger = screen.getByTestId('child-trigger')
+    expect(trigger.tagName).toBe('SPAN')
+    expect(trigger.closest('button')).toBeNull()
+    expect(trigger.getAttribute('aria-describedby')).toBeTruthy()
+  })
+
+  it('keeps a single button when given a Button child', () => {
+    const { container } = render(
+      <SimpleTooltip content="Copy">
+        <Button data-testid="child-trigger">Go</Button>
+      </SimpleTooltip>,
+    )
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    expect(screen.getByTestId('child-trigger').tagName).toBe('BUTTON')
   })
 
   it('shows content on hover', () => {
@@ -281,5 +358,141 @@ describe('SimpleTooltip', () => {
     const content = document.body.querySelector('[role="tooltip"]')!
     expect(content).toBeTruthy()
     expect(content.textContent).toContain('Copy')
+  })
+})
+
+/* ── Geometry contract added by card 73ad1c78 (tooltip/badge audit) ──────
+   - positioned from real trigger/content rects, honoring side AND align
+   - flips to the opposite side when the preferred side has no room
+   - never lets its (duration-150) transition tween the position */
+
+const ZERO: DOMRect = {
+  x: 0,
+  y: 0,
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: 0,
+  height: 0,
+  toJSON: () => ({}),
+}
+
+const CONTENT_RECT: DOMRect = { ...ZERO, width: 100, height: 40 }
+
+/** Per-trigger rects; the tooltip content is matched by role. */
+const triggerRects = new Map<Element, DOMRect>()
+
+function rect(partial: Partial<DOMRect>): DOMRect {
+  return { ...ZERO, ...partial, toJSON: () => ({}) }
+}
+
+function renderTooltip(
+  props: {
+    side?: 'top' | 'right' | 'bottom' | 'left'
+    align?: 'start' | 'center' | 'end'
+    delayDuration?: number
+  } = {},
+) {
+  const out = render(
+    <Tooltip delayDuration={props.delayDuration ?? 0}>
+      <TooltipTrigger data-testid="trigger">Info</TooltipTrigger>
+      <TooltipContent side={props.side} align={props.align}>
+        Clones a GitHub repo.
+      </TooltipContent>
+    </Tooltip>,
+  )
+  const trigger = screen.getByTestId('trigger')
+  return { ...out, trigger }
+}
+
+describe('TooltipContent positioning (card 73ad1c78)', () => {
+  beforeEach(() => {
+    triggerRects.clear()
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.getAttribute('role') === 'tooltip') return CONTENT_RECT
+      return triggerRects.get(this) ?? ZERO
+    })
+  })
+
+  it('places a top-side tooltip above the trigger, center-aligned', () => {
+    const { trigger } = renderTooltip({ side: 'top' })
+    triggerRects.set(
+      trigger,
+      rect({ top: 400, bottom: 450, left: 300, right: 500, width: 200, height: 50 }),
+    )
+    fireEvent.focus(trigger)
+
+    const tip = screen.getByRole('tooltip')
+    // side=top: above trigger minus 8px offset; center: trigger center - half content width
+    expect(tip.style.top).toBe(`${400 - 40 - 8}px`) // 352px
+    expect(tip.style.left).toBe(`${300 + 100 - 50}px`) // 350px
+  })
+
+  it('honors align="start" (left edges flush)', () => {
+    const { trigger } = renderTooltip({ side: 'top', align: 'start' })
+    triggerRects.set(
+      trigger,
+      rect({ top: 400, bottom: 450, left: 300, right: 500, width: 200, height: 50 }),
+    )
+    fireEvent.focus(trigger)
+
+    const tip = screen.getByRole('tooltip')
+    expect(tip.style.left).toBe('300px')
+  })
+
+  it('honors align="end" (right edges flush)', () => {
+    const { trigger } = renderTooltip({ side: 'top', align: 'end' })
+    triggerRects.set(
+      trigger,
+      rect({ top: 400, bottom: 450, left: 300, right: 500, width: 200, height: 50 }),
+    )
+    fireEvent.focus(trigger)
+
+    const tip = screen.getByRole('tooltip')
+    expect(tip.style.left).toBe(`${300 + 200 - 100}px`) // 400px
+  })
+
+  it('flips to the bottom when the top side has no room', () => {
+    const { trigger } = renderTooltip({ side: 'top' })
+    // trigger near the viewport top: only 10px above < content height 40px
+    triggerRects.set(
+      trigger,
+      rect({ top: 10, bottom: 60, left: 300, right: 500, width: 200, height: 50 }),
+    )
+    fireEvent.focus(trigger)
+
+    const tip = screen.getByRole('tooltip')
+    expect(tip.style.top).toBe(`${60 + 8}px`) // below the trigger: 68px
+  })
+
+  it('keeps the preferred side when it fits', () => {
+    const { trigger } = renderTooltip({ side: 'bottom' })
+    triggerRects.set(
+      trigger,
+      rect({ top: 400, bottom: 450, left: 300, right: 500, width: 200, height: 50 }),
+    )
+    fireEvent.focus(trigger)
+
+    const tip = screen.getByRole('tooltip')
+    expect(tip.style.top).toBe(`${450 + 8}px`) // 458px, still below
+  })
+
+  it('disables transitions on the portal so position never tweens from the corner', () => {
+    const { trigger } = renderTooltip()
+    fireEvent.focus(trigger)
+    const tip = screen.getByRole('tooltip') as HTMLElement
+    expect(tip.style.transition).toBe('none')
+    expect(tip.style.position).toBe('absolute')
+  })
+
+  it('unmounts content when closed', () => {
+    const { trigger } = renderTooltip()
+    fireEvent.focus(trigger)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    fireEvent.blur(trigger)
+    expect(screen.queryByRole('tooltip')).toBeNull()
   })
 })

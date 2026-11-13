@@ -67,7 +67,10 @@ export const MessageTranslation = memo(function MessageTranslation({
       <Button
         variant="ghost"
         size="sm"
-        className={cn('text-[10px] h-5 text-muted-foreground/50 hover:text-muted-foreground', className)}
+        className={cn(
+          'text-[10px] h-5 text-muted-foreground/50 hover:text-muted-foreground',
+          className,
+        )}
         onClick={handleOpen}
       >
         Translate
@@ -79,13 +82,19 @@ export const MessageTranslation = memo(function MessageTranslation({
     <div className={cn('mt-1 rounded border bg-muted/30 p-2 space-y-2', className)}>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium text-muted-foreground">Translate to</span>
-        <Button variant="ghost" size="icon-sm" className="h-4 w-4" onClick={handleClose} aria-label="Close translation">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-4 w-4"
+          onClick={handleClose}
+          aria-label="Close translation"
+        >
           <IconX className="h-2.5 w-2.5" />
         </Button>
       </div>
 
       <div className="flex flex-wrap gap-1">
-        {LANGUAGES.map(lang => (
+        {LANGUAGES.map((lang) => (
           <button
             key={lang.code}
             type="button"
@@ -95,6 +104,7 @@ export const MessageTranslation = memo(function MessageTranslation({
               targetLang === lang.code
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
           >
             {lang.name}
@@ -112,9 +122,7 @@ export const MessageTranslation = memo(function MessageTranslation({
         {loading ? 'Translating...' : 'Translate'}
       </Button>
 
-      {error && (
-        <StatusBanner variant="error" message={error} dismissible={false} />
-      )}
+      {error && <StatusBanner variant="error" message={error} dismissible={false} />}
 
       {translated && (
         <div className="rounded bg-background p-2">

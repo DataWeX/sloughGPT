@@ -3,18 +3,20 @@ SloughGPT SDK - HTTP Client with Request/Response Handling
 Request sanitization, interceptors, and response handlers.
 """
 
-import time
-import re
 import logging
-from typing import Optional, Dict, Any, Callable, List
+import re
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
-import threading
+from typing import Any
 
 
 @dataclass
 class RequestConfig:
     """Request configuration."""
+
     timeout: int = 30
     retry_count: int = 3
     retry_backoff: float = 1.5
@@ -25,9 +27,10 @@ class RequestConfig:
 @dataclass
 class RequestContext:
     """Context for a request."""
+
     method: str
     url: str
-    headers: Dict[str, str]
+    headers: dict[str, str]
     body: Any
     timestamp: float
     attempt: int = 1
@@ -36,8 +39,9 @@ class RequestContext:
 @dataclass
 class ResponseContext:
     """Context for a response."""
+
     status_code: int
-    headers: Dict[str, str]
+    headers: dict[str, str]
     body: Any
     elapsed_ms: float
     request: RequestContext
@@ -47,8 +51,12 @@ class Sanitizer:
     """Sanitize requests and responses."""
 
     SENSITIVE_HEADERS = {
-        "authorization", "cookie", "x-api-key",
-        "x-auth-token", "x-access-token", "proxy-authorization"
+        "authorization",
+        "cookie",
+        "x-api-key",
+        "x-auth-token",
+        "x-access-token",
+        "proxy-authorization",
     }
 
     SENSITIVE_PATTERNS = [
@@ -56,16 +64,13 @@ class Sanitizer:
         (r'api[_-]?key["\']?\s*[:=]\s*["\'][^"\']+["\']', 'api_key":"***"'),
         (r'token["\']?\s*[:=]\s*["\'][^"\']+["\']', 'token":"***"'),
         (r'secret["\']?\s*[:=]\s*["\'][^"\']+["\']', 'secret":"***"'),
-        (r'bearer\s+[a-zA-Z0-9._-]+', 'Bearer ***'),
+        (r"bearer\s+[a-zA-Z0-9._-]+", "Bearer ***"),
     ]
 
     @classmethod
-    def sanitize_headers(cls, headers: Dict[str, str]) -> Dict[str, str]:
+    def sanitize_headers(cls, headers: dict[str, str]) -> dict[str, str]:
         """Remove sensitive headers."""
-        return {
-            k: "***" if k.lower() in cls.SENSITIVE_HEADERS else v
-            for k, v in headers.items()
-        }
+        return {k: "***" if k.lower() in cls.SENSITIVE_HEADERS else v for k, v in headers.items()}
 
     @classmethod
     def sanitize_body(cls, body: Any) -> Any:
@@ -119,7 +124,7 @@ class RequestInterceptor:
 
     def __init__(self):
         """Initialize interceptor."""
-        self._interceptors: List[Callable] = []
+        self._interceptors: list[Callable] = []
         self._lock = threading.Lock()
 
     def add(self, interceptor: Callable) -> "RequestInterceptor":
@@ -151,16 +156,14 @@ class RequestInterceptor:
 class LoggingInterceptor:
     """Log requests and responses."""
 
-    def __init__(self, logger: Optional[logging.Logger] = None, level: int = logging.INFO):
+    def __init__(self, logger: logging.Logger | None = None, level: int = logging.INFO):
         self.logger = logger or logging.getLogger("slo_sdk.http")
         self.level = level
 
     def __call__(self, context: RequestContext) -> RequestContext:
         """Log request."""
         self.logger.log(
-            self.level,
-            f"Request: {context.method} {context.url} "
-            f"(attempt {context.attempt})"
+            self.level, f"Request: {context.method} {context.url} (attempt {context.attempt})"
         )
         return context
 
@@ -185,7 +188,7 @@ class RetryInterceptor:
         max_retries: int = 3,
         backoff_factor: float = 1.5,
         max_delay: float = 30.0,
-        retry_on: Optional[List[int]] = None,
+        retry_on: list[int] | None = None,
     ):
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
@@ -200,7 +203,7 @@ class RetryInterceptor:
 
     def get_delay(self, attempt: int) -> float:
         """Calculate backoff delay."""
-        delay = self.backoff_factor ** attempt
+        delay = self.backoff_factor**attempt
         return min(delay, self.max_delay)
 
 
@@ -219,7 +222,7 @@ class ResponseHandler:
 
     def __init__(self):
         """Initialize response handler."""
-        self._handlers: List[Callable] = []
+        self._handlers: list[Callable] = []
         self._lock = threading.Lock()
 
     def add(self, handler: Callable) -> "ResponseHandler":
@@ -263,6 +266,7 @@ class JSONParser:
         if context.body and isinstance(context.body, str):
             try:
                 import json
+
                 context.body = json.loads(context.body)
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -275,7 +279,7 @@ class RetryHandler:
     def __init__(
         self,
         interceptor: RetryInterceptor,
-        on_retry: Optional[Callable] = None,
+        on_retry: Callable | None = None,
     ):
         self.interceptor = interceptor
         self.on_retry = on_retry
@@ -293,7 +297,7 @@ def with_retry(
     max_retries: int = 3,
     backoff: float = 1.5,
     max_delay: float = 30.0,
-    retry_on: Optional[List[int]] = None,
+    retry_on: list[int] | None = None,
 ):
     """
     Decorator for retry logic.
@@ -321,13 +325,13 @@ def with_retry(
                         return response
 
                     if attempt < max_retries - 1:
-                        delay = min(backoff ** attempt, max_delay)
+                        delay = min(backoff**attempt, max_delay)
                         time.sleep(delay)
 
                 except Exception as e:
                     last_exception = e
                     if attempt < max_retries - 1:
-                        delay = min(backoff ** attempt, max_delay)
+                        delay = min(backoff**attempt, max_delay)
                         time.sleep(delay)
 
             if last_exception:
@@ -336,11 +340,13 @@ def with_retry(
             return response
 
         return wrapper
+
     return decorator
 
 
 def with_timeout(timeout: int = 30):
     """Decorator to add timeout to requests."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -358,19 +364,20 @@ def with_timeout(timeout: int = 30):
                 signal.alarm(0)
 
             return result
+
         return wrapper
+
     return decorator
 
 
 def sanitize_request(func: Callable) -> Callable:
     """Decorator to sanitize request data."""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
-        sanitized_kwargs = {
-            k: Sanitizer.sanitize_body(v)
-            for k, v in kwargs.items()
-        }
+        sanitized_kwargs = {k: Sanitizer.sanitize_body(v) for k, v in kwargs.items()}
         return func(*args, **sanitized_kwargs)
+
     return wrapper
 
 
@@ -394,8 +401,8 @@ class HTTPClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
-        config: Optional[RequestConfig] = None,
-        api_key: Optional[str] = None,
+        config: RequestConfig | None = None,
+        api_key: str | None = None,
     ):
         """Initialize HTTP client."""
         self.base_url = base_url.rstrip("/")
@@ -414,6 +421,7 @@ class HTTPClient:
         """Get or create session."""
         if self._session is None:
             import requests
+
             self._session = requests.Session()
             self._session.headers.update({"User-Agent": "SloughGPT-SDK/1.0"})
         return self._session
@@ -422,7 +430,7 @@ class HTTPClient:
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         body: Any = None,
     ) -> RequestContext:
         """Create request context."""
@@ -439,7 +447,7 @@ class HTTPClient:
         self,
         request: RequestContext,
         status_code: int,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         body: Any,
         elapsed_ms: float,
     ) -> ResponseContext:
@@ -453,16 +461,14 @@ class HTTPClient:
         )
 
     def request(
-        self,
-        method: str,
-        endpoint: str,
-        headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        self, method: str, endpoint: str, headers: dict[str, str] | None = None, **kwargs
     ) -> Any:
         """Make HTTP request with handling."""
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
-        context = self._create_context(method, url, headers, kwargs.get("json") or kwargs.get("data"))
+        context = self._create_context(
+            method, url, headers, kwargs.get("json") or kwargs.get("data")
+        )
         context = self.interceptors.intercept(context)
 
         session = self._get_session()
@@ -470,11 +476,13 @@ class HTTPClient:
 
         start_time = time.time()
 
-        retry_handler = RetryHandler(RetryInterceptor(
-            max_retries=self.config.retry_count,
-            backoff_factor=self.config.retry_backoff,
-            max_delay=self.config.retry_max_delay,
-        ))
+        retry_handler = RetryHandler(
+            RetryInterceptor(
+                max_retries=self.config.retry_count,
+                backoff_factor=self.config.retry_backoff,
+                max_delay=self.config.retry_max_delay,
+            )
+        )
 
         last_response = None
 
@@ -487,7 +495,7 @@ class HTTPClient:
                     url=context.url,
                     timeout=self.config.timeout,
                     verify=self.config.validate_ssl,
-                    **kwargs
+                    **kwargs,
                 )
 
                 elapsed_ms = (time.time() - start_time) * 1000

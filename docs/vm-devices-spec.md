@@ -27,12 +27,14 @@ class DeviceTable:
 ```
 
 **Operations:**
+
 - `register(device, type)` → add device to table
 - `open(name, mode)` → alloc fd, return int
 - `close(fd)` → free fd
 - `ioctl(fd, command, *args)` → route to device
 
 **Bit operations:**
+
 - `_alloc_fd()` → bit scan for free fd
 - `_free_fd(fd)` → bit clear
 - `_fd_is_open(fd)` → bit test
@@ -72,6 +74,7 @@ CUSTOM    = 0       # no type
 Standalone compute hardware — wraps numpy.
 
 **59 commands via ioctl:**
+
 - Linear algebra: MATMUL, DOT, INV, SVD, EIG
 - Activations: RELU, SIGMOID, TANH, SOFTMAX, GELU, SILU, ELU, SELU
 - Arithmetic: ADD, SUB, MUL, DIV, NEG, ABS, POW, SQRT, EXP, LOG
@@ -86,6 +89,7 @@ Standalone compute hardware — wraps numpy.
 - Utility: CLIP_GRAD_NORM, DROPOUT, EMBEDDING, LINEAR
 
 **Interface:**
+
 ```python
 tensor = TensorDevice()
 result = tensor.ioctl("MATMUL", a, b)  # → SyscallResult
@@ -93,22 +97,52 @@ result = tensor.ioctl("MATMUL", a, b)  # → SyscallResult
 
 ## NPUDevice
 
-Standalone neural processing hardware — uses TensorDevice.
+The ONE NPU driver — `domain/shell/_internal/kernel_npu.py`. The former
+standalone `npu_device.NPUDevice` is a re-export of it, and `from domain.shell
+import NPUDevice` resolves to the same class, so every seam (VM `DEV_CALL`,
+`/dev/npu`, CLI, shell) shares one device and one model registry: a model
+loaded from any seam is visible from every other.
 
-**13 commands via ioctl:**
+**18 commands via ioctl** (`PIPE` and `PIPELINE` are aliases of one operation):
+
 - INFO, LIST_COMMANDS
 - LOAD, UNLOAD, CALL
-- BATCH, PIPELINE, PROFILE, QUANTIZE
+- BATCH, PIPE, PIPELINE, PROFILE, QUANTIZE
 - CHECKPOINT_SAVE, CHECKPOINT_LOAD
+- TOKENIZE, DETOKENIZE, EMBED, FORWARD
 - MEMORY, COMPUTE
 
+**Two faces of one contract:**
+
+- `call(method, *args)` — guest/VM face: lowercase, returns the value,
+  raises `DeviceFault` on failure.
+- `ioctl(command, *args)` — kernel face: uppercase, returns `SyscallResult`,
+  never raises.
+
 **Interface:**
+
 ```python
+from domain.shell import NPUDevice
+
 npu = NPUDevice()
-result = npu.ioctl("LOAD", "/path/to/model.slnc")
-result = npu.ioctl("CALL", "model", "Hello")
-result = npu.ioctl("COMPUTE", "MATMUL", a, b)  # → TensorDevice
+npu.ioctl("LOAD", "/path/to/model.slnc", "model")   # path, name
+npu.ioctl("CALL", "model", "Hello", 50)             # max_tokens is honoured
+npu.ioctl("COMPUTE", "MATMUL", a, b)                # → TensorDevice
+
+# both historical __call__ shapes work:
+npu("model", "Hello")           # canonical (model_name, input)
+npu("Hello", model_name="model")  # standalone keyword shape
+
+# provider-level ops — same op on both faces. ioctl returns the dict;
+# the VM's DEV_CALL unwraps it to the bare value for the guest.
+npu.ioctl("TOKENIZE", "model", "Hello")    # → {"token_ids": [...], "count": n}
+npu.ioctl("EMBED", "model", "Hello")       # → {"embedding": ndarray, ...}
+npu.ioctl("FORWARD", "model", token_ids)   # → {"logits": ndarray, ...}
 ```
+
+**Boot:** `DaitRuntime.boot()` registers the very same instance
+`create_default_devices()` put in `_devices["npu"]`, behind its `NPUVMDevice`
+face — not a second copy. One device, one registry, both seams.
 
 ## SyscallResult
 
@@ -144,9 +178,9 @@ class SyscallResult:
 ## Usage
 
 ```python
-from domains.shell.kernel_devices import DeviceTable, DeviceType
-from domains.shell.tensor_device import TensorDevice
-from domains.shell.npu_device import NPUDevice
+from domain.shell._internal.kernel_devices import DeviceTable, DeviceType
+from domain.shell._internal.tensor_device import TensorDevice
+from domain.shell import NPUDevice
 
 # Create table
 table = DeviceTable()

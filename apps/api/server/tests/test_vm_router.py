@@ -11,11 +11,13 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
-from routers.vm import router as vm_router
+from routers.shell import router as shell_router
 
 from apps.api.server.main import app
 
-app.include_router(vm_router)
+# Route-map card 6/7: vm.py merged into shell.py — the aggregate facade
+# carries both the /shell and /vm halves.
+app.include_router(shell_router)
 client = TestClient(app)
 
 
@@ -124,7 +126,9 @@ HLT"""
             def start(self, config_json):
                 return 1
 
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         source = """[BITS 32]
 MOV EBX, cfg
 MOV EAX, 28
@@ -147,7 +151,9 @@ cfg: db '{}', 0"""
                 calls.append(config_json)
                 return 1
 
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         source = """[BITS 32]
 MOV EBX, cfg
 MOV EAX, 28
@@ -173,7 +179,7 @@ cfg: db '{}', 0"""
 
     def test_run_captures_training_result(self, monkeypatch):
         """SYS_TRAIN_GET_RESULT bytes are surfaced as training_result in the response."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[1] = {
@@ -182,7 +188,7 @@ cfg: db '{}', 0"""
             "progress": 1.0,
             "_result_data": {"status": "completed", "loss": 1.5, "current_epoch": 2},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         source = """[BITS 32]
 MOV EBX, 1
@@ -207,7 +213,7 @@ HLT"""
 
     def test_run_training_result_null_without_get_result(self, monkeypatch):
         """Runs without SYS_TRAIN_GET_RESULT leave training_result null."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[1] = {
@@ -216,7 +222,7 @@ HLT"""
             "progress": 1.0,
             "_result_data": {"status": "completed", "loss": 1.5},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         source = "[BITS 32]\nMOV EBX, 1\nMOV EAX, 29\nINT 0x80\nHLT"
         resp = client.post("/vm/run", json={"source": source, "role": "admin"})
@@ -225,7 +231,7 @@ HLT"""
 
     def test_training_job_status_endpoint(self, monkeypatch):
         """GET /vm/training/jobs/{id} returns bridge-tracked job status."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[7] = {
@@ -234,7 +240,7 @@ HLT"""
             "progress": 1.0,
             "_result_data": {"status": "completed", "loss": 1.2},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.get("/vm/training/jobs/7")
         assert resp.status_code == 200
@@ -248,7 +254,7 @@ HLT"""
 
     def test_training_job_status_result_null_when_not_completed(self, monkeypatch):
         """GET /vm/training/jobs/{id} leaves result null for running jobs."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[7] = {
@@ -257,7 +263,7 @@ HLT"""
             "progress": 0.5,
             "_result_data": {"status": "completed", "loss": 1.2},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.get("/vm/training/jobs/7")
         assert resp.status_code == 200
@@ -265,22 +271,22 @@ HLT"""
 
     def test_training_job_status_404(self, monkeypatch):
         """GET /vm/training/jobs/{id} returns 404 for unknown job."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.get("/vm/training/jobs/999")
         assert resp.status_code == 404
 
     def test_training_job_stop_endpoint(self, monkeypatch):
         """POST /vm/training/jobs/{id}/stop delegates to the bridge."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[7] = {"api_job_id": "api-7", "status": "running"}
         bridge.stop = lambda job_id: True  # noqa: E731 — avoid network in wiring test
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.post("/vm/training/jobs/7/stop")
         assert resp.status_code == 200
@@ -290,11 +296,85 @@ HLT"""
 
     def test_training_job_stop_404(self, monkeypatch):
         """POST /vm/training/jobs/{id}/stop returns 404 for unknown job."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
         bridge.stop = lambda job_id: False  # noqa: E731
 
         resp = client.post("/vm/training/jobs/999/stop")
         assert resp.status_code == 404
+
+
+class TestShellFacadeAbsorbsVm:
+    """Route-map card 6/7 (20261101_154057): routers/vm.py merged into routers/shell.py.
+
+    The shell facade must own the byte-identical /vm/* route set (the
+    /developer page's VM tab + the §12 training-launch journey keep their
+    API surface), and the routers.vm module must be gone.
+    """
+
+    def test_shell_facade_owns_vm_routes(self):
+        """Aggregate shell router serves all five /vm/* paths unchanged."""
+        from fastapi import FastAPI
+        from routers.shell import router as shell_router
+
+        facade = FastAPI()
+        facade.include_router(shell_router)
+        vm_paths = sorted(p for p in facade.openapi()["paths"] if p.startswith("/vm"))
+        assert vm_paths == [
+            "/vm/builtins",
+            "/vm/info",
+            "/vm/run",
+            "/vm/training/jobs/{job_id}",
+            "/vm/training/jobs/{job_id}/stop",
+        ]
+
+    def test_shell_facade_keeps_shell_routes(self):
+        """The /shell half of the facade is untouched by the merge."""
+        from fastapi import FastAPI
+        from routers.shell import router as shell_router
+
+        facade = FastAPI()
+        facade.include_router(shell_router)
+        shell_paths = sorted(p for p in facade.openapi()["paths"] if p.startswith("/shell"))
+        assert shell_paths == ["/shell/exec", "/shell/exec/stream"]
+
+    def test_shell_facade_vm_handler_names(self):
+        """Handler function names survive the merge (route names, per path)."""
+        from fastapi import FastAPI
+        from routers.shell import router as shell_router
+
+        def real_routes(routes):
+            """Resolve lazy _IncludedRouter placeholders (FastAPI 0.141)."""
+            out = []
+            for r in routes:
+                inner = getattr(r, "routes", None)
+                if inner:
+                    out.extend(real_routes(inner))
+                elif hasattr(r, "original_router"):
+                    out.extend(real_routes(r.original_router.routes))
+                else:
+                    out.append(r)
+            return out
+
+        facade = FastAPI()
+        facade.include_router(shell_router)
+        vm_handlers = {
+            r.path: r.name
+            for r in real_routes(facade.routes)
+            if getattr(r, "path", "").startswith("/vm")
+        }
+        assert vm_handlers == {
+            "/vm/builtins": "list_builtins",
+            "/vm/info": "vm_info",
+            "/vm/run": "run_assembly",
+            "/vm/training/jobs/{job_id}": "training_job_status",
+            "/vm/training/jobs/{job_id}/stop": "training_job_stop",
+        }
+
+    def test_routers_vm_module_is_gone(self):
+        """routers.vm no longer exists as a module (merged, not wrapped)."""
+        import importlib.util
+
+        assert importlib.util.find_spec("routers.vm") is None

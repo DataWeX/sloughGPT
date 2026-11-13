@@ -1,8 +1,8 @@
 """Tests for the CLI framework built into cli.py."""
 
+import json
 import os
 import sys
-import json
 from pathlib import Path as StdPath
 from unittest.mock import patch
 
@@ -11,15 +11,31 @@ import pytest
 sys.path.insert(0, str(StdPath(__file__).resolve().parent.parent / "src"))
 
 # Import the framework from cli.py
-from cli import (
-    Choice, CliPath, Option, Argument, Context, Command, Group,
-    UsageError, BadParameter, _parse_args, _record_usage,
-    run, option, argument, pass_context, version_option, echo, confirm, group, command,
-    _TTY, _SUGGESTIONS,
+from core.framework import (
+    Argument,
+    BadParameter,
+    Choice,
+    CliPath,
+    Command,
+    Context,
+    Group,
+    Option,
+    UsageError,
+    argument,
+    confirm,
+    echo,
+    group,
+    option,
+    pass_context,
+    run,
+)
+from core.slo_cli import (
+    _parse_args,
+    _record_usage,
 )
 
-
 # ── Choice type ─────────────────────────────────────────────────────────
+
 
 class TestChoice:
     def test_valid_choice_case_insensitive(self):
@@ -42,6 +58,7 @@ class TestChoice:
 
 # ── Path type ───────────────────────────────────────────────────────────
 
+
 class TestPath:
     def test_basic(self):
         p = CliPath()
@@ -59,6 +76,7 @@ class TestPath:
 
 
 # ── Option ──────────────────────────────────────────────────────────────
+
 
 class TestOption:
     def test_primary_name(self):
@@ -84,6 +102,7 @@ class TestOption:
 
 # ── Argument ────────────────────────────────────────────────────────────
 
+
 class TestArgument:
     def test_required(self):
         arg = Argument("name", required=True)
@@ -96,6 +115,7 @@ class TestArgument:
 
 
 # ── Context ─────────────────────────────────────────────────────────────
+
 
 class TestContext:
     def test_ensure_object(self):
@@ -112,13 +132,16 @@ class TestContext:
     def test_invoke_callable(self):
         ctx = Context()
         called = []
+
         def my_func(x=1):
             called.append(x)
+
         ctx.invoke(my_func, x=42)
         assert called == [42]
 
 
 # ── Parser ──────────────────────────────────────────────────────────────
+
 
 class TestParser:
     def test_parse_options(self):
@@ -215,6 +238,7 @@ class TestParser:
 
 # ── Group ───────────────────────────────────────────────────────────────
 
+
 class TestGroup:
     def test_register_command(self):
         g = Group("test")
@@ -261,6 +285,7 @@ class TestGroup:
 
 # ── Decorators ──────────────────────────────────────────────────────────
 
+
 class TestDecorators:
     def test_option_decorator(self):
         @option("--host", default="localhost", help="Host")
@@ -306,6 +331,7 @@ class TestDecorators:
 
 # ── echo / confirm ──────────────────────────────────────────────────────
 
+
 class TestEcho:
     def test_echo(self, capsys):
         echo("hello")
@@ -340,11 +366,13 @@ class TestConfirm:
 
 # ── Usage tracking ──────────────────────────────────────────────────────
 
+
 class TestUsageTracking:
     def test_record_usage(self, tmp_path):
         usage_file = tmp_path / "usage.json"
-        import cli as _cli
-        with patch.object(_cli, "_USAGE_PATH", usage_file):
+        from core import slo_cli as _slo
+
+        with patch.object(_slo, "_USAGE_PATH", usage_file):
             _record_usage("model list")
             _record_usage("model list")
             _record_usage("train start")
@@ -355,6 +383,7 @@ class TestUsageTracking:
 
 
 # ── Group decorator (top-level) ─────────────────────────────────────────
+
 
 class TestGroupDecorator:
     def test_creates_group(self):
@@ -378,6 +407,7 @@ class TestGroupDecorator:
 
 
 # ── Run (integration) ──────────────────────────────────────────────────
+
 
 class TestRun:
     def test_run_help(self, capsys):
@@ -468,8 +498,10 @@ class TestRun:
 
         with patch("sys.argv", ["cli", "xyz"]):
             with patch("sys.stdin.isatty", return_value=False):
-                run(my_cli)
+                with pytest.raises(SystemExit) as ei:
+                    run(my_cli)
 
+        assert ei.value.code == 1
         captured = capsys.readouterr()
         assert "Unknown command" in captured.out
 
@@ -561,9 +593,11 @@ class TestRun:
 
 # ── Integration with real cli.py patterns ────────────────────────────────
 
+
 class TestRealPatterns:
     def test_cli_group_with_options(self, capsys):
         """Test group with subcommand that has options."""
+
         @group()
         def cli():
             pass
@@ -584,6 +618,7 @@ class TestRealPatterns:
 
     def test_subgroup_with_subcommands(self, capsys):
         """Test the model → list pattern used in cli.py."""
+
         @group(invoke_without_command=True)
         def cli():
             pass
@@ -611,14 +646,19 @@ class TestRealPatterns:
 
     def test_choice_type_in_option(self, capsys):
         """Test Choice type used in cli.py export format."""
+
         @group()
         def cli():
             pass
 
         @cli.command("export")
-        @option("--format", "-f", "fmt",
+        @option(
+            "--format",
+            "-f",
+            "fmt",
             type=Choice(["safetensors", "onnx", "gguf"]),
-            default="safetensors")
+            default="safetensors",
+        )
         def export(fmt):
             echo(f"Format: {fmt}")
 

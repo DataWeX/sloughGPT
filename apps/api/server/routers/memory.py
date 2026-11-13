@@ -1,17 +1,25 @@
 """Memory API router - inspect, search, store, and clear the auto-memory layer.
 
-Thin HTTP wrapper over ``domains.memory.memory_service`` (endpoints are
+Thin HTTP wrapper over ``domain.memory.memory_service`` (endpoints are
 adapters; all logic lives in core). Exposed so frontends and integrations can
 manage the memory store the chat loop writes to automatically.
 """
 
+from __future__ import annotations
+
 import logging
 
-from domains.memory.memory_service import get_memory_service
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.memory import get_memory_service
 
 logger = logging.getLogger("slo.api.memory")
 
@@ -54,6 +62,31 @@ class UpdateRequest(BaseModel):
         le=1.0,
         description="Optional importance score in [0, 1]; keeps existing when omitted.",
     )
+
+
+class SaveCardRequest(BaseModel):
+    """Body for POST /memory/cards/save."""
+
+    name: str | None = Field(default=None, description="Card name; auto-generated when omitted.")
+    overwrite: bool = Field(default=False, description="Replace an existing same-name card.")
+
+
+class LoadCardRequest(BaseModel):
+    """Body for POST /memory/cards/load."""
+
+    name: str = Field(..., min_length=1, description="Card to load.")
+    mode: str = Field(default="replace", description="'replace' (default) or 'merge'.")
+
+
+def _raise_card_error(result: dict) -> None:
+    """Map a failed card result dict to an HTTP error (never returns)."""
+    err = str(result.get("error") or "memory card operation failed")
+    code = str(result.get("error_code") or "")
+    if code == "not_found":
+        raise_error(err, "E_NOT_FOUND", status_code=404)
+    if code == "exists":
+        raise_error(err, "E_CONFLICT", status_code=409)
+    raise_error(err, "E_BAD_REQUEST", status_code=400)
 
 
 class MemoryRouter:
@@ -131,6 +164,31 @@ class MemoryRouter:
             "/archive/prune",
             self.archive_prune,
             methods=["POST"],
+            response_model=dict,
+        )
+        # Cards routes must precede the /{item_id} catch-alls (route shadowing).
+        self.router.add_api_route(
+            "/cards",
+            self.list_cards,
+            methods=["GET"],
+            response_model=dict,
+        )
+        self.router.add_api_route(
+            "/cards/save",
+            self.save_card,
+            methods=["POST"],
+            response_model=dict,
+        )
+        self.router.add_api_route(
+            "/cards/load",
+            self.load_card,
+            methods=["POST"],
+            response_model=dict,
+        )
+        self.router.add_api_route(
+            "/cards/{card_name}",
+            self.delete_card,
+            methods=["DELETE"],
             response_model=dict,
         )
         self.router.add_api_route(
@@ -268,8 +326,7 @@ class MemoryRouter:
         self, threshold: float | None = None, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Merge near-duplicate facts, keeping the longest in each cluster."""
-        from domains.memory.consolidation import plan_consolidation
-        from domains.memory.memory_config import MemoryConfig
+        from domain.memory import MemoryConfig, plan_consolidation
 
         svc = self._service()
         if threshold is None:
@@ -290,7 +347,7 @@ class MemoryRouter:
     @endpoint("memory.archive")
     def archive(self, limit: int | None = None) -> dict:
         """Return recent task-backed provenance archive records, newest first."""
-        from domains.memory.task_memory import list_archive
+        from domain.memory import list_archive
 
         if limit is None:
             limit = 20
@@ -301,7 +358,7 @@ class MemoryRouter:
     @endpoint("memory.archive_stats")
     def archive_stats(self) -> dict:
         """Summarize the task-backed provenance archive."""
-        from domains.memory.task_memory import archive_stats
+        from domain.memory import archive_stats
 
         return success_response(data=archive_stats())
 
@@ -310,11 +367,62 @@ class MemoryRouter:
         self, retain_days: float | None = None, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Delete archive records older than the retention window."""
-        from domains.memory.task_memory import prune_archive
+        from domain.memory import prune_archive
 
         removed = prune_archive(retain_days=retain_days)
         safe_audit_log("memory.archive_prune", resource="archive", detail=f"pruned={removed}")
         return success_response(data={"pruned": removed})
+
+    @endpoint("memory.cards")
+    def list_cards(self) -> dict:
+        """List saved memory cards, newest first (``valid`` = checksum ok)."""
+        result = self._service().list_cards()
+        if not result.get("ok"):
+            _raise_card_error(result)
+        return success_response(data={"cards": result["cards"], "total": len(result["cards"])})
+
+    @endpoint("memory.cards.save")
+    def save_card(
+        self, req: SaveCardRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Snapshot current long-term memory into a portable card file."""
+        result = self._service().save_card(name=req.name, overwrite=req.overwrite)
+        if not result.get("ok"):
+            _raise_card_error(result)
+        safe_audit_log(
+            "memory.cards.save",
+            resource=str(result["name"]),
+            detail=f"facts={result['facts_count']}",
+        )
+        return success_response(data=result)
+
+    @endpoint("memory.cards.load")
+    def load_card(
+        self, req: LoadCardRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Load a card back into memory (verified before any store mutation)."""
+        result = self._service().load_card(req.name, mode=req.mode)
+        if not result.get("ok"):
+            _raise_card_error(result)
+        safe_audit_log(
+            "memory.cards.load",
+            resource=str(result["name"]),
+            detail=f"mode={result['mode']} imported={result['imported']}",
+        )
+        return success_response(data=result)
+
+    @endpoint("memory.cards.delete")
+    def delete_card(
+        self, card_name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Delete a saved memory card (memory store untouched)."""
+        result = self._service().delete_card(card_name)
+        if not result.get("ok"):
+            _raise_card_error(result)
+        if not result.get("deleted"):
+            raise_error(f"card not found: {card_name}", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("memory.cards.delete", resource=card_name, detail="deleted")
+        return success_response(data={"deleted": True, "name": card_name})
 
 
 router = MemoryRouter().router

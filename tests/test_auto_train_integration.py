@@ -1,8 +1,8 @@
-import pytest
-import asyncio
 import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch
+
 import httpx
+import pytest
 
 pytestmark = pytest.mark.slow
 
@@ -11,6 +11,7 @@ def _server_available() -> bool:
     """Check if the API server is running on localhost:8000."""
     try:
         import urllib.request
+
         req = urllib.request.Request("http://localhost:8000/health")
         resp = urllib.request.urlopen(req, timeout=2)
         return resp.status == 200
@@ -32,8 +33,21 @@ class TestAutoTrainIntegration:
         async with httpx.AsyncClient(timeout=300.0) as client:
             start_resp = await client.post(
                 f"{api_base_url}/auto-train/start",
-                json={"teacher_model": "gpt2", "temperature": 0.8, "epochs": 2, "soul_name": "assistant"}
+                json={
+                    "teacher_model": "gpt2",
+                    "temperature": 0.8,
+                    "epochs": 2,
+                    "soul_name": "assistant",
+                },
             )
+            if start_resp.status_code == 404:
+                # /auto-train/{start,stream,stop} was removed by
+                # c02788ca4 (109-file training+shell cleanup); auto-train
+                # is config-driven now (/settings/training/auto-train/*)
+                # and the successor /training router (training/router.py,
+                # committed) is not in origin/main's boot manifest yet —
+                # it is landing via an in-flight lane (card c59d5be7).
+                pytest.skip("/auto-train flow removed; successor router unmounted")
             assert start_resp.status_code == 200, f"Start failed: {start_resp.text}"
 
             events = []
@@ -56,6 +70,11 @@ class TestAutoTrainIntegration:
         async with httpx.AsyncClient(timeout=30.0) as client:
             events = []
             async with client.stream("GET", f"{api_base_url}/auto-train/stream") as resp:
+                if resp.status_code == 404:
+                    # Same removal as above: /auto-train/stream no longer
+                    # exists (c02788ca4); successor /training router is
+                    # unmounted on origin/main (card c59d5be7).
+                    pytest.skip("/auto-train stream removed; successor router unmounted")
                 async for line in resp.aiter_lines():
                     if line.startswith("data:"):
                         data = json.loads(line[5:])
@@ -80,7 +99,9 @@ class TestAutoTrainErrorHandling:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from apps.api.server.main import app
+
         return TestClient(app)
 
     def test_start_with_invalid_model(self, client):

@@ -22,7 +22,6 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -30,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 @dataclass
 class IsolationResult:
     """Result of running a test in isolation."""
+
     nodeid: str
     passed: bool
     exit_code: int
@@ -45,16 +45,15 @@ class IsolationResult:
     def assert_passed(self) -> None:
         if not self.passed:
             raise AssertionError(
-                f"Test {self.nodeid} failed (exit={self.exit_code}):\n"
-                f"{self.output[-1000:]}"
+                f"Test {self.nodeid} failed (exit={self.exit_code}):\n{self.output[-1000:]}"
             )
 
 
 def isolate_test(
     nodeid: str,
     timeout: int = 60,
-    extra_args: Optional[list[str]] = None,
-    env: Optional[dict[str, str]] = None,
+    extra_args: list[str] | None = None,
+    env: dict[str, str] | None = None,
     use_tmpdir: bool = False,
 ) -> IsolationResult:
     """Run a single test in a clean subprocess with optional env overrides.
@@ -66,9 +65,13 @@ def isolate_test(
     - Timeout protection
     """
     cmd = [
-        sys.executable, "-m", "pytest",
+        sys.executable,
+        "-m",
+        "pytest",
         nodeid,
-        "-v", "--tb=short", "-q",
+        "-v",
+        "--tb=short",
+        "-q",
         "--no-header",
         "--forked",  # if pytest-forked is available
     ]
@@ -120,7 +123,7 @@ def isolate_test(
 def isolate_test_clean(
     nodeid: str,
     timeout: int = 60,
-    extra_args: Optional[list[str]] = None,
+    extra_args: list[str] | None = None,
 ) -> IsolationResult:
     """Run a test with minimal env — no shared fixtures, no conftest magic."""
     clean_env = {

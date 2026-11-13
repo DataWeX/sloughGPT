@@ -1,21 +1,24 @@
 """Tests for API key management (CRUD, rotation, expiry, revocation)."""
+
 from __future__ import annotations
 
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+# parents[1] = repo root for a file at tests/ depth. parents[2] overshoots to
+# the PARENT of the repo — in a nested worktree that resolves to another
+# checkout's apps/api/server, shadowing this tree's packages at sys.path[0]
+# (card 5473eb90, order-dependent cross-tree imports).
+_server_dir = str(Path(__file__).resolve().parents[1] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 from fastapi.testclient import TestClient
+from routers.settings import ApiKeyManager, ApiKeysRouter
 
-sys.path.insert(0, _server_dir)
-from routers.api_keys import ApiKeyManager, ApiKeysRouter
 from tests.conftest import build_test_app
 
 

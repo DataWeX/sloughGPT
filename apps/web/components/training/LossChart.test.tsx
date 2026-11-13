@@ -1,19 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
-
-vi.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
-  LineChart: ({ children }: any) => <div data-testid="line-chart">{children}</div>,
-  ComposedChart: ({ children }: any) => <div data-testid="composed-chart">{children}</div>,
-  Line: () => <div data-testid="line" />,
-  XAxis: () => <div data-testid="x-axis" />,
-  YAxis: () => <div data-testid="y-axis" />,
-  CartesianGrid: () => <div data-testid="cartesian-grid" />,
-  Tooltip: () => <div data-testid="tooltip" />,
-  Legend: () => <div data-testid="legend" />,
-}))
 
 vi.mock('@/lib/download-utils', () => ({
   downloadBlob: vi.fn(),
@@ -24,6 +12,8 @@ vi.mock('@/lib/format-bytes', () => ({
 }))
 
 import { LossChart } from './LossChart'
+
+const trainAt = (step: number, value: number) => ({ step, value, type: 'train' as const })
 
 describe('LossChart', () => {
   afterEach(cleanup)
@@ -38,39 +28,83 @@ describe('LossChart', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders chart with train data', () => {
-    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} />)
-    expect(screen.getByTestId('responsive-container')).toBeDefined()
-    expect(screen.getByTestId('line-chart')).toBeDefined()
+  it('renders an svg with the train line for train data', () => {
+    render(<LossChart data={[trainAt(1, 0.5)]} />)
+    expect(screen.getByTestId('chart-svg')).toBeInTheDocument()
+    expect(screen.getByTestId('train-line')).toBeInTheDocument()
+    expect(screen.queryByTestId('eval-line')).toBeNull()
   })
 
-  it('renders chart with eval data', () => {
+  it('renders the eval line for eval data', () => {
     render(<LossChart data={[{ step: 1, value: 0.4, type: 'eval' }]} />)
-    expect(screen.getByTestId('line-chart')).toBeDefined()
+    expect(screen.getByTestId('eval-line')).toBeInTheDocument()
+    expect(screen.queryByTestId('train-line')).toBeNull()
   })
 
-  it('renders composed chart when reward data is present', () => {
+  it('renders reward axis and dashed reward line when reward data is present', () => {
     render(
       <LossChart
-        data={[{ step: 1, value: 0.5, type: 'train' }]}
+        data={[trainAt(1, 0.5)]}
         rewardData={[{ step: 1, value: 1.0 }]}
       />,
     )
-    expect(screen.getByTestId('composed-chart')).toBeDefined()
+    expect(screen.getByTestId('reward-axis')).toBeInTheDocument()
+    expect(screen.getByTestId('reward-line')).toBeInTheDocument()
+    expect(screen.queryByTestId('reward-axis')).not.toBeNull()
+  })
+
+  it('omits the reward axis without reward data', () => {
+    render(<LossChart data={[trainAt(1, 0.5)]} />)
+    expect(screen.queryByTestId('reward-axis')).toBeNull()
   })
 
   it('renders legend when showLegend is true', () => {
-    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} showLegend={true} />)
-    expect(screen.getByTestId('legend')).toBeDefined()
+    render(<LossChart data={[trainAt(1, 0.5)]} showLegend={true} />)
+    expect(screen.getByTestId('legend')).toBeInTheDocument()
+    expect(screen.getByTestId('legend').textContent).toContain('Train loss')
   })
 
   it('hides legend when showLegend is false', () => {
-    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} showLegend={false} />)
+    render(<LossChart data={[trainAt(1, 0.5)]} showLegend={false} />)
     expect(screen.queryByTestId('legend')).toBeNull()
   })
 
-  it('sets custom height on ResponsiveContainer', () => {
-    render(<LossChart data={[{ step: 1, value: 0.5, type: 'train' }]} height={400} />)
-    expect(screen.getByTestId('responsive-container')).toBeDefined()
+  it('sets custom height on the svg', () => {
+    render(<LossChart data={[trainAt(1, 0.5)]} height={400} />)
+    expect(screen.getByTestId('chart-svg').getAttribute('height')).toBe('400')
+  })
+
+  // Regression guard for the irregular category axis (ticks at 2,5,6,9,11,14,...)
+  it('draws evenly spaced x-axis ticks for irregular step intervals', () => {
+    const steps = [2, 5, 6, 9, 11, 14, 19, 20, 25, 30]
+    const { container } = render(
+      <LossChart data={steps.map((s, i) => trainAt(s, 4 + i * 0.1))} />,
+    )
+    const labels = [...container.querySelectorAll('[data-testid="x-axis"] text')]
+      .map(n => n.textContent ?? '')
+      .filter(t => /^\d+$/.test(t))
+      .map(Number)
+
+    expect(labels.length).toBeGreaterThanOrEqual(3)
+    const deltas = labels.slice(1).map((v, i) => v - labels[i])
+    deltas.forEach(d => expect(d).toBeCloseTo(deltas[0], 6))
+    expect(deltas[0]).toBeGreaterThan(0)
+  })
+
+  it('shows a Step-labelled tooltip on hover', () => {
+    render(<LossChart data={[trainAt(1, 0.5), trainAt(5, 0.4)]} />)
+    fireEvent.mouseMove(screen.getByTestId('hover-overlay'), { clientX: 100 })
+    const tooltip = screen.getByTestId('chart-tooltip')
+    expect(tooltip.textContent).toMatch(/^Step \d+/)
+    expect(tooltip.textContent).toContain('Train loss')
+  })
+
+  it('hides the tooltip on mouse leave', () => {
+    render(<LossChart data={[trainAt(1, 0.5), trainAt(5, 0.4)]} />)
+    const overlay = screen.getByTestId('hover-overlay')
+    fireEvent.mouseMove(overlay, { clientX: 100 })
+    expect(screen.getByTestId('chart-tooltip')).toBeInTheDocument()
+    fireEvent.mouseLeave(overlay)
+    expect(screen.queryByTestId('chart-tooltip')).toBeNull()
   })
 })

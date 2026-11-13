@@ -6,8 +6,10 @@ const h = vi.hoisted(() => ({
   logWarning: vi.fn(),
 }))
 
-vi.mock('next/web-vitals', () => ({
-  useReportWebVitals: (cb: any) => { h.onReport = cb },
+vi.mock('@/vite/next-compat/web-vitals', () => ({
+  useReportWebVitals: (cb: any) => {
+    h.onReport = cb
+  },
 }))
 vi.mock('@/lib/dev-log', () => ({
   logger: { child: () => ({ warning: h.logWarning }) },

@@ -5,7 +5,7 @@ from test_support import get_test_client
 
 def _cleanup():
     """Clear all stored memory via the knowledge singleton."""
-    from domains.learner.knowledge import get_knowledge_memory
+    from domain.learner._internal.knowledge import get_knowledge_memory
 
     get_knowledge_memory().clear_all()
 
@@ -163,7 +163,7 @@ def test_config_clamps_negative_retention_to_zero():
 def test_delete_item_removes_entry():
     client = get_test_client()
     _cleanup()
-    add = client.post(
+    client.post(
         "/memory/store", json={"content": "Deletable fact", "topic": "test", "source": "api"}
     )
     item_id = _d(client.get("/memory/list"))["items"][0]["id"]

@@ -1,6 +1,6 @@
 """Tests for chat_trainer — on-device training from chat pairs."""
+
 import gc
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -34,7 +34,8 @@ def _pairs():
 
 class TestChatTrainConfig:
     def test_defaults(self):
-        from domains.training.chat_trainer import ChatTrainConfig
+        from domain.training._internal.chat_trainer import ChatTrainConfig
+
         c = ChatTrainConfig()
         assert c.n_embed == 128
         assert c.epochs == 10
@@ -43,7 +44,8 @@ class TestChatTrainConfig:
         assert c.soul_name == "chat-trained"
 
     def test_custom(self):
-        from domains.training.chat_trainer import ChatTrainConfig
+        from domain.training._internal.chat_trainer import ChatTrainConfig
+
         c = ChatTrainConfig(n_embed=64, epochs=3, min_pair_quality=1.0)
         assert c.n_embed == 64
         assert c.epochs == 3
@@ -52,13 +54,15 @@ class TestChatTrainConfig:
 
 class TestChatTextDataset:
     def test_length(self):
-        from domains.training.chat_trainer import ChatTextDataset
+        from domain.training._internal.chat_trainer import ChatTextDataset
+
         ds = ChatTextDataset("abcdef", block_size=3, stoi={c: i for i, c in enumerate("abcdef")})
         assert len(ds) > 0
         assert len(ds) == 6 - 3 - 1
 
     def test_get_batch_shape(self):
-        from domains.training.chat_trainer import ChatTextDataset
+        from domain.training._internal.chat_trainer import ChatTextDataset
+
         stoi = {c: i + 1 for i, c in enumerate("abcdef")}
         ds = ChatTextDataset("abcdef", block_size=3, stoi=stoi)
         rng = np.random.default_rng(0)
@@ -67,7 +71,8 @@ class TestChatTextDataset:
         assert y.shape == (2, 3)
 
     def test_batch_values_are_valid(self):
-        from domains.training.chat_trainer import ChatTextDataset
+        from domain.training._internal.chat_trainer import ChatTextDataset
+
         stoi = {c: i + 1 for i, c in enumerate("abcdef")}
         ds = ChatTextDataset("abcdefabcdef", block_size=4, stoi=stoi)
         rng = np.random.default_rng(0)
@@ -78,7 +83,8 @@ class TestChatTextDataset:
 
 class TestVocab:
     def test_build_vocab(self):
-        from domains.training.chat_trainer import _build_vocab
+        from domain.training._internal.chat_trainer import _build_vocab
+
         pairs = _pairs()
         stoi, itos = _build_vocab(pairs)
         assert len(stoi) > 0
@@ -87,7 +93,8 @@ class TestVocab:
         assert stoi["\x00"] == 0
 
     def test_format_pairs_text(self):
-        from domains.training.chat_trainer import _format_pairs_text
+        from domain.training._internal.chat_trainer import _format_pairs_text
+
         text = _format_pairs_text(_pairs()[:2])
         assert "User: Hello" in text
         assert "Assistant: Hi there" in text
@@ -95,14 +102,16 @@ class TestVocab:
 
 class TestCrossEntropyLoss:
     def test_perfect_prediction(self):
-        from domains.training.chat_trainer import _cross_entropy_loss
+        from domain.training._internal.distill_gpt2 import _cross_entropy_loss
+
         logits = np.array([[0.0, 100.0, 0.0], [0.0, 0.0, 100.0]])
         targets = np.array([1, 2])
         loss = _cross_entropy_loss(logits, targets)
         assert loss < 0.01
 
     def test_worse_prediction(self):
-        from domains.training.chat_trainer import _cross_entropy_loss
+        from domain.training._internal.distill_gpt2 import _cross_entropy_loss
+
         logits = np.array([[100.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
         targets = np.array([1, 2])
         loss = _cross_entropy_loss(logits, targets)
@@ -111,13 +120,21 @@ class TestCrossEntropyLoss:
 
 class TestTrainChatModel:
     def test_basic_training(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=1, batch_size=2, log_interval=10, eval_interval=50,
-                checkpoint_dir=tmpdir, soul_name="test",
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=1,
+                batch_size=2,
+                log_interval=10,
+                eval_interval=50,
+                checkpoint_dir=tmpdir,
+                soul_name="test",
                 min_pair_quality=0.0,
             )
             model, meta = train_chat_model(pairs, config)
@@ -128,13 +145,21 @@ class TestTrainChatModel:
             assert meta["vocab_size"] > 0
 
     def test_training_loss_decreases(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=3, batch_size=2, log_interval=50, eval_interval=50,
-                checkpoint_dir=tmpdir, soul_name="test",
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=3,
+                batch_size=2,
+                log_interval=50,
+                eval_interval=50,
+                checkpoint_dir=tmpdir,
+                soul_name="test",
                 min_pair_quality=0.0,
             )
             _, meta = train_chat_model(pairs, config)
@@ -144,7 +169,8 @@ class TestTrainChatModel:
             assert losses[-1] < 10.0
 
     def test_empty_pairs_raises(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
+
         config = ChatTrainConfig()
         with tempfile.TemporaryDirectory() as tmpdir:
             config.checkpoint_dir = tmpdir
@@ -152,24 +178,37 @@ class TestTrainChatModel:
                 train_chat_model([], config)
 
     def test_quality_filter(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=1, batch_size=2, checkpoint_dir=tmpdir,
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=1,
+                batch_size=2,
+                checkpoint_dir=tmpdir,
                 min_pair_quality=5.0,
             )
             _, meta = train_chat_model(pairs, config)
             assert meta["num_pairs"] >= 5
 
     def test_checkpoint_soul_format(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=1, batch_size=2, checkpoint_dir=tmpdir, soul_name="format-test",
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=1,
+                batch_size=2,
+                checkpoint_dir=tmpdir,
+                soul_name="format-test",
             )
             _, meta = train_chat_model(pairs, config)
             ckpt_path = Path(meta["checkpoint"])
@@ -178,18 +217,31 @@ class TestTrainChatModel:
             assert header == b"SOUL"
 
     def test_resume(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             ckpt = str(Path(tmpdir) / "resume-test.soul")
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=1, batch_size=2, checkpoint_dir=tmpdir, soul_name="resume-test",
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=1,
+                batch_size=2,
+                checkpoint_dir=tmpdir,
+                soul_name="resume-test",
             )
             train_chat_model(pairs, config)
             config2 = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=2, batch_size=2, checkpoint_dir=tmpdir, soul_name="resume-test",
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=2,
+                batch_size=2,
+                checkpoint_dir=tmpdir,
+                soul_name="resume-test",
                 resume_checkpoint=ckpt,
             )
             model, meta = train_chat_model(pairs, config2)
@@ -198,14 +250,23 @@ class TestTrainChatModel:
 
 class TestGenerateFromChatModel:
     def test_generate(self):
-        from domains.training.chat_trainer import (
-            ChatTrainConfig, train_chat_model, generate_from_chat_model, _build_vocab,
+        from domain.training._internal.chat_trainer import (
+            ChatTrainConfig,
+            _build_vocab,
+            generate_from_chat_model,
+            train_chat_model,
         )
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=1, batch_size=2, checkpoint_dir=tmpdir,
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=1,
+                batch_size=2,
+                checkpoint_dir=tmpdir,
             )
             model, meta = train_chat_model(pairs, config)
             stoi, itos = _build_vocab(pairs)
@@ -216,13 +277,19 @@ class TestGenerateFromChatModel:
 
 class TestEvalLoss:
     def test_eval_loss_is_finite(self):
-        from domains.training.chat_trainer import ChatTextDataset, _eval_loss
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.chat_trainer import ChatTextDataset, _eval_loss
+        from domain.training._internal.slonet import SloTransformer
+
         stoi = {"\x00": 0, **{c: i + 1 for i, c in enumerate("abcdef")}}
         ds = ChatTextDataset("abcdef" * 10, block_size=4, stoi=stoi)
         model = SloTransformer(
-            vocab_size=len(stoi), n_embed=16, n_layer=1, n_head=2,
-            block_size=4, use_rope=True, norm_type="rms_norm",
+            vocab_size=len(stoi),
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=4,
+            use_rope=True,
+            norm_type="rms_norm",
         )
         rng = np.random.default_rng(0)
         loss = _eval_loss(model, ds, 2, rng)
@@ -232,14 +299,22 @@ class TestEvalLoss:
 
 class TestEvaluateChatModel:
     def test_evaluate_returns_samples(self):
-        from domains.training.chat_trainer import (
-            ChatTrainConfig, train_chat_model, evaluate_chat_model,
+        from domain.training._internal.chat_trainer import (
+            ChatTrainConfig,
+            evaluate_chat_model,
+            train_chat_model,
         )
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=1, batch_size=2, checkpoint_dir=tmpdir,
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=1,
+                batch_size=2,
+                checkpoint_dir=tmpdir,
             )
             model, meta = train_chat_model(pairs, config)
             stoi = meta["stoi"]
@@ -252,14 +327,22 @@ class TestEvaluateChatModel:
             assert result["perplexity"] > 0
 
     def test_evaluate_max_samples(self):
-        from domains.training.chat_trainer import (
-            ChatTrainConfig, train_chat_model, evaluate_chat_model,
+        from domain.training._internal.chat_trainer import (
+            ChatTrainConfig,
+            evaluate_chat_model,
+            train_chat_model,
         )
+
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = ChatTrainConfig(
-                n_embed=16, n_layer=1, n_head=2, block_size=16,
-                epochs=1, batch_size=2, checkpoint_dir=tmpdir,
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=16,
+                epochs=1,
+                batch_size=2,
+                checkpoint_dir=tmpdir,
             )
             model, meta = train_chat_model(pairs, config)
             stoi = meta["stoi"]

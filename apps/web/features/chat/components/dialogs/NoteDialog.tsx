@@ -1,9 +1,16 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
+import { notify } from '@/lib/notify'
+import { useState, useEffect, useRef, memo } from 'react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogPortal,
+  DialogOverlay,
+} from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 
 interface NoteDialogProps {
   open: boolean
@@ -13,10 +20,16 @@ interface NoteDialogProps {
   onDelete?: () => void
 }
 
-export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteDialogProps) {
+export const NoteDialog = memo(function NoteDialog({
+  open,
+  onOpenChange,
+  note,
+  onSave,
+  onDelete,
+}: NoteDialogProps) {
   const [draft, setDraft] = useState(note)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   useEffect(() => {
     setDraft(note)
@@ -64,7 +77,7 @@ export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteD
             </p>
             <textarea
               ref={textareaRef}
-              className="w-full min-h-[100px] text-sm p-2 rounded-md border border-border bg-background resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full min-h-[100px] text-sm p-2 rounded-md border border-border bg-background resize-y focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               placeholder="Enter your note..."
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -77,14 +90,23 @@ export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteD
             <div className="flex items-center justify-between gap-2">
               <div>
                 {note && onDelete && (
-                  <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDelete}
+                    className="text-destructive hover:text-destructive"
+                  >
                     Delete note
                   </Button>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
-                <Button size="sm" onClick={handleSave}>Save</Button>
+                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSave}>
+                  Save
+                </Button>
               </div>
             </div>
           </div>
@@ -92,4 +114,4 @@ export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteD
       </DialogPortal>
     </Dialog>
   )
-}
+})

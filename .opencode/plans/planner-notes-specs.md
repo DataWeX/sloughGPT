@@ -32,7 +32,7 @@ Storage: markdown files with YAML frontmatter in `.dev-notes/` (file backend) or
 id:          string    (YYYYMMDD_HHMMSS_slug or card-{ts}-{rand})
 title:       string
 description: string
-column:      string    (todo | in_progress | review | done)
+column:      string    (todo | wip | review | done)
 priority:    string    (low | medium | high | critical)
 tags:        string[]
 due_date:    string
@@ -53,12 +53,12 @@ wip_limit: number
 order:     number
 ```
 
-Default columns: todo (WIP 5), in_progress (WIP 3), review (WIP 2), done (WIP 0).
+Default columns: todo (WIP 5), wip (WIP 3), review (WIP 2), done (WIP 0).
 
 ### Status-Column Mapping
 ```
 open   -> todo
-wip    -> in_progress
+wip    -> wip
 review -> review
 done   -> done
 blocked -> todo

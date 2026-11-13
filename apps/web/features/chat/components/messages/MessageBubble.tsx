@@ -1,14 +1,21 @@
 'use client'
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { cn, IconStar } from '@sloughgpt/strui'
+import dynamic from '@/vite/next-compat/dynamic'
+import { cn, IconStar, StatusDot } from '@sloughgpt/strui'
 import { formatRelativeTime } from '@/lib/time-format'
+import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'
 
-import { MessageActions } from './MessageActions'
-import { MessageContextMenu } from './MessageContextMenu'
-import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'
 import type { ImageAttachment } from './../input/ImageUpload'
+
+const MessageActions = dynamic(() => import('./MessageActions').then((m) => m.MessageActions), {
+  ssr: false,
+})
+const MessageContextMenu = dynamic(
+  () => import('./MessageContextMenu').then((m) => m.MessageContextMenu),
+  { ssr: false },
+)
 
 export interface MessageBubbleProps {
   content: string
@@ -17,7 +24,7 @@ export interface MessageBubbleProps {
   showTimestamp: boolean
   images?: ImageAttachment[]
   onCopy?: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -32,16 +39,32 @@ export interface MessageBubbleProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
-  onReact?: (emoji: string) => void
+  onReact?: (messageId: string, emoji: string) => void
   onPin?: (messageId: string) => void
   hasNote?: boolean
-  onAddNote?: () => void
+  onAddNote?: (messageId: string) => void
   hasThread?: boolean
   onThread?: (messageId: string) => void
+  /** Per-turn stream metrics for the frame footer (tok/s, token count, latency). */
+  metrics?: { tokens?: number; elapsedMs?: number }
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
+function formatMetrics(m?: { tokens?: number; elapsedMs?: number }): string | null {
+  if (!m || m.tokens == null || m.elapsedMs == null || m.elapsedMs <= 0) return null
+  const tps = m.tokens / (m.elapsedMs / 1000)
+  const secs = (m.elapsedMs / 1000).toFixed(1)
+  return `${tps.toFixed(1)} tok/s · ${m.tokens} tok · ${secs}s`
+}
 
+/**
+ * Transcript turn — composes MessageFrame (Direction B, ruling 2026-11-03).
+ *
+ * Anatomy: the shared frame (user = right-aligned tinted surface, assistant =
+ * left-aligned card surface, both rounded-2xl) with the metadata footer inside
+ * it; this file owns only the surrounding behavior — context menu, actions,
+ * aria/live wiring. Chrome is never re-decided here.
+ */
 export const MessageBubble = memo(function MessageBubble({
   content,
   role,
@@ -70,6 +93,7 @@ export const MessageBubble = memo(function MessageBubble({
   onAddNote,
   hasThread,
   onThread,
+  metrics,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -79,6 +103,35 @@ export const MessageBubble = memo(function MessageBubble({
   const hasContent = content && content.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
+  const metricsText = formatMetrics(metrics)
+
+  // Metadata footer — inside the frame (Direction B), never a detached gutter.
+  const footer = (
+    <>
+      <span className="flex items-center gap-1.5">
+        {isStreaming && <StatusDot tone="primary" pulse aria-hidden />}
+        {isError && <StatusDot tone="destructive" aria-hidden />}
+        {role === 'user' ? 'You' : 'Assistant'}
+        {isBookmarked && (
+          <span className="text-warning" aria-label="Bookmarked">
+            <IconStar className="h-2.5 w-2.5 inline" filled />
+          </span>
+        )}
+      </span>
+      {role === 'assistant' && model && !isError && hasContent && <span>{model}</span>}
+      {metricsText && <span>{metricsText}</span>}
+      {isError && <span className="text-destructive">Interrupted</span>}
+      {/* Timestamp = the entry-closed marker; don't claim a finished entry
+          before the first token lands. Role label + StatusDot still signal
+          the in-progress turn. */}
+      {showTimestamp && (hasContent || role === 'user') && (
+        <span className="flex items-center gap-1.5">
+          {formatRelativeTime(timestamp)}
+          {role === 'assistant' && messageId && <ConsciousnessMessageBadge messageId={messageId} />}
+        </span>
+      )}
+    </>
+  )
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -89,6 +142,9 @@ export const MessageBubble = memo(function MessageBubble({
       if (next >= 0 && next < articlesRef.current.length) articlesRef.current[next].focus()
     }
   }, [])
+
+  const handleEditStart = useCallback(() => setIsEditing(true), [])
+  const handleEditCancel = useCallback(() => setIsEditing(false), [])
 
   useEffect(() => {
     const feed = document.getElementById('chat-messages')
@@ -106,7 +162,7 @@ export const MessageBubble = memo(function MessageBubble({
       hasNote={hasNote}
       hasThread={hasThread}
       onCopy={onCopy}
-      onEdit={onEdit ? () => setIsEditing(true) : undefined}
+      onEdit={onEdit ? handleEditStart : undefined}
       onBookmark={onBookmark}
       onPin={onPin}
       onRegenerate={showActions ? onRegenerate : undefined}
@@ -115,108 +171,75 @@ export const MessageBubble = memo(function MessageBubble({
       onAddNote={onAddNote}
       onThread={onThread}
     >
-    <div
-      id={messageId ? `msg-${messageId}` : undefined}
-      ref={bubbleRef}
-      role="article"
-      tabIndex={0}
-      aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
-      aria-live={isStreaming ? 'polite' : ariaLive}
-      onKeyDown={handleKeyDown}
-      className={cn(
-        "group flex flex-col transition-all duration-300 ease-out",
-        role === 'user' ? 'items-end' : 'items-start'
-      )}
-    >
-      {/* Role label — outside bubble for clear separation */}
-      <span className={cn(
-        "text-[10px] font-semibold tracking-wider uppercase mb-0.5 block",
-        role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70'
-      )}>
-        {role === 'user' ? 'You' : 'Assistant'}
-        {isBookmarked && (
-          <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-            <IconStar className="h-2.5 w-2.5 inline" filled />
-          </span>
-        )}
-        {role === 'assistant' && model && !isError && (
-          <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
-            {model}
-          </span>
-        )}
-        {isError && (
-          <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
-            Interrupted
-          </span>
-        )}
-      </span>
-
       <div
-        className={cn(
-          "relative rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 max-w-full transition-all duration-200 leading-relaxed",
-          role === 'user'
-            ? 'bg-primary text-primary-foreground rounded-br-md shadow-md max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] ml-auto'
-            : 'bg-card text-foreground rounded-bl-md shadow-sm',
-          isStreaming && role === 'assistant' && "ring-1 ring-primary/20",
-          isError && role === 'assistant' && "ring-1 ring-destructive/40 border border-destructive/30"
-        )}
+        id={messageId ? `msg-${messageId}` : undefined}
+        ref={bubbleRef}
+        role="article"
+        tabIndex={0}
+        aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
+        aria-live={isStreaming ? 'polite' : ariaLive}
+        onKeyDown={handleKeyDown}
+        className={cn('group transition-all duration-300 ease-out')}
       >
-        {images && images.length > 0 && <MessageImages images={images} role={role} />}
+        {/* Content — the frame carries the chrome; actions sit outside it.
+            This wrapper must stay a plain block: MessageFrame already owns
+            `justify-end` for user turns, and adding it here right-aligned
+            [frame][hover toolbar] as a PAIR — the toolbar is opacity-0 but still
+            occupies ~200px, so the bubble stopped short of the right edge and
+            read as floating mid-row. */}
+        <div className="min-w-0">
+          <MessageContent
+            content={content}
+            role={role}
+            searchQuery={searchQuery}
+            messageId={messageId}
+            isStreaming={isStreaming}
+            isError={isError}
+            collapsibleLength={collapsibleLength}
+            isEditing={isEditing}
+            onEdit={onEdit}
+            onEditStart={handleEditStart}
+            onEditCancel={handleEditCancel}
+            images={images}
+            footer={footer}
+          />
 
-        <MessageContent
-          content={content}
-          role={role}
-          searchQuery={searchQuery}
-          messageId={messageId}
-          isStreaming={isStreaming}
-          isError={isError}
-          collapsibleLength={collapsibleLength}
-          isEditing={isEditing}
-          onEdit={onEdit}
-          onEditStart={() => setIsEditing(true)}
-          onEditCancel={() => setIsEditing(false)}
-        />
+          {(showActions || isError) && (
+            <MessageActions
+              content={content}
+              messageId={id}
+              role={role}
+              onCopy={onCopy}
+              onRegenerate={onRegenerate}
+              onThumbsUp={onThumbsUp}
+              onThumbsDown={onThumbsDown}
+              onSuggestionClick={onSuggestionClick}
+              isBookmarked={isBookmarked}
+              onBookmark={onBookmark}
+              onDelete={onDelete}
+              onSaveToKnowledge={onSaveToKnowledge}
+              onReact={onReact}
+            />
+          )}
 
-        {showTimestamp && (
-          <p className={cn(
-            "mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
-            role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
-          )}>
-            {formatRelativeTime(timestamp)}
-          </p>
-        )}
+          {role === 'user' && hasContent && !isEditing && (
+            /* Column + items-end: MessageActions is a fragment (toolbar, then
+               reactions), so it must stack vertically while its buttons sit
+               flush with the right-aligned bubble above. */
+            <div className="flex flex-col items-end">
+              <MessageActions
+                content={content}
+                messageId={id}
+                role={role}
+                onCopy={onCopy}
+                onEdit={handleEditStart}
+                onSuggestionClick={onSuggestionClick}
+                onDelete={onDelete}
+              />
+            </div>
+          )}
+        </div>
       </div>
-
-      {(showActions || isError) && (
-        <MessageActions
-          content={content}
-          messageId={id}
-          role={role}
-          onCopy={onCopy}
-          onRegenerate={onRegenerate}
-          onThumbsUp={onThumbsUp}
-          onThumbsDown={onThumbsDown}
-          onSuggestionClick={onSuggestionClick}
-          isBookmarked={isBookmarked}
-          onBookmark={onBookmark}
-          onDelete={onDelete}
-          onSaveToKnowledge={onSaveToKnowledge}
-          onReact={onReact ? (messageId, emoji) => onReact(emoji) : undefined}
-        />
-      )}
-
-      {role === 'user' && hasContent && !isEditing && (
-        <MessageActions
-          content={content}
-          messageId={id}
-          role={role}
-          onCopy={onCopy}
-          onEdit={() => setIsEditing(true)}
-          onSuggestionClick={onSuggestionClick}
-          onDelete={onDelete}
-        />
-      )}
-    </div>
     </MessageContextMenu>
   )
 })

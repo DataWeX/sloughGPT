@@ -19,7 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from domains.training.dataset_manifest import (  # noqa: E402
+from domain.training._internal.dataset_manifest import (  # noqa: E402
     ManifestError,
     load_manifest,
     resolve_training_data_path,
@@ -40,10 +40,14 @@ def main() -> int:
         m = load_manifest(mp)
         if args.resolve:
             text_path, _ = resolve_training_data_path(mp)
-            print(f"OK: dataset_id={m['dataset_id']!r} version={m['version']!r} domain={m.get('domain')!r}")
+            print(
+                f"OK: dataset_id={m['dataset_id']!r} version={m['version']!r} domain={m.get('domain')!r}"
+            )
             print(f"Training text file: {text_path.resolve()}")
         else:
-            print(f"OK: dataset_id={m['dataset_id']!r} version={m['version']!r} domain={m.get('domain')!r}")
+            print(
+                f"OK: dataset_id={m['dataset_id']!r} version={m['version']!r} domain={m.get('domain')!r}"
+            )
     except ManifestError as e:
         print(f"FAIL: {e}", file=sys.stderr)
         return 1

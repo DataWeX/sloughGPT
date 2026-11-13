@@ -2,7 +2,7 @@
 description: >
   Run test coverage improvement. Usage: /coverage <module_path>
   Measures coverage, writes tests, finds bugs, and verifies no regressions.
-agent: coverage
+agent: test-writer
 ---
 
 # Coverage Command
@@ -18,9 +18,9 @@ Systematic test coverage improvement for Python modules.
 ## Examples
 
 ```
-/coverage packages/core-py/domains/training/export.py
-/coverage packages/core-py/domains/infrastructure/task_queue.py
-/coverage packages/core-py/domains/inference/slonet_provider.py
+/coverage domain/training/_internal/export.py
+/coverage domain/infrastructure/_internal/task_queue.py
+/coverage domain/inference/_internal/slonet_provider.py
 ```
 
 ## What It Does
@@ -36,44 +36,53 @@ Systematic test coverage improvement for Python modules.
 ## Workflow
 
 ### Step 1: Measure
+
 ```bash
-python3 -m pytest tests/test_<module>*.py \
-  --cov=domains/<area>/<module> \
+./scripts/python -m pytest tests/test_<module>*.py \
+  --cov=domain/<area>/<module> \
   --cov-report=term-missing -q
 ```
 
 ### Step 2: Write Tests
+
 For each uncovered line:
+
 - Read the source to understand the uncovered code
 - Read existing tests to match patterns
 - Write targeted tests for the uncovered paths
 - Run new tests to confirm they pass
 
 ### Step 3: Find & Fix Bugs
+
 Watch for:
+
 - `KeyError` → missing `.get()` with default
 - `AttributeError` after `hasattr` → value is `None`
 - `TypeError` → parameter name mismatch
 - Dead code after return → unreachable branches
 
 ### Step 4: Pragma Unreachable
+
 Only pragma provably unreachable branches:
+
 ```python
 try:
     from optional_lib import something
 except ImportError:
-    pragma: no cover  # Optional dependency
+    # pragma: no cover
 ```
 
 ### Step 5: Verify
+
 ```bash
-python3 -m pytest tests/test_<module>*.py -q
-python3 -m py_compile domains/<area>/<module>.py
+./scripts/python -m pytest tests/test_<module>*.py -q
+./scripts/python -m py_compile domain/<area>/<module>.py
 ```
 
 ### Step 6: Report
+
 ```
-ROUND N: domains/<area>/<module>.py 100% (<total> stmts)
+ROUND N: domain/<area>/<module>.py 100% (<total> stmts)
 - Tests added: <count>
 - Coverage: <before>% -> <after>%
 - Bugs found: <count>
@@ -83,13 +92,13 @@ ROUND N: domains/<area>/<module>.py 100% (<total> stmts)
 
 ## Coverage Targets
 
-| Priority | Area | Path |
-|----------|------|------|
-| 1 | Training | `domains/training/*.py` |
-| 2 | Infrastructure | `domains/infrastructure/*.py` |
-| 3 | Inference | `domains/inference/*.py` |
-| 4 | Feedback | `domains/feedback/*.py` |
-| 5 | Agents | `domains/agents/*.py` |
+| Priority | Area           | Path                         |
+| -------- | -------------- | ---------------------------- |
+| 1        | Training       | `domain/training/*.py`       |
+| 2        | Infrastructure | `domain/infrastructure/*.py` |
+| 3        | Inference      | `domain/inference/*.py`      |
+| 4        | Feedback       | `domain/feedback/*.py`       |
+| 5        | Agents         | `domain/agents/*.py`         |
 
 ## Rules
 

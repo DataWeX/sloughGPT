@@ -48,7 +48,7 @@ class TestGetMetaWeights:
     def test_get_weights_success(self):
         client = get_test_client()
         mgr = _mock_manager()
-        with patch("domains.feedback.get_meta_weight_manager", return_value=mgr):
+        with patch("domain.feedback.get_meta_weight_manager", return_value=mgr):
             resp = client.post(
                 "/meta-weights/get",
                 json={
@@ -71,7 +71,7 @@ class TestGetMetaWeights:
 
     def test_get_weights_manager_none(self):
         client = get_test_client()
-        with patch("domains.feedback.get_meta_weight_manager", return_value=None):
+        with patch("domain.feedback.get_meta_weight_manager", return_value=None):
             resp = client.post(
                 "/meta-weights/get",
                 json={
@@ -83,7 +83,7 @@ class TestGetMetaWeights:
     def test_get_weights_calls_manager_with_params(self):
         client = get_test_client()
         mgr = _mock_manager()
-        with patch("domains.feedback.get_meta_weight_manager", return_value=mgr):
+        with patch("domain.feedback.get_meta_weight_manager", return_value=mgr):
             client.post(
                 "/meta-weights/get",
                 json={
@@ -99,7 +99,7 @@ class TestGetMetaWeights:
     def test_get_weights_defaults(self):
         client = get_test_client()
         mgr = _mock_manager()
-        with patch("domains.feedback.get_meta_weight_manager", return_value=mgr):
+        with patch("domain.feedback.get_meta_weight_manager", return_value=mgr):
             resp = client.post(
                 "/meta-weights/get",
                 json={
@@ -114,7 +114,7 @@ class TestGetMetaWeightStats:
     def test_get_stats_success(self):
         client = get_test_client()
         mgr = _mock_manager()
-        with patch("domains.feedback.get_meta_weight_manager", return_value=mgr):
+        with patch("domain.feedback.get_meta_weight_manager", return_value=mgr):
             resp = client.get("/meta-weights/stats")
         assert resp.status_code == 200
         data = _data(resp)
@@ -123,6 +123,6 @@ class TestGetMetaWeightStats:
 
     def test_get_stats_manager_none(self):
         client = get_test_client()
-        with patch("domains.feedback.get_meta_weight_manager", return_value=None):
+        with patch("domain.feedback.get_meta_weight_manager", return_value=None):
             resp = client.get("/meta-weights/stats")
         assert resp.status_code == 503

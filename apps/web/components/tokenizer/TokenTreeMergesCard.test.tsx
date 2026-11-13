@@ -25,6 +25,41 @@ vi.mock('@sloughgpt/strui', () => ({
   Chip: ({ label }: { label: string }) => <span>{label}</span>,
   IconRefresh: () => <span />,
   IconSearch: () => <span />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { TokenTreeMergesCard } from './TokenTreeMergesCard'
@@ -47,10 +82,14 @@ describe('TokenTreeMergesCard', () => {
     render(<TokenTreeMergesCard />)
 
     await waitFor(() => expect(mocks.mockGetMerges).toHaveBeenCalledWith(20, ''))
-    expect(screen.getByText('the')).toBeDefined()
-    expect(screen.getAllByText('quic')).toHaveLength(2)
-    expect(screen.getByText('quick')).toBeDefined()
-    expect(screen.getAllByText('42')).toHaveLength(1)
+    await waitFor(() => {
+      expect(screen.getByText('the')).toBeDefined()
+      expect(screen.getAllByText('quic')).toHaveLength(2)
+      expect(screen.getByText('quick')).toBeDefined()
+    })
+    await waitFor(() => {
+      expect(screen.getAllByText('42')).toHaveLength(1)
+    })
   })
 
   it('searches with the typed query', async () => {
@@ -111,10 +150,14 @@ describe('TokenTreeMergesCard', () => {
     fireEvent.click(screen.getByLabelText('Toggle lineage for the'))
 
     await waitFor(() => expect(mocks.mockLineage).toHaveBeenCalledWith('the</w>'))
-    expect(screen.getAllByText('t')).toHaveLength(1)
-    expect(screen.getAllByText('h')).toHaveLength(1)
-    expect(screen.getAllByText('e')).toHaveLength(2)
-    expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    // The spy fires before React commits the expanded tree — wait for the
+    // rendered lineage rather than asserting synchronously (races under load).
+    await waitFor(() => {
+      expect(screen.getAllByText('t')).toHaveLength(1)
+      expect(screen.getAllByText('h')).toHaveLength(1)
+      expect(screen.getAllByText('e')).toHaveLength(2)
+      expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    })
   })
 
   it('toggles a rule lineage closed on second click', async () => {

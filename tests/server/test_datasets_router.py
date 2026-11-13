@@ -3,14 +3,14 @@ Tests for the datasets router — list, create, get, update, delete, import, exp
 """
 
 import json
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.datasets import DatasetsRouter
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.datasets import DatasetsRouter
 
 
 @pytest.fixture
@@ -169,7 +169,10 @@ class TestDatasetStats:
     def test_get_stats(self, mock_get_ctrl, client):
         ctrl = mock_get_ctrl.return_value
         ctrl.get_dataset_stats.return_value = {
-            "format": "text", "samples": 5, "chars": 100, "avg_length": 20.0,
+            "format": "text",
+            "samples": 5,
+            "chars": 100,
+            "avg_length": 20.0,
         }
         resp = client.get("/datasets/ds1/stats")
         assert resp.status_code == 200
@@ -250,12 +253,15 @@ class TestCreateFromChat:
     def test_creates_from_messages(self, mock_get_ctrl, client):
         ctrl = mock_get_ctrl.return_value
         ctrl.create_dataset.return_value = dict(_DATASET_FIXTURE)
-        resp = client.post("/datasets/from-chat", json={
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there"},
-            ],
-        })
+        resp = client.post(
+            "/datasets/from-chat",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi there"},
+                ],
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()["data"]
         assert body["status"] == "created"
@@ -265,21 +271,28 @@ class TestCreateFromChat:
     def test_creator_skips_empty_messages(self, mock_get_ctrl, client):
         ctrl = mock_get_ctrl.return_value
         ctrl.create_dataset.return_value = dict(_DATASET_FIXTURE)
-        resp = client.post("/datasets/from-chat", json={
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "system", "content": "ignored"},
-                {"role": "user", "content": ""},
-            ],
-        })
+        resp = client.post(
+            "/datasets/from-chat",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "system", "content": "ignored"},
+                    {"role": "user", "content": ""},
+                ],
+            },
+        )
         assert resp.json()["data"]["messages_exported"] == 1
 
 
 class TestImportFromLocal:
     def test_rejects_outside_allowed_paths(self, client):
-        resp = client.post("/datasets/import/local", json={
-            "path": "/etc/passwd", "name": "bad",
-        })
+        resp = client.post(
+            "/datasets/import/local",
+            json={
+                "path": "/etc/passwd",
+                "name": "bad",
+            },
+        )
         assert resp.status_code == 403
 
     @patch("apps.api.server.routers.datasets.DatasetsRouter._get_data_importer")
@@ -294,9 +307,13 @@ class TestImportFromLocal:
         _app = FastAPI()
         _app.include_router(router.router)
         client = TestClient(_app, raise_server_exceptions=False)
-        resp = client.post("/datasets/import/local", json={
-            "path": str(router._DATASETS_DIR), "name": "mine",
-        })
+        resp = client.post(
+            "/datasets/import/local",
+            json={
+                "path": str(router._DATASETS_DIR),
+                "name": "mine",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["success"] is True
         assert resp.json()["output_path"] == "/tmp/x"
@@ -315,9 +332,13 @@ class TestImportFromLocal:
         register_all_handlers(_app)
         _app.include_router(router.router)
         c = TestClient(_app, raise_server_exceptions=False)
-        r = c.post("/datasets/import/local", json={
-            "path": str(router._DATASETS_DIR), "name": "mine",
-        })
+        r = c.post(
+            "/datasets/import/local",
+            json={
+                "path": str(router._DATASETS_DIR),
+                "name": "mine",
+            },
+        )
         assert r.status_code == 400
 
 
@@ -329,7 +350,7 @@ class TestListDatasetDetails:
         ctrl = mock_get_ctrl.return_value
         ctrl.list_datasets.return_value = []
         client.get("/datasets?q=shakespeare&type=text")
-        ctrl.list_datasets.assert_called_once_with("shakespeare", "text")
+        ctrl.list_datasets.assert_called_once_with("shakespeare", "text", "")
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
     def test_list_reports_count(self, mock_get_ctrl, client):
@@ -363,8 +384,11 @@ class TestCreateDatasetValidation:
     def test_create_returns_full_fixture(self, mock_get_ctrl, client):
         ctrl = mock_get_ctrl.return_value
         ctrl.create_dataset.return_value = {
-            "id": "ds1", "name": "test", "path": "/datasets/ds1",
-            "type": "text", "num_samples": 10,
+            "id": "ds1",
+            "name": "test",
+            "path": "/datasets/ds1",
+            "type": "text",
+            "num_samples": 10,
         }
         resp = client.post("/datasets", json={"name": "test"})
         body = resp.json()
@@ -376,7 +400,7 @@ class TestCreateDatasetValidation:
 class TestImportGithub:
     """POST /datasets/import/github"""
 
-    @patch("domains.training.data_import.RepoImporter")
+    @patch("domain.training._internal.data_import.RepoImporter")
     def test_success(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -386,16 +410,20 @@ class TestImportGithub:
         result.output_path = "/tmp/repo"
         result.error = None
         mock_cls.return_value.import_from_github.return_value = result
-        resp = client.post("/datasets/import/github", json={
-            "url": "https://github.com/org/repo", "name": "repo",
-        })
+        resp = client.post(
+            "/datasets/import/github",
+            json={
+                "url": "https://github.com/org/repo",
+                "name": "repo",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["dataset_id"] == "repo"
         assert "4 files" in body["message"]
 
-    @patch("domains.training.data_import.RepoImporter")
+    @patch("domain.training._internal.data_import.RepoImporter")
     def test_failure_400(self, mock_cls, client):
         result = MagicMock()
         result.success = False
@@ -404,9 +432,13 @@ class TestImportGithub:
         result.total_chars = 0
         result.output_path = None
         mock_cls.return_value.import_from_github.return_value = result
-        resp = client.post("/datasets/import/github", json={
-            "url": "https://github.com/org/repo", "name": "repo",
-        })
+        resp = client.post(
+            "/datasets/import/github",
+            json={
+                "url": "https://github.com/org/repo",
+                "name": "repo",
+            },
+        )
         assert resp.status_code == 400
         assert resp.json()["error"] == "clone timeout"
 
@@ -422,7 +454,7 @@ class TestImportGithub:
 class TestImportHuggingface:
     """POST /datasets/import/huggingface"""
 
-    @patch("domains.training.data_import.HuggingFaceImporter")
+    @patch("domain.training._internal.data_import.HuggingFaceImporter")
     def test_success_default_name(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -437,7 +469,7 @@ class TestImportHuggingface:
         assert body["dataset_id"] == "myds"
         assert "2 splits" in body["message"]
 
-    @patch("domains.training.data_import.HuggingFaceImporter")
+    @patch("domain.training._internal.data_import.HuggingFaceImporter")
     def test_failure_400(self, mock_cls, client):
         result = MagicMock()
         result.success = False
@@ -457,7 +489,7 @@ class TestImportHuggingface:
 class TestImportUrl:
     """POST /datasets/import/url"""
 
-    @patch("domains.training.data_import.URLImporter")
+    @patch("domain.training._internal.data_import.URLImporter")
     def test_success(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -466,14 +498,18 @@ class TestImportUrl:
         result.output_path = "/tmp/u"
         result.error = None
         mock_cls.return_value.import_from_url.return_value = result
-        resp = client.post("/datasets/import/url", json={
-            "url": "https://x.example/data.txt", "name": "u",
-        })
+        resp = client.post(
+            "/datasets/import/url",
+            json={
+                "url": "https://x.example/data.txt",
+                "name": "u",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["success"] is True
         assert "Downloaded 50 chars" in resp.json()["message"]
 
-    @patch("domains.training.data_import.URLImporter")
+    @patch("domain.training._internal.data_import.URLImporter")
     def test_failure_400(self, mock_cls, client):
         result = MagicMock()
         result.success = False
@@ -481,9 +517,13 @@ class TestImportUrl:
         result.files_imported = 0
         result.total_chars = 0
         mock_cls.return_value.import_from_url.return_value = result
-        resp = client.post("/datasets/import/url", json={
-            "url": "https://x.example/missing.txt", "name": "u",
-        })
+        resp = client.post(
+            "/datasets/import/url",
+            json={
+                "url": "https://x.example/missing.txt",
+                "name": "u",
+            },
+        )
         assert resp.status_code == 400
         assert resp.json()["error"] == "404 not found"
 
@@ -495,7 +535,7 @@ class TestImportUrl:
 class TestImportISBN:
     """POST /datasets/import/isbn"""
 
-    @patch("domains.training.data_import.ISBNImporter")
+    @patch("domain.training._internal.data_import.ISBNImporter")
     def test_success_unnamed(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -509,7 +549,7 @@ class TestImportISBN:
         assert resp.status_code == 200
         assert resp.json()["dataset_id"] == "book_1234567890123"
 
-    @patch("domains.training.data_import.ISBNImporter")
+    @patch("domain.training._internal.data_import.ISBNImporter")
     def test_metadata_only_when_no_files(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -551,19 +591,22 @@ class TestImportMiscValidation:
 class TestBatchImport:
     """POST /datasets/import/batch"""
 
-    @patch("domains.training.data_import.URLImporter")
+    @patch("domain.training._internal.data_import.URLImporter")
     def test_mixed_sources_reports_errors(self, mock_url, client):
         ok = MagicMock()
         ok.success = True
         ok.files_imported = 1
         ok.total_chars = 10
         mock_url.return_value.import_from_url.return_value = ok
-        resp = client.post("/datasets/import/batch", json={
-            "sources": [
-                {"type": "url", "name": "u1", "url": "http://x"},
-                {"type": "bogus", "name": "b1"},
-            ],
-        })
+        resp = client.post(
+            "/datasets/import/batch",
+            json={
+                "sources": [
+                    {"type": "url", "name": "u1", "url": "http://x"},
+                    {"type": "bogus", "name": "b1"},
+                ],
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["imported"] == 1
@@ -577,12 +620,15 @@ class TestBatchImport:
         local.files_imported = 5
         local.total_chars = 200
         mock_imp.return_value.import_from_local.return_value = local
-        resp = client.post("/datasets/import/batch", json={
-            "sources": [{"type": "local", "name": "l1", "path": "/somewhere"}],
-        })
+        resp = client.post(
+            "/datasets/import/batch",
+            json={
+                "sources": [{"type": "local", "name": "l1", "path": "/somewhere"}],
+            },
+        )
         assert resp.json()["data"]["imported"] == 1
 
-    @patch("domains.training.data_import.RepoImporter")
+    @patch("domain.training._internal.data_import.RepoImporter")
     def test_source_failure_recorded(self, mock_repo, client):
         bad = MagicMock()
         bad.success = False
@@ -590,9 +636,12 @@ class TestBatchImport:
         bad.files_imported = 0
         bad.total_chars = 0
         mock_repo.return_value.import_from_github.return_value = bad
-        resp = client.post("/datasets/import/batch", json={
-            "sources": [{"type": "github", "name": "g1", "url": "http://x"}],
-        })
+        resp = client.post(
+            "/datasets/import/batch",
+            json={
+                "sources": [{"type": "github", "name": "g1", "url": "http://x"}],
+            },
+        )
         data = resp.json()["data"]
         assert data["imported"] == 0
         assert data["errors"][0]["error"] == "boom"
@@ -691,17 +740,23 @@ class TestFromChatValidation:
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
     def test_invalid_role_422(self, mock_get_ctrl, client):
-        resp = client.post("/datasets/from-chat", json={
-            "messages": [{"role": "owner", "content": "hello"}],
-        })
+        resp = client.post(
+            "/datasets/from-chat",
+            json={
+                "messages": [{"role": "owner", "content": "hello"}],
+            },
+        )
         assert resp.status_code == 422
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
     def test_name_too_long_422(self, mock_get_ctrl, client):
-        resp = client.post("/datasets/from-chat", json={
-            "messages": [{"role": "user", "content": "hi"}],
-            "name": "x" * 101,
-        })
+        resp = client.post(
+            "/datasets/from-chat",
+            json={
+                "messages": [{"role": "user", "content": "hi"}],
+                "name": "x" * 101,
+            },
+        )
         assert resp.status_code == 422
 
 
@@ -733,8 +788,7 @@ class TestConvertToMessages:
         ds = router._DATASETS_DIR / "ds1"
         ds.mkdir(parents=True, exist_ok=True)
         (ds / "input.jsonl").write_text(
-            '{"text": "hello"}\n'
-            '{"messages": [{"role": "user", "content": "hi"}]}\n'
+            '{"text": "hello"}\n{"messages": [{"role": "user", "content": "hi"}]}\n'
         )
         _app = FastAPI()
         register_all_handlers(_app)

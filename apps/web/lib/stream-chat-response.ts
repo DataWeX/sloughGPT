@@ -3,13 +3,14 @@
 import { streamSSE } from '@/lib/http-client'
 import { useErrorStore } from '@/lib/error-store'
 import { logger } from '@/lib/dev-log'
+import { emitConsciousness } from '@/lib/consciousness-bus'
 
 const _log = logger.child('stream-chat-response')
 
 const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
 const MAX_RETRIES = 2
 const BASE_DELAY_MS = 500
-const MODEL_LOADING_DELAY_MS = 3000  // Longer delay for model loading (503)
+const MODEL_LOADING_DELAY_MS = 3000 // Longer delay for model loading (503)
 
 export interface ToolCallEvent {
   tool: string
@@ -24,8 +25,14 @@ interface StreamChatParams {
   messages: { role: string; content: string }[]
   model: string
   systemPrompt: string
-  maxTokens: number
-  temperature: number
+  /**
+   * Turn-layer override for this one request. Omit it and the server resolves
+   * the value from the conversation's AppScope over the global defaults —
+   * sending it means "this turn wins" (e.g. regenerate-with-options).
+   */
+  maxTokens?: number
+  /** Turn-layer override — same precedence rule as `maxTokens`. */
+  temperature?: number
   userId: string
   sessionId: string
   images?: string[]
@@ -34,7 +41,19 @@ interface StreamChatParams {
   knowledge?: string[]
   onToken: (token: string) => void
   onComplete: () => void
-  onError: (status: number, text?: string, opts?: { correlationId?: string; backendError?: string; httpMethod?: string; httpPath?: string; durationMs?: number }) => void
+  /** Per-turn stream metrics (fires just before onComplete). */
+  onMeta?: (meta: { tokens: number; elapsedMs: number }) => void
+  onError: (
+    status: number,
+    text?: string,
+    opts?: {
+      correlationId?: string
+      backendError?: string
+      httpMethod?: string
+      httpPath?: string
+      durationMs?: number
+    },
+  ) => void
   onKnowledge?: (source: string, count: number) => void
   onThinking?: () => void
   onToolCall?: (event: ToolCallEvent) => void
@@ -47,23 +66,41 @@ interface StreamChatParams {
     grounded_claims: number
     hallucinated_claims: number
   }) => void
-  onControl?: (event: { action: string; tool?: string; approved?: boolean; context?: string }) => void
+  onControl?: (event: {
+    action: string
+    tool?: string
+    approved?: boolean
+    context?: string
+  }) => void
+  onConsciousness?: (event: {
+    level: number
+    qualia: Record<string, number>
+    beliefs: Record<string, number>
+    growth_delta: number
+    self_insight: string
+  }) => void
 }
 
 function buildBody(params: StreamChatParams) {
-  return {
+  // Precedence at the turn seam: turn (explicit wire field) > conversation
+  // AppScope > global settings. An *absent* field is how the client says
+  // "resolve me from my layers", so defaults are not shipped on every POST —
+  // that was the scattered-read Phase 2 retired (the client used to be the
+  // de facto resolver). `use_rag` likewise travels as a scope field, not as a
+  // constant `true` that would pin the conversation layer out.
+  const body: Record<string, unknown> = {
     messages: params.messages,
     model: params.model,
     system_prompt: params.systemPrompt,
-    max_new_tokens: params.maxTokens,
-    temperature: params.temperature,
     user_id: params.userId,
     session_id: params.sessionId,
     images: params.images,
     knowledge: params.knowledge,
     agent_id: params.agentId || undefined,
-    use_rag: true,
   }
+  if (params.temperature !== undefined) body.temperature = params.temperature
+  if (params.maxTokens !== undefined) body.max_new_tokens = params.maxTokens
+  return body
 }
 
 export async function streamChatResponse(params: StreamChatParams): Promise<void> {
@@ -72,7 +109,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
   let retries = 0
   let lastEventId: string | undefined
   let tokenCount = 0
-  let startTime = Date.now()
+  const startTime = Date.now()
 
   _log.debug('streamChatResponse START', {
     msgCount: params.messages.length,
@@ -81,13 +118,13 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
     hasImages: !!params.images?.length,
   })
 
-  while (true) {
+  for (;;) {
     let hasContent = false
     let completed = false
     let shouldRetry = false
 
     try {
-      for await (const event of streamSSE('/chat/stream', { body, signal, lastEventId })) {
+      for await (const event of streamSSE('/chat', { body, signal, lastEventId })) {
         const d = event.data ?? {}
 
         // Track last event ID for reconnection
@@ -118,7 +155,8 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
             hallucination_rate: typeof d.hallucination_rate === 'number' ? d.hallucination_rate : 0,
             citations: typeof d.citations === 'string' ? d.citations : '',
             grounded_claims: typeof d.grounded_claims === 'number' ? d.grounded_claims : 0,
-            hallucinated_claims: typeof d.hallucinated_claims === 'number' ? d.hallucinated_claims : 0,
+            hallucinated_claims:
+              typeof d.hallucinated_claims === 'number' ? d.hallucinated_claims : 0,
           })
           continue
         }
@@ -127,7 +165,11 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           if (d.tool && typeof d.tool === 'string') {
             const toolEvent: ToolCallEvent = {
               tool: d.tool as string,
-              status: (event.status === 'complete' ? 'success' : event.status === 'error' ? 'error' : 'executing') as ToolCallEvent['status'],
+              status: (event.status === 'complete'
+                ? 'success'
+                : event.status === 'error'
+                  ? 'error'
+                  : 'executing') as ToolCallEvent['status'],
               output: d.output as string | undefined,
               error: d.error as string | undefined,
               duration_ms: d.duration_ms as number | undefined,
@@ -148,9 +190,26 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           continue
         }
 
+        if (event.phase === 'CONSCIOUSNESS') {
+          const evt = {
+            level: typeof d.level === 'number' ? d.level : 0,
+            qualia:
+              d.qualia && typeof d.qualia === 'object' ? (d.qualia as Record<string, number>) : {},
+            beliefs:
+              d.beliefs && typeof d.beliefs === 'object'
+                ? (d.beliefs as Record<string, number>)
+                : {},
+            growth_delta: typeof d.growth_delta === 'number' ? d.growth_delta : 0,
+            self_insight: typeof d.self_insight === 'string' ? d.self_insight : '',
+          }
+          emitConsciousness(evt)
+          params.onConsciousness?.(evt)
+          continue
+        }
+
         if (event.status === 'error') {
           const hasHttpStatus = d != null && typeof d.http_status === 'number'
-          const httpStatus = hasHttpStatus ? d.http_status as number : 0
+          const httpStatus = hasHttpStatus ? (d.http_status as number) : 0
           const errStr = typeof d.error === 'string' ? d.error : undefined
           const message = event.message || errStr || 'Stream error'
 
@@ -162,24 +221,28 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           if (RETRYABLE_STATUSES.has(httpStatus) && retries < MAX_RETRIES) {
             retries++
             // Use longer delay for model loading (503 with MODEL_LOADING code)
-            const isModelLoading = httpStatus === 503 && (
-              message.includes('loading') || message.includes('Loading') ||
-              d.code === 'MODEL_LOADING'
-            )
+            const isModelLoading =
+              httpStatus === 503 &&
+              (message.includes('loading') ||
+                message.includes('Loading') ||
+                d.code === 'MODEL_LOADING')
             const delay = isModelLoading
               ? MODEL_LOADING_DELAY_MS * retries
               : BASE_DELAY_MS * Math.pow(2, retries - 1)
             _log.debug('Retrying chat stream after transient error', {
-              status: httpStatus, retries, delay, isModelLoading,
+              status: httpStatus,
+              retries,
+              delay,
+              isModelLoading,
             })
             shouldRetry = true
             break
           }
 
-          useErrorStore.getState().addError(
-            new Error(message),
-            { source: 'chat/stream', title: `Chat stream error (${httpStatus})` },
-          )
+          useErrorStore.getState().addError(new Error(message), {
+            source: 'chat',
+            title: `Chat stream error (${httpStatus})`,
+          })
           onError(httpStatus, message, {
             correlationId: typeof d.correlation_id === 'string' ? d.correlation_id : undefined,
             backendError: typeof d.error === 'string' ? d.error : undefined,
@@ -208,6 +271,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         if (event.status === 'complete') {
           _log.debug('Stream complete', { tokens: tokenCount, elapsed: Date.now() - startTime })
           if (!hasContent) params.onToken('')
+          params.onMeta?.({ tokens: tokenCount, elapsedMs: Date.now() - startTime })
           params.onComplete()
           completed = true
           continue
@@ -225,21 +289,21 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         retries++
         const delay = BASE_DELAY_MS * Math.pow(2, retries - 1)
         _log.debug('Retrying chat stream after network error', { retries, delay })
-        await new Promise(r => setTimeout(r, delay))
+        await new Promise((r) => setTimeout(r, delay))
         continue
       }
 
       _log.error('Stream network error after retries', { retries, message })
-      useErrorStore.getState().addError(
-        err instanceof Error ? err : new Error(message),
-        { source: 'chat/stream', title: 'Connection Error' },
-      )
+      useErrorStore.getState().addError(err instanceof Error ? err : new Error(message), {
+        source: 'chat',
+        title: 'Connection Error',
+      })
       onError(0, message, undefined)
       return
     }
 
     if (shouldRetry) {
-      await new Promise(r => setTimeout(r, BASE_DELAY_MS * Math.pow(2, retries - 1)))
+      await new Promise((r) => setTimeout(r, BASE_DELAY_MS * Math.pow(2, retries - 1)))
       continue
     }
 

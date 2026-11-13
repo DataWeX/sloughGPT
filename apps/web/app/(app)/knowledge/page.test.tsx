@@ -3,12 +3,37 @@ import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-libra
 import React from 'react'
 
 const {
-  mockList, mockStats, mockTopics, mockSearch, mockAdd, mockDelete, mockUpdate,
-  mockBatchDelete, mockGetAdapterStatus, mockTrainAdapter, mockAddToast,
+  mockList,
+  mockStats,
+  mockTopics,
+  mockSearch,
+  mockAdd,
+  mockDelete,
+  mockUpdate,
+  mockBatchDelete,
+  mockGetAdapterStatus,
+  mockTrainAdapter,
+  mockAddToast,
+  mockGetRAGStats,
+  mockListRAGDocuments,
+  searchParamsStore,
+  mockPush,
 } = vi.hoisted(() => ({
-  mockList: vi.fn(), mockStats: vi.fn(), mockTopics: vi.fn(), mockSearch: vi.fn(),
-  mockAdd: vi.fn(), mockDelete: vi.fn(), mockUpdate: vi.fn(), mockBatchDelete: vi.fn(),
-  mockGetAdapterStatus: vi.fn(), mockTrainAdapter: vi.fn(), mockAddToast: vi.fn(),
+  mockList: vi.fn(),
+  mockStats: vi.fn(),
+  mockTopics: vi.fn(),
+  mockSearch: vi.fn(),
+  mockAdd: vi.fn(),
+  mockDelete: vi.fn(),
+  mockUpdate: vi.fn(),
+  mockBatchDelete: vi.fn(),
+  mockGetAdapterStatus: vi.fn(),
+  mockTrainAdapter: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockGetRAGStats: vi.fn(),
+  mockListRAGDocuments: vi.fn(),
+  searchParamsStore: { value: new URLSearchParams() },
+  mockPush: vi.fn(),
 }))
 
 vi.mock('@/lib/knowledge-controller', () => ({
@@ -26,12 +51,47 @@ vi.mock('@/lib/knowledge-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+vi.mock('@/lib/rag-controller', () => ({
+  getRAGStats: (...a: unknown[]) => mockGetRAGStats(...a),
+  listRAGDocuments: (...a: unknown[]) => mockListRAGDocuments(...a),
+  clearRAG: vi.fn().mockResolvedValue({ cleared: 0 }),
+  syncKGToRAG: vi.fn().mockResolvedValue({ total_triples: 0 }),
 }))
 
+vi.mock('@/vite/next-compat/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    replace: vi.fn(),
+  }),
+  useSearchParams: () => searchParamsStore.value,
+  usePathname: () => '/knowledge',
+}))
+
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
+
 vi.mock('@/lib/download-utils', () => ({ downloadJson: vi.fn() }))
-vi.mock('@/lib/format-bytes', () => ({ todayDateString: () => '2026-08-07', MS_PER_SECOND: 1000, formatRelativeTime: (s: number) => `${s}s ago` }))
+vi.mock('@/lib/format-bytes', () => ({
+  todayDateString: () => '2026-08-07',
+  MS_PER_SECOND: 1000,
+  formatRelativeTime: (s: number) => `${s}s ago`,
+}))
 vi.mock('@/lib/validation-schemas', () => ({
   knowledgeSchema: {
     shape: {
@@ -42,53 +102,155 @@ vi.mock('@/lib/validation-schemas', () => ({
 }))
 
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
+    return C
+  }
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     CardDescription: ({ children }: any) => <div>{children}</div>,
-    EmptyCard: ({ message, action }: any) => <div><span>{message}</span>{action}</div>,
+    EmptyCard: ({ message, action }: any) => (
+      <div>
+        <span>{message}</span>
+        {action}
+      </div>
+    ),
     Button: ({ children, onClick, disabled, variant, 'aria-label': ariaLabel }: any) => (
-      <button onClick={onClick} disabled={disabled} aria-label={ariaLabel} data-variant={variant}>{children}</button>
+      <button onClick={onClick} disabled={disabled} aria-label={ariaLabel} data-variant={variant}>
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, placeholder, className }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} className={className} />
     ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Chip: ({ children, onClick, variant }: any) => <button onClick={onClick} data-variant={variant}>{children}</button>,
-    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'),
-    IconSearch: iconMock('search'), IconCheck: iconMock('check'), IconX: iconMock('x'),
+    Chip: ({ children, onClick, variant }: any) => (
+      <button onClick={onClick} data-variant={variant}>
+        {children}
+      </button>
+    ),
+    IconRefresh: iconMock('refresh'),
+    IconPlus: iconMock('plus'),
+    IconTrash: iconMock('trash'),
+    IconSearch: iconMock('search'),
+    IconCheck: iconMock('check'),
+    IconX: iconMock('x'),
     IconBrain: iconMock('brain'),
-    IconFilter: iconMock('filter'), IconFolder: iconMock('folder'), IconSettings: iconMock('settings'),
-    IconClock: iconMock('clock'), IconDownload: iconMock('download'), IconUpload: iconMock('upload'),
-    IconChevronDown: iconMock('chevron-down'), IconEdit: iconMock('edit'),
+    IconFilter: iconMock('filter'),
+    IconFolder: iconMock('folder'),
+    IconSettings: iconMock('settings'),
+    IconClock: iconMock('clock'),
+    IconDownload: iconMock('download'),
+    IconUpload: iconMock('upload'),
+    IconChevronDown: iconMock('chevron-down'),
+    IconEdit: iconMock('edit'),
     IconMapPin: iconMock('map-pin'),
-    FoldSection: ({ heading, children }: any) => <details><summary>{heading}</summary>{children}</details>,
-    AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
-    AlertDialogContent: passthrough, AlertDialogHeader: passthrough, AlertDialogTitle: passthrough,
-    AlertDialogDescription: passthrough, AlertDialogFooter: passthrough,
-    AlertDialogCancel: ({ onClick, ...p }: any) => <button onClick={onClick} {...p}>Cancel</button>,
-    AlertDialogAction: ({ onClick, ...p }: any) => <button onClick={onClick} {...p}>Confirm</button>,
-    Dialog: ({ open, children }: any) => open ? <div data-testid="dialog">{children}</div> : null,
-    DialogContent: passthrough, DialogHeader: passthrough, DialogTitle: passthrough,
-    DialogDescription: passthrough, DialogFooter: passthrough,
+    FoldSection: ({ heading, children }: any) => (
+      <details>
+        <summary>{heading}</summary>
+        {children}
+      </details>
+    ),
+    AlertDialog: ({ open, children }: any) =>
+      open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogContent: passthrough,
+    AlertDialogHeader: passthrough,
+    AlertDialogTitle: passthrough,
+    AlertDialogDescription: passthrough,
+    AlertDialogFooter: passthrough,
+    AlertDialogCancel: ({ onClick, ...p }: any) => (
+      <button onClick={onClick} {...p}>
+        Cancel
+      </button>
+    ),
+    AlertDialogAction: ({ onClick, ...p }: any) => (
+      <button onClick={onClick} {...p}>
+        Confirm
+      </button>
+    ),
+    Dialog: ({ open, children }: any) => (open ? <div data-testid="dialog">{children}</div> : null),
+    DialogContent: passthrough,
+    DialogHeader: passthrough,
+    DialogTitle: passthrough,
+    DialogDescription: passthrough,
+    DialogFooter: passthrough,
     Switch: ({ checked, onCheckedChange, disabled, 'aria-label': ariaLabel }: any) => (
-      <button role="switch" aria-checked={!!checked} disabled={disabled} aria-label={ariaLabel} onClick={() => onCheckedChange?.(!checked)} />
+      <button
+        role="switch"
+        aria-checked={!!checked}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        onClick={() => onCheckedChange?.(!checked)}
+      />
     ),
     DropdownMenu: passthrough,
     DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
     DropdownMenuContent: ({ children }: any) => <>{children}</>,
     DropdownMenuItem: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
     Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
-      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onCheckedChange?.(!checked)}
+        className={className}
+        {...props}
+      />
     ),
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
 vi.mock('@/components/knowledge/KnowledgeCategoryChart', () => ({
-  KnowledgeCategoryChart: ({ topics }: any) => <div data-testid="category-chart" data-count={topics?.length ?? 0} />,
+  KnowledgeCategoryChart: ({ topics }: any) => (
+    <div data-testid="category-chart" data-count={topics?.length ?? 0} />
+  ),
 }))
 
 import KnowledgePage from './page'
@@ -103,14 +265,28 @@ function expectEmptyStateVisible() {
 beforeEach(() => {
   vi.resetAllMocks()
   mockList.mockResolvedValue([])
-  mockStats.mockResolvedValue({ total_items: 0, topic_count: 0, avg_importance: 0, searchable: true, total_chars: 0 })
+  mockStats.mockResolvedValue({
+    total_items: 0,
+    topic_count: 0,
+    avg_importance: 0,
+    searchable: true,
+    total_chars: 0,
+  })
   mockTopics.mockResolvedValue({ topics: [], total: 0 })
-  mockGetAdapterStatus.mockResolvedValue({ adapter_exists: false, fact_count: 0, total_facts_available: 0 })
+  mockGetAdapterStatus.mockResolvedValue({
+    adapter_exists: false,
+    fact_count: 0,
+    total_facts_available: 0,
+  })
   mockAdd.mockResolvedValue({ id: 'new-1', content: 'test', topic: 'general' })
   mockDelete.mockResolvedValue(true)
   mockUpdate.mockResolvedValue(true)
   mockBatchDelete.mockResolvedValue(2)
   mockSearch.mockResolvedValue([])
+  // RAG endpoints are exercised by the dedicated paging test below; reject by
+  // default so the Deep Memory card stays hidden exactly as before this suite.
+  mockGetRAGStats.mockRejectedValue(new Error('rag not under test'))
+  mockListRAGDocuments.mockRejectedValue(new Error('rag not under test'))
 })
 
 describe('KnowledgePage — loading flow', () => {
@@ -131,12 +307,43 @@ describe('KnowledgePage — loading flow', () => {
 describe('KnowledgePage — data display flow', () => {
   beforeEach(() => {
     mockList.mockResolvedValue([
-      { id: 'k1', content: 'User likes Python', topic: 'personal', importance: 0.8, created_at: '2026-08-01' },
-      { id: 'k2', content: 'API uses REST', topic: 'technical', importance: 0.5, created_at: '2026-08-02' },
-      { id: 'k3', content: 'Prefers dark mode', topic: 'preferences', importance: 0.9, created_at: '2026-08-03' },
+      {
+        id: 'k1',
+        content: 'User likes Python',
+        topic: 'personal',
+        importance: 0.8,
+        created_at: '2026-08-01',
+      },
+      {
+        id: 'k2',
+        content: 'API uses REST',
+        topic: 'technical',
+        importance: 0.5,
+        created_at: '2026-08-02',
+      },
+      {
+        id: 'k3',
+        content: 'Prefers dark mode',
+        topic: 'preferences',
+        importance: 0.9,
+        created_at: '2026-08-03',
+      },
     ])
-    mockStats.mockResolvedValue({ total_items: 3, topic_count: 3, avg_importance: 0.73, searchable: true, total_chars: 50 })
-    mockTopics.mockResolvedValue({ topics: [{ topic: 'personal', count: 1 }, { topic: 'technical', count: 1 }, { topic: 'preferences', count: 1 }], total: 3 })
+    mockStats.mockResolvedValue({
+      total_items: 3,
+      topic_count: 3,
+      avg_importance: 0.73,
+      searchable: true,
+      total_chars: 50,
+    })
+    mockTopics.mockResolvedValue({
+      topics: [
+        { topic: 'personal', count: 1 },
+        { topic: 'technical', count: 1 },
+        { topic: 'preferences', count: 1 },
+      ],
+      total: 3,
+    })
   })
 
   it('displays all knowledge items', async () => {
@@ -169,11 +376,13 @@ describe('KnowledgePage — data display flow', () => {
 describe('KnowledgePage — add item flow', () => {
   it('renders add button on page', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expectEmptyStateVisible() })
+    await waitFor(() => {
+      expectEmptyStateVisible()
+    })
 
     // The Add button should be rendered (IconPlus mock renders "plus" + "Add" text)
     const buttons = screen.getAllByRole('button')
-    const addBtn = buttons.find(b => {
+    const addBtn = buttons.find((b) => {
       const text = b.textContent || ''
       return text.includes('plus') || text.includes('Add')
     })
@@ -184,26 +393,44 @@ describe('KnowledgePage — add item flow', () => {
 describe('KnowledgePage — delete item flow', () => {
   beforeEach(() => {
     mockList.mockResolvedValue([
-      { id: 'k1', content: 'Delete me', topic: 'general', importance: 0.5, created_at: '2026-08-01' },
+      {
+        id: 'k1',
+        content: 'Delete me',
+        topic: 'general',
+        importance: 0.5,
+        created_at: '2026-08-01',
+      },
     ])
-    mockStats.mockResolvedValue({ total_items: 1, topic_count: 1, avg_importance: 0.5, searchable: true, total_chars: 10 })
+    mockStats.mockResolvedValue({
+      total_items: 1,
+      topic_count: 1,
+      avg_importance: 0.5,
+      searchable: true,
+      total_chars: 10,
+    })
     mockTopics.mockResolvedValue({ topics: [{ topic: 'general', count: 1 }], total: 1 })
   })
 
   it('clicks delete, confirms in dialog, calls delete controller', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText('Delete me')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Delete me')).toBeTruthy()
+    })
 
     // Find and click the delete button for this item
     const trashBtns = screen.getAllByLabelText(/delete/i)
     fireEvent.click(trashBtns[0])
 
     // Confirm dialog should appear
-    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+    })
 
     // Click Confirm
     const confirmBtn = screen.getByText('Confirm')
-    await act(async () => { fireEvent.click(confirmBtn) })
+    await act(async () => {
+      fireEvent.click(confirmBtn)
+    })
 
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('k1')
@@ -214,10 +441,28 @@ describe('KnowledgePage — delete item flow', () => {
 describe('KnowledgePage — search flow', () => {
   beforeEach(() => {
     mockList.mockResolvedValue([
-      { id: 'k1', content: 'Python is great', topic: 'technical', importance: 0.7, created_at: '2026-08-01' },
-      { id: 'k2', content: 'Likes cats', topic: 'personal', importance: 0.5, created_at: '2026-08-02' },
+      {
+        id: 'k1',
+        content: 'Python is great',
+        topic: 'technical',
+        importance: 0.7,
+        created_at: '2026-08-01',
+      },
+      {
+        id: 'k2',
+        content: 'Likes cats',
+        topic: 'personal',
+        importance: 0.5,
+        created_at: '2026-08-02',
+      },
     ])
-    mockStats.mockResolvedValue({ total_items: 2, topic_count: 2, avg_importance: 0.6, searchable: true, total_chars: 20 })
+    mockStats.mockResolvedValue({
+      total_items: 2,
+      topic_count: 2,
+      avg_importance: 0.6,
+      searchable: true,
+      total_chars: 20,
+    })
     mockTopics.mockResolvedValue({ topics: [], total: 2 })
     mockSearch.mockResolvedValue([
       { id: 'k1', content: 'Python is great', topic: 'technical', importance: 0.7 },
@@ -226,14 +471,19 @@ describe('KnowledgePage — search flow', () => {
 
   it('typing in search triggers debounced search', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText('Python is great')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Python is great')).toBeTruthy()
+    })
 
     const searchInput = screen.getByPlaceholderText('Search knowledge...')
     fireEvent.change(searchInput, { target: { value: 'python' } })
 
-    await waitFor(() => {
-      expect(mockSearch).toHaveBeenCalledWith('python')
-    }, { timeout: 1000 })
+    await waitFor(
+      () => {
+        expect(mockSearch).toHaveBeenCalledWith('python')
+      },
+      { timeout: 1000 },
+    )
   })
 })
 
@@ -243,13 +493,21 @@ describe('KnowledgePage — batch delete flow', () => {
       { id: 'k1', content: 'Item 1', topic: 'general', importance: 0.5, created_at: '2026-08-01' },
       { id: 'k2', content: 'Item 2', topic: 'general', importance: 0.5, created_at: '2026-08-02' },
     ])
-    mockStats.mockResolvedValue({ total_items: 2, topic_count: 1, avg_importance: 0.5, searchable: true, total_chars: 10 })
+    mockStats.mockResolvedValue({
+      total_items: 2,
+      topic_count: 1,
+      avg_importance: 0.5,
+      searchable: true,
+      total_chars: 10,
+    })
     mockTopics.mockResolvedValue({ topics: [{ topic: 'general', count: 2 }], total: 2 })
   })
 
   it('renders select checkboxes when items exist', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText('Item 1')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Item 1')).toBeTruthy()
+    })
     // Checkboxes should be present for selection
     const checkboxes = screen.getAllByRole('checkbox')
     expect(checkboxes.length).toBeGreaterThanOrEqual(1)
@@ -259,16 +517,42 @@ describe('KnowledgePage — batch delete flow', () => {
 describe('KnowledgePage — topic filter flow', () => {
   beforeEach(() => {
     mockList.mockResolvedValue([
-      { id: 'k1', content: 'Tech item', topic: 'technical', importance: 0.7, created_at: '2026-08-01' },
-      { id: 'k2', content: 'Personal item', topic: 'personal', importance: 0.5, created_at: '2026-08-02' },
+      {
+        id: 'k1',
+        content: 'Tech item',
+        topic: 'technical',
+        importance: 0.7,
+        created_at: '2026-08-01',
+      },
+      {
+        id: 'k2',
+        content: 'Personal item',
+        topic: 'personal',
+        importance: 0.5,
+        created_at: '2026-08-02',
+      },
     ])
-    mockStats.mockResolvedValue({ total_items: 2, topic_count: 2, avg_importance: 0.6, searchable: true, total_chars: 20 })
-    mockTopics.mockResolvedValue({ topics: [{ topic: 'technical', count: 1 }, { topic: 'personal', count: 1 }], total: 2 })
+    mockStats.mockResolvedValue({
+      total_items: 2,
+      topic_count: 2,
+      avg_importance: 0.6,
+      searchable: true,
+      total_chars: 20,
+    })
+    mockTopics.mockResolvedValue({
+      topics: [
+        { topic: 'technical', count: 1 },
+        { topic: 'personal', count: 1 },
+      ],
+      total: 2,
+    })
   })
 
   it('clicking a topic chip filters items', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText('Tech item')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Tech item')).toBeTruthy()
+    })
 
     // Click a topic chip
     const techChip = screen.getByText('technical')
@@ -283,12 +567,17 @@ describe('KnowledgePage — topic filter flow', () => {
 describe('KnowledgePage — refresh flow', () => {
   it('clicking refresh re-fetches all data', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(mockList).toHaveBeenCalledTimes(1) })
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledTimes(1)
+    })
 
     // Find refresh button by icon or aria-label
-    const refreshBtns = screen.getAllByRole('button').filter(b =>
-      b.textContent?.includes('refresh') || b.getAttribute('aria-label')?.includes('refresh')
-    )
+    const refreshBtns = screen
+      .getAllByRole('button')
+      .filter(
+        (b) =>
+          b.textContent?.includes('refresh') || b.getAttribute('aria-label')?.includes('refresh'),
+      )
     if (refreshBtns.length > 0) {
       fireEvent.click(refreshBtns[0])
       await waitFor(() => {
@@ -300,7 +589,11 @@ describe('KnowledgePage — refresh flow', () => {
 
 describe('KnowledgePage — adapter training flow', () => {
   beforeEach(() => {
-    mockGetAdapterStatus.mockResolvedValue({ adapter_exists: false, fact_count: 10, total_facts_available: 10 })
+    mockGetAdapterStatus.mockResolvedValue({
+      adapter_exists: false,
+      fact_count: 10,
+      total_facts_available: 10,
+    })
   })
 
   it('shows adapter section when facts are available', async () => {
@@ -332,7 +625,15 @@ describe('KnowledgePage — error handling flow', () => {
 
   it('retry after error loads data', async () => {
     mockList.mockRejectedValueOnce(new Error('Network error'))
-    mockList.mockResolvedValueOnce([{ id: 'k1', content: 'Recovered', topic: 'general', importance: 0.5, created_at: '2026-08-01' }])
+    mockList.mockResolvedValueOnce([
+      {
+        id: 'k1',
+        content: 'Recovered',
+        topic: 'general',
+        importance: 0.5,
+        created_at: '2026-08-01',
+      },
+    ])
     render(<KnowledgePage />)
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalled()
@@ -342,7 +643,13 @@ describe('KnowledgePage — error handling flow', () => {
 
 describe('KnowledgePage — empty stats flow', () => {
   it('shows zero values when stats are empty', async () => {
-    mockStats.mockResolvedValue({ total_items: 0, topic_count: 0, avg_importance: 0, searchable: true, total_chars: 0 })
+    mockStats.mockResolvedValue({
+      total_items: 0,
+      topic_count: 0,
+      avg_importance: 0,
+      searchable: true,
+      total_chars: 0,
+    })
     render(<KnowledgePage />)
     await waitFor(() => {
       expectEmptyStateVisible()
@@ -353,10 +660,12 @@ describe('KnowledgePage — empty stats flow', () => {
 describe('KnowledgePage — add form flow', () => {
   it('opens add form when Add button clicked', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expectEmptyStateVisible() })
-    const addBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.includes('plus') || b.textContent?.includes('Add')
-    )
+    await waitFor(() => {
+      expectEmptyStateVisible()
+    })
+    const addBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.includes('plus') || b.textContent?.includes('Add'))
     if (addBtn) {
       fireEvent.click(addBtn)
       await waitFor(() => {
@@ -368,10 +677,12 @@ describe('KnowledgePage — add form flow', () => {
 
   it('submitting add form calls controller', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expectEmptyStateVisible() })
-    const addBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.includes('plus') || b.textContent?.includes('Add')
-    )
+    await waitFor(() => {
+      expectEmptyStateVisible()
+    })
+    const addBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.includes('plus') || b.textContent?.includes('Add'))
     if (addBtn) {
       fireEvent.click(addBtn)
       await waitFor(() => {
@@ -385,17 +696,49 @@ describe('KnowledgePage — add form flow', () => {
 describe('KnowledgePage — batch operations flow', () => {
   beforeEach(() => {
     mockList.mockResolvedValue([
-      { id: 'k1', content: 'Batch item 1', topic: 'general', importance: 0.5, created_at: '2026-08-01' },
-      { id: 'k2', content: 'Batch item 2', topic: 'general', importance: 0.5, created_at: '2026-08-02' },
-      { id: 'k3', content: 'Batch item 3', topic: 'other', importance: 0.5, created_at: '2026-08-03' },
+      {
+        id: 'k1',
+        content: 'Batch item 1',
+        topic: 'general',
+        importance: 0.5,
+        created_at: '2026-08-01',
+      },
+      {
+        id: 'k2',
+        content: 'Batch item 2',
+        topic: 'general',
+        importance: 0.5,
+        created_at: '2026-08-02',
+      },
+      {
+        id: 'k3',
+        content: 'Batch item 3',
+        topic: 'other',
+        importance: 0.5,
+        created_at: '2026-08-03',
+      },
     ])
-    mockStats.mockResolvedValue({ total_items: 3, topic_count: 2, avg_importance: 0.5, searchable: true, total_chars: 30 })
-    mockTopics.mockResolvedValue({ topics: [{ topic: 'general', count: 2 }, { topic: 'other', count: 1 }], total: 3 })
+    mockStats.mockResolvedValue({
+      total_items: 3,
+      topic_count: 2,
+      avg_importance: 0.5,
+      searchable: true,
+      total_chars: 30,
+    })
+    mockTopics.mockResolvedValue({
+      topics: [
+        { topic: 'general', count: 2 },
+        { topic: 'other', count: 1 },
+      ],
+      total: 3,
+    })
   })
 
   it('select all checkbox toggles all items', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText('Batch item 1')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Batch item 1')).toBeTruthy()
+    })
     const checkboxes = screen.getAllByRole('checkbox')
     expect(checkboxes.length).toBeGreaterThanOrEqual(1)
     // Click first checkbox (select all or first item)
@@ -404,16 +747,128 @@ describe('KnowledgePage — batch operations flow', () => {
 
   it('batch delete button appears when items selected', async () => {
     render(<KnowledgePage />)
-    await waitFor(() => { expect(screen.getByText('Batch item 1')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Batch item 1')).toBeTruthy()
+    })
     const checkboxes = screen.getAllByRole('checkbox')
     if (checkboxes.length > 0) {
       fireEvent.click(checkboxes[0])
       await waitFor(() => {
-        const batchBtn = screen.getAllByRole('button').find(b =>
-          b.textContent?.includes('trash') || b.textContent?.includes('Delete')
-        )
+        const batchBtn = screen
+          .getAllByRole('button')
+          .find((b) => b.textContent?.includes('trash') || b.textContent?.includes('Delete'))
         expect(batchBtn).toBeTruthy()
       })
+    }
+  })
+})
+
+describe('KnowledgePage — RAG sources panel paging', () => {
+  const doc = (source: string) => ({
+    metadata: { source },
+    chunk_size: 512,
+    num_chunks: 1,
+    added_at: 1,
+  })
+  const ragStats = { total_documents: 5, total_chunks: 5, index_size: 10 }
+
+  it('shows first page with count, appends on Load more, hides button when complete', async () => {
+    mockGetRAGStats.mockResolvedValue(ragStats)
+    mockListRAGDocuments
+      .mockResolvedValueOnce({
+        documents: [doc('src-a'), doc('src-b')],
+        stats: ragStats,
+        ready: true,
+        total: 5,
+        limit: 200,
+        offset: 0,
+      })
+      .mockResolvedValueOnce({
+        documents: [doc('src-c'), doc('src-d'), doc('src-e')],
+        stats: ragStats,
+        ready: true,
+        total: 5,
+        limit: 200,
+        offset: 2,
+      })
+
+    render(<KnowledgePage />)
+    const sourcesBtn = await screen.findByRole('button', { name: 'Sources' })
+    fireEvent.click(sourcesBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText('Showing 2 of 5')).toBeTruthy()
+    })
+    expect(screen.getByText('src-a')).toBeTruthy()
+    expect(screen.queryByText('src-c')).toBeNull()
+
+    const loadMore = screen.getByRole('button', { name: 'Load more' })
+    await act(async () => {
+      fireEvent.click(loadMore)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Showing 5 of 5')).toBeTruthy()
+    })
+    expect(screen.getByText('src-c')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+})
+
+describe('KnowledgePage — ?id= detail fold (route-map card 7/7, 20261101_154056)', () => {
+  beforeEach(() => {
+    mockList.mockResolvedValue([
+      {
+        id: 'k1',
+        content: 'User likes Python',
+        topic: 'personal',
+        importance: 0.8,
+        created_at: '2026-08-01',
+      },
+    ])
+    searchParamsStore.value = new URLSearchParams('id=k1')
+    mockPush.mockClear()
+  })
+
+  afterEach(() => {
+    searchParamsStore.value = new URLSearchParams()
+    mockPush.mockClear()
+  })
+
+  it('renders the detail fold when ?id= is set (composed from /knowledge/[id])', async () => {
+    render(<KnowledgePage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('knowledge-detail-fold')).toBeTruthy()
+    })
+  })
+
+  it('renders no fold without ?id=', () => {
+    searchParamsStore.value = new URLSearchParams()
+    render(<KnowledgePage />)
+    expect(screen.queryByTestId('knowledge-detail-fold')).toBeNull()
+  })
+
+  it('list click pushes ?id= — the fold’s source link', async () => {
+    // List-only view (no ?id=): exactly one instance of the row text, so the
+    // click target is unambiguous.
+    searchParamsStore.value = new URLSearchParams()
+    render(<KnowledgePage />)
+    const rowText = await screen.findByText('User likes Python')
+    fireEvent.click(rowText)
+    expect(mockPush).toHaveBeenCalledWith('/knowledge?id=k1')
+  })
+})
+
+describe('KnowledgePage — plain-language jargon ban (Build Order #5 guard, UX_FLOWS Feature 3)', () => {
+  it('renders none of the banned jargon terms on the default view', async () => {
+    const { container } = render(<KnowledgePage />)
+    await waitFor(() => expectEmptyStateVisible())
+    const text = container.textContent ?? ''
+    // UX_FLOWS Feature 3 "What they should NOT see": "Knowledge base",
+    // "vector store", "ingestion", "indexing", "RAG", "embeddings",
+    // "chunks" — Card 058 shipped the ban; this pins it against regrowth.
+    for (const pattern of ['\\bRAG\\b', 'vector store', 'chunks', 'ingestion', 'Indexing']) {
+      expect(text, `banned term matched: ${pattern}`).not.toMatch(new RegExp(pattern, 'i'))
     }
   })
 })

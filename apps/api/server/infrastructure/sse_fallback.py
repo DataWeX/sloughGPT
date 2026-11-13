@@ -3,7 +3,7 @@
 """
 Consolidated SSE fallback utilities.
 
-When ``domains.api.sse_envelope`` is available, this module re-exports its
+When ``domain.api._internal.sse_envelope`` is available, this module re-exports its
 functions.  When it is not available (e.g. during testing or when the
 core-py package is not installed), this module provides canonical
 fallback implementations so that routers do not need to duplicate them.
@@ -13,16 +13,16 @@ import json
 from typing import Any
 
 try:
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_complete as _sse_complete,
     )
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_error as _sse_error,
     )
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_event as _sse_event,
     )
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_token as _sse_token,
     )
 

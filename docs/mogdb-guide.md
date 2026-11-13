@@ -132,6 +132,13 @@ slo db sync        # Force JSON sync
 slo db migrate     # Run migration
 ```
 
+In-repo example: `apps/api/server/infrastructure/startup_history.py` —
+swapped from full-file JSON rewrites to a `startup_records` collection (one
+document per boot, sorted index on `timestamp`, pruned to the newest 50). Its
+one-time legacy import skips timestamps the store already has, then renames
+the original to `.bak` (never deletes it), and it degrades to in-memory-only
+with a warning if mogdb is unavailable.
+
 ## Performance
 
 Based on benchmarks (1K documents):

@@ -18,9 +18,9 @@ Generate or update documentation for code.
 ## Examples
 
 ```
-/doc packages/core-py/domains/infrastructure/model_server.py
+/doc domain/infrastructure/_internal/model_server.py
 /doc apps/web/features/chat/components/ChatInput.tsx
-/doc packages/core-py/domains/training/
+/doc domain/training/_internal/
 ```
 
 ## What It Does

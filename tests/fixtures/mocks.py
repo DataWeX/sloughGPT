@@ -18,8 +18,7 @@ from __future__ import annotations
 
 import json
 from contextlib import contextmanager
-from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 
@@ -57,6 +56,7 @@ class MockAPI:
     def intercept(self):
         """Context manager that patches requests.get and requests.post."""
         import requests as req
+
         with patch.object(req, "get", self._mock_get):
             with patch.object(req, "post", self._mock_post):
                 yield self
@@ -97,6 +97,7 @@ class MockCLI:
         """Context manager that captures echo() calls."""
         try:
             import apps.cli.src.cli as cli_mod
+
             original_echo = cli_mod.echo
             cli_mod.echo = self._mock_echo
             yield self
@@ -136,12 +137,14 @@ class MockLogger:
         return self._mock
 
     def assert_warning(self, text: str) -> None:
-        assert any(text in w for w in self.warnings), \
+        assert any(text in w for w in self.warnings), (
             f"Expected warning containing '{text}', got: {self.warnings}"
+        )
 
     def assert_error(self, text: str) -> None:
-        assert any(text in e for e in self.errors), \
+        assert any(text in e for e in self.errors), (
             f"Expected error containing '{text}', got: {self.errors}"
+        )
 
     def assert_no_errors(self) -> None:
         assert len(self.errors) == 0, f"Expected no errors, got: {self.errors}"
@@ -209,15 +212,13 @@ class MockFilesystem:
 
     def list_files(self, dir_path: str = "") -> list[str]:
         prefix = dir_path.rstrip("/") + "/" if dir_path else ""
-        return [
-            p for p in self._files
-            if p.startswith(prefix) and "/" not in p[len(prefix):]
-        ]
+        return [p for p in self._files if p.startswith(prefix) and "/" not in p[len(prefix) :]]
 
     @contextmanager
     def patch(self):
         """Context manager that patches Path.exists, Path.read_text, etc."""
         from pathlib import Path
+
         original_exists = Path.exists
         original_read = Path.read_text
 

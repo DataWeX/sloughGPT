@@ -17,17 +17,16 @@ afterEach(() => {
 
 describe('GlobalError', () => {
   it('wraps CustomErrorHandler in html and body', () => {
-    const { container } = render(<GlobalError error={new Error('fatal')} reset={vi.fn()} />)
-    expect(container.querySelector('html')).toBeTruthy()
-    expect(container.querySelector('body')).toBeTruthy()
+    render(<GlobalError error={new Error('fatal')} reset={vi.fn()} />)
+    expect(document.querySelector('html')).toBeTruthy()
+    expect(document.querySelector('body')).toBeTruthy()
     expect(screen.getByTestId('handler')).toHaveTextContent('fatal|function|Error')
   })
 
   it('applies background and foreground color classes to body', () => {
-    const { container } = render(<GlobalError error={new Error('fatal')} reset={vi.fn()} />)
-    const body = container.querySelector('body')
-    expect(body?.className).toContain('bg-background')
-    expect(body?.className).toContain('text-foreground')
+    render(<GlobalError error={new Error('fatal')} reset={vi.fn()} />)
+    expect(document.body?.className).toContain('bg-background')
+    expect(document.body?.className).toContain('text-foreground')
   })
 
   it('handles TypeError', () => {

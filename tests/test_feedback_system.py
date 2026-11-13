@@ -17,11 +17,6 @@ _SERVER_DIR = _REPO_ROOT / "apps" / "api" / "server"
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 
-_PKGS_DIR = _REPO_ROOT / "packages" / "core-py"
-if str(_PKGS_DIR) not in sys.path:
-    sys.path.insert(0, str(_PKGS_DIR))
-
-
 pytestmark = pytest.mark.slow
 
 TestClient = pytest.importorskip("fastapi.testclient").TestClient
@@ -181,7 +176,7 @@ def test_export_training(client):
     assert response.status_code == 200
     data = response.json()
     assert "pairs_count" in data
-    assert "filepath" in data
+    assert "file" in data
 
 
 def test_export_training_invalid(client):

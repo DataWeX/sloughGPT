@@ -99,6 +99,7 @@ const session: UseTrainingSessionReturn = {
   stopTurboTrain: vi.fn(),
   startSSETraining: vi.fn(),
   closeStream: vi.fn(),
+  startStandardPoll: vi.fn(),
   turboRunning: false,
 }
 
@@ -146,7 +147,9 @@ describe('TrainingPipeline', () => {
   it('shows epoch info during training', () => {
     const trainSession = { ...session, trainingRunning: true, epoch: 3, totalEpochs: 10 }
     render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
-    expect(screen.getByText('Epoch 3/10')).toBeDefined()
+    // UX_FLOWS Feature 12 plain language: "Training round", never "Epoch"
+    // (guard: training-plain-language.test.tsx, Build Order #5).
+    expect(screen.getByText('Training round 3/10')).toBeDefined()
   })
 
   it('shows step, speed, ETA and elapsed stats during training', () => {

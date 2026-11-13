@@ -70,6 +70,7 @@ export function makeForm(overrides: Record<string, any> = {}) {
     startTraining: vi.fn(),
     resumeCheckpoint: '',
     setResumeCheckpoint: vi.fn(),
+    clearOptimisticJobs: vi.fn(),
     ...overrides,
   }
 }

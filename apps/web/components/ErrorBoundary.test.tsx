@@ -51,7 +51,8 @@ describe('ErrorBoundary', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<ErrorBoundary><ThrowError /></ErrorBoundary>)
     expect(screen.getByText('Something went wrong')).toBeDefined()
-    expect(screen.getByText('Something went wrong. Try refreshing the page.')).toBeDefined()
+    fireEvent.click(screen.getByText('Show details'))
+    expect(screen.getByText('Hide details')).toBeDefined()
   })
 
   it('handles TypeError', () => {

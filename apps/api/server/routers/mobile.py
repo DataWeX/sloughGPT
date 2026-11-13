@@ -11,16 +11,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import time as _time
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
-from domains.infrastructure.errors import AppError
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+
+from domain.infrastructure import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +146,64 @@ class FromSessionsRequest(BaseModel):
     session_ids: list[str] | None = None
 
 
+_CONDA_ENV_NAME = "sloughgpt"
+
+
+def _conda_python_candidates() -> list[Path]:
+    """Interpreter candidates from the conda install, best-first.
+
+    Prefers an *active* ``sloughgpt`` env, then derives the default env
+    location from whichever conda is on PATH — so this works wherever conda
+    is installed instead of assuming ``~/miniconda3``.
+    """
+    candidates: list[Path] = []
+
+    prefix = os.environ.get("CONDA_PREFIX", "")
+    if prefix:
+        p = Path(prefix)
+        if p.name == _CONDA_ENV_NAME:
+            candidates.append(p / "bin" / "python")
+        candidates.append(p / "envs" / _CONDA_ENV_NAME / "bin" / "python")
+
+    conda_exe = os.environ.get("CONDA_EXE", "")
+    if conda_exe:
+        root = Path(conda_exe).parent.parent
+        candidates.append(root / "envs" / _CONDA_ENV_NAME / "bin" / "python")
+
+    # CONDA_PREFIX/CONDA_EXE can both derive the same path — keep it unique
+    # so the candidate list reads as distinct options, not a repeated guess.
+    return list(dict.fromkeys(candidates))
+
+
+def _training_python(repo_root: Path) -> Path:
+    """Interpreter the training subprocess runs under — the one owner of that path.
+
+    Training needs the project environment (torch, transformers, the pinned dep
+    set), so it resolves to the conda ``sloughgpt`` env that AGENTS.md pins as
+    the project interpreter. ``SLO_TRAINING_PYTHON`` overrides it explicitly.
+
+    ``.venv`` survives only as a last-resort fallback: it is gitignored, so it
+    is absent on a fresh clone, and both endpoints used to hard-code it. That
+    left an SSE-flow test which already mocked ``subprocess.Popen`` still
+    hitting a real ``Path.exists()`` — it passed only where a local ``.venv``
+    happened to exist and failed with ``E_ENV_MISSING`` everywhere else.
+
+    Deliberately returns the best *candidate* rather than silently substituting
+    ``sys.executable``: the caller's pre-flight ``exists()`` is what raises
+    E_ENV_MISSING, so a missing env stays a loud error instead of quietly
+    spawning training in whatever interpreter happens to be serving the API.
+    """
+    override = os.environ.get("SLO_TRAINING_PYTHON")
+    if override:
+        return Path(override)
+
+    for candidate in _conda_python_candidates():
+        if candidate.exists():
+            return candidate
+
+    return repo_root / ".venv" / "bin" / "python3"
+
+
 class MobileRouter:
     """Mobile BFF (Backend For Frontend) router."""
 
@@ -261,28 +322,28 @@ class MobileRouter:
 
     @staticmethod
     def _get_sessions_list():
-        """Get session list directly from the inference router."""
+        """Get session list from the shared inference read-model."""
         try:
-            from routers.inference import _instance
+            from routers.inference import build_session_metadata_index
 
-            return _instance._build_session_metadata_index()
+            return build_session_metadata_index()
         except Exception as exc:
             logger.debug("Session list fallback to SessionCore: %s", exc)
-            from domains.infrastructure.session_core import SessionCore
+            from domain.infrastructure.session_core import SessionCore
 
             return SessionCore.list_sessions()
 
     @staticmethod
     def _get_session_messages(session_id: str):
         """Get session messages directly."""
-        from domains.infrastructure.session_core import SessionCore
+        from domain.infrastructure.session_core import SessionCore
 
         return SessionCore.get_messages(session_id)
 
     @staticmethod
     def _get_souls():
         """Get soul list directly from the SloManager."""
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         mgr = get_slo_manager()
         souls = mgr.list_souls()
@@ -294,7 +355,7 @@ class MobileRouter:
     @staticmethod
     def _get_current_soul():
         """Get current soul directly from the SloManager."""
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         soul = get_slo_manager().get_current_soul()
         if soul is None:
@@ -340,22 +401,23 @@ class MobileRouter:
     @staticmethod
     def _get_knowledge_items(limit: int = 200, offset: int = 0, topic: str | None = None):
         """Get knowledge items directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        items = km.list_all(top_k=limit + offset)
+        engine = get_knowledge_engine()
+        result = engine.list_all(top_k=limit + offset)
+        items = result.data if result.success else []
         if topic:
-            items = [i for i in items if getattr(i, "topic", None) == topic]
+            items = [i for i in items if i.get("topic") == topic]
         return [
             {
-                "id": getattr(i, "id", ""),
-                "content": getattr(i, "content", ""),
-                "topic": getattr(i, "topic", ""),
-                "source": getattr(i, "source", "manual"),
-                "importance": getattr(i, "importance", 0.5),
-                "url": getattr(i, "url", ""),
-                "timestamp": getattr(i, "timestamp", 0),
-                "score": getattr(i, "score", 0),
+                "id": i.get("id", ""),
+                "content": i.get("content", ""),
+                "topic": i.get("topic", ""),
+                "source": i.get("source", "manual"),
+                "importance": i.get("importance", 0.5),
+                "url": i.get("url", ""),
+                "timestamp": i.get("timestamp", 0),
+                "score": i.get("score", 0),
             }
             for i in items[offset : offset + limit]
         ]
@@ -363,29 +425,31 @@ class MobileRouter:
     @staticmethod
     def _search_knowledge(query: str, limit: int = 10):
         """Search knowledge items directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        results = km.search(query, top_k=limit)
+        engine = get_knowledge_engine()
+        result = engine.query(query, top_k=limit)
+        items = result.data if result.success else []
         return [
             {
-                "id": getattr(r, "id", ""),
-                "content": getattr(r, "content", ""),
-                "topic": getattr(r, "topic", ""),
-                "source": getattr(r, "source", "manual"),
-                "importance": getattr(r, "importance", 0.5),
-                "score": getattr(r, "score", 0),
+                "id": r.get("id", ""),
+                "content": r.get("content", ""),
+                "topic": r.get("topic", ""),
+                "source": r.get("source", "manual"),
+                "importance": r.get("importance", 0.5),
+                "score": r.get("score", 0),
             }
-            for r in results
+            for r in items
         ]
 
     @staticmethod
     def _create_knowledge_item(content: str, topic: str | None = None):
         """Create a knowledge item directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        return km.store(content, topic=topic)
+        engine = get_knowledge_engine()
+        result = engine.store(content, topic=topic or "general")
+        return result.data if result.success else None
 
     @staticmethod
     def _update_knowledge_item(
@@ -395,18 +459,20 @@ class MobileRouter:
         importance: float | None = None,
     ):
         """Update a knowledge item directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        return km.update(item_id, content=content, topic=topic, importance=importance)
+        engine = get_knowledge_engine()
+        result = engine.update(item_id, content=content, topic=topic, importance=importance)
+        return result.data if result.success else None
 
     @staticmethod
     def _delete_knowledge_item(item_id: str):
         """Delete a knowledge item directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        return km.delete(item_id)
+        engine = get_knowledge_engine()
+        result = engine.delete(item_id)
+        return result.data if result.success else None
 
     @staticmethod
     def _get_checkpoints():
@@ -416,7 +482,6 @@ class MobileRouter:
 
             return get_training_controller().list_checkpoints()
         except Exception as exc:
-            import logging
             logging.getLogger("slo.mobile").warning("Failed to list checkpoints: %s", exc)
             return []
 
@@ -457,7 +522,7 @@ class MobileRouter:
     @staticmethod
     def _switch_soul(soul_name: str, checkpoint_name: str | None = None):
         """Switch soul directly."""
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         mgr = get_slo_manager()
         return mgr.switch_soul(soul_name, checkpoint_name=checkpoint_name)
@@ -835,8 +900,7 @@ class MobileRouter:
             Processes queued messages from the offline cache, sends them to the
             chat endpoint, and returns results for each.
             """
-            from routers.inference import ChatRequest, Message
-            from routers.inference import _instance as _inference
+            from routers.inference import ChatRequest, Message, handle_chat
 
             # Cap batch size to prevent DoS via unbounded inference calls
             MAX_SYNC_MESSAGES = 50
@@ -863,7 +927,7 @@ class MobileRouter:
                         messages=[Message(role="user", content=msg.content)],
                         session_id=msg.session_id,
                     )
-                    chat_resp = await _inference.chat(chat_req)
+                    chat_resp = await handle_chat(chat_req)
                     chat_result = (
                         chat_resp.model_dump()
                         if hasattr(chat_resp, "model_dump")
@@ -947,7 +1011,7 @@ class MobileRouter:
             Returns:
                 Registration status.
             """
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             result = svc.register_device(
@@ -966,7 +1030,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Unregister a device from push notifications."""
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             removed = svc.unregister_device(body.token)
@@ -986,7 +1050,7 @@ class MobileRouter:
             Returns:
                 List of registered devices.
             """
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"devices": svc.get_devices(topic=topic)})
@@ -1007,7 +1071,10 @@ class MobileRouter:
             Returns:
                 Send result with recipient count.
             """
-            from domains.mobile.notifications import NotificationPayload, get_notification_service
+            from domain.mobile import (
+                NotificationPayload,
+                get_notification_service,
+            )
 
             svc = get_notification_service()
             payload = NotificationPayload(
@@ -1030,7 +1097,7 @@ class MobileRouter:
     async def notification_history(self, limit: int = Query(50, ge=1, le=200)) -> dict:
         try:
             """Get recent notification history."""
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"history": svc.get_history(limit=limit)})
@@ -1046,7 +1113,7 @@ class MobileRouter:
             Returns:
                 Count of removed devices.
             """
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             removed = svc.cleanup_stale()
@@ -1060,7 +1127,10 @@ class MobileRouter:
     ) -> dict:
         try:
             """Send a training-complete notification to all registered devices."""
-            from domains.mobile.notifications import NotificationPayload, get_notification_service
+            from domain.mobile import (
+                NotificationPayload,
+                get_notification_service,
+            )
 
             svc = get_notification_service()
             training = self._get_training_status()
@@ -1087,7 +1157,6 @@ class MobileRouter:
         self, body: MobileTrainRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Train the SloNet model on conversation pairs from the mobile app."""
-        import time as _time
         from pathlib import Path
 
         if len(body.pairs) < 5:
@@ -1096,8 +1165,10 @@ class MobileRouter:
         # Filter out pairs with too-short messages
         MIN_MSG_LEN = 5
         valid_pairs = [
-            p for p in body.pairs
-            if len(p.user_msg.strip()) >= MIN_MSG_LEN and len(p.assistant_msg.strip()) >= MIN_MSG_LEN
+            p
+            for p in body.pairs
+            if len(p.user_msg.strip()) >= MIN_MSG_LEN
+            and len(p.assistant_msg.strip()) >= MIN_MSG_LEN
         ]
         if len(valid_pairs) < 5:
             raise_error(
@@ -1108,9 +1179,9 @@ class MobileRouter:
 
         t0 = int(_time.time() * 1000)
 
-        from domains.training.mobile_training_store import get_training_store
+        from domain.training.engine import get_training_engine
 
-        store = get_training_store()
+        store = get_training_engine().get_training_store()
         pair_ids = store.add_batch(
             [
                 {
@@ -1141,7 +1212,7 @@ class MobileRouter:
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
         await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
-        venv_python = repo_root / ".venv" / "bin" / "python3"
+        venv_python = _training_python(repo_root)
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not await asyncio.to_thread(venv_python.exists):
@@ -1249,9 +1320,9 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             stats = store.stats()
             quality_counts = store.quality_breakdown()
 
@@ -1282,9 +1353,9 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             pairs = store.get_pending_pairs(limit=limit)
             return success_response(
                 data={
@@ -1330,9 +1401,9 @@ class MobileRouter:
         Side effects:
             - Reads from MogDB training data collection.
         """
-        from domains.training.mobile_training_store import get_training_store
+        from domain.training.engine import get_training_engine
 
-        store = get_training_store()
+        store = get_training_engine().get_training_store()
         pairs = store.list_pairs(
             limit=limit,
             offset=offset,
@@ -1380,9 +1451,9 @@ class MobileRouter:
         Side effects:
             - Reads from MogDB training data collection.
         """
-        from domains.training.mobile_training_store import get_training_store
+        from domain.training.engine import get_training_engine
 
-        store = get_training_store()
+        store = get_training_engine().get_training_store()
         pairs = store.list_pairs(limit=limit, min_quality=min_quality, session_id=session_id)
 
         def generate() -> AsyncGenerator[str, None]:
@@ -1420,9 +1491,9 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             pairs = store.get_pairs_by_session(session_id)
             return success_response(
                 data={
@@ -1464,9 +1535,9 @@ class MobileRouter:
             Side effects:
                 - Updates quality field in MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             updated = store.update_quality(pair_id, body.quality)
             if not updated:
                 raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
@@ -1493,9 +1564,9 @@ class MobileRouter:
             Side effects:
                 - Deletes pair from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             deleted = store.delete_pair(pair_id)
             if not deleted:
                 raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
@@ -1516,9 +1587,9 @@ class MobileRouter:
             Side effects:
                 - Deletes all synced pairs from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             count = store.delete_synced()
             safe_audit_log("mobile.pairs_delete_synced", detail=f"count={count}")
             return success_response(data={"status": "deleted", "count": count})
@@ -1533,9 +1604,9 @@ class MobileRouter:
     ) -> dict:
         try:
             """Delete multiple training pairs by ID."""
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             count = 0
             for pair_id in ids:
                 if store.delete_pair(pair_id):
@@ -1551,9 +1622,9 @@ class MobileRouter:
     ) -> dict:
         try:
             """Compact the training data store (reclaim space from deleted records)."""
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             count = store.compact()
             return success_response(data={"status": "compacted", "count": count})
 
@@ -1588,12 +1659,12 @@ class MobileRouter:
         """
         from pathlib import Path
 
-        from domains.api.sse_envelope import sse_complete, sse_error, sse_event
+        from domain.api import sse_complete, sse_error, sse_event
 
         t0 = _time.time()
 
         # Extract pairs from server logs
-        from domains.training.pair_extractor import (
+        from domain.training import (
             extract_pairs_from_logs,
             extract_pairs_from_sessions,
             write_training_text,
@@ -1630,11 +1701,11 @@ class MobileRouter:
         text_file = write_training_text(pairs)
 
         # Store pairs in MogDB (with quality scoring)
-        from domains.training.mobile_training_store import get_training_store
-        from domains.training.quality_scorer import score_batch
+        from domain.training.engine import get_training_engine
 
-        quality_scores = score_batch(pairs)
-        store = get_training_store()
+        engine = get_training_engine()
+        quality_scores = engine.score_pairs(pairs).data or []
+        store = engine.get_training_store()
         store.add_batch(
             [
                 {
@@ -1654,7 +1725,7 @@ class MobileRouter:
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        venv_python = repo_root / ".venv" / "bin" / "python3"
+        venv_python = _training_python(repo_root)
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not venv_python.exists():
@@ -1734,7 +1805,7 @@ class MobileRouter:
                         asyncio.get_running_loop().run_in_executor(None, proc.stdout.readline),
                         timeout=disconnect_check_interval,
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # readline timed out — loop back to check deadline/disconnect
                     continue
 
@@ -1858,10 +1929,10 @@ class MobileRouter:
             Side effects:
                 - None (reads from AutoTrainer singleton).
             """
-            from domains.training.auto_trainer import get_auto_trainer
+            from domain.training.engine import get_training_engine
 
-            trainer = get_auto_trainer()
-            return success_response(data=trainer.status())
+            engine = get_training_engine()
+            return success_response(data=engine.get_auto_trainer_status().data)
 
         except Exception as e:
             classify_and_raise(e, source="mobile.get_auto_train_status")
@@ -1885,14 +1956,16 @@ class MobileRouter:
         Side effects:
             - Modifies AutoTrainer singleton attributes.
         """
-        from domains.training.auto_trainer import get_auto_trainer
+        from domain.training.engine import get_training_engine
 
-        trainer = get_auto_trainer()
+        engine = get_training_engine()
+        updates = {}
         if threshold is not None:
-            trainer.threshold = threshold
+            updates["threshold"] = threshold
         if interval_s is not None:
-            trainer.interval_s = interval_s
-        return success_response(data=trainer.status())
+            updates["interval_s"] = interval_s
+        result = engine.update_auto_trainer_config(**updates)
+        return success_response(data=result.data)
 
 
 router = MobileRouter().router

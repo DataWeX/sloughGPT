@@ -8,6 +8,7 @@
  */
 
 import { apiGet, apiPost } from './http-client'
+import { serverNow } from '../../lib/clock'
 import { logger } from './dev-log'
 import type { ModelInfo } from './types'
 
@@ -151,8 +152,8 @@ export const modelController = {
   },
 
   async waitForReady(timeoutMs = 90_000, pollMs = 2_000): Promise<ModelStatus> {
-    const start = Date.now()
-    while (Date.now() - start < timeoutMs) {
+    const start = serverNow()
+    while (serverNow() - start < timeoutMs) {
       const s = await this.status()
       if (s.loaded) return s
       await new Promise(r => setTimeout(r, pollMs))

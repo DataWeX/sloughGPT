@@ -13,8 +13,14 @@
  *   stream.stop()  // later
  */
 
-import { PUBLIC_API_URL } from './config'
-import { useAuthStore } from './auth'
+import { fetchSSE } from './http-client'
+
+// The wire-frame parser moved down into the transport (it is pure decode with
+// no app dependency). Imported locally for connect()'s decode loop, and
+// re-exported so app-layer callers keep their import path.
+import { consumeSSEChunk, consumeSSEDrain } from '../../lib/sse-parse'
+export type { SSEParseResult } from '../../lib/sse-parse'
+export { consumeSSEChunk, consumeSSEDrain }
 
 export interface SSEEnvelope {
   stream: string
@@ -87,18 +93,17 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
     if (_stopped) return
 
     controller = new AbortController()
-    const apiUrl = `${PUBLIC_API_URL}${url}`
 
     const headers: Record<string, string> = {
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
       ...extraHeaders,
     }
-    const token = useAuthStore.getState().token
-    if (token) headers['Authorization'] = `Bearer ${token}`
 
     try {
-      const res = await fetch(apiUrl, {
+      // Base URL resolution and the bearer token now come from the transport
+      // (fetchSSE) instead of a second hand-rolled fetch in this file.
+      const res = await fetchSSE(url, {
         headers,
         signal: controller.signal,
       })
@@ -117,26 +122,19 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
       const decoder = new TextDecoder()
       let buffer = ''
 
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read()
         if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.slice(6).trim()
-            if (!jsonStr) continue
-            try {
-              const parsed = JSON.parse(jsonStr)
-              onEvent(parsed as SSEEnvelope)
-            } catch {
-              // skip malformed events
-            }
-          }
+        const { events, buffer: nextBuffer } = consumeSSEChunk(buffer, decoder, value)
+        buffer = nextBuffer
+        for (const event of events) {
+          onEvent(event as SSEEnvelope)
         }
+      }
+
+      for (const event of consumeSSEDrain(buffer)) {
+        onEvent(event as SSEEnvelope)
       }
 
       // Stream ended normally
@@ -157,14 +155,13 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
         reconnectCount++
         // Detect connection refused / fetch failures during cold start.
         // Use a longer initial delay to avoid hammering a dead server.
-        const isConnRefused = err instanceof Error && (
-          err.message.includes('Failed to fetch') ||
-          err.message.includes('ECONNREFUSED') ||
-          err.message.includes('NetworkError')
-        )
-        const effectiveBase = isConnRefused && reconnectCount <= 3
-          ? Math.max(baseReconnectMs, 5000)
-          : baseReconnectMs
+        const isConnRefused =
+          err instanceof Error &&
+          (err.message.includes('Failed to fetch') ||
+            err.message.includes('ECONNREFUSED') ||
+            err.message.includes('NetworkError'))
+        const effectiveBase =
+          isConnRefused && reconnectCount <= 3 ? Math.max(baseReconnectMs, 5000) : baseReconnectMs
         const delay = Math.min(maxReconnectMs, effectiveBase * Math.pow(2, reconnectCount - 1))
         reconnectTimer = setTimeout(connect, delay)
       } else {

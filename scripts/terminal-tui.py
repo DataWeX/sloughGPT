@@ -11,17 +11,19 @@ Shows:
   - Full dev dashboard with tabs and logs
 """
 
-import sys
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "apps", "cli", "src"))
 
 from core.tui import (
-    LiveDisplay, DevDashboard, TabConfig,
-    FG, _fg, _RESET, _BOLD, _DIM,
-    render_panel, render_gradient_header, render_metrics_row,
-    render_tab_bar, render_footer,
+    _BOLD,
+    _DIM,
+    _RESET,
+    DevDashboard,
+    LiveDisplay,
+    TabConfig,
 )
 
 SPINNERS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -44,9 +46,9 @@ def demo_multi_line_fixed():
             lines.append(f"  {_BOLD}Loading 10 tasks{_RESET}")
             for i in range(10):
                 ch = SPINNERS[(frame + i) % len(SPINNERS)]
-                lines.append(f"    {ch}  Task {i+1}/10")
+                lines.append(f"    {ch}  Task {i + 1}/10")
             lines.append("")
-            lines.append(f"  {_DIM}frame {frame+1}{_RESET}")
+            lines.append(f"  {_DIM}frame {frame + 1}{_RESET}")
             d.update("\n".join(lines))
             time.sleep(0.08)
 
@@ -72,10 +74,10 @@ def demo_dashboard():
     db = DevDashboard("SloughGPT Dev Server", tabs=tabs)
     db._api_lines = api_lines
     db._web_lines = [
-        "> next dev",
-        "  ▲ Next.js 15.5.24",
-        "  - Local: http://localhost:3000",
-        "  ✓ Ready in 2.9s",
+        "> vite",
+        "  VITE ready in 290 ms",
+        "  ➜  Local:   http://localhost:5173/",
+        "  ➜  Network: http://0.0.0.0:5173/",
     ]
     db._states = {"api": "ready", "web": "ready"}
 

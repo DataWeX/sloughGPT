@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   STRUI_VERSION,
   FEATURE_VERSIONS,
+  NEW_FEATURES,
   getComponentFeature,
+  isNewFeature,
   listFeatures,
 } from './versions'
 
@@ -93,8 +95,9 @@ describe('FEATURE_VERSIONS', () => {
     // This is intentional — they serve multiple domains
     const shared = ['StatusDot', 'StatCard', 'KpiGrid']
     for (const comp of shared) {
-      const occurrences = Object.entries(FEATURE_VERSIONS)
-        .filter(([, info]) => info.components.includes(comp))
+      const occurrences = Object.entries(FEATURE_VERSIONS).filter(([, info]) =>
+        info.components.includes(comp),
+      )
       expect(occurrences.length).toBeGreaterThanOrEqual(1)
     }
   })
@@ -162,7 +165,7 @@ describe('listFeatures', () => {
 
   it('includes core feature', () => {
     const features = listFeatures()
-    const core = features.find(f => f.name === 'core')
+    const core = features.find((f) => f.name === 'core')
     expect(core).toBeDefined()
     expect(core!.backend).toBe('/')
   })
@@ -177,5 +180,41 @@ describe('listFeatures', () => {
 
   it('returns all features', () => {
     expect(listFeatures().length).toBe(Object.keys(FEATURE_VERSIONS).length)
+  })
+})
+
+// ── isNewFeature / NEW_FEATURES ────────────────────────────────────
+
+describe('isNewFeature', () => {
+  const NOW = Date.parse('2026-09-23T00:00:00Z')
+
+  it('has documented features in NEW_FEATURES', () => {
+    expect(Object.keys(NEW_FEATURES).length).toBeGreaterThan(0)
+    for (const [name, meta] of Object.entries(NEW_FEATURES)) {
+      expect(meta.releasedAt).toMatch(/^\d{4}-\d{2}-\d{2}/)
+      expect(meta.windowDays).toBeGreaterThan(0)
+      expect(name.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('returns true inside the freshness window', () => {
+    const midWindow = new Date(NOW)
+    midWindow.setDate(midWindow.getDate() + 1)
+    expect(isNewFeature('consciousness', midWindow)).toBe(true)
+  })
+
+  it('returns false once the window expires', () => {
+    const expired = new Date(NOW)
+    expired.setDate(expired.getDate() + 90)
+    expect(isNewFeature('consciousness', expired)).toBe(false)
+  })
+
+  it('returns false for unknown features', () => {
+    expect(isNewFeature('nope', new Date(NOW))).toBe(false)
+  })
+
+  it('returns false for a feature released in the future', () => {
+    const beforeRelease = new Date(Date.parse('2020-01-01T00:00:00Z'))
+    expect(isNewFeature('consciousness', beforeRelease)).toBe(false)
   })
 })

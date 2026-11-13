@@ -1,7 +1,43 @@
 /**
  */
+import React from 'react'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+
+vi.mock('./CodeBlock', () => {
+  return {
+    CodeBlock: (props: any) => {
+      const { language, code } = props || {}
+      const [copied, setCopied] = React.useState(false)
+      return (
+        <div>
+          <span>{language || 'code'}</span>
+          <button
+            aria-label="Copy code"
+            onClick={() => navigator.clipboard.writeText(code).then(() => setCopied(true))}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <pre>{code}</pre>
+        </div>
+      )
+    },
+  }
+})
+
+vi.mock('@/vite/next-compat/dynamic', () => ({
+  default: (factory: () => Promise<any>) => {
+    let _resolved: any = null
+    factory().then((mod: any) => {
+      _resolved = typeof mod === 'function' ? mod : mod.default || mod.CodeBlock
+    })
+    return function ResolvedDynamic(props: any) {
+      if (!_resolved) return null
+      return <_resolved {...props} />
+    }
+  },
+}))
+
 import { Markdown } from './Markdown'
 
 afterEach(cleanup)
@@ -118,23 +154,26 @@ describe('Markdown', () => {
     expect(hr).toBeInTheDocument()
   })
 
-  it('renders code block with language', () => {
+  it('renders code block with language', async () => {
     const { container } = render(<Markdown content={"```python\nprint('hi')\n```"} />)
+    await waitFor(() => {
+      const pre = container.querySelector('pre')
+      expect(pre).toBeInTheDocument()
+    })
     const pre = container.querySelector('pre')
-    expect(pre).toBeInTheDocument()
     expect(pre?.textContent).toContain("print('hi')")
     expect(container.textContent).toContain('python')
   })
 
   it('renders code block without language', () => {
-    const { container } = render(<Markdown content={"```\nplain code\n```"} />)
+    const { container } = render(<Markdown content={'```\nplain code\n```'} />)
     const pre = container.querySelector('pre')
     expect(pre).toBeInTheDocument()
     expect(container.textContent).toContain('code')
   })
 
   it('code block has copy button', () => {
-    const { container } = render(<Markdown content={"```js\nvar x = 1\n```"} />)
+    const { container } = render(<Markdown content={'```js\nvar x = 1\n```'} />)
     const copyBtn = container.querySelector('button')
     expect(copyBtn).toBeInTheDocument()
     expect(copyBtn).toHaveAttribute('aria-label', 'Copy code')
@@ -144,7 +183,7 @@ describe('Markdown', () => {
     Object.assign(navigator, {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
     })
-    const { container } = render(<Markdown content={"```js\nvar x = 1\n```"} />)
+    const { container } = render(<Markdown content={'```js\nvar x = 1\n```'} />)
     const copyBtn = container.querySelector('button')!
     fireEvent.click(copyBtn)
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('var x = 1')
@@ -186,5 +225,66 @@ describe('Markdown', () => {
     const link = screen.getByText('here')
     expect(link.tagName).toBe('A')
     expect(link).toHaveAttribute('href', 'https://example.com')
+  })
+
+  // ── Images ────────────────────────────────────────────────────────────
+  it('renders image', () => {
+    render(<Markdown content="![a cat](https://example.com/cat.png)" />)
+    const img = screen.getByAltText('a cat')
+    expect(img.tagName).toBe('IMG')
+    expect(img).toHaveAttribute('src', 'https://example.com/cat.png')
+  })
+
+  it('renders image inline with surrounding text', () => {
+    render(<Markdown content="look ![pic](https://example.com/p.png) here" />)
+    expect(screen.getByAltText('pic')).toBeInTheDocument()
+    expect(screen.getByText(/look/)).toBeInTheDocument()
+    expect(screen.getByText(/here/)).toBeInTheDocument()
+  })
+
+  it('renders image with empty alt text', () => {
+    // alt="" makes the img role="presentation", so query the DOM directly
+    // instead of getByRole('img').
+    const { container } = render(<Markdown content="![](https://example.com/x.png)" />)
+    const img = container.querySelector('img')
+    expect(img).not.toBeNull()
+    expect(img).toHaveAttribute('src', 'https://example.com/x.png')
+    expect(img).toHaveAttribute('alt', '')
+  })
+
+  it('renders relative image src', () => {
+    render(<Markdown content="![rel](/static/logo.png)" />)
+    expect(screen.getByAltText('rel')).toHaveAttribute('src', '/static/logo.png')
+  })
+
+  it('does not render image as a link', () => {
+    // Regression: the link regex \[(.+?)\]\((.+?)\) matches INSIDE
+    // ![alt](url), so before image support this rendered a literal "!"
+    // followed by an <a> whose text was the alt.
+    render(<Markdown content="![cat](https://example.com/c.png)" />)
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.getByAltText('cat')).toBeInTheDocument()
+  })
+
+  it('renders literal text for unsafe image url', () => {
+    // javascript: and data:text/html must never become an img src.
+    render(<Markdown content="![bad](javascript:alert(1))" />)
+    expect(screen.queryByAltText('bad')).toBeNull()
+  })
+
+  it('refuses scriptable data url but allows raster data url', () => {
+    const { rerender } = render(
+      <Markdown content="![svg](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)" />,
+    )
+    expect(screen.queryByAltText('svg')).toBeNull()
+
+    rerender(<Markdown content="![png](data:image/png;base64,iVBORw0KGgo=)" />)
+    expect(screen.getByAltText('png')).toBeInTheDocument()
+  })
+
+  it('does not treat a link as an image', () => {
+    render(<Markdown content="[not an image](https://example.com)" />)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByText('not an image')).toBeInTheDocument()
   })
 })

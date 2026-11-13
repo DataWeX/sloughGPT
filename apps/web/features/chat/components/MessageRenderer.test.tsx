@@ -7,10 +7,55 @@ afterEach(() => cleanup())
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
+
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 vi.mock('./messages/Markdown', () => ({
-  Markdown: ({ content }: { content: string }) => React.createElement('div', { 'data-testid': 'markdown' }, content),
+  Markdown: ({ content }: { content: string }) =>
+    React.createElement('div', { 'data-testid': 'markdown' }, content),
 }))
 
 vi.mock('./messages/ToolCallPanel', () => ({
@@ -40,7 +85,7 @@ describe('MessageRenderer', () => {
     render(
       React.createElement(MessageRenderer, {
         message: { ...baseMessage, role: 'assistant', content: 'Test response' },
-      })
+      }),
     )
     expect(screen.getByTestId('markdown')).toHaveTextContent('Test response')
   })
@@ -50,7 +95,7 @@ describe('MessageRenderer', () => {
       React.createElement(MessageRenderer, {
         message: { ...baseMessage, role: 'assistant', content: '' },
         isStreaming: true,
-      })
+      }),
     )
     expect(screen.getByTestId('streaming-indicator')).toHaveAttribute('data-status', 'thinking')
   })
@@ -60,7 +105,7 @@ describe('MessageRenderer', () => {
       React.createElement(MessageRenderer, {
         message: { ...baseMessage, role: 'assistant', content: 'Partial' },
         isStreaming: true,
-      })
+      }),
     )
     expect(screen.getByText('Partial')).toBeInTheDocument()
     const cursor = document.querySelector('.animate-pulse')
@@ -77,7 +122,9 @@ describe('MessageRenderer', () => {
   })
 
   it('renders ImageGrid empty when no images', () => {
-    const { container } = render(React.createElement(MessageRenderer, { message: { ...baseMessage, images: [] } }))
+    const { container } = render(
+      React.createElement(MessageRenderer, { message: { ...baseMessage, images: [] } }),
+    )
     expect(container.querySelectorAll('img')).toHaveLength(0)
   })
 
@@ -96,14 +143,16 @@ describe('MessageRenderer', () => {
     render(
       React.createElement(MessageRenderer, {
         message: { ...baseMessage, role: 'assistant', reasoning: 'Thinking step...' },
-      })
+      }),
     )
     expect(screen.getByText('Reasoning')).toBeInTheDocument()
     expect(screen.getByText('Thinking step...')).toBeInTheDocument()
   })
 
   it('hides reasoning when not provided', () => {
-    const { container } = render(React.createElement(MessageRenderer, { message: { ...baseMessage, role: 'assistant' } }))
+    const { container } = render(
+      React.createElement(MessageRenderer, { message: { ...baseMessage, role: 'assistant' } }),
+    )
     expect(container.querySelector('details')).not.toBeInTheDocument()
   })
 
@@ -118,7 +167,7 @@ describe('MessageRenderer', () => {
       React.createElement(MessageRenderer, {
         message: { ...baseMessage, content: 'Price is $5.00 (tax incl.)' },
         searchQuery: '$5.00',
-      })
+      }),
     )
     expect(screen.getByText('$5.00')).toBeInTheDocument()
   })
@@ -136,7 +185,7 @@ describe('MessageRenderer', () => {
           role: 'assistant',
           metadata: { model: 'gpt-4', tokens: 42, latencyMs: 1200 },
         },
-      })
+      }),
     )
     expect(screen.getByText('gpt-4')).toBeInTheDocument()
     expect(screen.getByText('· 42 tokens')).toBeInTheDocument()
@@ -145,8 +194,37 @@ describe('MessageRenderer', () => {
 
   it('applies custom className prop', () => {
     const { container } = render(
-      React.createElement(MessageRenderer, { message: baseMessage, className: 'custom-class' })
+      React.createElement(MessageRenderer, { message: baseMessage, className: 'custom-class' }),
     )
     expect(container.firstChild).toHaveClass('custom-class')
+  })
+
+  // ── MessageFrame enforcement (Direction B, ruling 2026-11-03) ───────
+
+  it('renders both roles through MessageFrame', () => {
+    const user = render(React.createElement(MessageRenderer, { message: baseMessage }))
+    expect(user.container.querySelector('[data-message-frame="user"]')).not.toBeNull()
+    cleanup()
+    const assistant = render(
+      React.createElement(MessageRenderer, {
+        message: { ...baseMessage, role: 'assistant' },
+      }),
+    )
+    expect(assistant.container.querySelector('[data-message-frame="assistant"]')).not.toBeNull()
+  })
+
+  it('keeps metadata in the frame footer, not outside it', () => {
+    const { container } = render(
+      React.createElement(MessageRenderer, {
+        message: {
+          ...baseMessage,
+          role: 'assistant',
+          metadata: { model: 'gpt-4', tokens: 42, latencyMs: 1200 },
+        },
+      }),
+    )
+    const footer = container.querySelector('[data-message-frame] [data-message-frame-footer]')
+    expect(footer).not.toBeNull()
+    expect(footer!.textContent).toContain('gpt-4')
   })
 })

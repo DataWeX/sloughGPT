@@ -1,6 +1,13 @@
 """LoRA fine-tuning routes — lora-finetune, load-adapter, unload-adapter.
 
 Extracted from execution.py to keep each module focused.
+
+Descriptor-projected (card 20261104_151036): three ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Raw wire — the
+handlers' dicts are served unwrapped (``envelope=False``), byte-identical to
+the hand-built routes. ``lora-finetune`` declares its body's model constraints
+and ``auth_user`` scope; ``load-adapter``/``unload-adapter`` stay public (no
+``auth_user`` in their signatures).
 """
 
 from __future__ import annotations
@@ -12,11 +19,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from domains.shared import find_repo_root
-from domains.training.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
+
+from domain.agents import ToolSpec
+from domain.shared import find_repo_root
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -29,7 +39,6 @@ logger = logging.getLogger("slo")
 router = APIRouter(tags=["training-lora"])
 
 
-@router.post("/training/lora-finetune")
 async def start_lora_finetune(
     request: LoraFinetuneRequest, auth_user: dict = Depends(require_auth_if_enabled)
 ):
@@ -56,7 +65,9 @@ async def start_lora_finetune(
     if not str(model_path.resolve()).startswith(str(repo_root.resolve())):
         raise_error("Invalid model path", "E_BAD_REQUEST", status_code=400)
     if model_path.suffix != ".slnc":
-        raise_error(f"Model must be .slnc format, got {model_path.suffix}", "E_BAD_REQUEST", status_code=400)
+        raise_error(
+            f"Model must be .slnc format, got {model_path.suffix}", "E_BAD_REQUEST", status_code=400
+        )
     # Validate dataset
     datasets_dir = repo_root / "datasets"
     data_dir = datasets_dir / request.dataset
@@ -161,7 +172,7 @@ async def start_lora_finetune(
         logger.warning("Training runtime registration failed for %s: %s", job_id, e)
 
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
@@ -176,7 +187,7 @@ async def start_lora_finetune(
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
-            from domains.training.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
+            from domain.training import HFLoraConfig, HFLoraTrainer
 
             start_time = time.time()
 
@@ -213,13 +224,12 @@ async def start_lora_finetune(
                 if total_epochs > 0:
                     rec["progress"] = min(99, int((rec["current_epoch"] / total_epochs) * 100))
 
-            config = HFLoraConfig(
+            config_kwargs: dict[str, Any] = dict(
                 model_path=str(model_path),
                 data_path=str(data_path),
                 rank=request.rank,
                 alpha=request.alpha,
                 dropout=request.dropout,
-                target_modules=request.target_modules,
                 epochs=request.epochs,
                 batch_size=request.batch_size,
                 block_size=request.block_size,
@@ -231,11 +241,18 @@ async def start_lora_finetune(
                 log_interval=request.log_interval,
                 output_dir=request.output_dir,
                 adapter_name=request.adapter_name,
+                progress_callback=on_progress,
                 _cancel_event=cancel_event,
             )
+            # Omit when None so HFLoraConfig default_factory (W_q/W_k/W_v/W_o)
+            # applies — explicitly passing None would fall through to LoRAConfig's
+            # q_proj default and match zero modules on SloTransformer.
+            if request.target_modules:
+                config_kwargs["target_modules"] = request.target_modules
+            config = HFLoraConfig(**config_kwargs)
 
             trainer = HFLoraTrainer(config)
-            result = trainer.train(on_progress=on_progress)
+            result = trainer.train()
 
             if cancel_event.is_set():
                 _finish_job(job_id, "cancelled")
@@ -322,22 +339,58 @@ def _resolve_adapter_path(raw: str) -> Path:
     raise_error(f"Adapter not found: {raw}", "E_BAD_REQUEST", status_code=400)
 
 
-@router.post("/training/load-adapter")
 async def load_adapter(request: LoadAdapterRequest):
     """Load a LoRA adapter into the currently running model for inference."""
     adapter_path = _resolve_adapter_path(request.adapter_path)
 
     # Find the ProcessGuard — stored in the models controller (adopted during autoload)
-    from domains.infrastructure.server_state import get_server_state
+    from domain.infrastructure.server_state import get_server_state
 
     provider = get_server_state().model.get()
     if provider is None:
         raise_error("No model loaded — load a model first", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domains.training.lora import load_lora_adapter
+        import numpy as np
 
-        load_lora_adapter(provider, str(adapter_path), merge=request.merge)
+        from domain.training import (
+            LoRAConfig,
+            apply_lora_to_model,
+            count_lora_parameters,
+            get_lora_parameters,
+            load_lora_adapter,
+            merge_lora_adapter,
+        )
+
+        adapter = np.load(str(adapter_path), allow_pickle=True)
+        rank = int(adapter["_config/rank"][0]) if "_config/rank" in adapter else 8
+        alpha = float(adapter["_config/alpha"][0]) if "_config/alpha" in adapter else 16.0
+        target_modules = []
+        n_modules = (
+            int(adapter["_config/target_modules"][0]) if "_config/target_modules" in adapter else 0
+        )
+        for i in range(n_modules):
+            key = f"_config/target_module_{i}"
+            if key in adapter:
+                target_modules.append("".join(chr(int(c)) for c in adapter[key].tolist()))
+        if not target_modules:
+            target_modules = ["W_q", "W_k", "W_v", "W_o"]
+
+        model = getattr(provider, "_model", provider)
+        if model is None:
+            raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
+        if not get_lora_parameters(model):
+            model = apply_lora_to_model(
+                model, LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
+            )
+            if hasattr(provider, "_model"):
+                provider._model = model
+        load_lora_adapter(model, str(adapter_path))
+        if request.merge:
+            model = merge_lora_adapter(model)
+            if hasattr(provider, "_model"):
+                provider._model = model
+        n_params = count_lora_parameters(model) if not request.merge else 0
     except Exception as e:
         raise_error(f"Failed to load adapter: {e}", "E_BAD_REQUEST", status_code=400)
 
@@ -345,24 +398,86 @@ async def load_adapter(request: LoadAdapterRequest):
         "status": "loaded",
         "adapter_path": str(adapter_path),
         "merged": request.merge,
+        "rank": rank,
+        "alpha": alpha,
+        "target_modules": target_modules,
+        "n_params": n_params,
         "message": f"Adapter loaded: {adapter_path.name}",
     }
 
 
-@router.post("/training/unload-adapter")
 async def unload_adapter():
     """Unload the active LoRA adapter, reverting to base weights."""
-    from domains.infrastructure.server_state import get_server_state
+    from domain.infrastructure.server_state import get_server_state
 
     provider = get_server_state().model.get()
     if provider is None:
         raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domains.training.lora import unload_lora_adapter
+        from domain.training import unload_lora_adapter
 
         unload_lora_adapter(provider)
     except Exception as e:
         raise_error(f"Failed to unload adapter: {e}", "E_BAD_REQUEST", status_code=400)
 
     return {"status": "unloaded", "message": "LoRA adapter unloaded"}
+
+
+# ── descriptor projection (card 20261104_151036) ────────────────────────
+#
+# One ToolSpec per capability; create_router derives verb, auth, validation,
+# envelope and OpenAPI metadata. RouteSpec.summary carries the hand-built
+# operation title (FastAPI derives it from the route name as
+# ``route.name.replace("_", " ").title()``); spec.description is the handler
+# docstring verbatim, so summary/description publish byte-identically.
+
+SPEC_LORA_FINETUNE = ToolSpec(
+    name="training.lora.finetune",
+    description="LoRA fine-tuning on .slnc models using SloNet numpy autograd (no PyTorch).",
+    parameters=params_from_model(LoraFinetuneRequest),
+    execute=start_lora_finetune,
+    idempotent=False,
+    auth_scope="authenticated",
+    version="1",
+)
+
+SPEC_LOAD_ADAPTER = ToolSpec(
+    name="training.lora.load_adapter",
+    description="Load a LoRA adapter into the currently running model for inference.",
+    parameters=params_from_model(LoadAdapterRequest),
+    execute=load_adapter,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_UNLOAD_ADAPTER = ToolSpec(
+    name="training.lora.unload_adapter",
+    description="Unload the active LoRA adapter, reverting to base weights.",
+    parameters=[],
+    execute=unload_adapter,
+    idempotent=False,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_LORA_FINETUNE,
+        RouteSpec(path="/training/lora-finetune", envelope=False, summary="Start Lora Finetune"),
+        start_lora_finetune,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_LOAD_ADAPTER,
+        RouteSpec(path="/training/load-adapter", envelope=False, summary="Load Adapter"),
+        load_adapter,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_UNLOAD_ADAPTER,
+        RouteSpec(path="/training/unload-adapter", envelope=False, summary="Unload Adapter"),
+        unload_adapter,
+    )
+)

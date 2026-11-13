@@ -98,7 +98,7 @@ def get_thing():
     return _instance
 
 # After: One import
-from domains.infrastructure.singleton import SingletonMeta
+from domain.infrastructure._internal.singleton import SingletonMeta
 
 class Thing(metaclass=SingletonMeta):
     pass
@@ -197,7 +197,7 @@ npm run test          # Full suite
 ## File Organization
 
 ```
-packages/core-py/domains/
+domain/
 ├── infrastructure/
 │   ├── singleton.py          # SingletonMeta metaclass
 │   ├── server_state.py       # AtomicRef with __slots__

@@ -153,7 +153,7 @@ export function useTrainingPolling(): TrainingPolling {
           clearInterval(pollId); turboPollRef.current = null
           writeTraining({ phase: 'error', error: s.error })
           addToast?.(s.error, 'error')
-          sendBrowserNotification('Turbo Training Failed', s.error)
+          sendBrowserNotification('Training Failed', s.error)
           return
         }
 
@@ -173,12 +173,12 @@ export function useTrainingPolling(): TrainingPolling {
             modelPath: (s.result?.model_path as string) ?? null,
             avgQuality: (s.result?.avg_quality as number) ?? s.avg_quality ?? null,
           })
-          addToast?.('Turbo training complete!', 'success')
-          sendBrowserNotification('Turbo Training Complete', 'Your turbo training finished successfully')
+          addToast?.('Training complete!', 'success')
+          sendBrowserNotification('Training Complete', 'Your training finished successfully')
         } else {
           writeTraining({ phase: 'error', error: s.error || 'Could not train' })
           addToast?.(s.error || 'Could not train', 'error')
-          sendBrowserNotification('Turbo Training Failed', s.error || 'Turbo training encountered an error')
+          sendBrowserNotification('Training Failed', s.error || 'Training encountered an error')
         }
       } catch (e) {
         turboRetryRef.current++

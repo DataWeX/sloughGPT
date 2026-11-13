@@ -3,10 +3,20 @@ import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-libra
 import React from 'react'
 
 const {
-  mockList, mockCreate, mockDelete, mockExecute, mockOrchestrate, mockAddToast, mockDownloadJson,
+  mockList,
+  mockCreate,
+  mockDelete,
+  mockExecute,
+  mockOrchestrate,
+  mockAddToast,
+  mockDownloadJson,
 } = vi.hoisted(() => ({
-  mockList: vi.fn(), mockCreate: vi.fn(), mockDelete: vi.fn(),
-  mockExecute: vi.fn(), mockOrchestrate: vi.fn(), mockAddToast: vi.fn(),
+  mockList: vi.fn(),
+  mockCreate: vi.fn(),
+  mockDelete: vi.fn(),
+  mockExecute: vi.fn(),
+  mockOrchestrate: vi.fn(),
+  mockAddToast: vi.fn(),
   mockDownloadJson: vi.fn(),
 }))
 
@@ -14,29 +24,97 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, placeholder }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} />
     ),
-    AlertDialog: passthrough, AlertDialogAction: passthrough, AlertDialogCancel: passthrough,
-    AlertDialogContent: passthrough, AlertDialogDescription: passthrough,
-    AlertDialogFooter: passthrough, AlertDialogHeader: passthrough, AlertDialogTitle: passthrough,
-    EmptyCard: ({ title, description }: any) => <div data-testid="empty-card"><div>{title}</div><div>{description}</div></div>,
+    AlertDialog: passthrough,
+    AlertDialogAction: passthrough,
+    AlertDialogCancel: passthrough,
+    AlertDialogContent: passthrough,
+    AlertDialogDescription: passthrough,
+    AlertDialogFooter: passthrough,
+    AlertDialogHeader: passthrough,
+    AlertDialogTitle: passthrough,
+    EmptyCard: ({ title, description }: any) => (
+      <div data-testid="empty-card">
+        <div>{title}</div>
+        <div>{description}</div>
+      </div>
+    ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
-    StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={`stat-${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     IconPlus: () => <span>+</span>,
     IconTrash: () => <span>trash</span>,
     IconClock: () => <span>clock</span>,
     IconCopy: () => <span>copy</span>,
     Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
-      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onCheckedChange?.(!checked)}
+        className={className}
+        {...props}
+      />
     ),
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
@@ -56,9 +134,21 @@ vi.mock('@/lib/agents-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/download-utils', () => ({
   downloadJson: (...a: unknown[]) => mockDownloadJson(...a),
@@ -72,6 +162,12 @@ vi.mock('@/lib/validation-schemas', () => ({
   agentSchema: { parse: (v: any) => v, safeParse: (v: any) => ({ success: true, data: v }) },
   agentExecuteSchema: { parse: (v: any) => v, safeParse: (v: any) => ({ success: true, data: v }) },
   orchestrateSchema: { parse: (v: any) => v, safeParse: (v: any) => ({ success: true, data: v }) },
+}))
+
+vi.mock('@/vite/next-compat/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/agents',
 }))
 
 import AgentsPage from './page'
@@ -111,8 +207,20 @@ describe('AgentsPage — initial load flow', () => {
 describe('AgentsPage — agent list flow', () => {
   it('displays agents when loaded', async () => {
     mockList.mockResolvedValue([
-      { id: 'a1', name: 'Researcher', description: 'Finds information', tools: ['web_search'], created_at: '2026-08-07T00:00:00Z' },
-      { id: 'a2', name: 'Coder', description: 'Writes code', tools: ['code_execution'], created_at: '2026-08-07T00:00:00Z' },
+      {
+        id: 'a1',
+        name: 'Researcher',
+        description: 'Finds information',
+        tools: ['web_search'],
+        created_at: '2026-08-07T00:00:00Z',
+      },
+      {
+        id: 'a2',
+        name: 'Coder',
+        description: 'Writes code',
+        tools: ['code_execution'],
+        created_at: '2026-08-07T00:00:00Z',
+      },
     ])
     render(<AgentsPage />)
     await waitFor(() => {
@@ -123,7 +231,13 @@ describe('AgentsPage — agent list flow', () => {
 
   it('shows tool count badge', async () => {
     mockList.mockResolvedValue([
-      { id: 'a1', name: 'Researcher', description: 'Info', tools: ['web_search', 'knowledge_retrieval'], created_at: '2026-08-07T00:00:00Z' },
+      {
+        id: 'a1',
+        name: 'Researcher',
+        description: 'Info',
+        tools: ['web_search', 'knowledge_retrieval'],
+        created_at: '2026-08-07T00:00:00Z',
+      },
     ])
     render(<AgentsPage />)
     await waitFor(() => {
@@ -135,11 +249,13 @@ describe('AgentsPage — agent list flow', () => {
 describe('AgentsPage — create agent flow', () => {
   it('new agent button opens form', async () => {
     render(<AgentsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const newBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('new') || b.textContent?.includes('+')
-    )
+    const newBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('new') || b.textContent?.includes('+'))
     if (newBtn) {
       fireEvent.click(newBtn)
       await waitFor(() => {
@@ -152,11 +268,13 @@ describe('AgentsPage — create agent flow', () => {
 describe('AgentsPage — template flow', () => {
   it('shows template options when creating', async () => {
     render(<AgentsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const newBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('new') || b.textContent?.includes('+')
-    )
+    const newBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('new') || b.textContent?.includes('+'))
     if (newBtn) {
       fireEvent.click(newBtn)
       await waitFor(() => {
@@ -172,11 +290,13 @@ describe('AgentsPage — template flow', () => {
 describe('AgentsPage — orchestrate flow', () => {
   it('orchestrate button triggers orchestration', async () => {
     render(<AgentsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const orchBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('orchestrate')
-    )
+    const orchBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('orchestrate'))
     if (orchBtn) {
       fireEvent.click(orchBtn)
       await waitFor(() => {
@@ -199,7 +319,13 @@ describe('AgentsPage — error handling', () => {
 describe('AgentsPage — stats display', () => {
   it('shows agent stats when agents exist', async () => {
     mockList.mockResolvedValue([
-      { id: 'a1', name: 'R', description: '', tools: ['web_search'], created_at: '2026-08-07T00:00:00Z' },
+      {
+        id: 'a1',
+        name: 'R',
+        description: '',
+        tools: ['web_search'],
+        created_at: '2026-08-07T00:00:00Z',
+      },
     ])
     render(<AgentsPage />)
     await waitFor(() => {
@@ -220,11 +346,25 @@ describe('AgentsPage — search/filter flow', () => {
 
   it('typing in search filters agents', async () => {
     mockList.mockResolvedValue([
-      { id: 'a1', name: 'Researcher', description: 'Finds info', tools: ['web_search'], created_at: '2026-08-07T00:00:00Z' },
-      { id: 'a2', name: 'Coder', description: 'Writes code', tools: ['code'], created_at: '2026-08-07T00:00:00Z' },
+      {
+        id: 'a1',
+        name: 'Researcher',
+        description: 'Finds info',
+        tools: ['web_search'],
+        created_at: '2026-08-07T00:00:00Z',
+      },
+      {
+        id: 'a2',
+        name: 'Coder',
+        description: 'Writes code',
+        tools: ['code'],
+        created_at: '2026-08-07T00:00:00Z',
+      },
     ])
     render(<AgentsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Researcher').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Researcher').length).toBeGreaterThanOrEqual(1)
+    })
     const searchInput = screen.getByPlaceholderText(/search/i)
     fireEvent.change(searchInput, { target: { value: 'Research' } })
     await waitFor(() => {
@@ -244,16 +384,26 @@ describe('AgentsPage — loading state', () => {
 describe('AgentsPage — agent actions flow', () => {
   beforeEach(() => {
     mockList.mockResolvedValue([
-      { id: 'a1', name: 'TestAgent', description: 'Test', tools: ['web_search'], created_at: '2026-08-07T00:00:00Z' },
+      {
+        id: 'a1',
+        name: 'TestAgent',
+        description: 'Test',
+        tools: ['web_search'],
+        created_at: '2026-08-07T00:00:00Z',
+      },
     ])
   })
 
   it('delete button triggers delete flow', async () => {
     render(<AgentsPage />)
-    await waitFor(() => { expect(screen.getAllByText('TestAgent').length).toBeGreaterThanOrEqual(1) })
-    const deleteBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.includes('trash') || b.getAttribute('aria-label')?.includes('delete')
-    )
+    await waitFor(() => {
+      expect(screen.getAllByText('TestAgent').length).toBeGreaterThanOrEqual(1)
+    })
+    const deleteBtn = screen
+      .getAllByRole('button')
+      .find(
+        (b) => b.textContent?.includes('trash') || b.getAttribute('aria-label')?.includes('delete'),
+      )
     if (deleteBtn) {
       fireEvent.click(deleteBtn)
     }
@@ -279,7 +429,9 @@ describe('AgentsPage — error handling flow', () => {
   it('shows toast on create failure', async () => {
     mockCreate.mockRejectedValue(new Error('create failed'))
     render(<AgentsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Agents').length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('shows toast on delete failure', async () => {
@@ -288,6 +440,8 @@ describe('AgentsPage — error handling flow', () => {
       { id: 'a1', name: 'Agent', description: '', tools: [], created_at: '2026-08-07T00:00:00Z' },
     ])
     render(<AgentsPage />)
-    await waitFor(() => { expect(screen.getAllByText('Agent').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Agent').length).toBeGreaterThanOrEqual(1)
+    })
   })
 })

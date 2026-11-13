@@ -1,8 +1,11 @@
 'use client'
 
 import { memo, useState, useMemo } from 'react'
-import { Button, Textarea } from '@sloughgpt/strui'
+import { Button, Textarea, cn } from '@sloughgpt/strui'
 import { Markdown } from './Markdown'
+import { MessageFrame } from './MessageFrame'
+import { MessageImages } from './MessageImages'
+import type { ImageAttachment } from './../input/ImageUpload'
 
 interface MessageContentProps {
   content: string
@@ -16,6 +19,9 @@ interface MessageContentProps {
   onEdit?: (messageId: string, newContent: string) => void
   onEditStart?: () => void
   onEditCancel?: () => void
+  images?: ImageAttachment[]
+  /** Metadata (role, model, metrics, timestamp) — rendered in the frame footer. */
+  footer?: React.ReactNode
 }
 
 function highlightText(text: string, query: string): (string | React.JSX.Element)[] {
@@ -23,9 +29,13 @@ function highlightText(text: string, query: string): (string | React.JSX.Element
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
   return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase()
-      ? <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">{part}</mark>
-      : part
+    part.toLowerCase() === query.toLowerCase() ? (
+      <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
   )
 }
 
@@ -41,70 +51,99 @@ export const MessageContent = memo(function MessageContent({
   onEdit,
   onEditStart,
   onEditCancel,
+  images,
+  footer,
 }: MessageContentProps) {
   const [editContent, setEditContent] = useState(content)
   const [isCollapsed, setIsCollapsed] = useState(true)
 
   const id = messageId || 'msg'
   const hasContent = content && content.trim().length > 0
-  const isCollapsible = collapsibleLength > 0 && content.length > collapsibleLength && !isEditing && !isStreaming
-  const visibleContent = isCollapsible && isCollapsed ? content.slice(0, collapsibleLength) : content
+  const isCollapsible =
+    collapsibleLength > 0 && content.length > collapsibleLength && !isEditing && !isStreaming
+  const visibleContent =
+    isCollapsible && isCollapsed ? content.slice(0, collapsibleLength) : content
   const highlightedContent = useMemo(() => {
     if (!searchQuery || !content) return null
     return highlightText(content, searchQuery)
   }, [content, searchQuery])
 
+  // Loading UI is gated by the explicit `isStreaming` boolean — never inferred
+  // from content emptiness (a persisted empty message or an error-cleared one
+  // is not "loading"). Empty + streaming + assistant → dots; otherwise → null.
   if (!hasContent) {
-    if (role === 'assistant') {
+    if (isStreaming && role === 'assistant') {
       return (
-        <div className="flex gap-1 items-center h-5" aria-hidden="true">
-          <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0ms]" />
-          <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:150ms]" />
-          <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:300ms]" />
-        </div>
+        <MessageFrame role={role} footer={footer}>
+          {/* aria-hidden: the frame carries aria-live="polite" while
+              streaming, so these decorative dots must not be announced twice. */}
+          <div className="flex gap-1 items-center h-5" aria-hidden="true">
+            <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0ms]" />
+            <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:150ms]" />
+            <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:300ms]" />
+          </div>
+        </MessageFrame>
       )
     }
     return null
   }
 
+  let body: React.ReactNode
+
   if (role === 'assistant') {
     if (searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightedContent}</p>
+      body = (
+        <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
+          {highlightedContent}
+        </p>
+      )
+    } else {
+      body = (
+        <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
+          <Markdown content={visibleContent} isStreaming={isStreaming} />
+          {isCollapsible && isCollapsed && (
+            <span className="text-muted-foreground/40 select-none">…</span>
+          )}
+          {isStreaming && (
+            <span
+              className="inline-block ml-0.5 animate-pulse motion-reduce:animate-none text-primary"
+              aria-hidden="true"
+            >
+              ▊
+            </span>
+          )}
+          {isCollapsible && (
+            <button
+              type="button"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+              aria-expanded={!isCollapsed}
+            >
+              {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}
+            </button>
+          )}
+        </article>
+      )
     }
-    return (
-      <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
-        <Markdown content={visibleContent} />
-        {isCollapsible && isCollapsed && (
-          <span className="text-muted-foreground/40 select-none">…</span>
-        )}
-        {isStreaming && (
-          <span className="inline-block ml-0.5 animate-pulse text-primary" aria-hidden="true">▊</span>
-        )}
-        {isCollapsible && (
-          <button
-            type="button"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-            aria-expanded={!isCollapsed}
-          >
-            {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}
-          </button>
-        )}
-      </article>
-    )
-  }
-
-  // User role
-  if (isEditing) {
+  } else if (isEditing) {
     const handleSave = () => {
       if (editContent.trim() && onEdit && messageId) {
         onEdit(messageId, editContent.trim())
         onEditCancel?.()
       }
     }
-    return (
-      <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); handleSave() }} aria-label="Edit message form">
-        <label className="sr-only" htmlFor={`edit-${id}`}>Edit message</label>
+    body = (
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          handleSave()
+        }}
+        aria-label="Edit message form"
+      >
+        <label className="sr-only" htmlFor={`edit-${id}`}>
+          Edit message
+        </label>
         <Textarea
           id={`edit-${id}`}
           value={editContent}
@@ -116,41 +155,80 @@ export const MessageContent = memo(function MessageContent({
             if (e.key === 'Escape') {
               setEditContent(content)
               onEditCancel?.()
+            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault()
+              handleSave()
             }
           }}
           aria-describedby={`edit-hint-${id}`}
         />
-        <p id={`edit-hint-${id}`} className="sr-only">Press Enter to save, Escape to cancel</p>
+        <p id={`edit-hint-${id}`} className="sr-only">
+          Press Ctrl+Enter to save, Escape to cancel
+        </p>
         <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setEditContent(content); onEditCancel?.() }} aria-label="Cancel editing">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditContent(content)
+              onEditCancel?.()
+            }}
+            aria-label="Cancel editing"
+          >
             Cancel
           </Button>
-          <Button size="sm" aria-label="Save and resend message">
+          <Button type="submit" size="sm" aria-label="Save and resend message">
             Resend
           </Button>
         </div>
       </form>
     )
+  } else {
+    body = (
+      <div>
+        <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
+          {searchQuery ? highlightText(visibleContent, searchQuery) : visibleContent}
+        </p>
+        {isCollapsible && isCollapsed && (
+          // user turns sit on the tinted card (bg-primary/10) — foreground-based
+          // tints would wash out there, so the affordance uses the primary hue
+          <span
+            className={cn(
+              'select-none text-sm',
+              role === 'user' ? 'text-primary/60' : 'text-primary-foreground/50',
+            )}
+          >
+            …
+          </span>
+        )}
+        {isCollapsible && (
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className={cn(
+              'active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-xs font-medium transition-colors',
+              role === 'user'
+                ? 'text-primary/70 hover:text-primary'
+                : 'text-primary-foreground/70 hover:text-primary-foreground',
+            )}
+            aria-expanded={!isCollapsed}
+          >
+            {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}
+          </button>
+        )}
+      </div>
+    )
   }
 
   return (
-    <div>
-      <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
-        {searchQuery ? highlightText(visibleContent, searchQuery) : visibleContent}
-      </p>
-      {isCollapsible && isCollapsed && (
-        <span className="text-primary-foreground/50 select-none text-sm">…</span>
-      )}
-      {isCollapsible && (
-        <button
-          type="button"
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
-          aria-expanded={!isCollapsed}
-        >
-          {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}
-        </button>
-      )}
-    </div>
+    <MessageFrame
+      role={role}
+      footer={footer}
+      fullWidth={isEditing && role === 'user'}
+      className={cn(isError && role === 'assistant' && 'text-destructive')}
+    >
+      {images && images.length > 0 && <MessageImages images={images} role={role} />}
+      {body}
+    </MessageFrame>
   )
 })

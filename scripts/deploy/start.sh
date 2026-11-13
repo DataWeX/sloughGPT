@@ -100,7 +100,7 @@ case $MODE in
         npm run dev --prefix "$ROOT/apps/web" &
         log_success "All services started"
         echo "  API: http://localhost:8000"
-        echo "  UI:  http://localhost:3000"
+        echo "  UI:  http://localhost:5173"
         ;;
     help|-h|--help)
         echo "Usage: $0 [MODE] [PORT]"

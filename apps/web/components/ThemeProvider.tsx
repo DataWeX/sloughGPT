@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useLayoutEffect } from 'react'
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
 import { trackEvent } from '@/lib/dev-log'
 import {
@@ -18,6 +19,8 @@ interface ThemeContextType {
   theme: StoredThemeId
   mode: ThemeMode
   palette: StoredPaletteId
+  /** True once the client has mounted; guards SSR/client state divergence (theme hydration). */
+  mounted: boolean
   setTheme: (theme: StoredThemeId) => void
   setMode: (mode: ThemeMode) => void
   setPalette: (palette: StoredPaletteId) => void
@@ -80,8 +83,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(PALETTE_STORAGE_KEY, palette)
   }, [theme, mode, palette, mounted])
 
+  // Listen for Ctrl+Shift+D dark mode toggle
+  useEffect(() => {
+    const handler = () => setMode(mode === 'dark' ? 'light' : 'dark')
+    window.addEventListener('toggle-dark-mode', handler)
+    return () => window.removeEventListener('toggle-dark-mode', handler)
+  }, [mode, setMode])
+
   return (
-    <ThemeContext.Provider value={{ theme, mode, palette, setTheme, setMode, setPalette }}>
+    <ThemeContext.Provider value={{ theme, mode, palette, mounted, setTheme, setMode, setPalette }}>
       {children}
     </ThemeContext.Provider>
   )
@@ -96,12 +106,12 @@ export function useTheme() {
 }
 
 /** Accent presets — ids kept for localStorage; hues match ``globals.css`` theme-* */
-export const THEMES: { id: StoredThemeId; name: string; color: string }[] = [
-  { id: 'blue', name: 'Periwinkle', color: '#5a82dc' },
-  { id: 'purple', name: 'Lilac', color: '#9b6cd6' },
-  { id: 'pink', name: 'Rose', color: '#da82aa' },
-  { id: 'red', name: 'Coral', color: '#e67882' },
-  { id: 'orange', name: 'Peach', color: '#ec9b5a' },
-  { id: 'green', name: 'Mint', color: '#48b282' },
-  { id: 'teal', name: 'Dew', color: '#48a6c8' },
+export const THEMES: { id: StoredThemeId; name: string; color: string; aura: string }[] = [
+  { id: 'blue', name: 'Periwinkle', color: '#5a82dc', aura: 'Calm ocean, trustworthy' },
+  { id: 'purple', name: 'Lilac', color: '#9b6cd6', aura: 'Ethereal lilac, mystical' },
+  { id: 'pink', name: 'Rose', color: '#da82aa', aura: 'Soft rose, delicate' },
+  { id: 'red', name: 'Coral', color: '#e67882', aura: 'Warm coral, energetic' },
+  { id: 'orange', name: 'Peach', color: '#ec9b5a', aura: 'Peachy bread crust, warm bakery' },
+  { id: 'green', name: 'Mint', color: '#48b282', aura: 'Fresh mint, natural' },
+  { id: 'teal', name: 'Dew', color: '#48a6c8', aura: 'Cool dew, refreshing' },
 ]

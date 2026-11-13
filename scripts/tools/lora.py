@@ -15,10 +15,10 @@ The function recursively replaces ``nn.Linear`` modules with ``LoRALinear``.
 """
 
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 
 
 class LoRALinear(nn.Module):
@@ -36,8 +36,8 @@ class LoRALinear(nn.Module):
         bias: bool = True,
         rank: int = 4,
         alpha: float = 1.0,
-        original_weight: Optional[torch.Tensor] = None,
-        original_bias: Optional[torch.Tensor] = None,
+        original_weight: torch.Tensor | None = None,
+        original_bias: torch.Tensor | None = None,
     ):
         super().__init__()
         self.in_features = in_features

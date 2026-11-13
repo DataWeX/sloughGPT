@@ -1,6 +1,10 @@
 """Builds listing route — builds.
 
 Extracted from execution.py to keep each module focused.
+Descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{builds: [...]}`` is served unwrapped (``envelope=False``),
+byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
@@ -8,18 +12,17 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from domains.shared import find_repo_root
-from fastapi import APIRouter
+from infrastructure.contract import RouteSpec, create_router
+
+from domain.agents import ToolSpec
+from domain.shared import find_repo_root
 
 from .jobs import training_jobs
 
-router = APIRouter(tags=["training-builds"])
 
-
-@router.get("/training/builds")
 async def list_builds():
     """List all training builds (checkpoints + fine-tuned models + LoRA adapters)."""
-    from domains.training.service import load_lora_soul, load_soul
+    from domain.training._internal.service import load_lora_soul, load_soul
 
     _repo_root = find_repo_root(Path(__file__).resolve())
     _checkpoints_dir = _repo_root / "models" / "auto-training"
@@ -92,3 +95,25 @@ async def list_builds():
                 )
 
     return {"builds": builds}
+
+
+SPEC = ToolSpec(
+    name="training.builds.list",
+    description="List all training builds (checkpoints + fine-tuned models + LoRA adapters).",
+    parameters=[],
+    execute=list_builds,
+    auth_scope="public",
+    idempotent=True,
+    result={
+        "type": "object",
+        "properties": {"builds": {"type": "array", "items": {"type": "object"}}},
+    },
+    version="1",
+)
+
+router = create_router(
+    SPEC,
+    RouteSpec(path="/training/builds", summary="List all training builds", envelope=False),
+    list_builds,
+    tags=("training-builds",),
+)

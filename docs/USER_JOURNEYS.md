@@ -1,19 +1,22 @@
 # User Journeys
 
-End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user_journeys.py`.
+End-to-end user flows driven by the **avion** computer-use library (`packages/avion`) in `tests/core-py/test_user_journeys.py` — one shared driver, so locator/backend fixes land in one place.
 
 ## Tested Journeys
 
 ### Dashboard
+
 - **Load**: Home page (`/`) loads with substantial content (>50 chars)
 - **Navigation**: Home page contains nav links to core sections
 
 ### Chat
+
 - **Load**: Chat page (`/chat`) loads
 - **Input**: Chat page has a visible textarea/input
 - **Type message**: User can type a message and the value persists
 
 ### Training
+
 - **Load**: Training page (`/training`) loads with "train" content
 - **Import button**: "+ Import" button is visible
 - **Tabs**: Train, Results, Settings tabs are visible
@@ -23,6 +26,7 @@ End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user
 - **Job back link**: Job detail page has a back link to training list
 
 ### Datasets
+
 - **Load**: Datasets page (`/datasets`) loads
 - **Import button**: "Import" button exists
 - **Import dialog**: Clicking "Import" opens a dialog
@@ -32,37 +36,44 @@ End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user
 - **Kaggle import**: Full end-to-end: fill `heptapod/titanic` → click Import → "downloaded" appears (requires Kaggle CLI auth)
 
 ### Settings
+
 - **Load**: Settings page (`/settings`) loads
 
 ### Planner
+
 - **Load**: Planner page (`/planner`) loads
 
 ### Models
+
 - **Load**: Models page (`/models`) loads
 
 ### Monitoring
+
 - **Load**: Monitoring page (`/monitoring`) loads with health keywords (cpu, memory, monitor)
 
 ### Knowledge
+
 - **Load**: Knowledge page (`/knowledge`) loads with keywords (knowledge, memory, fact)
 
 ### Redirects (Legacy Routes)
-| Old Route | Redirects To |
-|-----------|-------------|
-| `/companion` | `/souls` |
-| `/evaluate` | `/benchmark` |
-| `/memory` | `/knowledge` |
-| `/collections` | `/datasets` |
-| `/self-train` | `/training` |
-| `/admin` | `/settings` |
-| `/images` | `/files` |
-| `/session` | `/shell` |
+
+| Old Route      | Redirects To |
+| -------------- | ------------ |
+| `/companion`   | `/souls`     |
+| `/personality` | `/souls`     |
+| `/evaluate`    | `/benchmark` |
+| `/memory`      | `/knowledge` |
+| `/collections` | `/datasets`  |
+| `/self-train`  | `/training`  |
+| `/admin`       | `/settings`  |
+| `/images`      | `/files`     |
+| `/session`     | `/shell`     |
 
 ## Untested Routes
 
-The following routes have `page.tsx` files but are not covered by Playwright tests:
+The following routes have `page.tsx` files but are not covered by journey tests:
 
-**Core**: `/dataset/[id]`, `/model/[id]`
+**Core**: `/dataset/[id]`
 **Agents/Souls**: `/agents`, `/souls`
 **Tools**: `/tokenizer`, `/benchmark`, `/compare`, `/shell`, `/errors`, `/monitoring`
 **Supporting**: `/feedback`, `/files`, `/security`, `/developer`, `/magazine`, `/learn`
@@ -71,11 +82,11 @@ The following routes have `page.tsx` files but are not covered by Playwright tes
 ## Running Tests
 
 ```bash
-# Full suite
-.venv/bin/python -m pytest packages/core-py/tests/test_user_journeys.py -x -v
+# Full suite (needs a live stack — skips itself when none is running)
+scripts/python -m pytest tests/core-py/test_user_journeys.py -x -v
 
 # Single journey class
-.venv/bin/python -m pytest packages/core-py/tests/test_user_journeys.py::TestDatasetsImport -v
+scripts/python -m pytest tests/core-py/test_user_journeys.py::TestDatasetsImport -v
 ```
 
-Results are saved to `tests/test_results/user_journey_results.json`.
+Results are saved to `tests/core-py/test_results/user_journey_results.json`.

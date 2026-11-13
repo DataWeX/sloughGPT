@@ -5,20 +5,29 @@ Storage backed by MogDB (the project's embedded document DB). User
 records are stored in a ``users`` collection instead of a raw JSON file.
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
 import secrets
 import time
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field
 
+from domain.shared import utc_now_iso
+
 logger = logging.getLogger(__name__)
 
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 # ---------- rate limiting for auth endpoints ----------
 
@@ -186,7 +195,8 @@ class AuthRouter:
         if api_key in env_keys:
             return True
         try:
-            from routers.api_keys import ApiKeyManager
+            from routers.settings import ApiKeyManager
+
             mgr = ApiKeyManager()
             return mgr.validate(api_key)
         except Exception as exc:
@@ -295,6 +305,11 @@ class AuthRouter:
             existing = self._users.find_one({"username": req.username})
             if existing:
                 raise_error("Username already exists", "E_INFRA_BUSY", status_code=409)
+            existing_email = self._users.find_one({"email": req.email})
+            if existing_email:
+                raise_error(
+                    f"A user with email {req.email} already exists", code="user/exists", status=409
+                )
             uid = str(uuid.uuid4())
             user_data = {
                 "username": req.username,
@@ -302,7 +317,7 @@ class AuthRouter:
                 "password_hash": self._hash_password(req.password),
                 "role": "user",
                 "tenant_id": "",
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": utc_now_iso(),
             }
             self._save_user(uid, user_data)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
@@ -367,7 +382,7 @@ class AuthRouter:
                     extra={"action": "token_create", "status": "failure"},
                 )
                 raise_error("Invalid API key", "E_AUTH_MISSING", status_code=401)
-            token = jwt_auth.create_token(user_id=token_request.api_key[:8])
+            token = jwt_auth.create_token(user_id=token_request.api_key)
             audit_logger.log(
                 "auth_success",
                 client_ip,

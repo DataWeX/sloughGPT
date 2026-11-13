@@ -231,7 +231,7 @@ Verified in `tests/test_slonet_server.py`:
 
 Non-streaming chat path closed: `ChatDomain.respond()` →
 `_generate()` now passes `session_id` into `provider.chat()` (previously
-dropped), so `/chat` gets cross-turn KV reuse exactly like `/chat/stream`.
+dropped), so `/chat` gets cross-turn KV reuse.
 Verified in `tests/test_chat_domain.py` (3 new tests).
 
 End-to-end stack benchmark in `tests/test_slonet_kv_benchmark.py`:
@@ -346,7 +346,7 @@ temp-0 + top_p=0.9 returns the deterministic argmax.
 
 ### Update (2026-08-04) — Streaming stack benchmark (`--stack --stream`)
 
-`--stack --stream` drives the actual `/chat/stream` path:
+`--stack --stream` drives the actual chat SSE path (`POST /chat`):
 `SloNetServer.generate_stream` → `_generate_stream_sync` →
 `generate_numpy_stream(kv_state=...)`, so each token is decoded and
 pumped through the server's queue thread before the next is produced —

@@ -1,7 +1,7 @@
 """Coverage for sloughgpt_sdk.exceptions and sloughgpt_sdk.setup."""
+
 import importlib.util
 import io
-import os
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -15,13 +15,17 @@ from sloughgpt_sdk.exceptions import (  # noqa: E402
     APIError,
     AuthenticationError,
     CacheError,
-    ConnectionError as SDKConnectionError,
     ModelNotFoundError,
     ModelNotLoadedError,
     RateLimitError,
     SloughGPTError,
-    TimeoutError as SDKTimeoutError,
     ValidationError,
+)
+from sloughgpt_sdk.exceptions import (
+    ConnectionError as SDKConnectionError,
+)
+from sloughgpt_sdk.exceptions import (
+    TimeoutError as SDKTimeoutError,
 )
 
 
@@ -119,7 +123,7 @@ class TestSetupModule:
 
         setup_path = _setup_root() / "setup.py"
         with (
-            patch("builtins.open", return_value=readme_sentinel) as mopen,
+            patch("builtins.open", return_value=readme_sentinel),
             patch.dict(sys.modules, {"setuptools": fake}, clear=False),
         ):
             spec = importlib.util.spec_from_file_location("sdk_setup_probe", setup_path)

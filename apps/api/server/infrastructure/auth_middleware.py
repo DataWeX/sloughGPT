@@ -7,6 +7,7 @@ attaches the decoded user payload to ``request.state.user``.
 Routes can then access ``request.state.user`` directly or use the
 ``get_current_user`` dependency to retrieve it.
 """
+
 from __future__ import annotations
 
 import logging

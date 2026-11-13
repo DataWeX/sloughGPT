@@ -14,13 +14,18 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
 
-from domains.infrastructure.errors import AppError
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Body, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_complete, sse_token
 from pydantic import BaseModel, Field
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 # Response cache for list_souls: avoids FS glob + per-soul metadata parse.
 _list_souls_cache: tuple[float, dict] | None = None
@@ -28,7 +33,7 @@ _LIST_SOULS_CACHE_TTL = 30.0
 _list_souls_lock = threading.Lock()
 
 try:
-    from domains.models import SloughGPTModel
+    from domain.models import SloughGPTModel
 except ImportError:
     SloughGPTModel = None
 
@@ -57,8 +62,8 @@ class SloChatRequest(BaseModel):
     checkpoint_name: str = Field(..., min_length=1, max_length=100)
     prompt: str = Field(..., min_length=1, max_length=10000)
     max_new_tokens: int = Field(default=100, ge=1, le=4096)
-    temperature: float = Field(default=0.8, ge=0.1, le=2.0)
-    top_p: float = Field(default=0.9, ge=0.1, le=1.0)
+    temperature: float = Field(default=0.7, ge=0.1, le=2.0)
+    top_p: float = Field(default=0.85, ge=0.1, le=1.0)
 
 
 class SaveWeightsRequest(BaseModel):
@@ -67,6 +72,115 @@ class SaveWeightsRequest(BaseModel):
     personality: dict[str, float] | None = None
     cognition: dict[str, float] | None = None
     emotion: dict[str, float] | None = None
+
+
+def _get_db():
+    from infrastructure.db_pool import get_db
+
+    return get_db("companion_mogdb")
+
+
+class SetPersonalityRequest(BaseModel):
+    """Set companion personality (full replacement)."""
+
+    name: str = Field(default="Friend", max_length=100)
+    warmth: float = Field(default=0.7, ge=0.0, le=1.0)
+    curiosity: float = Field(default=0.6, ge=0.0, le=1.0)
+    creativity: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    humor: float = Field(default=0.4, ge=0.0, le=1.0)
+
+
+class PatchPersonalityRequest(BaseModel):
+    """Partial update to companion personality (only provided fields are updated)."""
+
+    name: str | None = Field(default=None, max_length=100)
+    warmth: float | None = Field(default=None, ge=0.0, le=1.0)
+    curiosity: float | None = Field(default=None, ge=0.0, le=1.0)
+    creativity: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    humor: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class PresetInfo(BaseModel):
+    id: str
+    name: str
+    description: str
+    traits: dict
+    system_prompt: str = ""
+
+
+class PresetCreateRequest(BaseModel):
+    id: str = Field(..., max_length=50, pattern=r"^[a-z0-9_-]+$")
+    name: str = Field(..., max_length=100)
+    description: str = Field(default="", max_length=500)
+    traits: dict = Field(default_factory=dict)
+    system_prompt: str = Field(default="", max_length=2000)
+
+
+def _load_presets() -> list[dict]:
+    """Load presets from MogDB."""
+    db = _get_db()
+    col = db.collection("presets")
+    return col.find()
+
+
+def _seed_default_presets() -> None:
+    """Seed default presets if missing (idempotent)."""
+    db = _get_db()
+    col = db.collection("presets")
+    defaults = [
+        {
+            "id": "warm",
+            "name": "Warm Friend",
+            "description": "Caring and supportive",
+            "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3},
+            "system_prompt": "You are a warm, caring friend.",
+        },
+        {
+            "id": "curious",
+            "name": "Curious Friend",
+            "description": "Interested in everything",
+            "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3},
+            "system_prompt": "You are a deeply curious friend.",
+        },
+        {
+            "id": "playful",
+            "name": "Playful Friend",
+            "description": "Fun and humorous",
+            "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8},
+            "system_prompt": "You are a playful, fun-loving friend.",
+        },
+        {
+            "id": "balanced",
+            "name": "Balanced Friend",
+            "description": "Well-rounded",
+            "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5},
+            "system_prompt": "You are a balanced, well-rounded friend.",
+        },
+    ]
+    for p in defaults:
+        if not col.find_one({"id": p["id"]}):
+            col.insert_one(p)
+
+
+class ChatRequest(BaseModel):
+    """Chat with companion."""
+
+    message: str = Field(..., min_length=1, max_length=10000)
+    user_name: str | None = Field(default=None, max_length=100)
+    user_mood: str | None = Field(default=None, max_length=100)
+    include_system_prompt: bool = True
+    max_tokens: int = Field(default=256, ge=1, le=4096, description="Max tokens to generate")
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
+
+
+class ChatResponse(BaseModel):
+    """Companion response."""
+
+    response: str
+    system_prompt: str
+    elapsed_ms: float = 0.0
 
 
 class SoulsRouter:
@@ -127,8 +241,8 @@ class SoulsRouter:
         """
         if SloughGPTModel is None:
             raise RuntimeError("SloughGPTModel not available — PyTorch model module not loaded")
-        from domains.inference import load_soul
-        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
+        from domain.inference import load_soul
+        from domain.infrastructure.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(checkpoint_path)
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:
@@ -173,7 +287,7 @@ class SoulsRouter:
                 return {"status": "not_found", "path": str(checkpoint_file)}
 
             # Use SloNet import for .soul files
-            from domains.training.slonet import import_from_sou
+            from domain.training import import_from_sou
 
             try:
                 soul_net = import_from_sou(str(checkpoint_file))
@@ -268,7 +382,7 @@ Be yourself — let your personality shape how you respond."""
                 all_chars += [chr(i) for i in range(192, 256)]
                 chars = all_chars[:model_vocab]
             stoi = {c: i for i, c in enumerate(chars)}
-            itos = {i: c for i, c in enumerate(chars)}
+            itos = dict(enumerate(chars))
 
             def encode(t) -> dict:
                 """encode."""
@@ -359,7 +473,7 @@ Be yourself — let your personality shape how you respond."""
             import time as _time
 
             _switch_t0 = _time.monotonic()
-            from domains.inference.slo_manager import get_slo_manager
+            from domain.inference import get_slo_manager
 
             manager = get_slo_manager()
             result = manager.switch_soul(req.name)
@@ -368,7 +482,7 @@ Be yourself — let your personality shape how you respond."""
             soul_info = manager.get_soul(req.name)
             if soul_info:
                 try:
-                    from domains.infrastructure.context_core import get_context_core
+                    from domain.infrastructure.context_core import get_context_core
 
                     ctx_core = get_context_core()
                     if ctx_core:
@@ -383,7 +497,7 @@ Be yourself — let your personality shape how you respond."""
 
                 # Update PersonalityProcessor with soul traits
                 try:
-                    from domains.models.provider import update_personality_traits
+                    from domain.models import update_personality_traits
 
                     personality = getattr(soul_info, "personality", {})
                     if personality:
@@ -400,7 +514,7 @@ Be yourself — let your personality shape how you respond."""
                 )
                 result["checkpoint_loaded"] = loaded
                 try:
-                    from domains.infrastructure.server_state import get_server_state
+                    from domain.infrastructure.server_state import get_server_state
 
                     get_server_state().record_model_event(
                         "load", req.name, f"checkpoint={req.checkpoint_name}"
@@ -410,7 +524,7 @@ Be yourself — let your personality shape how you respond."""
 
             if result.get("success") and soul_info and soul_info.path:
                 try:
-                    from domains.core.soul import SloEngine
+                    from domain.core import SloEngine
 
                     engine = SloEngine(device="cpu")
                     soul = engine.load_soul(soul_info.path)
@@ -422,7 +536,7 @@ Be yourself — let your personality shape how you respond."""
                     logger.warning("Failed to set soul engine: %s", exc, extra={"tag": "SOUL"})
 
             try:
-                from domains.infrastructure.server_state import get_server_state
+                from domain.infrastructure.server_state import get_server_state
 
                 get_server_state().record_model_event("switch", req.name)
             except Exception:
@@ -430,7 +544,7 @@ Be yourself — let your personality shape how you respond."""
 
             # Record dashboard event
             try:
-                from domains.infrastructure.event_buffer import get_event_buffer
+                from domain.infrastructure.event_buffer import get_event_buffer
 
                 detail = f" checkpoint={req.checkpoint_name}" if req.checkpoint_name else ""
                 get_event_buffer().record("SOUL", f"switched to {req.name}{detail}")
@@ -471,7 +585,7 @@ Be yourself — let your personality shape how you respond."""
         try:
             import asyncio
 
-            from domains.inference.slo_manager import get_slo_manager
+            from domain.inference import get_slo_manager
 
             manager = get_slo_manager()
             souls = await asyncio.to_thread(manager.list_souls)
@@ -513,7 +627,7 @@ Be yourself — let your personality shape how you respond."""
         """Get details for a specific soul by name."""
         import asyncio
 
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         manager = get_slo_manager()
         souls = await asyncio.to_thread(manager.list_souls)
@@ -542,6 +656,7 @@ Be yourself — let your personality shape how you respond."""
                     }
                 )
         raise_error(f"Soul '{soul_name}' not found", "E_NOT_FOUND", status_code=404)
+
     @endpoint("souls.get_trait_weights")
     async def get_trait_weights(self) -> dict:
         """
@@ -559,11 +674,12 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_trait_weights()
         """
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         manager = get_slo_manager()
         weights = manager.get_trait_weights()
         return success_response(data=weights)
+
     @endpoint("souls.save_trait_weights")
     async def save_trait_weights(
         self, body: SaveWeightsRequest, auth_user: dict = Depends(require_auth_if_enabled)
@@ -580,7 +696,7 @@ Be yourself — let your personality shape how you respond."""
             - does not modify soul files — only the live config overlay
         """
         try:
-            from domains.context.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             flat: dict[str, float] = {}
@@ -621,7 +737,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - reads current TraitWeightsConfig
         """
-        from domains.context.managers import (
+        from domain.context import (
             MemoryManager,
             PersonalityManager,
             StyleManager,
@@ -638,6 +754,7 @@ Be yourself — let your personality shape how you respond."""
                 "task": TaskManager(config).get_mode(),
             }
         )
+
     @endpoint("souls.get_current_soul")
     async def get_current_soul(self) -> dict:
         """
@@ -649,7 +766,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_current_soul()
         """
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         manager = get_slo_manager()
         current = manager.get_current_soul()
@@ -664,6 +781,7 @@ Be yourself — let your personality shape how you respond."""
                 }
             )
         return success_response(data={"name": None})
+
     @endpoint("souls.list_weight_snapshots")
     async def list_weight_snapshots(self) -> dict:
         """
@@ -675,10 +793,11 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls TraitWeightsConfig.list_snapshots()
         """
-        from domains.context.managers import get_trait_config
+        from domain.context import get_trait_config
 
         config = get_trait_config()
         return success_response(data=config.list_snapshots())
+
     @endpoint("souls.save_weight_snapshot")
     async def save_weight_snapshot(
         self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
@@ -696,7 +815,7 @@ Be yourself — let your personality shape how you respond."""
             - writes snapshot JSON to disk
         """
         try:
-            from domains.context.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             path = config.save_snapshot(name)
@@ -723,7 +842,7 @@ Be yourself — let your personality shape how you respond."""
             - overwrites current trait weights with snapshot values
         """
         try:
-            from domains.context.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             count = config.load_snapshot(name)
@@ -750,7 +869,7 @@ Be yourself — let your personality shape how you respond."""
             - removes snapshot file from disk
         """
         try:
-            from domains.context.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             ok = config.delete_snapshot(name)
@@ -771,7 +890,218 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_stats()
         """
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         return success_response(data=get_slo_manager().get_stats())
-router = SoulsRouter().router
+
+
+class CompanionRouter:
+    """Router for AI companion management and chat."""
+
+    def __init__(self):
+        self.router = APIRouter(prefix="/companion", tags=["companion"])
+        self._companion = None
+        self._register_routes()
+
+    def _register_routes(self):
+        self.router.add_api_route("/", self.get_companion_info, methods=["GET"])
+        self.router.add_api_route("/", self.reset_companion, methods=["DELETE"])
+        self.router.add_api_route("/personality", self.set_personality, methods=["POST"])
+        self.router.add_api_route("/personality", self.patch_personality, methods=["PATCH"])
+        self.router.add_api_route("/preset", self.use_preset, methods=["POST"])
+        self.router.add_api_route("/prompt", self.get_prompt, methods=["GET"])
+        self.router.add_api_route("/chat", self.chat, methods=["POST"], response_model=ChatResponse)
+        self.router.add_api_route("/presets", self.list_presets, methods=["GET"])
+        self.router.add_api_route("/presets", self.create_preset, methods=["POST"])
+        self.router.add_api_route("/presets/{preset_id}", self.delete_preset, methods=["DELETE"])
+
+    def _get_companion(self):
+        """Get or create companion."""
+        if self._companion is None:
+            from domain.companion import get_companion
+
+            self._companion = get_companion()
+        return self._companion
+
+    @endpoint("companion.get_companion_info")
+    async def get_companion_info(self) -> dict:
+        """Return the current companion's full state as a dictionary."""
+        companion = self._get_companion()
+        return success_response(data=companion.to_dict())
+
+    @endpoint("companion.reset")
+    async def reset_companion(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Reset companion to default state."""
+        self._companion = None
+        from domain.companion import create_companion
+
+        self._companion = create_companion()
+        safe_audit_log("companion.reset")
+        return success_response(data={"reset": True})
+
+    @endpoint("companion.set_personality")
+    async def set_personality(
+        self, req: SetPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Set companion personality (full replacement)."""
+        companion = self._get_companion()
+        companion.set_personality(
+            name=req.name,
+            warmth=req.warmth,
+            curiosity=req.curiosity,
+            creativity=req.creativity,
+            confidence=req.confidence,
+            humor=req.humor,
+        )
+        safe_audit_log("companion.personality.set", detail=f"name={req.name}")
+        return success_response(data=companion.to_dict())
+
+    @endpoint("companion.patch_personality")
+    async def patch_personality(
+        self, req: PatchPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Partial update to companion personality."""
+        companion = self._get_companion()
+        # Build kwargs for only provided fields
+        kwargs = {}
+        if req.name is not None:
+            kwargs["name"] = req.name
+        if req.warmth is not None:
+            kwargs["warmth"] = req.warmth
+        if req.curiosity is not None:
+            kwargs["curiosity"] = req.curiosity
+        if req.creativity is not None:
+            kwargs["creativity"] = req.creativity
+        if req.confidence is not None:
+            kwargs["confidence"] = req.confidence
+        if req.humor is not None:
+            kwargs["humor"] = req.humor
+        if kwargs:
+            # Merge with current traits for full replacement
+            current = companion.traits
+            companion.set_personality(
+                name=kwargs.get("name", current.name),
+                warmth=kwargs.get("warmth", current.warmth),
+                curiosity=kwargs.get("curiosity", current.curiosity),
+                creativity=kwargs.get("creativity", current.creativity),
+                confidence=kwargs.get("confidence", current.confidence),
+                humor=kwargs.get("humor", current.humor),
+            )
+        safe_audit_log("companion.personality.patch")
+        return success_response(data=companion.to_dict())
+
+    @endpoint("companion.use_preset")
+    async def use_preset(
+        self, preset_id: str = Body(...), auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Apply a preset personality."""
+        # Defaults are guaranteed by seed-on-empty, same convention as
+        # list_presets — otherwise the first use on a fresh store 404s.
+        _seed_default_presets()
+        db = _get_db()
+        col = db.collection("presets")
+        preset = col.find_one({"id": preset_id})
+        if not preset:
+            raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
+        companion = self._get_companion()
+        traits = preset.get("traits", {})
+        # Merge preset traits with current companion traits
+        current = companion.traits
+        companion.set_personality(
+            name=traits.get("name", current.name),
+            warmth=traits.get("warmth", current.warmth),
+            curiosity=traits.get("curiosity", current.curiosity),
+            creativity=traits.get("creativity", current.creativity),
+            confidence=traits.get("confidence", current.confidence),
+            humor=traits.get("humor", current.humor),
+        )
+        safe_audit_log("companion.preset.use", resource=preset_id)
+        return success_response(data=companion.to_dict())
+
+    @endpoint("companion.get_prompt")
+    async def get_prompt(self) -> dict:
+        """Get the current system prompt."""
+        companion = self._get_companion()
+        return success_response(data={"system_prompt": companion.get_system_prompt()})
+
+    @endpoint("companion.chat")
+    async def chat(
+        self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> ChatResponse:
+        """Chat with the companion."""
+        companion = self._get_companion()
+        system_prompt = companion.get_system_prompt() if req.include_system_prompt else ""
+        _chat_start = time.monotonic()
+        response_text = companion.respond(
+            user_message=req.message,
+        )
+        _chat_elapsed_ms = (time.monotonic() - _chat_start) * 1000
+        safe_audit_log(
+            "companion.chat",
+            detail=f"elapsed={_chat_elapsed_ms:.0f}ms tokens={len(response_text.split())}",
+        )
+
+        return ChatResponse(
+            response=response_text,
+            system_prompt=system_prompt,
+            elapsed_ms=round(_chat_elapsed_ms, 1),
+        )
+
+    @endpoint("companion.list_presets")
+    async def list_presets(self) -> dict:
+        """Return the list of available companion presets."""
+        _seed_default_presets()
+        presets = _load_presets()
+        return success_response(data={"presets": presets})
+
+    @endpoint("companion.create_preset")
+    async def create_preset(
+        self, req: PresetCreateRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Create a new companion preset."""
+        db = _get_db()
+        col = db.collection("presets")
+        existing = col.find_one({"id": req.id})
+        if existing:
+            raise_error(f"Preset '{req.id}' already exists", "E_CONFLICT", status_code=409)
+        preset = {
+            "id": req.id,
+            "name": req.name,
+            "description": req.description,
+            "traits": req.traits,
+            "system_prompt": req.system_prompt,
+        }
+        col.insert_one(preset)
+        safe_audit_log("companion.preset.create", resource=req.id)
+        return success_response(data={"preset": preset})
+
+    @endpoint("companion.delete_preset")
+    async def delete_preset(
+        self, preset_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Delete a companion preset."""
+        db = _get_db()
+        col = db.collection("presets")
+        deleted = col.delete_one({"id": preset_id})
+        if not deleted:
+            raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("companion.preset.delete", resource=preset_id)
+        return success_response(data={"deleted": preset_id})
+
+
+# Aggregate facade (route-map card 4/7): ONE module-level router serving
+# /souls/* and /companion/* — sub-router prefixes bake at add-time, so every
+# path stays byte-identical to the two old modules.
+_instance = SoulsRouter()
+_companion_router = CompanionRouter()
+
+router = APIRouter()
+router.include_router(_instance.router)
+router.include_router(_companion_router.router)
+
+
+def _get_companion():
+    return _companion_router._get_companion()
+
+
+__all__ = ["router"]

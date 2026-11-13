@@ -2,37 +2,49 @@
 Inference Router - Chat and text generation endpoints
 """
 
+from __future__ import annotations
+
 import json
 import logging
+import os
 import threading
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Collection
 from pathlib import Path
 from typing import Any
 
-from domains.agents.system import get_agent_system
-from domains.agents.tools import get_tool_registry
-from domains.cognitive.rag_service import get_rag_service
-from domains.feedback.response_tracker import get_response_tracker
-from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
-from domains.infrastructure.conversation_log import capture
-from domains.infrastructure.errors import AppError
-from domains.infrastructure.request_coalescer import get_coalescer
-from domains.infrastructure.server_state import get_server_state
-from domains.learner import get_learner
-from domains.learner.entity_extractor import extract_and_store
-from domains.learner.knowledge import KnowledgeFact, get_knowledge_memory
-from domains.memory.memory_service import get_memory_service
-from domains.models.provider import KnowledgeProcessor, apply_processors, get_provider
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_error, sse_token
-from infrastructure.sse_fallback import sse_event as _sse_event
-from pydantic import BaseModel, Field
+from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
+from infrastructure.contract import REGISTRY, RouteEntry
+from infrastructure.sse_fallback import sse_error, sse_event, sse_token
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
 from config import gen_config as _gen_config
+from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
+from domain.cognition import get_rag_service
+from domain.feedback import get_response_tracker
+from domain.infrastructure import AppError
+from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+from domain.infrastructure.conversation_log import capture
+from domain.infrastructure.request_coalescer import get_coalescer
+from domain.infrastructure.server_state import get_server_state
+from domain.learner import extract_and_store, get_learner
+from domain.memory import get_memory_service
+from domain.models import ConsciousnessProcessor, apply_processors, get_provider
+from domain.settings import get_settings
 
 logger = logging.getLogger("slo.inference")
 
@@ -40,7 +52,6 @@ cfg = ServerConfig.from_env()
 import asyncio
 import datetime
 import sys as _sys
-import time
 import uuid
 
 # Ensure server parent dir is on path for host_metrics import (used in /info)
@@ -52,14 +63,12 @@ if _server_parent not in _sys.path:
 def _model_ready() -> bool:
     """True when a model is actually materialized and ready for inference.
 
-    Checks three sources because the lazy-guard autoload path stores the
-    provider in the core ``ServerState`` singleton but leaves
-    ``state.__dict__["model"]`` as ``None`` (module ``__setattr__`` is a
-    no-op in CPython — writes go to ``__dict__`` directly).
-
+    Checks multiple sources because different load paths store the model
+    in different locations:
     1. ``state.model`` — set by eager-load paths.
     2. ``state.provider._model`` — set when eager load materializes weights.
     3. Core ``ServerState.model.get()`` — set by the lazy-guard path.
+    4. ``state.provider`` is not None — lazy-guard provider delegates to subprocess.
     """
     import state as server_state
 
@@ -70,15 +79,119 @@ def _model_ready() -> bool:
         return True
     # Lazy-guard path: provider lives in the core ServerState singleton
     # but state.__dict__["model"] stays None.
-    from domains.infrastructure.server_state import get_server_state
+    from domain.infrastructure.server_state import get_server_state
 
     core_model = get_server_state().model.get()
-    return core_model is not None
+    if core_model is not None:
+        return True
+    # Lazy-guard: provider is set but model is in subprocess — can still serve
+    if provider is not None:
+        return True
+    return False
+
+
+def _get_model_status() -> dict:
+    """Return a structured model status with ready flag, reason, and error code.
+
+    Returns one of:
+      {"ready": True}
+      {"ready": False, "reason": "...", "code": "...", "status": 503}
+    """
+    if _model_ready():
+        return {"ready": True}
+
+    from startup_progress import MODEL_LOAD_STATE, STARTUP_PHASE
+
+    from config import ServerConfig
+
+    cfg = ServerConfig.from_env()
+    phase = STARTUP_PHASE.get("phase", "unknown")
+    raw = getattr(cfg, "autoload_model", "") or ""
+    autoload_disabled = not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable")
+
+    if autoload_disabled:
+        model_name = getattr(cfg, "default_model", "") or "none"
+        return {
+            "ready": False,
+            "reason": f"No model loaded. Autoload is disabled. Set SLO_AUTOLOAD_MODEL={model_name} to enable.",
+            "code": "E_NO_MODEL",
+            "status": 503,
+        }
+
+    # Terminal: the load already ended in failure. Report the real cause —
+    # "still loading" would be a lie for a load that stopped long ago.
+    if MODEL_LOAD_STATE.get("status") == "failed":
+        return {
+            "ready": False,
+            "reason": MODEL_LOAD_STATE.get("error") or "Model load failed — no model is available.",
+            "code": "E_MODEL_LOAD_FAILED",
+            "status": 503,
+        }
+
+    if phase != "ready":
+        msg = STARTUP_PHASE.get("message", "Starting...")
+        step = STARTUP_PHASE.get("step", 0)
+        total = STARTUP_PHASE.get("total", 9)
+        return {
+            "ready": False,
+            "reason": f"Server starting — {msg} (step {step}/{total})",
+            "code": "E_STARTING",
+            "status": 503,
+        }
+
+    # Phase is ready but model isn't materialized — still loading in background
+    return {
+        "ready": False,
+        "reason": "Model still loading — please wait.",
+        "code": "E_MODEL_LOADING",
+        "status": 503,
+    }
 
 
 def _estimate_tokens(text: str) -> int:
     """Rough token estimate: ~4 chars per token for English text."""
     return max(1, len(text) // 4)
+
+
+# Budget for the injected RAG block (card cad8ccf0). Measured 2026-10-24:
+# query(prompt, 5) returned 15,228 chars (~4k tokens) from 3-4KB chunks; an
+# uncut dump makes prefill alone exceed the 120s generation timeout (0 tokens
+# streamed). ~2000 chars ≈ 500 tokens keeps first-token ~20s worst-case
+# (8.7s measured @196 tok; prefill attention scales ~quadratically).
+_RAG_CONTEXT_MAX_CHARS = 2000
+
+
+def _build_rag_block(
+    rag_result: dict[str, Any], max_chars: int = _RAG_CONTEXT_MAX_CHARS
+) -> str | None:
+    """Build the RAG system block, capped to the prompt budget.
+
+    Returns None when there is nothing to inject (zero results).
+    """
+    if rag_result.get("num_results", 0) <= 0:
+        return None
+    results = rag_result.get("results") or []
+    if results:
+        # Budget is split evenly across passages: ragsvc chunks are ~3KB, so a
+        # single global slice would keep only the first passage and starve the
+        # rest. Splitting preserves retrieval diversity (all ranks visible).
+        per = max(120, max_chars // len(results))
+        parts: list[str] = []
+        for r in results:
+            c = (r.get("content") or "").strip()
+            if not c:
+                continue
+            if len(c) > per:
+                c = c[:per].rstrip() + " [...]"
+            parts.append(c)
+        ctx = "\n\n".join(parts)
+    else:
+        ctx = rag_result.get("context", "") or ""
+        if len(ctx) > max_chars:
+            ctx = ctx[:max_chars].rstrip() + "\n[...]"
+    if not ctx:
+        return None
+    return f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{ctx}"
 
 
 def _trim_messages_to_budget(
@@ -112,6 +225,38 @@ def _trim_messages_to_budget(
     return system_msgs + kept
 
 
+def _append_volatile_context(messages: list[dict[str, Any]], block: str) -> list[dict[str, Any]]:
+    """Attach per-turn context to the LAST user turn instead of the prefix.
+
+    Context used to be folded into the system prompt and inserted at index 0,
+    which means the token prefix changed on every request. That silently
+    defeats cross-turn KV reuse — ``_resolve_kv_state`` and ``PrefixCache``
+    both match on prefix tokens, so a changing head re-prefills the whole
+    prompt (measured: 43.0 s cold vs 1.26 s warm on a 482-token prompt).
+
+    Retrieval results, learned facts and RAG blocks are all per-turn by
+    nature, so they belong at the tail: the head stays byte-identical per
+    session and the facts still reach the model in the same request.
+
+    Mutates and returns ``messages``. Handles both string content and the
+    multi-part list content used for image requests.
+    """
+    if not block:
+        return messages
+
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") != "user":
+            continue
+        content = messages[i].get("content")
+        if isinstance(content, list):
+            content.append({"type": "text", "text": block})
+        else:
+            base = content if isinstance(content, str) else str(content or "")
+            messages[i]["content"] = f"{base}\n\n{block}" if base.strip() else block
+        return messages
+    return messages
+
+
 _memory_pressure_cache: str | None = None
 _memory_pressure_cache_ts: float = 0.0
 _memory_pressure_lock = threading.Lock()
@@ -130,7 +275,7 @@ def _check_memory_pressure() -> str | None:
         if _memory_pressure_cache is not None and now - _memory_pressure_cache_ts < 2.0:
             return _memory_pressure_cache if _memory_pressure_cache else None
     try:
-        from domains.infrastructure.memory_pressure import (
+        from domain.infrastructure.memory_pressure import (
             PressureLevel,
             get_memory_pressure_monitor,
         )
@@ -138,10 +283,21 @@ def _check_memory_pressure() -> str | None:
         monitor = get_memory_pressure_monitor()
         level = monitor.check()
         if level == PressureLevel.EMERGENCY:
-            import psutil
+            # Report the sample that TRIGGERED the classification, never a
+            # fresh one. Re-reading psutil here printed "System memory at 56%"
+            # at 10:50:19 for a refusal classified on a 96.1% sample at
+            # 10:49:10 — a message that contradicted the very block it
+            # explained (journal, 2026-11-01).
+            reading = monitor.last_reading or {}
+            percent = reading.get("percent")
+            if percent is None:
+                import psutil
 
-            mem = psutil.virtual_memory()
-            result = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+                percent = psutil.virtual_memory().percent
+            result = (
+                f"System memory at {percent:.0f}% — too low for safe inference. "
+                "Free some memory and retry."
+            )
             with _memory_pressure_lock:
                 _memory_pressure_cache = result
                 _memory_pressure_cache_ts = now
@@ -164,6 +320,31 @@ class CreateSessionRequest(BaseModel):
     model: str | None = None
 
 
+class AppScopeDelta(BaseModel):
+    """Per-conversation configuration delta — the mini-app's own settings.
+
+    Pydantic twin of ``domain.inference.app_scope.AppScope`` (the frozen
+    domain value object; ``tests/test_app_scope.py`` pins field parity
+    between the two). Persisted wholesale on the session record under
+    ``scope`` via ``PUT /chat/sessions/{id}``; ``None`` on any field means
+    "unset — inherit the layer below" (presence-based, never value-based).
+    Bounds mirror ``ChatRequest`` so a delta can never hold a value the wire
+    would reject.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_k: int | None = Field(default=None, ge=0, le=500)
+    repetition_penalty: float | None = Field(default=None, ge=0.5, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=2048)
+    system_prompt: str | None = Field(default=None, max_length=100000)
+    knowledge: list[str] | None = Field(default=None, max_length=100)
+    use_context_core: bool | None = None
+    use_rag: bool | None = None
+
+
 class UpsertSessionRequest(BaseModel):
     """Schema for updating session metadata."""
 
@@ -171,63 +352,106 @@ class UpsertSessionRequest(BaseModel):
     archived: bool | None = None
     starred: bool | None = None
     pinned: bool | None = None
+    scope: AppScopeDelta | None = None
+    """Conversation AppScope delta — replaces the stored delta wholesale."""
 
 
-class Message(BaseModel):
-    role: str = Field(..., pattern=r"^(user|assistant|system)$")
-    content: str = Field(..., min_length=1, max_length=100000)
+class BranchSessionRequest(BaseModel):
+    """Schema for branching a session at a message index.
+
+    Server-side messages carry no ids (`MessageData` is role+content), so the
+    branch point is the position in the ordered list.
+    """
+
+    from_index: int
+    name: str | None = Field(None, max_length=200)
 
 
-class ChatRequest(BaseModel):
-    messages: list[Message]
-    model: str = "qwen2.5-0.5b-instruct"
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=128, ge=1, le=2048)
-    max_new_tokens: int | None = Field(
-        default=None, ge=1, le=2048, description="Alias for max_tokens (frontend compat)"
-    )
-    top_p: float = Field(default=0.85, ge=0.0, le=1.0)
-    top_k: int = Field(default=40, ge=0, le=500)
-    repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
-    session_id: str | None = None
-    user_id: str | None = None
-    system_prompt: str | None = None
-    knowledge: list[str] | None = None
-    images: list[str] | None = Field(default=None, description="Base64 encoded images")
-    use_context_core: bool = Field(
-        default=True, description="Use ContextCore for multi-layer context"
-    )
-    use_rag: bool = Field(
-        default=True, description="Use production RAG for document-grounded responses"
-    )
-    agent_id: str | None = Field(
-        default=None, description="Agent ID for role-based system instructions"
-    )
+class SessionModel(BaseModel):
+    """One row of GET /chat/sessions — the session-metadata index contract.
 
-    def model_post_init(self, __context: Any) -> None:
-        """Resolve max_new_tokens alias into max_tokens."""
-        if self.max_new_tokens is not None and self.max_tokens == 128:
-            object.__setattr__(self, "max_tokens", self.max_new_tokens)
+    Single source of truth for the wire shape of a session row: the
+    ``chat.sessions.list`` descriptor's ``result`` schema and the generated TS
+    ``SessionMeta`` interface both derive from this model
+    (``scripts/gen_ts_contracts.py``). Mirrors
+    ``InferenceRouter._build_session_metadata_index`` output — exactly these
+    keys, always present. ``extra="allow"`` so indexed rows may grow
+    without breaking consumers.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+    message_count: int
+    scope: AppScopeDelta | None = None
+    """This conversation's AppScope delta (``None`` = inherits global only)."""
 
 
-class ChatResponse(BaseModel):
-    message: str
-    session_id: str
-    done: bool = True
+# Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
+# chat router no longer imports this router. Re-exported here for backwards
+# compatibility with existing importers (mobile BFF, tests).
+from schemas.chat import (  # noqa: E402
+    ChatControlRequest,
+    ChatRequest,
+    ChatResponse,
+    Message,
+)
 
-
-class ChatControlRequest(BaseModel):
-    session_id: str
-    action: str = Field(..., pattern=r"^(cancel|approve|context)$")
-    tool_name: str | None = None
-    approved: bool | None = None
-    context: str | None = None
-
+from domain.inference.app_scope import (  # noqa: E402
+    apply_scope,
+    resolve_scope,
+)
+from domain.inference.engine import (  # noqa: E402
+    TurnRequest,
+    TurnResult,
+    fold,
+    register_chat_engine,
+)
 
 # In-memory store for pending control requests per session
 _chat_control_store: dict[str, dict] = {}
 _chat_control_lock = threading.Lock()
 _CHAT_CONTROL_TTL = 300  # 5 minutes
+
+
+async def _apply_consciousness_reflection(messages: list, corr_id: str) -> list:
+    """CONSCIOUSNESS_PROC — prepend the reflection narrative (build order #6).
+
+    Pulls ``engine.reflect(apply=False)`` (propose-only: never commits belief
+    deltas) and prepends its narrative as a system message via
+    ConsciousnessProcessor. Advisory by design: a disabled engine, an empty
+    narrative, or ANY failure skips injection and returns messages unchanged
+    (try/except skip — chat never errors on reflection).
+    """
+    try:
+        from domain.core import get_consciousness
+
+        ce = get_consciousness()
+        if not ce.config.is_enabled():
+            return messages
+        narrative = ce.reflect(apply=False).narrative
+        if not (narrative or "").strip():
+            return messages
+        return await apply_processors(messages, [ConsciousnessProcessor(narrative=narrative)])
+    except Exception as e:
+        logger.debug(
+            "CHAT_PIPELINE corr=%s step=CONSCIOUSNESS_PROC skip error=%s",
+            corr_id,
+            e,
+            extra={
+                "tag": "CHAT",
+                "context": {
+                    "corr": corr_id,
+                    "step": "CONSCIOUSNESS_PROC",
+                    "result": "SKIP",
+                    "error": str(e),
+                },
+            },
+        )
+        return messages
 
 
 def get_chat_control(session_id: str) -> dict | None:
@@ -242,58 +466,20 @@ def get_chat_control(session_id: str) -> dict | None:
 def set_chat_control(session_id: str, control: dict) -> None:
     """Set pending control for a session."""
     import time as _time
+
     with _chat_control_lock:
         control["_ts"] = _time.time()
         _chat_control_store[session_id] = control
         # Evict expired entries
         if len(_chat_control_store) > 100:
             now = _time.time()
-            expired = [k for k, v in _chat_control_store.items() if now - v.get("_ts", 0) > _CHAT_CONTROL_TTL]
-            for k in expired:
-                del _chat_control_store[k]
-
-
-# Cache for partial chat responses (for Last-Event-ID reconnection)
-_chat_response_cache: dict[str, dict] = {}
-_chat_cache_lock = threading.Lock()
-_CHAT_CACHE_MAX_SESSIONS = 100
-_CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
-
-
-def get_chat_response_cache(session_id: str) -> dict | None:
-    """Get cached response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        entry = _chat_response_cache.get(session_id)
-        if entry and time.time() - entry.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S:
-            _chat_response_cache.pop(session_id, None)
-            return None
-        return entry
-
-
-def set_chat_response_cache(session_id: str, response: dict) -> None:
-    """Cache a partial response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        # Purge old entries if cache is full
-        if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
-            now = time.time()
             expired = [
                 k
-                for k, v in _chat_response_cache.items()
-                if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S
+                for k, v in _chat_control_store.items()
+                if now - v.get("_ts", 0) > _CHAT_CONTROL_TTL
             ]
-            for k in expired[:10]:  # Remove up to 10 expired entries
-                _chat_response_cache.pop(k, None)
-        _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
-
-
-def clear_chat_response_cache(session_id: str) -> None:
-    """Clear cached response for a session."""
-    with _chat_cache_lock:
-        _chat_response_cache.pop(session_id, None)
+            for k in expired:
+                del _chat_control_store[k]
 
 
 class ContextInspectorResponse(BaseModel):
@@ -357,6 +543,40 @@ _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
 
+# Bounds mirroring GenerateRequest's Field constraints (:temperature ge=0 le=2,
+# :top_p ge=0 le=1, :top_k ge=0 le=500, :repetition_penalty ge=0.5 le=2). Nudged
+# values are clamped here so a feedback-derived adjustment can never push a
+# defaulted param outside the schema the request itself is validated against
+# (drift-gated by tests/test_meta_weights_clamp.py).
+_META_WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
+    "temperature": (0.0, 2.0),
+    "top_p": (0.0, 1.0),
+    "top_k": (0.0, 500.0),
+    "repetition_penalty": (0.5, 2.0),
+}
+
+
+# Feedback must steer *context*, not sampling. `domain/context` owns that:
+# TraitWeightsConfig is clamped to [0,1] by construction and its managers
+# render prompt text, which is readable and reversible per request. This
+# sampler-side nudge duplicates that responsibility one layer down, where an
+# unbounded integrator turned 473 thumbs-up into `repetition_penalty 0.8` —
+# a value that REWARDS already-emitted tokens, so a finished answer replayed
+# until `max_tokens` (card 20261102_001621). Off by default; set
+# SLO_META_WEIGHT_NUDGE=1 to restore the old behaviour while the context path
+# is measured.
+_META_WEIGHT_NUDGE_ENV = "SLO_META_WEIGHT_NUDGE"
+_META_WEIGHT_NUDGE_DEFAULT = "0"
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def _meta_weight_nudge_enabled() -> bool:
+    """Whether feedback may still move sampling parameters."""
+    return (
+        os.environ.get(_META_WEIGHT_NUDGE_ENV, _META_WEIGHT_NUDGE_DEFAULT).strip().lower()
+        in _TRUTHY
+    )
+
 
 def _apply_meta_weights(
     temperature: float,
@@ -365,83 +585,123 @@ def _apply_meta_weights(
     repetition_penalty: float,
     user_message: str,
     user_id: str = "default",
+    explicit: Collection[str] = (),
 ) -> dict:
     """Apply feedback-driven meta-weight adjustments to generation parameters.
 
-    Looks up similar past messages in the feedback database and adjusts
-    temperature, top_p, top_k, and repetition_penalty accordingly.
-    Results are cached for 5 seconds to avoid repeated similarity searches.
+    Looks up similar past messages in the feedback database and derives a
+    *nudge* -- the distance from the neutral baseline -- for temperature,
+    top_p, top_k and repetition_penalty. Nudges are cached for 5 seconds to
+    avoid repeated similarity searches.
 
-    Returns a dict of adjusted parameters to pass to the provider.
+    `explicit` names the parameters the caller actually sent (pydantic request
+    models pass `model_fields_set`). Those pass through verbatim: a
+    server-side heuristic may only move parameters the caller left at their
+    default, because an explicitly-set value is user intent and outranks a
+    derived one.
+
+    Returns a dict of parameters to pass to the provider.
+
+    Disabled by default: ``SLO_META_WEIGHT_NUDGE=0`` returns the caller's
+    parameters untouched. Feedback steering belongs to the context stack
+    (``domain/context`` trait weights -> ``ContextCore`` -> prompt), where the
+    space is bounded [0,1] and the effect is readable text rather than a
+    sampler corner every request inherits. Set the env var to ``1`` to restore
+    the sampler-side nudge for A/B measurement.
     """
     import time
 
+    requested = {
+        "temperature": temperature,
+        "top_p": top_p,
+        "top_k": top_k,
+        "repetition_penalty": repetition_penalty,
+    }
+
+    if not _meta_weight_nudge_enabled():
+        return dict(requested)
     cache_key = f"{user_id}:{hash(user_message)}"
     now = time.monotonic()
 
+    # The cache holds the NUDGE, never the merged result. The nudge depends
+    # only on the message and user, while the merge depends on which fields
+    # THIS request set explicitly -- caching merged output would leak one
+    # request's explicit set into another's.
+    nudge: dict[str, float] | None = None
     with _META_WEIGHT_CACHE_LOCK:
-        if cache_key in _META_WEIGHT_CACHE:
-            cached_time, cached_params = _META_WEIGHT_CACHE[cache_key]
-            if now - cached_time < _META_WEIGHT_CACHE_TTL:
-                return cached_params
+        cached = _META_WEIGHT_CACHE.get(cache_key)
+        if cached is not None and now - cached[0] < _META_WEIGHT_CACHE_TTL:
+            nudge = cached[1]
 
-    try:
-        from domains.feedback.meta_weights import get_meta_weight_manager
+    if nudge is None:
+        try:
+            from domain.feedback import get_meta_weight_manager
 
-        manager = get_meta_weight_manager()
-        adj = manager.get_adjustment(
-            user_message=user_message,
-            k=5,
-            user_id=user_id,
-        )
-        result = {
-            "temperature": adj.temperature,
-            "top_p": adj.top_p,
-            "top_k": adj.top_k,
-            "repetition_penalty": adj.repetition_penalty,
-        }
-        if adj.temperature > 1.2 or adj.top_k < 10:
-            logger.warning(
-                "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
-                adj.temperature,
-                adj.top_k,
-                user_id,
-                extra={
-                    "tag": "INF",
-                    "context": {
-                        "temperature": adj.temperature,
-                        "top_k": adj.top_k,
-                        "user_id": user_id,
-                    },
-                },
+            manager = get_meta_weight_manager()
+            adj = manager.get_adjustment(
+                user_message=user_message,
+                k=5,
+                user_id=user_id,
             )
-        with _META_WEIGHT_CACHE_LOCK:
-            _META_WEIGHT_CACHE[cache_key] = (now, result)
-            if len(_META_WEIGHT_CACHE) > 1000:
-                logger.info(
-                    "Meta-weight cache overflow, clearing %d entries", len(_META_WEIGHT_CACHE)
+            neutral = manager.neutral_weights
+            nudge = {
+                "temperature": adj.temperature - neutral.temperature,
+                "top_p": adj.top_p - neutral.top_p,
+                "top_k": adj.top_k - neutral.top_k,
+                "repetition_penalty": adj.repetition_penalty - neutral.repetition_penalty,
+            }
+            if adj.temperature > 1.2 or adj.top_k < 10:
+                logger.warning(
+                    "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
+                    adj.temperature,
+                    adj.top_k,
+                    user_id,
+                    extra={
+                        "tag": "INF",
+                        "context": {
+                            "temperature": adj.temperature,
+                            "top_k": adj.top_k,
+                            "user_id": user_id,
+                        },
+                    },
                 )
-                safe_audit_log(
-                    "inference.meta_weight_cache_clear",
-                    resource="meta_weight_cache",
-                    detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}",
-                )
-                _META_WEIGHT_CACHE.clear()
-        return result
-    except Exception as e:
-        logger.debug("Meta-weight adjustment failed: %s", e)
-        return {
-            "temperature": temperature,
-            "top_p": top_p,
-            "top_k": top_k,
-            "repetition_penalty": repetition_penalty,
-        }
+            with _META_WEIGHT_CACHE_LOCK:
+                _META_WEIGHT_CACHE[cache_key] = (now, nudge)
+                if len(_META_WEIGHT_CACHE) > 1000:
+                    logger.info(
+                        "Meta-weight cache overflow, clearing %d entries",
+                        len(_META_WEIGHT_CACHE),
+                    )
+                    safe_audit_log(
+                        "inference.meta_weight_cache_clear",
+                        resource="meta_weight_cache",
+                        detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}",
+                    )
+                    _META_WEIGHT_CACHE.clear()
+        except Exception as e:
+            logger.debug("Meta-weight adjustment failed: %s", e)
+            nudge = {}  # no signal -- the request's own values stand
+
+    merged: dict[str, float] = {}
+    for param, value in requested.items():
+        if param in explicit:
+            # Explicit user intent: pydantic already validated it against the
+            # request schema — pass through verbatim.
+            merged[param] = value
+            continue
+        nudged = value + nudge.get(param, 0)
+        lo, hi = _META_WEIGHT_BOUNDS[param]
+        nudged = min(max(nudged, lo), hi)
+        if param == "top_k":
+            nudged = int(round(nudged))
+        merged[param] = nudged
+    return merged
 
 
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
     """Search learned knowledge + optionally live web search. Returns {facts, source, topics}."""
     try:
-        from domains.learner.knowledge_augmenter import enrich_with_knowledge
+        from domain.learner import enrich_with_knowledge
 
         return enrich_with_knowledge(user_msg, auto_search=auto_search, max_facts=max_facts)
     except Exception as e:
@@ -451,85 +711,77 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         return {"facts": [], "source": "error", "topics": [], "error": str(e)}
 
 
+async def _build_context_frame(
+    ctx_core: Any,
+    session_id: str,
+    user_msg: str,
+    corr_id: str,
+) -> tuple[Any, dict]:
+    """Build context frame from ContextCore. Returns (frame, context_info)."""
+    context_info: dict = {}
+    frame = None
+
+    # Retrieval *layers* need facts; the frame itself does not. Trait-weight
+    # steering rides the same frame (``ContextFrame.system_extra``), so
+    # skipping the build whenever the knowledge store was empty is exactly how
+    # feedback -> prompt stayed decorative: on a fresh install the store has
+    # zero facts, so ``_apply_managers`` never ran. Build the frame every turn
+    # and switch only the expensive layers off.
+    has_facts = True
+    try:
+        has_facts = get_memory_service().stats().get("total_facts", 0) > 0
+    except Exception as e:
+        logger.debug("Knowledge memory check failed: %s", e)
+
+    ctx_core.set_session_id(session_id)
+    if has_facts:
+        ctx_core.add_message("user", user_msg)
+    try:
+        frame = await asyncio.wait_for(
+            ctx_core.build_context_frame(
+                include_rag=has_facts,
+                include_memory=has_facts,
+                query=user_msg,
+            ),
+            timeout=5.0,
+        )
+    except TimeoutError:
+        logger.warning(
+            "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
+            corr_id,
+        )
+        frame = None
+
+    if frame is not None:
+        context_info = {
+            "layers": [l.layer_type for l in frame.layers],
+            "total_tokens": frame.total_tokens,
+            "max_tokens": frame.max_tokens,
+            "system_extra_chars": len(frame.system_extra),
+        }
+
+    return frame, context_info
+
+
+# ── In-memory session search index ──────────────────────────────────────────
+
+
+# SessionSearchIndex was extracted to domain/search/session_index.py so
+# the system-wide search SessionsAdapter shares this same index — one
+# cache over the session corpus, not two. Legacy contract unchanged:
+# _search_sessions_sync below still backs GET /chat/sessions/search.
+from domain.search.session_index import get_session_index  # noqa: E402
+
+_session_search_index = get_session_index()
+
+
 def _search_sessions_sync(q: str, limit: int) -> list:
-    """Synchronous full-text search across session files on disk."""
-    q_lower = q.lower().strip()
-    results = []
-    max_matches_per_session = 3  # stop scanning messages after this many matches
-
-    search_dirs: list[Path] = []
-    sessions_dir = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
-    if sessions_dir.is_dir():
-        search_dirs.append(sessions_dir)
-    conv_dir = Path(__file__).parent.parent.parent.parent / "data" / "conversations"
-    if conv_dir.is_dir():
-        search_dirs.append(conv_dir)
-    seen = set()
-
-    for sdir in search_dirs:
-        if not sdir.is_dir():
-            continue
-
-        def _safe_mtime(p: Path) -> float:
-            try:
-                return p.stat().st_mtime
-            except (OSError, ValueError):
-                return 0.0
-
-        for f in sorted(sdir.glob("*.json"), key=_safe_mtime, reverse=True):
-            if len(results) >= limit:
-                break
-            try:
-                data = json.loads(f.read_text())
-                sid = data.get("id") or data.get("session_id") or f.stem
-                if sid in seen:
-                    continue
-                seen.add(sid)
-                name = data.get("name", "") or ""
-                messages = data.get("messages", [])
-                matches = []
-
-                if q_lower in name.lower():
-                    matches.append(
-                        {
-                            "role": "session",
-                            "content": name,
-                            "timestamp": data.get("updated_at", ""),
-                        }
-                    )
-
-                for msg in messages:
-                    if len(matches) >= max_matches_per_session:
-                        break
-                    content = msg.get("content", "")
-                    if q_lower in content.lower():
-                        matches.append(
-                            {
-                                "role": msg.get("role", "unknown"),
-                                "content": content,
-                                "timestamp": msg.get("timestamp", ""),
-                            }
-                        )
-
-                if matches:
-                    results.append(
-                        {
-                            "id": sid,
-                            "name": name or sid,
-                            "created_at": data.get("created_at", ""),
-                            "updated_at": data.get("updated_at", ""),
-                            "match_count": len(matches),
-                            "matches": matches[:3],
-                        }
-                    )
-            except (json.JSONDecodeError, OSError):
-                continue
-
-    return results
+    """Full-text search across session files using in-memory index."""
+    return _session_search_index.search(q, limit)
 
 
 # ── FileRepository-backed session store ──
-from domains.infrastructure.repository import FileRepository, Serializer
+from domain.infrastructure.repository import FileRepository, Serializer
 
 
 class _SessionDictSerializer(Serializer[dict]):
@@ -558,105 +810,46 @@ class _SessionDictSerializer(Serializer[dict]):
         return result
 
 
-def _inject_knowledge_items(knowledge_list: list[str]) -> int:
-    """Store injected knowledge items in vector store. Returns count stored."""
-    import time as _time
+def _consciousness_post_process(user_msg: str, full_response: str) -> dict[str, Any]:
+    """Level-gated consciousness post-processing for one chat response.
 
-    mem = get_knowledge_memory()
-    stored = 0
-    for k in knowledge_list:
-        if k and len(k) > 10:
-            fact = KnowledgeFact(
-                content=k,
-                topic="injected",
-                source="injected",
-                timestamp=_time.time(),
-                importance=0.7,
-            )
-            if mem.add_fact(fact):
-                stored += 1
-    return stored
-
-
-def _prepare_provider_messages(
-    messages: list[Message],
-    images: list[str] | None,
-    user_msg: str,
-) -> list[dict[str, Any]]:
-    """Build provider messages list, injecting images into the last user message."""
-    provider_messages = [{"role": m.role, "content": m.content} for m in messages]
-    if images:
-        content_parts: list[dict[str, Any]] = [{"type": "text", "text": user_msg}]
-        for img_data in images:
-            content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
-        for i in range(len(provider_messages) - 1, -1, -1):
-            if provider_messages[i]["role"] == "user":
-                provider_messages[i]["content"] = content_parts
-                break
-    return provider_messages
-
-
-async def _build_context_frame(
-    ctx_core: Any,
-    session_id: str,
-    user_msg: str,
-    corr_id: str,
-) -> tuple[Any, dict]:
-    """Build context frame from ContextCore. Returns (frame, context_info)."""
-    context_info = {}
-    frame = None
-
-    skip_context = False
+    Returns {"narrative": str, "level": int}; empty narrative means nothing
+    to surface. Best-effort: any failure disables the event for this turn.
+    """
     try:
-        if get_memory_service().stats().get("total_facts", 0) == 0:
-            skip_context = True
+        from domain.core import get_consciousness
+
+        _ce = get_consciousness()
+        if not _ce.config.is_enabled():
+            return {"narrative": "", "level": 0}
+        narrative = _ce.process(user_msg or "", full_response)
+        _ce.save()
+        return {"narrative": narrative or "", "level": _ce.config.level}
     except Exception as e:
-        logger.debug("Knowledge memory check failed: %s", e)
-
-    if not skip_context:
-        ctx_core.set_session_id(session_id)
-        ctx_core.add_message("user", user_msg)
-        try:
-            frame = await asyncio.wait_for(
-                ctx_core.build_context_frame(
-                    include_rag=True,
-                    include_memory=True,
-                    query=user_msg,
-                ),
-                timeout=5.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning(
-                "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
-                corr_id,
-            )
-            frame = None
-
-        if frame is not None:
-            context_info = {
-                "layers": [l.layer_type for l in frame.layers],
-                "total_tokens": frame.total_tokens,
-                "max_tokens": frame.max_tokens,
-            }
-
-    return frame, context_info
+        logger.debug("Consciousness post-processing skipped: %s", e)
+        return {"narrative": "", "level": 0}
 
 
 def _run_post_gen_tasks(
     full_response: str,
     user_msg: str,
     session_id: str,
-    start_time: "datetime.datetime",
-    req: "ChatRequest",
+    start_time: datetime.datetime,
+    req: TurnRequest,
     ctx_core: Any,
     bg_tasks_lock: Any,
     bg_tasks: Any,
     bg_tasks_discard: Any,
     corr_id: str,
-) -> None:
-    """Launch fire-and-forget background tasks after chat generation completes."""
+) -> dict[str, Any]:
+    """Launch fire-and-forget background tasks after chat generation completes.
+
+    Returns the consciousness post-process result for the caller to surface
+    as a CONSCIOUSNESS SSE event.
+    """
     import state as _pgs_state
-    from domains.cognitive.rag_service import get_rag_service as _pgs_rag
+
+    from domain.cognition import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -667,6 +860,7 @@ def _run_post_gen_tasks(
                 fut.result()
             except Exception as e:
                 logger.debug("Post-gen task %s failed: %s", task_name, e)
+
         return _cb
 
     # RAG verification
@@ -763,6 +957,13 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("Entity extraction failed: %s", e)
 
+    # Consciousness post-processing (narrative surfaced by the caller).
+    # Same use_consciousness gate as the pre-gen narrative: a bare probe must
+    # not ingest its exchange into the episode store nor surface a reflection.
+    if not req.use_consciousness:
+        return {"narrative": "", "level": 0}
+    return _consciousness_post_process(user_msg, full_response)
+
 
 class InferenceRouter:
     """OOP-style router for inference, chat, sessions, and context endpoints."""
@@ -791,6 +992,13 @@ class InferenceRouter:
         self._session_cache_ts: float = 0
         self._session_cache_ttl = 5.0
 
+        # The metadata index is a full rescan of every session JSON header
+        # (~1900 files = 0.13-0.21s measured), so it gets its own longer
+        # TTL: fresh-enough for the sessions list, cheap enough not to show
+        # up in the /bootstrap fan-out every 5s. Writes still invalidate it
+        # (see the `_session_metadata_cache = None` call sites), so freshness
+        # after create/delete/rename stays event-driven, not timer-driven.
+        self._session_metadata_ttl = 60.0
         self._session_metadata_cache: list | None = None
         self._session_metadata_cache_ts: float = 0
 
@@ -833,18 +1041,36 @@ class InferenceRouter:
     def _get_context_core(self):
         if self._context_core is None:
             try:
-                from domains.infrastructure.context_core import get_context_core
+                from domain.infrastructure.context_core import get_context_core
 
                 self._context_core = get_context_core()
             except ImportError:
                 return None
+            # Connect the trait-weight steering path (feedback -> trait
+            # weights -> managers -> ContextCore). It was designed and never
+            # wired: set_managers() had only test callers, so the frame
+            # carried no steering while a duplicate sampler-side integrator
+            # did run (card 20261103_071231). Fail-open — context steering is
+            # an enhancement, never a precondition for inference.
+            try:
+                from domain.context import ensure_managers
+
+                attached = ensure_managers(self._context_core)
+                if attached:
+                    logger.info(
+                        "ContextCore managers attached: %s",
+                        ",".join(sorted(attached)),
+                        extra={"tag": "INF"},
+                    )
+            except Exception as e:
+                logger.warning("Context manager wiring failed: %s", e)
         if (
             self._context_core
             and self._vector_store_ref
             and self._context_core._vector_store is None
         ):
             try:
-                from domains.inference.vector_store import simple_embed
+                from domain.inference import simple_embed
 
                 self._context_core.set_vector_store(self._vector_store_ref, simple_embed)
             except Exception as e:
@@ -877,6 +1103,9 @@ class InferenceRouter:
 
     def _save_session(self, session_id: str, data: dict) -> None:
         self._session_cache = None
+        # New/updated sessions must show up in /chat/sessions immediately;
+        # the metadata index reads files, so invalidate it with the cache.
+        self._session_metadata_cache = None
         data["updated_at"] = datetime.datetime.now().isoformat()
         self._session_cache_put(session_id, data)
         self._session_dirty.add(session_id)
@@ -893,8 +1122,10 @@ class InferenceRouter:
             self._session_dirty.discard(session_id)
         except Exception as exc:
             logger.warning(
-                "Disk write failed for session %s: %s — will retry on next flush", session_id, exc,
-                extra={"tag": "REQ"}
+                "Disk write failed for session %s: %s — will retry on next flush",
+                session_id,
+                exc,
+                extra={"tag": "REQ"},
             )
 
     async def flush_dirty_sessions(self) -> int:
@@ -926,8 +1157,22 @@ class InferenceRouter:
         try:
             self._background_flush_task = asyncio.create_task(_flush_loop())
         except RuntimeError as e:
-            logger.warning("Failed to start background session flush: %s", e,
-                extra={"tag": "REQ"})
+            logger.warning("Failed to start background session flush: %s", e, extra={"tag": "REQ"})
+
+    @staticmethod
+    def _derive_session_name(messages: list, fallback: str) -> str:
+        """Derive a session title from the first message line.
+
+        One deliberate rule for every listing surface: the FIRST message's
+        first line (the user-authored topic), truncated to 60 chars — not the
+        conversation tail. The frontend sanitizes whatever arrives; direct
+        API consumers (mobile) read this shape as-is.
+        """
+        if messages:
+            first = str(messages[0].get("content") or "").split("\n")[0][:60].strip()
+            if first:
+                return first
+        return fallback
 
     def _build_session_metadata_index(self) -> list:
         """Build a lightweight metadata index without loading full message content.
@@ -939,7 +1184,7 @@ class InferenceRouter:
         now = time.time()
         if (
             self._session_metadata_cache is not None
-            and now - self._session_metadata_cache_ts < self._session_cache_ttl
+            and now - self._session_metadata_cache_ts < self._session_metadata_ttl
         ):
             return self._session_metadata_cache
 
@@ -953,24 +1198,33 @@ class InferenceRouter:
                         raw = fh.read(4096)
                     if not raw.strip():
                         continue
-                    # Try to parse the partial JSON for header fields
-                    data = json.loads(raw)
-                    sid = data.get("id") or data.get("session_id") or f.stem
-                    name = data.get("name", "") or ""
+                    # Partial-header fast path; >4KB sessions truncate the
+                    # prefix, so fall back to a full read (the docstring's
+                    # promised fallback) instead of silently dropping the
+                    # session from the listing.
+                    try:
+                        data = json.loads(raw)
+                    except json.JSONDecodeError:
+                        with open(f) as fh:
+                            raw = fh.read()
+                        if not raw.strip():
+                            continue
+                        data = json.loads(raw)
+                    # session_id first: _SessionDictSerializer injects a random
+                    # "id" when absent, which would diverge from the filename
+                    # (the canonical repo key _build_session_cache exposes).
+                    sid = data.get("session_id") or f.stem
                     messages = data.get("messages", [])
-                    # If messages array is truncated, count from file size heuristic
+                    name = data.get("name") or self._derive_session_name(messages, sid)
                     msg_count = len(messages)
-                    if not name and messages:
-                        name = messages[0].get("content", "").split("\n")[0][:60]
-                    if not name:
-                        name = sid
                     metadata.append(
                         {
                             "id": sid,
                             "name": name,
-                            "created_at": data.get("created_at", ""),
+                            "created_at": data.get("created_at") or "",
                             "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
                             "message_count": msg_count,
+                            "scope": data.get("scope"),
                         }
                     )
                 except (json.JSONDecodeError, OSError):
@@ -996,12 +1250,7 @@ class InferenceRouter:
             data["id"] = sid
             data.pop("session_id", None)
             if not data.get("name"):
-                msgs = data.get("messages", [])
-                if msgs:
-                    first = msgs[0].get("content", "").split("\n")[0]
-                    data["name"] = first[:60]
-                else:
-                    data["name"] = sid
+                data["name"] = self._derive_session_name(data.get("messages", []), sid)
             if not data.get("updated_at"):
                 data["updated_at"] = data.get("created_at") or datetime.datetime.now().isoformat()
             sessions.append(data)
@@ -1018,18 +1267,13 @@ class InferenceRouter:
         """generate."""
 
         import state as _gen_state
-        from startup_progress import STARTUP_PHASE
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            phase = STARTUP_PHASE.get("phase", "unknown")
-            step = STARTUP_PHASE.get("step", 0)
-            total = STARTUP_PHASE.get("total", 9)
-            msg = STARTUP_PHASE.get("message", "Starting...")
+        ms = _get_model_status()
+        if not ms["ready"]:
             raise_error(
-                f"Model still loading — {msg} (step {step}/{total})",
-                "E_MODEL_LOADING",
-                status_code=503,
-                details={"phase": phase, "step": step, "total": total, "message": msg},
+                ms["reason"],
+                ms["code"],
+                status_code=ms["status"],
             )
 
         mem_err = _check_memory_pressure()
@@ -1038,7 +1282,9 @@ class InferenceRouter:
 
         provider = get_provider("default")
         if provider is None:
-            raise_error("No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500)
+            raise_error(
+                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503
+            )
 
         prompt_text = req.prompt
         if req.response_format == "json":
@@ -1047,6 +1293,19 @@ class InferenceRouter:
                 "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
             )
         provider_messages = [{"role": "user", "content": prompt_text}]
+
+        # Cognitive reasoning context injection from SloEngine
+        try:
+            import state as _gen_state2
+
+            soul_engine = _gen_state2.soul_engine
+            if soul_engine and soul_engine._soul:
+                reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
+                if reasoning_text.strip():
+                    provider_messages.insert(0, {"role": "system", "content": reasoning_text})
+        except Exception:
+            pass
+
         try:
             _t0 = time.monotonic()
             gen_params = _apply_meta_weights(
@@ -1055,6 +1314,7 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
+                explicit=req.model_fields_set,
             )
 
             import state as _gen_state
@@ -1106,7 +1366,7 @@ class InferenceRouter:
                     model=actual_model,
                     tokens_generated=tokens,
                     elapsed_ms=(time.monotonic() - _t0) * 1000,
-                    temperature=req.temperature,
+                    temperature=gen_params["temperature"],
                 )
             except Exception as e:
                 logger.warning("Failed to capture conversation: %s", e)
@@ -1128,18 +1388,18 @@ class InferenceRouter:
     ) -> StreamingResponse:
         """generate_stream."""
         import state as _stream_state
-        from startup_progress import STARTUP_PHASE
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
+        ms = _get_model_status()
+        if not ms["ready"]:
 
             async def error_stream() -> AsyncIterator[str]:
                 """error_stream."""
                 yield sse_error(
                     "generate",
                     "IDLE",
-                    "Model still loading — please wait.",
-                    code="MODEL_LOADING",
-                    http_status=503,
+                    ms["reason"],
+                    code=ms["code"],
+                    http_status=ms["status"],
                 )
 
             return StreamingResponse(error_stream(), media_type="text/event-stream")
@@ -1165,7 +1425,7 @@ class InferenceRouter:
                     "IDLE",
                     "No provider available — load a model first",
                     code="E_INFRA_REGISTRY",
-                    http_status=500,
+                    http_status=503,
                 )
                 return
 
@@ -1185,6 +1445,17 @@ class InferenceRouter:
                     "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
                 )
             provider_messages = [{"role": "user", "content": prompt_text}]
+
+            # Cognitive reasoning context injection from SloEngine
+            try:
+                soul_engine = _stream_state.soul_engine
+                if soul_engine and soul_engine._soul:
+                    reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
+                    if reasoning_text.strip():
+                        provider_messages.insert(0, {"role": "system", "content": reasoning_text})
+            except Exception:
+                pass
+
             start = datetime.datetime.now()
             token_count = 0
             collected = []
@@ -1203,6 +1474,7 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
+                explicit=req.model_fields_set,
             )
 
             _coalescer = get_coalescer()
@@ -1222,12 +1494,14 @@ class InferenceRouter:
                     )
                     return
                 cached = existing.result or ""
-                tokens = cached.split()
-                for i in range(0, len(tokens), 5):
-                    yield sse_token("generate", " ".join(tokens[i : i + 5]))
+                for chunk in _chunk_replay(cached):
+                    yield sse_token("generate", chunk)
                 _mgr.finish(_op_id)
                 yield sse_token(
-                    "generate", "", done=True, meta={"tokens": len(tokens), "cached": True}
+                    "generate",
+                    "",
+                    done=True,
+                    meta={"tokens": len(cached.split()), "cached": True},
                 )
                 return
 
@@ -1337,7 +1611,7 @@ class InferenceRouter:
                     model=_stream_state.model_type or req.model,
                     tokens_generated=token_count,
                     elapsed_ms=elapsed,
-                    temperature=req.temperature,
+                    temperature=gen_params["temperature"],
                 )
             except Exception as e:
                 logger.warning("Failed to capture conversation: %s", e)
@@ -1352,6 +1626,228 @@ class InferenceRouter:
             )
 
         return StreamingResponse(generate(), media_type="text/event-stream")
+
+    async def ws_generate(self, websocket: WebSocket) -> None:
+        """WebSocket endpoint for real-time token streaming.
+
+        Protocol:
+          1. Client connects and sends auth message: {"api_key": "..."} or {"token": "..."}
+          2. Server responds: {"status": "authenticated"} or {"status": "error", "error": "..."}
+          3. Client sends generate requests: {"prompt": "...", "max_tokens": 100, "temperature": 0.8}
+          4. Server streams tokens: {"token": "..."}
+          5. Server sends completion: {"done": true, "status": "done", "text": "...full text"}
+          6. Server sends error: {"status": "error", "error": "..."}
+        """
+        await websocket.accept()
+
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+            msg = json.loads(raw)
+        except (TimeoutError, json.JSONDecodeError) as e:
+            try:
+                await websocket.send_json(
+                    {"status": "error", "error": f"Invalid auth message: {e}"}
+                )
+            except Exception:
+                pass
+            await websocket.close()
+            return
+
+        api_key = msg.get("api_key") or msg.get("token")
+        if not api_key:
+            try:
+                await websocket.send_json({"status": "error", "error": "Missing api_key or token"})
+            except Exception:
+                pass
+            await websocket.close()
+            return
+
+        import os as _ws_os
+
+        auth_required = _ws_os.environ.get("SLO_AUTH_REQUIRED", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
+        if auth_required:
+            from infrastructure.auth import get_jwt_auth
+
+            jwt_auth = get_jwt_auth()
+            try:
+                jwt_auth.verify_token(api_key)
+            except Exception:
+                try:
+                    await websocket.send_json({"status": "error", "error": "Invalid token"})
+                except Exception:
+                    pass
+                await websocket.close()
+                return
+        else:
+            from routers.settings import ApiKeyManager
+
+            try:
+                _key_mgr = ApiKeyManager()
+                if not _key_mgr.validate(api_key):
+                    try:
+                        await websocket.send_json({"status": "error", "error": "Invalid API key"})
+                    except Exception:
+                        pass
+                    await websocket.close()
+                    return
+            except Exception as e:
+                logger.debug("API key validation skipped (manager unavailable): %s", e)
+
+        try:
+            await websocket.send_json({"status": "authenticated"})
+        except Exception:
+            return
+
+        logger.info("WebSocket /ws/generate connected", extra={"tag": "INF"})
+
+        while True:
+            try:
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+            except WebSocketDisconnect:
+                logger.info("WebSocket /ws/generate disconnected", extra={"tag": "INF"})
+                return
+            except json.JSONDecodeError as e:
+                try:
+                    await websocket.send_json({"status": "error", "error": f"Invalid JSON: {e}"})
+                except Exception:
+                    return
+                continue
+
+            if msg.get("type") == "ping":
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception:
+                    return
+                continue
+
+            prompt = msg.get("prompt")
+            if not prompt:
+                try:
+                    await websocket.send_json({"status": "error", "error": "Missing prompt field"})
+                except Exception:
+                    return
+                continue
+
+            max_tokens = msg.get("max_tokens", 256)
+            temperature = msg.get("temperature", 0.7)
+            top_p = msg.get("top_p", 0.85)
+            top_k = msg.get("top_k", 40)
+            repetition_penalty = msg.get("repetition_penalty", 1.15)
+
+            import state as _ws_gen_state
+
+            ms = _get_model_status()
+            if not ms["ready"]:
+                try:
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "error": ms["reason"],
+                            "code": ms["code"],
+                        }
+                    )
+                except Exception:
+                    return
+                continue
+
+            mem_err = _check_memory_pressure()
+            if mem_err:
+                try:
+                    await websocket.send_json({"status": "error", "error": mem_err})
+                except Exception:
+                    return
+                continue
+
+            provider = get_provider("default")
+            if provider is None:
+                try:
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "error": "No provider available — load a model first",
+                        }
+                    )
+                except Exception:
+                    return
+                continue
+
+            provider_messages = [{"role": "user", "content": prompt}]
+            # A WebSocket frame carries no pydantic model, so a parameter is
+            # "explicit" exactly when the client included it in the frame.
+            _ws_explicit = {
+                k for k in ("temperature", "top_p", "top_k", "repetition_penalty") if k in msg
+            }
+            gen_params = _apply_meta_weights(
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                user_message=prompt,
+                explicit=_ws_explicit,
+            )
+
+            collected: list[str] = []
+            try:
+                async for token in provider.chat_stream(
+                    provider_messages,
+                    max_tokens=max_tokens,
+                    **gen_params,
+                ):
+                    if token:
+                        collected.append(token)
+                        try:
+                            await websocket.send_json({"token": token})
+                        except Exception:
+                            logger.info(
+                                "WebSocket client disconnected during stream", extra={"tag": "INF"}
+                            )
+                            return
+
+                full_text = "".join(collected)
+                try:
+                    await websocket.send_json(
+                        {
+                            "done": True,
+                            "status": "done",
+                            "text": full_text,
+                        }
+                    )
+                except Exception:
+                    return
+
+                token_count = _count_tokens(full_text, _ws_gen_state)
+                actual_model = _ws_gen_state.model_type or msg.get("model", "default")
+                try:
+                    get_server_state().record_inference(
+                        tokens=token_count,
+                        elapsed_ms=0,
+                        model=actual_model,
+                    )
+                except Exception as e:
+                    logger.warning("Failed to record inference metrics: %s", e)
+                try:
+                    capture(
+                        prompt,
+                        full_text,
+                        model=actual_model,
+                        tokens_generated=token_count,
+                        temperature=gen_params["temperature"],
+                    )
+                except Exception as e:
+                    logger.warning("Failed to capture conversation: %s", e)
+
+            except Exception as e:
+                logger.warning("WebSocket generate failed: %s", e, extra={"tag": "INF"})
+                try:
+                    await websocket.send_json({"status": "error", "error": str(e)})
+                except Exception:
+                    return
 
     async def get_info(self) -> dict:
         try:
@@ -1469,874 +1965,6 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.list_chat_tools")
 
-    async def chat_stream(
-        self, req: ChatRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> StreamingResponse:
-        """chat_stream."""
-        corr_id = request.scope.get("correlation_id", "-")
-        logger.info(
-            "CHAT_STREAM ENTER corr=%s session=%s msgs=%d images=%d max_tokens=%d temp=%.2f",
-            corr_id,
-            req.session_id,
-            len(req.messages),
-            len(req.images or []),
-            req.max_tokens,
-            req.temperature,
-            extra={
-                "tag": "CHAT",
-                "context": {
-                    "corr": corr_id,
-                    "session_id": req.session_id,
-                    "msg_count": len(req.messages),
-                    "has_images": bool(req.images),
-                    "max_tokens": req.max_tokens,
-                    "temperature": req.temperature,
-                    "use_context": req.use_context_core,
-                    "use_rag": req.use_rag,
-                },
-            },
-        )
-        import state as _check_state
-        from startup_progress import STARTUP_PHASE
-
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            phase = STARTUP_PHASE.get("phase", "unknown")
-            if phase == "ready":
-                msg = "Model still loading — please wait."
-            else:
-                msg = f"Server starting (phase: {phase}). Please wait."
-
-            async def error_stream() -> AsyncIterator[str]:
-                """error_stream."""
-                yield sse_error("chat", "IDLE", msg, code="MODEL_LOADING", http_status=503)
-
-            return StreamingResponse(error_stream(), media_type="text/event-stream")
-
-        mem_err = _check_memory_pressure()
-        if mem_err:
-            get_server_state().record_memory_pressure_block()
-
-            async def oom_stream() -> AsyncIterator[str]:
-                yield sse_error("chat", "IDLE", mem_err, code="E_MEMORY_PRESSURE", http_status=503)
-
-            return StreamingResponse(oom_stream(), media_type="text/event-stream")
-
-        async def generate() -> AsyncIterator[str]:
-            """generate."""
-            corr_id = request.scope.get("correlation_id", "-")
-            logger.debug("chat_stream.generate() ENTERED corr=%s", corr_id)
-
-            # Check for Last-Event-ID header for reconnection
-            last_event_id_raw = request.headers.get("last-event-id")
-            try:
-                last_event_id = int(last_event_id_raw) if last_event_id_raw else 0
-            except (ValueError, TypeError):
-                last_event_id = 0
-            if last_event_id:
-                session_id = req.session_id or "default"
-                cached = get_chat_response_cache(session_id)
-                if cached and cached.get("event_counter", 0) > last_event_id:
-                    # Replay cached response from the point of disconnection
-                    logger.info(
-                        "Replaying cached response for session %s from event %s",
-                        session_id,
-                        last_event_id,
-                    )
-                    cached_counter = last_event_id
-                    for token in cached.get("tokens", []):
-                        cached_counter += 1
-                        yield sse_token("chat", token)
-                    if cached.get("complete"):
-                        yield sse_token("chat", "", done=True)
-                    return
-
-            cancel_event = threading.Event()
-            user_msg = _extract_user_message(req.messages)
-            if not user_msg:
-                yield sse_error(
-                    "chat", "IDLE", "No user message", code="E_VAL_REQUEST", http_status=400
-                )
-                return
-
-            _mgr = get_cancel_manager()
-            _op_id = _mgr.register(
-                OpType.INFERENCE,
-                f"chat:{user_msg[:40]}",
-                cancel_fn=lambda: cancel_event.set(),
-            )
-            _mgr.start(_op_id)
-
-            start_time = datetime.datetime.now()
-
-            yield _sse_event("chat", "STREAMING", "thinking", data={}, message="Thinking...")
-
-            if req.knowledge:
-                try:
-                    stored = await asyncio.to_thread(_inject_knowledge_items, req.knowledge)
-                    if stored:
-                        logger.info(
-                            "Stored %d injected knowledge items in vector store",
-                            stored,
-                            extra={"tag": "INF", "context": {"count": stored}},
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "Failed to store injected knowledge: %s",
-                        e,
-                        extra={"tag": "INF", "context": {"error": str(e)}},
-                    )
-
-            provider_messages = _prepare_provider_messages(req.messages, req.images, user_msg)
-
-            session_id = (
-                req.session_id or f"session_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-            )
-
-            session_data = self._get_session(session_id)
-            session_data.setdefault("messages", []).append(
-                {
-                    "role": "user",
-                    "content": user_msg,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
-            )
-
-            logger.debug(
-                "CHAT_PIPELINE corr=%s step=SESSION_LOADED session=%s",
-                corr_id,
-                session_id,
-                extra={
-                    "tag": "CHAT",
-                    "context": {
-                        "corr": corr_id,
-                        "step": "SESSION_LOADED",
-                        "session_id": session_id,
-                    },
-                },
-            )
-
-            ctx_core = self._get_context_core()
-            context_info = {}
-            frame = None
-            if ctx_core and req.use_context_core:
-                frame, context_info = await _build_context_frame(
-                    ctx_core, session_id, user_msg, corr_id,
-                )
-                if frame is not None and frame.system_prompt:
-                        for i, m in enumerate(provider_messages):
-                            if m["role"] == "system":
-                                provider_messages[i] = {
-                                    "role": "system",
-                                    "content": frame.system_prompt,
-                                }
-                                break
-                        else:
-                            provider_messages.insert(
-                                0, {"role": "system", "content": frame.system_prompt}
-                            )
-
-            # Production RAG: query for relevant context from ingested documents
-            rag_context = ""
-            if req.use_rag:
-                try:
-                    from domains.cognitive.rag_service import is_rag_service_ready
-
-                    if not is_rag_service_ready():
-                        logger.debug("RAG service not ready yet, skipping query")
-                    else:
-                        rag_svc = await asyncio.wait_for(
-                            asyncio.to_thread(get_rag_service), timeout=10.0
-                        )
-                        if rag_svc.stats().get("total_chunks", 0) > 0:
-                            rag_result = await asyncio.wait_for(
-                                asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0
-                            )
-                            if rag_result.get("num_results", 0) > 0:
-                                rag_context = rag_result["context"]
-                                # Inject RAG context into system prompt or as a user context message
-                                rag_block = f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{rag_context}"
-                                # Prepend as user context before the conversation
-                                provider_messages.insert(
-                                    0, {"role": "system", "content": rag_block}
-                                )
-                                logger.debug(
-                                    "RAG injected %d passages into chat context",
-                                    rag_result["num_results"],
-                                )
-                except Exception as e:
-                    logger.debug("RAG query skipped: %s", e)
-                    if corr_id:
-                        yield sse_error("chat", "RAG_ERROR", str(e), code="RAG_ERROR")
-
-            if req.agent_id:
-                try:
-                    agent_sys = get_agent_system()
-                    agent_instructions = agent_sys.get_instructions(req.agent_id)
-                    if agent_instructions:
-                        agent_msg = {
-                            "role": "system",
-                            "content": f"[AGENT: {req.agent_id}]\n{agent_instructions}",
-                        }
-                        replaced = False
-                        for i, m in enumerate(provider_messages):
-                            if m["role"] == "system" and m["content"].startswith("[AGENT:"):
-                                provider_messages[i] = agent_msg
-                                replaced = True
-                                break
-                        if not replaced:
-                            provider_messages.insert(0, agent_msg)
-                except Exception as exc:
-                    logger.warning(
-                        "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
-                    )
-                    yield _sse_event(
-                        "chat",
-                        "AGENT",
-                        "error",
-                        data={"error": str(exc)},
-                        message=f"Agent instruction injection failed: {exc}",
-                    )
-
-            tool_result_data = None
-            try:
-                logger.debug(
-                    "CHAT_PIPELINE corr=%s step=TOOL_DETECT start",
-                    corr_id,
-                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "TOOL_DETECT"}},
-                )
-                tool_reg = get_tool_registry()
-                tool_intent = tool_reg.detect_tool_intent(user_msg)
-                if tool_intent:
-                    tool_name, tool_args = tool_intent
-                    spec = tool_reg.get(tool_name)
-                    if spec and spec.requires_approval:
-                        yield _sse_event(
-                            "chat",
-                            "TOOL_APPROVAL",
-                            "pending",
-                            data={"tool": tool_name, "args": tool_args, "requires_approval": True},
-                            message=f"Approval needed: {tool_name}",
-                        )
-                    else:
-                        yield _sse_event(
-                            "chat",
-                            "TOOL",
-                            "working",
-                            data={"tool": tool_name, "args": tool_args, "status": "executing"},
-                            message=f"Running tool: {tool_name}",
-                        )
-                        result = await tool_reg.execute(tool_name, tool_args)
-                        tool_result_data = {
-                            "tool": tool_name,
-                            "status": "success" if result.success else "error",
-                            "output": result.output,
-                            "error": result.error,
-                            "duration_ms": round(result.duration_ms, 1),
-                        }
-                        if result.success:
-                            yield _sse_event(
-                                "chat",
-                                "TOOL",
-                                "complete",
-                                data=tool_result_data,
-                                message=f"Tool {tool_name} completed in {result.duration_ms:.0f}ms",
-                            )
-                            provider_messages.append(
-                                {
-                                    "role": "system",
-                                    "content": f"[TOOL RESULT: {tool_name}]\n{result.output}\n[/TOOL RESULT]",
-                                }
-                            )
-                        else:
-                            yield _sse_event(
-                                "chat",
-                                "TOOL",
-                                "error",
-                                data=tool_result_data,
-                                message=f"Tool {tool_name} failed: {result.error}",
-                            )
-                            provider_messages.append(
-                                {
-                                    "role": "system",
-                                    "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]",
-                                }
-                            )
-            except Exception as exc:
-                logger.warning("Tool execution failed", exc_info=True, extra={"tag": "INF"})
-                yield _sse_event(
-                    "chat",
-                    "TOOL",
-                    "error",
-                    data={"error": str(exc)},
-                    message=f"Tool execution failed: {exc}",
-                )
-            logger.debug(
-                "CHAT_PIPELINE corr=%s step=TOOL_DETECT done",
-                corr_id,
-                extra={
-                    "tag": "CHAT",
-                    "context": {"corr": corr_id, "step": "TOOL_DETECT", "result": "DONE"},
-                },
-            )
-
-            if context_info:
-                yield _sse_event(
-                    "chat",
-                    "STREAMING",
-                    "working",
-                    data={"context": context_info},
-                    message=f"{len(context_info.get('layers', []))} context layers",
-                )
-
-            frame_context = []
-            if frame:
-                for layer in frame.layers:
-                    if layer.layer_type in ("memory", "rag") and layer.content:
-                        frame_context.append(layer.content)
-
-            knowledge_retrieved = []
-            if not frame_context:
-                try:
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH start",
-                        corr_id,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH"},
-                        },
-                    )
-                    enrichment = await asyncio.wait_for(
-                        asyncio.to_thread(_enrich_knowledge, user_msg, False, 5),
-                        timeout=10.0,
-                    )
-                    if enrichment.get("facts"):
-                        knowledge_retrieved = enrichment["facts"]
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH done facts=%d",
-                        corr_id,
-                        len(knowledge_retrieved),
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "KNOWLEDGE_ENRICH",
-                                "result": "DONE",
-                                "facts": len(knowledge_retrieved),
-                            },
-                        },
-                    )
-                except Exception as e:
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH error=%s",
-                        corr_id,
-                        e,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "KNOWLEDGE_ENRICH",
-                                "result": "ERROR",
-                                "error": str(e),
-                            },
-                        },
-                    )
-                    yield sse_error("chat", "KNOWLEDGE_ERROR", str(e), code="KNOWLEDGE_ERROR")
-
-            all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
-            if all_knowledge:
-                try:
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC start count=%d",
-                        corr_id,
-                        len(all_knowledge),
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "KNOWLEDGE_PROC",
-                                "count": len(all_knowledge),
-                            },
-                        },
-                    )
-                    k_proc = KnowledgeProcessor(knowledge=all_knowledge)
-                    provider_messages = await apply_processors(provider_messages, [k_proc])
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC done",
-                        corr_id,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "KNOWLEDGE_PROC",
-                                "result": "DONE",
-                            },
-                        },
-                    )
-                except Exception as e:
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC error=%s",
-                        corr_id,
-                        e,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "KNOWLEDGE_PROC",
-                                "result": "ERROR",
-                                "error": str(e),
-                            },
-                        },
-                    )
-                    yield sse_error("chat", "KNOWLEDGE_PROC_ERROR", str(e), code="KNOWLEDGE_ERROR")
-
-            try:
-                logger.debug(
-                    "CHAT_PIPELINE corr=%s step=PROVIDER_SETUP start",
-                    corr_id,
-                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "PROVIDER_SETUP"}},
-                )
-
-                provider = get_provider("default")
-
-                if provider is not None:
-                    full_response_parts: list[str] = []
-                    logger.debug("chat_stream: about to call provider.chat_stream()")
-                    _token_gen_start = time.time()
-                    _max_token_wait_s = cfg.generate_timeout
-                    _heartbeat_interval_s = 10.0
-                    _last_heartbeat = time.time()
-                    _batch: list[str] = []
-                    _batch_start = time.time()
-                    _BATCH_MAX = 5
-                    _BATCH_INTERVAL_S = 0.005
-                    _token_count = 0
-                    gen_params = _apply_meta_weights(
-                        temperature=req.temperature,
-                        top_p=req.top_p,
-                        top_k=req.top_k,
-                        repetition_penalty=req.repetition_penalty,
-                        user_message=user_msg or "",
-                        user_id=req.user_id or "default",
-                    )
-
-                    import state as _cs_state
-
-                    _coalescer = get_coalescer()
-                    _coalesce_key = _coalescer.hash(
-                        provider_messages, gen_params, req.max_tokens, _cs_state.model_type
-                    )
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=COALESCER_START key=%s",
-                        corr_id,
-                        _coalesce_key[:16],
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "COALESCER_START",
-                                "key": _coalesce_key[:16],
-                            },
-                        },
-                    )
-                    existing = await _coalescer.start(_coalesce_key)
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=COALESCER_START done existing=%s",
-                        corr_id,
-                        existing is not None,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "COALESCER_START",
-                                "result": "DONE",
-                                "existing": existing is not None,
-                            },
-                        },
-                    )
-                    if existing is not None:
-                        logger.debug(
-                            "CHAT_PIPELINE corr=%s step=COALESCER_JOIN existing_key=%s",
-                            corr_id,
-                            _coalesce_key[:16],
-                            extra={
-                                "tag": "CHAT",
-                                "context": {
-                                    "corr": corr_id,
-                                    "step": "COALESCER_JOIN",
-                                    "key": _coalesce_key[:16],
-                                },
-                            },
-                        )
-                        await existing.event.wait()
-                        logger.debug(
-                            "CHAT_PIPELINE corr=%s step=COALESCER_JOIN done error=%s",
-                            corr_id,
-                            existing.error,
-                            extra={
-                                "tag": "CHAT",
-                                "context": {
-                                    "corr": corr_id,
-                                    "step": "COALESCER_JOIN",
-                                    "result": "DONE",
-                                    "error": str(existing.error) if existing.error else None,
-                                },
-                            },
-                        )
-                        if existing.error is not None:
-                            yield sse_error(
-                                "chat",
-                                "ERROR",
-                                str(existing.error),
-                                code="E_INFRA_GENERATION",
-                                http_status=500,
-                            )
-                            return
-                        cached = existing.result or ""
-                        tokens = cached.split()
-                        for i in range(0, len(tokens), 5):
-                            yield sse_token("chat", " ".join(tokens[i : i + 5]))
-                        _mgr.finish(_op_id)
-                        yield sse_token("chat", "", done=True)
-                        return
-
-                    # Event ID counter for Last-Event-ID reconnection
-                    _event_counter = 0
-                    _cached_tokens: list[str] = []
-
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=COALESCER_WAIT done ready_for_provider",
-                        corr_id,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "COALESCER_WAIT",
-                                "result": "DONE",
-                            },
-                        },
-                    )
-                    try:
-                        # Enforce context window budget
-                        _orig_count = len(provider_messages)
-                        provider_messages = _trim_messages_to_budget(
-                            provider_messages,
-                            _gen_config.max_context_length,
-                            req.max_tokens,
-                        )
-                        _trimmed = _orig_count - len(provider_messages)
-                        if _trimmed:
-                            logger.info(
-                                "CHAT_CONTEXT_TRIM corr=%s trimmed=%d msgs_keep=%d budget=%d",
-                                corr_id,
-                                _trimmed,
-                                len(provider_messages),
-                                _gen_config.max_context_length - req.max_tokens,
-                            )
-                        try:
-                            _control_check_interval = 0.1  # Check for controls every 100ms
-                            _last_control_check = time.time()
-                            logger.info(
-                                "CHAT_PROVIDER_CALL corr=%s provider=%s session=%s msg_count=%d max_tokens=%d",
-                                corr_id,
-                                "default",
-                                session_id,
-                                len(provider_messages),
-                                req.max_tokens,
-                                extra={
-                                    "tag": "CHAT",
-                                    "context": {
-                                        "corr": corr_id,
-                                        "provider": "default",
-                                        "session_id": session_id,
-                                        "msg_count": len(provider_messages),
-                                        "max_tokens": req.max_tokens,
-                                        "gen_params": gen_params,
-                                    },
-                                },
-                            )
-                            async for token in provider.chat_stream(
-                                provider_messages,
-                                max_tokens=req.max_tokens,
-                                **gen_params,
-                                cancel_event=cancel_event,
-                                session_id=session_id,
-                            ):
-                                if await request.is_disconnected():
-                                    cancel_event.set()
-                                    # Cache partial response for reconnection
-                                    set_chat_response_cache(
-                                        session_id,
-                                        {
-                                            "tokens": _cached_tokens,
-                                            "complete": False,
-                                            "event_counter": _event_counter,
-                                        },
-                                    )
-                                    logger.info(
-                                        "Client disconnected from chat stream (request)",
-                                        extra={"tag": "INF", "context": {"session_id": session_id}},
-                                    )
-                                    _mgr.finish(_op_id)
-                                    return
-
-                                # Check for control messages periodically
-                                now = time.time()
-                                if now - _last_control_check >= _control_check_interval:
-                                    _last_control_check = now
-                                    control = get_chat_control(session_id)
-                                    if control:
-                                        if control["action"] == "cancel":
-                                            cancel_event.set()
-                                            _mgr.finish(_op_id)
-                                            yield _sse_event(
-                                                "chat",
-                                                "CONTROL",
-                                                "cancelled",
-                                                data={"action": "cancel"},
-                                                message="Stream cancelled by user",
-                                            )
-                                            return
-                                        elif control["action"] == "approve":
-                                            yield _sse_event(
-                                                "chat",
-                                                "CONTROL",
-                                                "approved",
-                                                data={
-                                                    "tool": control.get("tool_name"),
-                                                    "approved": control.get("approved", True),
-                                                },
-                                                message=f"Tool approval: {control.get('tool_name')}",
-                                            )
-                                        elif control["action"] == "context":
-                                            yield _sse_event(
-                                                "chat",
-                                                "CONTROL",
-                                                "context",
-                                                data={"context": control.get("context")},
-                                                message="Context injected",
-                                            )
-
-                                if token:
-                                    if _token_count == 0:
-                                        _first_token_elapsed_ms = (
-                                            time.time() - _token_gen_start
-                                        ) * 1000
-                                        logger.info(
-                                            "CHAT_FIRST_TOKEN corr=%s session=%s after=%.1fms",
-                                            corr_id,
-                                            session_id,
-                                            _first_token_elapsed_ms,
-                                            extra={
-                                                "tag": "CHAT",
-                                                "context": {
-                                                    "corr": corr_id,
-                                                    "elapsed_ms": round(_first_token_elapsed_ms, 1),
-                                                },
-                                            },
-                                        )
-                                    _token_gen_start = time.time()
-                                    full_response_parts.append(token)
-                                    _cached_tokens.append(token)
-                                    _batch.append(token)
-                                    _token_count += 1
-                                    if (
-                                        _token_count == 1
-                                        or len(_batch) >= _BATCH_MAX
-                                        or (time.time() - _batch_start) >= _BATCH_INTERVAL_S
-                                    ):
-                                        _event_counter += 1
-                                        yield sse_token("chat", "".join(_batch))
-                                        _batch = []
-                                        _batch_start = time.time()
-                                else:
-                                    now = time.time()
-                                    if now - _last_heartbeat >= _heartbeat_interval_s:
-                                        yield ": heartbeat\n\n"
-                                        _last_heartbeat = now
-                                elapsed_since_token = time.time() - _token_gen_start
-                                if elapsed_since_token > _max_token_wait_s:
-                                    logger.warning(
-                                        "Token generation stalled for %.1fs (limit=%.1fs), aborting corr=%s session=%s",
-                                        elapsed_since_token,
-                                        _max_token_wait_s,
-                                        corr_id,
-                                        session_id,
-                                        extra={
-                                            "tag": "INF",
-                                            "context": {
-                                                "corr": corr_id,
-                                                "session_id": session_id,
-                                                "elapsed_s": round(elapsed_since_token, 1),
-                                                "limit_s": _max_token_wait_s,
-                                            },
-                                        },
-                                    )
-                                    cancel_event.set()
-                                    _mgr.finish(_op_id, "timeout")
-                                    yield sse_error(
-                                        "chat",
-                                        "TIMEOUT",
-                                        f"Generation stalled for {elapsed_since_token:.0f}s",
-                                        code="MODEL_TIMEOUT",
-                                        http_status=504,
-                                    )
-                                    return
-                            if _batch:
-                                yield sse_token("chat", "".join(_batch))
-                                _batch = []
-                            yield sse_token("chat", "", done=True)
-                            logger.info(
-                                "CHAT_STREAM_DONE corr=%s session=%s tokens=%d events=%d",
-                                corr_id,
-                                session_id,
-                                _token_count,
-                                _event_counter,
-                                extra={
-                                    "tag": "CHAT",
-                                    "context": {
-                                        "corr": corr_id,
-                                        "session_id": session_id,
-                                        "tokens": _token_count,
-                                        "events": _event_counter,
-                                    },
-                                },
-                            )
-                            # Cache complete response for potential reconnection
-                            set_chat_response_cache(
-                                session_id,
-                                {
-                                    "tokens": _cached_tokens,
-                                    "complete": True,
-                                    "event_counter": _event_counter,
-                                },
-                            )
-                        except GeneratorExit:
-                            cancel_event.set()
-                            # Cache partial response on generator exit
-                            set_chat_response_cache(
-                                session_id,
-                                {
-                                    "tokens": _cached_tokens,
-                                    "complete": False,
-                                    "event_counter": _event_counter,
-                                },
-                            )
-                            _mgr.finish(_op_id)
-                            logger.info(
-                                "Client disconnected from chat stream",
-                                extra={"tag": "INF", "context": {"session_id": session_id}},
-                            )
-                            return
-                    except Exception as e:
-                        try:
-                            await _coalescer.complete_error(_coalesce_key, e)
-                        except Exception as coalescer_err:
-                            logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
-                        _mgr.finish(_op_id, str(e))
-                        logger.error(
-                            "CHAT_STREAM_ERROR corr=%s session=%s error=%s tokens_received=%d",
-                            corr_id,
-                            session_id,
-                            str(e),
-                            _token_count,
-                            extra={
-                                "tag": "CHAT",
-                                "context": {
-                                    "corr": corr_id,
-                                    "session_id": session_id,
-                                    "error": str(e),
-                                    "tokens_received": _token_count,
-                                    "error_type": type(e).__name__,
-                                },
-                            },
-                        )
-                        err_code = (
-                            "E_MEMORY_PRESSURE"
-                            if isinstance(e, RuntimeError) and "memory" in str(e).lower()
-                            else "E_INFRA_GENERATION"
-                        )
-                        http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
-                        yield sse_error(
-                            "chat", "ERROR", str(e), code=err_code, http_status=http_status
-                        )
-                else:
-                    yield sse_error(
-                        "chat",
-                        "STREAMING",
-                        "No inference provider loaded",
-                        code="E_INFRA_REGISTRY",
-                        http_status=503,
-                    )
-                    return
-
-                full_response = "".join(full_response_parts)
-                await _coalescer.complete(_coalesce_key, full_response)
-
-                if session_id not in self._session_deleted:
-                    session_data["messages"].append(
-                        {
-                            "role": "assistant",
-                            "content": full_response,
-                            "timestamp": datetime.datetime.now().isoformat(),
-                        }
-                    )
-                    self._save_session(session_id, session_data)
-                    await self._flush_session_to_disk(session_id)
-                else:
-                    logger.info(
-                        "Session %s was deleted during generation, skipping save",
-                        session_id,
-                        extra={"tag": "INF"},
-                    )
-
-                _run_post_gen_tasks(
-                    full_response, user_msg or "", session_id, start_time,
-                    req, ctx_core, self._bg_tasks_lock, self._BG_TASKS,
-                    self._bg_tasks_lock_discard, corr_id,
-                )
-
-                _memory_stored = False
-                _memory_fact = None
-                try:
-                    _memory_facts = await get_memory_service().remember_facts_async(
-                        user_msg or "", full_response
-                    )
-                    _memory_stored = len(_memory_facts) > 0
-                    if _memory_stored:
-                        _memory_fact = _memory_facts[0]
-                except Exception as e:
-                    logger.debug("Auto-memory remember failed: %s", e)
-
-                if _memory_stored:
-                    yield _sse_event(
-                        "chat",
-                        "MEMORY",
-                        "success",
-                        data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
-                        message="New fact remembered",
-                    )
-
-                logger.info(
-                    "Chat stream: generated %d chars",
-                    len(full_response),
-                    extra={
-                        "tag": "INF",
-                        "context": {"char_count": len(full_response), "session_id": session_id},
-                    },
-                )
-                _mgr.finish(_op_id)
-
-            except Exception as e:
-                _mgr.finish(_op_id, str(e))
-                logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
-                from domains.infrastructure.errors import classify_exception
-                classified = classify_exception(e)
-                err_code = classified.code or "E_INFRA_GENERATION"
-                http_status = getattr(classified, 'http_status', None) or 500
-                yield sse_error("chat", "ERROR", str(e), code=err_code, http_status=http_status)
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
-
     async def inspect_context(self) -> dict:
         try:
             """inspect_context."""
@@ -2399,26 +2027,68 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
 
-    async def chat(
-        self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> ChatResponse:
-        """chat."""
-        _chat_t0 = time.monotonic()
-        import state as _chat_state
-        from domains import get_chat_domain
-        from startup_progress import STARTUP_PHASE
+    def _resolve_turn_scope(self, session_id: str, req: TurnRequest) -> frozenset[str]:
+        """Resolve this conversation's AppScope over global settings; apply to ``req``.
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            phase = STARTUP_PHASE.get("phase", "unknown")
-            step = STARTUP_PHASE.get("step", 0)
-            total = STARTUP_PHASE.get("total", 9)
-            msg = STARTUP_PHASE.get("message", "Starting...")
-            raise_error(
-                f"Model still loading — {msg} (step {step}/{total})",
-                "E_MODEL_LOADING",
-                status_code=503,
-                details={"phase": phase, "step": step, "total": total, "message": msg},
+        The turn seam: the below-turn layers are loaded here (conversation
+        delta from the session record, global defaults from
+        ``domain.settings``), while resolution itself stays the pure
+        ``resolve_scope``. Applied in place on ``req`` — transport fields only
+        where the wire left them unset (``apply_scope``), plus the additive
+        ``system_prompt``/``knowledge`` composition.
+
+        Returns the conversation-won field names: the caller passes them to
+        ``_apply_meta_weights`` alongside ``model_fields_set`` so a
+        server-side heuristic may not move a value the user deliberately
+        scoped to this conversation.
+        """
+        session = self._get_session(session_id)
+        raw = session.get("scope")
+        delta: dict[str, Any] | None = None
+        if isinstance(raw, dict):
+            try:
+                # Re-validate on read: the session file is a trust boundary
+                # (hand-edited / foreign-version data). Corrupt or out-of-
+                # bounds deltas fail safe — inherit the layers below.
+                delta = AppScopeDelta.model_validate(raw).model_dump(exclude_none=True)
+            except ValidationError:
+                logger.debug("Dropping invalid scope delta on session %s", session_id)
+        scope = resolve_scope(
+            conversation=delta,
+            global_settings=get_settings().settings.generation,
+        )
+        applied = apply_scope(req, scope, conversation=delta)
+        if scope.system_prompt:
+            req.system_prompt = (
+                f"{req.system_prompt}\n\n{scope.system_prompt}"
+                if req.system_prompt
+                else scope.system_prompt
             )
+        if scope.knowledge:
+            req.knowledge = [*scope.knowledge, *(req.knowledge or [])]
+        return applied
+
+    async def stream_turn(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]:
+        """The single inference method: yield raw tokens, then the final ``TurnResult``.
+
+        Streaming is baked in — there is no non-streaming backend and no
+        ``stream: bool`` toggle. Edges fold this stream when they need a
+        complete response (the mobile BFF), or frame the tokens as they arrive
+        (POST /chat, the web client).
+
+        Yields:
+            ``str`` raw tokens as they are generated, then a final
+            ``TurnResult`` carrying the details (model, usage, timing,
+            finish_reason, and the full token list).
+        """
+        _chat_t0 = time.monotonic()
+        _chat_start_dt = datetime.datetime.now()
+        import state as _chat_state
+
+        # GATES — reject fast before any provider call.
+        ms = _get_model_status()
+        if not ms["ready"]:
+            raise_error(ms["reason"], ms["code"], status_code=ms["status"])
 
         mem_err = _check_memory_pressure()
         if mem_err:
@@ -2440,24 +2110,31 @@ class InferenceRouter:
         except Exception as e:
             logger.debug("Circuit breaker check failed: %s", e)
 
-        user_msg = _extract_user_message(req.messages)
+        user_msg = ""
+        messages = [dict(m) for m in req.messages]
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                content = m.get("content")
+                user_msg = content if isinstance(content, str) else str(content)
+                break
         if not user_msg:
             raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
-        system_prompt = req.system_prompt or ""
+        # Instance seam: resolve this conversation's AppScope (delta over
+        # global defaults) once, before anything reads the transport fields.
+        session_id = req.session_id or "default"
+        scope_applied = self._resolve_turn_scope(session_id, req)
 
-        messages = [{"role": m.role, "content": m.content} for m in req.messages]
+        system_prompt = req.system_prompt or ""
 
         if req.images:
             content_parts = [{"type": "text", "text": user_msg}]
             for img_data in req.images:
                 content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
             for i in range(len(messages) - 1, -1, -1):
-                if messages[i]["role"] == "user":
+                if messages[i].get("role") == "user":
                     messages[i]["content"] = content_parts
                     break
-
-        chat_domain = get_chat_domain()
 
         if req.agent_id:
             try:
@@ -2473,90 +2150,266 @@ class InferenceRouter:
                 logger.warning(
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
-                # Non-streaming path: log but continue (no SSE channel to send error)
 
-        if req.knowledge:
-            knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
-            system_prompt = (
-                f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}"
-                if system_prompt
-                else f"Use the following context to answer:\n{knowledge_str}"
-            )
-
-        try:
-            enrichment = await asyncio.wait_for(
-                asyncio.to_thread(_enrich_knowledge, user_msg, False, 5),
-                timeout=10.0,
-            )
-            if enrichment.get("facts"):
-                k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
-                system_prompt = (
-                    f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
-                    if system_prompt
-                    else f"Use the following context to answer:\n{k_text}"
+        # Context frame — memory/rag layers via ContextCore, gated on the wire
+        # flag first (use_context_core was previously honored only by the
+        # non-streaming chat(); stream_turn ignored it — card 20261112_140010),
+        # then on the memory service holding at least one fact (the gate travels
+        # with the frame builder: empty memory means skip the frame entirely).
+        frame = None
+        if req.use_context_core:
+            try:
+                frame, _context_info = await _build_context_frame(
+                    self._get_context_core(), session_id, user_msg, corr_id="stream"
                 )
+            except Exception as e:
+                logger.debug("Context frame build failed: %s", e)
+
+        frame_context = []
+        if frame:
+            for layer in frame.layers:
+                if layer.layer_type in ("memory", "rag") and layer.content:
+                    frame_context.append(layer.content)
+
+        # Trait-weight steering goes in the STABLE HEAD, not the volatile tail.
+        # It is derived from the user's feedback profile, so it changes only
+        # when feedback changes — which keeps the token prefix reusable while
+        # still letting feedback reach the prompt (the one authority: trait
+        # weights -> managers -> frame -> here).
+        if frame and frame.system_extra:
+            system_prompt = (
+                f"{system_prompt}\n{frame.system_extra}" if system_prompt else frame.system_extra
+            )
+
+        # Knowledge enrichment — only when the frame carried no memory/rag
+        # layer content; facts learned live feed the prompt otherwise. Shares
+        # the use_context_core gate: with context off there is no frame to
+        # fall back from, and a bare probe must not pull learned facts either.
+        knowledge_retrieved = []
+        if req.use_context_core and not frame_context:
+            try:
+                enrichment = await asyncio.wait_for(
+                    asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
+                )
+                if enrichment.get("facts"):
+                    knowledge_retrieved = enrichment["facts"]
+            except Exception as e:
+                logger.debug("Knowledge enrichment failed: %s", e)
+
+        # Per-turn context accumulates here and rides the LAST user turn (see
+        # _append_volatile_context) — never the system prompt, which is the
+        # token prefix every cross-turn KV reuse matches on.
+        volatile_blocks: list[str] = []
+
+        all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
+        if all_knowledge:
+            k_text = "\n".join(f"- {k}" for k in all_knowledge)
+            volatile_blocks.append(f"Use the following context to answer:\n{k_text}")
+
+        # Production RAG — retrieve relevant context from ingested documents
+        # and attach it to the volatile tail (gated on req.use_rag).
+        if req.use_rag:
+            try:
+                from domain.cognition import is_rag_service_ready
+
+                if is_rag_service_ready():
+                    rag_svc = await asyncio.wait_for(
+                        asyncio.to_thread(get_rag_service), timeout=10.0
+                    )
+                    if rag_svc.stats().get("total_chunks", 0) > 0:
+                        rag_result = await asyncio.wait_for(
+                            asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0
+                        )
+                        rag_block = _build_rag_block(rag_result)
+                        if rag_block is not None:
+                            logger.info(
+                                "RAG context injected: %d chars (budget %d)",
+                                len(rag_block),
+                                _RAG_CONTEXT_MAX_CHARS,
+                            )
+                            volatile_blocks.append(rag_block)
+            except Exception as e:
+                logger.debug("RAG query skipped: %s", e)
+
+        # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
+        # main's chat-pipeline wiring onto the stream_turn restructure).
+        # Gated on the wire flag: a bare probe (QuickActions "Test model",
+        # use_consciousness=false) must not receive the reflection system
+        # message — the 0.5B model answered the narrative instead of the
+        # probe (card 20261112_140010).
+        if req.use_consciousness:
+            messages = await _apply_consciousness_reflection(messages, "-")
+
+        gen_params = _apply_meta_weights(
+            temperature=req.temperature,
+            top_p=req.top_p,
+            top_k=req.top_k,
+            repetition_penalty=req.repetition_penalty,
+            user_message=user_msg,
+            user_id=req.user_id or "default",
+            explicit=req.model_fields_set | scope_applied,
+        )
+        # Attach per-turn context to the last user turn BEFORE the budget trim,
+        # so the trimmer counts those tokens instead of the block arriving
+        # after the budget was already spent.
+        messages = _append_volatile_context(messages, "\n\n".join(volatile_blocks))
+        messages = _trim_messages_to_budget(
+            messages, _gen_config.max_context_length, req.max_tokens
+        )
+
+        if system_prompt:
+            messages = [{"role": "system", "content": system_prompt}] + messages
+
+        provider = get_provider("default")
+        if provider is None:
+            raise_error("Model not loaded", "E_INFRA_REGISTRY", status_code=503)
+
+        model = _chat_state.model_type or req.model
+
+        collected: list[str] = []
+        try:
+            async for token in provider.chat_stream(
+                messages,
+                max_tokens=req.max_tokens,
+                # The turn's stop flag: minted by whoever owns the registry
+                # (chat's manager) and delivered with the request. The provider
+                # polls is_set() each token, so a cancel fired mid-stream stops
+                # generation here. None only when the caller has no registry.
+                cancel_event=req.cancel_event,
+                session_id=session_id,
+                **gen_params,
+            ):
+                if token:
+                    collected.append(token)
+                    yield token
         except Exception as e:
-            logger.debug("Knowledge enrichment failed: %s", e)
+            logger.error("chat stream failed: %s", e, exc_info=True)
+            raise
 
+        text = "".join(collected)
+        elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
-            gen_params = _apply_meta_weights(
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repetition_penalty=req.repetition_penalty,
-                user_message=user_msg,
-                user_id=req.user_id or "default",
-            )
-            # Enforce context window budget before delegating to domain
-            messages = _trim_messages_to_budget(
-                messages, _gen_config.max_context_length, req.max_tokens
-            )
-            result = await asyncio.wait_for(
-                chat_domain.respond(
-                    messages=messages,
-                    model=_chat_state.model_type or req.model,
-                    system_prompt=system_prompt,
-                    temperature=gen_params["temperature"],
-                    max_tokens=req.max_tokens,
-                    session_id=req.session_id or "default",
-                    user_id=req.user_id or "default",
-                ),
-                timeout=60.0,
-            )
-        except asyncio.TimeoutError:
-            return ChatResponse(
-                message="Generation timed out. Try a shorter prompt or fewer tokens.",
-                session_id=req.session_id or "default",
-                done=True,
-            )
-
-        try:
-            tokens = _count_tokens(result.text, _chat_state)
-            _chat_elapsed_ms = round((time.monotonic() - _chat_t0) * 1000, 1)
-            get_server_state().record_inference(
-                tokens=tokens,
-                elapsed_ms=_chat_elapsed_ms,
-                model=_chat_state.model_type or req.model,
-            )
+            tokens = _count_tokens(text, _chat_state)
         except Exception as e:
-            logger.warning("Failed to record inference metrics: %s", e)
+            logger.debug("Token count failed: %s", e)
 
+        # One task set, one call site: _run_post_gen_tasks performs the
+        # metrics record and the conversation capture that used to live
+        # inline here, alongside RAG verification, response tracking,
+        # continual-learning ingest, entity extraction, and consciousness
+        # post-processing. Retaining the inline copies would double-count
+        # every turn (audit gap G2's rule, applied to the single path the
+        # stream-first architecture left).
+        _post_gen: dict[str, Any] = {}
         try:
-            capture(
+            _post_gen = _run_post_gen_tasks(
+                text,
                 user_msg or "",
-                result.text,
-                model=_chat_state.model_type or req.model,
-                tokens_generated=_count_tokens(result.text, _chat_state),
-                temperature=req.temperature,
-                meta={"session_id": req.session_id or "default"},
+                session_id,
+                _chat_start_dt,
+                req,
+                # Resolve only when the turn opted into the context stack:
+                # first resolution wires ContextCore (incl. its consciousness
+                # engine) — a bare probe must not drag that in (quick-test
+                # card). None changes nothing downstream: add_response is
+                # gated on req.use_context_core anyway.
+                self._get_context_core() if req.use_context_core else None,
+                self._bg_tasks_lock,
+                self._BG_TASKS,
+                self._bg_tasks_lock_discard,
+                corr_id="stream",
             )
         except Exception as e:
-            logger.warning("Failed to capture conversation: %s", e)
+            logger.warning("Post-gen tasks failed: %s", e)
+        if _post_gen.get("narrative"):
+            logger.info(
+                "Chat reflection recorded (level=%s)",
+                _post_gen["level"],
+                extra={"tag": "INF"},
+            )
 
+        _memory: dict | None = None
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            if _memory_facts:
+                _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
+
+        # Sideband frames the chat edge forwards verbatim before close:
+        # the consciousness reflection surfaced by post-gen, then the
+        # auto-memory store step (main's chat_stream wiring, re-seamed
+        # onto TurnResult — stream_turn yields tokens, not SSE frames).
+        _sideband_events: list[str] = []
+        if _post_gen.get("narrative"):
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "CONSCIOUSNESS",
+                    "complete",
+                    data={
+                        "level": _post_gen["level"],
+                        "self_insight": _post_gen["narrative"],
+                    },
+                    message="Reflection updated",
+                )
+            )
+
+        _memory_stored = False
+        _memory_fact = None
+        _memory_facts: list[str] = []
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            _memory_stored = len(_memory_facts) > 0
+            if _memory_stored:
+                _memory_fact = _memory_facts[0]
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
+
+        if _memory_stored:
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "MEMORY",
+                    "success",
+                    data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
+                    message="New fact remembered",
+                )
+            )
+
+        yield TurnResult(
+            text=text,
+            session_id=session_id,
+            done=True,
+            model=model,
+            usage={"completion_tokens": tokens, "total_tokens": tokens},
+            elapsed_ms=elapsed,
+            finish_reason="stop",
+            tokens=collected,
+            consciousness=(
+                {
+                    "level": _post_gen.get("level", 0),
+                    "self_insight": _post_gen.get("narrative", ""),
+                }
+                if _post_gen.get("narrative")
+                else None
+            ),
+            memory=_memory,
+        )
+
+    async def chat(
+        self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> ChatResponse:
+        """POST /chat — a fold of the engine's raw-token stream."""
+        turn = await fold(self.stream_turn(req.to_turn()))
         return ChatResponse(
-            message=result.text,
-            session_id=result.session_id,
-            done=result.done,
+            message=turn.text,
+            session_id=turn.session_id,
+            done=turn.done,
+            model=turn.model,
+            usage=turn.usage,
+            elapsed_ms=turn.elapsed_ms,
+            finish_reason=turn.finish_reason,
         )
 
     async def send_voice_message(
@@ -2649,21 +2502,35 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.list_sessions")
 
-    async def search_sessions(self, q: str = "", limit: int = 20) -> dict:
+    async def search_sessions(
+        self,
+        q: str = "",
+        limit: int = 20,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         try:
             """search_sessions."""
             if not q.strip():
                 return success_response(data=[], meta={"query": q, "total": 0})
             results = await asyncio.to_thread(_search_sessions_sync, q, limit)
+            # Filter by user_id if auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    results = [s for s in results if s.get("user_id", "") == user_id]
             return success_response(data=results, meta={"query": q, "total": len(results)})
 
         except Exception as e:
             classify_and_raise(e, source="inference.search_sessions")
 
-    async def get_current_session(self) -> dict:
+    async def get_current_session(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """get_current_session."""
             sessions = await asyncio.to_thread(self._build_session_cache)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    sessions = [s for s in sessions if s.get("user_id", "") == user_id]
             if not sessions:
                 return success_response(data=None)
             return success_response(data=sessions[0])
@@ -2709,12 +2576,19 @@ class InferenceRouter:
             logger.warning("Create session failed: %s", exc, extra={"tag": "INF"})
             classify_and_raise(exc, source="create_session")
 
-    async def get_session(self, session_id: str) -> dict:
+    async def get_session(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """get_session."""
             data = self._get_session(session_id)
             if not data.get("messages"):
                 raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            # Verify user owns this session when auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
             return success_response(data=data)
 
         except Exception as e:
@@ -2725,8 +2599,16 @@ class InferenceRouter:
     ) -> dict:
         try:
             """delete_session."""
+            # Verify user owns this session when auth is enabled
+            if auth_user:
+                data = self._get_session(session_id)
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
             if self._session_repo.delete(session_id):
                 self._session_memory_cache.pop(session_id, None)
+                self._session_cache = None
+                self._session_metadata_cache = None
                 self._session_dirty.discard(session_id)
                 self._session_deleted.add(session_id)
                 if len(self._session_deleted) > 1000:
@@ -2738,6 +2620,114 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.delete_session")
+
+    async def branch_session(
+        self,
+        session_id: str,
+        req: BranchSessionRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Create a new session from messages[:from_index + 1] of a source.
+
+        The prefix lands in both projections the source session uses: the
+        drawer file (name/lineage/message preview) and the context store that
+        `GET /session/{id}/messages` (mobile loadSession) reads.
+        """
+        try:
+            source_file = self._session_repo.get(session_id)
+            if source_file is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and source_file.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            from domain.infrastructure.session_core import SessionCore
+
+            history = SessionCore.get_messages(session_id) or source_file.get("messages") or []
+            if not history:
+                raise_error("No messages to branch from", "E_BAD_REQUEST", status_code=400)
+            if req.from_index < 0 or req.from_index >= len(history):
+                raise_error(
+                    f"from_index {req.from_index} out of range (0..{len(history) - 1})",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+
+            prefix = history[: req.from_index + 1]
+            new_id = str(uuid.uuid4())
+            new_data = {
+                "id": new_id,
+                "session_id": new_id,
+                "name": req.name or f"{source_file.get('name') or session_id} (Branch)",
+                "parent_session_id": session_id,
+                "branch_from_index": req.from_index,
+                "messages": json.loads(json.dumps(prefix)),
+                "created_at": datetime.datetime.now().isoformat(),
+            }
+            if auth_user:
+                new_data["user_id"] = auth_user.get("sub", "")
+
+            self._save_session(new_id, new_data)
+            SessionCore.store_context(new_id, prefix)
+            await self._flush_session_to_disk(new_id)
+            safe_audit_log("inference.session_branch", resource=new_id)
+            return success_response(
+                data={
+                    "session_id": new_id,
+                    "branched_from": session_id,
+                    "from_index": req.from_index,
+                },
+                message="branched",
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.branch_session")
+
+    async def get_session_lineage(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Walk the parent chain of a session (nearest parent first)."""
+        try:
+            data = self._session_repo.get(session_id)
+            if data is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            ancestors: list[dict] = []
+            parent = data.get("parent_session_id")
+            seen = {session_id}
+            depth = 0
+            while parent and parent not in seen and depth < 50:
+                seen.add(parent)
+                pdata = self._session_repo.get(parent)
+                if pdata is None:
+                    break
+                ancestors.append(
+                    {
+                        "session_id": parent,
+                        "parent_session_id": pdata.get("parent_session_id"),
+                        "branch_from_index": pdata.get("branch_from_index"),
+                        "name": pdata.get("name") or parent,
+                    }
+                )
+                parent = pdata.get("parent_session_id")
+                depth += 1
+
+            return success_response(
+                data={
+                    "session_id": session_id,
+                    "parent_session_id": data.get("parent_session_id"),
+                    "branch_from_index": data.get("branch_from_index"),
+                    "ancestors": ancestors,
+                }
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_session_lineage")
 
     def _clear_session_kv(self, session_id: str):
         """Drop cross-turn KV state for a deleted session.
@@ -2757,7 +2747,7 @@ class InferenceRouter:
                 "Failed to clear KV state for session %s: %s", session_id, exc, extra={"tag": "KV"}
             )
 
-    async def chat_suggestions(self) -> dict:
+    async def chat_suggestions(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """chat_suggestions."""
             return success_response(
@@ -2777,7 +2767,7 @@ class InferenceRouter:
     async def list_model_providers(self) -> dict:
         try:
             """list_model_providers."""
-            from domains.models.provider import get_provider, list_providers
+            from domain.models import get_provider, list_providers
 
             result = {}
             for name in list_providers():
@@ -2785,19 +2775,56 @@ class InferenceRouter:
                 if provider is not None:
                     try:
                         caps = provider.capabilities
-                        result[name] = {
-                            "model_id": provider.model_id,
-                            "capabilities": {
-                                "chat": caps.chat,
-                                "streaming": caps.streaming,
-                                "embedding": caps.embedding,
-                                "vision": caps.vision,
-                            },
-                            "metadata": provider.metadata,
-                        }
+                        # A provider is a plugin, and this handler already
+                        # isolates one that misbehaves: the guard below
+                        # degrades it to {"error": ...} rather than failing
+                        # the whole listing. That isolation never reached this
+                        # value. A metadata field holding a datetime, an engine
+                        # handle, or any other non-JSON type is perfectly
+                        # well-formed here, and only fails later, in the
+                        # response encoder, outside the guard — which is why
+                        # `GET /providers` answered 500 E_SERIALIZATION while
+                        # this method raised nothing, and why the default log
+                        # level recorded no cause at all. Coercing with
+                        # `default=str` is what the SSE routers already do.
+                        #
+                        # `metadata` is declared a @property on the Provider
+                        # protocol, but ct_provider / slonet_provider /
+                        # slonet_server implement it as a plain METHOD while
+                        # api_provider / router / slo_transformer use @property.
+                        # Reading it property-style on a plain-method provider
+                        # puts a bound method in the payload; `default=str` then
+                        # coerces it to the useless
+                        # "<bound method ... at 0x...>" repr. Normalise the read
+                        # first so the real dict is what gets serialised, then
+                        # let `default=str` catch genuinely non-JSON values
+                        # inside it. Callers are split the same way, so accept
+                        # both forms here rather than churning every call site.
+                        meta = provider.metadata
+                        if callable(meta):
+                            meta = meta()
+                        result[name] = json.loads(
+                            json.dumps(
+                                {
+                                    "model_id": provider.model_id,
+                                    "capabilities": {
+                                        "chat": caps.chat,
+                                        "streaming": caps.streaming,
+                                        "embedding": caps.embedding,
+                                        "vision": caps.vision,
+                                    },
+                                    "metadata": meta,
+                                },
+                                default=str,
+                            )
+                        )
                     except Exception as exc:
-                        logger.warning("Provider '%s' capability query failed: %s", name, exc,
-                            extra={"tag": "INF"})
+                        logger.warning(
+                            "Provider '%s' capability query failed: %s",
+                            name,
+                            exc,
+                            extra={"tag": "INF"},
+                        )
                         result[name] = {"model_id": str(provider), "error": str(exc)}
                 else:
                     result[name] = {"error": "provider not found"}
@@ -2982,13 +3009,11 @@ class InferenceRouter:
         r.add_api_route("/info/soul", self.get_info_soul, methods=["GET"])
         r.add_api_route("/", self.root, methods=["GET"])
         r.add_api_route("/chat/tools", self.list_chat_tools, methods=["GET"])
-        r.add_api_route("/chat/stream", self.chat_stream, methods=["POST"])
         r.add_api_route("/chat/control", self.chat_control, methods=["POST"])
         r.add_api_route("/context/inspect", self.inspect_context, methods=["GET"])
         r.add_api_route("/context/fact", self.store_fact, methods=["POST"])
         r.add_api_route("/context/facts", self.get_facts, methods=["GET"])
         r.add_api_route("/context/reset", self.reset_context, methods=["POST"])
-        r.add_api_route("/chat", self.chat, methods=["POST"], response_model=ChatResponse)
         r.add_api_route("/chat/voice/{session_id}", self.send_voice_message, methods=["POST"])
         r.add_api_route(
             "/chat/audio/{session_id}/{message_id}", self.get_voice_audio, methods=["GET"]
@@ -3000,16 +3025,149 @@ class InferenceRouter:
         r.add_api_route("/chat/sessions", self.create_session, methods=["POST"])
         r.add_api_route("/chat/sessions/{session_id}", self.get_session, methods=["GET"])
         r.add_api_route("/chat/sessions/{session_id}", self.delete_session, methods=["DELETE"])
+        r.add_api_route("/chat/sessions/{session_id}/branch", self.branch_session, methods=["POST"])
+        r.add_api_route(
+            "/chat/sessions/{session_id}/lineage",
+            self.get_session_lineage,
+            methods=["GET"],
+        )
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
         r.add_api_route("/operations", self.list_operations, methods=["GET"])
         r.add_api_route("/cancel/{op_id}", self.cancel_operation, methods=["POST"])
         r.add_api_route("/cancel-all", self.cancel_all_operations, methods=["POST"])
         r.add_api_route("/operations/purge", self.purge_operations, methods=["POST"])
+        r.add_api_websocket_route("/ws/generate", self.ws_generate)
 
 
 _instance = InferenceRouter()
 router = _instance.router
+
+
+# ── Descriptor for GET /chat/sessions ───────────────────────────────────────
+# The route above is grandfathered (hand-built, counted in the hand-built
+# baseline); this descriptor is its contract declaration — the single source of
+# truth for the session-metadata index wire shape. The frontend derives its
+# ``Conversation``/``SessionMeta`` types from the generated artifact of this
+# descriptor (scripts/gen_ts_contracts.py), not from hand-written interfaces.
+
+SESSIONS_SPEC = ToolSpec(
+    name="chat.sessions.list",
+    description=(
+        "Session-metadata index for the chat sidebar: one row per session with "
+        "id/name/timestamps/message_count (SessionModel wire shape)."
+    ),
+    parameters=[
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Include archived sessions (default excludes them)",
+        ),
+    ],
+    execute=_instance.list_sessions,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={"type": "array", "items": SessionModel.model_json_schema()},
+    version="1",
+)
+
+
+def _register_sessions_spec(spec: ToolSpec, method: str, path: str) -> None:
+    operation_id = REGISTRY.claim_operation_id(f"{spec.name}.{method.lower()}", method, path)
+    REGISTRY.register(
+        RouteEntry(
+            name=spec.name,
+            version=spec.version,
+            auth_scope=spec.auth_scope,
+            idempotent=spec.idempotent,
+            description=spec.description,
+            method=method,
+            path=path,
+            operation_id=operation_id,
+            module=__name__,
+            params=spec.params,
+            result=spec.result,
+        )
+    )
+
+
+_register_sessions_spec(SESSIONS_SPEC, "GET", "/chat/sessions")
+
+
+# ── Descriptor for PUT /chat/sessions/{session_id} ──────────────────────────
+# Same grandfathering as above: the route is hand-built (baseline untouched);
+# this descriptor declares its contract, including the ``scope`` field that
+# persists a conversation's AppScope delta — the mini-app instance config
+# resolved at the turn seam (``InferenceRouter._resolve_turn_scope``).
+
+SESSIONS_UPDATE_SPEC = ToolSpec(
+    name="chat.sessions.update",
+    description=(
+        "Update session metadata (name/archived/starred/pinned) and/or replace "
+        "the conversation's AppScope delta (scope: model settings, system "
+        "prompt, knowledge, context toggles) — the per-conversation config "
+        "resolved over global defaults on each turn."
+    ),
+    parameters=[
+        ToolParam(
+            name="name",
+            type="string",
+            description="New session name",
+        ),
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Archive/unarchive the session",
+        ),
+        ToolParam(
+            name="starred",
+            type="boolean",
+            description="Star/unstar the session",
+        ),
+        ToolParam(
+            name="pinned",
+            type="boolean",
+            description="Pin/unpin the session",
+        ),
+        ToolParam(
+            name="scope",
+            type="object",
+            description=(
+                "AppScope delta for this conversation — replaces the stored "
+                "delta wholesale (omit to leave it unchanged)"
+            ),
+        ),
+    ],
+    execute=_instance.upsert_session,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": ["session_id"],
+    },
+    version="1",
+)
+
+_register_sessions_spec(SESSIONS_UPDATE_SPEC, "PUT", "/chat/sessions/{session_id}")
+
+
+class _GenerationEngine:
+    """Inference-backed implementation of the engine port.
+
+    Registered into ``domain.inference.engine`` so the chat surface reads the
+    engine's output through the port instead of importing this router. The one
+    method is ``stream``: a raw-token generator that yields tokens then the final
+    ``TurnResult``. There is no separate non-streaming backend — surfaces that
+    need a complete response fold this stream at the edge.
+    """
+
+    async def stream(self, req: TurnRequest):
+        async for item in _instance.stream_turn(req):
+            yield item
+
+
+register_chat_engine(_GenerationEngine())
 
 
 def set_vector_store_ref(ref) -> dict:
@@ -3020,3 +3178,23 @@ def set_vector_store_ref(ref) -> dict:
 def flush_dirty_sessions() -> dict:
     """flush_dirty_sessions."""
     return _instance.flush_dirty_sessions()
+
+
+def build_session_metadata_index() -> list:
+    """Public facade over the inference router's session-metadata index.
+
+    Lets the mobile BFF reuse the shared chat-session read-model without
+    reaching into router internals (shared-core contract: translate at the
+    edge, never into the core).
+    """
+    return _instance._build_session_metadata_index()
+
+
+async def handle_chat(req: ChatRequest) -> ChatResponse:
+    """Public facade over the shared chat handler.
+
+    Used by in-process consumers (mobile BFF offline sync) so they ride the
+    same chat kernel the web client calls over HTTP, instead of reaching
+    into router internals.
+    """
+    return await _instance.chat(req)

@@ -1,0 +1,2 @@
+./scripts/check-main-sync.sh
+npx lint-staged

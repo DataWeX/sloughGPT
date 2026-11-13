@@ -10,7 +10,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 logger = logging.getLogger("slo.api.user_adapters")
 
@@ -45,7 +51,7 @@ class UserAdaptersRouter:
     def _get_store(self):
         """Get the per-user LoRA store, raising 503 if not available."""
         try:
-            from domains.feedback import get_per_user_lora
+            from domain.feedback import get_per_user_lora
 
             return get_per_user_lora()
         except ImportError:
@@ -107,7 +113,8 @@ class UserAdaptersRouter:
         """Update a user's LoRA adapter with new feedback rating."""
         try:
             store = self._get_store()
-            store.update_adapter(user_id, rating=req.rating)
+            feedback_signal = {"thumbs_up": 1.0, "thumbs_down": -1.0}.get(req.rating, 0.0)
+            store.update_adapter(user_id, feedback_signal=feedback_signal)
             logger.info("Adapter updated (user=%s, rating=%s)", user_id, req.rating)
             safe_audit_log("adapter.update", resource=user_id, detail=f"rating={req.rating}")
             return success_response(data={"status": "updated", "user_id": user_id})

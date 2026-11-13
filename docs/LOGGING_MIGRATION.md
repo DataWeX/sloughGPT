@@ -3,7 +3,7 @@
 ## Architecture
 
 ```
-domains.logging.Logger (ABC)
+domain.logging.Logger (ABC)
 ├── CLILogger        → CLI (ANSI color, no external deps)
 ├── CompositeLogger  → Multi-output fan-out
 ├── StructuredLogger → Key-value context, child(), tagged(), log_timer, timed
@@ -16,16 +16,16 @@ domains.logging.Logger (ABC)
 
 | File | Purpose |
 |------|---------|
-| `domains/logging/base.py` | Logger ABC, CompositeLogger, context propagation |
-| `domains/logging/cli_logger.py` | Pure ANSI CLILogger, timer() context manager |
-| `domains/infrastructure/structured_log.py` | StructuredLogger, child(), tagged(), log_timer, timed decorator |
-| `domains/logging/console_logger.py` | ConsoleLogger for API server |
-| `domains/logging/web_logger.py` | WebLogger for browser frontend |
+| `domain/logging/_internal/base.py` | Logger ABC, CompositeLogger, context propagation |
+| `domain/logging/_internal/cli_logger.py` | Pure ANSI CLILogger, timer() context manager |
+| `domain/infrastructure/_internal/structured_log.py` | StructuredLogger, child(), tagged(), log_timer, timed decorator |
+| `domain/logging/_internal/console_logger.py` | ConsoleLogger for API server |
+| `domain/logging/_internal/web_logger.py` | WebLogger for browser frontend |
 
 ## Usage
 
 ```python
-from domains.logging.base import get_logger
+from domain.logging import get_logger
 
 logger = get_logger("slo.routers.inference")
 logger.info("Model loaded", extra={"tag": "MODEL", "context": {"model": "sloughgpt-7b"}})
@@ -35,7 +35,7 @@ logger.warning("High latency: %dms", elapsed_ms, extra={"tag": "PERF"})
 ## Structured Logging
 
 ```python
-from domains.infrastructurestructured_log import get_structured_logger, tagged, log_timer
+from domain.infrastructure._internal.structured_log import get_structured_logger, tagged, log_timer
 
 logger = get_structured_logger("slo.training")
 

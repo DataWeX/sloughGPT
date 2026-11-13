@@ -1,0 +1,26 @@
+# slough-gateway — stateless edge (byte-relay + streaming compression)
+# 1.83's cargo could not parse the resolved transitive dep zeroize-1.9.0
+# (edition 2024 manifest) — `cargo build --release --locked` died with exit
+# 101 the first time anyone built this file (rot gate, 2026-11-03). The lock
+# is produced by the repo's own cargo, and Gateway CI compiles the same crate
+# with `stable`, so build with the current stable toolchain.
+FROM rust:1.99.1-bookworm AS builder
+
+WORKDIR /build
+COPY apps/gateway/Cargo.toml apps/gateway/Cargo.lock ./
+COPY apps/gateway/src ./src
+RUN cargo build --release --locked
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl bash \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/target/release/slough-gateway /usr/local/bin/slough-gateway
+
+ENV MAN_GATEWAY_PORT=8080 \
+    MAN_CORE_URL=http://api:8000 \
+    RUST_LOG=slough_gateway=info,tower_http=info
+
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf "http://127.0.0.1:${MAN_GATEWAY_PORT}/health" || exit 1
+CMD ["slough-gateway"]

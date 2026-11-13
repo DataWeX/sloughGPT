@@ -68,6 +68,11 @@ describe('SystemStatusCard', () => {
     expect(screen.getByText('offline')).toBeDefined()
   })
 
+  it('shows unreachable status when reload protection engaged', () => {
+    renderCard(base, null, 'error')
+    expect(screen.getByText('unreachable')).toBeDefined()
+  })
+
   it('falls back to detailed health when snapshot is absent', () => {
     renderCard(null, { status: 'healthy', model_loaded: true, model_type: 'qwen', num_parameters: 500000000, inference: { inference_count: 3 } })
     expect(screen.getByText('qwen · 500M')).toBeDefined()
@@ -92,5 +97,19 @@ describe('SystemStatusCard', () => {
   it('shows placeholder when no soul is set', () => {
     renderCard()
     expect(screen.getByText('—')).toBeDefined()
+  })
+
+  it('shows Degraded when health_status is degraded', () => {
+    renderCard({ ...base, health_status: 'degraded', health_score: 65 })
+    expect(screen.getByText('Degraded')).toBeDefined()
+    expect(screen.queryByText('Healthy')).toBeNull()
+    expect(screen.queryByText('Error')).toBeNull()
+  })
+
+  it('shows Error when health_status is unhealthy', () => {
+    renderCard({ ...base, health_status: 'unhealthy', health_score: 30 })
+    expect(screen.getByText('Error')).toBeDefined()
+    expect(screen.queryByText('Healthy')).toBeNull()
+    expect(screen.queryByText('Degraded')).toBeNull()
   })
 })

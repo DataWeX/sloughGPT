@@ -2,12 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, act } from '@testing-library/react'
 import React from 'react'
 
-const {
-  mockGetCapabilities, mockGetTrainingReport, mockGetTrainingStatus, mockAddToast,
-} = vi.hoisted(() => ({
-  mockGetCapabilities: vi.fn(), mockGetTrainingReport: vi.fn(),
-  mockGetTrainingStatus: vi.fn(), mockAddToast: vi.fn(),
-}))
+const { mockGetCapabilities, mockGetTrainingReport, mockGetTrainingStatus, mockAddToast } =
+  vi.hoisted(() => ({
+    mockGetCapabilities: vi.fn(),
+    mockGetTrainingReport: vi.fn(),
+    mockGetTrainingStatus: vi.fn(),
+    mockAddToast: vi.fn(),
+  }))
 
 vi.mock('@/lib/controllers', () => ({
   multimodalController: {
@@ -17,9 +18,21 @@ vi.mock('@/lib/controllers', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: vi.fn().mockReturnValue('Error'),
@@ -33,22 +46,45 @@ vi.mock('@/lib/dev-log', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('next/dynamic', () => {
-  const React = require('react')
+vi.mock('@/vite/next-compat/dynamic', async () => {
+  const React = await import('react')
   return {
     __esModule: true,
-    default: () => (props: Record<string, unknown>) => React.createElement('div', { 'data-testid': 'dynamic' }),
+    default: () => (_props: Record<string, unknown>) =>
+      React.createElement('div', { 'data-testid': 'dynamic' }),
   }
 })
 
-vi.mock('@/components/multimodal/CapabilitiesCard', () => ({ default: () => <div data-testid="capabilities-card" /> }))
-vi.mock('@/components/multimodal/TrainingCard', () => ({ default: () => <div data-testid="training-card" /> }))
-vi.mock('@/components/multimodal/ImageTrainingCard', () => ({ default: () => <div data-testid="image-training-card" /> }))
-vi.mock('@/components/multimodal/BatchTrainingCard', () => ({ default: () => <div data-testid="batch-training-card" /> }))
-vi.mock('@/components/multimodal/VisualDatasetCard', () => ({ default: () => <div data-testid="visual-dataset-card" /> }))
-vi.mock('@/components/multimodal/PreferenceOptimizationCard', () => ({ default: () => <div data-testid="dpo-card" /> }))
-vi.mock('@/components/multimodal/ImageGenerationCard', () => ({ default: () => <div data-testid="image-generation-card" /> }))
-vi.mock('@/components/multimodal/AudioCard', () => ({ default: () => <div data-testid="audio-card" /> }))
+vi.mock('@/components/multimodal/CapabilitiesCard', () => ({
+  default: () => <div data-testid="capabilities-card" />,
+}))
+vi.mock('@/components/multimodal/TrainingCard', () => ({
+  default: () => <div data-testid="training-card" />,
+}))
+vi.mock('@/components/multimodal/ImageTrainingCard', () => ({
+  default: () => <div data-testid="image-training-card" />,
+}))
+vi.mock('@/components/multimodal/BatchTrainingCard', () => ({
+  default: () => <div data-testid="batch-training-card" />,
+}))
+vi.mock('@/components/multimodal/VisualDatasetCard', () => ({
+  default: () => <div data-testid="visual-dataset-card" />,
+}))
+vi.mock('@/components/multimodal/PreferenceOptimizationCard', () => ({
+  default: () => <div data-testid="dpo-card" />,
+}))
+vi.mock('@/components/multimodal/ImageGenerationCard', () => ({
+  default: () => <div data-testid="image-generation-card" />,
+}))
+vi.mock('@/components/multimodal/AudioCard', () => ({
+  default: () => <div data-testid="audio-card" />,
+}))
+vi.mock('@/components/multimodal/VqaSection', () => ({
+  default: () => <div data-testid="vqa-section" />,
+}))
+vi.mock('@/components/multimodal/ObjectDetectionSection', () => ({
+  default: () => <div data-testid="object-detection-section" />,
+}))
 
 import MultimodalPage from './page'
 
@@ -127,6 +163,18 @@ describe('MultimodalPage — other cards', () => {
     await act(async () => {})
     expect(screen.getByTestId('audio-card')).toBeTruthy()
   })
+
+  it('shows VQA section', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('vqa-section')).toBeTruthy()
+  })
+
+  it('shows object detection section', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('object-detection-section')).toBeTruthy()
+  })
 })
 
 describe('MultimodalPage — error handling', () => {
@@ -141,10 +189,16 @@ describe('MultimodalPage — error handling', () => {
 describe('MultimodalPage — loading state', () => {
   it('shows loading while fetching capabilities', async () => {
     let resolveCaps: (v: { vision: boolean; audio: boolean; image_gen: boolean }) => void
-    mockGetCapabilities.mockReturnValue(new Promise(r => { resolveCaps = r }))
+    mockGetCapabilities.mockReturnValue(
+      new Promise((r) => {
+        resolveCaps = r
+      }),
+    )
     render(<MultimodalPage />)
-    expect(screen.queryByText(/vision|multimodal/i)).toBeNull()
-    await act(async () => { resolveCaps!({ vision: true, audio: true, image_gen: false }) })
+    expect(screen.getByTestId('page-container')).toHaveAttribute('data-state', 'loading')
+    await act(async () => {
+      resolveCaps!({ vision: true, audio: true, image_gen: false })
+    })
     expect(screen.getAllByText(/vision|multimodal/i).length).toBeGreaterThanOrEqual(1)
   })
 })

@@ -45,6 +45,7 @@ def parse(url: str, *, timeout: int = 15, rate: float = 0.5) -> Optional["Page"]
         Page, or None if fetch failed.
     """
     from .fetch import fetch as _fetch
+
     html = _fetch(url, timeout=timeout, rate=rate)
     if html is None:
         return None
@@ -100,8 +101,26 @@ class Page:
 class _Parser(HTMLParser):
     """Stack-based HTML parser. Correctly handles nesting, <br>, <img>, tables, lists, code."""
 
-    BLOCK = {"p", "div", "section", "article", "main", "header", "h1", "h2", "h3",
-             "h4", "h5", "h6", "blockquote", "pre", "td", "th", "li", "caption"}
+    BLOCK = {
+        "p",
+        "div",
+        "section",
+        "article",
+        "main",
+        "header",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "blockquote",
+        "pre",
+        "td",
+        "th",
+        "li",
+        "caption",
+    }
     IGNORE = {"script", "style", "nav", "footer", "aside", "noscript", "form", "svg"}
 
     def __init__(self):
@@ -116,7 +135,7 @@ class _Parser(HTMLParser):
         self._stack: list[dict] = []
         self._root_buf: list[str] = []
 
-    def _push(self, tag: str, extra: Optional[dict] = None) -> dict:
+    def _push(self, tag: str, extra: dict | None = None) -> dict:
         ctx = {"tag": tag.lower(), "buf": [], "ignore": False}
         if extra:
             ctx.update(extra)
@@ -206,7 +225,9 @@ class _Parser(HTMLParser):
 
         elif tag == "code":
             if self._on_tag("pre"):
-                lang = next((v.replace("language-", "").strip() for k, v in attrs if k == "class"), "")
+                lang = next(
+                    (v.replace("language-", "").strip() for k, v in attrs if k == "class"), ""
+                )
                 self._push("code", {"lang": lang, "in_pre": True, "noflush": True})
 
         elif tag == "caption":

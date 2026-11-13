@@ -1,6 +1,7 @@
 ---
 description: >
-  Git code review agent. Analyzes branch diffs, reviews code quality,
+  Git code review agent for OUR branches/worktrees (vs `commit-review` for
+  external commits). Analyzes diffs, reviews code quality,
   checks for bugs, style violations, and architectural concerns.
   Produces a structured review report with pass/fail verdict.
 mode: subagent
@@ -40,6 +41,7 @@ git diff --diff-filter=AD --name-only <base>..<head>
 ### Step 2: Analyze Each Changed File
 
 For each file, check:
+
 - Does the change introduce new bugs or edge cases?
 - Are error paths handled correctly?
 - Are there any security concerns (secrets, injection, etc.)?
@@ -49,12 +51,14 @@ For each file, check:
 ### Step 3: Check Project Boundaries
 
 The project has strict layer boundaries:
-- `packages/core-py/domains/` — Core logic, no HTTP deps
+
+- `domain/` — Core logic, no HTTP deps
 - `apps/api/server/` — FastAPI routes, thin adapters
-- `apps/web/` — Next.js frontend, uses @sloughgpt/strui
+- `apps/web/` — Vite + React frontend, uses @sloughgpt/strui
 - `packages/strui/` — Shared component library
 
 Verify:
+
 - No reverse imports (core importing from API, etc.)
 - No hardcoded paths or secrets
 - No runtime downloads without user consent
@@ -62,6 +66,7 @@ Verify:
 ### Step 4: Check Test Coverage
 
 For each changed module:
+
 - Are there corresponding test changes?
 - Do tests cover the new code paths?
 - Are edge cases tested?

@@ -7,6 +7,8 @@ import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 function makeHealth(overrides: Partial<LiveHealthSnapshot> = {}): LiveHealthSnapshot {
   return {
     model_loaded: true, model_loading: false, model_type: 'gpt2', device: 'cpu', soul: null,
+    startup_stage: 'ready', startup_stage_value: 3, startup_elapsed: 1,
+    startup_model_progress: 1, startup_model_progress_message: '', startup_hooks: {},
     is_inferencing: false, inference_count: 10, uptime_seconds: 300, request_count: 10,
     error_count: 0, tokens_per_sec: 12, avg_latency_ms: 0, p95_latency_ms: 0,
     requests_per_minute: 5, total_tokens: 200, avg_tokens_per_request: 20,

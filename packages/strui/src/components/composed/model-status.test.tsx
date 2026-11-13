@@ -19,22 +19,22 @@ describe('ModelStatusPill', () => {
   it('renders loaded label and tone classes', () => {
     const html = renderToStaticMarkup(<ModelStatusPill status="loaded" />)
     expect(html).toContain('Ready')
-    expect(html).toContain('text-green-500')
-    expect(html).toContain('bg-green-500')
+    expect(html).toContain('text-success')
+    expect(html).toContain('bg-success')
   })
 
   it('renders offline label and tone classes', () => {
     const html = renderToStaticMarkup(<ModelStatusPill status="offline" />)
     expect(html).toContain('Offline')
-    expect(html).toContain('text-red-500')
-    expect(html).toContain('bg-red-500')
+    expect(html).toContain('text-destructive')
+    expect(html).toContain('bg-destructive')
   })
 
   it('renders no-model label and tone classes', () => {
     const html = renderToStaticMarkup(<ModelStatusPill status="no-model" />)
     expect(html).toContain('No Model')
-    expect(html).toContain('text-yellow-500')
-    expect(html).toContain('bg-yellow-500')
+    expect(html).toContain('text-warning')
+    expect(html).toContain('bg-warning')
   })
 
   it('renders a button', () => {
@@ -55,7 +55,9 @@ describe('ModelStatusPill', () => {
   })
 
   it('merges a custom className onto the button', () => {
-    const html = renderToStaticMarkup(<ModelStatusPill status="offline" className="my-custom-class" />)
+    const html = renderToStaticMarkup(
+      <ModelStatusPill status="offline" className="my-custom-class" />,
+    )
     expect(html).toContain('my-custom-class')
   })
 

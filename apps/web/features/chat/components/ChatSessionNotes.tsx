@@ -85,22 +85,23 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
     setShowNew(false)
   }, [newNote, notes, sessionId])
 
-  const handleEdit = useCallback((noteId: string) => {
-    const note = notes.find(n => n.id === noteId)
-    if (!note) return
-    setEditing(noteId)
-    setDraft(note.content)
-  }, [notes])
+  const handleEdit = useCallback(
+    (noteId: string) => {
+      const note = notes.find((n) => n.id === noteId)
+      if (!note) return
+      setEditing(noteId)
+      setDraft(note.content)
+    },
+    [notes],
+  )
 
   const handleSaveEdit = useCallback(() => {
     if (!editing) return
     const trimmed = draft.trim()
     if (!trimmed) return
 
-    const next = notes.map(n =>
-      n.id === editing
-        ? { ...n, content: trimmed, updatedAt: Date.now() }
-        : n
+    const next = notes.map((n) =>
+      n.id === editing ? { ...n, content: trimmed, updatedAt: Date.now() } : n,
     )
     setNotes(next)
     saveNotes(sessionId, next)
@@ -113,11 +114,14 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
     setDraft('')
   }, [])
 
-  const handleDelete = useCallback((noteId: string) => {
-    const next = notes.filter(n => n.id !== noteId)
-    setNotes(next)
-    saveNotes(sessionId, next)
-  }, [notes, sessionId])
+  const handleDelete = useCallback(
+    (noteId: string) => {
+      const next = notes.filter((n) => n.id !== noteId)
+      setNotes(next)
+      saveNotes(sessionId, next)
+    },
+    [notes, sessionId],
+  )
 
   const formatDate = useCallback((timestamp: number) => {
     const date = new Date(timestamp)
@@ -152,7 +156,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
             placeholder="Add a note..."
-            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset resize-none"
             rows={3}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAdd()
@@ -188,7 +192,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
           </p>
         ) : (
           <div className="divide-y">
-            {notes.map(note => (
+            {notes.map((note) => (
               <div key={note.id} className="px-3 py-2 hover:bg-muted/30 group">
                 {editing === note.id ? (
                   <div className="space-y-1">
@@ -196,7 +200,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                       ref={textareaRef}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
-                      className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+                      className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset resize-none"
                       rows={3}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSaveEdit()
@@ -231,7 +235,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                         {formatDate(note.updatedAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100">
+                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                       <Button
                         variant="ghost"
                         size="icon-sm"

@@ -26,16 +26,16 @@ const STATUS_CONFIG: Record<ModelStatus, { label: string }> = {
 
 const STATUS_STYLES: Record<ModelStatus, string> = {
   loading: 'text-primary',
-  loaded: 'text-green-500',
-  offline: 'text-red-500',
-  'no-model': 'text-yellow-500',
+  loaded: 'text-success',
+  offline: 'text-destructive',
+  'no-model': 'text-warning',
 }
 
 const DOT_STYLES: Record<ModelStatus, string> = {
   loading: 'bg-primary',
-  loaded: 'bg-green-500',
-  offline: 'bg-red-500',
-  'no-model': 'bg-yellow-500',
+  loaded: 'bg-success',
+  offline: 'bg-destructive',
+  'no-model': 'bg-warning',
 }
 
 export function ModelStatusPill({
@@ -71,7 +71,14 @@ export function ModelStatusPill({
         className,
       )}
     >
-      <span className={cn('rounded-full', dotColor, size === 'sm' ? 'w-1.5 h-1.5' : size === 'md' ? 'w-2 h-2' : 'w-2.5 h-2.5', (status === 'loaded' || status === 'loading') && 'animate-pulse')} />
+      <span
+        className={cn(
+          'rounded-full',
+          dotColor,
+          size === 'sm' ? 'w-1.5 h-1.5' : size === 'md' ? 'w-2 h-2' : 'w-2.5 h-2.5',
+          (status === 'loaded' || status === 'loading') && 'animate-pulse',
+        )}
+      />
       <span className="font-sans">{modelName || config.label}</span>
     </button>
   )
@@ -82,9 +89,7 @@ export function ModelStatusPill({
 
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        {button}
-      </DialogTrigger>
+      <DialogTrigger asChild>{button}</DialogTrigger>
       <DialogContent className="max-w-xs">
         <DialogHeader>
           <DialogTitle className="text-sm">Model Info</DialogTitle>

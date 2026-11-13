@@ -15,22 +15,38 @@
     "./react": {
       "types": "./dist/useSloughGPT.d.ts",
       "import": "./dist/useSloughGPT.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.gen.d.ts",
+      "import": "./dist/contracts.gen.js",
+      "require": "./dist/contracts.gen.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "build:bun": "bun run build",
     "watch": "tsc --watch",
     "clean": "rm -rf dist",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit",
-    "ci": "npm run lint && npm run build && npm test",
+    "ci": "npm run lint && npm run typecheck && npm run build && npm test",
     "install:bun": "bun install",
     "install:yarn": "yarn install"
   },
-  "keywords": ["sloughgpt", "ai", "llm", "typescript", "react", "react-native"],
+  "keywords": [
+    "sloughgpt",
+    "ai",
+    "llm",
+    "typescript",
+    "react",
+    "react-native"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -48,7 +64,9 @@
     "react": ">=17.0.0"
   },
   "devDependencies": {
+    "@sloughgpt/eslint-config": "file:../../eslint-config",
     "@types/react": "^19.2.18",
+    "eslint": "^9.0.0",
     "typescript": "^5.0.0",
     "vitest": "^4.1.11"
   }

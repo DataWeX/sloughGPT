@@ -1,18 +1,20 @@
 """Tests for apps/cli/src/commands/data.py — dataset management commands."""
-import sys
-import os
-import json
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+import json
+import os
+import sys
+from unittest.mock import MagicMock
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 @pytest.fixture(autouse=True)
 def mock_log(monkeypatch):
     fake_log = MagicMock()
     import commands.data as mod
+
     monkeypatch.setattr(mod, "log", fake_log)
     return fake_log
 
@@ -20,6 +22,7 @@ def mock_log(monkeypatch):
 class TestCmdDatasets:
     def test_header_called(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
@@ -29,6 +32,7 @@ class TestCmdDatasets:
 
     def test_lists_datasets_as_rows(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         (ds_dir / "shakespeare").mkdir()
@@ -47,6 +51,7 @@ class TestCmdDatasets:
 
     def test_total_size_accumulated(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         (ds_dir / "ds1").mkdir()
@@ -61,6 +66,7 @@ class TestCmdDatasets:
 
     def test_with_registry_vocab_info(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         (ds_dir / "test").mkdir()
@@ -81,6 +87,7 @@ class TestCmdDatasets:
 class TestCmdDatasetImportUrl:
     def test_import_url_creates_file(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
@@ -90,6 +97,7 @@ class TestCmdDatasetImportUrl:
         mock_response.raise_for_status = MagicMock()
 
         import requests
+
         monkeypatch.setattr(requests, "get", MagicMock(return_value=mock_response))
 
         args = MagicMock()
@@ -103,6 +111,7 @@ class TestCmdDatasetImportUrl:
 
     def test_import_jsonl_writes_corpus(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
@@ -112,6 +121,7 @@ class TestCmdDatasetImportUrl:
         mock_response.raise_for_status = MagicMock()
 
         import requests
+
         monkeypatch.setattr(requests, "get", MagicMock(return_value=mock_response))
 
         args = MagicMock()
@@ -124,6 +134,7 @@ class TestCmdDatasetImportUrl:
 
     def test_import_url_success_logged(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
@@ -133,6 +144,7 @@ class TestCmdDatasetImportUrl:
         mock_response.raise_for_status = MagicMock()
 
         import requests
+
         monkeypatch.setattr(requests, "get", MagicMock(return_value=mock_response))
 
         args = MagicMock()
@@ -145,12 +157,16 @@ class TestCmdDatasetImportUrl:
 
     def test_import_url_error_logged(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
+
         ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
 
         import requests
-        monkeypatch.setattr(requests, "get", MagicMock(side_effect=requests.ConnectionError("timeout")))
+
+        monkeypatch.setattr(
+            requests, "get", MagicMock(side_effect=requests.ConnectionError("timeout"))
+        )
 
         args = MagicMock()
         args.url = "http://example.com/data.txt"
@@ -163,6 +179,7 @@ class TestCmdDatasetImportUrl:
 class TestCmdDataToolStats:
     def test_file_stats_lines_and_chars(self, mock_log, tmp_path):
         from commands.data import cmd_data_tool
+
         test_file = tmp_path / "test.txt"
         test_file.write_text("line1\nline2\nline3\n")
         args = MagicMock()
@@ -175,6 +192,7 @@ class TestCmdDataToolStats:
 
     def test_missing_path_logs_error(self, mock_log):
         from commands.data import cmd_data_tool
+
         args = MagicMock()
         args.path = "/nonexistent/path"
         cmd_data_tool(args, subcmd="stats")
@@ -182,6 +200,7 @@ class TestCmdDataToolStats:
 
     def test_directory_stats(self, mock_log, tmp_path):
         from commands.data import cmd_data_tool
+
         ds_dir = tmp_path / "mydata"
         ds_dir.mkdir()
         (ds_dir / "file1.txt").write_text("hello\n")

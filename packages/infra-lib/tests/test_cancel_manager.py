@@ -3,13 +3,11 @@
 import threading
 import time
 
-import pytest
-
 from infra_lib.cancel_manager import (
     CancelManager,
+    Operation,
     OpStatus,
     OpType,
-    Operation,
     get_cancel_manager,
     reset_cancel_manager,
 )
@@ -185,7 +183,9 @@ class TestCancelManager:
 
     def test_meta_stored(self):
         oid = self.mgr.register(
-            OpType.TRAINING, "t1", cancel_fn=lambda: None,
+            OpType.TRAINING,
+            "t1",
+            cancel_fn=lambda: None,
             meta={"dataset": "shakespeare"},
         )
         assert self.mgr.get(oid).meta["dataset"] == "shakespeare"

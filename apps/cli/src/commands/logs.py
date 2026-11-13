@@ -13,16 +13,18 @@ Usage:
     sloughgpt logs --errors-only            # only ERROR and WARNING lines
     sloughgpt logs --stats                  # quick log summary
 """
+
 import json
+import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+import urllib.error
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import click
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 
@@ -53,6 +55,7 @@ def _line(text: str = "") -> None:
 
 # ── Sparkline ──────────────────────────────────────────────────────────
 
+
 def _sparkline(values: list[float], width: int = 12) -> str:
     if not values:
         return ""
@@ -69,91 +72,214 @@ def _sparkline(values: list[float], width: int = 12) -> str:
 
 # ── Log file helpers ───────────────────────────────────────────────────
 
-def _parse_since(since: str) -> Optional[datetime]:
+
+def _parse_since(since: str) -> datetime | None:
     if not since:
         return None
-    if since[-1] in ('m', 'h', 'd'):
+    if since[-1] in ("m", "h", "d"):
         unit = since[-1]
         try:
             value = int(since[:-1])
         except ValueError:
             return None
-        delta = timedelta(minutes=value) if unit == 'm' else (
-            timedelta(hours=value) if unit == 'h' else timedelta(days=value)
+        delta = (
+            timedelta(minutes=value)
+            if unit == "m"
+            else (timedelta(hours=value) if unit == "h" else timedelta(days=value))
         )
-        return datetime.now(timezone.utc) - delta
+        return datetime.now(UTC) - delta
     try:
-        return datetime.fromisoformat(since).replace(tzinfo=timezone.utc)
+        return datetime.fromisoformat(since).replace(tzinfo=UTC)
     except ValueError:
         return None
 
 
+_SYSLOG_RE = re.compile(
+    r"^([A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (\S+)\[(\d+)\]: ([A-Z]+)"
+    r"(?: \[([A-Za-z0-9_]+)\])?(?: (.*))?$"
+)
+_KV_RE = re.compile(r'([A-Za-z_][\w.\-]*)=(?:"([^"]*)"|(\S+))')
+_MONTHS = {
+    "Jan": 1,
+    "Feb": 2,
+    "Mar": 3,
+    "Apr": 4,
+    "May": 5,
+    "Jun": 6,
+    "Jul": 7,
+    "Aug": 8,
+    "Sep": 9,
+    "Oct": 10,
+    "Nov": 11,
+    "Dec": 12,
+}
+_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+
+
+def _parse_syslog_ts(ts: str) -> str:
+    """Convert 'Sep 18 09:31:02' to ISO (assumes current year)."""
+    try:
+        mon, day, hms = ts.split()
+        dt = datetime(
+            datetime.now().year,
+            _MONTHS[mon],
+            int(day),
+            *map(int, hms.split(":")),
+        )
+        return dt.isoformat()
+    except (ValueError, KeyError):
+        return ts
+
+
+def _split_msg_ctx(rest: str) -> tuple[str, dict]:
+    """Split trailing key=val pairs (values may be double-quoted) from message."""
+    matches = list(_KV_RE.finditer(rest))
+    idx = len(matches)
+    pos = len(rest)
+    while idx > 0:
+        m = matches[idx - 1]
+        if rest[m.end() : pos].strip() == "":
+            pos = m.start()
+            idx -= 1
+        else:
+            break
+    ctx = {}
+    for m in matches[idx:]:
+        key = m.group(1)
+        ctx[key] = m.group(2) if m.group(2) is not None else m.group(3)
+    return rest[:pos].rstrip(), ctx
+
+
+def _parse_syslog_line(line: str) -> dict | None:
+    """Parse a systemd-style log line into a record dict (None if no match)."""
+    m = _SYSLOG_RE.match(line.strip())
+    if not m or m.group(4) not in _LEVELS:
+        return None
+    ts_raw, logger_name, _pid, level, tag, rest = m.groups()
+    msg, ctx = _split_msg_ctx(rest or "")
+    rid = ctx.pop("rid", None) or ctx.pop("corr", None) or ctx.pop("request_id", None)
+    return {
+        "ts": _parse_syslog_ts(ts_raw),
+        "level": level,
+        "logger": logger_name,
+        "msg": msg,
+        "tag": tag or "",
+        "request_id": rid or "",
+        "ctx": ctx,
+    }
+
+
+def _normalize_json_record(data: object) -> dict | None:
+    """Normalize a parsed JSON line to the record shape (legacy file support)."""
+    if not isinstance(data, dict):
+        return None
+    if "msg" in data and ("level" in data or "lvl" in data):
+        return {
+            "ts": data.get("ts", ""),
+            "level": data.get("level", data.get("lvl", "INFO")),
+            "logger": data.get("logger", ""),
+            "msg": data.get("msg", ""),
+            "tag": data.get("tag", data.get("op", "") or ""),
+            "request_id": data.get("request_id", data.get("corr", "") or ""),
+            "ctx": data.get("ctx", {}) if isinstance(data.get("ctx"), dict) else {},
+        }
+    return None
+
+
+def _parse_line(line: str) -> dict | None:
+    """Parse one log file line (JSON legacy or systemd-style syslog)."""
+    stripped = line.strip()
+    if not stripped:
+        return None
+    if stripped.startswith("{"):
+        try:
+            return _normalize_json_record(json.loads(stripped))
+        except json.JSONDecodeError:
+            return None
+    return _parse_syslog_line(stripped)
+
+
 def _format_line(record: dict, use_color: bool = True) -> str:
-    ts = record.get('ts', '')
-    level = record.get('level', 'INFO')
-    logger_name = record.get('logger', '')
-    msg = record.get('msg', '')
-    tag = record.get('tag', '')
-    request_id = record.get('request_id', '')
+    ts = record.get("ts", "")
+    level = record.get("level", "INFO")
+    logger_name = record.get("logger", "")
+    msg = record.get("msg", "")
+    tag = record.get("tag", "")
+    request_id = record.get("request_id", "")
 
     if use_color:
         level_colors = {
-            'DEBUG': '\033[36m', 'INFO': '\033[32m',
-            'WARNING': '\033[33m', 'ERROR': '\033[31m', 'CRITICAL': '\033[35m',
+            "DEBUG": "\033[36m",
+            "INFO": "\033[32m",
+            "WARNING": "\033[33m",
+            "ERROR": "\033[31m",
+            "CRITICAL": "\033[35m",
         }
-        reset = '\033[0m'
+        reset = "\033[0m"
         level_str = f"{level_colors.get(level, '')}{level:8s}{reset}"
-        tag_str = f"\033[90m[{tag}]\033[0m" if tag else ''
-        rid_str = f"\033[90mrid={request_id}\033[0m" if request_id else ''
+        tag_str = f"\033[90m[{tag}]\033[0m" if tag else ""
+        rid_str = f"\033[90mrid={request_id}\033[0m" if request_id else ""
         ts_str = f"\033[90m{ts}\033[0m"
         logger_str = f"\033[90m{logger_name}\033[0m"
     else:
         level_str = f"{level:8s}"
-        tag_str = f"[{tag}]" if tag else ''
-        rid_str = f"rid={request_id}" if request_id else ''
+        tag_str = f"[{tag}]" if tag else ""
+        rid_str = f"rid={request_id}" if request_id else ""
         ts_str, logger_str = ts, logger_name
 
     parts = [ts_str, level_str]
-    if tag_str: parts.append(tag_str)
-    if rid_str: parts.append(rid_str)
+    if tag_str:
+        parts.append(tag_str)
+    if rid_str:
+        parts.append(rid_str)
     parts.extend([logger_str, msg])
-    return ' '.join(p for p in parts if p)
+    out = " ".join(p for p in parts if p)
+    tail = record.get("_tail", "")
+    if tail:
+        out += "\n" + tail
+    return out
 
 
 def _matches_filters(record: dict, filters: dict) -> bool:
-    if filters.get('request_id') and filters['request_id'] != record.get('request_id', ''):
+    if filters.get("request_id") and filters["request_id"] != record.get("request_id", ""):
         return False
-    if filters.get('level') and filters['level'].upper() != record.get('level', '').upper():
+    if filters.get("level") and filters["level"].upper() != record.get("level", "").upper():
         return False
-    if filters.get('tag') and filters['tag'] != record.get('tag', ''):
+    if filters.get("tag") and filters["tag"] != record.get("tag", ""):
         return False
-    if filters.get('path'):
-        ctx = record.get('ctx', {})
+    if filters.get("path"):
+        ctx = record.get("ctx", {})
         if isinstance(ctx, dict):
-            req_ctx = ctx.get('context', {})
-            if isinstance(req_ctx, dict) and filters['path'] not in req_ctx.get('path', ''):
+            req_ctx = ctx.get("context", {})
+            if isinstance(req_ctx, dict) and filters["path"] not in req_ctx.get("path", ""):
                 return False
-        if filters['path'] not in record.get('msg', ''):
+        if filters["path"] not in record.get("msg", ""):
             return False
-    if filters.get('search') and filters['search'].lower() not in record.get('msg', '').lower():
+    if filters.get("search") and filters["search"].lower() not in record.get("msg", "").lower():
         return False
-    if filters.get('since'):
-        ts_str = record.get('ts', '')
+    if filters.get("since"):
+        ts_str = record.get("ts", "")
         if ts_str:
             try:
-                if datetime.fromisoformat(ts_str.replace('Z', '+00:00')) < filters['since']:
+                if datetime.fromisoformat(ts_str.replace("Z", "+00:00")) < filters["since"]:
                     return False
             except ValueError:
                 pass
-    if filters.get('errors_only') and record.get('level', '').upper() not in ('ERROR', 'WARNING', 'CRITICAL'):
+    if filters.get("errors_only") and record.get("level", "").upper() not in (
+        "ERROR",
+        "WARNING",
+        "CRITICAL",
+    ):
         return False
     return True
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────
 
+
 def _format_uptime(seconds: int) -> str:
-    if seconds < 60: return f"{seconds}s"
+    if seconds < 60:
+        return f"{seconds}s"
     if seconds < 3600:
         m, s = divmod(seconds, 60)
         return f"{m}m {s:02d}s"
@@ -162,30 +288,78 @@ def _format_uptime(seconds: int) -> str:
 
 
 def _format_ts(ts: float) -> str:
-    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M:%S")
+    return datetime.fromtimestamp(ts, tz=UTC).strftime("%H:%M:%S")
 
 
 def _category_color(cat: str) -> str:
     return {
-        "TRAIN": _GREEN, "MODEL": _CYAN, "INFERENCE": "\033[35m",
-        "SYSTEM": _GREY, "ERROR": _RED, "INFRA": _GREY, "CHAT": _CYAN,
-        "SOUL": _YELLOW, "START": _GREY, "IDLE": _GREY, "DOWNLOAD": _CYAN,
-        "SLOW": _YELLOW, "WORKFLOW": _GREY, "UI": _BLUE,
+        "TRAIN": _GREEN,
+        "MODEL": _CYAN,
+        "INFERENCE": "\033[35m",
+        "SYSTEM": _GREY,
+        "ERROR": _RED,
+        "INFRA": _GREY,
+        "CHAT": _CYAN,
+        "SOUL": _YELLOW,
+        "START": _GREY,
+        "IDLE": _GREY,
+        "DOWNLOAD": _CYAN,
+        "SLOW": _YELLOW,
+        "WORKFLOW": _GREY,
+        "UI": _BLUE,
     }.get(cat, "")
 
 
 def _status_icon(status: str) -> str:
     return {
-        "running": _c("\u25b6", _GREEN), "queued": _c("\u25c6", _YELLOW),
-        "starting": _c("\u21bb", _CYAN), "complete": _c("\u2713", _GREEN),
-        "completed": _c("\u2713", _GREEN), "error": _c("\u2717", _RED),
-        "exited": _c("\u25a0", _GREY), "idle": _c("\u00b7", _GREY), "stopped": _c("\u25a0", _GREY),
+        "running": _c("\u25b6", _GREEN),
+        "queued": _c("\u25c6", _YELLOW),
+        "starting": _c("\u21bb", _CYAN),
+        "complete": _c("\u2713", _GREEN),
+        "completed": _c("\u2713", _GREEN),
+        "error": _c("\u2717", _RED),
+        "exited": _c("\u25a0", _GREY),
+        "idle": _c("\u00b7", _GREY),
+        "stopped": _c("\u25a0", _GREY),
     }.get(status, _c("?", _YELLOW))
 
 
 def _progress_bar(progress: float, width: int = 20) -> str:
     filled = int(width * progress / 100)
     return _c("\u2588" * filled, _GREEN) + _c("\u2591" * (width - filled), _GREY)
+
+
+def _load_color(value: float) -> str:
+    """Color-grade a load percentage: cool=green, warm=yellow, hot=red."""
+    return _GREEN if value < 70 else _YELLOW if value < 90 else _RED
+
+
+def _status_color(status: str) -> str:
+    """Status word color — mirrors the _status_icon palette."""
+    colors = {
+        "running": _GREEN,
+        "complete": _GREEN,
+        "completed": _GREEN,
+        "queued": _YELLOW,
+        "starting": _CYAN,
+        "error": _RED,
+        "exited": _GREY,
+        "idle": _GREY,
+        "stopped": _GREY,
+    }
+    return colors.get(status, _YELLOW)
+
+
+# Punchy per-type label colors so every process reads at a glance
+# (card 8182563a — port of 0a29d5c6e, stranded on feat/shared-governance).
+_PROC_TYPE_COLORS = {
+    "training": _GREEN,
+    "self-train": _CYAN,
+    "auto-train": _YELLOW,
+    "download": _BLUE,
+    "inference": "\033[35m",
+    "chat": _CYAN,
+}
 
 
 def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False) -> None:
@@ -201,11 +375,11 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     cpu = health.get("cpu_percent", 0)
     mem = health.get("memory_percent", 0)
     mem_mb = health.get("memory_used_mb", 0)
-    rpm = health.get("requests_per_minute", 0)
     tps = health.get("tokens_per_sec", 0)
     reqs = health.get("request_count", 0)
     errs = health.get("error_count", 0)
     lat = health.get("avg_latency_ms", 0)
+    rpm = health.get("requests_per_minute", 0)
     rpm_history = health.get("rpm_history", [])
     mem_history = health.get("mem_history", [])
     gpu = health.get("gpu", {})
@@ -218,9 +392,43 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}  {_c(_format_ts(time.time()), _DIM)}")
     _line(f"  {'─' * 60}")
 
+    # A STALL/ERROR frame deliberately carries no health data — that is what
+    # distinguishes it from a real snapshot. Rendering it through the normal
+    # path would print "no model" and up 0s, visually identical to a server
+    # that is idle and fine, which is exactly the confusion the server-side
+    # STALL frame exists to prevent (silence must never read as "nothing to
+    # report"). Say what is actually happening, then stop: there is nothing
+    # else in this frame to show.
+    phase = str(snapshot.get("phase", ""))
+    if phase in ("STALL", "ERROR"):
+        detail = snapshot.get("message") or data.get("error")
+        if phase == "STALL":
+            _line(f"  {_c('SNAPSHOT STALLED', _BOLD + _YELLOW)}")
+            _line(f"  {_c(str(detail or 'a subsystem is likely blocked'), _DIM)}")
+            cadence = data.get("interval_seconds")
+            if cadence:
+                _line(f"  {_c(f'cadence {cadence:g}s — a stall, not an empty server', _DIM)}")
+        else:
+            _line(f"  {_c('SNAPSHOT FAILED', _BOLD + _RED)}")
+            _line(f"  {_c(str(detail or 'unknown error'), _DIM)}")
+        sys.stdout.flush()
+        return
+
     loaded = health.get("model_loaded", False)
     status_str = _c("online", _GREEN) if loaded else _c("no model", _YELLOW)
-    _line(f"  {_c('SERVER', _BOLD)} {status_str}  {_c(model_str, _CYAN)}  up {_format_uptime(uptime)}")
+    server_line = (
+        f"  {_c('SERVER', _BOLD)} {status_str}  {_c(model_str, _CYAN)}"
+        f"  up {_c(_format_uptime(uptime), _GREY)}"
+    )
+    # Health score folds into the SERVER line — de-clutter (card 8182563a)
+    score = health_score.get("score", 0) if health_score else 0
+    if score > 0:
+        score_color = _GREEN if score >= 80 else _YELLOW if score >= 50 else _RED
+        server_line += f"  {_c('health', _BOLD)} {_c(f'{score}/100', score_color)}"
+        hs_status = health_score.get("status", "")
+        if hs_status:
+            server_line += f" {_c(hs_status, _DIM)}"
+    _line(server_line)
 
     # MODEL line — device, params, quantization
     if loaded:
@@ -240,11 +448,18 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         if mode:
             model_parts.append(mode)
         if model_parts:
-            _line(f"  {_c('MODEL', _BOLD)}   {'  '.join(model_parts)}")
+            styled = [_c(p, _CYAN) if i == 0 else _c(p, _GREY) for i, p in enumerate(model_parts)]
+            _line(f"  {_c('MODEL', _BOLD)}   {'  '.join(styled)}")
 
     spark_rpm = _sparkline(rpm_history) if rpm_history else ""
     spark_mem = _sparkline(mem_history) if mem_history else ""
-    sys_line = f"  {_c('SYS', _BOLD)}   cpu {cpu:.0f}%  mem {mem:.0f}% ({mem_mb}MB)  reqs {reqs}  err {errs}"
+    err_str = _c(f"err {errs}", _RED) if errs else _c("err 0", _GREY)
+    sys_line = (
+        f"  {_c('SYS', _BOLD)}   cpu {_c(f'{cpu:.0f}%', _load_color(cpu))}"
+        f"  mem {_c(f'{mem:.0f}%', _load_color(mem))} ({mem_mb}MB)"
+        f"  reqs {reqs}  {err_str}"
+    )
+    sys_line += f"  rpm {rpm:.0f}"  # restored numeric rpm (card 8182563a)
     if spark_rpm:
         sys_line += f"  {_c(spark_rpm, _GREY)}"
     if spark_mem:
@@ -252,27 +467,17 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     _line(sys_line)
 
     gen_parts = []
-    if tps > 0: gen_parts.append(f"{tps:.1f} tok/s")
-    if lat > 0: gen_parts.append(f"{lat:.0f}ms avg")
+    if tps > 0:
+        gen_parts.append(f"{_c(f'{tps:.1f}', _CYAN)} tok/s")
+    if lat > 0:
+        gen_parts.append(f"{_c(f'{lat:.0f}ms', _GREY)} avg")
     if gen_parts:
         _line(f"  {_c('GEN', _BOLD)}   {'  '.join(gen_parts)}")
 
-    # Health score
-    if health_score:
-        score = health_score.get("score", 0)
-        status = health_score.get("status", "")
-        if score > 0:
-            score_color = _GREEN if score >= 80 else _YELLOW if score >= 50 else _RED
-            _line(f"  {_c('HEALTH', _BOLD)}  {_c(f'{score}/100', score_color)}  {_c(status, _DIM)}")
-
-    if not compact:
+    if not compact and (processes or events or errors):
         _line()
-        _line(f"  {_c('PROCESSES', _BOLD)}")
-        _line(f"  {'─' * 60}")
-
-        if not processes:
-            _line(f"  {_c('  (none active)', _DIM)}")
-        else:
+        if processes:
+            _line(f"  {_c('PROCESSES', _BOLD)}")
             for proc_id, proc in processes.items():
                 status = proc.get("status", "unknown")
                 label = proc.get("label", proc_id)
@@ -280,24 +485,26 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
                 progress = proc.get("progress", 0)
 
                 icon = _status_icon(status)
-                name = _c(label.ljust(14), _BOLD)
+                name = _c(label.ljust(14), _PROC_TYPE_COLORS.get(proc.get("type", ""), _BOLD))
 
                 if progress > 0 and status == "running":
                     bar = _progress_bar(progress)
                     pct = f"{progress:.0f}%".rjust(4)
-                    detail_str = f"{detail}  {bar} {pct}" if detail else f"{bar} {pct}"
+                    body = f"{detail}  {bar} {pct}" if detail else f"{bar} {pct}"
+                    _line(f"  {icon} {name} {_c(body, _DIM)}")
+                elif status == "running" and detail:
+                    _line(f"  {icon} {name} {_c(detail, _DIM)}")
+                elif detail:
+                    _line(f"  {icon} {name} {_c(status, _status_color(status))} {_c(detail, _DIM)}")
                 else:
-                    detail_str = detail
-
-                _line(f"  {icon} {name} {_c(detail_str, _DIM)}")
-
-        _line()
-        _line(f"  {_c('EVENTS', _BOLD)}")
-        _line(f"  {'─' * 60}")
+                    # no detail: the status word fills the line — punchy, no blanks
+                    _line(f"  {icon} {name} {_c(status, _status_color(status))}")
 
         if not events:
-            _line(f"  {_c('  (no events yet)', _DIM)}")
+            pass  # empty — section omitted entirely (de-clutter, card 8182563a)
         else:
+            _line()
+            _line(f"  {_c('EVENTS', _BOLD)}")
             for ev in events[:8]:
                 ts_str = _c(_format_ts(ev.get("ts", 0)), _GREY)
                 cat = ev.get("category", "")
@@ -305,13 +512,12 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
                 cat_str = _c(cat.ljust(10), _category_color(cat))
                 max_msg = 42
                 if len(msg) > max_msg:
-                    msg = msg[:max_msg - 1] + "\u2026"
+                    msg = msg[: max_msg - 1] + "\u2026"
                 _line(f"  {ts_str} {cat_str} {msg}")
 
         if errors:
             _line()
             _line(f"  {_c('RECENT ERRORS', _BOLD + _RED)}")
-            _line(f"  {'─' * 60}")
             for err in errors[:3]:
                 path = err.get("path", "")
                 msg = err.get("message", "")[:40]
@@ -322,9 +528,11 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     sys.stdout.flush()
 
 
-def _consume_sse_dashboard(host: str, port: int, interval: float, output_json: bool, clear: bool, compact: bool = False) -> None:
-    import urllib.request
+def _consume_sse_dashboard(
+    host: str, port: int, interval: float, output_json: bool, clear: bool, compact: bool = False
+) -> None:
     import urllib.error
+    import urllib.request
 
     url = f"http://{host}:{port}/dashboard/stream"
     error_count = 0
@@ -353,7 +561,8 @@ def _consume_sse_dashboard(host: str, port: int, interval: float, output_json: b
         except urllib.error.URLError as e:
             error_count += 1
             if not output_json:
-                if clear: sys.stdout.write(_CLEAR)
+                if clear:
+                    sys.stdout.write(_CLEAR)
                 _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}")
                 _line(f"  {'─' * 60}")
                 _line(f"  {_c('Cannot connect to server', _RED)}")
@@ -370,14 +579,18 @@ def _consume_sse_dashboard(host: str, port: int, interval: float, output_json: b
         except Exception as e:
             error_count += 1
             if not output_json:
-                if clear: sys.stdout.write(_CLEAR)
+                if clear:
+                    sys.stdout.write(_CLEAR)
                 _line(f"  {_c('Stream error', _RED)}: {e}")
                 sys.stdout.flush()
             time.sleep(3)
 
 
-def _poll_fallback_dashboard(host: str, port: int, interval: float, output_json: bool, clear: bool, compact: bool = False) -> None:
+def _poll_fallback_dashboard(
+    host: str, port: int, interval: float, output_json: bool, clear: bool, compact: bool = False
+) -> None:
     import urllib.request
+
     while True:
         snapshot = {"data": {"health": {}, "processes": {}, "events": [], "recent_errors": []}}
         for key, path in [("health", "/health"), ("events", "/dashboard/events")]:
@@ -385,7 +598,11 @@ def _poll_fallback_dashboard(host: str, port: int, interval: float, output_json:
                 req = urllib.request.Request(f"http://{host}:{port}{path}")
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     raw = json.loads(resp.read())
-                    snapshot["data"][key] = raw.get("data", raw) if key == "health" else raw.get("data", {}).get("events", [])
+                    snapshot["data"][key] = (
+                        raw.get("data", raw)
+                        if key == "health"
+                        else raw.get("data", {}).get("events", [])
+                    )
             except (urllib.error.URLError, OSError, ValueError):
                 pass
         try:
@@ -405,6 +622,7 @@ def _poll_fallback_dashboard(host: str, port: int, interval: float, output_json:
 
 # ── Stats mode ─────────────────────────────────────────────────────────
 
+
 def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
     """Show quick log file statistics."""
     level_counts = {"DEBUG": 0, "INFO": 0, "WARNING": 0, "ERROR": 0, "CRITICAL": 0}
@@ -414,14 +632,10 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
     last_ts = None
     recent_errors = []
 
-    with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+    with open(log_path, encoding="utf-8", errors="replace") as f:
         for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
+            record = _parse_line(line)
+            if record is None:
                 continue
             total += 1
             level = record.get("level", "INFO")
@@ -440,11 +654,18 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
                 recent_errors.append(record)
 
     if output_json:
-        click.echo(json.dumps({
-            "total": total, "levels": level_counts, "tags": tag_counts,
-            "first_ts": first_ts, "last_ts": last_ts,
-            "recent_errors": [_format_line(e, use_color=False) for e in recent_errors],
-        }))
+        click.echo(
+            json.dumps(
+                {
+                    "total": total,
+                    "levels": level_counts,
+                    "tags": tag_counts,
+                    "first_ts": first_ts,
+                    "last_ts": last_ts,
+                    "recent_errors": [_format_line(e, use_color=False) for e in recent_errors],
+                }
+            )
+        )
         return
 
     _line(f"  {_c('Log Stats', _BOLD + _CYAN)}  {_c(str(log_path), _DIM)}")
@@ -458,7 +679,13 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
     for lvl in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
         count = level_counts[lvl]
         if count > 0:
-            color = {"DEBUG": _GREY, "INFO": _GREEN, "WARNING": _YELLOW, "ERROR": _RED, "CRITICAL": _RED + _BOLD}.get(lvl, "")
+            color = {
+                "DEBUG": _GREY,
+                "INFO": _GREEN,
+                "WARNING": _YELLOW,
+                "ERROR": _RED,
+                "CRITICAL": _RED + _BOLD,
+            }.get(lvl, "")
             _line(f"    {_c(lvl.ljust(12), color)} {count}")
 
     if tag_counts:
@@ -478,92 +705,151 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
 
 # ── Log file modes ─────────────────────────────────────────────────────
 
+
 def _read_logs(log_path: Path, tail: int, filters: dict, output_json: bool, use_color: bool):
     matches = []
-    with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
-        for line in f:
-            line = line.strip()
-            if not line: continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
+    pending = None
+    with open(log_path, encoding="utf-8", errors="replace") as f:
+        for raw in f:
+            record = _parse_line(raw)
+            if record is None:
+                # Traceback continuation of the previous record.
+                if pending is not None:
+                    prev = pending.get("_tail", "")
+                    pending["_tail"] = (prev + "\n" if prev else "") + raw.rstrip("\n")
                 continue
+            pending = record
             if _matches_filters(record, filters):
                 matches.append(record)
+            else:
+                pending = None
     for record in matches[-tail:]:
         if output_json:
-            click.echo(json.dumps(record))
+            click.echo(json.dumps({k: v for k, v in record.items() if k != "_tail"}))
         else:
             click.echo(_format_line(record, use_color=use_color))
     if not matches:
-        click.echo("No matching log lines found.", err=True)
+        click.echo(_c("No matching log lines found.", _YELLOW), err=True, color=_TTY)
 
 
 def _tail_follow(log_path: Path, filters: dict, output_json: bool, use_color: bool):
     click.echo(f"Following {log_path} (Ctrl+C to stop)...", err=True)
-    with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+    with open(log_path, encoding="utf-8", errors="replace") as f:
         f.seek(0, 2)
+        pending = None
         try:
             while True:
-                line = f.readline()
-                if not line:
+                raw = f.readline()
+                if not raw:
                     time.sleep(0.1)
                     continue
-                line = line.strip()
-                if not line: continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
+                record = _parse_line(raw)
+                if record is None:
+                    # Traceback continuation of the record being shown.
+                    if pending is not None:
+                        prev = pending.get("_tail", "")
+                        pending["_tail"] = (prev + "\n" if prev else "") + raw.rstrip("\n")
+                        if not output_json:
+                            click.echo(raw.rstrip("\n"))
                     continue
+                pending = None
                 if _matches_filters(record, filters):
+                    pending = record
                     if output_json:
-                        click.echo(json.dumps(record))
+                        click.echo(json.dumps({k: v for k, v in record.items() if k != "_tail"}))
                     else:
                         click.echo(_format_line(record, use_color=use_color))
         except KeyboardInterrupt:
             click.echo("\nStopped following.", err=True)
 
 
+def run_dashboard(
+    host: str,
+    port: int,
+    interval: float,
+    output_json: bool = False,
+    no_clear: bool = False,
+    compact: bool = False,
+) -> None:
+    """Run the live dashboard until interrupted — the single dashboard path.
+
+    Shared by ``logs --dashboard``, the hidden ``monitor`` migration alias,
+    and ``train monitor`` (card 8182563a: one command, one code path — the
+    old ``commands/monitor.py`` copy is deleted).
+    """
+    clear = not no_clear
+    if _TTY and not output_json:
+        log.hide_cursor()
+    try:
+        _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
+    except (urllib.error.URLError, OSError, ValueError):
+        try:
+            _poll_fallback_dashboard(host, port, interval, output_json, clear, compact)
+        except KeyboardInterrupt:
+            pass
+    finally:
+        if _TTY and not output_json:
+            log.show_cursor()
+
+
 # ── CLI entry point ───────────────────────────────────────────────────
 
+
 @click.command(help="Query, filter, and monitor server logs")
-@click.option('--tail', '-n', default=50, type=int, help='Number of lines to show (from end)')
-@click.option('--request-id', '-r', default=None, help='Filter by correlation request ID')
-@click.option('--level', '-l', default=None, help='Filter by log level')
-@click.option('--since', '-s', default=None, help='Show logs since: relative (30m, 1h, 2d) or ISO timestamp')
-@click.option('--tag', '-t', default=None, help='Filter by log tag')
-@click.option('--path', '-p', default=None, help='Filter by request path')
-@click.option('--search', default=None, help='Free-text search in message')
-@click.option('--errors-only', is_flag=True, help='Show only ERROR and WARNING lines')
-@click.option('--json', 'output_json', is_flag=True, help='Output raw JSON lines')
-@click.option('--file', 'log_file', default=None, type=click.Path(exists=True), help='Log file path')
-@click.option('--follow', '-f', is_flag=True, help='Follow (tail -f) new log lines')
-@click.option('--dashboard', '-d', is_flag=True, help='Live dashboard: health, processes, events')
-@click.option('--compact', is_flag=True, help='Dashboard: compact mode (less detail)')
-@click.option('--interval', '-i', default=2.0, type=float, help='Dashboard refresh interval (s)')
-@click.option('--no-clear', is_flag=True, help='Dashboard: append mode, no screen clear')
-@click.option('--host', default='localhost', help='Dashboard: API hostname')
-@click.option('--port', default=8000, type=int, help='Dashboard: API port')
-@click.option('--stats', is_flag=True, help='Show log file statistics')
-def logs(tail, request_id, level, since, tag, path, search, errors_only, output_json, log_file, follow,
-         dashboard, compact, interval, no_clear, host, port, stats):
+@click.option("--tail", "-n", default=50, type=int, help="Number of lines to show (from end)")
+@click.option("--request-id", "-r", default=None, help="Filter by correlation request ID")
+@click.option("--level", "-l", default=None, help="Filter by log level")
+@click.option(
+    "--since", "-s", default=None, help="Show logs since: relative (30m, 1h, 2d) or ISO timestamp"
+)
+@click.option("--tag", "-t", default=None, help="Filter by log tag")
+@click.option("--path", "-p", default=None, help="Filter by request path")
+@click.option("--search", default=None, help="Free-text search in message")
+@click.option("--errors-only", is_flag=True, help="Show only ERROR and WARNING lines")
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON lines")
+@click.option(
+    "--file", "log_file", default=None, type=click.Path(exists=True), help="Log file path"
+)
+@click.option("--follow", "-f", is_flag=True, help="Follow (tail -f) new log lines")
+@click.option("--dashboard", "-d", is_flag=True, help="Live dashboard: health, processes, events")
+@click.option("--compact", is_flag=True, help="Dashboard: compact mode (less detail)")
+@click.option("--interval", "-i", default=2.0, type=float, help="Dashboard refresh interval (s)")
+@click.option("--no-clear", is_flag=True, help="Dashboard: append mode, no screen clear")
+@click.option("--host", default="localhost", help="Dashboard: API hostname")
+@click.option("--port", default=8000, type=int, help="Dashboard: API port")
+@click.option("--stats", is_flag=True, help="Show log file statistics")
+def logs(
+    tail,
+    request_id,
+    level,
+    since,
+    tag,
+    path,
+    search,
+    errors_only,
+    output_json,
+    log_file,
+    follow,
+    dashboard,
+    compact,
+    interval,
+    no_clear,
+    host,
+    port,
+    stats,
+):
     """Query, filter, and monitor server logs."""
     use_color = sys.stdout.isatty() and not output_json
 
     if dashboard:
-        clear = not no_clear
-        if _TTY and not output_json:
-            log.hide_cursor()
-        try:
-            _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
-        except (urllib.error.URLError, OSError, ValueError):
-            try:
-                _poll_fallback_dashboard(host, port, interval, output_json, clear, compact)
-            except KeyboardInterrupt:
-                pass
-        finally:
-            if _TTY and not output_json:
-                log.show_cursor()
+        run_dashboard(
+            host,
+            port,
+            interval,
+            output_json=output_json,
+            no_clear=no_clear,
+            compact=compact,
+        )
         return
 
     # Resolve log file
@@ -571,7 +857,7 @@ def logs(tail, request_id, level, since, tag, path, search, errors_only, output_
         log_path = Path(log_file)
     else:
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
-        log_path = repo_root / 'logs' / 'sloughgpt.log'
+        log_path = repo_root / "logs" / "sloughgpt.log"
 
     if not log_path.exists():
         click.echo(f"Log file not found: {log_path}", err=True)
@@ -583,11 +869,46 @@ def logs(tail, request_id, level, since, tag, path, search, errors_only, output_
 
     since_dt = _parse_since(since) if since else None
     filters = {
-        'request_id': request_id, 'level': level, 'tag': tag,
-        'path': path, 'search': search, 'since': since_dt, 'errors_only': errors_only,
+        "request_id": request_id,
+        "level": level,
+        "tag": tag,
+        "path": path,
+        "search": search,
+        "since": since_dt,
+        "errors_only": errors_only,
     }
 
     if follow:
         _tail_follow(log_path, filters, output_json, use_color)
     else:
         _read_logs(log_path, tail, filters, output_json, use_color)
+
+
+# ── monitor migration alias ───────────────────────────────────────────────
+# Card 8182563a: "no separate monitor command - integrate into logs".
+# All dashboard logic lives above (run_dashboard); this hidden alias keeps
+# old muscle memory working without appearing in any help listing.
+
+
+@click.command(
+    hidden=True,
+    help="Old dashboard command — merged into `logs --dashboard`; forwards with the same flags.",
+)
+@click.option(
+    "--interval",
+    "-i",
+    default=2.0,
+    type=float,
+    help="Refresh interval in seconds",
+    show_default=True,
+)
+@click.option("--host", default="localhost", help="API hostname", show_default=True)
+@click.option("--port", default=8000, type=int, help="API port", show_default=True)
+@click.option(
+    "--json", "output_json", is_flag=True, help="Output raw JSON lines instead of dashboard"
+)
+@click.option("--no-clear", is_flag=True, help="Append mode — don't clear screen between refreshes")
+def monitor(interval: float, host: str, port: int, output_json: bool, no_clear: bool) -> None:
+    """Hidden migration alias — the dashboard now lives in `logs --dashboard`."""
+    click.echo("`monitor` has merged into `logs --dashboard` — forwarding…", err=True)
+    run_dashboard(host, port, interval, output_json=output_json, no_clear=no_clear)

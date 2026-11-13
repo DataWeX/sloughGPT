@@ -1,13 +1,23 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPut, apiPost } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface UserProfile {
   id: string
@@ -31,7 +41,7 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const { user, setUser } = useAuthStore()
 
   const fetchProfile = useCallback(async () => {
@@ -49,6 +59,8 @@ export default function ProfilePage() {
       setLoading(false)
     }
   }, [])
+
+  useRefreshShortcut(fetchProfile)
 
   const updateProfile = async () => {
     setSaving(true)
@@ -98,7 +110,9 @@ export default function ProfilePage() {
     }
   }
 
-  useEffect(() => { fetchProfile() }, [fetchProfile])
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
 
   if (loading) {
     return (
@@ -108,134 +122,143 @@ export default function ProfilePage() {
           <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
           <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded-lg" /></CardContent></Card>
+        <Card>
+          <CardContent>
+            <div className="h-48 animate-pulse bg-muted/50 rounded-lg" />
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Profile" subtitle="Your account settings" />}
-      />
+    <PageContainer title="Profile" subtitle="Your account settings">
+      <KpiGrid>
+        <StatCard label="Username" value={profile?.username ?? '—'} />
+        <StatCard label="Role" value={profile?.role ?? '—'} />
+        <StatCard label="Status" value={profile?.status ?? '—'} />
+        <StatCard
+          label="Member Since"
+          value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '—'}
+        />
+      </KpiGrid>
 
-      <div className="space-y-4">
-        <KpiGrid>
-          <StatCard label="Username" value={profile?.username ?? '—'} />
-          <StatCard label="Role" value={profile?.role ?? '—'} />
-          <StatCard label="Status" value={profile?.status ?? '—'} />
-          <StatCard label="Member Since" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '—'} />
-        </KpiGrid>
-
-        {/* Profile info */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Profile Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">Username</label>
-              <Input value={profile?.username ?? ''} disabled className="h-6 text-[10px] opacity-60" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">Display Name</label>
-              <Input
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                placeholder="Your display name"
-                className="h-6 text-[10px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">Email</label>
-              <Input
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                type="email"
-                placeholder="your@email.com"
-                className="h-6 text-[10px]"
-              />
-            </div>
-            <Button size="sm" className="h-6 text-[10px]" onClick={updateProfile} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Change password */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Change Password</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">Current Password</label>
-              <Input
-                value={currentPassword}
-                onChange={e => setCurrentPassword(e.target.value)}
-                type="password"
-                placeholder="Current password"
-                className="h-6 text-[10px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">New Password</label>
-              <Input
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                type="password"
-                placeholder="New password (min 8 characters)"
-                className="h-6 text-[10px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">Confirm New Password</label>
-              <Input
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                type="password"
-                placeholder="Confirm new password"
-                className="h-6 text-[10px]"
-              />
-            </div>
-            <Button
-              size="sm"
+      {/* Profile info */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Profile Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground">Username</label>
+            <Input
+              value={profile?.username ?? ''}
+              disabled
+              className="h-6 text-[10px] opacity-60"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground">Display Name</label>
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Your display name"
               className="h-6 text-[10px]"
-              onClick={changePassword}
-              disabled={changingPassword || !currentPassword || !newPassword}
-            >
-              {changingPassword ? 'Changing...' : 'Change Password'}
-            </Button>
-          </CardContent>
-        </Card>
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground">Email</label>
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              placeholder="your@email.com"
+              className="h-6 text-[10px]"
+            />
+          </div>
+          <Button size="sm" className="h-6 text-[10px]" onClick={updateProfile} disabled={saving}>
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </CardContent>
+      </Card>
 
-        {/* Account details */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Account Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <div>
-                <span className="text-muted-foreground">User ID: </span>
-                <span className="font-mono">{profile?.id}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Tenant ID: </span>
-                <span className="font-mono">{profile?.tenant_id || '—'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Last Login: </span>
-                <span>{profile?.last_login_at ? new Date(profile.last_login_at).toLocaleString() : '—'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Created: </span>
-                <span>{profile?.created_at ? new Date(profile.created_at).toLocaleString() : '—'}</span>
-              </div>
+      {/* Change password */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Change Password</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground">Current Password</label>
+            <Input
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              type="password"
+              placeholder="Current password"
+              className="h-6 text-[10px]"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground">New Password</label>
+            <Input
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              type="password"
+              placeholder="New password (min 8 characters)"
+              className="h-6 text-[10px]"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground">Confirm New Password</label>
+            <Input
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              type="password"
+              placeholder="Confirm new password"
+              className="h-6 text-[10px]"
+            />
+          </div>
+          <Button
+            size="sm"
+            className="h-6 text-[10px]"
+            onClick={changePassword}
+            disabled={changingPassword || !currentPassword || !newPassword}
+          >
+            {changingPassword ? 'Changing...' : 'Change Password'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Account details */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Account Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-2 text-[10px]">
+            <div>
+              <span className="text-muted-foreground">User ID: </span>
+              <span className="font-mono">{profile?.id}</span>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+            <div>
+              <span className="text-muted-foreground">Tenant ID: </span>
+              <span className="font-mono">{profile?.tenant_id || '—'}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Last Login: </span>
+              <span>
+                {profile?.last_login_at ? new Date(profile.last_login_at).toLocaleString() : '—'}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Created: </span>
+              <span>
+                {profile?.created_at ? new Date(profile.created_at).toLocaleString() : '—'}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </PageContainer>
   )
 }

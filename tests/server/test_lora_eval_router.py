@@ -5,13 +5,13 @@ Uses a standalone FastAPI app with only the router under test to avoid
 lifespan / startup dependency issues.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
-from apps.api.server.routers.lora_eval import router
+from apps.api.server.training.lora_eval import router
 
 app = FastAPI()
 register_all_handlers(app)
@@ -34,9 +34,9 @@ def _mock_eval_result():
 class TestRunEval:
     """POST /lora-eval/run"""
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_baseline_only_no_adapter(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
         evaluator.run.return_value = _mock_eval_result()
@@ -53,9 +53,9 @@ class TestRunEval:
         assert "baseline" in data
         assert data["baseline"]["perplexity"] == 12.5
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_compared_with_adapter(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
         baseline = _mock_eval_result()
@@ -83,21 +83,21 @@ class TestRunEval:
         assert "delta" in data
         assert "report" in data
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_evaluator_import_error_returns_500(self, mock_get_eval):
         mock_get_eval.side_effect = ImportError("no module")
 
         resp = client.post("/lora-eval/run")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_internal_error_returns_500(self, mock_get_eval):
         mock_get_eval.side_effect = RuntimeError("evaluator broken")
 
         resp = client.post("/lora-eval/run")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_evaluator_run_fails(self, mock_get_eval):
         evaluator = MagicMock()
         evaluator.run.side_effect = RuntimeError("run failed")
@@ -106,9 +106,9 @@ class TestRunEval:
         resp = client.post("/lora-eval/run")
         assert resp.status_code == 500
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_adapter_path_not_found_falls_back(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
         evaluator.run.return_value = _mock_eval_result()
@@ -124,9 +124,9 @@ class TestRunEval:
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_soul_param_passed_to_run(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
         evaluator.run.return_value = _mock_eval_result()
@@ -140,9 +140,9 @@ class TestRunEval:
         for call in evaluator.run.call_args_list:
             assert call.kwargs.get("soul_name") == "friendly"
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_default_adapter_path_used(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
         evaluator.run.return_value = _mock_eval_result()
@@ -159,7 +159,7 @@ class TestRunEval:
 class TestEvalHistory:
     """GET /lora-eval/history"""
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_returns_results(self, mock_get_eval):
         evaluator = MagicMock()
         result1 = _mock_eval_result()
@@ -173,7 +173,7 @@ class TestEvalHistory:
         assert "results" in data
         assert len(data["results"]) == 2
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_empty_history(self, mock_get_eval):
         evaluator = MagicMock()
         evaluator.get_history.return_value = []
@@ -183,7 +183,7 @@ class TestEvalHistory:
         assert resp.status_code == 200
         assert resp.json()["data"]["results"] == []
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_passes_limit_param(self, mock_get_eval):
         evaluator = MagicMock()
         evaluator.get_history.return_value = [_mock_eval_result()]
@@ -193,14 +193,14 @@ class TestEvalHistory:
         assert resp.status_code == 200
         evaluator.get_history.assert_called_once_with(limit=5)
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_error_returns_500(self, mock_get_eval):
         mock_get_eval.side_effect = RuntimeError("history broken")
 
         resp = client.get("/lora-eval/history")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_history_limit_bounds(self, mock_get_eval):
         evaluator = MagicMock()
         evaluator.get_history.return_value = []
@@ -222,7 +222,7 @@ class TestEvalHistory:
 class TestAggregate:
     """POST /lora-eval/aggregate"""
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_aggregated_with_eval(self, mock_get_store):
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {
@@ -250,7 +250,7 @@ class TestAggregate:
         assert data["eval"]["verdict"] == "improved"
         assert data["eval"]["perplexity_delta"] == -1.5
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_no_adapters(self, mock_get_store):
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {
@@ -263,7 +263,7 @@ class TestAggregate:
         data = resp.json()["data"]
         assert data["status"] == "no_adapters"
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_aggregated_no_eval(self, mock_get_store):
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {
@@ -279,7 +279,7 @@ class TestAggregate:
         data = resp.json()["data"]
         assert data["status"] == "aggregated_no_eval"
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_passes_params(self, mock_get_store):
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {"error": "none"}
@@ -296,14 +296,14 @@ class TestAggregate:
             run_eval=False,
         )
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_store_error_returns_500(self, mock_get_store):
         mock_get_store.side_effect = RuntimeError("store broken")
 
         resp = client.post("/lora-eval/aggregate")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_import_error_returns_500(self, mock_get_store):
         mock_get_store.side_effect = ImportError("no module")
 
@@ -326,9 +326,9 @@ class TestAggregate:
 class TestRunEvalCompareFailure:
     """POST /lora-eval/run — comparison failure falls back to baseline_only"""
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
+    @patch("domain.feedback.get_lora_evaluator")
     def test_adapter_exists_but_compare_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
         evaluator.run.side_effect = [_mock_eval_result(), RuntimeError("compare blew up")]
@@ -344,10 +344,12 @@ class TestRunEvalCompareFailure:
         assert data["status"] == "baseline_only"
         assert "note" in data
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
-    @patch("domains.feedback.lora_eval.get_lora_evaluator")
-    def test_adapter_exists_but_second_run_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
+    @patch("domain.feedback.get_lora_evaluator")
+    def test_adapter_exists_but_second_run_raises_returns_baseline(
+        self, mock_get_eval, mock_path_cls
+    ):
         evaluator = MagicMock()
         evaluator.run.side_effect = [_mock_eval_result(), RuntimeError("load failed")]
         mock_get_eval.return_value = evaluator
@@ -384,7 +386,7 @@ class TestLoraEvalMethods:
 class TestAggregateEvalDeltaDefaults:
     """POST /lora-eval/aggregate — missing delta fields default to unknown"""
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_eval_without_delta_uses_unknown_verdict(self, mock_get_store):
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {
@@ -401,7 +403,7 @@ class TestAggregateEvalDeltaDefaults:
         assert data["eval"]["verdict"] == "unknown"
         assert data["eval"]["perplexity_delta"] is None
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     def test_eval_error_uses_aggregated_no_eval(self, mock_get_store):
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {

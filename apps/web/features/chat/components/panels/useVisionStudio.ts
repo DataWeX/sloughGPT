@@ -156,6 +156,7 @@ export function useVisionStudio(
     setRetryLoading(true)
     try {
       const blobRes = await fetch(previewUrl)
+      if (!blobRes.ok) throw new Error(`Failed to fetch image: ${blobRes.status}`)
       const blob = await blobRes.blob()
       const file = new File([blob], previewFileName || 'retry.png', { type: blob.type || 'image/png' })
       const { multimodalController } = await import('@/lib/multimodal-controller')
@@ -186,6 +187,7 @@ export function useVisionStudio(
     setTrainLoading(true)
     try {
       const blobRes = await fetch(previewUrl)
+      if (!blobRes.ok) throw new Error(`Failed to fetch image: ${blobRes.status}`)
       const blob = await blobRes.blob()
       const file = new File([blob], previewFileName || 'train.png', { type: blob.type || 'image/png' })
       const { multimodalController } = await import('@/lib/multimodal-controller')

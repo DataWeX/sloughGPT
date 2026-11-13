@@ -1,4 +1,5 @@
 """Coverage for remaining sloughgpt_sdk.models branches."""
+
 import sys
 from pathlib import Path
 

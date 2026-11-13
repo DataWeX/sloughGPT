@@ -18,11 +18,11 @@ _health_start_time = datetime.now()
 def _get_executor_stats() -> dict[str, Any] | None:
     """Get TrainingExecutor pool stats if available."""
     try:
-        from domains.training.executor import _instance, get_training_executor
+        from domain.training import peek_training_executor
 
-        if _instance is None:
+        ex = peek_training_executor()
+        if ex is None:
             return None
-        ex = get_training_executor()
         return {
             "active_jobs": ex.active_count(),
             "max_workers": ex._max_workers,
@@ -48,7 +48,7 @@ def _get_process_guard_status() -> dict[str, Any] | None:
 def _get_mps_monitor_info() -> dict[str, Any] | None:
     """Get MPS GPU memory monitor status if available."""
     try:
-        from domains.infrastructure.mps_monitor import get_mps_monitor
+        from domain.infrastructure.mps_monitor import get_mps_monitor
 
         mon = get_mps_monitor()
         return {
@@ -70,7 +70,7 @@ def _is_model_loading() -> bool:
     """
     try:
         # Check if ModelLoader has a load in progress
-        from domains.infrastructure.model_loader import ModelLoader
+        from domain.infrastructure.model_loader import ModelLoader
 
         if ModelLoader.is_loading():
             return True
@@ -94,7 +94,7 @@ def _get_mogdb_health() -> dict[str, Any] | None:
     try:
         from pathlib import Path
 
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
 
         data_root = find_repo_root(Path(__file__).resolve()) / "data"
         mogdb_dirs = list(data_root.glob("*_mogdb"))
@@ -185,7 +185,7 @@ def _get_model_info_with_registry() -> tuple[bool, str | None, dict[str, Any]]:
 
     # Check ModelRegistry first (most authoritative)
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
 
         registry = get_model_registry()
         registry_health = registry.health_summary()
@@ -240,7 +240,7 @@ def _get_model_device() -> str | None:
     except ImportError:
         logger.debug("Models controller not available for device detection")
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
 
         registry = get_model_registry()
         health = registry.health_summary()
@@ -256,7 +256,7 @@ def _get_model_device() -> str | None:
 def _get_lifecycle_info() -> dict[str, Any]:
     """Get lifecycle phase and profile info from the lifecycle manager."""
     try:
-        from domains.infrastructure.lifecycle import get_lifecycle_manager
+        from domain.infrastructure import get_lifecycle_manager
 
         mgr = get_lifecycle_manager()
         return {
@@ -292,7 +292,7 @@ def _get_inference_stats() -> dict[str, Any]:
 def _get_quantization_info() -> dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
-        from domains.models.provider import get_provider
+        from domain.models import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:
@@ -300,7 +300,15 @@ def _get_quantization_info() -> dict[str, Any]:
         if provider is None:
             provider = get_provider("hf-default")
         if provider is not None and hasattr(provider, "quantization_report"):
-            return provider.quantization_report()
+            # Health contract: never ship per_tensor. It serializes to
+            # ~10 MB (per-channel scales, lm_head ~3.4 MB alone) and every
+            # health surface (/health, /health/detailed, /health/stream
+            # SSE every 3s) would repeat it per poll per client. The UI
+            # reads only summary/bits/mode; per-layer detail stays on the
+            # on-demand quantization endpoints.
+            report = provider.quantization_report(include_per_tensor=False)
+            report.pop("per_tensor", None)
+            return report
         return {}
     except Exception:
         logger.debug("Quantization info unavailable", exc_info=True)
@@ -314,7 +322,7 @@ def _get_kv_session_info() -> dict[str, Any]:
     tokens, TTL). Returns ``{"enabled": False}`` when no provider exposes it.
     """
     try:
-        from domains.models.provider import get_provider
+        from domain.models import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:
@@ -365,7 +373,7 @@ def _build_status_message(
 def _get_resource_allocation() -> dict[str, Any]:
     """Get CPU topology resource allocation."""
     try:
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure.resource_manager import get_resource_manager
 
         rm = get_resource_manager()
         return {
@@ -392,7 +400,7 @@ def _get_resource_allocation() -> dict[str, Any]:
 def _get_memory_pressure_stats() -> dict[str, Any]:
     """Get memory pressure monitor stats for health reporting."""
     try:
-        from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+        from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
 
         return get_memory_pressure_monitor().stats()
     except Exception:
@@ -448,6 +456,66 @@ def _get_process_info() -> dict[str, Any]:
         return {}
 
 
+def _derive_verdict(lifecycle: dict[str, Any], health_score: dict[str, Any]) -> str:
+    """The health verdict, as one opinion shared by every health view.
+
+    This is the single source of truth for ``status``. ``/health`` and
+    ``/health/detailed`` both call it, so they cannot disagree — the defect
+    this function exists to prevent, where the operator-facing endpoint
+    answered ``"healthy"`` while the detailed one answered ``"init"`` for
+    the same process.
+
+    Weighted, in the order the signals actually matter:
+
+    1. **Lifecycle gates everything.** A process that has not reached RUNNING
+       is not healthy whatever its score says. That is not a theoretical
+       concern: the composite score is computed from request/latency/throughput
+       counters, and on a freshly booted server those are all *absent rather
+       than bad* — so it happily scored 92/"healthy" for a process still parked
+       in ``init``. Absence of evidence is not health, and a score that cannot
+       see the lifecycle must not be the thing that declares it.
+    2. **Otherwise the weighted score decides.** ``health_flow`` already
+       combines errors, latency, throughput, uptime and resources into
+       ``healthy``/``degraded``/``unhealthy``, with a per-check diagnosis and
+       severity behind it. Re-deriving any of that here would be a second
+       scoring system, and a second scoring system is how two endpoints end up
+       telling two stories.
+
+    ``status`` is deliberately a *verdict*, not a phase: the phase stays
+    available in ``lifecycle.phase`` for anything that needs to know why.
+    """
+    if not lifecycle.get("is_running", False):
+        return "degraded"
+    return str(health_score.get("status") or "degraded")
+
+
+def _get_basic_health_score() -> dict[str, Any]:
+    """The weighted composite score, for the basic view.
+
+    ``/health`` and ``/health/detailed`` must carry the same score, because a
+    verdict with no reasoning behind it is not something an agent can act on —
+    it can only alert. Guarded, because the verdict has to be produced even
+    when server state is unavailable: ``degraded`` is the honest reading of a
+    score we could not compute, and inventing ``healthy`` in its place is the
+    exact failure this file is being corrected for.
+    """
+    try:
+        from domain.infrastructure.server_state import get_server_state
+
+        return get_server_state().get_health_score(
+            cpu_percent=psutil.cpu_percent(interval=None),
+            memory_percent=psutil.virtual_memory().percent,
+        )
+    except Exception:
+        logger.debug("health score unavailable for basic health", exc_info=True)
+        return {
+            "score": 0,
+            "status": "degraded",
+            "summary": "health score unavailable",
+            "diagnoses": [],
+        }
+
+
 class HealthController:
     """Controller for system health"""
 
@@ -469,8 +537,14 @@ class HealthController:
         inference_stats = _get_inference_stats()
         lifecycle = _get_lifecycle_info()
         model_loading = not model_loaded and _is_model_loading()
+        # Derived, never seeded: this used to be the literal "healthy", which
+        # made the operator-facing endpoint green on a process that had never
+        # reported itself running. It now comes from the same function
+        # /health/detailed uses, so the two views cannot drift apart.
+        health_score = _get_basic_health_score()
         result: dict[str, Any] = {
-            "status": "healthy",
+            "status": _derive_verdict(lifecycle, health_score),
+            "health_score": health_score,
             "timestamp": datetime.now().isoformat(),
             "model_loaded": model_loaded,
             "model_loading": model_loading,
@@ -529,7 +603,7 @@ class HealthController:
 
         # Idle manager status
         try:
-            from domains.infrastructure.model_server import get_idle_manager
+            from domain.infrastructure.model_server import get_idle_manager
 
             idle_mgr = get_idle_manager()
             import state as server_state
@@ -562,7 +636,7 @@ class HealthController:
         gpu_info: dict[str, Any] = {}
         degraded: list[str] = []
         try:
-            from domains.slolib.gpu import get_accelerator
+            from domain.slolib import get_accelerator
 
             acc = get_accelerator()
             gpu_info = {
@@ -578,7 +652,7 @@ class HealthController:
 
         # Add ServerState counters if available
         try:
-            from domains.infrastructure.server_state import get_server_state
+            from domain.infrastructure.server_state import get_server_state
 
             ss = get_server_state()
             request_count = ss.request_count
@@ -624,6 +698,21 @@ class HealthController:
 
         lifecycle = _get_lifecycle_info()
 
+        # Staged loader info
+        try:
+            from infrastructure.staged_loader import get_staged_loader
+
+            staged_loader = get_staged_loader()
+            startup_progress = staged_loader.get_status()
+        except Exception:
+            startup_progress = {
+                "stage": "unknown",
+                "stage_value": 0,
+                "elapsed_seconds": 0,
+                "errors": {},
+                "stages": {},
+            }
+
         # Version info
         try:
             from version import version_info as _version_info
@@ -634,9 +723,7 @@ class HealthController:
             versions = {}
 
         result = {
-            "status": "healthy"
-            if lifecycle.get("is_running", False)
-            else lifecycle.get("phase", "unknown"),
+            "status": _derive_verdict(lifecycle, health_score),
             "uptime_seconds": uptime,
             "timestamp": datetime.now().isoformat(),
             "request_count": request_count,
@@ -675,6 +762,7 @@ class HealthController:
             "quantization": _get_quantization_info(),
             "kv_sessions": _get_kv_session_info(),
             "lifecycle": lifecycle,
+            "startup_progress": startup_progress,
             "training_pool": _get_executor_stats(),
             "resource_allocation": _get_resource_allocation(),
             "process_guard": _get_process_guard_status(),

@@ -17,7 +17,9 @@ describe('ErrorPanel', () => {
   })
 
   it('renders error title and message from the store', () => {
-    useErrorStore.getState().addError(new Error('boom'), { title: 'Load failed', severity: 'error', source: 'fetch' })
+    useErrorStore
+      .getState()
+      .addError(new Error('boom'), { title: 'Load failed', severity: 'error', source: 'fetch' })
     render(<ErrorPanel />)
     expect(screen.getByText('Load failed')).toBeTruthy()
     expect(screen.getByText('boom')).toBeTruthy()
@@ -52,17 +54,23 @@ describe('ErrorPanel', () => {
     expect(screen.queryByText('Two')).toBeNull()
   })
 
-  it('styles the toggle red when there are errors', () => {
+  it('styles the toggle destructive when there are errors', () => {
     useErrorStore.getState().addError(new Error('x'), { severity: 'error' })
     render(<ErrorPanel />)
-    const toggle = screen.getAllByText('1 issue').find((el) => el.closest('button'))?.closest('button')
-    expect(toggle?.className).toContain('bg-red-500')
+    const toggle = screen
+      .getAllByText('1 issue')
+      .find((el) => el.closest('button'))
+      ?.closest('button')
+    expect(toggle?.className).toContain('bg-destructive')
   })
 
-  it('styles the toggle orange when there are only warnings', () => {
+  it('styles the toggle warning when there are only warnings', () => {
     useErrorStore.getState().addError(new Error('y'), { severity: 'warning' })
     render(<ErrorPanel />)
-    const toggle = screen.getAllByText('1 issue').find((el) => el.closest('button'))?.closest('button')
-    expect(toggle?.className).toContain('bg-orange-500')
+    const toggle = screen
+      .getAllByText('1 issue')
+      .find((el) => el.closest('button'))
+      ?.closest('button')
+    expect(toggle?.className).toContain('bg-warning')
   })
 })

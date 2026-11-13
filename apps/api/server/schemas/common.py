@@ -15,17 +15,18 @@ passed explicitly — callers never need to thread it manually.
 from __future__ import annotations
 
 import logging
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
-from domains.infrastructure.correlation import get_correlation_id
 from pydantic import BaseModel, Field
+
+from domain.infrastructure.correlation import get_correlation_id
 
 _audit_logger = logging.getLogger("audit")
 
 T = TypeVar("T")
 
 
-class StandardResponse(BaseModel, Generic[T]):
+class StandardResponse[T](BaseModel):
     """Unified response envelope for all API endpoints.
 
     Attributes:
@@ -136,7 +137,7 @@ def raise_error(
 ) -> None:
     """Raise an AppError that the global exception handler converts to JSON.
 
-    Uses the unified ERROR_REGISTRY from domains.infrastructure.errors to
+    Uses the unified ERROR_REGISTRY from domain.infrastructure._internal.errors to
     resolve the correct AppError subclass and HTTP status for each code.
 
     Args:
@@ -148,7 +149,7 @@ def raise_error(
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domains.infrastructure.errors import (
+    from domain.infrastructure._internal.errors import (
         ERROR_REGISTRY,
         AppError,
         ErrorCode,
@@ -164,7 +165,7 @@ def raise_error(
         default_status = status_code or 400
 
     # Import the correct class dynamically
-    import domains.infrastructure.errors as _err_mod
+    import domain.infrastructure._internal.errors as _err_mod
 
     exc_cls = getattr(_err_mod, class_name, AppError)
 
@@ -207,8 +208,12 @@ def safe_audit_log(
 
         merged = {**(extra or {}), **kwargs} if kwargs else extra
         get_audit_logger().log(
-            action, user=user, resource=resource, detail=detail,
-            extra=merged, workspace_id=workspace_id,
+            action,
+            user=user,
+            resource=resource,
+            detail=detail,
+            extra=merged,
+            workspace_id=workspace_id,
         )
     except Exception:
         _audit_logger.info(
@@ -241,8 +246,8 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domains.infrastructure.errors import AppError as _AppError
-    from domains.infrastructure.errors import classify_exception
+    from domain.infrastructure._internal.errors import AppError as _AppError
+    from domain.infrastructure._internal.errors import classify_exception
 
     try:
         err = classify_exception(e)
@@ -280,5 +285,7 @@ def endpoint(source: str):
                 return fn(*args, **kwargs)
             except Exception as e:
                 classify_and_raise(e, source=source)
+
         return wrapper
+
     return decorator

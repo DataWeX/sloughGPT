@@ -77,7 +77,7 @@ def build_training_sse_response(
         def _enqueue(event_str: str) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, event_str)
 
-        from domains.infrastructure.task_queue import Priority, Task, get_task_queue
+        from domain.infrastructure.task_queue import Priority, Task, get_task_queue
 
         tq = get_task_queue()
         await tq.start()
@@ -99,7 +99,7 @@ def build_training_sse_response(
         # Register with CancelManager
         cm_op_id: str | None = None
         try:
-            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+            from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
             _mgr = get_cancel_manager()
             cm_op_id = _mgr.register(
@@ -136,7 +136,7 @@ def build_training_sse_response(
         get_training_runtime().register(task_id, runtime_job, None, dict(config))
 
         # Import service helpers (core layer, zero HTTP deps)
-        from domains.training.service import (
+        from domain.training._internal.service import (
             cleanup_stream_state,
             process_training_completion,
         )
@@ -147,7 +147,7 @@ def build_training_sse_response(
             def _finish_cm(status: str, error: str = "") -> None:
                 if cm_op_id:
                     try:
-                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        from domain.infrastructure.cancel_manager import get_cancel_manager
 
                         get_cancel_manager().finish(
                             cm_op_id, error=error if status != "complete" else ""
@@ -185,7 +185,7 @@ def build_training_sse_response(
                         remaining = heartbeat_interval
                     try:
                         event = await asyncio.wait_for(queue.get(), timeout=remaining)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield ": heartbeat\n\n"
                         last_yield = time.time()
                         continue
@@ -242,7 +242,7 @@ def stop_all_training() -> dict:
     It delegates to CancelManager which tracks all active operations.
     """
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
     except Exception as e:
@@ -250,7 +250,7 @@ def stop_all_training() -> dict:
 
     # Also signal service-layer cancel events
     try:
-        from domains.training.service import (
+        from domain.training._internal.service import (
             get_cancel_event,
             get_pgq,
             get_state,
@@ -280,7 +280,8 @@ def stop_all_training() -> dict:
     except Exception as e:
         logger.warning("cancel_all_training failed: %s", e)
         try:
-            from domains.training.service import get_state
+            from domain.training._internal.service import get_state
+
             get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_all failure")
@@ -291,14 +292,14 @@ def stop_all_training() -> dict:
 def cancel_from_sessions() -> dict:
     """Cancel from-sessions training specifically."""
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
     except Exception as e:
         logger.warning("CancelManager.cancel_all failed: %s", e)
 
     try:
-        from domains.training.service import get_cancel_event, get_state
+        from domain.training._internal.service import get_cancel_event, get_state
 
         ev = get_cancel_event()
         if ev is not None:
@@ -307,7 +308,8 @@ def cancel_from_sessions() -> dict:
     except Exception as e:
         logger.warning("cancel_from_sessions state reset failed: %s", e)
         try:
-            from domains.training.service import get_state
+            from domain.training._internal.service import get_state
+
             get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_from_sessions failure")

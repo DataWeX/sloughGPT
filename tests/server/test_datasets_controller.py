@@ -1,20 +1,25 @@
 """Tests for DatasetsController."""
-import pytest
+
 import json
-from pathlib import Path
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'api', 'server'))
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api", "server"))
 
 from controllers.datasets import DatasetsController
 
 
 @pytest.fixture
-def tmp_repo(tmp_path):
+def tmp_repo(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
     return DatasetsController(tmp_path)
 
 
 @pytest.fixture
-def repo_with_datasets(tmp_path):
+def repo_with_datasets(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
     ds_dir = tmp_path / "data"
     ds_dir.mkdir()
     (ds_dir / "shakespeare").mkdir()
@@ -66,9 +71,36 @@ class TestListDatasets:
         code = next(d for d in result if d["name"] == "Code")
         assert code["type"] == "text"
 
-    def test_empty_dir_no_datasets_dir(self, tmp_path):
+    def test_empty_dir_no_datasets_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
         ctrl = DatasetsController(tmp_path)
         assert ctrl.list_datasets() == []
+
+    def test_datasets_container_expanded(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        nested = tmp_path / "data" / "datasets" / "chat_ds"
+        nested.mkdir(parents=True)
+        (nested / "corpus.jsonl").write_text('{"text":"a"}\n')
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert "datasets" not in by_id
+        assert by_id["chat_ds"]["source"] == "data/datasets"
+        assert by_id["chat_ds"]["kind"] == "dataset"
+        assert by_id["chat_ds"]["num_samples"] == 1
+        assert ctrl.get_dataset_stats("chat_ds")["samples"] == 1
+
+    def test_kind_tags_mime_present(self, repo_with_datasets, tmp_path):
+        adapters = tmp_path / "data" / "user_adapters"
+        adapters.mkdir()
+        (adapters / "a.npz").write_bytes(b"x")
+        result = repo_with_datasets.list_datasets()
+        by_id = {d["id"]: d for d in result}
+        assert by_id["shakespeare"]["kind"] == "dataset"
+        assert "dataset" in by_id["shakespeare"]["tags"]
+        assert by_id["shakespeare"]["mime"] == "application/x-ndjson"
+        assert by_id["shakespeare"]["source"] == "data"
+        assert by_id["user_adapters"]["kind"] == "adapter"
+        assert "adapter" in by_id["user_adapters"]["tags"]
 
 
 class TestGetDataset:
@@ -105,8 +137,18 @@ class TestGetDatasetStats:
         ds_dir = tmp_path / "data" / "convo"
         ds_dir.mkdir()
         msgs = [
-            {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]},
-            {"messages": [{"role": "user", "content": "bye"}, {"role": "assistant", "content": "goodbye"}]},
+            {
+                "messages": [
+                    {"role": "user", "content": "hi"},
+                    {"role": "assistant", "content": "hello"},
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "bye"},
+                    {"role": "assistant", "content": "goodbye"},
+                ]
+            },
         ]
         (ds_dir / "corpus.jsonl").write_text("\n".join(json.dumps(m) for m in msgs) + "\n")
         ctrl = DatasetsController(tmp_path)
@@ -126,11 +168,13 @@ class TestGetDatasetStats:
 
 
 class TestCreateDataset:
-    def test_creates_directory(self, tmp_repo):
+    def test_creates_directory(self, tmp_repo, tmp_path):
         result = tmp_repo.create_dataset("test_ds")
         assert result["created"] is True
         assert result["id"] == "test_ds"
-        assert (tmp_repo.datasets_dir / "test_ds").exists()
+        # Just-cache is the write target; legacy data dir stays untouched.
+        assert (tmp_path / "cache" / "external" / "test_ds").is_dir()
+        assert not (tmp_repo.datasets_dir / "test_ds").exists()
 
     def test_creates_with_description(self, tmp_repo):
         result = tmp_repo.create_dataset("test_ds", description="A test dataset")
@@ -177,7 +221,7 @@ class TestAddData:
     def test_add_data(self, repo_with_datasets):
         count = repo_with_datasets.add_data("shakespeare", ["line1", "line2", "line3"])
         assert count == 3
-        corpus = (repo_with_datasets.datasets_dir / "shakespeare" / "corpus.jsonl")
+        corpus = repo_with_datasets.datasets_dir / "shakespeare" / "corpus.jsonl"
         lines = [l for l in corpus.read_text().splitlines() if l.strip()]
         assert len(lines) >= 5
 
@@ -225,7 +269,7 @@ class TestPreviewDataset:
             "conversations": [
                 {"from": "human", "value": "What is this?"},
                 {"from": "gpt", "value": "A cat sitting on a mat."},
-            ]
+            ],
         }
         (ds_dir / "corpus.jsonl").write_text(json.dumps(entry) + "\n")
         (ds_dir / ".visual_metadata.json").write_text("{}")
@@ -308,6 +352,71 @@ class TestDescribeDataset:
 class TestSingleton:
     def test_singleton_same_instance(self):
         from controllers.datasets import get_datasets_controller
+
         a = get_datasets_controller()
         b = get_datasets_controller()
         assert a is b
+
+
+class TestStructuredListing:
+    """Structured listing (card 20261104_060023): honest counts + kind groups."""
+
+    def test_large_corpus_counts_samples(self, tmp_path, monkeypatch):
+        """A corpus over 1 MB must still report its record count.
+
+        The old gate (`size < 1_000_000`) reported samples=0 for
+        tinyshakespeare (32,777 records) and imported_dataset (18 MB).
+        """
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        ds_dir = tmp_path / "data" / "bigcorpus"
+        ds_dir.mkdir(parents=True)
+        # >1 MB (5 records x ~300 KB), 5 records
+        (ds_dir / "corpus.jsonl").write_text(
+            "\n".join(json.dumps({"text": "x" * 300_000}) for _ in range(5)) + "\n"
+        )
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert by_id["bigcorpus"]["size"] > 1_000_000
+        assert by_id["bigcorpus"]["num_samples"] == 5
+
+    def test_corpusless_entry_is_flagged_not_just_empty(self, tmp_path, monkeypatch):
+        """An entry with no corpus at all carries has_corpus=False.
+
+        nbaallelo_csv (only an empty versions/) and test_ds (nothing)
+        were listed as kind=dataset/type=text with no signal that there
+        is no training data inside.
+        """
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        cache_ext = tmp_path / "cache" / "external"
+        (cache_ext / "hollow").mkdir(parents=True)
+        (cache_ext / "hollow" / ".manifest.json").write_text(
+            json.dumps({"kind": "dataset", "tags": ["dataset"]})
+        )
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert by_id["hollow"]["has_corpus"] is False
+        # and a real one stays True
+        ds_dir = tmp_path / "data" / "real"
+        ds_dir.mkdir(parents=True)
+        (ds_dir / "corpus.jsonl").write_text('{"text":"a"}\n')
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert by_id["real"]["has_corpus"] is True
+
+    def test_kind_groups_are_separable(self, repo_with_datasets, tmp_path):
+        """system/adapter/media entries must be separable from datasets.
+
+        24 system dirs (auth_mogdb, errors_json, ...) polluted the
+        37-row 'My Files' list. The listing carries `kind` on every row
+        so the UI can group — asserted here so the contract can't drop.
+        """
+        sysdir = tmp_path / "data" / "auth_mogdb"
+        sysdir.mkdir(parents=True)
+        result = repo_with_datasets.list_datasets()
+        by_id = {d["id"]: d for d in result}
+        assert by_id["auth_mogdb"]["kind"] == "system"
+        datasets = [d for d in result if d["kind"] == "dataset"]
+        others = [d for d in result if d["kind"] != "dataset"]
+        assert any(d["id"] == "shakespeare" for d in datasets)
+        assert any(d["id"] == "auth_mogdb" for d in others)
+        # a system dir must never be typed as a training corpus
+        assert by_id["auth_mogdb"]["type"] != "corpus"

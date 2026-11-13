@@ -12,7 +12,7 @@ Self-hosted LLM platform: train from scratch, serve, chat. One core engine, four
                     │                                  │
                     │  ┌────────┐  ┌────────┐         │
                     │  │  Web   │  │ Mobile │         │
-                    │  │ Next.js│  │ RN/Expo│         │
+                    │  │  Vite  │  │ RN/Expo│         │
                     │  └───┬────┘  └───┬────┘         │
                     │      │           │               │
                     │  ┌───┴────┐  ┌───┴────┐         │
@@ -33,7 +33,7 @@ Self-hosted LLM platform: train from scratch, serve, chat. One core engine, four
                                    ▼
                     ┌──────────────────────────────┐
                     │        Core Logic            │
-                    │   packages/core-py/domains   │
+                    │   domain   │
                     │                              │
                     │  training/  inference/        │
                     │  models/    cognitive/        │
@@ -42,25 +42,26 @@ Self-hosted LLM platform: train from scratch, serve, chat. One core engine, four
                     └──────────────────────────────┘
 ```
 
-**Principle:** Core logic is framework-agnostic. No FastAPI, React, or CLI imports in `domains/`. This keeps the engine portable across API server, CLI local mode, notebooks, and workers.
+**Principle:** Core logic is framework-agnostic. No FastAPI, React, or CLI imports in `domain/`. This keeps the engine portable across API server, CLI local mode, notebooks, and workers.
 
 ---
 
 ## The Five Components
 
-### 1. Core Engine (`packages/core-py/domains/`)
+### 1. Core Engine (`domain/`)
 
 29 domain modules. The brain.
 
-| Layer | Modules | What It Does |
-|-------|---------|--------------|
-| **Training** | `training/` | Character-level trainer, GPT-2 distillation, LoRA adapters, feedback-driven training |
-| **Inference** | `inference/` | KV cache, vector store, SLNC memory-mapped format, context management |
-| **Models** | `models/` | SloughGPTModel (RoPE + SwiGLU + RMSNorm), SloTransformer, arch detection |
-| **Cognitive** | `cognitive/` | Memory, reasoning, learning, knowledge graph |
-| **Infrastructure** | `infrastructure/` | Error taxonomy, EventBus, lifecycle, task queue, rate limiter, config |
+| Layer              | Modules           | What It Does                                                                         |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------ |
+| **Training**       | `training/`       | Character-level trainer, GPT-2 distillation, LoRA adapters, feedback-driven training |
+| **Inference**      | `inference/`      | KV cache, vector store, SLNC memory-mapped format, context management                |
+| **Models**         | `models/`         | SloughGPTModel (RoPE + SwiGLU + RMSNorm), SloTransformer, arch detection             |
+| **Cognitive**      | `cognitive/`      | Memory, reasoning, learning, knowledge graph                                         |
+| **Infrastructure** | `infrastructure/` | Error taxonomy, EventBus, lifecycle, task queue, rate limiter, config                |
 
 **Key decisions:**
+
 - Pure NumPy autograd. No PyTorch dependency for core inference/training.
 - `.slnc` memory-mapped format — 2.2x faster load, demand paging.
 - `.sou` checkpoint format — 1960x faster than JSON.
@@ -75,11 +76,13 @@ FastAPI backend. The hub everything connects to.
 **48 routers** covering: chat, inference, training, models, datasets, knowledge, agents, souls, feedback, shell, VM, multimodal, voice, images, health, config, auth, security, metrics.
 
 **Startup sequence:**
+
 1. Path bootstrapping → logging → CORS
 2. `StartupOrchestrator` runs 7 lifecycle hooks (task queue, config, model load, registry, routers, daemons)
 3. Background daemons: feedback workflow, health monitor, watchdog, auto-trainer, RAG ingestion
 
 **Request flow:**
+
 ```
 Request → CorrelationId → ReadinessGate → RateLimit → Timeout → Router → Handler → Response
                                                    ↓ (error)
@@ -96,9 +99,10 @@ Request → CorrelationId → ReadinessGate → RateLimit → Timeout → Router
 
 ### 3. Web App (`apps/web/`)
 
-Next.js 16 frontend. 59 routes.
+Vite + React frontend. 59 routes.
 
 **Data flow:**
+
 ```
 Component → Controller (lib/*-controller.ts) → http-client.ts → API Server
                                                            ↓
@@ -120,6 +124,7 @@ Component ← Zustand Store ← Controller ← Response
 React Native 0.86. 32 screens, 32 services.
 
 **Two inference paths:**
+
 - **Remote:** API server via `api-client.ts` (same as web)
 - **On-device:** `llama-rn` (Metal, 15-30 tok/s) or JS SloNet (pure JS, 2-5 ms/token)
 
@@ -133,13 +138,13 @@ React Native 0.86. 32 screens, 32 services.
 
 ### 5. Gateway (`apps/gateway/`)
 
-Rust/Axum reverse proxy. 574 lines.
+Rust/Axum reverse proxy (`slough-gateway`, binds `:8080`).
 
-**Role:** Fast entry point. Routes requests to Python core. Serves static files (Next.js build). Background health checker (3s poll).
+**Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves the **static site document root** when a build exists (`MAN_STATIC_DIR`, default `apps/web/dist-vite`, then `apps/web/.next/static`): file hit → asset, browser navigation (`Accept: text/html`) → `index.html` for SPA routes, data requests → relay. Routing is by **request kind, not path prefix** — the SPA and the API own the same top-level names (`/training`, `/models`, `/chat`), and the only browser _navigation_ onto API surface is `/docs`, `/redoc`, `/openapi.json` (path contract). Result: shell + API + SSE on one origin, and the shell still loads when the sidecar is down.
 
-**Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + health + static files.
+**Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + filters + compression + health + static files.
 
-**Catch-all:** Any route not explicitly defined is proxied to Python core.
+**Catch-all:** Any allowed route not explicitly defined is proxied to Python core.
 
 ---
 
@@ -148,7 +153,7 @@ Rust/Axum reverse proxy. 574 lines.
 ### Error Handling
 
 ```
-domains/infrastructure/errors.py    — ErrorCode enum, ERROR_REGISTRY, AppError
+domain/infrastructure/_internal/errors.py    — ErrorCode enum, ERROR_REGISTRY, AppError
 apps/api/server/schemas/common.py   — raise_error(), classify_and_raise()
 apps/api/server/infrastructure/     — exception_handlers.py (single emission point)
 ```
@@ -212,14 +217,14 @@ POST /models/load
 
 ## Testing Strategy
 
-| Component | Framework | Count | Focus |
-|-----------|-----------|-------|-------|
-| Core Logic | pytest | 399+ | Training convergence, inference correctness |
-| API Server | pytest | 100+ | Endpoint contracts, error handling |
-| Web | Vitest | 3048+ | Components, controllers, hooks |
-| Web E2E | Cypress | 6 specs | Critical user flows |
-| CLI | pytest | 16 files | Command parsing, output formatting |
-| Mobile | Jest + RNTL | 25+ | Screens, services |
+| Component  | Framework   | Count    | Focus                                       |
+| ---------- | ----------- | -------- | ------------------------------------------- |
+| Core Logic | pytest      | 399+     | Training convergence, inference correctness |
+| API Server | pytest      | 100+     | Endpoint contracts, error handling          |
+| Web        | Vitest      | 3048+    | Components, controllers, hooks              |
+| Web E2E    | Cypress     | 6 specs  | Critical user flows                         |
+| CLI        | pytest      | 16 files | Command parsing, output formatting          |
+| Mobile     | Jest + RNTL | 25+      | Screens, services                           |
 
 ---
 
@@ -231,8 +236,12 @@ docker-compose up -d
 
 # Local dev
 python -m apps.api.server.main --reload    # API :8000
-cd apps/web && npm run dev                  # Web :3001
+cd apps/web && npm run dev                  # Web :5173
 cd apps/gateway && cargo run                # Gateway :8080
+
+# Or one shot (API + Web; opt-in edge):
+./scripts/dev-stack.sh
+MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh    # + gateway :8080 → API
 
 # CLI
 pip install -e .
@@ -241,19 +250,43 @@ sloughgpt chat
 sloughgpt shell
 ```
 
+### Port map (container truth, audited 2026-10-08 — card 257d310b)
+
+The web container listens on **:3000 inside the container**
+(`apps/web/Dockerfile`: nginx `listen 3000` + `/health`, `EXPOSE 3000`,
+`HEALTHCHECK` — the only web image since Next.js was removed). Everything
+that targets `web:3000` or `localhost:3000` _inside_ the compose network is
+therefore valid.
+
+| Context                                        | Host ports                                            | Notes                                                                                                                 |
+| ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Live systemd dev stack                         | web **:5173** (vite), api :8000, gateway :8080        | Independent of docker; never :3000 (`e47e19ee` retired those claims)                                                  |
+| `docker-compose.yml` (dev)                     | web `3000:3000`, api `8000:8000`, gateway `8080:8080` | Host `curl localhost:3000` valid **here only**                                                                        |
+| `docker-compose.prod.yml`                      | nginx only: `${NGINX_HTTP_PORT:-80}:80`, `:443`       | nginx routes `/ → web:3000`, `/v1\|chat\|training\|health → api:8000`, static → gateway. Nothing on host :8000/:3000  |
+| grafana / prometheus / postgres / redis (prod) | none                                                  | Internal only — grafana's `:3000/api/health` healthcheck is Grafana's own in-network default port, not a host publish |
+
+Consequences: `infra/scripts/deploy.sh` health checks read **container
+health** (`docker inspect`) instead of host curls that can never pass;
+`.env.example`'s `NEXTAUTH_URL` (Next-path only — host `dev:e2e` runs
+Next on `:3010`, dev-compose maps it to `:3000`; the live vite stack
+ignores it) applies to the Next path (prod compose defaults to
+`http://localhost`);
+the web image is `apps/web/Dockerfile` (Vite static on nginx). Grafana has
+no nginx route — no host URL exists for it.
+
 ---
 
 ## What's Done, What's Next
 
-| Phase | Status |
-|-------|--------|
-| Core inference engine | Done |
-| Training pipeline | Done |
-| Model serving + health | Done |
-| API + CLI | Done |
-| Web frontend | Done |
-| Mobile app | Done |
-| Gateway | Done |
-| Multi-user / multi-tenant | Done |
-| **Cloud/edge deployment** | Next |
-| **Enterprise features** | Next |
+| Phase                     | Status |
+| ------------------------- | ------ |
+| Core inference engine     | Done   |
+| Training pipeline         | Done   |
+| Model serving + health    | Done   |
+| API + CLI                 | Done   |
+| Web frontend              | Done   |
+| Mobile app                | Done   |
+| Gateway                   | Done   |
+| Multi-user / multi-tenant | Done   |
+| **Cloud/edge deployment** | Next   |
+| **Enterprise features**   | Next   |

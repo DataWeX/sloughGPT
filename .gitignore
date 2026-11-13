@@ -65,6 +65,14 @@ checkpoints/
 # Compiled model cache (SLNC weights, 2.5GB+)
 packages/models/
 
+# Build artifacts / installers — too big to keep in the tree (one 45MB APK
+# checked out across every worktree costs ~934MB). Build outputs, not source.
+*.apk
+*.aab
+*.ipa
+*.xap
+index.android.bundle
+
 # Jupyter Notebook
 .ipynb_checkpoints
 sloughgpt_colab.executed.ipynb
@@ -87,6 +95,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Change-scoped test selection DB (scripts/run_affected.sh — local state)
+# * covers the SQLite sidecars (-shm/-wal) the open DB keeps alongside it
+.testmondata*
 
 # TypeScript (tsc --incremental)
 *.tsbuildinfo
@@ -141,8 +153,8 @@ data/sample.jsonl
 
 # Data directories (repo root only — do not ignore web/app/(app)/datasets)
 /datasets/
-runs/
-out/
+/runs/
+/out/
 
 # Cache directories
 .cache/
@@ -209,6 +221,10 @@ models/unified-trained/
 # User data and backups
 .git-corrupted-backup/
 data/
+# …but not app source: the bare `data/` above shadows this Next.js route
+# dir (its files are tracked yet un-addable without -f, and lint-staged's
+# apply step fails on every commit that touches it).
+!apps/web/app/(app)/workspace/data/
 /models/
 /datasets/
 
@@ -222,11 +238,21 @@ data/
 *.soul
 *.gguf
 *.bin
+*.img
 *.db
 *.sqlite
+boot.img
+serveo_ecdsa
+serveo_ecdsa.pub
+t.png
 
 # Compiled C extensions (build artifacts)
 *.so
+*.so.buildflags
+
+# Native engine source-hash cache (domain/slolib/_internal/native.py)
+# holds compiled .so + hashed .c copies — regenerated per source hash.
+.native_cache/
 
 # Build output
 **/target/
@@ -254,5 +280,19 @@ y
 
 # Dev notes — derived from journal, not source of truth
 .dev-notes/*.md
+# app-planner transient lock files
+.dev-notes/.commit.lock
+.kanban/.commit.lock
 # Hoplite platform metadata (per-thread sandbox artifacts)
 .hoplite/
+
+# avion journey-engine test artifacts
+arken_output/
+.resilient-state/
+
+# Feature-flag change log — appended at runtime by FeatureFlags
+# (domain/shared/_internal/feature_flags.py); tests redirect it to tmp
+config/flag_history.jsonl
+# API-local config — defaults.yaml.example is generated on first boot by
+# AppConfig._write_example_config; defaults.yaml is the operator's copy
+apps/api/config/
