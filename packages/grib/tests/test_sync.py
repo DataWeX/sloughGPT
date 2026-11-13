@@ -157,3 +157,120 @@ def test_legacy_sync_twin_notes_converges(tmp_path):
     assert board.cards[0].column == "done", "latest-edited twin decides the column"
     added, updated, total = sync_notes_to_board(_StubNotes(), kanban)
     assert (added, updated) == (0, 0), "legacy rerun must be net-zero"
+
+
+# ── card -> note propagation (card 20261112_063528) ─────────────────────────
+#
+# sync is a note -> card projection: it restores card.column from the bound
+# note's status on EVERY run. update_card/move_card used to write only the
+# card, so any direct column move was silently reverted on the next sync
+# (observed twice on card 20261102_001441: wip -> todo, done -> todo rev4).
+
+
+def test_update_card_column_survives_sync(store):
+    """The reported defect: a direct column move must not be reverted."""
+    store.create_note("Move me", status="open")  # open -> todo
+    store.sync()
+    card = store.list_cards()[0]
+    assert card.column == "todo"
+
+    store.update_card(card.id, column="done")
+    store.sync()  # used to restore the note's status over the card
+
+    assert store.list_cards()[0].column == "done", "sync reverted the card move"
+
+
+def test_move_card_column_survives_sync(store):
+    store.create_note("Mover", status="open")
+    store.sync()
+    card = store.list_cards()[0]
+
+    store.move_card(card.id, "wip")
+    store.sync()
+
+    assert store.list_cards()[0].column == "wip", "sync reverted move_card"
+
+
+def test_update_card_propagates_status_to_bound_note(store):
+    """The contract itself: moving the card writes the bound note's status."""
+    store.create_note("Propagate", status="open")
+    store.sync()
+    card = store.list_cards()[0]
+
+    store.update_card(card.id, column="done")
+
+    notes = store.list_notes(limit=10)
+    assert len(notes) == 1
+    assert notes[0].status == "done", "card move must reach the bound note"
+
+
+def test_move_card_propagates_status_to_bound_note(store):
+    store.create_note("Move propagates", status="open")
+    store.sync()
+    card = store.list_cards()[0]
+
+    store.move_card(card.id, "review")
+
+    assert store.list_notes(limit=10)[0].status == "review"
+
+
+def test_update_card_propagates_via_id_bound_note(store):
+    """Production shape: the grib note's id EQUALS the card id (the
+    20261102_001441 workaround relied on update_note(card_id, ...))."""
+    store.create_note("Id bound", status="open")
+    store.sync()
+    card = store.list_cards()[0]
+    # Force the id-binding shape the real journal uses.
+    note = store.list_notes(limit=10)[0]
+    if note.id != card.id:
+        store.update_note(note.id, title=card.title)  # keep title binding valid
+        store._write_notes(
+            [
+                n if n.id != note.id else type(n)(**{**n.__dict__, "id": card.id})
+                for n in store.list_notes(limit=10)
+            ]
+        )
+    assert any(n.id == card.id for n in store.list_notes(limit=10))
+
+    store.update_card(card.id, column="done")
+    store.sync()
+
+    assert store.list_cards()[0].column == "done"
+
+
+def test_update_card_without_bound_note_creates_none(store):
+    """MUST-NOT: a card with no note must not materialize one on move."""
+    store.add_card("Orphan", column="todo")
+    card = store.list_cards()[0]
+
+    store.update_card(card.id, column="done")
+
+    assert store.list_notes(limit=10) == []
+    store.sync()
+    assert store.list_cards()[0].column == "done", "no note -> nothing to revert"
+
+
+def test_update_card_non_column_kwarg_leaves_note_status(store):
+    """Only `column` maps to status; other kwargs must not rewrite it."""
+    store.create_note("Metadata only", status="wip")
+    store.sync()
+    card = store.list_cards()[0]
+
+    store.update_card(card.id, description="changed", assignee="mana")
+
+    assert store.list_notes(limit=10)[0].status == "wip"
+
+
+def test_update_card_column_roundtrip_maps_open_back(store):
+    """todo <-> open are distinct vocabularies; moving back must not
+    overwrite the note with a status sync cannot round-trip."""
+    store.create_note("Round trip", status="open")
+    store.sync()
+    card = store.list_cards()[0]
+
+    store.update_card(card.id, column="done")
+    store.update_card(card.id, column="todo")
+    store.sync()
+
+    assert store.list_cards()[0].column == "todo"
+    assert store.list_notes(limit=10)[0].status in ("open", "todo")

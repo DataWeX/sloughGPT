@@ -579,6 +579,50 @@ class PlannerStore:
         self._append_card(card)
         return card
 
+    def _bound_note(self, card: Card) -> Note | None:
+        """The journal note bound to *card*, or None when none binds.
+
+        Binding mirrors ``verify_note`` (uuid first, title fallback): sync
+        mints a card from a note, so id equality is the strong signal; the
+        title fallback resolves cards created before the ids were paired.
+        Ties on title go to the latest-edited note — the same rule
+        ``canonical_notes`` applies when several notes share a title.
+        """
+        notes = self._read_notes()
+        for note in notes:
+            if note.id == card.id:
+                return note
+        matches = [n for n in notes if n.title == card.title]
+        if not matches:
+            return None
+        matches.sort(
+            key=lambda n: n.updated_at or n.created_at or n.id,
+            reverse=True,
+        )
+        return matches[0]
+
+    def _propagate_status_to_note(self, card: Card) -> None:
+        """Write a column move back into the bound note's status.
+
+        The board is a *projection* of the notes: ``sync`` restores
+        ``card.column`` from the note status on every run, so a direct
+        column move that never reaches the note is reverted (the defect in
+        card 20261112_063528). The write is guarded by disagreement —
+        when the note's status already maps to this column, nothing is
+        written, which makes ``sync``'s own internal ``move_card`` a no-op
+        and leaves statuses outside the column vocabulary (``blocked``,
+        ``""``) untouched instead of flattening them to ``open``.
+        """
+        note = self._bound_note(card)
+        if note is None:
+            return  # no bound note: never materialize one on a move
+        if config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo") == card.column:
+            return  # already agrees (e.g. sync's own write) — no churn
+        status = config.COLUMN_TO_STATUS.get(card.column)
+        if status is None or status == note.status:
+            return
+        self.update_note(note.id, status=status)
+
     def update_card(self, card_id: str, **kwargs: Any) -> Card | None:
         if "column" in kwargs:
             self.validate_column(kwargs["column"])
@@ -591,6 +635,8 @@ class PlannerStore:
                 card.rev += 1
                 card.updated_at = datetime.now(UTC).isoformat()
                 self._surgical_rewrite({card_id: self._card_line(card)})
+                if "column" in kwargs:
+                    self._propagate_status_to_note(card)
                 return card
         return None
 
@@ -606,6 +652,7 @@ class PlannerStore:
                 card.rev += 1
                 card.updated_at = datetime.now(UTC).isoformat()
                 self._surgical_rewrite({card_id: self._card_line(card)})
+                self._propagate_status_to_note(card)
                 return True
         return False
 
