@@ -255,7 +255,7 @@ vi.mock('@/components/home/NavigationGrid', () => ({
   NavigationGrid: () => (
     <div>
       <a href="/chat">Chat</a>
-      <a href="/personality">Personalities</a>
+      <a href="/souls">Personalities</a>
       <a href="/datasets">Datasets</a>
       <a href="/training">Teach me</a>
       <a href="/monitoring">System Health</a>

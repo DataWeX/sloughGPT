@@ -350,6 +350,18 @@ def _status_color(status: str) -> str:
     return colors.get(status, _YELLOW)
 
 
+# Punchy per-type label colors so every process reads at a glance
+# (card 8182563a — port of 0a29d5c6e, stranded on feat/shared-governance).
+_PROC_TYPE_COLORS = {
+    "training": _GREEN,
+    "self-train": _CYAN,
+    "auto-train": _YELLOW,
+    "download": _BLUE,
+    "inference": "\033[35m",
+    "chat": _CYAN,
+}
+
+
 def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False) -> None:
     data = snapshot.get("data", {})
     health = data.get("health", {})
@@ -367,6 +379,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     reqs = health.get("request_count", 0)
     errs = health.get("error_count", 0)
     lat = health.get("avg_latency_ms", 0)
+    rpm = health.get("requests_per_minute", 0)
     rpm_history = health.get("rpm_history", [])
     mem_history = health.get("mem_history", [])
     gpu = health.get("gpu", {})
@@ -378,6 +391,28 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
 
     _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}  {_c(_format_ts(time.time()), _DIM)}")
     _line(f"  {'─' * 60}")
+
+    # A STALL/ERROR frame deliberately carries no health data — that is what
+    # distinguishes it from a real snapshot. Rendering it through the normal
+    # path would print "no model" and up 0s, visually identical to a server
+    # that is idle and fine, which is exactly the confusion the server-side
+    # STALL frame exists to prevent (silence must never read as "nothing to
+    # report"). Say what is actually happening, then stop: there is nothing
+    # else in this frame to show.
+    phase = str(snapshot.get("phase", ""))
+    if phase in ("STALL", "ERROR"):
+        detail = snapshot.get("message") or data.get("error")
+        if phase == "STALL":
+            _line(f"  {_c('SNAPSHOT STALLED', _BOLD + _YELLOW)}")
+            _line(f"  {_c(str(detail or 'a subsystem is likely blocked'), _DIM)}")
+            cadence = data.get("interval_seconds")
+            if cadence:
+                _line(f"  {_c(f'cadence {cadence:g}s — a stall, not an empty server', _DIM)}")
+        else:
+            _line(f"  {_c('SNAPSHOT FAILED', _BOLD + _RED)}")
+            _line(f"  {_c(str(detail or 'unknown error'), _DIM)}")
+        sys.stdout.flush()
+        return
 
     loaded = health.get("model_loaded", False)
     status_str = _c("online", _GREEN) if loaded else _c("no model", _YELLOW)
@@ -413,10 +448,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         if mode:
             model_parts.append(mode)
         if model_parts:
-            styled = [
-                _c(p, _CYAN) if i == 0 else _c(p, _GREY)
-                for i, p in enumerate(model_parts)
-            ]
+            styled = [_c(p, _CYAN) if i == 0 else _c(p, _GREY) for i, p in enumerate(model_parts)]
             _line(f"  {_c('MODEL', _BOLD)}   {'  '.join(styled)}")
 
     spark_rpm = _sparkline(rpm_history) if rpm_history else ""
@@ -427,6 +459,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         f"  mem {_c(f'{mem:.0f}%', _load_color(mem))} ({mem_mb}MB)"
         f"  reqs {reqs}  {err_str}"
     )
+    sys_line += f"  rpm {rpm:.0f}"  # restored numeric rpm (card 8182563a)
     if spark_rpm:
         sys_line += f"  {_c(spark_rpm, _GREY)}"
     if spark_mem:
@@ -445,7 +478,6 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         _line()
         if processes:
             _line(f"  {_c('PROCESSES', _BOLD)}")
-            _line(f"  {'─' * 60}")
             for proc_id, proc in processes.items():
                 status = proc.get("status", "unknown")
                 label = proc.get("label", proc_id)
@@ -453,7 +485,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
                 progress = proc.get("progress", 0)
 
                 icon = _status_icon(status)
-                name = _c(label.ljust(14), _BOLD)
+                name = _c(label.ljust(14), _PROC_TYPE_COLORS.get(proc.get("type", ""), _BOLD))
 
                 if progress > 0 and status == "running":
                     bar = _progress_bar(progress)
@@ -463,10 +495,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
                 elif status == "running" and detail:
                     _line(f"  {icon} {name} {_c(detail, _DIM)}")
                 elif detail:
-                    _line(
-                        f"  {icon} {name} {_c(status, _status_color(status))}"
-                        f" {_c(detail, _DIM)}"
-                    )
+                    _line(f"  {icon} {name} {_c(status, _status_color(status))} {_c(detail, _DIM)}")
                 else:
                     # no detail: the status word fills the line — punchy, no blanks
                     _line(f"  {icon} {name} {_c(status, _status_color(status))}")
@@ -476,7 +505,6 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         else:
             _line()
             _line(f"  {_c('EVENTS', _BOLD)}")
-            _line(f"  {'─' * 60}")
             for ev in events[:8]:
                 ts_str = _c(_format_ts(ev.get("ts", 0)), _GREY)
                 cat = ev.get("category", "")
@@ -490,7 +518,6 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         if errors:
             _line()
             _line(f"  {_c('RECENT ERRORS', _BOLD + _RED)}")
-            _line(f"  {'─' * 60}")
             for err in errors[:3]:
                 path = err.get("path", "")
                 msg = err.get("message", "")[:40]
@@ -702,7 +729,7 @@ def _read_logs(log_path: Path, tail: int, filters: dict, output_json: bool, use_
         else:
             click.echo(_format_line(record, use_color=use_color))
     if not matches:
-        click.echo("No matching log lines found.", err=True)
+        click.echo(_c("No matching log lines found.", _YELLOW), err=True, color=_TTY)
 
 
 def _tail_follow(log_path: Path, filters: dict, output_json: bool, use_color: bool):
@@ -816,8 +843,12 @@ def logs(
 
     if dashboard:
         run_dashboard(
-            host, port, interval,
-            output_json=output_json, no_clear=no_clear, compact=compact,
+            host,
+            port,
+            interval,
+            output_json=output_json,
+            no_clear=no_clear,
+            compact=compact,
         )
         return
 
@@ -864,7 +895,11 @@ def logs(
     help="Old dashboard command — merged into `logs --dashboard`; forwards with the same flags.",
 )
 @click.option(
-    "--interval", "-i", default=2.0, type=float, help="Refresh interval in seconds",
+    "--interval",
+    "-i",
+    default=2.0,
+    type=float,
+    help="Refresh interval in seconds",
     show_default=True,
 )
 @click.option("--host", default="localhost", help="API hostname", show_default=True)

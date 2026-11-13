@@ -34,8 +34,24 @@ describe('resolveRedirect / splitTarget', () => {
     expect(splitTarget('/datasets')).toEqual({ path: '/datasets', search: '' })
   })
 
-  it('has 47 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(47)
+  it('has 49 entries matching proxy table', () => {
+    // 2026-11-08: 48 -> 49 — /vm folded into /developer (route-map card 6/7).
+    expect(Object.keys(REDIRECTS).length).toBe(49)
+  })
+
+  it('redirects the retired /mole page to the plugin surface', () => {
+    // /mole stopped being a hardwired page (2026-10-28) — the checks are now
+    // the Mole plugin's panel on /plugins-cloud.
+    expect(resolveRedirect('/mole')).toBe('/plugins-cloud')
+  })
+
+  it('never redirects a live route away from itself', () => {
+    // /files absorbed the /images page (card 7839a7c6). A redirect source on a
+    // live route fires before routing (applyRedirect is unconditional), which
+    // silently makes the page unreachable — that already happened once when
+    // both /files and /images pointed at /developer.
+    expect(resolveRedirect('/images')).toBe('/files')
+    expect(resolveRedirect('/files')).toBeNull()
   })
 
   it('maps workspace legacy paths to consolidated routes', () => {

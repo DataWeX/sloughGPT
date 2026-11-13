@@ -80,4 +80,16 @@ describe('GlobalBanner', () => {
     expect(onAction).toHaveBeenCalledTimes(1)
     expect(container.querySelector('[role="alert"]')).toBeNull()
   })
+
+  it('never dims the message with opacity (the ink contrast contract covers it)', () => {
+    useBannerStore.getState().showBanner({
+      tone: 'warning',
+      title: 'Backend not responding',
+      message: 'supporting detail stays legible',
+    })
+    render(<GlobalBanner />)
+    // opacity-80 on the message dropped light-mode warning text to ~3.6:1.
+    const msg = screen.getByText(/supporting detail stays legible/)
+    expect(msg.className).not.toMatch(/opacity/)
+  })
 })

@@ -105,14 +105,14 @@ export const ChatPresets = memo(function ChatPresets({ onSelect, className }: Ch
             onChange={(e) => setName(e.target.value)}
             placeholder="Preset name..."
             aria-label="Preset name"
-            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           />
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Prompt template..."
             aria-label="Prompt template"
-            className="w-full text-xs bg-transparent border rounded px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 min-h-[60px]"
+            className="w-full text-xs bg-transparent border rounded px-2 py-1 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset min-h-[60px]"
           />
           <div className="flex gap-1">
             <Button
@@ -154,7 +154,7 @@ export const ChatPresets = memo(function ChatPresets({ onSelect, className }: Ch
               >
                 <button
                   type="button"
-                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
+                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   onClick={() => handleSelect(preset.prompt)}
                 >
                   <div className="text-xs font-medium truncate">{preset.name}</div>

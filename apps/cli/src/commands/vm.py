@@ -27,23 +27,43 @@ def cmd_vm(args):
         log.key_value("Syscalls", "INT 0x80")
 
         log.section("RBAC Roles")
-        log.key_value("USER", "Basic I/O, print, scan")
-        log.key_value("ADMIN", "Device I/O, training")
-        log.key_value("KERNEL", "Unrestricted access")
+        log.key_value("USER", "FILE_READ, FILE_WRITE, FILE_META, PROCESS_SELF, PROCESS_SPAWN")
+        log.key_value(
+            "ADMIN",
+            "USER + PROCESS_KILL, DEVICE_SERIAL/MOUSE/DISK/RTC/NET, TRAINING",
+        )
+        log.key_value("KERNEL", "All permissions")
 
-        log.section("Syscall Table")
+        log.section("Syscall Table (INT 0x80, X86SyscallHandler)")
         syscalls = [
             ("1", "SYS_EXIT", "Exit program"),
-            ("2", "SYS_PRINT", "Print string"),
-            ("3", "SYS_SCAN", "Read input"),
-            ("4", "SYS_OPEN", "Open file"),
-            ("5", "SYS_READ", "Read from file"),
-            ("6", "SYS_WRITE", "Write to file"),
-            ("7", "SYS_CLOSE", "Close file"),
-            ("8", "SYS_DEV_OPEN", "Open device"),
-            ("9", "SYS_DEV_CALL", "Call device"),
-            ("10", "SYS_DEV_CLOSE", "Close device"),
-            ("28", "SYS_TRAIN_START", "Start training"),
+            ("2", "SYS_READ", "Read file into buffer"),
+            ("3", "SYS_WRITE", "Write buffer to file"),
+            ("4", "SYS_OPEN", "Open path, return fd"),
+            ("5", "SYS_CLOSE", "Close fd"),
+            ("6", "SYS_FORK", "Spawn child process"),
+            ("7", "SYS_EXEC", "Exec program by path"),
+            ("8", "SYS_WAIT", "Wait for child"),
+            ("9", "SYS_BRK", "Set program break"),
+            ("10", "SYS_GETPID", "Get process id"),
+            ("11", "SYS_SBRK", "Grow heap by increment"),
+            ("12", "SYS_YIELD", "Yield CPU"),
+            ("13", "SYS_KILL", "Send signal to pid"),
+            ("14", "SYS_GETTIMEOFDAY", "Read timeval into buffer"),
+            ("15", "SYS_MALLOC", "Allocate block, return address"),
+            ("16", "SYS_FREE", "Free block"),
+            ("17", "SYS_READDIR", "List directory into buffer"),
+            ("18", "SYS_UNAME", "Write uname into buffer"),
+            ("19", "SYS_SERIAL_WRITE", "Write byte to serial"),
+            ("20", "SYS_SERIAL_READ", "Read byte from serial"),
+            ("21", "SYS_MOUSE_READ", "Read mouse event"),
+            ("22", "SYS_RTC_GETTIME", "Read RTC into buffer"),
+            ("23", "SYS_DISK_READ", "Read disk sectors"),
+            ("24", "SYS_DISK_WRITE", "Write disk sectors"),
+            ("25", "SYS_NET_SEND", "Send network buffer"),
+            ("26", "SYS_NET_RECV", "Receive network buffer"),
+            ("27", "SYS_GETROLE", "Get RBAC role of process"),
+            ("28", "SYS_TRAIN_START", "Start training job"),
             ("29", "SYS_TRAIN_STATUS", "Get training status"),
             ("30", "SYS_TRAIN_GET_RESULT", "Get training result"),
         ]

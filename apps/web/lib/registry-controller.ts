@@ -24,11 +24,30 @@ export interface RegistryData {
   bestModel: Record<string, unknown> | null
 }
 
+export interface ArtifactRecord {
+  artifact_id: string
+  kind: string
+  id: string
+  name: string
+  path: string
+  size_bytes: number
+  parents?: string[]
+  meta?: Record<string, unknown>
+}
+
 class RegistryController {
   async list(): Promise<RegisteredModel[]> {
-    const data = await apiGet<{ models?: RegisteredModel[] } | RegisteredModel[]>('/registry/models')
+    const data = await apiGet<{ models?: RegisteredModel[] } | RegisteredModel[]>(
+      '/registry/models',
+    )
     if (Array.isArray(data)) return data
     return data?.models ?? []
+  }
+
+  /** Artifacts with lineage parents attached (?lineage=true). */
+  async artifacts(): Promise<ArtifactRecord[]> {
+    const data = await apiGet<{ artifacts?: ArtifactRecord[] }>('/registry/artifacts?lineage=true')
+    return data?.artifacts ?? []
   }
 
   async stats(): Promise<RegistryStats | null> {
@@ -50,7 +69,9 @@ class RegistryController {
   }
 
   async best(): Promise<Record<string, unknown> | null> {
-    const data = await apiGet<{ default_model?: string | null; models_loaded?: number }>('/registry/best')
+    const data = await apiGet<{ default_model?: string | null; models_loaded?: number }>(
+      '/registry/best',
+    )
     if (!data) return null
     return data as Record<string, unknown>
   }

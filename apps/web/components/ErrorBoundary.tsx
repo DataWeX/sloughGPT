@@ -1,11 +1,11 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import type { ReactNode } from 'react'
 import { Component } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { IconAlert } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage, formatStackTrace, getErrorType } from '@/lib/error-utils'
 import { logger } from '@/lib/dev-log'
 
@@ -46,7 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (isNonFatalError(error)) {
       // Log to toast instead
       try {
-        useToastStore.getState().addToast('Something went wrong. Try refreshing the page.', 'error')
+        notify.toast('Something went wrong. Try refreshing the page.', 'error')
       } catch {
         logger.warning('ErrorBoundary: toast store not initialized', { error: error.message })
       }

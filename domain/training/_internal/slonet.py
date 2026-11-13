@@ -24,8 +24,10 @@ from typing import Any
 import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.inference._internal.soul_meta_slim import externalize_optimizer_state
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
+from domain.infrastructure._internal.kv_cache.prefix_cache import PrefixCache
 from domain.shared import align_dim_ff, find_repo_root  # noqa: F401 — kept for compatibility
 
 logger = logging.getLogger("slo.slonet")
@@ -131,9 +133,6 @@ try:
         fused_attention_single as _nb_fused_attention_single,
     )
     from domain.training._internal.slonet_kernels import (
-        gqa_expand as _nb_gqa_expand,
-    )
-    from domain.training._internal.slonet_kernels import (
         lm_head_argmax as _nb_lm_head_argmax,
     )
     from domain.training._internal.slonet_kernels import (
@@ -149,6 +148,39 @@ try:
     _KERNELS_AVAILABLE = True
 except ImportError:
     _KERNELS_AVAILABLE = False
+
+try:
+    from domain.infrastructure._internal.quant_core.wrapper import (
+        swiglu_f32_c as _swiglu_f32_c,
+    )
+except Exception:  # pragma: no cover — quant_core optional (no .so / build fail)
+    _swiglu_f32_c = None
+
+
+def _swiglu(h1: np.ndarray, h3: np.ndarray) -> np.ndarray:
+    """SwiGLU(h1) * h3 — AVX2 C kernel first, numba, then numpy fallback.
+
+    The C kernel (quant_core matmul_int8.so) vectorizes exp with a degree-5
+    polynomial across 8 lanes (~10x the numba/libm scalar path, which is
+    ~21% of decode on Qwen int8). It requires C-contiguous float32 inputs;
+    strided views such as ``h13[..., :ff_dim]`` are compacted first (memcpy
+    is far cheaper than the scalar exp it replaces). Returns numba when the
+    kernel is unavailable or the layout/dtype is unsupported.
+    """
+    if _swiglu_f32_c is not None:
+        out = _swiglu_f32_c(h1, h3)
+        if out is not None:
+            return out
+        if h1.dtype == np.float32 and h3.dtype == np.float32 and h1.shape == h3.shape:
+            out = _swiglu_f32_c(np.ascontiguousarray(h1), np.ascontiguousarray(h3))
+            if out is not None:
+                return out
+    if _KERNELS_AVAILABLE:
+        return _nb_swi_glu_mul(h1, h3)
+    h1f = np.asarray(h1, dtype=np.float32)
+    h3f = np.asarray(h3, dtype=np.float32)
+    return h1f * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1f))) * h3f
+
 
 # Global no_grad mode — skips backward graph construction
 _NO_GRAD = False
@@ -229,8 +261,21 @@ def _broadcast_forward(t: np.ndarray, target_shape: tuple) -> np.ndarray:
 
 
 def _get_accelerator():
-    """Get GPU accelerator, lazy-loaded. Tries slolib/gpu first, then old accelerator."""
+    """Get GPU accelerator, lazy-loaded. Tries slolib/gpu first, then old accelerator.
+
+    A thread-local pin (``domain.slolib._internal.gpu.push_accelerator``) wins
+    over both caches. That is how one training run honours ``device="cpu"`` on
+    a GPU host without switching the accelerator off for every other thread.
+    """
     global _ACCELERATOR
+    try:
+        from domain.slolib._internal.gpu import override_accelerator
+
+        pinned = override_accelerator()
+        if pinned is not None:
+            return None if pinned.name == "cpu" else pinned
+    except Exception as e:  # pragma: no cover - pin layer must never break math
+        logger.debug("Accelerator pin unavailable: %s", e)
     if _ACCELERATOR is not None:
         return _ACCELERATOR if _ACCELERATOR != "none" else None
     try:
@@ -926,6 +971,8 @@ def _pow(a, p):
 
 
 def _matmul(a, b):
+    from domain.slolib._internal.gpu import count_dispatch
+
     a_data = a.data if isinstance(a, Tensor) else np.asarray(a)
     b_data = b.data if isinstance(b, Tensor) else np.asarray(b)
     a_req = isinstance(a, Tensor) and a.requires_grad
@@ -944,14 +991,25 @@ def _matmul(a, b):
     if _use_acc:
         try:
             result = acc.matmul(a_data, b_data)
+            # Path attribution for StepTrace: exactly one of {gpu, cpu} per
+            # eligible matmul; a failed accelerator attempt records BOTH the
+            # fallback and the CPU work that replaced it (the job_c87a2dd6
+            # signature — silent degradation must leave a trace).
+            count_dispatch("gpu_matmuls")
         except Exception as exc:
             import logging
 
             logging.getLogger("slo.training").warning(
                 "GPU matmul failed, falling back to CPU: %s", exc
             )
+            count_dispatch("fallbacks")
+            count_dispatch("cpu_matmuls")
             result = np.matmul(a_data, b_data)
     else:
+        # Only accelerator-eligible matmuls are attributed: tiny matmuls go
+        # to the CPU by design (dispatch overhead), not as a degradation.
+        if out_elems >= 16384:
+            count_dispatch("cpu_matmuls")
         result = np.matmul(a_data, b_data)
     out = Tensor(result, requires_grad=a_req or b_req, _children=children, _copy=False)
     _a_shape = a_data.shape
@@ -1809,7 +1867,6 @@ class SloLinear(SloLayer):
             self.bias = zeros((out_f,), requires_grad=True)
         self.out_features = out_f
         self.in_features = in_f
-        self._weight_T = None
         self._weight_T_contig = None  # cached contiguous (K, N) transpose for numpy GEMM
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
         self._quant_info = None  # TensorInfo for quantized weight
@@ -1826,19 +1883,31 @@ class SloLinear(SloLayer):
         return new
 
     def _get_weight_T(self) -> Tensor:
-        if self._weight_T is None:
-            self._weight_T = self.weight.T()
-        return self._weight_T
+        """Return a fresh ``(K, N)`` transpose node for *this* forward pass.
+
+        This used to be cached on the layer as a graph node. A cached node is a
+        node of *every* graph that reuses it: it is not in ``parameters()``, so
+        ``zero_grads`` never cleared it, and each ``backward()`` added the new
+        gradient on top of the previous step's (``_matmul`` allocates
+        ``ga`` and the transpose backward does ``a.grad.data += tg``). The real
+        weight's gradient then grew linearly with the step count — 1x, 2x, 3x —
+        invisible at step 1, slowly poisoning every training run.
+
+        Building the node per forward pass costs one object allocation; the
+        transpose itself is a strided view, never a copy. The cached transpose
+        *data* used by the inference paths is ``_get_weight_T_contig``.
+        """
+        return self.weight.T()
 
     def _get_weight_T_contig(self) -> np.ndarray:
         """Return a cached contiguous transposed weight matrix.
 
-        Unlike _get_weight_T (a strided view), this returns a contiguous
-        (K, N) copy so numpy `x @ W_T` uses the optimized GEMM kernel.
+        Unlike _get_weight_T (a strided view, rebuilt per forward pass), this
+        returns a contiguous (K, N) copy so numpy `x @ W_T` uses the optimized
+        GEMM kernel.
         The cache is built once per layer and reused across generate calls;
         it is invalidated when the weight is replaced (set_quantized_weight,
-        set_point_weight). In-place updates to weight.data are NOT reflected
-        (same staleness semantics as _get_weight_T).
+        set_point_weight). In-place updates to weight.data are NOT reflected.
 
         Returns:
             np.ndarray: (K, N) contiguous float32 array of weight.data.T
@@ -1860,6 +1929,10 @@ class SloLinear(SloLayer):
         self._quant_info = quant_info
         self._quant_unpacked = None  # lazy unpack cache for int4
         self._weight_T_contig = None  # transpose cache no longer valid
+        # Fused-pack memos are keyed on _quant_info identity — drop them so
+        # the next _fuse_quant_weights(_int4) call rebuilds from the new info.
+        self._fuse_memo = None
+        self._fuse_memo4 = None
 
     def _get_quant_array(self) -> np.ndarray:
         if self._quant_info is None or not self._quant_info.is_quantized:
@@ -1906,7 +1979,6 @@ class SloLinear(SloLayer):
             return True
         self._freed_shape = tuple(self.weight.data.shape)
         self.weight.data = np.zeros((1,), dtype=np.float32)
-        self._weight_T = None
         self._weight_T_contig = None
         return True
 
@@ -1924,6 +1996,8 @@ class SloLinear(SloLayer):
         arr = point_weight.generate()
         self.weight.data = arr.astype(np.float32)
         self._weight_T_contig = None  # transpose cache no longer valid
+        self._fuse_memo = None  # fused-pack memo (bias/weight layout) stale
+        self._fuse_memo4 = None
 
     def get_point_weight(self):
         """Return the PointWeight for this layer, or None."""
@@ -2852,7 +2926,7 @@ def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> tup
     return Q_out, K_out
 
 
-def _fuse_quant_weights(linears):
+def _fuse_quant_weights_uncached(linears):
     """Concatenate quantized int8 weight rows of ``linears`` into one matrix.
 
     Merges several per-layer projections that share the same float32 input
@@ -2905,7 +2979,45 @@ def _fuse_quant_weights(linears):
     return W, S, fused_bias
 
 
-def _fuse_quant_weights_int4(linears):
+def _fuse_quant_weights(linears):
+    """Memoized wrapper around :func:`_fuse_quant_weights_uncached`.
+
+    The fused pack depends only on each projection's ``_quant_info`` (weight
+    array + meta) and bias, which change only when a projection is
+    re-quantized — the same staleness contract as
+    ``SloTransformerBlock._fused_qkv`` (re-quantization rebuilds; in-place
+    weight edits are not reflected). The pack is therefore cached on
+    ``linears[0]`` keyed by the identity of every ``_quant_info``, so the
+    cache dies with the owning model, and ``set_quantized_weight``/
+    ``set_point_weight`` clear it. Rebuilding costs ~74 ms per generate
+    call, so every call site (generate_numpy, generate_numpy_stream, the
+    forward paths) benefits from the hit.
+
+    Args:
+        linears: sequence of SloLinear with quantized weights.
+
+    Returns:
+        Same as :func:`_fuse_quant_weights_uncached`.
+    """
+    infos = tuple(l._quant_info for l in linears)
+    key = tuple(id(qi) for qi in infos)
+    memo = getattr(linears[0], "_fuse_memo", None)
+    if memo is not None:
+        entry = memo.get(key)
+        # Key match + the entry's strong refs to ``infos`` imply identity: a
+        # live object cannot share another live object's id, and the entry
+        # keeps its infos alive, so their ids can never be recycled.
+        if entry is not None and all(a is b for a, b in zip(entry[0], infos)):
+            return entry[1]
+    result = _fuse_quant_weights_uncached(linears)
+    if memo is None:
+        memo = {}
+        linears[0]._fuse_memo = memo
+    memo[key] = (infos, result)
+    return result
+
+
+def _fuse_quant_weights_int4_uncached(linears):
     """Concatenate packed int4 weight rows of ``linears`` into one packed matrix.
 
     Same contract as ``_fuse_quant_weights`` but keeps the weights packed
@@ -2964,6 +3076,36 @@ def _fuse_quant_weights_int4(linears):
     W = np.concatenate(arrs, axis=0).astype(np.int8, copy=False)
     S = np.concatenate(scales)
     return W, S, int(zps[0]), fused_bias
+
+
+def _fuse_quant_weights_int4(linears):
+    """Memoized wrapper around :func:`_fuse_quant_weights_int4_uncached`.
+
+    Same caching contract as :func:`_fuse_quant_weights` (pack cached on
+    ``linears[0]``, keyed by ``_quant_info`` identity, cleared by
+    ``set_quantized_weight``/``set_point_weight``) but kept in a separate
+    ``_fuse_memo4`` memo so the int4 and int8 packs of the same projections
+    never collide.
+
+    Args:
+        linears: sequence of SloLinear with packed int4 quantized weights.
+
+    Returns:
+        Same as :func:`_fuse_quant_weights_int4_uncached`.
+    """
+    infos = tuple(l._quant_info for l in linears)
+    key = tuple(id(qi) for qi in infos)
+    memo = getattr(linears[0], "_fuse_memo4", None)
+    if memo is not None:
+        entry = memo.get(key)
+        if entry is not None and all(a is b for a, b in zip(entry[0], infos)):
+            return entry[1]
+    result = _fuse_quant_weights_int4_uncached(linears)
+    if memo is None:
+        memo = {}
+        linears[0]._fuse_memo4 = memo
+    memo[key] = (infos, result)
+    return result
 
 
 def _fused_qkv_matmul(
@@ -4178,26 +4320,59 @@ class SloNet:
         return result
 
     def _rebuild_from_state_dict(self, sd: dict[str, np.ndarray]) -> None:
-        """Rebuild architecture from PyTorch state dict keys, then load weights."""
+        """Rebuild architecture from PyTorch state dict keys, then load weights.
+
+        Structure comes from metadata first, then from the keys themselves —
+        both key families: native (``blocks.{i}.attn_norm`` / ``blocks.{i}.ff.w1``,
+        what ``SloTransformer.state_dict()`` emits) and legacy
+        (``blocks.{i}.norm1`` / ``blocks.{i}.mlp.w1``). Head counts stay
+        metadata-or-probe: under GQA a square ``q_proj`` admits many
+        (n_heads, head_dim) splits, so shapes alone cannot decide them.
+        """
         self._sd = sd
         self.layers = []
+        md = self.metadata or {}
+
+        def _shape(key: str, idx: int = 0):
+            w = sd.get(key)
+            if w is None:
+                return None
+            if hasattr(w, "shape"):
+                return w.shape[idx]
+            # v1/v2 JSON weight blocks arrive as nested Python lists,
+            # not ndarrays (import_from_sou tok_emb-only files).
+            return len(w) if idx == 0 else (len(w[0]) if w else None)
 
         # Count transformer blocks
         block_keys = [k for k in sd if k.startswith("blocks.")]
         num_blocks = len({k.split(".")[1] for k in block_keys})
 
-        # Determine dims from first block
-        norm1_w = sd.get("blocks.0.norm1.weight")
-        hidden_dim = norm1_w.shape[0] if norm1_w is not None else 384
+        # Hidden dim: metadata -> tok_emb (vocab, hidden) by definition ->
+        # either norm probe (native or legacy) -> documented fallback.
+        hidden_dim = (
+            md.get("n_embed")
+            or md.get("hidden_size")
+            or _shape("tok_emb.weight", 1)
+            or _shape("blocks.0.attn_norm.weight")
+            or _shape("blocks.0.norm1.weight")
+            or 384
+        )
 
-        q_w = sd.get("blocks.0.attn.q_proj.weight")
-        n_heads = 4  # default
-        if q_w is not None:
-            head_dim = q_w.shape[0]
-            n_heads = hidden_dim // head_dim
+        n_heads = md.get("n_head") or md.get("num_attention_heads")
+        if not n_heads:
+            q_w = sd.get("blocks.0.attn.q_proj.weight")
+            n_heads = 4  # default
+            if q_w is not None:
+                head_dim = q_w.shape[0]
+                n_heads = hidden_dim // head_dim
 
-        ff_w1 = sd.get("blocks.0.mlp.w1.weight")
-        ff_dim = ff_w1.shape[0] if ff_w1 is not None else hidden_dim * 4
+        ff_dim = (
+            md.get("intermediate_size")
+            or _shape("blocks.0.ff.w1.weight")
+            or _shape("blocks.0.mlp.w1.weight")
+            or _shape("blocks.0.w1.weight")
+            or hidden_dim * 4
+        )
 
         for i in range(num_blocks):
             block = _SoulTransformerBlockSoulLib(hidden_dim, n_heads, ff_dim, name=f"block{i}")
@@ -4301,14 +4476,32 @@ class SloNet:
 
     def _forward_state_dict(self, x: Tensor) -> Tensor:
         sd = self._sd
+        md = self.metadata or {}
         vocab = sd["tok_emb.weight"].shape[0]
         hidden = sd["tok_emb.weight"].shape[1]
 
         def _sd_get(key):
-            if key in sd:
-                return sd[key]
+            # Try the requested name, the flat name (legacy HF-style dumps),
+            # then the native family aliases — over BOTH bases, so
+            # blocks.{i}.norm1 <-> blocks.{i}.attn_norm,
+            # blocks.{i}.norm2 <-> blocks.{i}.ff_norm, and
+            # blocks.{i}.mlp.wN <-> blocks.{i}.ff.wN all resolve.
             key2 = key.replace("attn.", "").replace("mlp.", "")
-            return sd.get(key2)
+            key_native = (
+                key.replace("norm1.weight", "attn_norm.weight")
+                .replace("norm2.weight", "ff_norm.weight")
+                .replace("mlp.", "ff.")
+            )
+            key_native2 = (
+                key2.replace("norm1.weight", "attn_norm.weight")
+                .replace("norm2.weight", "ff_norm.weight")
+                .replace("mlp.", "ff.")
+            )
+            for k in (key, key2, key_native, key_native2):
+                w = sd.get(k)
+                if w is not None:
+                    return w
+            return None
 
         indices = x.data.astype(int).clip(0, vocab - 1)
         B, N = indices.shape
@@ -4325,10 +4518,16 @@ class SloNet:
             k_w = _sd_get(f"blocks.{i}.attn.k_proj.weight")
             v_w = _sd_get(f"blocks.{i}.attn.v_proj.weight")
 
+            md_heads = md.get("n_head") or md.get("num_attention_heads")
             H = 4
             E = hidden // H
             C = hidden
-            if q_w is not None:
+            if md_heads and hidden % md_heads == 0:
+                # Metadata first: under GQA a square q_proj cannot pin the
+                # (n_heads, head_dim) split — only metadata can.
+                H = int(md_heads)
+                E = hidden // H
+            elif q_w is not None:
                 q_out_dim = q_w.shape[0]
                 head_dim = q_out_dim // 8
                 if head_dim > 0 and q_out_dim % 8 == 0:
@@ -4344,8 +4543,20 @@ class SloNet:
             v = np.clip(v, -50, 50)
 
             Q = q.reshape(B, N, H, E).transpose(0, 2, 1, 3)
-            K = k.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
-            V = v.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
+            if k.shape[-1] != H * E and k.shape[-1] % E == 0:
+                # GQA: k/v carry fewer features than q (n_kv_head < n_heads).
+                # Reshape with their own head count, then repeat each kv head
+                # over its group of query heads — never fold the seq axis.
+                kv_H = k.shape[-1] // E
+                K = k.reshape(B, N, kv_H, E).transpose(0, 2, 1, 3)
+                V = v.reshape(B, N, kv_H, E).transpose(0, 2, 1, 3)
+                if kv_H != H and H % kv_H == 0:
+                    rep = H // kv_H
+                    K = np.repeat(K, rep, axis=1)
+                    V = np.repeat(V, rep, axis=1)
+            else:
+                K = k.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
+                V = v.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
             scale = 1.0 / (E**0.5)
             scores = np.einsum("bhnd,bhkd->bhnk", Q, K) * scale
             attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
@@ -4400,6 +4611,10 @@ def _matmul_state_dict(a: Tensor, b: np.ndarray) -> Tensor:
 
 
 def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> Tensor:
+    if weight is None:
+        # A missing norm degrades to identity instead of TypeError
+        # ('float * None') — only changes calls that used to crash.
+        return x
     acc = _get_accelerator()
     if acc is not None and acc.name != "cpu":
         try:
@@ -4448,6 +4663,24 @@ def clip_grad_norm_(
     return total_norm
 
 
+def _optimizer_buffer(buf, as_arrays: bool):
+    """Snapshot one optimizer moment buffer.
+
+    ``as_arrays=True`` → C-contiguous numpy copy (checkpoint hot path: bytes
+    end-to-end, no ``tolist()`` → JSON float-text round-trip per save).
+    Default → nested Python lists, the pre-existing JSON-serializable
+    contract that chat_trainer and legacy consumers rely on.
+    """
+    if isinstance(buf, np.ndarray):
+        return buf.copy() if as_arrays else buf.tolist()
+    if hasattr(buf, "detach"):  # torch tensor
+        arr = buf.detach().cpu().numpy()
+        return arr.copy() if as_arrays else arr.tolist()
+    if as_arrays:
+        return np.asarray(buf)
+    return buf
+
+
 class SloSGD:
     """Stochastic gradient descent with optional momentum.
 
@@ -4494,12 +4727,17 @@ class SloSGD:
             p.data -= self.lr * g
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists — the checkpoint hot path's bytes end-to-end
+                mode (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters' and 'state' (name-keyed buffers).
@@ -4519,13 +4757,7 @@ class SloSGD:
             pid = id(p)
             if pid in self._v:
                 buf = self._v[pid]
-                state["state"][name] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                state["state"][name] = _optimizer_buffer(buf, as_arrays)
         return state
 
     def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
@@ -4679,12 +4911,16 @@ class SloAdam:
             p.data -= self._reduce_to_param_shape(upd, p)
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters and timestep (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters', 't', and 'state' (name-keyed buffers).
@@ -4709,22 +4945,10 @@ class SloAdam:
             entry = {}
             if pid in self._m:
                 buf = self._m[pid]
-                entry["m"] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                entry["m"] = _optimizer_buffer(buf, as_arrays)
             if pid in self._v:
                 buf = self._v[pid]
-                entry["v"] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                entry["v"] = _optimizer_buffer(buf, as_arrays)
             if entry:
                 state["state"][name] = entry
         return state
@@ -4860,19 +5084,23 @@ class SloAdamW(SloAdam):
                 p.data -= lr * wd * p.data
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters and timestep (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters', 't', and 'state' (name-keyed
             buffers). When ``amsgrad`` is active, each entry also carries
             the 'maxv' running maximum.
         """
-        state = super().state_dict(params)
+        state = super().state_dict(params, as_arrays=as_arrays)
         state["hyperparameters"]["amsgrad"] = self.amsgrad
         state["hyperparameters"]["maximize"] = self.maximize
         if params is None:
@@ -4882,13 +5110,7 @@ class SloAdamW(SloAdam):
             pid = id(p)
             if pid in self._vmax:
                 buf_v = self._vmax[pid]
-                state["state"].setdefault(name, {})["maxv"] = (
-                    buf_v.tolist()
-                    if isinstance(buf_v, np.ndarray)
-                    else buf_v.detach().cpu().tolist()
-                    if hasattr(buf_v, "detach")
-                    else buf_v
-                )
+                state["state"].setdefault(name, {})["maxv"] = _optimizer_buffer(buf_v, as_arrays)
         return state
 
     def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
@@ -4981,10 +5203,20 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
         )
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
+    # A round-tripped net can carry training_state moments in net.metadata;
+    # externalize them so a re-export never re-fattens the sidecar.
+    sidecar_path = path + ".meta.json"
+    sidecar_doc, _externalized = externalize_optimizer_state(_sanitize(metadata), sidecar_path)
     atomic_write(
-        path + ".meta.json",
-        json.dumps(_sanitize(metadata), indent=2),
+        sidecar_path,
+        json.dumps(sidecar_doc, indent=2),
     )
+
+    # Provenance sidecar — records which dataset/model produced this file so
+    # lineage() can walk it. Best-effort: a stamp failure never breaks a save.
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    stamp_export(path, "model", metadata)
 
     return path
 
@@ -5558,6 +5790,12 @@ class SloTransformer(SloNet):
         self.max_seq_len = max_seq_len
         self.tie_weights = tie_weights
         self._kv_caches: list[tuple[np.ndarray, np.ndarray] | None] = [None] * n_layer
+        # Rung A (card 20261102_023531): a KV prefix belongs to the *tokens*,
+        # not to the session id that happened to produce it, so two clients
+        # sharing a system prompt share the prefill. Weights-scoped because
+        # K/V is a function of the weights: a swap drops the table with the
+        # instance. ``SLO_KV_PREFIX_CACHE=0`` turns it off on a live box.
+        self._prefix_cache: PrefixCache | None = PrefixCache.from_env()
 
         # Absolute positional embedding (GPT-2 style, optional)
         self.pos_emb: SloEmbedding | None = None
@@ -5839,6 +6077,8 @@ class SloTransformer(SloNet):
         When ``state`` holds a completed output whose token prefix matches the
         start of ``input_ids``, the cached K/V for that shared prefix is kept
         and only the appended suffix is recomputed (``start`` = prefix length).
+        A full-prompt match resumes at ``prompt_len - 1`` — the last token's
+        logits are never stored, so contractually one token is recomputed.
         The buffers are grown in place when ``total_len`` exceeds the current
         capacity; the prefix data is preserved on growth.
 
@@ -5869,12 +6109,29 @@ class SloTransformer(SloNet):
             # it), so cap start at the actual cache fill length.
             cache_filled = state.kv_len[0] if state.kv_len else 0
             s = min(s, cache_filled)
-            if 0 < s < prompt_len:
-                start = s
+            # A FULL-prompt match (s == prompt_len) is not a degenerate case to
+            # be thrown away — it means every prompt token is already cached, so
+            # resume at prompt_len - 1 and recompute exactly one token. Logits
+            # for the final prompt token are never stored, and an incremental
+            # decode step is how the next token is produced anyway, so this is
+            # the same work a normal step does. Requiring strictly `s <
+            # prompt_len` re-prefilled the ENTIRE prompt on every identical
+            # repeat (~16 s for 482 tokens on the live box) while the K/V for
+            # nearly all of it sat in the session state (card 20261102_012822).
+            if 0 < s:
+                start = min(s, prompt_len - 1)
             else:
                 start = 0
         else:
             start = 0
+
+        if start == 0 and self._prefix_cache is not None:
+            # Rung A: the same token prefix arriving from a DIFFERENT session or
+            # route. Token-exact by construction — the table compares ids, so it
+            # can only resume on a sequence whose K/V was actually computed.
+            state, start = self._adopt_cached_prefix(
+                state, input_ids, prompt_len, n_blocks, nkv, head_dim, total_len, use_kvq
+            )
 
         if start == 0:
             if state is None:
@@ -5901,6 +6158,120 @@ class SloTransformer(SloNet):
             state.kv_len,
             start,
         )
+
+    # ── cross-session prefix sharing (card 20261102_023531) ───────────────
+
+    def _adopt_cached_prefix(
+        self,
+        state,
+        input_ids: np.ndarray,
+        prompt_len: int,
+        n_blocks: int,
+        nkv: list[int],
+        head_dim: int,
+        total_len: int,
+        use_kvq: bool,
+    ):
+        """Install a prefix cached by *another* session or route into ``state``.
+
+        Returns ``(state, start)``; ``start`` is 0 on any miss, so the caller
+        falls through to a normal full prefill. This is the one place the model
+        touches the table, and every rejection is total and silent: a wrong
+        adopt produces fluent wrong output, so anything that does not verify
+        exactly is a miss. Cheaper to be slow than to be plausible.
+
+        The prefix is **copied** into buffers this state owns (``bind`` allocates
+        them), never aliased, because generation writes at ``start`` and beyond —
+        aliasing would let one session overwrite the snapshot other sessions read.
+        """
+        cache = self._prefix_cache
+        if cache is None:
+            return state, 0
+
+        found = cache.match(input_ids)
+        if found is None:
+            return state, 0
+        snap, matched = found
+
+        # A model swapped under the table: dims or quantize mode changed, so the
+        # stored K/V was computed by different weights. Never transplant it.
+        if snap.n_layers != n_blocks or snap.head_dim != head_dim:
+            return state, 0
+        if snap.quantized != use_kvq:
+            return state, 0
+        if use_kvq and any(s is None for s in snap.sk):
+            return state, 0
+        if snap.filled < matched:
+            return state, 0
+
+        # Same rule as a session resume: the final prompt token's logits were
+        # never stored, so recomputing one token is the contract.
+        cut = min(matched, prompt_len - 1)
+        if cut < 1:
+            return state, 0
+
+        if state is None:
+            state = NumpyKVState()
+        state.backend.bind(n_blocks, total_len, nkv, head_dim, use_kvq)
+        for i in range(n_blocks):
+            state.kv_buf_k[i][:, :cut] = snap.k[i][:, :cut]
+            state.kv_buf_v[i][:, :cut] = snap.v[i][:, :cut]
+            if use_kvq:
+                state.kv_scale_k[i][:, :cut] = snap.sk[i][:, :cut]
+                state.kv_scale_v[i][:, :cut] = snap.sv[i][:, :cut]
+        state.backend.lens[:] = [cut] * n_blocks
+        state.prev_ids = np.array(snap.ids[:, :cut], copy=True)
+        return state, cut
+
+    def _prefix_harvest(self, ids, k, v, sk, sv, filled: int, quantized: bool) -> None:
+        """Offer a just-finished generation's prefix to the cross-session table.
+
+        Called at generation *end*, deliberately not on the next request: the
+        payoff belongs to a different session that shares the prefix, and a
+        one-shot client never comes back to trigger a lazy harvest. An abandoned
+        stream is therefore not harvested — a miss costs latency, never
+        correctness, so that is the right side to fail on.
+
+        Takes the raw buffers rather than a ``kv_state`` on purpose: the
+        headline client is the *session-less* one (``kv_state is None``, the
+        normal ``/v1`` call). Harvesting only states would mean only sessions
+        contribute, and a session already resumes from its own KV — the table
+        would save nothing for anyone. So every finished generation offers its
+        prefix, session or not.
+
+        A cache must never fail a generation: everything is swallowed and the
+        table simply misses next time. A cache that raises on the hot path is
+        worse than no cache.
+        """
+        cache = self._prefix_cache
+        if cache is None or ids is None or not k or k[0] is None:
+            return
+        try:
+            cache.store(
+                ids,
+                k,
+                v,
+                sk,
+                sv,
+                filled=int(filled),
+                quantized=bool(quantized),
+            )
+        except Exception as e:  # pragma: no cover - defensive
+            logger.debug("prefix cache harvest skipped: %s", e)
+
+    def clear_prefix_cache(self) -> int:
+        """Drop every shared prefix (weights changed). Returns entries dropped."""
+        cache = self._prefix_cache
+        if cache is None:
+            return 0
+        n = len(cache)
+        cache.clear()
+        return n
+
+    def prefix_cache_stats(self) -> dict:
+        """Counters for the health/status surface; ``{}`` when disabled."""
+        cache = self._prefix_cache
+        return cache.get_stats() if cache is not None else {}
 
     def _generate_numpy_lora(
         self,
@@ -6544,16 +6915,17 @@ class SloTransformer(SloNet):
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
 
+                _k_unexpanded = False
                 if _use_gqa:
                     if _use_kernels:
-                        # GQA expand via numba — kernel expects (K_H, new_len, E)
-                        # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
+                        # GQA: the fused attention kernels index kv head
+                        # h // (H // K_H) directly — pass the cache
+                        # unexpanded as (1, K_H, new_len, E) and skip the
+                        # O(new_len) expansion (decode slope drag: repeated
+                        # full-cache rewrite of a 7x-larger buffer).
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
+                        _k_unexpanded = True
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -6568,9 +6940,15 @@ class SloTransformer(SloNet):
                 _use_einsum = not (step > 0 and _use_kernels) and not (
                     step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
                 )
-                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
-                    k = k.transpose(0, 2, 1, 3)
-                    v = v.transpose(0, 2, 1, 3)
+                if _use_einsum and k.ndim == 4:
+                    if _k_unexpanded:
+                        # einsum has no head mapping — expand here (only the
+                        # non-hot einsum path reaches this branch).
+                        k = np.repeat(k, _gqa_reps, axis=1)
+                        v = np.repeat(v, _gqa_reps, axis=1)
+                    if k.shape[1] == H:
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
@@ -6634,7 +7012,7 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_ff4[bi]
                         h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -6643,7 +7021,7 @@ class SloTransformer(SloNet):
                         Wf, Sf, Bf = f_ff[bi]
                         h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -6652,7 +7030,7 @@ class SloTransformer(SloNet):
                         h1 = q_w1[bi].forward_numpy(h)
                         h3 = q_w3[bi].forward_numpy(h)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h1, h3)
+                            h = _swiglu(h1, h3)
                         else:
                             h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
@@ -6661,7 +7039,7 @@ class SloTransformer(SloNet):
                     if _use_bias_b13:
                         h13 = h13 + m_b13[bi]
                     if _use_kernels:
-                        h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                        h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                     else:
                         h = (
                             h13[..., :_ff_dim]
@@ -6728,6 +7106,15 @@ class SloTransformer(SloNet):
                 _gen_metrics.finalize()
                 if kv_state is not None:
                     kv_state.prev_ids = out_buf[:, : prompt_len + step + 1].copy()
+                self._prefix_harvest(
+                    out_buf,
+                    kv_buf_k,
+                    kv_buf_v,
+                    kv_scale_k,
+                    kv_scale_v,
+                    kv_len[0],
+                    _use_kvq,
+                )
                 return GenerateResult(out_buf[:, : prompt_len + step + 1], _gen_metrics)
 
         _gen_metrics.n_tokens = max_gen
@@ -6735,6 +7122,9 @@ class SloTransformer(SloNet):
         _gen_metrics.finalize()
         if kv_state is not None:
             kv_state.prev_ids = out_buf.copy()
+        self._prefix_harvest(
+            out_buf, kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len[0], _use_kvq
+        )
         return GenerateResult(out_buf, _gen_metrics)
 
     def generate_numpy_stream(
@@ -7103,16 +7493,17 @@ class SloTransformer(SloNet):
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
 
+                _k_unexpanded = False
                 if _use_gqa:
                     if _use_kernels:
-                        # GQA expand via numba — kernel expects (K_H, new_len, E)
-                        # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
+                        # GQA: the fused attention kernels index kv head
+                        # h // (H // K_H) directly — pass the cache
+                        # unexpanded as (1, K_H, new_len, E) and skip the
+                        # O(new_len) expansion (decode slope drag: repeated
+                        # full-cache rewrite of a 7x-larger buffer).
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
+                        _k_unexpanded = True
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -7127,9 +7518,15 @@ class SloTransformer(SloNet):
                 _use_einsum = not (step > 0 and _use_kernels) and not (
                     step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
                 )
-                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
-                    k = k.transpose(0, 2, 1, 3)
-                    v = v.transpose(0, 2, 1, 3)
+                if _use_einsum and k.ndim == 4:
+                    if _k_unexpanded:
+                        # einsum has no head mapping — expand here (only the
+                        # non-hot einsum path reaches this branch).
+                        k = np.repeat(k, _gqa_reps, axis=1)
+                        v = np.repeat(v, _gqa_reps, axis=1)
+                    if k.shape[1] == H:
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
@@ -7189,7 +7586,7 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_ff4[bi]
                         h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -7198,7 +7595,7 @@ class SloTransformer(SloNet):
                         Wf, Sf, Bf = f_ff[bi]
                         h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -7207,7 +7604,7 @@ class SloTransformer(SloNet):
                         h1 = q_w1[bi].forward_numpy(h)
                         h3 = q_w3[bi].forward_numpy(h)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h1, h3)
+                            h = _swiglu(h1, h3)
                         else:
                             h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
@@ -7218,7 +7615,7 @@ class SloTransformer(SloNet):
                     h1 = h13[..., :_ff_dim]
                     h3 = h13[..., _ff_dim:]
                     if _use_kernels:
-                        h = _nb_swi_glu_mul(h1, h3)
+                        h = _swiglu(h1, h3)
                     else:
                         h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = h @ m_w2[bi]
@@ -7252,6 +7649,15 @@ class SloTransformer(SloNet):
                     if kv_state is not None:
                         kv_state.prev_ids = out_buf[:, : prompt_len + step + 1].copy()
                     if next_id in _stop_ids and step > 0:
+                        self._prefix_harvest(
+                            out_buf,
+                            kv_buf_k,
+                            kv_buf_v,
+                            kv_scale_k,
+                            kv_scale_v,
+                            kv_len[0],
+                            _use_kvq,
+                        )
                         return
                     yield (next_id, logits) if return_logprobs else next_id
                     continue
@@ -7277,6 +7683,9 @@ class SloTransformer(SloNet):
             if next_id in _stop_ids and step > 0:
                 _gen_metrics.t_end = time.perf_counter()
                 _gen_metrics.finalize()
+                self._prefix_harvest(
+                    out_buf, kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len[0], _use_kvq
+                )
                 return
             if _gen_metrics.n_tokens == 0:
                 _gen_metrics.t_first_token = time.perf_counter()
@@ -7285,6 +7694,9 @@ class SloTransformer(SloNet):
 
         _gen_metrics.t_end = time.perf_counter()
         _gen_metrics.finalize()
+        self._prefix_harvest(
+            out_buf, kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len[0], _use_kvq
+        )
         self._last_stream_metrics = _gen_metrics
 
     def state_dict(self) -> dict[str, np.ndarray]:
@@ -7345,6 +7757,10 @@ class SloTransformer(SloNet):
                     min_d = min(p.data.shape[0], arr.shape[0])
                     p.data[:min_d] = arr[:min_d]
                     loaded.add(key)
+        if loaded:
+            # New weights invalidate every cached prefix: K/V is a function of
+            # the weights, so a reused snapshot would be fluent wrong output.
+            self.clear_prefix_cache()
         if strict and len(loaded) < len(state_dict):
             missing = [k for k in state_dict if k not in loaded]
         return missing
@@ -7900,7 +8316,13 @@ class WarmupCosineScheduler(SloLRScheduler):
 
     def get_lr(self):
         if self.last_epoch < self.warmup_steps:
-            warmup_factor = float(self.last_epoch + 1) / float(max(1, self.warmup_steps))
+            # Warmup starts at 0.0 (SloLRScheduler.__init__ steps to
+            # last_epoch=0 before any lr is read) and reaches base_lr exactly
+            # at warmup_steps. The "+1" drift in 68c427af5 ("startup
+            # optimization suggestions" — a drive-by) started warmup at
+            # 0.1x base and hit base a step early; test_warmup_linear_then_
+            # cosine pins the original contract.
+            warmup_factor = float(self.last_epoch) / float(max(1, self.warmup_steps))
             return [base_lr * warmup_factor for base_lr in self.base_lrs]
         progress = float(self.last_epoch - self.warmup_steps) / float(
             max(1, self.total_steps - self.warmup_steps)

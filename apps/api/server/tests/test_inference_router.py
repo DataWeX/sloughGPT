@@ -1,7 +1,10 @@
 """Tests for inference router endpoints (non-streaming, sessions, suggestions, tools, operations, context)."""
 
+import json
 import uuid
 from unittest.mock import MagicMock, patch
+
+from infrastructure.contract import REGISTRY
 
 from apps.api.server.tests.test_support import get_test_client
 
@@ -75,6 +78,55 @@ class TestProviders:
         body = resp.json()
         assert body["status"] == "success"
         assert isinstance(body["data"], dict)
+
+    def test_list_providers_survives_unserialisable_metadata(self):
+        """A plugin's odd metadata must not take the whole listing down.
+
+        This is the regression test for `GET /providers` answering
+        500 E_SERIALIZATION in production. `list_model_providers` already
+        guards each provider with a try/except, but that guard sits *inside*
+        the method: a metadata value holding a datetime or an engine handle is
+        well-formed Python, so nothing raises there. It fails later, in the
+        response encoder, outside the guard — by which point the handler has
+        returned and no per-provider degradation can happen.
+
+        The previous test here asserted only `isinstance(body["data"], dict)`
+        with an **empty** registry, so it passed on `{}` and could not have
+        caught this however many times it ran.
+
+        A provider is a plugin; one returning something unserialisable is a
+        normal state, not an exceptional one, so the listing degrades that
+        field instead of failing.
+        """
+        import datetime
+
+        from domain.models._internal.provider import _providers, register_provider
+
+        class _Caps:
+            chat = True
+            streaming = True
+            embedding = False
+            vision = False
+
+        class _OddProvider:
+            model_id = "odd-model"
+            capabilities = _Caps
+            metadata = {"loaded_at": datetime.datetime.now(), "handle": object()}
+
+        register_provider("slonet-native", _OddProvider())
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, (
+                f"one plugin's metadata took the listing down: {resp.text[:200]}"
+            )
+            data = resp.json()["data"]
+            entry = data["slonet-native"]
+            assert entry["model_id"] == "odd-model"
+            # coerced to something the encoder can carry, not dropped
+            assert isinstance(entry["metadata"]["loaded_at"], str)
+            assert "handle" in entry["metadata"]
+        finally:
+            _providers.pop("slonet-native", None)
 
 
 class TestSessionCRUD:
@@ -162,6 +214,92 @@ class TestSessionCRUD:
         resp = client.get("/chat/sessions/search?q=test")
         assert resp.status_code == 200
         assert isinstance(resp.json()["data"], list)
+
+    def test_search_sessions_shares_one_index_with_system_search(self):
+        """Extraction invariant: the legacy endpoint and the system-wide
+        search adapter must read ONE cache, not two copies of the
+        session corpus."""
+        import routers.inference as inference_mod
+
+        from domain.search.registry import get_registry
+        from domain.search.session_index import get_session_index
+
+        assert inference_mod._session_search_index is get_session_index()
+        adapter = get_registry().get("sessions")
+        assert adapter is not None
+        assert adapter._resolve() is get_session_index()
+
+
+class TestSessionMetadataIndex:
+    """Regressions for the /chat/sessions metadata index (card 6b728f97)."""
+
+    @staticmethod
+    def _router():
+        from main import app
+
+        def walk(routes):
+            for r in routes:
+                inner = getattr(r, "original_router", None)
+                if inner is not None and hasattr(inner, "routes"):
+                    yield from walk(inner.routes)
+                else:
+                    yield r
+
+        for r in walk(app.routes):
+            ep = getattr(r, "endpoint", None)
+            if getattr(r, "path", None) == "/chat/sessions" and getattr(ep, "__self__", None):
+                return ep.__self__
+        raise AssertionError("inference router instance not found on /chat/sessions")
+
+    def test_large_session_survives_metadata_index(self, tmp_path, monkeypatch):
+        # >4KB session files truncated the 4KB header read; json.loads on the
+        # prefix raised and the except clause silently dropped the session.
+        fat = {
+            "id": "fat_session_4kb",
+            "name": "",
+            "created_at": "2026-10-23T00:00:00",
+            "updated_at": "2026-10-23T00:00:00",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "How do I configure the gateway?\n" + ("context " * 400),
+                },
+                {
+                    "role": "assistant",
+                    "content": "Use the gateway config file.\n" + ("detail " * 400),
+                },
+            ],
+        }
+        session_file = tmp_path / "fat_session_4kb.json"
+        session_file.write_text(json.dumps(fat), encoding="utf-8")
+        assert session_file.stat().st_size > 4096
+        router = self._router()
+        monkeypatch.setattr(router, "_SESSIONS_DIR", tmp_path)
+        router._session_metadata_cache = None
+        router._session_metadata_cache_ts = 0
+        try:
+            rows = router._build_session_metadata_index()
+        finally:
+            router._session_metadata_cache = None
+            router._session_metadata_cache_ts = 0
+        by_id = {row["id"]: row for row in rows}
+        assert "fat_session_4kb" in by_id
+        # Name derives from the FIRST message's first line via the shared helper.
+        assert by_id["fat_session_4kb"]["name"] == "How do I configure the gateway?"
+        assert by_id["fat_session_4kb"]["message_count"] == 2
+
+    def test_save_session_invalidates_metadata_index(self):
+        router = self._router()
+        router._session_metadata_cache = [{"id": "stale"}]
+        router._save_session(f"sess_inv_{uuid.uuid4().hex[:8]}", {"messages": []})
+        assert router._session_metadata_cache is None
+
+    def test_derive_session_name_rules(self):
+        derive = self._router()._derive_session_name
+        assert derive([{"content": "Topic line\nlong body"}], "sid") == "Topic line"
+        assert derive([{"content": ""}], "sid") == "sid"
+        assert derive([], "sid") == "sid"
+        assert derive([{"content": "x" * 80}], "sid") == "x" * 60
 
 
 class TestContextEndpoints:
@@ -394,3 +532,33 @@ class TestSchemaValidationExtended:
     def test_chat_control_missing_action(self):
         resp = client.post("/chat/control", json={"session_id": "s"})
         assert resp.status_code == 422
+
+
+class TestSessionsDescriptorProjection:
+    """The chat.sessions.list descriptor must project an honest registry row."""
+
+    def test_chat_sessions_list_registered(self):
+        routes = {(r["method"], r["path"]): r for r in REGISTRY.routes()}
+        entry = routes[("GET", "/chat/sessions")]
+        assert entry["name"] == "chat.sessions.list"
+        assert entry["auth_scope"] == "authenticated"
+        assert entry["idempotent"] is True
+        assert entry["module"] == "routers.inference"
+        # params: JSON Schema projection of the declared query params (archived)
+        assert set(entry["params"]["properties"]) == {"archived"}
+        # result derives from SessionModel — the five index fields, always present
+        items = entry["result"]["items"]
+        props = items["properties"]
+        for field in ("id", "name", "created_at", "updated_at", "message_count"):
+            assert field in props, f"SessionModel missing {field}"
+
+    def test_chat_sessions_list_served_route_matches_descriptor(self):
+        resp = client.get("/chat/sessions")
+        assert resp.status_code == 200
+        rows = resp.json()["data"]
+        assert isinstance(rows, list)
+        # Wire rows carry exactly the SessionModel fields (extra="allow" lets
+        # the index grow, but every model field must be present per row).
+        for row in rows[:3]:
+            for field in ("id", "name", "created_at", "updated_at", "message_count"):
+                assert field in row, f"row missing {field}"

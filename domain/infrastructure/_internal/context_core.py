@@ -33,6 +33,10 @@ class ContextLayer:
     source: str
     timestamp: str
     priority: float = 1.0
+    # Structured provenance (ContextPart list) when the layer's source
+    # provides it — consumers at the chat seam budget and render from
+    # these instead of the flattened content string. None = legacy layer.
+    parts: list | None = None
 
 
 @dataclass
@@ -45,6 +49,13 @@ class ContextFrame:
     total_tokens: int
     max_tokens: int
     created_at: str
+    # Manager-generated steering, WITHOUT ``ContextCore.system_prompt``'s own
+    # preamble. ``system_prompt`` above is base + this (see
+    # ``build_context_frame``), so consumers that already have their own
+    # system prompt — the chat router uses the caller's — take this field and
+    # leave the default preamble behind. That is what makes feedback reach the
+    # prompt without overwriting caller intent.
+    system_extra: str = ""
 
     def to_prompt(self) -> str:
         """Render as model input string."""
@@ -271,7 +282,10 @@ Be concise, accurate, and helpful."""
                 content = str(ep.get("content", {}))
                 score = sum(1 for word in query_lower.split() if word in content.lower())
                 scored.append((score, ep))
-            scored.sort(reverse=True)
+            # Sort on the score ONLY. A bare sort() would fall back to comparing
+            # the episode dicts when scores tie -> TypeError ('<' not supported
+            # between instances of 'dict' and 'dict') -> 500 on /chat/stream.
+            scored.sort(key=lambda item: item[0], reverse=True)
             episodes = [ep for _, ep in scored[:limit]]
         else:
             episodes = episodes[-limit:]
@@ -291,7 +305,6 @@ Be concise, accurate, and helpful."""
     def _auto_ingest(self) -> None:
         """Trigger repo auto-ingestion if vector store is empty."""
         import os
-        import threading
 
         provider = os.environ.get("MAN_VECTOR_STORE", "chromadb")
 
@@ -312,12 +325,30 @@ Be concise, accurate, and helpful."""
                     },
                 )
 
-        threading.Thread(target=_do, daemon=True).start()
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): the one-shot trigger flag above means a dropped
+        # fire-and-forget submit would skip ingestion for the process
+        # lifetime — the engine never drops.
+        from .pugqeep.singleton import get_engine
+
+        get_engine().spawn(_do, name="context-auto-ingest")
 
     async def get_rag_context(self, query: str) -> str:
-        """Get RAG context from vector store."""
+        """Get RAG context from vector store (legacy string projection)."""
+        content, _parts = await self._get_rag_context_parts(query)
+        return content
+
+    async def _get_rag_context_parts(self, query: str) -> tuple[str, list]:
+        """RAG retrieval returning (legacy content, ContextPart list).
+
+        The content string keeps the historical labels and truncation
+        (grandfathered); parts carry FULL text + score/locator so the
+        chat-seam budgeter can select without blind char-cuts.
+        """
+        from domain.inference._internal.context_contract import ContextPart
+
         if not self.rag_enabled:
-            return ""
+            return "", []
 
         if self._vector_store is None:
             # Query KnowledgeMemory through the relevance-gated augmenter — the
@@ -332,11 +363,11 @@ Be concise, accurate, and helpful."""
                     result = enrich_with_knowledge(
                         query, auto_search=False, max_facts=self.rag_top_k
                     )
-                    return result.get("facts", [])
+                    return result.get("facts", []), result.get("parts", [])
 
-                facts = await asyncio.to_thread(_query_aug)
+                facts, aug_parts = await asyncio.to_thread(_query_aug)
                 if facts:
-                    return "\n".join(f"[Knowledge] {f}" for f in facts)
+                    return "\n".join(f"[Knowledge] {f}" for f in facts), list(aug_parts)
             except Exception as e:
                 logger.debug(
                     "context_core: knowledge augmenter query failed",
@@ -352,8 +383,18 @@ Be concise, accurate, and helpful."""
             facts = self.search_semantic(query, limit=self.rag_top_k)
             if facts:
                 parts = [f"Related: {f['key']} = {f['value']}" for f in facts]
-                return "\n".join(parts)
-            return ""
+                sem_parts = [
+                    ContextPart(
+                        text=str(f.get("value", "")),
+                        source="semantic_memory",
+                        layer="rag",
+                        locator=str(f.get("key", "")),
+                    )
+                    for f in facts
+                    if f.get("value")
+                ]
+                return "\n".join(parts), sem_parts
+            return "", []
 
         try:
             # Generate embedding for query
@@ -365,22 +406,44 @@ Be concise, accurate, and helpful."""
             results = await self._vector_store.query(query_vec, top_k=self.rag_top_k)
 
             if not results:
-                return ""
+                return "", []
 
             parts = []
+            vs_parts = []
             for r in results:
                 text = r.text[: self.rag_max_chars] if len(r.text) > self.rag_max_chars else r.text
                 parts.append(f"[Doc: {r.id}] {text}")
+                # Full text, no [:500]: the seam budgeter owns selection now.
+                score = getattr(r, "score", None)
+                vs_parts.append(
+                    ContextPart(
+                        text=r.text,
+                        source="vector_store",
+                        layer="rag",
+                        score=float(score) if score is not None else None,
+                        locator=str(r.id),
+                    )
+                )
 
-            return "\n".join(parts)
+            return "\n".join(parts), vs_parts
         except Exception as e:
             logger.warning("Vector store RAG query failed, falling back to semantic memory: %s", e)
             # Fallback to semantic memory
             facts = self.search_semantic(query, limit=self.rag_top_k)
             if facts:
                 parts = [f"Related: {f['key']} = {f['value']}" for f in facts]
-                return "\n".join(parts)
-            return ""
+                sem_parts = [
+                    ContextPart(
+                        text=str(f.get("value", "")),
+                        source="semantic_memory",
+                        layer="rag",
+                        locator=str(f.get("key", "")),
+                    )
+                    for f in facts
+                    if f.get("value")
+                ]
+                return "\n".join(parts), sem_parts
+            return "", []
 
     async def get_auto_memory_context(self, query: str = "", limit: int = 5) -> str:
         """
@@ -427,9 +490,12 @@ Be concise, accurate, and helpful."""
         query: str = "",
     ) -> ContextFrame:
         """Build a complete context frame, applying context managers."""
-        # Apply managers
+        # Apply managers. They run on every frame — trait steering is a
+        # separate concern from retrieval, so an empty vector store must not
+        # disable it (that coupling is what kept this seam dead).
         manager_mods = self._apply_managers(query)
-        system_prompt = self.system_prompt + manager_mods.get("system_extra", "")
+        system_extra = manager_mods.get("system_extra", "")
+        system_prompt = self.system_prompt + system_extra
 
         frame_id = hashlib.md5(f"{datetime.now().isoformat()}{query}".encode()).hexdigest()[:12]
         layers: list[ContextLayer] = []
@@ -474,7 +540,7 @@ Be concise, accurate, and helpful."""
 
         # Layer 3: RAG
         if include_rag and self.rag_enabled:
-            rag_content = await self.get_rag_context(query)
+            rag_content, rag_parts = await self._get_rag_context_parts(query)
             if rag_content:
                 layer = ContextLayer(
                     layer_type="rag",
@@ -483,6 +549,7 @@ Be concise, accurate, and helpful."""
                     source="vector_store",
                     timestamp=datetime.now().isoformat(),
                     priority=0.7,
+                    parts=rag_parts or None,
                 )
                 if used_tokens + layer.tokens <= self.max_tokens:
                     layers.append(layer)
@@ -495,6 +562,7 @@ Be concise, accurate, and helpful."""
             total_tokens=used_tokens,
             max_tokens=self.max_tokens,
             created_at=datetime.now().isoformat(),
+            system_extra=system_extra,
         )
 
         self.frame_history.append(frame)

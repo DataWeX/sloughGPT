@@ -20,11 +20,10 @@ from pathlib import Path
 # paths in commands keep firing.
 signal.signal(signal.SIGINT, signal.default_int_handler)
 
-# Ensure repo root (domain shims), CLI core, and core-py domains are on the path
+# Ensure repo root (domain shims) and CLI core are on the path
 _CLI_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _CLI_DIR.parent.parent.parent
-_CORE_PY_DIR = _ROOT_DIR / "packages" / "core-py"
-for _sys_path in [_CLI_DIR, str(_ROOT_DIR), str(_CORE_PY_DIR)]:
+for _sys_path in [_CLI_DIR, str(_ROOT_DIR)]:
     if str(_sys_path) not in sys.path:
         sys.path.insert(0, str(_sys_path))
 
@@ -341,15 +340,25 @@ def tui(ctx):
     "--tui/--no-tui", default=None, is_flag=True, help="Curses TUI mode (default when TTY)"
 )
 @click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
+@click.option(
+    "--remote",
+    is_flag=True,
+    help="Talk to an API server over HTTP instead of the in-process core",
+)
 @click.pass_context
-def shell(ctx, command, tui, line):
-    """Launch the SloughGPT interactive shell REPL."""
-    from utils.helpers import ensure_server
+def shell(ctx, command, tui, line, remote):
+    """Launch the SloughGPT interactive shell REPL.
 
-    actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
+    By default the shell runs the domain core in-process — no API server
+    needed (card ad4f5ec2). Pass ``--remote`` (or set ``MAN_API_URL``) to
+    dispatch every command to a running API server over HTTP instead.
+    """
     from domain.shell import DaitRuntime, ShellREPL
+    from domain.shell._internal.config import set_remote_mode
 
-    os = DaitRuntime(api_url=actual_url)
+    if remote:
+        set_remote_mode(True)
+    os = DaitRuntime()
     # Default to TUI when TTY, line mode when piped or --line
     use_tui = True
     if line:
@@ -400,6 +409,47 @@ def completion(shell):
         )
     elif _shell == "fish":
         echo(f"source (_{{COMPLETE}}={_shell}_complete sloughgpt | psub)")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Gates — static invariant checks as a product feature (card 20261112_060632)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Run the static gates (command parity, domain baseline, router manifest)")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Also fail on known (baselined) findings — debt the baseline tolerates",
+)
+def gates(strict):
+    """Report on the repo's static invariants without running the test suite.
+
+    \b
+    Examples:
+      sloughgpt gates             # fail only on new drift
+      sloughgpt gates --strict    # also fail on baselined known gaps
+    """
+    from domain.gates import run_gates
+
+    reports = run_gates()
+    failed = False
+    for report in reports:
+        mark = "ok" if report.ok else "FAIL"
+        echo(f"  {report.name}: {mark}" + (f" ({len(report.known)} known)" if report.known else ""))
+        for finding in report.findings:
+            echo(f"    - {finding}")
+        if strict:
+            for known in report.known:
+                echo(f"    ~ {known}")
+        if not report.ok:
+            failed = True
+        elif strict and report.known:
+            failed = True
+    if failed:
+        echo("gates: FAILED" + (" (--strict)" if strict else ""))
+        sys.exit(1)
+    echo("gates: all green")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -473,7 +523,7 @@ def dev(ctx, model, web_port, watch_web, auto_download):
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
 @click.option(
-    "--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser"
+    "--web", is_flag=True, help="Start full FastAPI server + Vite web UI and opens browser"
 )
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
 @click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
@@ -840,7 +890,11 @@ def simulate(
 
             npu = NPUDevice(name="npu")
             npu.open()
-            result = npu.load_model(model, f"huggingface:{model}")
+            # LOAD takes (path, name). An explicit .slnc path loads for real;
+            # an HF id is not a device file, so LOAD fails and the existing
+            # mock fallback below reports it (the NPU loads files, not ids).
+            source = model if model.endswith(".slnc") else f"huggingface:{model}"
+            result = npu.ioctl("LOAD", source, model)
             if not result.success:
                 _p(f"  {_c(f"⚠ Could not load '{model}': {result.error}", _YELLOW)}")
                 _p(
@@ -876,7 +930,7 @@ def simulate(
 
                 k.engine.load_model(model, FallbackModel())
             else:
-                provider = npu._models[model].provider
+                provider = npu.model(model).provider
                 k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
         _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load * 1000:.1f}ms")

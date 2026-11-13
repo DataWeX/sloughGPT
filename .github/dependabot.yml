@@ -32,11 +32,6 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/core-py"
-    schedule:
-      interval: "weekly"
-
-  - package-ecosystem: "pip"
     directory: "/apps/api/server"
     schedule:
       interval: "weekly"

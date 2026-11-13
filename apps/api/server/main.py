@@ -19,11 +19,12 @@ continue to work unchanged.
 
 from __future__ import annotations
 
-import faulthandler
 import logging
 import os
 import sys
+import threading
 import time
+import traceback
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -51,7 +52,6 @@ from domain.shared import find_repo_root  # noqa: E402  (resolvable now)
 
 _REPO_ROOT = find_repo_root(_HERE)
 _SERVER_ROOT = _HERE.parent
-_CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 _CHARGECTL_ROOT = _REPO_ROOT / "packages" / "chargectl" / "src"
 
@@ -59,7 +59,7 @@ _HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
 
-for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
+for _p in (_SERVER_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)
@@ -99,6 +99,19 @@ async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
     global _pgq_engine
     _install_stack_dump_timer()
+
+    # Hydrate feature flags from config/feature_flags.json BEFORE any startup
+    # phase reads a flag (orchestration phases and provider setup call
+    # is_enabled). Without this the registry keeps code defaults and the config
+    # file is dead — card 60917072. Non-fatal: a malformed/missing config logs
+    # a warning and boot proceeds on defaults.
+    try:
+        from domain.shared._internal.feature_flags import FeatureFlags
+
+        FeatureFlags.load_config()
+    except Exception as exc:  # pragma: no cover — defensive, never block boot
+        logger.warning("Feature flag config load failed (non-fatal): %s", exc)
+
     try:
         from infrastructure.startup import StartupOrchestrator
 
@@ -139,13 +152,13 @@ async def lifespan(app_inst: FastAPI):
             logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
         # Auto-ingest repo docs into production RAG (if empty)
-        # Moved to background thread: importing rag_service chains through
+        # Moved off the critical path: importing rag_service chains through
         # rag.py → HybridRetriever and blocks the lifespan.
-        import threading
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
 
         def _rag_init_and_ingest():
             try:
-                from domain.cognition._internal.rag_service import get_rag_service
+                from domain.cognition import get_rag_service
 
                 _rag = get_rag_service()
                 if _rag.stats().get("total_chunks", 0) == 0:
@@ -158,10 +171,26 @@ async def lifespan(app_inst: FastAPI):
             except Exception as e:
                 logger.debug("RAG init skipped: %s", e)
 
-        threading.Thread(target=_rag_init_and_ingest, daemon=True, name="rag-init").start()
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): engine spawn is never dropped, unlike a bounded
+        # FAF submit — RAG init must run.
+        get_engine().spawn(_rag_init_and_ingest, name="rag-init")
 
-        # Start background daemons (moved from pre-uvicorn to post-startup)
-        _start_feedback_workflow()
+        # Warm the soul index off the critical path. SloManager no longer scans
+        # in __init__ (a trained .soul embeds ~41 MB of Adam optimizer state as
+        # JSON — ~2.2 s per file, 11 s observed on the 2026-11-03 cold start).
+        try:
+            from domain.inference._internal.slo_manager import warm_soul_index_async
+
+            warm_soul_index_async()
+        except Exception as e:
+            logger.debug("Soul index warm skipped: %s", e, extra={"tag": "START"})
+
+        # Start background daemons (moved from pre-uvicorn to post-startup).
+        # The feedback workflow parses/aggregates adapters before returning
+        # (observed ~9 s of the 40 s cold start), so it runs on the shared
+        # engine like rag-init above — background work must not gate readiness.
+        get_engine().spawn(_start_feedback_workflow, name="feedback-workflow")
         _start_health_monitor()
         _start_watchdog()
 
@@ -218,6 +247,53 @@ async def lifespan(app_inst: FastAPI):
         _cancel_stack_dump_timer()
 
 
+# fd the periodic dump writes to — a named seam so tests can capture it.
+_STACK_DUMP_FD = 2
+# The single dumper thread and its stop signal; install/cancel own them.
+_STACK_DUMP_STOP: threading.Event | None = None
+_STACK_DUMP_THREAD: threading.Thread | None = None
+
+
+def _dump_thread_stacks(fd: int = _STACK_DUMP_FD) -> None:
+    """Write every thread's Python stack to *fd* as one buffered write.
+
+    ``sys._current_frames()`` runs under the GIL, and frame teardown also
+    requires the GIL, so the snapshot can never observe a freed frame: the
+    returned frame objects pin themselves, and each frame holds a strong
+    ref to its parent (``f_back``), keeping the whole chain alive while we
+    format it. The GIL is the invariant the old implementation broke.
+
+    Replaced ``faulthandler.dump_traceback_later(interval, repeat=True)``,
+    whose C-level walk of raw ``_PyInterpreterFrame`` pointers runs from a
+    timer/signal context WITHOUT the GIL and races normal frame teardown.
+    That race was not theoretical: slough-api SIGSEGV'd 23 times over
+    2026-10-31..11-02 (every 4-14 min under load, and during idle
+    startup), and all 3 retained cores died at the identical instruction —
+    ``dump_frame``, ``Python/traceback.c:1259`` (``code->co_filename`` off
+    a stale frame), frames #0 offset ``python3.12 + 0x1a3c7b`` each.
+
+    Side effects:
+        - one ``os.write`` to *fd* (stderr by default → journald)
+    """
+    frames = sys._current_frames()
+    parts: list[str] = []
+    for tid, frame in frames.items():
+        if frame is None:
+            continue
+        parts.append(f"Thread 0x{tid:015x} (most recent call first):\n")
+        parts.extend(traceback.format_stack(frame))
+    os.write(fd, "".join(parts).encode("utf-8", "replace"))
+
+
+def _stack_dump_loop(interval: float, stop: threading.Event) -> None:
+    """Dump every *interval* seconds until *stop* is set; never raise."""
+    while not stop.wait(interval):
+        try:
+            _dump_thread_stacks()
+        except Exception as exc:
+            logger.warning("periodic stack dump failed: %s", exc, extra={"tag": "START"})
+
+
 def _install_stack_dump_timer() -> None:
     """Periodically dump all thread stacks to stderr when ``SLO_DUMP_STACKS=1``.
 
@@ -226,29 +302,56 @@ def _install_stack_dump_timer() -> None:
     loop). Off by default; interval configurable via ``SLO_DUMP_STACKS_INTERVAL``
     seconds (default 30).
 
+    Runs as a Python thread instead of faulthandler's repeating timer —
+    see ``_dump_thread_stacks`` for the crash this swap replaces. The
+    install is idempotent: a second call stops the previous dumper first.
+
     Side effects:
-        - registers a faulthandler repeating timer dumping to stderr
+        - starts one daemon thread writing stack dumps to stderr
     """
+    global _STACK_DUMP_STOP, _STACK_DUMP_THREAD
     if os.environ.get("SLO_DUMP_STACKS", "0").lower() not in ("1", "true", "yes"):
         return
     try:
         interval = float(os.environ.get("SLO_DUMP_STACKS_INTERVAL", "30"))
-        faulthandler.dump_traceback_later(interval, repeat=True)
+        _cancel_stack_dump_timer()
+        stop = threading.Event()
+        thread = threading.Thread(
+            target=_stack_dump_loop,
+            args=(interval, stop),
+            name="stack-dump",
+            daemon=True,
+        )
+        thread.start()
+        _STACK_DUMP_STOP, _STACK_DUMP_THREAD = stop, thread
         logger.info(
-            "faulthandler stack dump active every %ss (SLO_DUMP_STACKS=1)",
+            "stack dump active every %ss (SLO_DUMP_STACKS=1, gil-safe)",
             interval,
             extra={"tag": "START"},
         )
     except Exception as exc:
-        logger.warning("faulthandler stack dump not installed: %s", exc, extra={"tag": "START"})
+        logger.warning("stack dump thread not installed: %s", exc, extra={"tag": "START"})
 
 
 def _cancel_stack_dump_timer() -> None:
-    """Cancel the faulthandler dump timer installed by ``_install_stack_dump_timer``."""
+    """Stop the dumper thread installed by ``_install_stack_dump_timer``.
+
+    Idempotent — safe to call when nothing is installed (lifespan's
+    ``finally`` runs unconditionally). Joins briefly so a test or a fast
+    restart never races a half-written dump.
+    """
+    global _STACK_DUMP_STOP, _STACK_DUMP_THREAD
+    stop, thread = _STACK_DUMP_STOP, _STACK_DUMP_THREAD
+    _STACK_DUMP_STOP, _STACK_DUMP_THREAD = None, None
+    if stop is None or thread is None:
+        return
     try:
-        faulthandler.cancel_dump_traceback_later()
+        stop.set()
+        thread.join(timeout=5.0)
+        if thread.is_alive():
+            logger.warning("stack dump thread still draining after 5s")
     except Exception as e:
-        logger.warning("Faulthandler cancel failed: %s", e)
+        logger.warning("Stack dump cancel failed: %s", e)
 
 
 # ── FastAPI application ─────────────────────────────────────────────
@@ -450,8 +553,7 @@ def _start_health_monitor() -> None:
 
         interval = int(os.environ.get("SLO_HEALTH_INTERVAL", "300"))
         monitor = get_health_monitor()
-        thread = monitor.start_auto_monitoring(interval_seconds=interval)
-        thread.name = "health-monitor"
+        monitor.start_auto_monitoring(interval_seconds=interval)
         logger.info(
             "Model health monitor started",
             extra={"context": {"interval_seconds": interval}, "tag": "START"},

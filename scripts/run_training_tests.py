@@ -44,18 +44,18 @@ if not (REPO_ROOT / ".venv" / "bin" / "python" / "-m" / "pytest").exists():
 else:
     PYTEST = [str(REPO_ROOT / ".venv" / "bin" / "python"), "-m", "pytest"]
 
-UNIT_TEST_FILE = "packages/core-py/tests/test_comprehensive_trainer_unit.py"
-JOURNEY_TEST_FILE = "packages/core-py/tests/test_comprehensive_training_journeys.py"
-E2E_TEST_FILE = "packages/core-py/tests/test_e2e_training_trigger.py"
-INTEGRATION_TEST_FILE = "packages/core-py/tests/test_computer_use_training_integration.py"
-PROGRESS_STREAM_FILE = "packages/core-py/tests/test_training_progress_stream.py"
-BENCHMARK_FILE = "packages/core-py/tests/test_training_benchmarks.py"
-EXPORT_PRESETS_FILE = "packages/core-py/tests/test_training_export_presets.py"
-INFRASTRUCTURE_FILE = "packages/core-py/tests/test_training_infrastructure.py"
-WORKFLOW_INTEGRATION_FILE = "packages/core-py/tests/test_training_integration.py"
-ROBUSTNESS_FILE = "packages/core-py/tests/test_training_robustness.py"
-QUALITY_METHODS_FILE = "packages/core-py/tests/test_training_quality_methods.py"
-CHECKPOINT_EXPORT_FILE = "packages/core-py/tests/test_training_checkpoint_export.py"
+UNIT_TEST_FILE = "tests/core-py/test_comprehensive_trainer_unit.py"
+JOURNEY_TEST_FILE = "tests/core-py/test_comprehensive_training_journeys.py"
+E2E_TEST_FILE = "tests/core-py/test_e2e_training_trigger.py"
+INTEGRATION_TEST_FILE = "tests/core-py/test_computer_use_training_integration.py"
+PROGRESS_STREAM_FILE = "tests/core-py/test_training_progress_stream.py"
+BENCHMARK_FILE = "tests/core-py/test_training_benchmarks.py"
+EXPORT_PRESETS_FILE = "tests/core-py/test_training_export_presets.py"
+INFRASTRUCTURE_FILE = "tests/core-py/test_training_infrastructure.py"
+WORKFLOW_INTEGRATION_FILE = "tests/core-py/test_training_integration.py"
+ROBUSTNESS_FILE = "tests/core-py/test_training_robustness.py"
+QUALITY_METHODS_FILE = "tests/core-py/test_training_quality_methods.py"
+CHECKPOINT_EXPORT_FILE = "tests/core-py/test_training_checkpoint_export.py"
 
 
 def run_pytest(args: list[str], label: str) -> tuple[bool, float]:

@@ -25,9 +25,11 @@ import numpy as np
 
 # ─── Data Structures ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class Chunk:
     """A document chunk with precomputed embeddings and token data."""
+
     id: str
     content: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -47,6 +49,7 @@ class Chunk:
 @dataclass
 class ScoredChunk:
     """Chunk with all scoring components for transparency."""
+
     chunk: Chunk
     bm25: float = 0.0
     tfidf: float = 0.0
@@ -58,6 +61,7 @@ class ScoredChunk:
 @dataclass
 class ExtractionRule:
     """A single extraction rule with pattern, relation type, and confidence."""
+
     name: str
     pattern: re.Pattern[str]
     relation: str
@@ -68,6 +72,7 @@ class ExtractionRule:
 @dataclass
 class ExtractedFact:
     """A fact extracted by the rule engine."""
+
     subject: str
     predicate: str
     obj: str
@@ -81,27 +86,124 @@ class ExtractedFact:
 
 # ─── Tokenizer ────────────────────────────────────────────────────────────────
 
-_STOP_WORDS = frozenset({
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "shall", "can", "need", "dare", "ought",
-    "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
-    "as", "into", "through", "during", "before", "after", "above", "below",
-    "between", "out", "off", "over", "under", "again", "further", "then",
-    "once", "here", "there", "when", "where", "why", "how", "all", "both",
-    "each", "few", "more", "most", "other", "some", "such", "no", "nor",
-    "not", "only", "own", "same", "so", "than", "too", "very", "just",
-    "don", "now", "and", "but", "or", "if", "because", "while", "although",
-    "that", "this", "these", "those", "it", "its", "he", "she", "they",
-    "we", "you", "i", "me", "my", "your", "his", "her", "our", "their",
-})
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "need",
+        "dare",
+        "ought",
+        "used",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "both",
+        "each",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "don",
+        "now",
+        "and",
+        "but",
+        "or",
+        "if",
+        "because",
+        "while",
+        "although",
+        "that",
+        "this",
+        "these",
+        "those",
+        "it",
+        "its",
+        "he",
+        "she",
+        "they",
+        "we",
+        "you",
+        "i",
+        "me",
+        "my",
+        "your",
+        "his",
+        "her",
+        "our",
+        "their",
+    }
+)
 
 
 def _tokenize(text: str) -> list[str]:
     """Lowercase, split on non-alphanumeric, filter stop words and short tokens."""
     return [
-        t for t in re.findall(r"\b[a-z0-9]+\b", text.lower())
-        if t not in _STOP_WORDS and len(t) > 1
+        t for t in re.findall(r"\b[a-z0-9]+\b", text.lower()) if t not in _STOP_WORDS and len(t) > 1
     ]
 
 
@@ -111,6 +213,7 @@ def _tokenize_raw(text: str) -> list[str]:
 
 
 # ─── BM25 (Okapi BM25) ───────────────────────────────────────────────────────
+
 
 class BM25:
     """Okapi BM25 with correct TF, IDF, and document-length normalization.
@@ -204,6 +307,7 @@ class BM25:
 
 # ─── TF-IDF Vector Space ─────────────────────────────────────────────────────
 
+
 class TFIDFIndex:
     """TF-IDF vector space with proper L2 normalization.
 
@@ -289,6 +393,7 @@ class TFIDFIndex:
 
 # ─── Rule Engine ──────────────────────────────────────────────────────────────
 
+
 class RuleEngine:
     """Deterministic C-style rule engine for fact extraction.
 
@@ -311,12 +416,10 @@ class RuleEngine:
 
         rules_defs: list[tuple[str, str, str, float, int]] = [
             # (name, pattern, relation, confidence, priority)
-
             # Classification (highest priority — must come before generic "is")
             ("is_a", rf"{_S1}\s+is\s+a\s+(.+)", "is_a", 0.9, 10),
             ("is_an", rf"{_S1}\s+is\s+an\s+(.+)", "is_a", 0.9, 10),
             ("is_the", rf"{_S1}\s+is\s+the\s+(.+)", "is_a", 0.85, 9),
-
             # Compound verb phrases (must come before generic verb patterns)
             # These match multi-word verb constructions to avoid partial matches
             ("born_in", rf"{_S1}\s+was\s+born\s+in\s+{_O}", "located_in", 0.95, 9),
@@ -329,40 +432,43 @@ class RuleEngine:
             ("serves_as", rf"{_S1}\s+serves\s+as\s+{_O}", "serves_as", 0.8, 9),
             ("based_in", rf"{_S1}\s+is\s+based\s+in\s+{_O}", "based_in", 0.85, 9),
             ("lives_in", rf"{_S1}\s+lives\s+in\s+{_O}", "lives_in", 0.85, 9),
-
             # Generic existence (lower priority than compound phrases)
-            ("is", rf"{_S1}\s+is\s+(?!a\s|an\s|the\s|located\s|used\s|made\s|based\s)(.+)", "is", 0.8, 5),
+            (
+                "is",
+                rf"{_S1}\s+is\s+(?!a\s|an\s|the\s|located\s|used\s|made\s|based\s)(.+)",
+                "is",
+                0.8,
+                5,
+            ),
             ("was", rf"{_S1}\s+was\s+(?!born\s)(.+)", "was", 0.8, 5),
             ("are", rf"{_S1}\s+are\s+(.+)", "are", 0.8, 5),
             ("were", rf"{_S1}\s+were\s+(.+)", "were", 0.8, 5),
-
             # Ability
             ("can", rf"{_S1}\s+can\s+(.+)", "can", 0.8, 4),
             ("could", rf"{_S1}\s+could\s+(.+)", "could", 0.75, 4),
             ("will", rf"{_S1}\s+will\s+(.+)", "will", 0.75, 4),
-
             # Possession
             ("has", rf"{_S1}\s+has\s+(.+)", "has", 0.85, 3),
             ("have", rf"{_S1}\s+have\s+(.+)", "has", 0.85, 3),
             ("had", rf"{_S1}\s+had\s+(.+)", "had", 0.8, 3),
             ("owns", rf"{_S1}\s+owns\s+(.+)", "owns", 0.85, 3),
             ("contains", rf"{_S1}\s+contains\s+(.+)", "contains", 0.85, 3),
-
             # Location (generic fallback)
             ("in", rf"{_S1}\s+is\s+in\s+{_O}", "located_in", 0.7, 2),
-
             # Causation
             ("causes", rf"{_S1}\s+causes\s+(.+)", "causes", 0.85, 1),
         ]
 
         for name, pattern, relation, confidence, priority in rules_defs:
-            self.rules.append(ExtractionRule(
-                name=name,
-                pattern=re.compile(pattern, re.IGNORECASE),
-                relation=relation,
-                confidence=confidence,
-                priority=priority,
-            ))
+            self.rules.append(
+                ExtractionRule(
+                    name=name,
+                    pattern=re.compile(pattern, re.IGNORECASE),
+                    relation=relation,
+                    confidence=confidence,
+                    priority=priority,
+                )
+            )
 
         # Sort by priority descending
         self.rules.sort(key=lambda r: -r.priority)
@@ -414,17 +520,19 @@ class RuleEngine:
                     subj_conf = _subject_confidence(subject)
                     final_conf = rule.confidence * subj_conf
 
-                    facts.append(ExtractedFact(
-                        subject=subject,
-                        predicate=predicate,
-                        obj=predicate,
-                        relation=rule.relation,
-                        confidence=round(final_conf, 3),
-                        rule_name=rule.name,
-                        text=match.group(0).strip(),
-                        start=match.start(),
-                        end=match.end(),
-                    ))
+                    facts.append(
+                        ExtractedFact(
+                            subject=subject,
+                            predicate=predicate,
+                            obj=predicate,
+                            relation=rule.relation,
+                            confidence=round(final_conf, 3),
+                            rule_name=rule.name,
+                            text=match.group(0).strip(),
+                            start=match.start(),
+                            end=match.end(),
+                        )
+                    )
 
         # Sort by confidence descending
         facts.sort(key=lambda f: -f.confidence)
@@ -464,6 +572,7 @@ def _subject_confidence(subject: str) -> float:
 
 
 # ─── MathRAG Engine ──────────────────────────────────────────────────────────
+
 
 class MathRAG:
     """Mathematically rigorous RAG engine combining BM25, TF-IDF, and rule extraction.
@@ -576,9 +685,13 @@ class MathRAG:
         # Merge scores: normalize each to [0, 1], then weighted sum
         merged: dict[int, float] = {}
         for doc_id, score in bm25_scores:
-            merged[doc_id] = merged.get(doc_id, 0.0) + self.bm25_weight * (score / max(bm25_max, 1e-10))
+            merged[doc_id] = merged.get(doc_id, 0.0) + self.bm25_weight * (
+                score / max(bm25_max, 1e-10)
+            )
         for doc_id, score in tfidf_scores:
-            merged[doc_id] = merged.get(doc_id, 0.0) + self.tfidf_weight * (score / max(tfidf_max, 1e-10))
+            merged[doc_id] = merged.get(doc_id, 0.0) + self.tfidf_weight * (
+                score / max(tfidf_max, 1e-10)
+            )
 
         # Sort and filter
         ranked = sorted(merged.items(), key=lambda x: -x[1])
@@ -588,13 +701,15 @@ class MathRAG:
         results = []
         for rank, (doc_id, score) in enumerate(ranked):
             chunk = self.chunks[doc_id]
-            results.append(ScoredChunk(
-                chunk=chunk,
-                bm25=bm25_scores[doc_id][1] if doc_id < len(bm25_scores) else 0.0,
-                tfidf=tfidf_scores[doc_id][1] if doc_id < len(tfidf_scores) else 0.0,
-                combined=score,
-                rank=rank + 1,
-            ))
+            results.append(
+                ScoredChunk(
+                    chunk=chunk,
+                    bm25=bm25_scores[doc_id][1] if doc_id < len(bm25_scores) else 0.0,
+                    tfidf=tfidf_scores[doc_id][1] if doc_id < len(tfidf_scores) else 0.0,
+                    combined=score,
+                    rank=rank + 1,
+                )
+            )
 
         context = "\n\n".join(r.chunk.content for r in results)
         return {
@@ -629,23 +744,27 @@ class MathRAG:
             result = self.query(query, top_k=3, min_score=0.05)
 
             if result["num_results"] == 0:
-                hallucinations.append({
-                    "subject": fact.subject,
-                    "predicate": fact.predicate,
-                    "relation": fact.relation,
-                    "reason": "No supporting evidence found",
-                    "confidence": 0.0,
-                })
+                hallucinations.append(
+                    {
+                        "subject": fact.subject,
+                        "predicate": fact.predicate,
+                        "relation": fact.relation,
+                        "reason": "No supporting evidence found",
+                        "confidence": 0.0,
+                    }
+                )
             else:
                 # Check if any result actually supports the claim
                 best_score = result["results"][0].combined if result["results"] else 0.0
-                grounded.append({
-                    "subject": fact.subject,
-                    "predicate": fact.predicate,
-                    "relation": fact.relation,
-                    "confidence": best_score,
-                    "sources": [r.chunk.id for r in result["results"][:3]],
-                })
+                grounded.append(
+                    {
+                        "subject": fact.subject,
+                        "predicate": fact.predicate,
+                        "relation": fact.relation,
+                        "confidence": best_score,
+                        "sources": [r.chunk.id for r in result["results"][:3]],
+                    }
+                )
 
         # Compute overall confidence
         total = len(facts)

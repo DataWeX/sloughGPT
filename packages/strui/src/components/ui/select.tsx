@@ -161,7 +161,7 @@ const SelectTrigger = forwardRef<
       onClick={() => ctx.onOpenChange(!ctx.open)}
       className={cn(
         'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm',
-        'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}

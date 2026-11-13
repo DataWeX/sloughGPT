@@ -112,6 +112,20 @@ export function IconPin({ className }: IconProps) {
   )
 }
 
+export function IconSmile({ className }: IconProps) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path
+        d="M8.5 14.5c.9 1.2 2.1 1.8 3.5 1.8s2.6-.6 3.5-1.8"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+      <path d="M9 9.5h.01M15 9.5h.01" strokeWidth={2.5} strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function IconClock({ className }: IconProps) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">

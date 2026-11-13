@@ -81,7 +81,7 @@ def _seeded_store(tmp_path: Path) -> WebhookStore:
     """A store with one startup webhook and two delivery records."""
     store = WebhookStore(str(tmp_path / "webhooks.db"))
     store.register(
-        url="https://hooks.example.com/startup",
+        url="https://example.com/startup",
         events=["startup.complete", "startup.failed"],
         headers={"X-A": "b"},
         timeout=7.5,
@@ -127,7 +127,7 @@ class TestGetStatusShape:
         [hook] = status["webhooks"]
         assert set(hook) == ORACLE_HOOK_KEYS
         assert hook == {
-            "url": "https://hooks.example.com/startup",
+            "url": "https://example.com/startup",
             "events": ["startup.complete", "startup.failed"],
             "headers": {"X-A": "b"},
             "timeout": 7.5,
@@ -138,7 +138,7 @@ class TestGetStatusShape:
         assert len(status["recent_deliveries"]) == 2
         first, second = status["recent_deliveries"]
         assert set(first) == ORACLE_DELIVERY_KEYS
-        assert first["url"] == "https://hooks.example.com/startup"
+        assert first["url"] == "https://example.com/startup"
         assert first["event"] == "startup.complete"
         assert first["success"] is True
         assert first["status_code"] == 200
@@ -229,7 +229,7 @@ class TestRegisterMapping:
         store = WebhookStore(str(tmp_path / "webhooks.db"))
         with patch("training.webhooks.get_webhook_store", return_value=store):
             config = register_webhook(
-                "https://hooks.example/y",
+                "https://example.com/hook-y",
                 events=[WebhookEvent.STARTUP_COMPLETE],
                 timeout=5.0,
                 retry_count=4,
@@ -237,7 +237,7 @@ class TestRegisterMapping:
             [hook] = store.list()
 
         assert isinstance(config, WebhookConfig)
-        assert hook.url == "https://hooks.example/y"
+        assert hook.url == "https://example.com/hook-y"
         assert hook.events == ["startup.complete"]
         assert hook.timeout == 5.0
         assert hook.retry_count == 4
@@ -246,8 +246,8 @@ class TestRegisterMapping:
         store = WebhookStore(str(tmp_path / "webhooks.db"))
         manager = WebhookManager()
         with patch("training.webhooks.get_webhook_store", return_value=store):
-            manager.register(WebhookConfig(url="https://hooks.example/z"))
-            manager.unregister("https://hooks.example/z")
+            manager.register(WebhookConfig(url="https://example.com/hook-z"))
+            manager.unregister("https://example.com/hook-z")
             assert store.list() == []
 
 
@@ -272,7 +272,7 @@ class TestRestGate:
         resp = client.post(
             "/training/webhooks",
             params={
-                "url": "https://hooks.example/startup",
+                "url": "https://example.com/startup-event",
                 "events": '["startup.complete"]',
             },
         )
@@ -290,7 +290,7 @@ class TestRestGate:
         resp = client.post(
             "/training/webhooks",
             params={
-                "url": "https://hooks.example/x",
+                "url": "https://example.com/hook-x",
                 "events": '["not.an.event"]',
             },
         )

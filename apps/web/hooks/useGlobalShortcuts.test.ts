@@ -54,12 +54,6 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/datasets')
   })
 
-  it('Ctrl+4 navigates to /personality', () => {
-    renderHook(() => useGlobalShortcuts())
-    keydown('4', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/personality')
-  })
-
   it('Ctrl+5 navigates to agents', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('5', { ctrl: true })

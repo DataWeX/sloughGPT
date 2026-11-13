@@ -1,6 +1,6 @@
-import { logger } from '../web/lib/dev-log'
-import { useAuthStore } from '../web/lib/auth'
+import { _getToken, _log } from './ports'
 import { ApiError } from './errors'
+import { sampleServerTime } from './clock'
 import type { RequestConfig, ResponseEnvelope, RequestOptions } from './types'
 import { _corrId, _trackCorrId } from './corr-id'
 import { _resolveUrl, _isDocstoreUrl } from './url'
@@ -29,7 +29,7 @@ export async function request<T>(
   if (!opts?.raw) headers['Content-Type'] = 'application/json'
   if (opts?.headers) Object.assign(headers, opts.headers)
   if (!opts?.noAuth) {
-    const token = useAuthStore.getState().token
+    const token = _getToken()
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
   headers['X-Correlation-ID'] = corrId
@@ -51,7 +51,7 @@ export async function request<T>(
   // Run request interceptors
   const finalConfig = await _globalInterceptors.request.run(config)
 
-  logger.debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
+  _log().debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
   const timeoutMs = opts?.timeout ?? httpDefaults.timeout
   const isDocstore = _isDocstoreUrl(url)
@@ -104,6 +104,7 @@ export async function request<T>(
           headers: finalConfig.headers,
           body: fetchBody,
           signal,
+          keepalive: opts?.keepalive,
         })
         if (!originalRes.ok || !originalRes.body) {
           res = originalRes
@@ -146,12 +147,13 @@ export async function request<T>(
           headers: finalConfig.headers,
           body: fetchBody,
           signal,
+          keepalive: opts?.keepalive,
         })
       }
 
       if (timer) clearTimeout(timer)
 
-      logger.debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, {
+      _log().debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, {
         corrId,
         method,
         url,
@@ -159,6 +161,9 @@ export async function request<T>(
       })
 
       // Build response envelope
+      // Single clock seam: every response (both fetch paths, every retry)
+      // re-anchors the server-clock offset from the `Date` header.
+      sampleServerTime(res.headers)
       const resText = await res.text()
       const envelope: ResponseEnvelope = {
         ok: res.ok,
@@ -186,7 +191,7 @@ export async function request<T>(
           retries++
           const retryAfter = Number(finalEnvelope.headers.get('Retry-After')) || 0
           const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelay * Math.pow(2, retries - 1)
-          logger.warning(
+          _log().warning(
             `retry ${retries}/${maxRetries} ${method} ${url} ${status} delay=${delay}ms corr=${corrId}`,
             { corrId, method, url, status, retries, maxRetries, delay },
           )
@@ -282,7 +287,7 @@ export async function request<T>(
       if (retries < maxRetries) {
         retries++
         const delay = baseDelay * Math.pow(2, retries - 1)
-        logger.warning(
+        _log().warning(
           `retry ${retries}/${maxRetries} ${method} ${url} ${kind} delay=${delay}ms corr=${corrId}`,
           { corrId, method, url, kind, retries, maxRetries, delay },
         )

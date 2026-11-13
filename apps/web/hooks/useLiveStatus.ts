@@ -23,6 +23,7 @@ import { systemController, type DetailedHealth } from '@/lib/system-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { trackEvent } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
+import { revalidateAll } from '@/lib/cache/client'
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
 
@@ -102,7 +103,9 @@ export interface LiveHealthSnapshot {
 }
 
 export interface LiveStatusState {
-  /** Connection status: connected (SSE active), connecting (trying), offline (failed), reloading (about to reload) */
+  /** Connection status: connected (SSE active), connecting (trying), offline (failed),
+    error (recoverable failure), reloading (legacy member — still rendered by consumers,
+    no longer produced by this hook: health failures now revalidate in place) */
   connectionStatus: ConnectionStatus
   /** Latest health snapshot from SSE or fallback poll */
   health: LiveHealthSnapshot | null
@@ -128,10 +131,12 @@ export interface LiveStatusState {
 }
 
 const FALLBACK_POLL_MS = 8000
-const MAX_FAILURES_BEFORE_RELOAD = 6
-const RELOAD_DELAY_MS = 2000
-const MAX_RELOADS = 3
-const RELOAD_WINDOW_MS = 120_000 // 2 minutes
+
+/** One failure is a hiccup; the Nth consecutive one is a drop. Until this
+ *  escalation existed, nothing in production ever emitted 'offline' — the
+ *  offline UI (status text, Retry button, drop banner) was unreachable. */
+const OFFLINE_ESCALATION_FAILURES = 2
+const MAX_FAILURES_BEFORE_REVALIDATE = 6
 
 /**
  * Map the full /health/detailed response onto the live snapshot shape.
@@ -274,16 +279,14 @@ export function initLiveStatus(): () => void {
         const h = await systemController.getDetailedHealth()
         if (h && h !== null) {
           const hadFailures = liveStatusStore.getState().failureCount > 0
-          liveStatusStore
-            .getState()
-            .setHealthLegacy({
-              status: 'healthy',
-              model_loaded: h.model_loaded,
-              model_type: h.model_type || '',
-              summary: '',
-              inference_count: h.inference_count,
-              is_inferencing: h.inference?.is_inferencing,
-            })
+          liveStatusStore.getState().setHealthLegacy({
+            status: 'healthy',
+            model_loaded: h.model_loaded,
+            model_type: h.model_type || '',
+            summary: '',
+            inference_count: h.inference_count,
+            is_inferencing: h.inference?.is_inferencing,
+          })
           liveStatusStore.getState().setConnectionStatus('connected')
           // Convert full detailed health to the live snapshot shape
           const snap = mapDetailedToSnapshot(h)
@@ -304,7 +307,8 @@ export function initLiveStatus(): () => void {
               message: 'health_fallback_empty offline',
             })
           }
-          checkReload()
+          escalateOffline()
+          checkRevalidate()
         }
       } catch {
         const first = liveStatusStore.getState().failureCount === 0
@@ -316,7 +320,8 @@ export function initLiveStatus(): () => void {
             message: 'health_fallback_error offline',
           })
         }
-        checkReload()
+        escalateOffline()
+        checkRevalidate()
       }
     }
     poll()
@@ -334,39 +339,34 @@ export function initLiveStatus(): () => void {
     }
   }
 
-  function checkReload() {
+  function checkRevalidate() {
     const { failureCount } = liveStatusStore.getState()
-    if (failureCount >= MAX_FAILURES_BEFORE_RELOAD) {
-      // Reload-loop protection: track reloads in sessionStorage.
-      // If we've reloaded MAX_RELOADS times within RELOAD_WINDOW_MS,
-      // stop reloading and show an error instead of creating an infinite loop.
-      const now = Date.now()
-      const storageKey = 'slo-reload-count'
-      const storageTimeKey = 'slo-reload-window-start'
-      let reloadCount = parseInt(sessionStorage.getItem(storageKey) || '0', 10)
-      let windowStart = parseInt(sessionStorage.getItem(storageTimeKey) || '0', 10)
-
-      if (!windowStart || now - windowStart > RELOAD_WINDOW_MS) {
-        // New window — reset counter
-        reloadCount = 0
-        windowStart = now
-      }
-
-      if (reloadCount >= MAX_RELOADS) {
-        // Too many reloads — show error state, don't reload again
-        liveStatusStore.getState().setConnectionStatus('error')
-        return
-      }
-
-      reloadCount++
-      sessionStorage.setItem(storageKey, String(reloadCount))
-      sessionStorage.setItem(storageTimeKey, String(windowStart))
-
-      liveStatusStore.getState().setConnectionStatus('reloading')
-      setTimeout(() => {
-        if (!_stopped) window.location.reload()
-      }, RELOAD_DELAY_MS)
+    if (failureCount >= MAX_FAILURES_BEFORE_REVALIDATE) {
+      // Health has failed N times in a row. Revalidate the client cache in
+      // place rather than reloading the document: the SSE stream reconnects
+      // with infinite backoff and the fallback poll keeps running, so the
+      // old reload bought nothing but lost client state. Resetting the
+      // counter makes this re-fire every N failures instead of every poll.
+      logStateEvent('health_revalidate_threshold', {
+        kind: 'health',
+        message: `health_revalidate_threshold revalidated after ${MAX_FAILURES_BEFORE_REVALIDATE} consecutive failures`,
+      })
+      revalidateAll()
+      liveStatusStore.getState().setConnectionStatus('connecting')
+      liveStatusStore.getState().setFailureCount(0)
     }
+  }
+
+  /** First failure is a hiccup ('connecting'); the second consecutive one is
+   *  a real drop ('offline') — the state the Retry UI and drop banner hang
+   *  off. Called after every incrementFailures, before checkRevalidate (the
+   *  threshold reset re-enters through 'connecting', which is honest: the
+   *  cache was just revalidated and the next poll is a fresh probe). */
+  function escalateOffline() {
+    const { failureCount } = liveStatusStore.getState()
+    liveStatusStore
+      .getState()
+      .setConnectionStatus(failureCount >= OFFLINE_ESCALATION_FAILURES ? 'offline' : 'connecting')
   }
 
   // Convert SSE envelope to our store shape
@@ -375,12 +375,14 @@ export function initLiveStatus(): () => void {
     _receivedHealthEvent = true
     stopFallbackPoll()
     const d = envelope.data as Partial<LiveHealthSnapshot>
-    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
+    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
+      StagedLoaderStatus | undefined
     // Hardening: very old / minimal snapshots omit every startup field, which
     // used to pin the StartupOverlay on "Connecting" forever. A loaded model
     // means startup finished — resolve to "background" (overlay-clearing).
     const rawStage = stagedLoader?.stage ?? d.startup_stage ?? 'unknown'
-    const resolvedStage = rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
+    const resolvedStage =
+      rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
       model_loading: Boolean(d.model_loading),
@@ -483,17 +485,20 @@ export function initLiveStatus(): () => void {
 
   function onError(_err: Error) {
     liveStatusStore.getState().incrementFailures()
-    liveStatusStore.getState().setConnectionStatus('connecting')
+    escalateOffline()
     logStateEvent('sse_error', {
       kind: 'sse',
       message: `sse_error ${_err?.message ?? 'stream failed'}`,
       data: { message: _err?.message ?? 'stream failed' },
     })
-    checkReload()
+    checkRevalidate()
   }
 
   function onOpen() {
-    liveStatusStore.getState().reset()
+    // Reconnect, not fresh boot: keep the last health snapshot — wiping it
+    // flashed an empty "No model" through every SSE reconnect — but clear
+    // the failure tally, the stream is up again.
+    liveStatusStore.getState().setFailureCount(0)
     liveStatusStore.getState().setConnectionStatus('connected')
     logStateEvent('sse_open', { kind: 'sse', message: 'sse_open connected' })
   }

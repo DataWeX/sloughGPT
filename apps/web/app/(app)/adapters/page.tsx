@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect } from 'react'
 import {
@@ -30,7 +31,6 @@ import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
 import { AdapterHealthCard } from '@/components/adapters/AdapterHealthCard'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { useToastStore } from '@/lib/toast-store'
 
 export default function AdaptersPage() {
   const router = useRouter()
@@ -38,7 +38,7 @@ export default function AdaptersPage() {
   const [adapters, setAdapters] = useState<UserAdapterInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [aggregating, setAggregating] = useState(false)
   const [aggregateResult, setAggregateResult] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)

@@ -47,6 +47,7 @@ def _advance_startup_phase(**fields: object) -> None:
 
 # Timeout constants for startup/shutdown hooks (seconds)
 _TIMEOUT_TASK_QUEUE = 10.0
+_TIMEOUT_AGENT_ROUTINES = 10.0
 _TIMEOUT_CONFIG = 5.0
 _TIMEOUT_WANDB = 30.0
 _TIMEOUT_MULTIMODAL = 30.0
@@ -265,6 +266,18 @@ class StartupOrchestrator:
                     profiles=all_profiles,
                 ),
             )
+            # Agent phase 2: background routine runner. Depends on the task
+            # queue because it only ever enqueues; the queue owns execution.
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "agent_routines",
+                    self._phase_agent_routines,
+                    depends_on=["task_queue"],
+                    timeout=_TIMEOUT_AGENT_ROUTINES,
+                    critical=False,
+                    profiles=quick_plus,
+                ),
+            )
 
             # Register shutdown hooks
             self._lifecycle.register_shutdown_hook(
@@ -291,6 +304,16 @@ class StartupOrchestrator:
                     self._shutdown_task_queue,
                     depends_on=[],
                     timeout=_TIMEOUT_TASK_QUEUE,
+                ),
+            )
+            # Ticker stops before the queue drains (shutdown runs the
+            # reverse of startup): no new enqueues once draining begins.
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook(
+                    "agent_routines_shutdown",
+                    self._shutdown_agent_routines,
+                    depends_on=["task_queue_shutdown"],
+                    timeout=_TIMEOUT_AGENT_ROUTINES,
                 ),
             )
             self._lifecycle.register_shutdown_hook(
@@ -329,10 +352,17 @@ class StartupOrchestrator:
         return self._lifecycle
 
     def _is_model_loaded(self) -> bool:
-        """Check if a model is loaded (either via autoload or manually)."""
+        """Check if a model is loaded (either via autoload or manually).
+
+        "Loaded" means the server can serve: an eager load puts the model on
+        ``server_state.model``, while the lazy-guard path installs a provider
+        and materialises weights in the background. Both are serving states,
+        so both must satisfy the gate — matching ``/health``'s own definition
+        (``model is not None or provider is not None``).
+        """
         import state as server_state
 
-        return server_state.model is not None
+        return server_state.model is not None or server_state.provider is not None
 
     async def run(self):
         """Execute startup in 3 stages via StagedLoader.
@@ -417,6 +447,8 @@ class StartupOrchestrator:
             if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
                 return
             # Wait up to 120s for model to load
+            from startup_progress import MODEL_LOAD_STATE
+
             for _ in range(240):
                 import state as server_state
 
@@ -424,6 +456,15 @@ class StartupOrchestrator:
                     return
                 # Lazy guard path: provider is set but model is None
                 if getattr(server_state, "provider", None) is not None:
+                    return
+                # Terminal failure — nothing is loading, so stop waiting
+                # instead of burning the remaining seconds and timing out.
+                if MODEL_LOAD_STATE.get("status") == "failed":
+                    logger.warning(
+                        "Model load already failed — skipping ready wait: %s",
+                        MODEL_LOAD_STATE.get("error"),
+                        extra={"tag": "START"},
+                    )
                     return
                 await asyncio.sleep(0.5)
             logger.warning("Model load timeout after 120s", extra={"tag": "START"})
@@ -472,7 +513,7 @@ class StartupOrchestrator:
             from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
 
             def _rag_sync():
-                from domain.cognition._internal.rag_service import get_rag_service
+                from domain.cognition import get_rag_service
 
                 rag = get_rag_service()
                 if hasattr(rag, "auto_ingest_repo_docs"):
@@ -482,11 +523,17 @@ class StartupOrchestrator:
             stem = self._bg_tree.branch([proc])
             await asyncio.to_thread(stem._done_event.wait)
 
+        async def _auto_resume():
+            # Runs after READY's training_restore marked stale rows
+            # interrupted; config-gated inside (no-op unless SLO_AUTO_RESUME).
+            await _auto_resume_training()
+
         loader.on(Stage.BACKGROUND, "wandb", _init_wandb, timeout=30.0)
         loader.on(Stage.BACKGROUND, "multimodal", _init_multimodal, timeout=30.0)
         loader.on(Stage.BACKGROUND, "metrics", _init_metrics, timeout=10.0)
         loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
         loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
+        loader.on(Stage.BACKGROUND, "training_auto_resume", _auto_resume, timeout=30.0)
 
         # Stage 2 (READY) and Stage 3 (BACKGROUND) run *after* the socket binds.
         # uvicorn refuses connections until the lifespan yields, and READY blocks
@@ -607,6 +654,12 @@ class StartupOrchestrator:
         )
         logger.info("Phase 4: loading model %s (background)", raw, extra={"tag": "START"})
 
+        # A fresh attempt must clear a previous terminal outcome, or the
+        # readiness gate would keep reporting the old failure.
+        from startup_progress import MODEL_LOAD_STATE
+
+        MODEL_LOAD_STATE.update(status="loading", error=None)
+
         def _load_and_register():
             """Load model then register with registry/providers."""
             import state as server_state
@@ -657,12 +710,15 @@ class StartupOrchestrator:
                         exc_info=True,
                         extra={"tag": "START"},
                     )
+                # Runs inside the PGQ model-load worker (never the uvicorn
+                # loop), so the cold soul-index parse cannot starve the loop.
                 _sync_soul_traits()
                 logger.info(
                     "Inference engine ready: %s (subprocess mode)",
                     cfg.autoload_model,
                     extra={"tag": "START"},
                 )
+                _mark_model_load_ready()
                 return
 
             # Lazy-guard fast path (default): with a ProcessGuard + .slnc
@@ -677,22 +733,21 @@ class StartupOrchestrator:
                     cfg.autoload_model,
                     extra={"tag": "START"},
                 )
+                _mark_model_load_ready()
                 return
 
             try:
                 loaded_provider = _autoload_model(cfg)
             except Exception as e:
                 logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
+                _record_model_load_failure(str(e))
                 return
 
-            # After model is loaded, register with registry + providers
-            try:
-                process_guard = _build_guard_for_model(cfg, server_state.model_type)
-                _register_loaded(cfg, process_guard, preloaded_provider=loaded_provider)
-            except Exception as e:
-                logger.error(
-                    "Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"}
-                )
+            # Register only when weights actually materialized. A load that
+            # produced nothing used to fall through to _register_loaded, which
+            # logged "Model loaded + providers registered: None" and left the
+            # readiness gate answering "Model still loading" forever.
+            _finish_autoload(cfg, loaded_provider)
 
         # Fire-and-forget: model loads in background while routers register
         from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
@@ -713,12 +768,23 @@ class StartupOrchestrator:
 
     def _on_pgq_model_load_done(self, proc):
         """Callback when model load PGQ process completes or fails."""
+        from startup_progress import MODEL_LOAD_STATE
+
         from domain.infrastructure._internal.pugqeep.engine import ProcessStatus
         from infrastructure.staged_loader import get_staged_loader
 
         loader = get_staged_loader()
 
         if proc.status == ProcessStatus.COMPLETED:
+            if MODEL_LOAD_STATE.get("status") == "failed":
+                # The worker returned without raising but produced nothing —
+                # the cause was recorded inside it. Reporting success here is
+                # what made the staged loader claim "Model loaded successfully"
+                # while every readiness check said otherwise.
+                err = MODEL_LOAD_STATE.get("error") or "unknown cause"
+                logger.error("Model load failed: %s", err, extra={"tag": "START"})
+                loader.set_model_progress(0.0, f"Model load failed: {err}")
+                return
             loader.set_model_progress(1.0, "Model loaded successfully")
         elif proc.status == ProcessStatus.CANCELLED:
             logger.debug("Model load cancelled (server shutting down)", extra={"tag": "START"})
@@ -726,6 +792,10 @@ class StartupOrchestrator:
             return
         else:
             logger.error("Model load failed: %s", proc.error, extra={"tag": "START"})
+            # A crashed PGQ worker records nothing of its own — without a
+            # terminal state the gate answers E_MODEL_LOADING forever for a
+            # load that already stopped (eternal 503, fix/model-readiness-verdict).
+            _record_model_load_failure(f"Model load process failed: {proc.error}")
             loader.set_model_progress(0.0, f"Model load failed: {proc.error}")
             return
 
@@ -937,6 +1007,59 @@ class StartupOrchestrator:
                 warmup_proc = PgqProcess(fn=_warm_checkpoints, name="ckpt-warmup")
                 self._bg_tree.branch([warmup_proc])
 
+                # Background health-snapshot warmup. The FIRST
+                # get_detailed_health() call costs ~1.3s: it imports the
+                # controllers.health graph (284 modules) and, via
+                # domain.slolib.get_accelerator() -> _detect_best_backend() ->
+                # is_available(), reaches the GPU stack (cupy: 279ms self,
+                # 758ms cumulative). Nothing warmed it before, so that whole
+                # cost landed in-request on the first /health/stream
+                # subscriber — measured 1281ms vs 1.5ms warm.
+                #
+                # Run it here, where there is no traffic yet. Note this only
+                # works because PgqProcess executes IN-PROCESS: the warmed
+                # sys.modules are this process's. (Verified: a marker file and
+                # a deliberately-unrelated stdlib module both landed in the
+                # parent.) A forked child would warm nothing but the page
+                # cache.
+                def _warm_health():
+                    try:
+                        from controllers.health import get_health_controller
+
+                        get_health_controller().get_detailed_health()
+                    except Exception as e:
+                        logger.debug(
+                            "Health warmup failed (non-fatal): %s", e, extra={"tag": "START"}
+                        )
+
+                self._bg_tree.branch([PgqProcess(fn=_warm_health, name="health-warmup")])
+
+                # Background dashboard-snapshot warmup — the same defect, and
+                # NOT covered by the health warmup above. Measured in a fresh
+                # process: the first `_build_snapshot()` costs **1419ms** and
+                # pulls 654 modules, against 6.6ms warm, and neither
+                # `controllers.health` nor `cupy` is in sys.modules afterwards
+                # — dashboard reaches its own closure (`domain.infrastructure`,
+                # `training.jobs`, the event buffer), so warming health leaves
+                # this cold. First `/dashboard/stream` subscriber pays it.
+                #
+                # Two separate procs rather than one that does both: they run
+                # concurrently on the background tree, and a failure in either
+                # warmup stays isolated to itself.
+                def _warm_dashboard():
+                    try:
+                        from routers.dashboard import _build_snapshot
+
+                        _build_snapshot()
+                    except Exception as e:
+                        logger.debug(
+                            "Dashboard warmup failed (non-fatal): %s",
+                            e,
+                            extra={"tag": "START"},
+                        )
+
+                self._bg_tree.branch([PgqProcess(fn=_warm_dashboard, name="dashboard-warmup")])
+
                 return
             except Exception as e:
                 last_exc = e
@@ -1018,6 +1141,26 @@ class StartupOrchestrator:
                 "Memory maintenance scheduler start failed: %s", e, extra={"tag": "START"}
             )
 
+    async def _phase_agent_routines(self):
+        """Register the routine handler and start the background ticker.
+
+        Non-critical: the server is fully usable without it, so a failure
+        here only means no scheduled runs (manual execute still works).
+        """
+        try:
+            from domain.agents import get_routine_runner
+
+            runner = get_routine_runner()
+            runner.register_handlers()
+            runner.start()
+            logger.info(
+                "Agent routine runner started (interval=%.1fs)",
+                runner.tick_interval,
+                extra={"tag": "START"},
+            )
+        except Exception as e:
+            logger.warning("Agent routine runner start failed: %s", e, extra={"tag": "START"})
+
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
         STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
@@ -1095,6 +1238,21 @@ class StartupOrchestrator:
             except Exception as e:
                 logger.warning("Task queue shutdown: %s", e, extra={"tag": "START"})
 
+    async def _shutdown_agent_routines(self):
+        """Stop the routine ticker only — in-flight runs belong to the queue.
+
+        Deliberately does not await or cancel running tasks: the queue
+        drains them on its own shutdown, and killing a model⇄tool loop
+        mid-step would strand its run record.
+        """
+        try:
+            from domain.agents import get_routine_runner
+
+            get_routine_runner().stop()
+            logger.info("Agent routine runner stopped", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("Agent routine runner shutdown: %s", e, extra={"tag": "START"})
+
     async def _shutdown_jobs(self):
         """Mark running training jobs as crashed on shutdown."""
         try:
@@ -1149,6 +1307,9 @@ class StartupOrchestrator:
 
     async def _shutdown_process_guard(self):
         """Stop any active ProcessGuard so worker subprocesses exit cleanly."""
+        # A pending parent preload must not fire during shutdown: it holds the
+        # GIL for the whole 2.5 GB read, which turned a stop into 25 s.
+        _cancel_parent_preload("process_guard_shutdown")
         try:
             from controllers.models import get_models_controller
 
@@ -1213,6 +1374,71 @@ async def _restore_training_runtime():
         logger.warning("Training runtime restore failed: %s", e, extra={"tag": "START"})
 
 
+async def _auto_resume_training():
+    """Boot-time auto-resume of interrupted training jobs (decision 20261102_001425).
+
+    Runs AFTER restore() (which marks stale rows interrupted) and only when
+    config auto_resume is on (default off). The policy caps at one concurrent
+    resume and skips jobs without a loadable checkpoint; dispatch goes through
+    training.router.start_recovery — the same fail-closed path as the HTTP
+    endpoint, so a boot race never double-starts a job. Every decision emits
+    a process event (logged here; the dock reads them via /recovery/events).
+    """
+    try:
+        from config import ServerConfig
+
+        cfg = ServerConfig.from_env()
+        if not cfg.auto_resume:
+            return
+
+        from training.auto_resume import run_auto_resume
+        from training.job_store import get_job_store
+        from training.router import start_recovery
+
+        def _loadable(job: dict) -> bool:
+            """Checkpoint probe via the engine's resolver — recorded path
+            authoritative, corrupt files count as unloadable (the probe's
+            ValueError is the skip signal, not a crash)."""
+            from domain.training.engine import get_training_engine
+
+            config = job.get("config", {})
+            checkpoint_dir = (
+                job.get("checkpoint_dir") or config.get("checkpoint_dir") or "checkpoints"
+            )
+            get_training_engine().resolve_resume_checkpoint(
+                job.get("checkpoint_path") or "", checkpoint_dir
+            )
+            return True
+
+        def _execute():
+            plan = run_auto_resume(
+                get_job_store(),
+                enabled=True,
+                checkpoint_loadable=_loadable,
+                recover=start_recovery,
+            )
+            for ev in plan.events:
+                logger.info(
+                    "Auto-resume event: %s (%s) reason=%s",
+                    ev["event"],
+                    ev["process_id"],
+                    ev.get("reason", "-"),
+                    extra={"tag": "TRAIN"},
+                )
+            return plan
+
+        plan = await asyncio.to_thread(_execute)
+        logger.info(
+            "Boot auto-resume: outcome=%s resumed=%d events=%d",
+            plan.outcome.value,
+            len(plan.to_resume),
+            len(plan.events),
+            extra={"tag": "TRAIN"},
+        )
+    except Exception as e:
+        logger.warning("Boot auto-resume failed: %s", e, extra={"tag": "START"})
+
+
 def _sync_soul_traits():
     """Sync current soul traits to the PersonalityProcessor (best-effort)."""
     try:
@@ -1229,84 +1455,154 @@ def _sync_soul_traits():
         )
 
 
-def _start_parent_preload(model_type: str):
-    """Background preload of parent weights after lazy-guard autoload.
+# Delay before the parent materialises weights: uvicorn's loop.create_server()
+# hangs when the event loop is starved by heavy C-extension weight loading, and
+# the soul-index warm thread wants the disk first.
+_PARENT_PRELOAD_DELAY_S = 15.0
 
-    Materializes parent weights while the guard still serves requests.
-    The preload is delayed by 15 seconds to avoid holding the GIL while
-    uvicorn binds the server socket (``loop.create_server()`` hangs when
-    the event loop is starved by heavy C-extension weight loading).
+# The scheduled preload must be cancellable: materialising 2.5 GB holds the GIL
+# for the whole read, so a timer that fires during a graceful stop turns that
+# stop into "wait for the weight load". (The baseline SIGTERM-ignoring teardown
+# measured by benchmark_startup.py is a separate, pre-existing behaviour.)
+_parent_preload_timer: threading.Timer | None = None
+_shutting_down = threading.Event()
+
+
+def _cancel_parent_preload(reason: str = "shutdown") -> bool:
+    """Cancel a pending preload so shutdown is never blocked by a weight read.
+
+    Returns True when a pending timer was cancelled. A preload already running
+    cannot be interrupted (the GIL is held inside the weight load) — that is
+    why the delay exists in the first place.
+    """
+    global _parent_preload_timer
+    _shutting_down.set()
+    timer = _parent_preload_timer
+    if timer is None:
+        return False
+    _parent_preload_timer = None
+    timer.cancel()
+    logger.info("Parent preload cancelled (%s)", reason, extra={"tag": "START"})
+    return True
+
+
+def _preload_parent_weights(model_type: str) -> bool:
+    """Materialise the parent's weights, then release the guard's copy.
+
+    The post-ready half of lazy-guard autoload: readiness was already reported
+    (the header-only provider serves), so this runs on its own daemon thread and
+    never gates anything. On success the resident model is published to
+    ``server_state.model`` so ``/health``'s ``model_loaded`` flips from
+    provider-only to materialised.
+
+    Returns True when weights are resident afterwards.
     """
     import time
 
     import state as server_state
 
-    def _preload():
-        try:
-            provider = getattr(server_state, "provider", None)
-            if provider is None:
-                logger.debug(
-                    "Parent preload: no provider on server_state, skipping", extra={"tag": "START"}
-                )
-                return
+    if _shutting_down.is_set():
+        logger.debug("Parent preload: server is shutting down, skipping", extra={"tag": "START"})
+        return False
 
-            # Materialize the parent weights WHILE guard still serves requests.
-            _st = time.monotonic()
-            provider.materialize_model()
-            elapsed = time.monotonic() - _st
-            logger.info(
-                "Parent preload complete: %s in %.1fs — in-process ready",
-                model_type,
-                elapsed,
-                extra={"tag": "START"},
-            )
-
-            # NOW stop the guard to release the subprocess copy.
-            try:
-                server = getattr(provider, "_server", None)
-                if server is not None:
-                    guard = getattr(server, "_process_guard", None)
-                    if guard is not None and getattr(guard, "alive", False):
-                        guard.stop()
-                        logger.info(
-                            "Parent preload: stopped guard after materialization (release subprocess copy)",
-                            extra={"tag": "START"},
-                        )
-            except Exception as exc:
-                logger.debug(
-                    "Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"}
-                )
-        except Exception as e:
+    try:
+        provider = getattr(server_state, "provider", None)
+        if provider is None:
             logger.debug(
-                "Parent preload failed (will materialize on first request): %s",
-                e,
-                extra={"tag": "START"},
+                "Parent preload: no provider on server_state, skipping", extra={"tag": "START"}
             )
+            return False
 
-    # Delay parent preload by 15s so uvicorn's loop.create_server() can
-    # bind the socket before heavy GIL-holding weight materialization starts.
-    _delay = 15.0
+        # Materialize the parent weights WHILE the guard still serves requests.
+        _st = time.monotonic()
+        provider.materialize_model()
+        elapsed = time.monotonic() - _st
+
+        model = getattr(provider, "_model", None)
+        if model is not None:
+            server_state.model = model
+            try:
+                from domain.infrastructure.server_state import get_server_state
+
+                get_server_state().model.set(model)
+            except Exception as exc:
+                logger.debug("Parent preload: core mirror failed: %s", exc, extra={"tag": "START"})
+        logger.info(
+            "Parent preload complete: %s in %.1fs — weights resident",
+            model_type,
+            elapsed,
+            extra={"tag": "START"},
+        )
+
+        # NOW stop the guard: the parent owns the weights, so the guard's copy
+        # is redundant (and in THREAD mode it is the same object).
+        try:
+            server = getattr(provider, "_server", None)
+            if server is not None:
+                guard = getattr(server, "_process_guard", None)
+                if guard is not None and getattr(guard, "alive", False):
+                    guard.stop()
+                    logger.info(
+                        "Parent preload: stopped guard after materialization (parent owns weights)",
+                        extra={"tag": "START"},
+                    )
+        except Exception as exc:
+            logger.debug(
+                "Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"}
+            )
+        return model is not None
+    except Exception as e:
+        logger.debug(
+            "Parent preload failed (will materialize on first request): %s",
+            e,
+            extra={"tag": "START"},
+        )
+        return False
+
+
+def _start_parent_preload(model_type: str, delay_s: float | None = None):
+    """Schedule ``_preload_parent_weights`` on a daemon timer after ready.
+
+    The delay lets uvicorn bind the socket and the soul-index warm thread use
+    the disk before the 2.5 GB weight read starts. Both the timer and the
+    thread are daemons: a preload that outlives its process must not hold it
+    open (a non-daemon ``threading.Timer`` would).
+    """
+    _delay = _PARENT_PRELOAD_DELAY_S if delay_s is None else delay_s
+    global _parent_preload_timer
+    from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+    _shutting_down.clear()  # a fresh boot is not shutting down
     logger.info(
         "Parent preload: scheduling in %.0fs (avoid GIL starvation of uvicorn bind)",
         _delay,
         extra={"tag": "START"},
     )
-    threading.Timer(
+    timer = threading.Timer(
         _delay,
-        lambda: threading.Thread(
-            target=_preload, daemon=True, name=f"parent-preload-{model_type.split('/')[-1]}"
-        ).start(),
-    ).start()
+        # Stage 3B: the Timer stays as the delay scheduler (daemon, not a
+        # gated Thread site); the preload work itself becomes an engine
+        # process — spawn is never dropped, so the must-run preload can't
+        # silently vanish.
+        lambda: get_engine().spawn(
+            _preload_parent_weights,
+            model_type,
+            name=f"parent-preload-{model_type.split('/')[-1]}",
+        ),
+    )
+    timer.daemon = True
+    _parent_preload_timer = timer
+    timer.start()
 
 
 def _try_lazy_guard_autoload(cfg) -> bool:
     """Defer the parent weight load when a ProcessGuard + .slnc are available.
 
     Creates a header-only lazy ``SloNetChatProvider`` (no weight pages faulted
-    into the parent) and a ``ProcessGuard`` whose worker process loads the
-    weights. The parent process stays near-idle; inference is served by the
-    guard worker; if the guard dies, the parent materializes weights on demand
-    via the lazy provider's ``_get_model()``.
+    into the parent) and a ``ProcessGuard`` whose worker thread serves
+    inference. The parent process stays near-idle at ready; weights are
+    materialised afterwards by ``_start_parent_preload`` (or on first request
+    via the lazy provider's ``_get_model()``).
 
     Returns:
         True when the lazy fast path was applied, False to fall back to the
@@ -1348,7 +1644,13 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     try:
         from domain.inference._internal.slonet_provider import SloNetChatProvider
 
-        provider = SloNetChatProvider.from_slnc(
+        # Header-only: config + tensor table, no weight pages faulted in.
+        # This used to call from_slnc(), which materialised the full 2.5 GB in
+        # the parent at boot — exactly the cost this path exists to defer.
+        # lazy_from_slnc() is the documented "intended construction path for
+        # the server autoload with a ProcessGuard"; _start_parent_preload is
+        # its companion (and was, until now, orphaned dead code).
+        provider = SloNetChatProvider.lazy_from_slnc(
             slnc_path,
             model_id=model_type,
             quantize=cfg.quantize_slonet,
@@ -1359,22 +1661,24 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         )
     except Exception as e:
         logger.warning(
-            "Lazy-guard autoload: model load failed (%s) — falling back to eager load",
+            "Lazy-guard autoload: provider construction failed (%s) — falling back to eager load",
             e,
             extra={"tag": "START"},
         )
         return False
 
     server_state.model_type = model_type
-    server_state.model = provider._model
+    # No resident weights yet: the provider is the ready handle, and
+    # server_state.model deliberately stays None until materialisation.
     server_state.provider = provider
+    server_state.model = None
     server_state.tokenizer = getattr(provider, "_tokenizer", None)
 
     try:
         from domain.infrastructure.server_state import get_server_state
 
         core = get_server_state()
-        core.model.set(provider)
+        core.provider.set(provider)
         core.model_type.set(model_type)
     except Exception as e:
         logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
@@ -1457,10 +1761,15 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         return False
 
     logger.info(
-        "Lazy-guard autoload active for %s (loaded in PGQ thread)",
+        "Lazy-guard autoload active for %s (header-only; weights materialise in background)",
         model_type,
         extra={"tag": "START"},
     )
+    # Readiness is already true — the provider is a serving handle. The weight
+    # materialisation runs after a short delay so the 2.5 GB read can neither
+    # hold the GIL while uvicorn binds the socket nor contend with the soul
+    # index warm thread for disk.
+    _start_parent_preload(model_type)
     return True
 
 
@@ -1642,6 +1951,90 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     )
 
 
+# ── Autoload outcome — the terminal state the readiness gate reports ──────────
+
+
+def _note_model_load_error(reason: str) -> None:
+    """Store why the autoload gave up (status stays ``loading`` for the caller)."""
+    from startup_progress import MODEL_LOAD_STATE
+
+    MODEL_LOAD_STATE["error"] = reason
+
+
+def _record_model_load_failure(reason: str | None = None) -> None:
+    """Record a terminal autoload failure for the readiness gate.
+
+    Without a terminal state the phase machine still reaches ``ready`` and
+    every check downstream answers "Model still loading" for a load that
+    already stopped — the failure has to be named, not implied.
+    """
+    from startup_progress import MODEL_LOAD_STATE
+
+    error = reason or MODEL_LOAD_STATE.get("error") or "Model load failed — no model is available."
+    MODEL_LOAD_STATE.update(status="failed", error=error)
+    logger.error("Model load failed: %s", error, extra={"tag": "START"})
+    try:
+        from infrastructure.staged_loader import get_staged_loader
+
+        get_staged_loader().set_model_progress(0.0, f"Model load failed: {error}")
+    except Exception as e:
+        logger.debug("Staged loader failure record skipped: %s", e, extra={"tag": "START"})
+
+
+def _mark_model_load_ready() -> None:
+    """Clear any recorded failure: something materialized and is registered."""
+    from startup_progress import MODEL_LOAD_STATE
+
+    MODEL_LOAD_STATE.update(status="ready", error=None)
+
+
+def _autoload_materialized() -> bool:
+    """True when the autoload actually produced something servable."""
+    import state as server_state
+
+    if server_state.model is not None or getattr(server_state, "provider", None) is not None:
+        return True
+    try:
+        from domain.infrastructure.server_state import get_server_state
+
+        return get_server_state().model.get() is not None
+    except Exception:
+        return False
+
+
+def _finish_autoload(cfg: ServerConfig, loaded_provider: Any) -> bool:
+    """Register a successful autoload — or record its terminal failure.
+
+    Returns True when the result is registered/usable. A load that produced
+    nothing must never reach ``_register_loaded``: that path logged
+    "Model loaded + providers registered: None" for a failed load, which is
+    what left ``GET /v1/models`` answering "still loading" forever.
+    """
+    import state as server_state
+
+    if not _autoload_materialized():
+        from startup_progress import MODEL_LOAD_STATE
+
+        _record_model_load_failure(
+            MODEL_LOAD_STATE.get("error")
+            or (
+                f"No model weights materialized for {cfg.autoload_model} — load weights "
+                "(POST /models/load) or set SLO_BOOTSTRAP_HF=1 to download them."
+            )
+        )
+        return False
+
+    try:
+        process_guard = _build_guard_for_model(cfg, server_state.model_type)
+        _register_loaded(cfg, process_guard, preloaded_provider=loaded_provider)
+    except Exception as e:
+        logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
+        _record_model_load_failure(f"Post-load registration failed: {e}")
+        return False
+    _mark_model_load_ready()
+    return True
+
+
 def _autoload_model(cfg: ServerConfig):
     """Load model weights into server_state. Registration handled by caller.
 
@@ -1745,6 +2138,11 @@ def _autoload_model(cfg: ServerConfig):
             model_id,
             extra={"tag": "START"},
         )
+        _note_model_load_error(
+            f"No local weights for {model_id} (no .slnc/.soul/safetensors) and "
+            "SLO_BOOTSTRAP_HF is off — set SLO_BOOTSTRAP_HF=1 to download them, or "
+            "point SLO_AUTOLOAD_MODEL at a model you already have."
+        )
         return None
 
     logger.info(
@@ -1762,6 +2160,7 @@ def _autoload_model(cfg: ServerConfig):
         logger.info("Download complete: %s", model_id, extra={"tag": "START"})
     except Exception as e:
         logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})
+        _note_model_load_error(f"HuggingFace download failed for {model_id}: {e}")
         return None
 
     # 3) Retry load now that safetensors are cached (with retries)
@@ -1803,6 +2202,7 @@ def _autoload_model(cfg: ServerConfig):
             _time.sleep(delay)
 
     logger.error("Autoload failed after all attempts: %s", result.error, extra={"tag": "START"})
+    _note_model_load_error(f"Autoload failed after all attempts for {model_id}: {result.error}")
 
 
 # ── Standalone inference engine ───────────────────────────────────────
@@ -1873,11 +2273,21 @@ def _start_inference_engine(cfg) -> Any | None:
     engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
     try:
-        proc = subprocess.Popen(
+        # Process kind: the engine child is an engine-supervised command —
+        # live status via engine.list_processes(), and Engine.stop()/atexit
+        # reaps it if shutdown never runs (docs/plans/
+        # 2026-09-20-execution-consolidation.md, routing kind "process").
+        # text=False keeps byte-mode stderr: the capture thread below
+        # decodes bytes, exactly as with the raw Popen this replaces.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        proc = get_engine().spawn_command(
             engine_cmd,
+            name="inference-engine",
+            cwd=os.getcwd(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            cwd=os.getcwd(),
+            text=False,
         )
         import collections
 
@@ -2019,11 +2429,15 @@ def _make_engine_restart_fn(cfg):
         engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
         try:
-            proc = subprocess.Popen(
+            from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+            proc = get_engine().spawn_command(
                 engine_cmd,
+                name="inference-engine",
+                cwd=os.getcwd(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                cwd=os.getcwd(),
+                text=False,
             )
             import state as server_state
 

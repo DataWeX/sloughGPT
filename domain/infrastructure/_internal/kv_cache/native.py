@@ -110,12 +110,8 @@ class _NumpyBackend:
         self._k = [np.zeros((1, total_len, nvk, head_dim), dtype=dtype) for nvk in nkv_list]
         self._v = [np.zeros((1, total_len, nvk, head_dim), dtype=dtype) for nvk in nkv_list]
         if quantized:
-            self._sk = [
-                np.zeros((1, total_len, nvk, 1), dtype=np.float32) for nvk in nkv_list
-            ]
-            self._sv = [
-                np.zeros((1, total_len, nvk, 1), dtype=np.float32) for nvk in nkv_list
-            ]
+            self._sk = [np.zeros((1, total_len, nvk, 1), dtype=np.float32) for nvk in nkv_list]
+            self._sv = [np.zeros((1, total_len, nvk, 1), dtype=np.float32) for nvk in nkv_list]
         else:
             self._sk = [None] * n_layers
             self._sv = [None] * n_layers
@@ -225,8 +221,12 @@ class _NumpyBackend:
         self._k[layer_idx] = new_k
         self._v[layer_idx] = new_v
         if self._quant:
-            nsk = np.empty((*self._sk[layer_idx].shape[:1], cap, *self._sk[layer_idx].shape[2:]), np.float32)
-            nsv = np.empty((*self._sv[layer_idx].shape[:1], cap, *self._sv[layer_idx].shape[2:]), np.float32)
+            nsk = np.empty(
+                (*self._sk[layer_idx].shape[:1], cap, *self._sk[layer_idx].shape[2:]), np.float32
+            )
+            nsv = np.empty(
+                (*self._sv[layer_idx].shape[:1], cap, *self._sv[layer_idx].shape[2:]), np.float32
+            )
             nsk[:, :dl] = self._sk[layer_idx][:, :dl]
             nsv[:, :dl] = self._sv[layer_idx][:, :dl]
             self._sk[layer_idx] = nsk

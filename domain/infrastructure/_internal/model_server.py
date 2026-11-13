@@ -32,6 +32,8 @@ from collections.abc import Generator as GeneratorType
 from threading import Lock, Thread
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
 from .circuit_breaker import CircuitBreaker, CircuitBreakerState  # noqa: F401
 from .constants import DEFAULT_GENERATE_TIMEOUT
 from .idle_manager import IdleManager, get_idle_manager  # noqa: F401
@@ -728,9 +730,10 @@ class ModelServer:
         # Register default post-generation hook for KV cache cleanup
         self.add_post_generate_hook(self._cleanup_kv_cache)
 
-        # Background warmup
+        # Background warmup — engine process (stage 3B): spawn is never
+        # dropped, so a warmup can't silently vanish like a lost submit.
         if self._enable_warmup:
-            Thread(target=self._run_warmup, daemon=True).start()
+            get_engine().spawn(self._run_warmup, name=f"warmup-{self.model_id}")
 
         # Queue workers are lazily started on first generate() call
         # (avoids asyncio loop issues with warmup threads)
@@ -873,12 +876,13 @@ class ModelServer:
     def _run_warmup(self) -> None:
         """Send a short warmup request to prime the model (JIT, KV cache, etc.).
 
-        Runs in a daemon thread so it never blocks startup. Warmup failures
-        are logged but never raised — they don't prevent the model from serving.
+        Runs in the background (engine process) so it never blocks startup.
+        Warmup failures are logged but never raised — they don't prevent the
+        model from serving.
 
         Warmup deliberately bypasses the async priority queue and the gen_lock:
-        it runs on a throwaway thread before any live requests arrive, so there
-        is no contention.  Skipping the lock lets the first real request proceed
+        it runs as a background process before any live requests arrive, so
+        there is no contention.  Skipping the lock lets the first real request proceed
         immediately instead of blocking behind warmup.
         """
         try:
@@ -1758,4 +1762,4 @@ class ModelServer:
             self._warmup_completed = False
             self._warmup_error = None
         if self._enable_warmup:
-            Thread(target=self._run_warmup, daemon=True).start()
+            get_engine().spawn(self._run_warmup, name=f"rewarmup-{self.model_id}")

@@ -6,8 +6,13 @@ Public API:
     ShellCommands, DaitRuntime, Resource, get_dait_runtime
 """
 
+from __future__ import annotations
+
 from domain.shell._internal.commands import (
     ShellCommands,
+)
+from domain.shell._internal.interactive import (
+    InteractivePrompt,
 )
 from domain.shell._internal.io import (
     ConsoleIO,
@@ -63,6 +68,11 @@ _dait_instance = None
 
 _LAZY_IMPORTS = {
     "ShellREPL": ("._internal.repl", "ShellREPL"),
+    # The unified NPU driver: `from domain.shell import NPUDevice` was the
+    # documented import (cli.py used it) but was never exported, so the CLI's
+    # model path died on line 1 with an ImportError. Lazy, so importing it
+    # costs nothing until someone actually asks for it.
+    "NPUDevice": ("._internal.kernel_npu", "NPUDevice"),
     "InsFault": ("._internal.vm", "InsFault"),
     "MemFault": ("._internal.vm", "MemFault"),
     "Role": ("._internal.vm_permissions", "Role"),
@@ -95,17 +105,14 @@ def get_dait_runtime() -> DaitRuntime:
 
 
 __all__ = [
+    "ConsoleIO",
+    "DaitRuntime",
+    "InteractivePrompt",
     "Kernel",
+    "MemoryIO",
     "NeuralKernel",
     "Process",
     "ProcessState",
-    "ShellState",
-    "ShellIO",
-    "ConsoleIO",
-    "MemoryIO",
-    "capture_output",
-    "ShellCommands",
-    "DaitRuntime",
     "Resource",
     "get_dait_runtime",
     "InsFault",
@@ -120,5 +127,10 @@ __all__ = [
     "SimScene",
     "Simulation",
     "WorldParams",
+    "ShellCommands",
+    "ShellIO",
+    "ShellState",
     "X86VirtualSystem",
+    "capture_output",
+    "NPUDevice",
 ]

@@ -885,7 +885,7 @@ class TestClassA:
         assert "error" in result.error.lower()
 ```
 
-**Test file location**: `packages/core-py/tests/test_<module>.py`
+**Test file location**: `tests/core-py/test_<module>.py`
 **Test class pattern**: `class Test<Feature>:`
 **Test method pattern**: `def test_<behavior>(self):`
 

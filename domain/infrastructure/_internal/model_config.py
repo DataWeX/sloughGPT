@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class ExecutionMode(Enum):
     """How ProcessGuard runs model inference."""
 
-    THREAD = "thread"      # PGQ Tree — no subprocess, for autoload / PGQ context
+    THREAD = "thread"  # PGQ Tree — no subprocess, for autoload / PGQ context
     SUBPROCESS = "subprocess"  # PGQ GuardTree — full OS isolation, for manual API load
 
 

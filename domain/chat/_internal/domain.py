@@ -86,6 +86,55 @@ class ChatDomain:
                 user_msg = m.get("content", "")
                 break
 
+        # --- unified response cache: exact-key lookup (deterministic only) ---
+        from domain.inference._internal.response_cache import (
+            get_response_cache,
+        )
+
+        _cache = get_response_cache()
+        _cacheable = _cache.is_deterministic(temperature)
+        _cache_key = None
+        if _cacheable:
+            _cache_key = _cache.build_key(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
+            _cached = _cache.get(_cache_key)
+            if _cached is not None:
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                self._log(
+                    user_message=user_msg,
+                    assistant_response=_cached,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    session_id=session_id,
+                    user_id=user_id,
+                    tokens_generated=len(_cached.split()) if _cached else 0,
+                    duration_ms=duration_ms,
+                )
+                return ChatResponse(
+                    text=_cached,
+                    session_id=session_id,
+                    tokens_generated=len(_cached.split()) if _cached else 0,
+                    duration_ms=duration_ms,
+                )
+            # Paraphrase fallback (opt-in semantic tier).
+            _sem = _cache.get_semantic(user_msg, model=model, temperature=temperature)
+            if _sem is not None:
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                return ChatResponse(
+                    text=_sem,
+                    session_id=session_id,
+                    tokens_generated=len(_sem.split()) if _sem else 0,
+                    duration_ms=duration_ms,
+                )
+        else:
+            _cache.record_bypass_stochastic()
+
         # Generate response (placeholder - uses external model)
         text = await self._generate(
             user_msg=user_msg,
@@ -99,6 +148,15 @@ class ChatDomain:
 
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         tokens = len(text.split()) if text else 0
+
+        # Fill the exact-key tier with a successful, non-error response.
+        if _cacheable and _cache_key and text and not text.startswith("[Error"):
+            _cache.put(
+                key=_cache_key,
+                response=text,
+                model=model,
+                prompt_for_semantic=user_msg,
+            )
 
         # Log response
         self._log(

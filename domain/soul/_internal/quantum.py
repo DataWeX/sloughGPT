@@ -139,6 +139,42 @@ class QuantumCognitiveEngine:
 
         return None
 
+    def snapshot(self) -> dict[str, Any]:
+        """Durable state as a JSON-native dict.
+
+        Only fields that survive a process restart: ``superposition`` is
+        per-invocation state with random phases, so it is never snapshotted.
+        """
+        return {
+            "coherence": float(self.coherence),
+            "decoherence_rate": float(self.decoherence_rate),
+            "entangled_pairs": [list(pair) for pair in self.entangled_pairs],
+        }
+
+    def hydrate(self, state: dict[str, Any] | None) -> bool:
+        """Overlay persisted state onto this (null-state) engine.
+
+        Never raises: non-dict state returns ``False`` untouched; fields
+        with invalid types are skipped. Superposition always stays empty —
+        it is rebuilt per invocation.
+        """
+        if not isinstance(state, dict):
+            return False
+        coherence = state.get("coherence")
+        if isinstance(coherence, (int, float)) and not isinstance(coherence, bool):
+            self.coherence = float(coherence)
+        rate = state.get("decoherence_rate")
+        if isinstance(rate, (int, float)) and not isinstance(rate, bool):
+            self.decoherence_rate = float(rate)
+        pairs = state.get("entangled_pairs")
+        if isinstance(pairs, list):
+            self.entangled_pairs = [
+                (str(pair[0]), str(pair[1]))
+                for pair in pairs
+                if isinstance(pair, (list, tuple)) and len(pair) == 2
+            ]
+        return True
+
     def _similarity(self, s1: str, s2: str) -> float:
         """Calculate similarity between strings."""
         if not s1 or not s2:

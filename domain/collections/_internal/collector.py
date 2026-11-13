@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 import time
 from collections.abc import Iterator
 
@@ -61,19 +60,21 @@ class ParallelCollector:
         return total
 
     def collect_threaded(self) -> int:
-        results = [0] * len(self._collectors)
+        """Collect from every source in parallel.
 
-        def run(i, c):
-            results[i] = c.collect()
+        Routed to the compute-batch kind (drain result → ParallelExecutor,
+        per the routing table in docs/plans/2026-09-20-execution-
+        consolidation.md): bounded workers instead of one raw thread per
+        collector, totals identical to collect().
+        """
+        from domain.infrastructure._internal.pugqeep.executor import ParallelExecutor
 
-        threads = []
-        for i, collector in enumerate(self._collectors):
-            t = threading.Thread(target=run, args=(i, collector))
-            threads.append(t)
-            t.start()
-        for t in threads:
-            t.join()
-        total = sum(results)
+        counts = ParallelExecutor().map(
+            [(str(i), c) for i, c in enumerate(self._collectors)],
+            lambda c: c.collect(),
+            name="collect",
+        )
+        total = sum(int(v) for v in counts.values())
         for i, collector in enumerate(self._collectors):
             self.stats["sources"][collector.source.name] = collector.stats
         self.stats["total_collected"] = total

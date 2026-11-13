@@ -1,9 +1,9 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Textarea } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
-import { useToastStore } from '@/lib/toast-store'
 
 interface PerplexityResult {
   perplexity: number
@@ -17,7 +17,7 @@ interface EvalPerplexityCardProps {
 }
 
 export function EvalPerplexityCard({ result: externalResult, onResult }: EvalPerplexityCardProps) {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [internalResult, setInternalResult] = useState<PerplexityResult | null>(null)
@@ -46,11 +46,16 @@ export function EvalPerplexityCard({ result: externalResult, onResult }: EvalPer
       <CardContent className="px-2.5 pb-2.5 space-y-3">
         <Textarea
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={(e) => setText(e.target.value)}
           placeholder="Enter text to calculate perplexity..."
           rows={3}
         />
-        <Button size="sm" onClick={handleCalculate} disabled={loading || !text.trim()} className="h-7 text-[11px]">
+        <Button
+          size="sm"
+          onClick={handleCalculate}
+          disabled={loading || !text.trim()}
+          className="h-7 text-[11px]"
+        >
           {loading ? 'Calculating...' : 'Calculate'}
         </Button>
         {result && (

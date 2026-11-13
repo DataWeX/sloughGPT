@@ -8,10 +8,10 @@ native infrastructure rather than a compatibility layer.
 One generation core; ``/v1`` is a projection of it (Endpoint & Transport Rule):
 
     chat        -> domain.models.get_provider("default").chat / .chat_stream
-                   (the same seam routers/infer.py projects — no second
+                   (the same seam routers/models.py projects — no second
                    generate implementation)
-    info        -> routers.infer.InferRouter.infer_info()
-    embeddings  -> routers.infer.InferRouter.infer_embed()
+    info        -> routers.models.InferRouter.infer_info()
+    embeddings  -> routers.models.InferRouter.infer_embed()
 
 Responses are the raw wire shape (``choices``/``data`` at the top level —
 that IS the contract; the project envelope belongs to our internal routes).
@@ -20,6 +20,13 @@ inventory and TS contract halves include this surface. Auth
 (``require_auth_if_enabled``), error classification (``classify_and_raise``;
 mid-stream failures go out in-band as error frames) and ``safe_audit_log``
 are the shared server story.
+
+Non-stream requests pass a response-cache ladder before the engine: a repeated
+deterministic request is replayed instead of regenerated (``_cache_key`` states
+the whole rule). Streaming and stochastic requests always generate, and a
+replay is tagged ``cached: true`` so it is distinguishable from a fast
+generation. This is the *answer* tier — it skips the model call entirely,
+where the KV session below it only skips re-prefilling.
 
 Tier: external utility tooling — out-of-process clients only; never enters
 the chat/agent tool registry or any logic the model reasons over.
@@ -75,6 +82,14 @@ class ChatBody(BaseModel):
     top_p: float = Field(default=_DEFAULT_TOP_P, ge=0.0, le=1.0)
     top_k: int = Field(default=0, ge=0, le=500, description="Serving-stack extension")
     stop: str | list[str] | None = Field(default=None, description="Accepted; phase 1 ignores")
+    tools: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Accepted; phase 1 ignores (and a tool-carrying request is never cache-served)",
+    )
+    tool_choice: Any | None = Field(
+        default=None,
+        description="Accepted; phase 1 ignores (and a tool-carrying request is never cache-served)",
+    )
     stream: bool = False
     stream_options: StreamOptions | None = None
     session_id: str | None = Field(
@@ -91,7 +106,7 @@ class EmbedBody(BaseModel):
     input: str | list[str]
 
 
-# ── Shared guards (parity with routers/infer.py) ────────────────────────────
+# ── Shared guards (parity with routers/models.py) ────────────────────────────
 
 
 def _require_engine() -> None:
@@ -157,54 +172,67 @@ def _frame(payload: dict[str, Any]) -> str:
     return "data: " + json.dumps(payload) + "\n\n"
 
 
-# ── Handlers ────────────────────────────────────────────────────────────────
+# ── Response cache: the ladder (card 20261102_021851) ───────────────────────
 
 
-async def chat_completions(
+def _cache_key(
     req: ChatBody,
-    request: Request,
-    auth_user: dict = Depends(require_auth_if_enabled),
-) -> dict[str, Any] | StreamingResponse:
-    """POST /v1/chat/completions — stream + non-stream over the one seam."""
-    _require_engine()
-    provider = _provider()
-    messages = _messages(req)
-    model_id = req.model or "default"
-    kwargs = _sampling(req)
-    if req.session_id:
-        # Keys cross-turn KV reuse below the seam (SloNetServer._resolve_kv_state
-        # -> SessionKVManager). Injected only when set — requests without it stay
-        # byte-identical for every adapter provider. The stream path inherits it
-        # (_stream_frames spreads kwargs into chat_stream).
-        kwargs["session_id"] = req.session_id
-    prompt_text = "\n".join(m["content"] for m in messages)
+    messages: list[dict[str, str]],
+    model_id: str,
+    sampling: dict[str, Any],
+) -> tuple[str | None, str]:
+    """Exact-tier key for this request, or ``None`` when it must generate.
+
+    A total decision function, first match wins, and every ambiguous case falls
+    to "generate": a wrong miss costs latency, while a wrong hit costs
+    correctness and is invisible downstream (a replay is fluent either way).
+
+        stream             → generate: a hit is not a stream; replay is its own
+                             contract, not a substitution inside this one
+        temperature > 0.2  → generate: the output is not a function of the inputs
+        tools / tool_choice → generate: the real input is the tool *result*
+        otherwise          → exact key (rule 6, the paraphrase tier, is
+                             deliberately absent — similarity may propose a
+                             candidate but must never decide one)
+
+    Key completeness is the entire correctness argument, so every input that
+    can change the output participates. ``top_k`` is keyed **as sent** because
+    ``_sampling`` maps 0 to the SloNet default — keying the raw 0 would make two
+    identical requests miss each other. ``stop`` is ignored by phase 1 but keyed
+    anyway, so honouring it later cannot silently collide. ``session_id`` selects
+    a KV state; a state that does not prefix-match falls back to a full prefill,
+    which ``test_slonet_kv_cache`` pins as output-identical. The module's
+    generation token already covers model load/unload/swap.
+    """
+    from domain.inference import ResponseCache
 
     if req.stream:
-        return StreamingResponse(
-            _stream_frames(req, request, provider, messages, model_id, kwargs, prompt_text),
-            media_type="text/event-stream",
-        )
-
-    start = datetime.datetime.now()
-    try:
-        result = await provider.chat(messages, **kwargs)
-    except Exception as e:
-        classify_and_raise(e, source="llm.chat.completions")
-    elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-    try:
-        from domain.infrastructure.server_state import get_server_state
-
-        get_server_state().record_inference(
-            tokens=_estimate(result), elapsed_ms=elapsed_ms, model=model_id
-        )
-    except Exception as e:
-        logger.warning("Failed to record inference metrics: %s", e)
-    safe_audit_log(
-        "llm.chat.completions",
-        resource=model_id,
-        detail=f"elapsed={elapsed_ms:.0f}ms stream=false",
+        return None, "stream"
+    if not ResponseCache.is_deterministic(req.temperature):
+        return None, "stochastic"
+    if req.tools or req.tool_choice:
+        return None, "tools"
+    key = ResponseCache.build_key(
+        messages=messages,
+        model=model_id,
+        temperature=req.temperature,
+        max_tokens=req.max_tokens,
+        system_prompt="",  # /v1 carries the system prompt as a message
+        extra={
+            "top_p": sampling["top_p"],
+            "top_k": sampling["top_k"],
+            "stop": req.stop,
+            "session_id": req.session_id,
+        },
     )
-    return {
+    return key, "cacheable"
+
+
+def _completion(
+    result: str, model_id: str, prompt_text: str, *, cached: bool = False
+) -> dict[str, Any]:
+    """The ``chat.completion`` wire shape, shared by the generated and replayed paths."""
+    payload: dict[str, Any] = {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
         "object": "chat.completion",
         "created": int(_time.time()),
@@ -218,6 +246,96 @@ async def chat_completions(
         ],
         "usage": _usage(prompt_text, result),
     }
+    if cached:
+        # Additive wire tag (clients ignore unknown keys). Without it a replay
+        # is indistinguishable from a suspiciously fast generation.
+        payload["cached"] = True
+    return payload
+
+
+def _record_inference(model_id: str, tokens: int, elapsed_ms: float) -> None:
+    try:
+        from domain.infrastructure.server_state import get_server_state
+
+        get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=model_id)
+    except Exception as e:
+        logger.warning("Failed to record inference metrics: %s", e)
+
+
+# ── Handlers ────────────────────────────────────────────────────────────────
+
+
+async def chat_completions(
+    req: ChatBody,
+    request: Request,
+    auth_user: dict = Depends(require_auth_if_enabled),
+) -> dict[str, Any] | StreamingResponse:
+    """POST /v1/chat/completions — stream + non-stream over the one seam."""
+    _require_engine()
+    provider = _provider()
+    messages = _messages(req)
+    model_id = req.model or "default"
+    sampling = _sampling(req)
+    kwargs = dict(sampling)
+    if req.session_id:
+        # Keys cross-turn KV reuse below the seam (SloNetServer._resolve_kv_state
+        # -> SessionKVManager). Injected only when set — requests without it stay
+        # byte-identical for every adapter provider. The stream path inherits it
+        # (_stream_frames spreads kwargs into chat_stream).
+        kwargs["session_id"] = req.session_id
+    prompt_text = "\n".join(m["content"] for m in messages)
+    start = datetime.datetime.now()
+
+    from domain.inference import get_response_cache
+
+    cache = get_response_cache()
+
+    if req.stream:
+        cache.record_bypass_stream()
+        return StreamingResponse(
+            _stream_frames(req, request, provider, messages, model_id, kwargs, prompt_text),
+            media_type="text/event-stream",
+        )
+
+    # The engine gates above stay first: with no model loaded the generation
+    # token has already been bumped, so every entry is stale and a lookup would
+    # only add a miss (a request with nothing to serve from is not servable).
+    cache_key, why = _cache_key(req, messages, model_id, sampling)
+    if cache_key is None:
+        if why == "stochastic":
+            cache.record_bypass_stochastic()
+    else:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
+            # tokens=0: the model ran zero tokens. Counting the replayed text
+            # would inflate the tokens/s window with work nobody did.
+            _record_inference(model_id, 0, elapsed_ms)
+            logger.info("response cache: exact hit (%.1fms, %d chars)", elapsed_ms, len(cached))
+            safe_audit_log(
+                "llm.chat.completions",
+                resource=model_id,
+                detail=f"elapsed={elapsed_ms:.0f}ms stream=false cached=1",
+            )
+            return _completion(cached, model_id, prompt_text, cached=True)
+
+    try:
+        result = await provider.chat(messages, **kwargs)
+    except Exception as e:
+        classify_and_raise(e, source="llm.chat.completions")
+    elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
+    _record_inference(model_id, _estimate(result), elapsed_ms)
+    safe_audit_log(
+        "llm.chat.completions",
+        resource=model_id,
+        detail=f"elapsed={elapsed_ms:.0f}ms stream=false",
+    )
+    if cache_key is not None and result:
+        # Exact tier only, and never fed from a replay: a semantic hit served
+        # elsewhere must not be re-stored under this prompt's key, or a
+        # paraphrase chain drifts the cache away from anything ever generated.
+        cache.put(key=cache_key, response=result, model=model_id)
+    return _completion(result, model_id, prompt_text)
 
 
 async def _stream_frames(
@@ -291,9 +409,19 @@ async def _stream_frames(
 
 
 async def list_models(auth_user: dict = Depends(require_auth_if_enabled)) -> dict[str, Any]:
-    """GET /v1/models — the loaded model, list shape."""
-    _require_engine()
-    from routers.infer import InferRouter
+    """GET /v1/models — the model list, raw wire shape.
+
+    Discovery, not a generation gate: out-of-process clients poll this as a
+    health probe, so a server whose load has not materialized answers 200
+    with an empty list (nothing to serve) instead of 503. Chat and
+    embeddings keep the full readiness gate.
+    """
+    from routers.inference import _model_ready
+
+    if not _model_ready():
+        return {"object": "list", "data": []}
+
+    from routers.models import InferRouter
 
     try:
         info = await InferRouter().infer_info()
@@ -311,7 +439,7 @@ async def create_embeddings(
 ) -> dict[str, Any]:
     """POST /v1/embeddings — batch through InferRouter.infer_embed."""
     _require_engine()
-    from routers.infer import EmbedRequest, InferRouter
+    from routers.models import EmbedRequest, InferRouter
 
     items = [req.input] if isinstance(req.input, str) else list(req.input)
     if not items:

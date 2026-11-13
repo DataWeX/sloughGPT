@@ -43,7 +43,7 @@ export function Tray({
       className={cn(
         'flex flex-col rounded-lg relative overflow-hidden',
         'transition-all duration-200',
-        isFocused && 'ring-1 ring-zinc-600/50',
+        isFocused && 'ring-1 ring-ring/50',
       )}
       style={{
         background: dropAllowed
@@ -74,7 +74,7 @@ export function Tray({
           borderBottom: '1px solid rgb(var(--sheen-rgb) / 0.05)',
         }}
       >
-        <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           {COLUMN_LABELS[column.name] || column.name}
         </h3>
         <span
@@ -85,7 +85,7 @@ export function Tray({
               ? 'bg-[rgb(var(--destructive)/0.15)] text-destructive border border-[rgb(var(--destructive)/0.3)]'
               : wipFull
                 ? 'bg-[rgb(var(--warning)/0.15)] text-warning border border-[rgb(var(--warning)/0.3)]'
-                : 'bg-zinc-900 text-zinc-600 border border-zinc-800',
+                : 'bg-card text-muted-foreground border border-border',
           )}
         >
           {(wipFull || showOverWip) && (
@@ -108,13 +108,13 @@ export function Tray({
           <div
             className={cn(
               'rounded-md border border-dashed p-5 text-center transition-colors duration-200 h-20 flex items-center justify-center',
-              dropAllowed ? 'border-zinc-800' : 'border-[rgb(var(--destructive)/0.25)]',
+              dropAllowed ? 'border-border' : 'border-[rgb(var(--destructive)/0.25)]',
             )}
           >
             <p
               className={cn(
                 'text-[10px] font-mono',
-                dropAllowed ? 'text-zinc-700' : 'text-destructive',
+                dropAllowed ? 'text-muted-foreground' : 'text-destructive',
               )}
             >
               {dropAllowed ? 'drop here' : 'WIP full'}
@@ -127,7 +127,7 @@ export function Tray({
               className={cn(
                 'transition-[transform,opacity] duration-200',
                 '[transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]',
-                idx === focusCard && 'ring-1 ring-zinc-500/50 rounded-md',
+                idx === focusCard && 'ring-1 ring-ring/50 rounded-md',
                 draggingId === card.id && 'opacity-20',
               )}
             >

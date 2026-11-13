@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, memo } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle, Progress, Spinner } from '@sloughgpt/strui'
@@ -9,7 +10,6 @@ import { catalogIdMatchesRuntime } from '@/lib/inference-display'
 import { generateController } from '@/lib/generate-controller'
 import { getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { useLoadModel } from '@/lib/cache/api-hooks'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConversionStatus, formatStage } from '@/hooks/useConversionStatus'
 import { logger } from '@/lib/dev-log'
@@ -44,7 +44,7 @@ export default memo(function ModelCatalogCard({
   onModelLoaded,
 }: ModelCatalogCardProps) {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { mutateAsync: loadModel } = useLoadModel()
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [warmingModel, setWarmingModel] = useState<string | null>(null)
@@ -159,7 +159,7 @@ export default memo(function ModelCatalogCard({
                   onChange={(e) => setModelSearch(e.target.value)}
                   placeholder="Search models..."
                   aria-label="Search models"
-                  className="h-8 w-full max-w-xs rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  className="h-8 w-full max-w-xs rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 />
               </div>
             )}
@@ -179,9 +179,10 @@ export default memo(function ModelCatalogCard({
                         isLoaded ? 'border-primary/40 bg-primary/5' : 'border-border/60',
                         isLoading && 'border-primary/30 bg-primary/[0.08]',
                       )}
-                      onClick={() => router.push(`/model/${encodeURIComponent(model.id)}`)}
+                      onClick={() => router.push(`/models?id=${encodeURIComponent(model.id)}`)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') router.push(`/model/${encodeURIComponent(model.id)}`)
+                        if (e.key === 'Enter')
+                          router.push(`/models?id=${encodeURIComponent(model.id)}`)
                       }}
                       tabIndex={0}
                       role="button"

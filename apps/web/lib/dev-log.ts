@@ -18,8 +18,9 @@
  *   logger.child('chat').info('user typed')
  */
 
-import { PUBLIC_API_URL } from '@/lib/config'
 import { inferStateKind, isStateEventKind } from '@/lib/event-kinds'
+import { configureTransport } from '../../lib/ports'
+import { apiPost } from './http-client'
 
 export type LogTag =
   | 'REQ'
@@ -126,17 +127,25 @@ export class LogTransport {
         clearTimeout(this._timer)
         this._timer = null
       }
-      this.flush()
+      void this.flush()
     } else {
       this._scheduleFlush()
     }
   }
 
-  flush(): void {
+  /**
+   * Flush buffered records through the http-client facade.
+   *
+   * Async because `apiPost` crosses microtasks before `fetch` fires —
+   * awaiting the returned promise means the ingest request has been issued
+   * (callers/tests that need the side effect await it; fire-and-forget
+   * sites use `void`).
+   */
+  async flush(): Promise<void> {
     if (this._batch.length === 0) return
     const now = Date.now()
     if (now - this._lastFlushAt < MIN_FLUSH_INTERVAL_MS) {
-      if (!this._timer) this._timer = setTimeout(() => this.flush(), MIN_FLUSH_INTERVAL_MS)
+      if (!this._timer) this._timer = setTimeout(() => void this.flush(), MIN_FLUSH_INTERVAL_MS)
       return
     }
     const payload = this._batch
@@ -145,22 +154,26 @@ export class LogTransport {
     this._lastFlushAt = now
 
     try {
-      void fetch(`${PUBLIC_API_URL}/errors/logs/ingest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ logs: payload }),
+      // Through the http-client facade (fetch gate, card 20261108_142919):
+      // keepalive preserves the raw fetch's page-unload semantics; silent
+      // keeps ingest failures out of the error store (we ARE the logger);
+      // skipCircuitBreaker keeps this diagnostics channel from tripping the
+      // GLOBAL breaker for all other API traffic.
+      await apiPost('/errors/logs/ingest', { logs: payload }, {
         keepalive: true,
+        silent: true,
+        skipCircuitBreaker: true,
       }).catch(() => {
         /* silent — don't loop on network errors */
       })
     } catch {
-      /* fetch unavailable or returned a non-promise — drop the flush */
+      /* transport unavailable or threw synchronously — drop the flush */
     }
   }
 
   private _scheduleFlush(): void {
     if (this._timer) return
-    this._timer = setTimeout(() => this.flush(), BATCH_INTERVAL_MS)
+    this._timer = setTimeout(() => void this.flush(), BATCH_INTERVAL_MS)
   }
 }
 
@@ -169,7 +182,7 @@ function _getSharedTransport(): LogTransport {
   if (!_sharedTransport) {
     _sharedTransport = new LogTransport()
     if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => _sharedTransport!.flush())
+      window.addEventListener('beforeunload', () => void _sharedTransport!.flush())
     }
   }
   return _sharedTransport
@@ -260,9 +273,9 @@ export class WebLogger {
     }
   }
 
-  /** Flush any buffered logs to the backend immediately. */
-  flush() {
-    this._transport.flush()
+  /** Flush any buffered logs to the backend immediately (awaits the POST). */
+  flush(): Promise<void> {
+    return this._transport.flush()
   }
 
   // ── Event tracking ────────────────────────────────────────────────
@@ -360,6 +373,12 @@ export const trackEvent = (event: string, data?: Record<string, unknown>) =>
 // ── Singleton ────────────────────────────────────────────────────────
 
 export const logger = new WebLogger('slo.web')
+
+// Self-registration: this module OWNS the app logger, so it hands it to the
+// transport rather than the transport importing it upward (apps/lib must never
+// import apps/web). A host that mocks this module simply never registers, and
+// the transport falls back to its silent port instead of throwing.
+configureTransport({ logger })
 
 /**
  * Logs only in development — keeps production consoles clean for expected API/network failures.

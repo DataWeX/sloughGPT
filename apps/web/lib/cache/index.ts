@@ -1,5 +1,5 @@
 export { useQuery, useMutation, useInvalidate, useIsFetching } from './hooks'
-export { invalidateQuery, fetchQuery, getQueryState } from './client'
+export { invalidateQuery, revalidateAll, fetchQuery, getQueryState } from './client'
 export type {
   QueryKey,
   QueryStatus,

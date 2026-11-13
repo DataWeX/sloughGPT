@@ -231,6 +231,7 @@ class TestPrepareDataHook:
         trainer.val_data = data[:16]
         trainer._experience_sampler = None
         trainer._feed_sampler = None
+        trainer._selfgen_sampler = None  # __init__ normally sets this; get_batch reads it
         x, y = trainer.get_batch("train")
         assert x.dtype == np.int64 and y.dtype == np.int64
 

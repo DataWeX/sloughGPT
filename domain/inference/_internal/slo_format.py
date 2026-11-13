@@ -26,6 +26,10 @@ from typing import Any
 
 import numpy as np
 
+from domain.inference._internal.soul_meta_slim import (
+    externalize_optimizer_state,
+    to_state_manifest,
+)
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.shared import repair_iso, utc_now_iso
 
@@ -82,6 +86,35 @@ def _soul_json_sanitize(obj: Any) -> Any:
     if isinstance(obj, float):
         return obj if math.isfinite(obj) else None
     return obj
+
+
+def _embed_state_manifests(profile_dict: dict) -> dict:
+    """Writer-boundary invariant: optimizer moments become base64 manifests.
+
+    The .soul header is JSON — without this, hand-built list state walks the
+    sanitize/hash/dumps pipeline float-by-float (~40 MB of JSON float text
+    per periodic save). ``to_state_manifest`` is idempotent (already-encoded
+    manifests pass through), and the metadata path is structurally copied so
+    the caller's profile object is left untouched.
+    """
+    md = profile_dict.get("metadata")
+    if not isinstance(md, dict):
+        return profile_dict
+    ts = md.get("training_state")
+    if not isinstance(ts, dict):
+        return profile_dict
+    opt = ts.get("optimizer")
+    if not isinstance(opt, dict) or not isinstance(opt.get("state"), dict):
+        return profile_dict
+    new_opt = dict(opt)
+    new_opt["state"] = to_state_manifest(opt["state"])
+    new_ts = dict(ts)
+    new_ts["optimizer"] = new_opt
+    new_md = dict(md)
+    new_md["training_state"] = new_ts
+    new_profile = dict(profile_dict)
+    new_profile["metadata"] = new_md
+    return new_profile
 
 
 def _soul_profile_hash(soul_dict: dict) -> str:
@@ -607,7 +640,9 @@ def save_soul(
 
     # Single to_dict + sanitize pass feeds the hash, the embedded config and
     # the sidecar — each previously re-walked the full training_state.
-    soul_dict = _soul_json_sanitize(soul_profile.to_dict())
+    # _embed_state_manifests runs first so the walk and the JSON text see
+    # O(#arrays) manifests instead of O(#floats) nested lists.
+    soul_dict = _soul_json_sanitize(_embed_state_manifests(soul_profile.to_dict()))
     soul_profile.integrity_hash = _soul_profile_hash(soul_dict)
     soul_dict["integrity_hash"] = soul_profile.integrity_hash
     config_json = json.dumps(soul_dict, default=str, allow_nan=False)
@@ -668,12 +703,108 @@ def save_soul(
         )
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
+    # Adam moments leave the JSON here (gzip sibling + hash-pinned state_ref);
+    # the embedded config above keeps them inline — phase 2 owns that copy.
+    sidecar_doc, _externalized = externalize_optimizer_state(soul_dict, meta_path)
     atomic_write(
         meta_path,
-        json.dumps(soul_dict, indent=2, default=str, allow_nan=False),
+        json.dumps(sidecar_doc, indent=2, default=str, allow_nan=False),
     )
 
     return output_path
+
+
+#: Top-level header fields that describe *which artifact this is* rather than
+#: its payload. All of them are written before ``metadata``, which can carry
+#: tens of megabytes of training/optimizer state.
+SOUL_IDENTITY_KEYS: tuple[str, ...] = (
+    "name",
+    "version",
+    "born_at",
+    "lineage",
+    "base_model",
+    "training_dataset",
+    "dataset_signature",
+    "epochs_trained",
+    "final_train_loss",
+    "final_val_loss",
+    "integrity_hash",
+)
+
+#: How much of the header an identity lookup is willing to read. The identity
+#: keys sit in the first few kilobytes (``metadata`` is the last key), so a
+#: truncated read is enough — and must never be mistaken for a corrupt file.
+_SOUL_IDENTITY_PREFIX_BYTES = 64 * 1024
+
+
+def read_soul_identity(path: str | os.PathLike[str]) -> dict[str, Any]:
+    """Read a ``.soul`` file's identity fields without parsing its weights.
+
+    ``save_soul`` serialises the profile as a single JSON object and writes
+    ``metadata`` (training state, optimizer buffers) last. That tail can run to
+    ~40 MB, so ``json.loads`` on a whole header costs >1 s per checkpoint — too
+    much to pay for a name, a hash or a dataset signature when scanning a
+    directory.
+
+    This reads a bounded prefix and walks the top-level object with
+    ``raw_decode``, stopping once the identity fields are in hand. A header that
+    fits entirely in the prefix is parsed exactly instead.
+
+    Args:
+        path: Path to a ``.soul`` file.
+
+    Returns:
+        Mapping of the identity keys that are present; ``{}`` for anything that
+        is not a readable ``.soul`` file.
+    """
+    try:
+        with open(path, "rb") as fh:
+            if fh.read(4) != SOU_MAGIC:
+                return {}
+            fh.read(4)  # format version — not part of the identity
+            raw_len = fh.read(4)
+            if len(raw_len) < 4:
+                return {}
+            header_len = struct.unpack("<I", raw_len)[0]
+            chunk = fh.read(min(header_len, _SOUL_IDENTITY_PREFIX_BYTES))
+    except OSError:
+        return {}
+
+    if header_len <= len(chunk):
+        try:
+            parsed = json.loads(chunk.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            return {}
+        return {key: parsed[key] for key in SOUL_IDENTITY_KEYS if key in parsed}
+
+    text = chunk.decode("utf-8", "ignore")
+    decoder = json.JSONDecoder()
+    identity: dict[str, Any] = {}
+    try:
+        index = text.index("{") + 1
+        while index < len(text):
+            while index < len(text) and text[index] in " \t\r\n,":
+                index += 1
+            if index >= len(text) or text[index] == "}":
+                break
+            key, index = decoder.raw_decode(text, index)
+            while index < len(text) and text[index] in " \t\r\n":
+                index += 1
+            if index >= len(text) or text[index] != ":":
+                break
+            index += 1
+            while index < len(text) and text[index] in " \t\r\n":
+                index += 1
+            value, index = decoder.raw_decode(text, index)
+            if isinstance(key, str) and key in SOUL_IDENTITY_KEYS:
+                identity[key] = value
+            if len(identity) == len(SOUL_IDENTITY_KEYS):
+                break
+    except (IndexError, ValueError):
+        # A truncated value (the metadata tail) or a malformed header — keep
+        # whatever was read before it; the caller validates on load anyway.
+        pass
+    return identity
 
 
 def load_soul(sou_path: str):
@@ -880,6 +1011,8 @@ __all__ = [
     "create_soul_profile",
     "save_soul",
     "load_soul",
+    "read_soul_identity",
+    "SOUL_IDENTITY_KEYS",
     "write_v3_sou",
     "generate_sample_dialogue",
     "SOU_MAGIC",

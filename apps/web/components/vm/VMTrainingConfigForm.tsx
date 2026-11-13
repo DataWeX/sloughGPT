@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { TRAINING_LIMITS, parseTrainingField } from '@/lib/sanitize'
 
 interface TrainConfig {
   dataset: string
@@ -31,8 +32,6 @@ interface VMTrainingConfigFormProps {
   launchedJob: number | null
   onDismissJob: () => void
 }
-
-const num = (v: string) => (v.trim() === '' ? NaN : Number(v))
 
 export function VMTrainingConfigForm({
   config,
@@ -124,54 +123,67 @@ export function VMTrainingConfigForm({
           <label className="text-xs font-medium text-muted-foreground">Epochs</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.epochs.min}
+            max={TRAINING_LIMITS.epochs.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.epochs}
             aria-label="Training epochs"
-            onChange={(e) => updateConfig({ epochs: num(e.target.value) })}
+            onChange={(e) => updateConfig({ epochs: parseTrainingField('epochs', e.target.value) })}
           />
           <label className="text-xs font-medium text-muted-foreground">Learning rate</label>
           <input
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.lr}
             aria-label="Training learning rate"
-            onChange={(e) => updateConfig({ lr: num(e.target.value) })}
+            onChange={(e) =>
+              updateConfig({ lr: parseTrainingField('learning_rate', e.target.value) })
+            }
           />
           <label className="text-xs font-medium text-muted-foreground">Batch size</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.batch_size.min}
+            max={TRAINING_LIMITS.batch_size.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.batch_size}
             aria-label="Training batch size"
-            onChange={(e) => updateConfig({ batch_size: num(e.target.value) })}
+            onChange={(e) =>
+              updateConfig({ batch_size: parseTrainingField('batch_size', e.target.value) })
+            }
           />
           <label className="text-xs font-medium text-muted-foreground">Layers</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.n_layer.min}
+            max={TRAINING_LIMITS.n_layer.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.n_layer}
             aria-label="Training layers"
-            onChange={(e) => updateConfig({ n_layer: num(e.target.value) })}
+            onChange={(e) =>
+              updateConfig({ n_layer: parseTrainingField('n_layer', e.target.value) })
+            }
           />
           <label className="text-xs font-medium text-muted-foreground">Heads</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.n_head.min}
+            max={TRAINING_LIMITS.n_head.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.n_head}
             aria-label="Training heads"
-            onChange={(e) => updateConfig({ n_head: num(e.target.value) })}
+            onChange={(e) => updateConfig({ n_head: parseTrainingField('n_head', e.target.value) })}
           />
           <label className="text-xs font-medium text-muted-foreground">Embed size</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.n_embed.min}
+            max={TRAINING_LIMITS.n_embed.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={config.embed_dim}
             aria-label="Training embed size"
-            onChange={(e) => updateConfig({ embed_dim: num(e.target.value) })}
+            onChange={(e) =>
+              updateConfig({ embed_dim: parseTrainingField('n_embed', e.target.value) })
+            }
           />
         </div>
         {hints.length > 0 && (

@@ -4,7 +4,8 @@ import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => (open ? <div>{children}</div> : null),
+  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+    open ? <div>{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -13,11 +14,17 @@ vi.mock('@sloughgpt/strui', () => ({
   Spinner: () => <div data-testid="spinner" />,
   IconCheck: () => <div data-testid="icon-check" />,
   Button: ({ children, onClick, variant, size, ...rest }: any) => (
-    <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+    <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>
+      {children}
+    </button>
   ),
   Input: (props: any) => <input data-testid="input" {...props} />,
   Label: ({ children, ...props }: any) => <label {...props}>{children}</label>,
-  Badge: ({ children, variant }: any) => <span data-testid="badge" data-variant={variant}>{children}</span>,
+  Badge: ({ children, variant }: any) => (
+    <span data-testid="badge" data-variant={variant}>
+      {children}
+    </span>
+  ),
   Tooltip: ({ children }: any) => <>{children}</>,
   TooltipTrigger: ({ children, asChild }: any) => <>{children}</>,
   TooltipContent: ({ children }: any) => <div>{children}</div>,
@@ -57,7 +64,9 @@ vi.mock('@/lib/dataset-controller', () => ({
 import { DatasetImportDialog } from './DatasetImportDialog'
 
 describe('DatasetImportDialog', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
   afterEach(cleanup)
 
   it('renders dialog when open', () => {
@@ -123,7 +132,9 @@ describe('DatasetImportDialog', () => {
   })
 
   it('shows error for empty GitHub URL on Import', async () => {
-    const { rerender } = render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    const { rerender } = render(
+      <DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />,
+    )
     fireEvent.click(screen.getByText('Import'))
     await waitFor(() => {
       expect(screen.getByText('GitHub URL is required')).toBeDefined()
@@ -167,7 +178,9 @@ describe('DatasetImportDialog', () => {
     expect(mocks.mockReportError).toHaveBeenCalledWith(
       'Enter a search term or ISBN',
       'dataset-import',
-      expect.objectContaining({ metadata: expect.objectContaining({ source: 'isbn', action: 'import' }) }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ source: 'isbn', action: 'import' }),
+      }),
     )
   })
 
@@ -183,7 +196,10 @@ describe('DatasetImportDialog', () => {
   })
 
   it('shows success message after import', async () => {
-    mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'Imported 5 files (12,345 chars)' })
+    mocks.mockImportFromGitHub.mockResolvedValue({
+      dataset_id: 'my-dataset',
+      message: 'Imported 5 files (12,345 chars)',
+    })
     render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
     const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
@@ -195,7 +211,9 @@ describe('DatasetImportDialog', () => {
     const onComplete = vi.fn()
     mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'done' })
     vi.useFakeTimers()
-    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={onComplete} />)
+    render(
+      <DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={onComplete} />,
+    )
     const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
     fireEvent.click(screen.getByText('Import'))
@@ -217,7 +235,15 @@ describe('DatasetImportDialog', () => {
   it('searches for GitHub repos', async () => {
     mocks.mockSearchGitHubRepos.mockResolvedValue({
       repos: [
-        { id: 1, name: 'test-repo', full_name: 'user/test-repo', url: 'https://github.com/user/test-repo', stars: 42, language: 'Python', description: 'A test repo' },
+        {
+          id: 1,
+          name: 'test-repo',
+          full_name: 'user/test-repo',
+          url: 'https://github.com/user/test-repo',
+          stars: 42,
+          language: 'Python',
+          description: 'A test repo',
+        },
       ],
     })
     render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
@@ -232,7 +258,15 @@ describe('DatasetImportDialog', () => {
   it('selects a GitHub repo from search results', async () => {
     mocks.mockSearchGitHubRepos.mockResolvedValue({
       repos: [
-        { id: 1, name: 'test-repo', full_name: 'user/test-repo', url: 'https://github.com/user/test-repo', stars: 42, language: 'Python', description: 'A test repo' },
+        {
+          id: 1,
+          name: 'test-repo',
+          full_name: 'user/test-repo',
+          url: 'https://github.com/user/test-repo',
+          stars: 42,
+          language: 'Python',
+          description: 'A test repo',
+        },
       ],
     })
     render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
@@ -244,7 +278,9 @@ describe('DatasetImportDialog', () => {
     })
     fireEvent.click(screen.getByText('user/test-repo'))
     await waitFor(() => {
-      expect(screen.queryByRole('listbox', { name: 'Repository search results' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('listbox', { name: 'Repository search results' }),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -266,5 +302,61 @@ describe('DatasetImportDialog', () => {
     rerender(<DatasetImportDialog open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
     fireEvent.click(screen.getByText('GitHub'))
     expect(screen.getByLabelText('Search for a repository')).toBeDefined()
+  })
+
+  it('clears success banner and all fields when switching source after import', async () => {
+    // Regression: ISBN import state (search text, dataset name, success
+    // banner) used to survive into the GitHub/Kaggle forms.
+    mocks.mockImportFromISBN.mockResolvedValue({
+      dataset_id: 'book-ds',
+      message: 'Imported book: 1 files (143 chars)',
+    })
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('ISBN / Book'))
+    fireEvent.change(screen.getByLabelText('Search by title or ISBN'), {
+      target: { value: '9780871294272' },
+    })
+    fireEvent.click(screen.getByText('Import'))
+    await screen.findByText('Imported book: 1 files (143 chars)')
+
+    fireEvent.click(screen.getByText('Kaggle'))
+
+    expect(screen.queryByText('Imported book: 1 files (143 chars)')).not.toBeInTheDocument()
+    expect((screen.getByLabelText('Dataset Name') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Kaggle Dataset ID') as HTMLInputElement).value).toBe('')
+  })
+
+  it('shows a background-continues notice when import is cancelled', async () => {
+    mocks.mockImportFromISBN.mockImplementation(
+      (_req: unknown, opts: { signal?: AbortSignal } | undefined) =>
+        new Promise((_resolve, reject) => {
+          opts?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        }),
+    )
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('ISBN / Book'))
+    fireEvent.change(screen.getByLabelText('Search by title or ISBN'), {
+      target: { value: '9780871294272' },
+    })
+    fireEvent.click(screen.getByText('Import'))
+    await screen.findByText('Cancel Import')
+    fireEvent.click(screen.getByText('Cancel Import'))
+    await screen.findByText(/Import cancelled/)
+  })
+
+  it('replaces footer with Done after success and closes on click', async () => {
+    const onClose = vi.fn()
+    mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'ds', message: 'ok' })
+    render(<DatasetImportDialog open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Search for a repository'), {
+      target: { value: 'https://github.com/u/r' },
+    })
+    fireEvent.click(screen.getByText('Import'))
+    await screen.findByText('Done')
+    expect(screen.queryByText('Import')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Done'))
+    expect(onClose).toHaveBeenCalledWith(false)
   })
 })

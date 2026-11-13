@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { ActionCard, Input, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -8,7 +9,6 @@ import {
   type SavedTree,
   type TokenTreeStats,
 } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 interface TokenTreePersistenceCardProps {
   refreshKey?: number
@@ -30,7 +30,7 @@ export function TokenTreePersistenceCard({
   const [saving, setSaving] = useState(false)
   const [busyName, setBusyName] = useState<string | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const load = useCallback(async (isCancelled?: () => boolean) => {
     try {

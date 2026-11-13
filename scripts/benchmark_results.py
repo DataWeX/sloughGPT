@@ -1,21 +1,33 @@
 """
 Persistent benchmark results + regression tracking.
 
-Records benchmark output (stability, latency) to data/benchmark_results/
-as JSON, tagged with model + git commit + timestamp. Compares each new run
-against prior runs and reports regressions.
+Records benchmark output (stability, latency, inference, ...) as JSON, tagged
+with model + git commit + timestamp + source. Compares each new run against
+prior runs and reports regressions.
+
+The store is CANONICAL and checkout-independent (card 20261031_133226): the
+old script-relative ``REPO_ROOT/data/benchmark_results`` forked one history per
+checkout — worktrees and the api-std lane each stranded their own records, so
+no single place ever held the series that regression gating needs. Resolution:
+``SLO_BENCH_DATA_DIR`` env var, else ``~/.local/share/sloughgpt/benchmark_results``.
+``migrate --from <dir>`` copies an old per-checkout store in (union: never
+overwrites an existing file).
 
 Usage:
     python scripts/benchmark_results.py record --kind stability --json-file out.json
     python scripts/benchmark_results.py record --kind latency --json-file out.json
+    python scripts/benchmark_results.py record --kind inference --json-file out.json
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
+    python scripts/benchmark_results.py migrate --from <old-checkout>/data/benchmark_results
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +35,14 @@ from pathlib import Path
 from domain.shared import utc_now_iso
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-RESULTS_DIR = REPO_ROOT / "data" / "benchmark_results"
+# Canonical store — env override for CI/containers, else the user-level
+# default. NEVER repo-relative: a worktree must record into the same history
+# as main or the series silently forks (the 2026-10-31 stranding: 5 decode
+# runs visible only from the api-std checkout).
+RESULTS_DIR = Path(
+    os.environ.get("SLO_BENCH_DATA_DIR")
+    or Path.home() / ".local" / "share" / "sloughgpt" / "benchmark_results"
+)
 
 REGRESSION_THRESHOLDS = {
     "stability": {
@@ -52,6 +71,29 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
+    "vm_life": {
+        # scripts/benchmark_vm_life.py — step counts are deterministic, wall
+        # time carries machine-load noise (hence the wider rel limit)
+        "batch_wall_ms": (50.0, "rel"),
+        "step_frame_steps": (10.0, "rel"),
+        "first_seed_steps.600": (25.0, "rel"),
+        "reseed_steps.600": (25.0, "rel"),
+    },
+    "effects": {
+        # show_effects.py engine-level report (card 20261024_095912).
+        # Load-sensitive metrics (attention, prefill, decode) get generous
+        # thresholds — runs happen on a shared box at unknown loadavg,
+        # which is recorded alongside for interpretation.
+        # ms-scale metrics use abs deltas: rel% on a 15ms baseline is pure
+        # scheduler jitter (measured 15→38ms at loadavg 23, no real change).
+        "rag_context_chars": (30.0, "rel"),
+        "rag_query_ms": (100.0, "abs"),
+        "attn_single_ms": (1.0, "abs"),
+        "attn_multi_ms": (50.0, "rel"),
+        "first_token_short_s": (50.0, "rel"),
+        "first_token_rag_s": (50.0, "rel"),
+        "decode_tok_s": (30.0, "rel"),
+    },
     "bootstrap": {
         # GET /bootstrap → landing first paint; frontend overlay watchdog = 8s
         # rel limits are PERCENT (100.0 = 100%): load-tolerant but still
@@ -61,7 +103,33 @@ REGRESSION_THRESHOLDS = {
         # a degraded member = partial landing page; zero tolerance
         "member_errors": (0, "abs"),
     },
+    "inference": {
+        # benchmark_decode_slope.py --json (greedy decode, int8 model).
+        # Shared box: decode swings ±50% with loadavg alone (measured
+        # 16.13 @ load 4.3 vs 11.6 @ load 8.8 on the same commit), so the
+        # regression bar is generous; load_s is recorded for interpretation.
+        # Headline = marginal slope; naive_tok_s.<n> gates the two ends of
+        # the context-growth curve (short-context throughput and the
+        # long-context fade the slope alone can hide).
+        "decode_tok_s": (30.0, "rel"),
+        "naive_tok_s.32": (30.0, "rel"),
+        "naive_tok_s.256": (30.0, "rel"),
+    },
 }
+
+
+# Single declaration of the recorded kinds — argparse choices and the
+# history default must never drift apart (parity is mechanical, not vibes).
+KINDS = (
+    "stability",
+    "latency",
+    "execution",
+    "training",
+    "startup",
+    "effects",
+    "bootstrap",
+    "inference",
+)
 
 
 def git_commit() -> str | None:
@@ -82,6 +150,23 @@ def git_commit() -> str | None:
 def timestamp() -> str:
     """Return ISO timestamp with timezone."""
     return utc_now_iso()
+
+
+def _provenance() -> dict:
+    """Code+platform provenance block for a recorded run.
+
+    Adds the platform/config-fingerprint context that a bare commit hash
+    lacks — two runs on the same commit but different machines or quant
+    knobs are not comparable, and loadavg is already recorded separately as
+    the scheduler confounder. Best-effort: never fails a record.
+    """
+    try:
+        from domain.infrastructure._internal.artifact_registry import provenance_snapshot
+
+        return provenance_snapshot()
+    except Exception as exc:  # noqa: BLE001 — provenance must never fail a record
+        print(f"[WARN] provenance unavailable: {exc}", file=sys.stderr)
+        return {}
 
 
 def results_path(kind: str, model: str, stamp: str) -> Path:
@@ -180,7 +265,7 @@ def load_result(path: Path) -> dict:
 
 
 # higher-is-better metric names (a drop means regression)
-HIGHER_IS_BETTER = {"overall", "response_rate"}
+HIGHER_IS_BETTER = {"overall", "response_rate", "decode_tok_s"}
 
 
 def _threshold(kind: str, metric: str) -> tuple:
@@ -252,6 +337,138 @@ def is_regression(kind: str, new: dict, old: dict) -> bool:
     return False
 
 
+def record_source(rec: dict) -> str:
+    """Source stamp of a record; records predating the stamp are local.
+
+    The always-record store stamps ``source: ci`` when the CI env var is
+    set; everything migrated from per-checkout stores predates the stamp
+    and was produced locally.
+    """
+    return rec.get("source") or "local"
+
+
+def load_series(kind: str, source: str | None = None) -> list[dict]:
+    """Newest-last record series for a kind, optionally source-filtered.
+
+    Corrupt or unreadable files are skipped (a half-written record must
+    not take the whole reader down). ``source`` matches against
+    :func:`record_source` so pre-stamp records count as local.
+    """
+    d = RESULTS_DIR / kind
+    if not d.is_dir():
+        return []
+    out: list[dict] = []
+    for p in d.glob("*.json"):
+        try:
+            rec = load_result(p)
+        except Exception:
+            continue
+        if source is not None and record_source(rec) != source:
+            continue
+        out.append(rec)
+    out.sort(key=lambda r: str(r.get("timestamp") or ""))
+    return out
+
+
+def trend_status(
+    metric: str,
+    history: list[dict],
+    current: float,
+    *,
+    window: int = 10,
+    k: float = 3.0,
+) -> dict:
+    """Compare ``current`` against the trend of the preceding ``history``.
+
+    Leave-one-out by contract: ``history`` must EXCLUDE the run that
+    produced ``current`` — a value cannot judge itself against a band it
+    moved (that masks exactly the outliers this exists to catch).
+
+    Fit = least squares over the last ``window`` usable values of
+    ``metric`` (values fetched via :func:`_dig`, the same accessor
+    ``is_regression`` uses — a path that resolves to nothing contributes
+    no value); ``sigma`` = residual scatter about that line
+    (``n-2`` degrees of freedom), so the band is trend-adjusted: a steady
+    decline is not "healthy because σ is large". Status:
+
+        insufficient  fewer than 3 usable history values — say so, never
+                      alarm on a thin sample (fresh store, single run)
+        healthy       |current - trend| <= k·σ
+        regressed     beyond the band, in the bad direction for this
+                      metric (direction = membership in HIGHER_IS_BETTER,
+                      the SAME table is_regression uses — never a second
+                      direction list)
+        improved      beyond the band, good direction
+
+    σ = 0 (perfectly flat history): the band collapses to a point, so an
+    exact match is healthy and any deviation is flagged — a step change
+    off a zero-variance baseline is exactly what deserves a look.
+
+    Returns a dict: status, metric, current, trend, slope (per run),
+    sigma, z (current-trend)/σ, n, window, k, message (compact, no dump).
+    """
+    usable = [
+        v
+        for v in (_dig(r, metric) for r in history[-window:])
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    ]
+    n = len(usable)
+    if n < 3:
+        return {
+            "status": "insufficient",
+            "metric": metric,
+            "current": current,
+            "trend": None,
+            "slope": None,
+            "sigma": None,
+            "z": None,
+            "n": n,
+            "window": window,
+            "k": k,
+            "message": f"{metric}: insufficient history (n={n}, need >=3)",
+        }
+    xs = list(range(n))
+    x_bar = (n - 1) / 2
+    y_bar = sum(usable) / n
+    sxx = sum((x - x_bar) ** 2 for x in xs)
+    sxy = sum((x - x_bar) * (y - y_bar) for x, y in zip(xs, usable))
+    slope = sxy / sxx
+    intercept = y_bar - slope * x_bar
+    residuals = [y - (intercept + slope * x) for x, y in zip(xs, usable)]
+    sigma = (sum(e * e for e in residuals) / (n - 2)) ** 0.5
+    # one step past history = the current run's expected position
+    trend = intercept + slope * n
+    diff = current - trend
+    z = diff / sigma if sigma > 0 else (0.0 if diff == 0 else float("inf"))
+    if abs(diff) <= k * sigma:
+        status = "healthy"
+    else:
+        bad = diff < 0 if metric in HIGHER_IS_BETTER else diff > 0
+        status = "regressed" if bad else "improved"
+    dirn = "below" if diff < 0 else ("above" if diff > 0 else "at")
+    if status == "healthy":
+        msg = f"{metric}: {current:g} within {k:g}σ of trend {trend:g} (σ={sigma:g}, n={n})"
+    else:
+        word = {"regressed": "regression candidate", "improved": "improvement"}[status]
+        msg = (
+            f"{metric}: {current:g} is {abs(z):.1f}σ {dirn} trend {trend:g} "
+            f"(σ={sigma:g}, n={n}) — {word}, slope {slope:+.3g}/run"
+        )
+    return {
+        "status": status,
+        "metric": metric,
+        "current": current,
+        "trend": trend,
+        "slope": slope,
+        "sigma": sigma,
+        "z": z,
+        "n": n,
+        "window": window,
+        "k": k,
+        "message": msg,
+    }
+
+
 def do_record(args) -> int:
     """Persist a run from an existing JSON file, or run live if none given."""
     kind = args.kind
@@ -280,9 +497,20 @@ def do_record(args) -> int:
                 file=sys.stderr,
             )
             return 1
+        elif kind == "effects":
+            print(
+                "[ERR] effects kind requires --json-file (from show_effects.py --json)",
+                file=sys.stderr,
+            )
         elif kind == "bootstrap":
             print(
                 "[ERR] bootstrap kind requires --json-file (from benchmark_bootstrap.py)",
+                file=sys.stderr,
+            )
+            return 1
+        elif kind == "inference":
+            print(
+                "[ERR] inference kind requires --json-file (from benchmark_decode_slope.py --json)",
                 file=sys.stderr,
             )
             return 1
@@ -298,6 +526,8 @@ def do_record(args) -> int:
             "model": model,
             "commit": git_commit(),
             "timestamp": stamp,
+            "source": "ci" if os.environ.get("CI") else "local",
+            "provenance": _provenance(),
             "runs": data.get("runs", args.runs),
             "passed": data.get("passed"),
             "score": data.get("score"),
@@ -311,6 +541,8 @@ def do_record(args) -> int:
             "model": model,
             "commit": git_commit(),
             "timestamp": stamp,
+            "source": "ci" if os.environ.get("CI") else "local",
+            "provenance": _provenance(),
             "metrics": data,
         }
 
@@ -324,6 +556,33 @@ def do_record(args) -> int:
     prior = collect_records(kind)
     if len(prior) > 1:
         return do_compare(args)
+    return 0
+
+
+def do_migrate(args) -> int:
+    """Union-copy an old per-checkout store into the canonical dir.
+
+    Copy semantics, never move: the source checkout may still be in use, and a
+    failed migrate must never destroy history (same lesson as the board
+    export wipe — preserve before touching). Existing canonical files are
+    skipped, so re-running is idempotent.
+    """
+    src = Path(args.source).expanduser()
+    if not src.is_dir():
+        print(f"[ERR] not a directory: {src}", file=sys.stderr)
+        return 1
+    copied = skipped = 0
+    for f in sorted(src.rglob("*.json")):
+        rel = f.relative_to(src)  # <kind>/<file>.json
+        dest = RESULTS_DIR / rel
+        if dest.exists():
+            skipped += 1
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, dest)
+        copied += 1
+        print(f"  copied {rel}")
+    print(f"[MIGRATE] {copied} copied, {skipped} already present → {RESULTS_DIR}")
     return 0
 
 
@@ -345,11 +604,7 @@ def _metric_entries(record: dict) -> list[dict]:
 
 def do_history(args) -> int:
     """List stored runs (all kinds unless --kind narrows it)."""
-    for kind in (
-        [args.kind]
-        if args.kind
-        else ["stability", "latency", "startup", "execution", "training", "bootstrap"]
-    ):
+    for kind in [args.kind] if args.kind else list(KINDS):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -381,11 +636,28 @@ def do_history(args) -> int:
                         f"  {stamp}  {model:<24} dispatch_us={str(c.get('dispatch_us', '?')):<9} "
                         f"threads={str(c.get('peak_threads', '?')):<7}  {p.name}"
                     )
+                elif kind == "effects":
+                    print(
+                        f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"attn1={str(c.get('attn_single_ms', '?')):<7} "
+                        f"rag={str(c.get('rag_context_chars', '?')):<6} "
+                        f"load={str(c.get('loadavg', '?')):<5}  {p.name}"
+                    )
                 elif kind == "bootstrap":
                     print(
                         f"  {stamp}  {model:<24} first={str(c.get('first_s', '?')):<7} "
                         f"p95={str(c.get('warm_p95_s', '?')):<7} "
                         f"errs={c.get('member_errors', '?')}  {p.name}"
+                    )
+                elif kind == "inference":
+                    naive = c.get("naive_tok_s") or {}
+                    print(
+                        f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"r2={str(c.get('r2', '?')):<7} "
+                        f"spread={str(c.get('spread_pct', '?')):<5} "
+                        f"naive32={str(naive.get('32', '?')):<7} "
+                        f"naive256={str(naive.get('256', '?')):<7} "
+                        f"load={c.get('loadavg_end', c.get('loadavg', '?'))}  {p.name}"
                     )
                 else:  # latency and unknown kinds
                     print(
@@ -393,6 +665,41 @@ def do_history(args) -> int:
                         f"p95={str(c.get('p95_ms', '?')):<7}  {p.name}"
                     )
     return 0
+
+
+# inference compare trust band — loadavg is a confounder of decode tok/s
+# (measured 18.5 @ load 6.86 vs 12.86 @ load 7.96 on the same commit), so a
+# FAIL across materially different load bands is box noise until proven
+# otherwise. r² floor from healthy runs is 0.9977 — 0.99 keeps headroom.
+INFERENCE_LOAD_BAND = 1.0
+INFERENCE_R2_FLOOR = 0.99
+
+
+def _inference_trust_reason(new: dict, old: dict) -> str | None:
+    """Return why an inference compare verdict is untrustworthy, else None.
+
+    Missing fields (pre-trust records) never suppress anything — the guard
+    only acts on evidence, it cannot invent innocence from absent data.
+    """
+
+    def _metric(record: dict, key: str) -> float | None:
+        v = record.get("metrics", {}).get(key)
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    for label, rec in (("new", new), ("old", old)):
+        r2 = _metric(rec, "r2")
+        if r2 is not None and r2 < INFERENCE_R2_FLOOR:
+            return f"fit untrustworthy ({label} r2={r2:.4f} < {INFERENCE_R2_FLOOR})"
+    nl = _metric(new, "loadavg_end") or _metric(new, "loadavg")
+    ol = _metric(old, "loadavg_end") or _metric(old, "loadavg")
+    if nl is not None and ol is not None and abs(nl - ol) > INFERENCE_LOAD_BAND:
+        return (
+            f"load band Δ{abs(nl - ol):.2f} > {INFERENCE_LOAD_BAND} (old {ol:.2f} → new {nl:.2f})"
+        )
+    return None
 
 
 def do_compare(args) -> int:
@@ -450,6 +757,14 @@ def do_compare(args) -> int:
                 flag = "  ⚠ REGRESSION"
         print(f"  {metric:<24} {ov:<10} → {nv:<10} Δ{delta:+.3f}{flag}")
 
+    if regressed and args.kind == "inference":
+        reason = _inference_trust_reason(new, old)
+        if reason:
+            print(
+                f"  → [INCONCLUSIVE] {reason} — FAIL suppressed; re-run both sides under similar load"
+            )
+            return 0
+
     if regressed:
         print(f"  → [FAIL] regression detected in {args.kind}")
         return 1
@@ -462,11 +777,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
-    p_rec.add_argument(
-        "--kind",
-        required=True,
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
-    )
+    p_rec.add_argument("--kind", required=True, choices=list(KINDS))
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
     p_rec.add_argument("--runs", type=int, default=20)
@@ -475,21 +786,21 @@ def main() -> int:
     p_rec.set_defaults(fn=do_record)
 
     p_h = sub.add_parser("history", help="list stored runs")
-    p_h.add_argument(
-        "--kind",
-        default=None,
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
-    )
+    p_h.add_argument("--kind", default=None, choices=list(KINDS))
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
-    p_c.add_argument(
-        "--kind",
-        default="stability",
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
-    )
+    p_c.add_argument("--kind", default="stability", choices=list(KINDS))
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
+
+    p_m = sub.add_parser(
+        "migrate", help="union-copy an old per-checkout store into the canonical dir"
+    )
+    p_m.add_argument(
+        "--from", dest="source", required=True, help="old results dir (…/data/benchmark_results)"
+    )
+    p_m.set_defaults(fn=do_migrate)
 
     args = parser.parse_args()
     return args.fn(args)

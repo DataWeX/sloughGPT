@@ -259,3 +259,79 @@ class TestHealthRouter:
         ):
             resp = client.get(path)
             assert resp.status_code == 200, f"{path} returned {resp.status_code}"
+
+
+class TestHealthVerdictIsOneOpinion:
+    """/health and /health/detailed must not tell two stories.
+
+    The defect: `get_basic_health` seeded `"status": "healthy"` as a literal,
+    while `/health/detailed` derived its status from the lifecycle. A server
+    still parked in `init` answered `"healthy"` to the operator-facing
+    endpoint and `"init"` to the detailed one. Each half looked reasonable on
+    its own; only a consumer asking both at once could see the disagreement.
+
+    The composite score made it worse rather than catching it: it is computed
+    from request/latency/throughput counters, which on a freshly booted server
+    are *absent rather than bad*, so it scored 92/"healthy" for a process that
+    had never reached RUNNING. A score that cannot see the lifecycle must not
+    be the thing that declares health.
+    """
+
+    def _data(self, resp):
+        body = resp.json()
+        return body.get("data", body)
+
+    def test_lifecycle_gates_the_verdict_even_when_the_score_glows(self):
+        """Not running -> degraded, whatever the score says."""
+        from controllers.health import _derive_verdict
+
+        glowing = {"score": 92, "status": "healthy"}
+        parked = {"phase": "init", "is_running": False}
+
+        assert _derive_verdict(parked, glowing) == "degraded", (
+            "a process that never reached RUNNING cannot be healthy, however "
+            "good its counters look — absence of traffic is not health"
+        )
+
+    def test_running_takes_the_weighted_score(self):
+        from controllers.health import _derive_verdict
+
+        running = {"phase": "running", "is_running": True}
+
+        assert _derive_verdict(running, {"status": "healthy"}) == "healthy"
+        assert _derive_verdict(running, {"status": "degraded"}) == "degraded"
+        assert _derive_verdict(running, {"status": "unhealthy"}) == "unhealthy"
+
+    def test_verdict_is_always_in_the_documented_vocabulary(self):
+        """Whatever the inputs, an agent gets one of the three known words."""
+        from controllers.health import _derive_verdict
+
+        for lifecycle in (
+            {},
+            {"phase": "init", "is_running": False},
+            {"phase": "running", "is_running": True},
+            {"phase": "draining", "is_running": True},
+        ):
+            for score in ({}, {"status": None}, {"status": "healthy"}):
+                verdict = _derive_verdict(lifecycle, score)
+                assert verdict in ("healthy", "degraded", "unhealthy"), (
+                    f"unexpected verdict {verdict!r} for {lifecycle} / {score}"
+                )
+
+    def test_both_endpoints_agree(self):
+        """The regression test proper: one process, one verdict."""
+        basic = self._data(client.get("/health"))
+        detailed = self._data(client.get("/health/detailed"))
+
+        assert basic["status"] == detailed["status"], (
+            f"/health said {basic['status']!r} while /health/detailed said "
+            f"{detailed['status']!r} for the same process"
+        )
+
+    def test_basic_health_carries_the_score_and_its_reasoning(self):
+        """A verdict an agent cannot interrogate can only be alerted on."""
+        data = self._data(client.get("/health"))
+
+        score = data.get("health_score")
+        assert isinstance(score, dict), "basic /health must expose health_score"
+        assert "score" in score and "status" in score

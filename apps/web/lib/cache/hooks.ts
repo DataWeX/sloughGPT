@@ -122,11 +122,25 @@ export function useQuery<T>(
 
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
-  // Trigger fetch on mount / key change
+  // Bumped by revalidateAll() — the signal that lets an already-mounted view
+  // refetch instead of us reloading the document (see client.ts).
+  const refreshVersion = useQueryStore((s) => s.refreshVersion)
+  const lastVersionRef = useRef(refreshVersion)
+
+  // Trigger fetch on mount / key change / revalidateAll()
   useEffect(() => {
     if (!enabled) return
 
-    const doFetch = refetchOnMount && (state.data === undefined || checkStale(key))
+    const versionAdvanced = refreshVersion !== lastVersionRef.current
+    // Record on every run so the first render is not treated as an advance.
+    lastVersionRef.current = refreshVersion
+
+    const doFetch = versionAdvanced
+      ? // Revalidation: previous data stays on screen (no spinner flash), so
+        // the only reason to hold off is a request already in flight — its
+        // result is the freshest we have and fetchQuery would dedup it anyway.
+        !useQueryStore.getState().cache[sk]?._promise
+      : refetchOnMount && (state.data === undefined || checkStale(key))
     if (!doFetch) return
 
     let cancelled = false
@@ -147,7 +161,7 @@ export function useQuery<T>(
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sk, enabled])
+  }, [sk, enabled, refreshVersion])
 
   const refetch = useCallback(async (): Promise<T> => {
     return fetchQuery(key, () => fetcherRef.current(), optsRef.current)

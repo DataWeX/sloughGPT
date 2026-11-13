@@ -1,4 +1,4 @@
-"""Domain-layer exceptions for SloughGPT (``packages/core-py``).
+"""Domain-layer exceptions for SloughGPT.
 
 Raised from training/inference code before or during tensor work. The HTTP layer
 (``apps/api/server``) maps these to JSON responses via ``exception_handler`` —

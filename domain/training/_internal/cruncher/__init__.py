@@ -4,6 +4,8 @@ Turns raw text streams (live conversation corpus, imported packs) into
 immutable, versioned training snapshots that feed ``SloughGPTTrainer``
 through the existing dataset manifest adapter.  See
 ``domain/training/_internal/cruncher/pipeline.py`` for the entry points.
+This pipeline is the canonical flow through the adapter composition gate
+— standing ruling: ``docs/adr-002-training-adapters.md``.
 
 Usage::
 

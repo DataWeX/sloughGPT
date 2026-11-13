@@ -25,9 +25,7 @@ AVION_DIR = PACKAGES / "avion"
 VOYAGER_SHIM = PACKAGES / "voyager"
 
 RETIRED = ("arken", "voyager")
-_IMPORT_LINE = re.compile(
-    r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z_][\w.]*))"
-)
+_IMPORT_LINE = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z_][\w.]*))")
 
 _scan_cache: dict[str, list[tuple[Path, int]]] | None = None
 
@@ -68,9 +66,7 @@ def _retired_imports(files: list[Path]) -> dict[str, list[tuple[Path, int]]]:
         candidate = False
         for line in text.splitlines():
             module = _line_imports_module(line)
-            if module and any(
-                module == name or module.startswith(f"{name}.") for name in RETIRED
-            ):
+            if module and any(module == name or module.startswith(f"{name}.") for name in RETIRED):
                 candidate = True
                 break
         if not candidate:
@@ -117,34 +113,23 @@ def test_scan_finds_the_expected_shim_import():
     """The guard must not pass by finding nothing to check."""
     assert scan()["arken"], "expected the voyager shim to import arken"
     assert all(
-        path == VOYAGER_SHIM / "src" / "voyager" / "__init__.py"
-        for path, _ in scan()["arken"]
+        path == VOYAGER_SHIM / "src" / "voyager" / "__init__.py" for path, _ in scan()["arken"]
     )
 
 
 def test_no_arken_imports_outside_the_voyager_shim():
-    strays = [
-        (path, line)
-        for path, line in scan()["arken"]
-        if VOYAGER_SHIM not in path.parents
-    ]
+    strays = [(path, line) for path, line in scan()["arken"] if VOYAGER_SHIM not in path.parents]
     assert strays == [], f"import arken outside the shim: {strays}"
 
 
 def test_no_voyager_imports_outside_the_voyager_shim():
-    strays = [
-        (path, line)
-        for path, line in scan()["voyager"]
-        if VOYAGER_SHIM not in path.parents
-    ]
+    strays = [(path, line) for path, line in scan()["voyager"] if VOYAGER_SHIM not in path.parents]
     assert strays == [], f"import voyager outside the shim: {strays}"
 
 
 def test_arken_shim_reexports_from_canonical_avion():
     """The shim must point at avion, not drift into its own copy."""
-    src = (PACKAGES / "arken" / "src" / "arken" / "__init__.py").read_text(
-        encoding="utf-8"
-    )
+    src = (PACKAGES / "arken" / "src" / "arken" / "__init__.py").read_text(encoding="utf-8")
     modules = {
         node.module
         for node in ast.walk(ast.parse(src))
@@ -155,9 +140,7 @@ def test_arken_shim_reexports_from_canonical_avion():
 
 def test_voyager_shim_still_targets_arken_chain():
     """voyager → arken → avion; both shims must keep re-exporting."""
-    src = (VOYAGER_SHIM / "src" / "voyager" / "__init__.py").read_text(
-        encoding="utf-8"
-    )
+    src = (VOYAGER_SHIM / "src" / "voyager" / "__init__.py").read_text(encoding="utf-8")
     modules = {
         node.module
         for node in ast.walk(ast.parse(src))

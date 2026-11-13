@@ -6,7 +6,6 @@ import { cn, IconStar, StatusDot } from '@sloughgpt/strui'
 import { formatRelativeTime } from '@/lib/time-format'
 import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'
 
-import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'
 import type { ImageAttachment } from './../input/ImageUpload'
 
@@ -46,9 +45,7 @@ export interface MessageBubbleProps {
   onAddNote?: (messageId: string) => void
   hasThread?: boolean
   onThread?: (messageId: string) => void
-  /** Position of this turn in the transcript (1-based). Renders in the gutter. */
-  turnNumber?: number
-  /** Per-turn stream metrics for the margin (tok/s, token count, latency). */
+  /** Per-turn stream metrics for the frame footer (tok/s, token count, latency). */
   metrics?: { tokens?: number; elapsedMs?: number }
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
@@ -61,11 +58,12 @@ function formatMetrics(m?: { tokens?: number; elapsedMs?: number }): string | nu
 }
 
 /**
- * Transcript turn — the log-entry primitive (see DESIGN_SYSTEM.md "The Log Entry").
+ * Transcript turn — composes MessageFrame (Direction B, ruling 2026-11-03).
  *
- * Anatomy: gutter (turn number, monospace) | content (document-like: assistant
- * prose flows with no bubble chrome, user turns are compact tinted cards) |
- * margin (living metadata: role, model, per-turn stream metrics, StatusDot).
+ * Anatomy: the shared frame (user = right-aligned tinted surface, assistant =
+ * left-aligned card surface, both rounded-2xl) with the metadata footer inside
+ * it; this file owns only the surrounding behavior — context menu, actions,
+ * aria/live wiring. Chrome is never re-decided here.
  */
 export const MessageBubble = memo(function MessageBubble({
   content,
@@ -95,7 +93,6 @@ export const MessageBubble = memo(function MessageBubble({
   onAddNote,
   hasThread,
   onThread,
-  turnNumber,
   metrics,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
@@ -107,6 +104,34 @@ export const MessageBubble = memo(function MessageBubble({
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
   const metricsText = formatMetrics(metrics)
+
+  // Metadata footer — inside the frame (Direction B), never a detached gutter.
+  const footer = (
+    <>
+      <span className="flex items-center gap-1.5">
+        {isStreaming && <StatusDot tone="primary" pulse aria-hidden />}
+        {isError && <StatusDot tone="destructive" aria-hidden />}
+        {role === 'user' ? 'You' : 'Assistant'}
+        {isBookmarked && (
+          <span className="text-warning" aria-label="Bookmarked">
+            <IconStar className="h-2.5 w-2.5 inline" filled />
+          </span>
+        )}
+      </span>
+      {role === 'assistant' && model && !isError && hasContent && <span>{model}</span>}
+      {metricsText && <span>{metricsText}</span>}
+      {isError && <span className="text-destructive">Interrupted</span>}
+      {/* Timestamp = the entry-closed marker; don't claim a finished entry
+          before the first token lands. Role label + StatusDot still signal
+          the in-progress turn. */}
+      {showTimestamp && (hasContent || role === 'user') && (
+        <span className="flex items-center gap-1.5">
+          {formatRelativeTime(timestamp)}
+          {role === 'assistant' && messageId && <ConsciousnessMessageBadge messageId={messageId} />}
+        </span>
+      )}
+    </>
+  )
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -154,49 +179,30 @@ export const MessageBubble = memo(function MessageBubble({
         aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
         aria-live={isStreaming ? 'polite' : ariaLive}
         onKeyDown={handleKeyDown}
-        className={cn(
-          'group grid transition-all duration-300 ease-out',
-          'grid-cols-[minmax(0,1fr)] sm:grid-cols-[2.5rem_minmax(0,1fr)_auto]',
-          'items-start',
-        )}
+        className={cn('group transition-all duration-300 ease-out')}
       >
-        {/* Gutter — stable turn number, like a transcript or lab log */}
-        <span
-          className="hidden sm:block pt-1 text-right font-mono text-[10px] leading-5 text-muted-foreground/50 select-none"
-          aria-hidden="true"
-        >
-          {turnNumber != null ? String(turnNumber).padStart(2, '0') : ''}
-        </span>
-
-        {/* Content — the words are the interface */}
-        <div className={cn('min-w-0', role === 'user' && !isEditing && 'flex justify-end')}>
-          <div
-            className={cn(
-              'transition-all duration-200 leading-relaxed',
-              role === 'user'
-                ? isEditing
-                  ? 'w-full bg-muted text-foreground rounded-lg px-4 py-2.5'
-                  : 'bg-primary text-primary-foreground rounded-lg px-4 py-2.5 max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] shadow-sm'
-                : 'text-foreground max-w-[70ch] py-0.5',
-              isError && role === 'assistant' && 'text-destructive',
-            )}
-          >
-            {images && images.length > 0 && <MessageImages images={images} role={role} />}
-
-            <MessageContent
-              content={content}
-              role={role}
-              searchQuery={searchQuery}
-              messageId={messageId}
-              isStreaming={isStreaming}
-              isError={isError}
-              collapsibleLength={collapsibleLength}
-              isEditing={isEditing}
-              onEdit={onEdit}
-              onEditStart={handleEditStart}
-              onEditCancel={handleEditCancel}
-            />
-          </div>
+        {/* Content — the frame carries the chrome; actions sit outside it.
+            This wrapper must stay a plain block: MessageFrame already owns
+            `justify-end` for user turns, and adding it here right-aligned
+            [frame][hover toolbar] as a PAIR — the toolbar is opacity-0 but still
+            occupies ~200px, so the bubble stopped short of the right edge and
+            read as floating mid-row. */}
+        <div className="min-w-0">
+          <MessageContent
+            content={content}
+            role={role}
+            searchQuery={searchQuery}
+            messageId={messageId}
+            isStreaming={isStreaming}
+            isError={isError}
+            collapsibleLength={collapsibleLength}
+            isEditing={isEditing}
+            onEdit={onEdit}
+            onEditStart={handleEditStart}
+            onEditCancel={handleEditCancel}
+            images={images}
+            footer={footer}
+          />
 
           {(showActions || isError) && (
             <MessageActions
@@ -217,45 +223,20 @@ export const MessageBubble = memo(function MessageBubble({
           )}
 
           {role === 'user' && hasContent && !isEditing && (
-            <MessageActions
-              content={content}
-              messageId={id}
-              role={role}
-              onCopy={onCopy}
-              onEdit={handleEditStart}
-              onSuggestionClick={onSuggestionClick}
-              onDelete={onDelete}
-            />
-          )}
-        </div>
-
-        {/* Margin — living metadata in monospace: the log's instrumentation */}
-        <div
-          className={cn(
-            'hidden sm:flex flex-col items-end gap-0.5 pt-1 pl-4',
-            'font-mono text-[10px] leading-5 text-muted-foreground/60 select-none',
-          )}
-        >
-          <span className="flex items-center gap-1.5">
-            {isStreaming && <StatusDot tone="primary" pulse aria-hidden />}
-            {isError && <StatusDot tone="destructive" aria-hidden />}
-            {role === 'user' ? 'You' : 'Assistant'}
-            {isBookmarked && (
-              <span className="text-warning" aria-label="Bookmarked">
-                <IconStar className="h-2.5 w-2.5 inline" filled />
-              </span>
-            )}
-          </span>
-          {role === 'assistant' && model && !isError && <span>{model}</span>}
-          {metricsText && <span>{metricsText}</span>}
-          {isError && <span className="text-destructive">Interrupted</span>}
-          {showTimestamp && (
-            <span className="flex items-center gap-1.5">
-              {formatRelativeTime(timestamp)}
-              {role === 'assistant' && messageId && (
-                <ConsciousnessMessageBadge messageId={messageId} />
-              )}
-            </span>
+            /* Column + items-end: MessageActions is a fragment (toolbar, then
+               reactions), so it must stack vertically while its buttons sit
+               flush with the right-aligned bubble above. */
+            <div className="flex flex-col items-end">
+              <MessageActions
+                content={content}
+                messageId={id}
+                role={role}
+                onCopy={onCopy}
+                onEdit={handleEditStart}
+                onSuggestionClick={onSuggestionClick}
+                onDelete={onDelete}
+              />
+            </div>
           )}
         </div>
       </div>

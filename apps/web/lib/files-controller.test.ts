@@ -18,8 +18,22 @@ beforeEach(() => {
 
 describe('filesController', () => {
   const backendFiles = [
-    { id: '1', filename: 'test.txt', extension: 'txt', size_bytes: 100, uploaded_at: '2026-01-01', tags: ['doc'] },
-    { id: '2', filename: 'data.csv', extension: 'csv', size_bytes: 200, uploaded_at: '2026-01-02', tags: [] },
+    {
+      id: '1',
+      filename: 'test.txt',
+      extension: 'txt',
+      size_bytes: 100,
+      uploaded_at: '2026-01-01',
+      tags: ['doc'],
+    },
+    {
+      id: '2',
+      filename: 'data.csv',
+      extension: 'csv',
+      size_bytes: 200,
+      uploaded_at: '2026-01-02',
+      tags: [],
+    },
   ]
 
   it('list returns mapped files from array response', async () => {
@@ -82,5 +96,47 @@ describe('filesController', () => {
     apiGet.mockResolvedValue(undefined)
     const result = await filesController.search('test')
     expect(result).toEqual([])
+  })
+
+  it('startImport posts the url and returns the job id', async () => {
+    apiPost.mockResolvedValue({ job_id: 'abc123' })
+    const result = await filesController.startImport('https://example.com/a.txt')
+    expect(apiPost).toHaveBeenCalledWith('/files/import', { url: 'https://example.com/a.txt' })
+    expect(result.job_id).toBe('abc123')
+  })
+
+  it('importStatus reads status from the job route', async () => {
+    apiGet.mockResolvedValue({
+      job_id: 'abc123',
+      state: 'done',
+      filename: 'a.txt',
+      done: 100,
+      total: 100,
+      pct: 100,
+      wire_bytes: 40,
+      saved_bytes: 60,
+      content_encoding: 'gzip',
+      error: null,
+    })
+    const result = await filesController.importStatus('abc123')
+    expect(apiGet).toHaveBeenCalledWith('/files/import/abc123')
+    expect(result.state).toBe('done')
+    expect(result.wire_bytes).toBe(40)
+    expect(result.saved_bytes).toBe(60)
+  })
+
+  it('importStatus surfaces a running job with unknown total', async () => {
+    apiGet.mockResolvedValue({
+      job_id: 'abc123',
+      state: 'running',
+      filename: 'a.txt',
+      done: 0,
+      total: 0,
+      pct: 0,
+      error: null,
+    })
+    const result = await filesController.importStatus('abc123')
+    expect(result.state).toBe('running')
+    expect(result.total).toBe(0)
   })
 })

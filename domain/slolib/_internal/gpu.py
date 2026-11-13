@@ -2,9 +2,12 @@
 GPU/Accelerator Layer for SloLib
 
 Three backends:
-- **Metal**: Apple Silicon awareness with numpy compute (platform detection, no torch)
+- **Metal**: Apple Silicon awareness with numpy compute (platform detection)
 - **CUDA**: NVIDIA GPU via CuPy (pip install cupy-cuda12x)
 - **CPU**: Pure NumPy (always works, no dependencies)
+
+Torch is not a backend here — see ``_REMOVED_BACKENDS``. SloNet's NumPy engine
+is the only training engine; the backends above are kernel providers for it.
 
 Usage:
     acc = get_accelerator()
@@ -27,6 +30,36 @@ from typing import Any
 import numpy as np
 
 logger = logging.getLogger("slo.gpu")
+
+
+# =============================================================================
+# DISPATCH COUNTERS — where did the matmuls actually run? (StepTrace tripwire)
+# =============================================================================
+# Cumulative counters for the per-step reduction set (see
+# domain/training/_internal/trace.py). The training path counts path
+# attribution at the slonet._matmul seam; the CuPy backend counts the
+# host<->device byte traffic it performs. Read via dispatch_stats() — a
+# snapshot copy, never reset — and diff before/after a window for that
+# window's delta (read-only snapshots keep concurrent readers safe; no
+# hidden global state mutation).
+
+_DISPATCH_STATS: dict[str, int] = {
+    "gpu_matmuls": 0,  # eligible matmuls computed on an accelerator
+    "cpu_matmuls": 0,  # eligible matmuls computed on the CPU
+    "fallbacks": 0,  # accelerator attempts that raised and degraded to CPU
+    "h2d_bytes": 0,  # host->device transfer payload (matmul path, v1 scope)
+    "d2h_bytes": 0,  # device->host transfer payload (matmul path, v1 scope)
+}
+
+
+def count_dispatch(key: str, amount: int = 1) -> None:
+    """Increment a dispatch counter. Unknown keys raise (typo protection)."""
+    _DISPATCH_STATS[key] += amount
+
+
+def dispatch_stats() -> dict[str, int]:
+    """Snapshot of the cumulative dispatch counters (a copy — never resets)."""
+    return dict(_DISPATCH_STATS)
 
 
 # =============================================================================
@@ -139,7 +172,13 @@ def _ensure_probe() -> None:
             return
         _PROBE_STARTED = True
         gen = _PROBE_GEN
-        threading.Thread(target=_run_probe, args=(gen,), name="accel-probe", daemon=True).start()
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): _PROBE_STARTED is already set, so a dropped
+        # fire-and-forget submit would leave detection dead for this epoch —
+        # the engine never drops.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        get_engine().spawn(_run_probe, gen, name="accel-probe")
 
 
 def _run_probe(gen: int) -> None:
@@ -175,7 +214,13 @@ def prewarm_accelerator() -> None:
 
 
 def reset_accelerator() -> None:
-    global _BACKEND, _PROBE_GEN, _PROBE_STARTED, _PROBE_LATCHED, _CPU_FALLBACK
+    # _PROBE_DONE MUST be in this list: without it the rebind below creates a
+    # function-local and the module keeps the previous epoch's already-SET
+    # event, so the next get_accelerator() sees wait() return instantly with
+    # _BACKEND still None and latches the CPU fallback — CUDA silently gone for
+    # the process (found 2026-11-02 when this probe landed on main; the fork's
+    # suite was green because it counted probe calls, not served backends).
+    global _BACKEND, _PROBE_GEN, _PROBE_STARTED, _PROBE_LATCHED, _CPU_FALLBACK, _PROBE_DONE
     with _PROBE_LOCK:
         _PROBE_GEN += 1  # discard any in-flight probe from the old epoch
         _BACKEND = None
@@ -202,7 +247,164 @@ def set_accelerator_precision(mode: str = "auto") -> str:
     return acc.set_precision(mode)
 
 
+# =============================================================================
+# EXPLICIT SELECTION + PER-THREAD PIN
+# =============================================================================
+#
+# ``SLO_ACCEL_BACKEND`` is a declaration, not a hint. Unset/``auto`` keeps the
+# historical priority order (CUDA > Metal > OpenCL > CPU) byte-identical; any
+# other value either resolves or fails. Silent degradation is the class the
+# dispatch counters were added for — a run that *thought* it was on the GPU and
+# quietly was not is worse than a run that refuses at boot.
+
+_BACKEND_ALIASES = {
+    "cupy": "cuda",
+    "gpu": "cuda",
+    "nvidia": "cuda",
+    "mps": "metal",
+    "apple": "metal",
+    "numpy": "cpu",
+}
+
+#: Backends that shipped once and were deliberately removed. A declaration for
+#: one of these must explain *why* it is gone — "unknown backend" would send the
+#: next reader looking for a typo instead of the ruling.
+_REMOVED_BACKENDS = {
+    "torch": (
+        "torch was removed — SloNet's NumPy engine is the only training backend; "
+        "use cpu|auto, or cuda/metal/opencl for the in-repo GPU kernels"
+    ),
+    "pytorch": (
+        "torch was removed — SloNet's NumPy engine is the only training backend; "
+        "use cpu|auto, or cuda/metal/opencl for the in-repo GPU kernels"
+    ),
+}
+
+
+def _backend_classes() -> dict[str, type[_Accelerator]]:
+    """The one declaration of which backends exist (canonical names only)."""
+    return {
+        "cpu": _CPUBackend,
+        "cuda": _CUDABackend,
+        "metal": _MetalBackend,
+        "opencl": _OpenCLBackend,
+    }
+
+
+def known_backends() -> frozenset[str]:
+    """Every name ``select_backend`` resolves: canonical names plus aliases.
+
+    ``TrainerConfig`` validates against this instead of keeping its own list —
+    one declaration, so the config vocabulary cannot drift from the seam.
+    """
+    return frozenset(_backend_classes()) | frozenset(_BACKEND_ALIASES)
+
+
+def removed_backend_reason(name: str) -> str | None:
+    """Why ``name`` is no longer a backend, or ``None`` if it never was one.
+
+    Shared by ``select_backend`` (refuses at resolution) and ``TrainerConfig``
+    (refuses at validation) so both say the same sentence.
+    """
+    key = str(name or "").strip().lower()
+    return _REMOVED_BACKENDS.get(_BACKEND_ALIASES.get(key, key))
+
+
+def requested_backend() -> str:
+    """Backend named by ``SLO_ACCEL_BACKEND`` (lower-case, ``auto`` when unset)."""
+    return os.environ.get("SLO_ACCEL_BACKEND", "auto").strip().lower() or "auto"
+
+
+def _backend_factory(name: str):
+    return _backend_classes().get(name)
+
+
+def select_backend(name: str) -> _Accelerator:
+    """Build the named backend or raise — never fall back silently.
+
+    Raises:
+        ValueError: unknown backend name — or a backend that was removed
+            (``torch``), with the reason attached.
+        RuntimeError: known backend, unavailable on this host (no CUDA driver,
+            no Metal platform, no pyopencl, ...).
+    """
+    key = str(name or "").strip().lower()
+    key = _BACKEND_ALIASES.get(key, key)
+    removed = removed_backend_reason(key)
+    if removed is not None:
+        raise ValueError(f"accelerator backend {key!r} is not supported: {removed}")
+    factory = _backend_factory(key)
+    if factory is None:
+        raise ValueError(
+            f"unknown accelerator backend {name!r}; known: auto, "
+            f"{', '.join(sorted(known_backends()))} (removed: "
+            f"{', '.join(sorted(_REMOVED_BACKENDS))})"
+        )
+    acc = factory()
+    if not acc.is_available():
+        raise RuntimeError(f"accelerator backend {key!r} is not available on this host")
+    return acc
+
+
+def accelerator_for(device: str = "auto") -> _Accelerator:
+    """Resolve a declared device string to a backend instance.
+
+    ``"auto"`` asks the detector (bounded probe, CPU fallback). Everything else
+    is a declaration: it resolves or raises (see :func:`select_backend`).
+    """
+    key = str(device or "auto").strip().lower()
+    if key in ("", "auto"):
+        return get_accelerator()
+    return select_backend(key)
+
+
+#: Per-thread backend pin. Training runs in worker threads, so the pin is
+#: thread-scoped: a ``device="cpu"`` run cannot silence the GPU for inference
+#: or for a second job in the same process.
+_TLS = threading.local()
+
+
+def override_accelerator() -> _Accelerator | None:
+    """The backend pinned to *this* thread, or ``None`` (global detection)."""
+    return getattr(_TLS, "accelerator", None)
+
+
+def push_accelerator(acc: _Accelerator | None) -> _Accelerator | None:
+    """Pin *acc* for this thread; returns the previous pin (pass it to pop)."""
+    previous = override_accelerator()
+    _TLS.accelerator = acc
+    return previous
+
+
+def pop_accelerator(previous: _Accelerator | None) -> None:
+    """Restore the pin returned by :func:`push_accelerator`."""
+    _TLS.accelerator = previous
+
+
 def _detect_best_backend() -> _Accelerator:
+    # A declared backend wins over detection. When it is unavailable the probe
+    # (a daemon thread at boot) logs an error and serves CPU; the loud failure
+    # for training is ``accelerator_for``, which raises instead.
+    requested = requested_backend()
+    if requested not in ("", "auto"):
+        try:
+            selected = select_backend(requested)
+            logger.info(
+                "Accelerator: SLO_ACCEL_BACKEND=%s selected %s",
+                requested,
+                selected.name,
+                extra={"tag": "GPU"},
+            )
+            return selected
+        except Exception as e:
+            logger.error(
+                "SLO_ACCEL_BACKEND=%s unavailable (%s) — serving the CPU backend",
+                requested,
+                e,
+                extra={"tag": "GPU"},
+            )
+            return _cpu_fallback()
+
     candidates: list[tuple[str, _Accelerator, int]] = []
 
     # --- Metal (macOS) ---
@@ -326,6 +528,17 @@ class _Accelerator:
             logger.debug("Precision benchmark failed: %s", e)
             self._fp16_mode = False
             return "fp32"
+
+    def array_module(self):
+        """The numpy-compatible array module this backend computes with.
+
+        Base/Metal/OpenCL compute with numpy. The CUDA backend returns
+        cupy, so callers can keep data device-resident across whole
+        operations — the high-level ops above return numpy per call,
+        which is right for NN layers but unusable for a per-bounce
+        tracer loop (every call would cross PCIe).
+        """
+        return np
 
     def is_available(self) -> bool:
         return True
@@ -1049,6 +1262,16 @@ class _CUDABackend(_Accelerator):
             logger.debug("CUDA availability check failed: %s", e)
             return False
 
+    def array_module(self):
+        """cupy when the package imported AND a device is usable, else numpy.
+
+        ``is_available`` only proves the package imports (it may be
+        installed on a GPU-less machine) — callers that will launch
+        kernels must still probe, but this never hands back a module
+        that cannot even allocate.
+        """
+        return self._cp if self._cp is not None else np
+
     def sync(self) -> None:
         if self._cp:
             self._cp.cuda.Stream.null.synchronize()
@@ -1098,17 +1321,34 @@ class _CUDABackend(_Accelerator):
         return np.asarray(arr)
 
     def matmul(self, a: Any, b: Any) -> np.ndarray:
+        # Detect an on-device CuPy array by type, NOT by a ``.device`` attribute:
+        # NumPy >= 2 added ``np.ndarray.device`` (== "cpu"), so ``hasattr(x, "device")``
+        # can no longer tell a CPU numpy array from a GPU cupy one and would skip the
+        # host->device transfer, feeding raw numpy into cp.matmul (TypeError -> CPU fallback).
         if self._cp and not self._fp16_mode:
-            return self._cp.asnumpy(
-                self._cp.matmul(
-                    self._cp.asarray(a) if not hasattr(a, "device") else a,
-                    self._cp.asarray(b) if not hasattr(b, "device") else b,
-                )
-            )
+            a_dev = a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a)
+            b_dev = b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b)
+            if a_dev is not a:
+                count_dispatch("h2d_bytes", int(getattr(a_dev, "nbytes", getattr(a, "nbytes", 0))))
+            if b_dev is not b:
+                count_dispatch("h2d_bytes", int(getattr(b_dev, "nbytes", getattr(b, "nbytes", 0))))
+            out = self._cp.asnumpy(self._cp.matmul(a_dev, b_dev))
+            count_dispatch("d2h_bytes", int(out.nbytes))
+            return out
         if self._cp:
-            a_arr = self._cp.asarray(a, dtype=self._dtype()) if not hasattr(a, "device") else a
-            b_arr = self._cp.asarray(b, dtype=self._dtype()) if not hasattr(b, "device") else b
-            return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
+            a_arr = (
+                a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a, dtype=self._dtype())
+            )
+            b_arr = (
+                b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b, dtype=self._dtype())
+            )
+            if a_arr is not a:
+                count_dispatch("h2d_bytes", int(getattr(a_arr, "nbytes", getattr(a, "nbytes", 0))))
+            if b_arr is not b:
+                count_dispatch("h2d_bytes", int(getattr(b_arr, "nbytes", getattr(b, "nbytes", 0))))
+            out = self._cp.asnumpy(self._cp.matmul(a_arr, b_arr))
+            count_dispatch("d2h_bytes", int(out.nbytes))
+            return out.astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
     def scaled_dot_attention(

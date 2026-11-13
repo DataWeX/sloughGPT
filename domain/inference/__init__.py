@@ -8,8 +8,23 @@ Public API:
     save_soul, load_soul, write_v3_sou, generate_sample_dialogue
     train_embedder, SloTextEmbedder
     create_vector_store, get_slo_manager, PDFVLMProcessor, _ngram_embed
+    ContextPart, BudgetedContext, budget_parts, render_context_block, estimate_tokens
+    DEFAULT_KNOWLEDGE_BUDGET, LAYER_PRIORITY
+    analyze_image, ImageAnalysis
+    generation: LanguageClient, hosted, soul, engine, extract_json
 """
 
+from __future__ import annotations
+
+from domain.inference._internal.context_contract import (
+    DEFAULT_KNOWLEDGE_BUDGET,
+    LAYER_PRIORITY,
+    BudgetedContext,
+    ContextPart,
+    budget_parts,
+    estimate_tokens,
+    render_context_block,
+)
 from domain.inference._internal.slo_format import (
     BehavioralTraits,
     CognitiveSignature,
@@ -65,6 +80,18 @@ __all__ = [
     "SloNetChatProvider",
     "get_engine",
     "configure_api_provider",
+    "ContextPart",
+    "BudgetedContext",
+    "budget_parts",
+    "render_context_block",
+    "estimate_tokens",
+    "DEFAULT_KNOWLEDGE_BUDGET",
+    "LAYER_PRIORITY",
+    "analyze_image",
+    "ImageAnalysis",
+    "ResponseCache",
+    "get_response_cache",
+    "reset_response_cache_for_tests",
 ]
 
 
@@ -82,6 +109,16 @@ def __getattr__(name):
         "PineconeVectorStore": "domain.inference._internal.vector_stores.pinecone_store",
         "configure_api_provider": "domain.inference._internal.api_provider",
         "get_engine": "domain.inference._internal.native.engine",
+        "analyze_image": "domain.inference._internal.image_capability",
+        "ImageAnalysis": "domain.inference._internal.image_capability",
+        "LanguageClient": "domain.inference.generation",
+        "hosted": "domain.inference.generation",
+        "soul": "domain.inference.generation",
+        "engine": "domain.inference.generation",
+        "extract_json": "domain.inference.generation",
+        "ResponseCache": "domain.inference._internal.response_cache",
+        "get_response_cache": "domain.inference._internal.response_cache",
+        "reset_response_cache_for_tests": "domain.inference._internal.response_cache",
     }
     if name in _lazy:
         import importlib

@@ -1,124 +1,128 @@
-import React, {useState} from 'react';
-import {
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, Input, Button} from 'tamagui';
-import {useColors} from '../theme/colors';
-import {useProvidersStore} from '../stores/providers-store';
-import {useHybridStore} from '../stores/hybrid-inference-store';
-import {PROVIDER_REGISTRY, PROVIDER_MODELS} from '../types/providers';
-import type {ProviderId} from '../types/providers';
-import {triggerHaptic} from '../services/haptics';
-import {sounds} from '../services/sounds';
-import {toast} from '../services/toast';
+import React, { useState } from 'react'
+import { ScrollView, KeyboardAvoidingView, Platform } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { YStack, XStack, Text, Input, Button } from 'tamagui'
+import { useColors } from '../theme/colors'
+import { useProvidersStore } from '../stores/providers-store'
+import { useHybridStore } from '../stores/hybrid-inference-store'
+import { PROVIDER_REGISTRY, PROVIDER_MODELS } from '../types/providers'
+import type { ProviderId } from '../types/providers'
+import { triggerHaptic } from '../services/haptics'
+import { sounds } from '../services/sounds'
+import { toast } from '../services/toast'
 
 const PROVIDER_ORDER: ProviderId[] = [
-  'openai', 'anthropic', 'google', 'mistral', 'groq', 'together', 'deepseek', 'openrouter', 'custom',
-];
+  'openai',
+  'anthropic',
+  'google',
+  'mistral',
+  'groq',
+  'together',
+  'deepseek',
+  'openrouter',
+  'custom',
+]
 
 function _maskKey(key: string): string {
-  if (!key) return '';
-  if (key.length <= 8) return '••••••••';
-  return key.slice(0, 4) + '••••' + key.slice(-4);
+  if (!key) return ''
+  if (key.length <= 8) return '••••••••'
+  return key.slice(0, 4) + '••••' + key.slice(-4)
 }
 
 export function ProvidersScreen() {
-  const colors = useColors();
-  const providers = useProvidersStore(s => s.providers);
-  const activeProviderId = useProvidersStore(s => s.activeProviderId);
-  const setActiveProvider = useProvidersStore(s => s.setActiveProvider);
-  const setApiKey = useProvidersStore(s => s.setApiKey);
-  const setBaseUrl = useProvidersStore(s => s.setBaseUrl);
-  const setDefaultModel = useProvidersStore(s => s.setDefaultModel);
-  const hybrid = useHybridStore();
+  const colors = useColors()
+  const providers = useProvidersStore((s) => s.providers)
+  const activeProviderId = useProvidersStore((s) => s.activeProviderId)
+  const setActiveProvider = useProvidersStore((s) => s.setActiveProvider)
+  const setApiKey = useProvidersStore((s) => s.setApiKey)
+  const setBaseUrl = useProvidersStore((s) => s.setBaseUrl)
+  const setDefaultModel = useProvidersStore((s) => s.setDefaultModel)
+  const hybrid = useHybridStore()
 
-  const [expandedId, setExpandedId] = useState<ProviderId | null>(null);
-  const [editingKey, setEditingKey] = useState<ProviderId | null>(null);
-  const [keyInput, setKeyInput] = useState('');
-  const [customModelInput, setCustomModelInput] = useState('');
+  const [expandedId, setExpandedId] = useState<ProviderId | null>(null)
+  const [editingKey, setEditingKey] = useState<ProviderId | null>(null)
+  const [keyInput, setKeyInput] = useState('')
+  const [customModelInput, setCustomModelInput] = useState('')
 
   const _handleSelect = async (id: ProviderId) => {
-    const config = providers[id];
+    const config = providers[id]
     if (!config.apiKey) {
-      toast.warn('Add an API key first');
-      return;
+      toast.warn('Add an API key first')
+      return
     }
-    triggerHaptic('selection');
-    sounds.send();
-    await setActiveProvider(id);
-    await hybrid.setActiveEngine(id);
-    toast.success(`Switched to ${config.name}`);
-  };
+    triggerHaptic('selection')
+    sounds.send()
+    await setActiveProvider(id)
+    await hybrid.setActiveEngine(id)
+    toast.success(`Switched to ${config.name}`)
+  }
 
   const _handleSaveKey = async (id: ProviderId) => {
     if (!keyInput.trim()) {
-      toast.warn('API key cannot be empty');
-      return;
+      toast.warn('API key cannot be empty')
+      return
     }
-    triggerHaptic('success');
-    sounds.receive();
-    await setApiKey(id, keyInput.trim());
-    setEditingKey(null);
-    setKeyInput('');
-    toast.success('API key saved');
-  };
+    triggerHaptic('success')
+    sounds.receive()
+    await setApiKey(id, keyInput.trim())
+    setEditingKey(null)
+    setKeyInput('')
+    toast.success('API key saved')
+  }
 
   const _handleTestKey = async (id: ProviderId) => {
-    const config = providers[id];
+    const config = providers[id]
     if (!config.apiKey) {
-      toast.warn('No API key configured');
-      return;
+      toast.warn('No API key configured')
+      return
     }
-    triggerHaptic('light');
+    triggerHaptic('light')
     if (id === 'anthropic') {
       if (config.apiKey.startsWith('sk-ant-')) {
-        toast.success('Key format looks valid');
+        toast.success('Key format looks valid')
       } else {
-        toast.warn('Anthropic keys usually start with sk-ant-');
+        toast.warn('Anthropic keys usually start with sk-ant-')
       }
     } else if (id === 'google') {
       if (config.apiKey.length > 20) {
-        toast.success('Key format looks valid');
+        toast.success('Key format looks valid')
       } else {
-        toast.warn('Google API keys are typically longer');
+        toast.warn('Google API keys are typically longer')
       }
     } else {
       if (config.apiKey.startsWith('sk-') || config.apiKey.length > 10) {
-        toast.success('Key format looks valid');
+        toast.success('Key format looks valid')
       } else {
-        toast.warn('Key format may be invalid');
+        toast.warn('Key format may be invalid')
       }
     }
-  };
+  }
 
   const _handleAddCustomModel = async (id: ProviderId) => {
-    const model = customModelInput.trim();
-    if (!model) return;
-    const config = providers[id];
+    const model = customModelInput.trim()
+    if (!model) return
+    const config = providers[id]
     const customModels = config.headers?.custom_models
       ? JSON.parse(config.headers.custom_models)
-      : [];
+      : []
     if (!customModels.includes(model)) {
-      customModels.push(model);
+      customModels.push(model)
       await useProvidersStore.getState().updateProvider(id, {
-        headers: {...config.headers, custom_models: JSON.stringify(customModels)},
-      });
+        headers: { ...config.headers, custom_models: JSON.stringify(customModels) },
+      })
     }
-    await setDefaultModel(id, model);
-    setCustomModelInput('');
-    toast.success(`Using ${model}`);
-  };
+    await setDefaultModel(id, model)
+    setCustomModelInput('')
+    toast.success(`Using ${model}`)
+  }
 
   return (
-    <SafeAreaView style={{flex: 1}} edges={['top']}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <KeyboardAvoidingView
-        style={{flex: 1}}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={{padding: 16}}>
+        <ScrollView contentContainerStyle={{ padding: 16 }}>
           {/* Header */}
           <YStack marginBottom={16}>
             <Text fontSize={22} fontWeight="600" color={colors.text}>
@@ -140,12 +144,7 @@ export function ProvidersScreen() {
               borderColor="$color6"
             >
               <XStack alignItems="center" gap={8}>
-                <YStack
-                  width={8}
-                  height={8}
-                  borderRadius={4}
-                  backgroundColor="$green10"
-                />
+                <YStack width={8} height={8} borderRadius={4} backgroundColor="$green10" />
                 <Text fontSize={13} fontWeight="500" color={colors.text}>
                   Active: {providers[activeProviderId]?.name || activeProviderId}
                 </Text>
@@ -154,13 +153,13 @@ export function ProvidersScreen() {
           )}
 
           {/* Provider cards */}
-          {PROVIDER_ORDER.map(id => {
-            const config = providers[id];
-            const isExpanded = expandedId === id;
-            const isActive = activeProviderId === id;
-            const hasKey = !!config.apiKey;
-            const registry = PROVIDER_REGISTRY[id];
-            const models = PROVIDER_MODELS[id] || [];
+          {PROVIDER_ORDER.map((id) => {
+            const config = providers[id]
+            const isExpanded = expandedId === id
+            const isActive = activeProviderId === id
+            const hasKey = !!config.apiKey
+            const registry = PROVIDER_REGISTRY[id]
+            const models = PROVIDER_MODELS[id] || []
 
             return (
               <YStack
@@ -178,8 +177,8 @@ export function ProvidersScreen() {
                   alignItems="center"
                   justifyContent="space-between"
                   onPress={() => {
-                    triggerHaptic('light');
-                    setExpandedId(isExpanded ? null : id);
+                    triggerHaptic('light')
+                    setExpandedId(isExpanded ? null : id)
                   }}
                 >
                   <YStack flex={1}>
@@ -194,7 +193,7 @@ export function ProvidersScreen() {
                           paddingVertical={2}
                           borderRadius={4}
                         >
-                           <Text fontSize={10} fontWeight="600" color="$color1">
+                          <Text fontSize={10} fontWeight="600" color="$color1">
                             ACTIVE
                           </Text>
                         </YStack>
@@ -228,12 +227,18 @@ export function ProvidersScreen() {
                   <YStack padding={12} paddingTop={0} gap={12}>
                     {/* Base URL */}
                     <YStack gap={4}>
-                      <Text fontSize={11} fontWeight="500" color={colors.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+                      <Text
+                        fontSize={11}
+                        fontWeight="500"
+                        color={colors.textMuted}
+                        textTransform="uppercase"
+                        letterSpacing={0.5}
+                      >
                         Base URL
                       </Text>
                       <Input
                         value={config.baseUrl}
-                        onChangeText={v => setBaseUrl(id, v)}
+                        onChangeText={(v) => setBaseUrl(id, v)}
                         placeholder={registry.baseUrl}
                         fontSize={13}
                         backgroundColor="$color3"
@@ -246,7 +251,13 @@ export function ProvidersScreen() {
 
                     {/* API Key */}
                     <YStack gap={4}>
-                      <Text fontSize={11} fontWeight="500" color={colors.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+                      <Text
+                        fontSize={11}
+                        fontWeight="500"
+                        color={colors.textMuted}
+                        textTransform="uppercase"
+                        letterSpacing={0.5}
+                      >
                         API Key
                       </Text>
                       {editingKey === id ? (
@@ -279,8 +290,8 @@ export function ProvidersScreen() {
                             color="$color11"
                             fontWeight="600"
                             onPress={() => {
-                              setEditingKey(null);
-                              setKeyInput('');
+                              setEditingKey(null)
+                              setKeyInput('')
                             }}
                           >
                             Cancel
@@ -304,8 +315,8 @@ export function ProvidersScreen() {
                             color="$color11"
                             fontWeight="600"
                             onPress={() => {
-                              setEditingKey(id);
-                              setKeyInput(config.apiKey);
+                              setEditingKey(id)
+                              setKeyInput(config.apiKey)
                             }}
                           >
                             {hasKey ? 'Edit' : 'Add'}
@@ -327,23 +338,28 @@ export function ProvidersScreen() {
 
                     {/* Default model */}
                     <YStack gap={4}>
-                      <Text fontSize={11} fontWeight="500" color={colors.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+                      <Text
+                        fontSize={11}
+                        fontWeight="500"
+                        color={colors.textMuted}
+                        textTransform="uppercase"
+                        letterSpacing={0.5}
+                      >
                         Default Model
                       </Text>
                       <XStack gap={8} flexWrap="wrap">
-                        {models.map(m => (
+                        {models.map((m) => (
                           <Button
                             key={m.id}
                             size="$2"
-                            backgroundColor={
-                              config.defaultModel === m.id ? '$color8' : '$color4'
-                            }
+                            backgroundColor={config.defaultModel === m.id ? '$color8' : '$color4'}
                             color={config.defaultModel === m.id ? 'white' : '$color11'}
                             fontWeight="500"
                             borderRadius={999}
+                            accessibilityLabel={`Set ${m.name} as default model`}
                             onPress={() => {
-                              triggerHaptic('selection');
-                              setDefaultModel(id, m.id);
+                              triggerHaptic('selection')
+                              setDefaultModel(id, m.id)
                             }}
                           >
                             {m.name}
@@ -400,10 +416,10 @@ export function ProvidersScreen() {
                           fontWeight="600"
                           flex={1}
                           onPress={async () => {
-                            triggerHaptic('light');
-                            await setActiveProvider(null);
-                            await hybrid.setActiveEngine('remote');
-                            toast.info('Switched to self-hosted remote');
+                            triggerHaptic('light')
+                            await setActiveProvider(null)
+                            await hybrid.setActiveEngine('remote')
+                            toast.info('Switched to self-hosted remote')
                           }}
                         >
                           Deactivate
@@ -413,7 +429,7 @@ export function ProvidersScreen() {
                   </YStack>
                 )}
               </YStack>
-            );
+            )
           })}
 
           {/* Info note */}
@@ -425,12 +441,12 @@ export function ProvidersScreen() {
             marginBottom={32}
           >
             <Text fontSize={12} color={colors.textMuted} lineHeight={18}>
-              API keys are stored locally on your device and never sent to our servers.
-              Each provider requires its own account and billing.
+              API keys are stored locally on your device and never sent to our servers. Each
+              provider requires its own account and billing.
             </Text>
           </YStack>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
+  )
 }

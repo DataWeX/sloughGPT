@@ -61,10 +61,8 @@ export const chatController = {
         error: err instanceof Error ? err.message : String(err),
       })
       try {
-        const { useToastStore } = await import('./toast-store')
-        useToastStore
-          .getState()
-          .addToast('Using basic mode — conversation context unavailable', 'info')
+        const { notify } = await import('./notify')
+        notify.toast('Using basic mode — conversation context unavailable', 'info')
       } catch {
         /* best-effort */
       }
@@ -87,6 +85,10 @@ export const chatController = {
       max_tokens?: number
       temperature?: number
       waitForModel?: boolean
+      session_id?: string
+      use_consciousness?: boolean
+      use_context_core?: boolean
+      use_rag?: boolean
     },
   ): AsyncGenerator<string> {
     let modelStatus = await modelController.status()
@@ -107,6 +109,16 @@ export const chatController = {
       messages: [{ role: 'user', content: message }],
       max_new_tokens: options?.max_tokens ?? 100,
       temperature: options?.temperature ?? 0.8,
+      // Optional pipeline flags — spread only when explicitly set so the
+      // default body stays byte-identical (server defaults are the same).
+      ...(options?.session_id !== undefined && { session_id: options.session_id }),
+      ...(options?.use_consciousness !== undefined && {
+        use_consciousness: options.use_consciousness,
+      }),
+      ...(options?.use_context_core !== undefined && {
+        use_context_core: options.use_context_core,
+      }),
+      ...(options?.use_rag !== undefined && { use_rag: options.use_rag }),
     }
 
     try {

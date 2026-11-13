@@ -1,7 +1,9 @@
 //! slough-gateway — transport-only edge for the Python core.
 //!
 //! CCGT Gateway domain: expose + optimize, never understand. This process
-//! terminates TLS (rustls), caps request bodies, enforces edge timeouts,
+//! speaks plain HTTP on loopback — TLS belongs to the deployment layer
+//! (the rustls dependency here is the outbound reqwest feature only) —
+//! caps request bodies, enforces edge timeouts,
 //! relays response bytes untouched (streaming-safe: no buffering, no JSON
 //! parsing, no SSE re-chunking), and serves static files. Auth, rate limits,
 //! CORS semantics, and error envelopes are owned by Python — see
@@ -10,7 +12,7 @@
 use axum::{
     body::{to_bytes, Body},
     extract::{Request, State},
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
@@ -283,10 +285,15 @@ fn build_router(state: AppState) -> Router {
                     axum::http::Method::GET | axum::http::Method::HEAD
                 );
                 let resp = if is_read {
+                    let path = req.uri().path().to_owned();
                     match serve_dir.call(req).await {
                         // ServeDir's body is its own type — erase it into the
                         // axum body the rest of this service returns.
-                        Ok(r) => r.map(axum::body::Body::new),
+                        Ok(r) => {
+                            let mut r = r.map(axum::body::Body::new);
+                            static_asset_headers(&path, r.status(), r.headers_mut());
+                            r
+                        }
                         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
                     }
                 } else {
@@ -359,6 +366,31 @@ async fn relay(state: AppState, req: Request) -> Response {
     match proxy_http(State(state), req).await {
         Ok(resp) => resp,
         Err(err) => err.into_response(),
+    }
+}
+
+/// Cache + hygiene headers for gateway-served static files.
+///
+/// Hashed build assets (`/assets/*` from Vite — content-addressed filenames)
+/// are safe to pin for a year; every other path stays revalidated so a
+/// redeploy is visible on the next navigation. Only 2xx responses are
+/// touched: a 304 already carries the representation's own headers, and a
+/// miss has no representation to cache.
+fn static_asset_headers(path: &str, status: StatusCode, headers: &mut HeaderMap) {
+    if !status.is_success() {
+        return;
+    }
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    if path.starts_with("/assets/") {
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+    } else if !headers.contains_key(header::CACHE_CONTROL) {
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     }
 }
 
@@ -739,6 +771,51 @@ mod tests {
             .unwrap_or("")
             .to_string();
         assert!(ct.contains("text/css"), "got content-type {ct}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn hashed_assets_are_immutable_and_nosniff() {
+        let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
+        std::fs::create_dir_all(dir.join("assets")).expect("assets dir");
+        std::fs::write(dir.join("assets/app-Ab12.js"), "console.log(1)").expect("asset");
+        let app = build_router(test_state(&dir));
+        let resp = app
+            .oneshot(get("/assets/app-Ab12.js", "*/*"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let cc = resp
+            .headers()
+            .get(axum::http::header::CACHE_CONTROL)
+            .and_then(|v| v.to_str().ok());
+        assert_eq!(
+            cc,
+            Some("public, max-age=31536000, immutable"),
+            "asset cache-control"
+        );
+        let nosniff = resp
+            .headers()
+            .get(axum::http::header::X_CONTENT_TYPE_OPTIONS)
+            .and_then(|v| v.to_str().ok());
+        assert_eq!(nosniff, Some("nosniff"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn unhashed_static_files_stay_revalidated() {
+        let dir = temp_site(&[
+            ("index.html", "<html>SPA-SHELL</html>"),
+            ("favicon.svg", "<svg/>"),
+        ]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/favicon.svg", "*/*")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let cc = resp
+            .headers()
+            .get(axum::http::header::CACHE_CONTROL)
+            .and_then(|v| v.to_str().ok());
+        assert_eq!(cc, Some("no-cache"), "unhashed files must revalidate");
         std::fs::remove_dir_all(&dir).ok();
     }
 

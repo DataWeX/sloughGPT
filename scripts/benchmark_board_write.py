@@ -29,9 +29,9 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "packages/app-planner/src"))
+sys.path.insert(0, str(REPO / "packages/grib/src"))
 
-from app_planner.store import PlannerStore  # noqa: E402
+from grib.store import PlannerStore  # noqa: E402
 
 
 def _add_burst(payload: tuple[str, str, int, int]) -> int:
@@ -101,7 +101,9 @@ def main() -> int:
 
     print("board-write benchmark (OCC PlannerStore)")
     print(f"  single-process add      : {single['add_ops_per_s']:>9.1f} ops/s ({args.ops} adds)")
-    print(f"  single-process note     : {single['note_ops_per_s']:>9.1f} ops/s ({args.ops} creates)")
+    print(
+        f"  single-process note     : {single['note_ops_per_s']:>9.1f} ops/s ({args.ops} creates)"
+    )
     print(
         f"  {args.workers}-process hammer       : "
         f"{multi['aggregate_ops_per_s']:>9.1f} ops/s aggregate "

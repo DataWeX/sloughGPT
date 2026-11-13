@@ -6,6 +6,7 @@ Re-exports the public API of the legacy provider.py so
 
 from __future__ import annotations
 
+from .processors.consciousness import ConsciousnessProcessor
 from .processors.knowledge import KnowledgeProcessor
 from .processors.personality import PersonalityProcessor
 from .processors.style import StyleProcessor
@@ -45,6 +46,7 @@ __all__ = [
     "apply_processors",
     "VisionProcessor",
     "KnowledgeProcessor",
+    "ConsciousnessProcessor",
     "ToolUseProcessor",
     "ToolDef",
     "PersonalityProcessor",

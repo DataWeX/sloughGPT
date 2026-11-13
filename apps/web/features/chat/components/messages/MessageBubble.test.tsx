@@ -17,7 +17,12 @@ vi.mock('@sloughgpt/strui', () => ({
 
   Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
   StatusDot: ({ tone, pulse, label, className }: any) => (
-    <span data-testid="status-dot" data-tone={tone} data-pulse={String(!!pulse)} className={className}>
+    <span
+      data-testid="status-dot"
+      data-tone={tone}
+      data-pulse={String(!!pulse)}
+      className={className}
+    >
       {label}
     </span>
   ),
@@ -245,12 +250,58 @@ describe('MessageBubble', () => {
     expect(container.textContent).not.toContain('just now')
   })
 
-  it('shows loading dots when content is empty and assistant', () => {
+  it('shows loading dots when content is empty, assistant, and streaming', () => {
     const { container } = render(
-      <MessageBubble content="" role="assistant" timestamp={new Date()} showTimestamp />,
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        isStreaming
+      />,
     )
     const dots = container.querySelector('.animate-bounce')
     expect(dots).toBeInTheDocument()
+  })
+
+  it('hides model + timestamp until first token lands (empty streaming turn)', () => {
+    const { container } = render(
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        model="Qwen/Qwen2.5-0.5B-Instruct"
+        isStreaming
+      />,
+    )
+    // The log must not claim a finished entry before content exists.
+    expect(container.textContent).not.toContain('Qwen/Qwen2.5-0.5B-Instruct')
+    expect(container.textContent).not.toContain('just now')
+    // Role label still signals the in-progress turn.
+    expect(screen.getByText('Assistant')).toBeInTheDocument()
+  })
+
+  it('shows model + timestamp once content lands', () => {
+    const { container } = render(
+      <MessageBubble
+        content="hello"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        model="Qwen/Qwen2.5-0.5B-Instruct"
+        isStreaming
+      />,
+    )
+    expect(container.textContent).toContain('Qwen/Qwen2.5-0.5B-Instruct')
+    expect(container.textContent).toContain('just now')
+  })
+
+  it('shows no loading dots when content is empty and not streaming', () => {
+    const { container } = render(
+      <MessageBubble content="" role="assistant" timestamp={new Date()} showTimestamp />,
+    )
+    expect(container.querySelector('.animate-bounce')).not.toBeInTheDocument()
   })
 
   it('shows streaming cursor when isStreaming', () => {
@@ -393,22 +444,20 @@ describe('MessageBubble', () => {
     expect(article).toHaveAttribute('aria-live', 'assertive')
   })
 
-  describe('transcript anatomy (log-entry primitive)', () => {
-    it('renders the gutter turn number, zero-padded', () => {
-      const { container } = render(
-        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp turnNumber={7} />,
+  describe('transcript frame (MessageFrame — Direction B, ruling 2026-11-03)', () => {
+    it('renders both roles through MessageFrame', () => {
+      const user = render(
+        <MessageBubble content="q" role="user" timestamp={new Date()} showTimestamp />,
       )
-      expect(container.textContent).toContain('07')
+      expect(user.container.querySelector('[data-message-frame="user"]')).not.toBeNull()
+      cleanup()
+      const assistant = render(
+        <MessageBubble content="a" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      expect(assistant.container.querySelector('[data-message-frame="assistant"]')).not.toBeNull()
     })
 
-    it('hides the gutter when no turnNumber is given', () => {
-      const { container } = render(
-        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
-      )
-      expect(container.textContent).not.toMatch(/\b00\b/)
-    })
-
-    it('renders per-turn metrics in the margin as tok/s · tokens · seconds', () => {
+    it('keeps metadata (role label, metrics) in the frame footer, not a detached gutter', () => {
       const { container } = render(
         <MessageBubble
           content="hi"
@@ -418,7 +467,18 @@ describe('MessageBubble', () => {
           metrics={{ tokens: 100, elapsedMs: 2000 }}
         />,
       )
-      expect(container.textContent).toContain('50.0 tok/s · 100 tok · 2.0s')
+      const frame = container.querySelector('[data-message-frame]')!
+      const footer = frame.querySelector('[data-message-frame-footer]')!
+      expect(footer.textContent).toContain('Assistant')
+      expect(footer.textContent).toContain('50.0 tok/s · 100 tok · 2.0s')
+    })
+
+    it('renders no message index numbers (sub-decision: removed entirely)', () => {
+      const { container } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      // The old gutter printed zero-padded turn numbers (07, 11, 13…).
+      expect(container.textContent).not.toMatch(/\b0\d\b/)
     })
 
     it('omits metrics text when metrics are absent or zero-elapsed', () => {
@@ -441,7 +501,13 @@ describe('MessageBubble', () => {
 
     it('shows a pulsing primary StatusDot while streaming', () => {
       render(
-        <MessageBubble content="streaming" role="assistant" timestamp={new Date()} showTimestamp isStreaming />,
+        <MessageBubble
+          content="streaming"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          isStreaming
+        />,
       )
       const dot = screen.getByTestId('status-dot')
       expect(dot).toHaveAttribute('data-tone', 'primary')
@@ -463,6 +529,35 @@ describe('MessageBubble', () => {
       const article = container.querySelector('[role="article"]') as HTMLElement
       expect(article.className).not.toMatch(/rounded-br-md/)
       expect(container.textContent).toContain('question')
+    })
+
+    it('does not right-align the frame and the action toolbar as one horizontal pair', () => {
+      render(
+        <MessageBubble
+          content="question"
+          role="user"
+          timestamp={new Date()}
+          showTimestamp
+          onEdit={vi.fn()}
+        />,
+      )
+      const wrapper = screen.getByTestId('message-actions').parentElement as HTMLElement
+      // Root cause of the "user bubble floats mid-row" bug: a shared
+      // `flex justify-end` wrapper right-aligns [frame][opacity-0 toolbar] as a
+      // PAIR, so the bubble stops short of the right edge. MessageFrame already
+      // self-aligns (MessageFrame.tsx `isUser && 'justify-end'`), so the wrapper
+      // must not add `justify-end` — that is what pins the pair.
+      expect(wrapper.className).not.toMatch(/(^|\s)justify-end(\s|$)/)
+    })
+
+    it('keeps the user frame right-aligned by its own chrome, not the wrapper', () => {
+      const { container } = render(
+        <MessageBubble content="question" role="user" timestamp={new Date()} showTimestamp />,
+      )
+      const frame = container.querySelector('[data-message-frame="user"]') as HTMLElement
+      // Deleting the wrapper's justify-end must not lose right alignment:
+      // MessageFrame owns it, and the bubble stays flush right.
+      expect(frame.className).toMatch(/(^|\s)justify-end(\s|$)/)
     })
   })
 

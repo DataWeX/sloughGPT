@@ -139,7 +139,9 @@ def build_arch(name: str, config: dict, weight_keys: set) -> ArchConfig:
         # no transpose (SloLinear stores (out, in), same as training).
         wm = NATIVE_WEIGHT_MAP
         norm = "rms_norm" if config.get("rms_norm_eps") is not None else "layer_norm"
-        has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+        has_rope = (
+            config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+        )
         positional = "rope" if has_rope else "absolute"
         has_w3 = "blocks.0.ff.w3.weight" in weight_keys
         has_gate = "blocks.0.ff.w1.weight" in weight_keys

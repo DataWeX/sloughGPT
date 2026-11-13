@@ -178,12 +178,14 @@ def enrich_with_knowledge(
         - may trigger live web search + ingest when auto_search is True
     """
     if _is_casual_small_talk(user_message):
-        return {"facts": [], "source": "none", "topics": []}
+        return {"facts": [], "parts": [], "source": "none", "topics": []}
 
     memory = get_knowledge_memory()
 
     def _relevant(results, query):
-        facts = []
+        # Keep (content, score) pairs — the score died at this gate before
+        # the context contract existed; parts need it for ranking.
+        pairs = []
         for r in results:
             content = r.get("content", "")
             score = r.get("score", 0.0)
@@ -194,15 +196,24 @@ def enrich_with_knowledge(
                 and _topically_related(query, content)
             ):
                 short = content[:300].strip()
-                if short not in facts:
-                    facts.append(short)
-        return facts
+                if short not in [c[:300].strip() for c, _, _ in pairs]:
+                    pairs.append((content, float(score), r.get("url") or None))
+        return pairs
+
+    def _to_parts(pairs, src):
+        from domain.inference._internal.context_contract import ContextPart
+
+        return [
+            ContextPart(text=c, source=src, layer="memory", score=s, locator=url)
+            for c, s, url in pairs
+        ]
 
     results = memory.search(user_message, top_k=max_facts)
-    facts = _relevant(results, user_message)
-    if facts:
+    pairs = _relevant(results, user_message)
+    if pairs:
         return {
-            "facts": facts[:max_facts],
+            "facts": [c[:300].strip() for c, _, _ in pairs][:max_facts],
+            "parts": _to_parts(pairs[:max_facts], "knowledge"),
             "source": "memory",
             "topics": [],
         }
@@ -212,14 +223,15 @@ def enrich_with_knowledge(
             ingestor = get_knowledge_ingestor()
             ingestor.search_and_ingest(user_message, max_results=2)
             results = memory.search(user_message, top_k=max_facts)
-            facts = _relevant(results, user_message)
-            if facts:
+            pairs = _relevant(results, user_message)
+            if pairs:
                 return {
-                    "facts": facts[:max_facts],
+                    "facts": [c[:300].strip() for c, _, _ in pairs][:max_facts],
+                    "parts": _to_parts(pairs[:max_facts], "web"),
                     "source": "web",
                     "topics": [],
                 }
         except Exception as e:
             logger.warning("Live web search failed: %s", e, extra={"tag": "INF"})
 
-    return {"facts": [], "source": "none", "topics": []}
+    return {"facts": [], "parts": [], "source": "none", "topics": []}

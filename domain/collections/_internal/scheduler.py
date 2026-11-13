@@ -6,6 +6,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
+
 from .collector import Collector
 from .stores import MemoryStore, Store
 from .validators import CollectorRunner
@@ -26,7 +28,7 @@ class JobScheduler:
     def __init__(self):
         self._jobs: dict[str, JobConfig] = {}
         self._collectors: dict[str, Collector] = {}
-        self._threads: dict[str, threading.Thread] = {}
+        self._threads: dict[str, ThreadHandle] = {}
         self._stop_events: dict[str, threading.Event] = {}
         self._stats: dict[str, dict] = {}
         self._lock = threading.Lock()
@@ -65,11 +67,15 @@ class JobScheduler:
             config = self._jobs[name]
             if not config.enabled:
                 return False
+            # Synchronous: status reflects the start request, not the fn's
+            # first dispatch tick (spawn_loop queues through the engine run
+            # loop, so run_loop's first line lands a tick later than callers'
+            # first stats read).
+            self._stats[name]["status"] = "running"
 
         stop_event = self._stop_events[name]
 
         def run_loop():
-            self._stats[name]["status"] = "running"
             run_count = 0
             while not stop_event.is_set():
                 start = time.monotonic()
@@ -92,10 +98,9 @@ class JobScheduler:
                 stop_event.wait(min(config.interval, 0.5))
             self._stats[name]["status"] = "stopped"
 
-        thread = threading.Thread(target=run_loop, daemon=True, name=f"job:{name}")
+        handle = spawn_loop(run_loop, name=f"job:{name}", stop=stop_event)
         with self._lock:
-            self._threads[name] = thread
-        thread.start()
+            self._threads[name] = handle
         return True
 
     def start_all(self) -> int:

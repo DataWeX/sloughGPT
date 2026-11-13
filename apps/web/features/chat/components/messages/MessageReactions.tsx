@@ -90,7 +90,7 @@ export const MessageReactions = memo(function MessageReactions({
                 key={emoji}
                 type="button"
                 onClick={() => handleReact(emoji)}
-                className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-8 h-8 flex items-center justify-center rounded hover:bg-muted text-lg transition-colors"
+                className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-8 h-8 flex items-center justify-center rounded hover:bg-muted text-base transition-colors"
                 aria-label={`React with ${emoji}`}
               >
                 {emoji}

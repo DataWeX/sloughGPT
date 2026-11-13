@@ -257,6 +257,7 @@ class SLNCParser:
 
         if self._verify:
             import zlib
+
             actual_crc = zlib.crc32(arr.tobytes()) & 0xFFFFFFFF
             if actual_crc != crc:
                 raise ValueError(
@@ -283,7 +284,12 @@ class SLNCParser:
         """
         return self.get_tensor(name).copy()
 
-    def get_tensor_info(self, name: str) -> tuple[int, tuple[int, ...], np.dtype, int, float] | tuple[int, tuple[int, ...], np.dtype, int]:
+    def get_tensor_info(
+        self, name: str
+    ) -> (
+        tuple[int, tuple[int, ...], np.dtype, int, float]
+        | tuple[int, tuple[int, ...], np.dtype, int]
+    ):
         """Get tensor metadata without reading data."""
         if name not in self._tensor_map:
             raise KeyError(f"Unknown tensor: {name}")
@@ -410,7 +416,7 @@ class SLNCParser:
     @property
     def param_count(self) -> int:
         """Total number of model parameters (sum of tensor elements)."""
-        return int(sum(int(__import__('numpy').prod(v[1])) for v in self._tensor_map.values()))
+        return int(sum(int(__import__("numpy").prod(v[1])) for v in self._tensor_map.values()))
 
     @property
     def n_layer(self) -> int:

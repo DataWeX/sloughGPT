@@ -18,12 +18,24 @@ vi.mock('@/lib/knowledge-controller', () => ({
   knowledgeController: { add: (...args: any[]) => mockAdd(...args) },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: any, fallback: string) => e?.message || fallback,
+  extractErrorMessage: (e: any, fallback = 'Unknown error') => e?.message || fallback,
 }))
 
 vi.mock('@sloughgpt/strui', () => {
@@ -135,7 +147,16 @@ describe('QuickActions', () => {
     const testBtn = Array.from(buttons).find((b) => b.textContent?.includes('Test model'))
     fireEvent.click(testBtn!)
     await waitFor(() => {
-      expect(mockStream).toHaveBeenCalledWith('Hello!', { waitForModel: true })
+      // Bare probe: own session + all three pipeline stages off, so the
+      // "Hello!" answer is the model's, not the consciousness narrative
+      // (card 20261112_140010).
+      expect(mockStream).toHaveBeenCalledWith('Hello!', {
+        waitForModel: true,
+        session_id: 'quick-test',
+        use_consciousness: false,
+        use_context_core: false,
+        use_rag: false,
+      })
     })
   })
 

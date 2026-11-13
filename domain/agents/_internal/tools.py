@@ -79,9 +79,10 @@ class ToolResult:
 class ToolRegistry:
     """Registry of tools accessible from chat."""
 
-    def __init__(self):
+    def __init__(self, *, register_defaults: bool = True):
         self._tools: dict[str, ToolSpec] = {}
-        self._register_defaults()
+        if register_defaults:
+            self._register_defaults()
 
     def _register_defaults(self) -> None:
         self.register(
@@ -228,6 +229,20 @@ class ToolRegistry:
     def get(self, name: str) -> ToolSpec | None:
         return self._tools.get(name)
 
+    def subset(self, names: list[str]) -> ToolRegistry:
+        """A new registry holding only the named tools.
+
+        Unknown names raise — the caller asked for a capability that does
+        not exist, which must not silently degrade to "all tools".
+        """
+        sub = ToolRegistry(register_defaults=False)
+        for n in names:
+            spec = self._tools.get(n)
+            if spec is None:
+                raise ValueError(f"unknown tool: {n}")
+            sub._tools[n] = spec
+        return sub
+
     def list_tools(self) -> list[dict[str, Any]]:
         return [
             {
@@ -279,11 +294,34 @@ class ToolRegistry:
                         return name, {"data_path": m.group(1).strip(), "operation": "summary"}
         return None
 
-    async def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
-        """Execute a tool by name with given args."""
+    async def execute(
+        self,
+        name: str,
+        args: dict[str, Any],
+        approve: Callable[..., bool] | None = None,
+    ) -> ToolResult:
+        """Execute a tool by name with given args.
+
+        Approval gate (fail-closed): a spec with ``requires_approval=True``
+        is refused unless the caller passes an ``approve`` callable.
+        Presence of ``approve`` declares "approval was obtained upstream" —
+        AgentLoop prompts the human first (loop.py) and passes its approver
+        through; callers with no approver (multi-agent orchestration,
+        scripts, tests exercising the raw tool) get a refusal instead of an
+        unattended run. The check lives HERE, at the seam, because the spec
+        already carries the flag: one declaration, enforced for every
+        current and future caller — a caller-side check is exactly the
+        pattern this gate replaces (multi.py ran approval tools directly).
+        """
         spec = self._tools.get(name)
         if not spec:
             return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
+        if spec.requires_approval and approve is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"tool '{name}' requires approval (no approver supplied)",
+            )
         start = asyncio.get_event_loop().time()
         try:
             result = await spec.execute(**args)
@@ -400,6 +438,17 @@ class ToolRegistry:
 
     async def _run_code(self, language: str, code: str) -> dict[str, Any]:
         """Execute code in a subprocess with timeout."""
+        import sys
+
+        from domain.agents._internal.code_guard import is_allowed
+
+        # Same blocked-pattern check agents.py enforces before running
+        # model code — one shared list, both surfaces (parity, not a new
+        # restriction: agents.py already blocked eval/exec/pickle here).
+        safe, msg = is_allowed(code)
+        if not safe:
+            return {"output": "", "error": msg}
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".py" if language == "python" else ".sh", delete=False
         ) as f:
@@ -407,7 +456,7 @@ class ToolRegistry:
             f.flush()
             fname = f.name
         try:
-            cmd = ["python3", fname] if language == "python" else ["bash", fname]
+            cmd = [sys.executable, fname] if language == "python" else ["bash", fname]
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
@@ -432,6 +481,12 @@ class ToolRegistry:
     async def _run_file_read(self, path: str) -> dict[str, Any]:
         """Read a file from the workspace."""
         import os
+
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(path)
+        if violation:
+            return {"output": "", "error": violation}
 
         try:
             resolved = os.path.abspath(path)
@@ -524,47 +579,50 @@ class ToolRegistry:
             return []
 
     async def _run_image_analysis(self, image_path: str) -> dict[str, Any]:
-        """Analyze an image using VisionCNN — embedding, caption, and object detection."""
+        """Analyze an image via the inference image-capability facade."""
         import os
 
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(image_path)
+        if violation:
+            return {"output": "", "error": violation}
+
         try:
-            if not os.path.exists(image_path):
-                return {"output": "", "error": f"Image not found: {image_path}"}
-            size = os.path.getsize(image_path)
-            ext = os.path.splitext(image_path)[1].lower()
+            from domain.inference import analyze_image
 
-            try:
-                from domain.multimodal._internal.vision import VisionCNN
-
-                vision = VisionCNN()
-                caption_result = vision.caption(image_path)
-                objects = vision.detect(image_path)
-                embedding = vision.get_embedding(image_path)
-
-                lines = [
-                    f"Image: {os.path.basename(image_path)}",
-                    f"Format: {ext or 'unknown'}  |  Size: {size:,} bytes",
-                    f"Caption: {caption_result.text}",
-                    f"Confidence: {caption_result.confidence:.1%}",
-                ]
-                if caption_result.tags:
-                    lines.append(f"Tags: {', '.join(caption_result.tags)}")
-                if objects:
-                    lines.append("Objects:")
-                    for obj in objects:
-                        lines.append(f"  - {obj.label} ({obj.confidence:.1%})")
-                lines.append(
-                    f"Embedding: {len(embedding)}-dim, L2={float((embedding**2).sum() ** 0.5):.3f}"
+            result = analyze_image(image_path)
+            if not result.success:
+                if result.error_kind == "not_found":
+                    return {"output": "", "error": result.error}
+                header = (
+                    f"Image: {os.path.basename(image_path)}"
+                    f"\nFormat: {result.format}\nSize: {result.size_bytes:,} bytes"
                 )
-                return {"output": "\n".join(lines)}
-            except ImportError:
-                return {
-                    "output": f"Image: {os.path.basename(image_path)}\nFormat: {ext}\nSize: {size:,} bytes\n\n(Vision model not available)"
-                }
-            except Exception as ve:
-                return {
-                    "output": f"Image: {os.path.basename(image_path)}\nFormat: {ext}\nSize: {size:,} bytes\n\nVision error: {ve}"
-                }
+                tail = (
+                    "(Vision model not available)"
+                    if result.error_kind == "unavailable"
+                    else f"Vision error: {result.error}"
+                )
+                return {"output": f"{header}\n\n{tail}"}
+
+            embedding = result.embedding
+            lines = [
+                f"Image: {os.path.basename(image_path)}",
+                f"Format: {result.format or 'unknown'}  |  Size: {result.size_bytes:,} bytes",
+                f"Caption: {result.caption}",
+                f"Confidence: {result.confidence:.1%}",
+            ]
+            if result.tags:
+                lines.append(f"Tags: {', '.join(result.tags)}")
+            if result.objects:
+                lines.append("Objects:")
+                for obj in result.objects:
+                    lines.append(f"  - {obj['label']} ({obj['confidence']:.1%})")
+            lines.append(
+                f"Embedding: {len(embedding)}-dim, L2={float((embedding**2).sum() ** 0.5):.3f}"
+            )
+            return {"output": "\n".join(lines)}
         except Exception as e:
             return {"output": "", "error": str(e)}
 
@@ -574,6 +632,12 @@ class ToolRegistry:
         """Analyze a CSV/JSON/JSONL data file."""
         import json
         import os
+
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(data_path)
+        if violation:
+            return {"output": "", "error": violation}
 
         try:
             if not os.path.exists(data_path):

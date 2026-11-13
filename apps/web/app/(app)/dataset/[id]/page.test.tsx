@@ -143,9 +143,21 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'ds-1' }),
   useRouter: () => stableRouter,
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mocks.addToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mocks.addToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 vi.mock('@/lib/dataset-controller', () => ({
   datasetController: {
     get: mocks.get,

@@ -16,10 +16,23 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
+import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("slo.voice.engine")
+
+TTS_CHECKPOINT_ENV = "SLOUGHGPT_TTS_CHECKPOINT"
+TTS_CHECKPOINT_DEFAULT = Path("models/tts/espeak_distilled.npz")
+
+
+def _resolve_tts_checkpoint() -> str | None:
+    """Env override wins; else the default distillation path if it exists."""
+    raw = os.environ.get(TTS_CHECKPOINT_ENV)
+    candidate = Path(raw) if raw else TTS_CHECKPOINT_DEFAULT
+    return str(candidate) if candidate.is_file() else None
 
 
 @dataclass
@@ -45,15 +58,83 @@ class VoiceEngine:
 
     def __init__(self) -> None:
         self._tts: Any = None
+        self._tts_checkpoint: str | None = None
+        self._tts_ckpt_mtime: int | None = None
+        self._tts_lock = threading.Lock()
         self._recognizer: Any = None
         self._encoder: Any = None
 
     def _get_tts(self) -> Any:
-        if self._tts is None:
+        if self._tts is not None:
+            self._maybe_reload_tts()
+            return self._tts
+        with self._tts_lock:
+            if self._tts is None:
+                from domain.voice._internal.tts import TTSEngine
+
+                tts = TTSEngine()
+                checkpoint = _resolve_tts_checkpoint()
+                if checkpoint is not None:
+                    try:
+                        mtime = os.stat(checkpoint).st_mtime_ns
+                        tts.load(checkpoint)
+                        self._tts_checkpoint = checkpoint
+                        # the mtime we stat'd BEFORE load: if the file moved
+                        # during load, the next request detects it
+                        self._tts_ckpt_mtime = mtime
+                        logger.info("TTS checkpoint loaded: %s", checkpoint)
+                    except Exception:
+                        # load may have partially mutated weights — rebuild clean
+                        logger.warning(
+                            "TTS checkpoint %s unusable, using untrained weights",
+                            checkpoint,
+                            exc_info=True,
+                        )
+                        tts = TTSEngine()
+                self._tts = tts
+        return self._tts
+
+    def _maybe_reload_tts(self) -> None:
+        """Generation swap: pick up a rewritten checkpoint between requests.
+
+        RCU-style: the replacement engine is fully built before the reference
+        swap, so in-flight synthesize calls finish on the old weights. The
+        recorded mtime advances on every *attempt*, so a half-written file
+        retries at its completion mtime while a permanently corrupt file
+        stops hot-looping — old weights keep serving either way.
+        """
+        checkpoint = self._tts_checkpoint
+        if checkpoint is None:
+            return
+        try:
+            mtime = os.stat(checkpoint).st_mtime_ns
+        except OSError:
+            return  # file vanished mid-training — keep serving current weights
+        if mtime == self._tts_ckpt_mtime:
+            return
+        with self._tts_lock:
+            try:
+                mtime = os.stat(checkpoint).st_mtime_ns
+            except OSError:
+                return
+            if mtime == self._tts_ckpt_mtime:
+                return  # another thread already handled this generation
             from domain.voice._internal.tts import TTSEngine
 
-            self._tts = TTSEngine()
-        return self._tts
+            fresh = TTSEngine()
+            try:
+                fresh.load(checkpoint)
+            except Exception:
+                self._tts_ckpt_mtime = mtime
+                logger.warning(
+                    "TTS checkpoint %s rewrite unusable, serving previous weights",
+                    checkpoint,
+                    exc_info=True,
+                )
+                return
+            self._tts = fresh
+            self._tts_ckpt_mtime = mtime
+            logger.info("TTS checkpoint generation swap: %s", checkpoint)
 
     def _get_recognizer(self) -> Any:
         if self._recognizer is None:
@@ -170,6 +251,7 @@ class VoiceEngine:
         """
         return {
             "tts": self._tts is not None,
+            "tts_checkpoint": self._tts_checkpoint,
             "recognizer": self._recognizer is not None,
             "encoder": self._encoder is not None,
             "capabilities": ["tts", "stt", "phonemes", "language_detection"],

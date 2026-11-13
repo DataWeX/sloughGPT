@@ -12,7 +12,10 @@ script code as a gated test:
   screenshot and URL assertion,
 - real assertions: PNG integrity, non-blank pixels, viewport dimensions,
 - skips (never fails) without a live web stack — same contract as the
-  route-level journey tests (packages/core-py/tests/test_user_journeys.py).
+  route-level journey tests (tests/core-py/test_user_journeys.py),
+  AND without asserting against a foreign checkout's dev server: the
+  skip gate verifies the served tree via the X-Slo-Web-Tree header
+  (card 20261029_041801, identity helpers in tests/skip_gate_identity.py).
 
 Slow-marked browser capture: runs in ``-m ""`` sweeps against a live stack
 (``scripts/dev-stack.sh`` — web :5173, or ``SLO_WEB_URL``).
@@ -36,6 +39,9 @@ if _AVION_SRC.is_dir() and str(_AVION_SRC) not in sys.path:
 pytest.importorskip("avion")
 pytest.importorskip("playwright")
 
+# Shared gate helpers (fast-lane pinned by tests/test_skip_gate_identity.py).
+from tests.skip_gate_identity import served_tree_status
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "apps" / "web" / "scripts" / "screenshot_headers.py"
 WEB_URL = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
@@ -57,13 +63,25 @@ MIN_BYTES = 3_000
 MIN_UNIQUE_COLORS = 30
 
 
-def _web_is_ready() -> bool:
-    try:
-        req = urllib.request.Request(WEB_URL)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return 200 <= resp.status < 400
-    except Exception:
-        return False
+def _web_is_ready() -> tuple[bool, str]:
+    """Whether WEB_URL serves THIS checkout's web tree — identity, not port-open.
+
+    Delegates to ``served_tree_status`` (card 20261104_085623 extracted the
+    check this module used to carry inline): the vite dev server announces
+    its checkout via the ``X-Slo-Web-Tree`` header (set in
+    apps/web/vite.config.ts from realpath(apps/web), same recipe as
+    ``web_tree_id()``). A server without the header (foreign checkout's
+    vite, a pre-fix server, a static preview) or with a different value is
+    NOT this tree → the module skips instead of capturing a foreign
+    checkout's UI (card 20261029_041801).
+    """
+    status, detail = served_tree_status(WEB_URL)
+    if status == "ok":
+        return True, ""
+    return False, detail
+
+
+_WEB_READY, _WEB_SKIP_REASON = _web_is_ready()
 
 
 def _api_is_ready() -> bool:
@@ -78,8 +96,9 @@ def _api_is_ready() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        not _web_is_ready(),
-        reason=(
+        not _WEB_READY,
+        reason=_WEB_SKIP_REASON
+        or (
             "header screenshot tests need a live web app "
             f"({WEB_URL} — scripts/dev-stack.sh or SLO_WEB_URL)"
         ),

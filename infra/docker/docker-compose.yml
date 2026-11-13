@@ -64,7 +64,7 @@ services:
       api:
         condition: service_healthy
 
-  # ─── Web UI (Next.js) ─────────────────────────────────────────────
+  # ─── Web UI (Vite SPA) ─────────────────────────────────────────────
   web:
     build:
       context: ../..

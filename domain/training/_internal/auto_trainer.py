@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
 from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.auto_trainer")
@@ -54,7 +55,7 @@ class AutoTrainer:
         self._last_train_checkpoint: str = ""
         self._conversation_count: int = 0
         self._total_trains: int = 0
-        self._thread: threading.Thread | None = None
+        self._thread: ThreadHandle | None = None
         self._stop_event = threading.Event()
         self._sessions_mtime: float = 0
         self._logs_mtime: float = 0
@@ -66,8 +67,7 @@ class AutoTrainer:
             return
 
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="auto-trainer")
-        self._thread.start()
+        self._thread = spawn_loop(self._loop, name="auto-trainer", stop=self._stop_event)
         logger.info(
             "AutoTrainer started (threshold=%d, interval=%ds)",
             self.threshold,

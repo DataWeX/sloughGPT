@@ -57,7 +57,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Group name..."
-            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
           <div className="flex gap-1 flex-wrap">
@@ -70,7 +70,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                   'w-5 h-5 rounded-full border-2 transition-transform',
                   newColor === color ? 'border-foreground scale-110' : 'border-transparent',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                  'active:bg-muted',
+                  'hover:scale-110 active:bg-muted',
                 )}
                 style={{ backgroundColor: color }}
               />

@@ -1,15 +1,15 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 type ActionName = 'toggle' | 'dashboard' | 'personality' | 'quickactions' | null
 
 export function useConsciousnessShortcuts(enabled: boolean = true) {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [lastAction, setLastAction] = useState<ActionName>(null)
   const [registered, setRegistered] = useState(enabled)
   const lastActionRef = useRef<ActionName>(null)
