@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse
 from infrastructure.contract import RouteSpec, create_router
 
 from domain.agents import ToolSpec
-from domain.shared._internal.feature_flags import FeatureFlags
+from domain.shared import FeatureFlags
 
 
 def build_document() -> dict[str, Any]:
