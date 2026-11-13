@@ -412,6 +412,47 @@ def completion(shell):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Gates — static invariant checks as a product feature (card 20261112_060632)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Run the static gates (command parity, domain baseline, router manifest)")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Also fail on known (baselined) findings — debt the baseline tolerates",
+)
+def gates(strict):
+    """Report on the repo's static invariants without running the test suite.
+
+    \b
+    Examples:
+      sloughgpt gates             # fail only on new drift
+      sloughgpt gates --strict    # also fail on baselined known gaps
+    """
+    from domain.gates import run_gates
+
+    reports = run_gates()
+    failed = False
+    for report in reports:
+        mark = "ok" if report.ok else "FAIL"
+        echo(f"  {report.name}: {mark}" + (f" ({len(report.known)} known)" if report.known else ""))
+        for finding in report.findings:
+            echo(f"    - {finding}")
+        if strict:
+            for known in report.known:
+                echo(f"    ~ {known}")
+        if not report.ok:
+            failed = True
+        elif strict and report.known:
+            failed = True
+    if failed:
+        echo("gates: FAILED" + (" (--strict)" if strict else ""))
+        sys.exit(1)
+    echo("gates: all green")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Serve & Chat
 # ═══════════════════════════════════════════════════════════════════════
 
