@@ -17,6 +17,11 @@
 #   2. LIVENESS. A worktree with any process whose cwd is inside it is live —
 #      another session is working there. Checked via /proc, never by mtime
 #      alone (a long compile can go quiet; a running REPL is not idle).
+#      FAIL CLOSED: "no owner" and "could not probe /proc" are different
+#      answers and must never collapse into one. If no /proc/<pid>/cwd could
+#      be read at all, the run aborts with exit 3 instead of reporting
+#      live=0 — otherwise an unattended run in a restricted environment
+#      would prune every live tree (the 2026-10-21 class, by another door).
 #   3. RECENT ACTIVITY. Anything touched within `--max-age` minutes is skipped
 #      even if currently quiet, because a session between commands looks idle.
 #
@@ -37,28 +42,47 @@
 #   --path P      restrict to a single worktree path (repeatable)
 #   --apply       perform removals; without it, print the plan and exit 0
 #   --list        print every registered worktree with its verdict, then exit
+#   --report      report-only. PINS dry-run regardless of what the default
+#                 becomes, so a scheduled job can never be the thing that
+#                 deletes. Mutually exclusive with --apply.
 #
-# Exit codes: 0 = ran (dry-run always 0), 1 = usage/error.
+# Exit codes: 0 = ran (dry-run always 0), 1 = usage/error,
+#             3 = FAIL CLOSED — /proc unreadable, liveness not judged.
 set -euo pipefail
 
 DRY=1
 MAX_AGE=60
 PATHS=()
 LIST_ONLY=0
+WANT_APPLY=0
+WANT_REPORT=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --apply)    DRY=0 ;;
+        --apply)    WANT_APPLY=1 ;;
+        --report)   WANT_REPORT=1 ;;
         --list)     LIST_ONLY=1 ;;
         --max-age)  shift; MAX_AGE="${1:?--max-age needs a number}"; ;;
         --max-age=*) MAX_AGE="${1#*=}"; ;;
         --path)     shift; PATHS+=("${1:?--path needs a path}"); ;;
         --path=*)   PATHS+=("${1#*=}"); ;;
-        -h|--help)  sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        # Self-maintaining: prints the leading comment block. A hard-coded
+        # line range drifted before (2,45p vs a header ending at 41) and
+        # leaked code into --help; this cannot drift.
+        -h|--help)  awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
         *) echo "unknown arg: $1 (try --help)" >&2; exit 1 ;;
     esac
     shift
 done
+
+# --report is what automation passes: it pins report-only even if the default
+# ever changes, so a scheduled job structurally cannot delete anything.
+if [ "${WANT_REPORT:-0}" = 1 ] && [ "${WANT_APPLY:-0}" = 1 ]; then
+    echo "--report and --apply are mutually exclusive" >&2
+    exit 1
+fi
+[ "${WANT_APPLY:-0}" = 1 ] && DRY=0
+[ "${WANT_REPORT:-0}" = 1 ] && DRY=1
 
 case "$MAX_AGE" in ''|*[!0-9]*) echo "--max-age must be a non-negative integer" >&2; exit 1 ;; esac
 
@@ -69,13 +93,35 @@ MAIN_WT="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
 # /proc scan: is any process's cwd inside $1? Prints the pid, or nothing.
 # This is the only reliable liveness signal — mtime misses a process parked
 # at a prompt, and `lsof +D` is far too slow to run per worktree.
+#
+# TRI-STATE, deliberately:
+#   0 = live, pid printed
+#   1 = probed successfully, no process lives here
+#   2 = COULD NOT PROBE (no /proc, glob matched nothing, every readlink
+#       denied). Returning 1 here would be a lie: it is indistinguishable
+#       from "empty", and a caller treating it as empty prunes live trees.
 cwd_owner() {
-    local target="$1" p cwd
+    local target="$1" p cwd probed=0
     for p in /proc/[0-9]*; do
+        [ -d "$p" ] || continue
         cwd="$(readlink "$p/cwd" 2>/dev/null)" || continue
+        probed=1
         case "$cwd" in
             "$target"|"$target"/*) echo "${p##*/proc/}"; return 0 ;;
         esac
+    done
+    [ "$probed" = 1 ] && return 1
+    return 2
+}
+
+# Can we read at least ONE process cwd? Own processes are always readable, so
+# a failure here means /proc is absent or unusable — not that nobody is home.
+proc_probe_healthy() {
+    local p
+    [ -d /proc ] || return 1
+    for p in /proc/[0-9]*; do
+        [ -d "$p" ] || continue
+        readlink "$p/cwd" >/dev/null 2>&1 && return 0
     done
     return 1
 }
@@ -109,6 +155,18 @@ else
     done < <(git worktree list --porcelain | sed -n 's/^worktree //p')
 fi
 
+# PREFLIGHT — fail closed before a single verdict is printed. The per-tree
+# tri-state catches /proc degrading mid-run; this catches an environment
+# that was never able to answer. Judging liveness without /proc means
+# judging every tree dead, which is exactly how the 2026-10-21 sweep
+# destroyed ~60 live worktrees.
+if ! proc_probe_healthy; then
+    echo "ERR: cannot read any /proc/<pid>/cwd — the liveness gate has no data." >&2
+    echo "     Refusing to judge liveness in this environment (fail closed;" >&2
+    echo "     see docs/WORKTREE_RECOVERY.md, incident 2026-10-21)." >&2
+    exit 3
+fi
+
 now="$(date +%s)"
 age_limit=$((MAX_AGE * 60))
 
@@ -138,10 +196,18 @@ for wt in "${TARGETS[@]}"; do
 
     # Gate 2 — liveness. Checked BEFORE cleanliness so a busy tree reports as
     # busy rather than as dirty; the distinction tells the operator why.
-    if pid="$(cwd_owner "$wt")"; then
+    rc=0
+    pid="$(cwd_owner "$wt")" || rc=$?
+    if [ "$rc" -eq 0 ]; then
         printf '%-9s %-46s %s\n' "LIVE" "pid $pid" "$wt"
         skipped_live=$((skipped_live + 1))
         continue
+    elif [ "$rc" -eq 2 ]; then
+        # /proc degraded between preflight and here. Abort rather than fall
+        # through to the cleanliness/recency gates: an unjudgable tree must
+        # never be printed as PRUNE.
+        echo "ERR: /proc liveness probe failed for $wt — fail closed." >&2
+        exit 3
     fi
 
     # Dirty = modified OR untracked. git is the authority: ask it rather than
