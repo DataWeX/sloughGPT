@@ -4,15 +4,25 @@ import { forwardRef, type InputHTMLAttributes, type ChangeEventHandler, type Rea
 import { cn } from '../../lib/cn'
 
 export const inputFieldClassName = [
-  'flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm',
+  'flex w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm',
   'transition-[border-color,box-shadow,background-color] duration-200',
-  'placeholder:text-muted-foreground',
+  'placeholder:text-muted-foreground/50',
   'selection:bg-primary/20 selection:text-foreground',
-  'hover:border-primary/50',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-  'focus-visible:border-primary/60',
-  'disabled:cursor-not-allowed disabled:opacity-50',
+  'hover:border-border/80',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+  'focus-visible:border-primary/50',
+  'disabled:cursor-not-allowed disabled:opacity-40 disabled:bg-muted',
 ].join(' ')
+
+const SAFE_INPUT_TYPES = new Set([
+  'text', 'email', 'password', 'number', 'search', 'tel', 'url',
+  'date', 'time', 'datetime-local', 'month', 'week', 'color', 'range',
+])
+
+/** Coerce `type` to a text-like value so control types (file, checkbox, button, hidden...) can never slip through. */
+export function sanitizeInputType(type: string | undefined): string {
+  return type && SAFE_INPUT_TYPES.has(type) ? type : 'text'
+}
 
 /* ── Base Input ─────────────────────────────────────────────── */
 
@@ -26,6 +36,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(({ className, type, error, leftIcon, rightElement, ...props }, ref) => {
+  const safeType = sanitizeInputType(type)
   if (leftIcon || rightElement) {
     return (
       <div className="relative flex items-center">
@@ -35,13 +46,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ className, type, error
           </span>
         )}
         <input
-          type={type}
+          type={safeType}
+          aria-invalid={error ? true : undefined}
           className={cn(
             inputFieldClassName,
             'h-10',
             leftIcon && 'pl-9',
             rightElement && 'pr-9',
-            error && 'border-destructive/60 focus-visible:ring-destructive/40 hover:border-destructive/70',
+            error && 'border-destructive focus-visible:ring-destructive/20 hover:border-destructive/80',
             className,
           )}
           ref={ref}
@@ -58,11 +70,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ className, type, error
 
   return (
     <input
-      type={type}
+      type={safeType}
+      aria-invalid={error ? true : undefined}
       className={cn(
         inputFieldClassName,
         'h-10',
-        error && 'border-destructive/60 focus-visible:ring-destructive/40 hover:border-destructive/70',
+        error && 'border-destructive focus-visible:ring-destructive/20 hover:border-destructive/80',
         className,
       )}
       ref={ref}
@@ -112,6 +125,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           type="search"
           value={value}
           onChange={handleChange}
+          aria-label={props['aria-label'] ?? 'Search'}
           className={cn(
             inputFieldClassName,
             'pl-8',

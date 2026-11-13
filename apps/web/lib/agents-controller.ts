@@ -2,8 +2,7 @@
  * Agents Controller — axios-based API for agent management.
  */
 
-import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
-import { PUBLIC_API_URL } from './config'
+import { apiGet, apiPost, apiPut, apiDelete, streamSSE } from './http-client'
 
 export interface Agent {
   id: string
@@ -23,6 +22,21 @@ export interface OrchestrateTask {
   depends_on: string[]
 }
 
+export interface AgentRun {
+  id: string
+  goal: string
+  context: string
+  status: 'running' | 'completed' | 'failed'
+  started_at: string | null
+  finished_at: string | null
+  tasks: OrchestrateTask[]
+  completed_count: number
+  failed_count: number
+  response: string
+  error: string
+  logs: string[]
+}
+
 export interface OrchestrateCallbacks {
   onPlan?: (tasks: OrchestrateTask[]) => void
   onTaskStatus?: (taskId: string, status: string, agent: string, description: string, resultPreview?: string) => void
@@ -32,8 +46,6 @@ export interface OrchestrateCallbacks {
   onComplete: (response: string, tasks: OrchestrateTask[]) => void
   onError: (error: string) => void
 }
-
-const API_ORCHESTRATE_ENDPOINT = `${PUBLIC_API_URL}/agents/orchestrate`
 
 export const agentsController = {
   async list(): Promise<Agent[]> {
@@ -56,104 +68,64 @@ export const agentsController = {
     return apiPost<{ response: string; tools_used: Array<{ tool: string; result: unknown }> }>(`/agents/${encodeURIComponent(id)}/execute`, { request, session_id: sessionId || '' })
   },
 
-  async orchestrate(goal: string, context: string, callbacks: OrchestrateCallbacks, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(API_ORCHESTRATE_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal, context }),
-      signal,
-    })
+  async listRuns(limit = 20): Promise<{ runs: AgentRun[]; count: number }> {
+    return apiGet<{ runs: AgentRun[]; count: number }>(`/agents/runs?limit=${limit}`)
+  },
 
-    if (!response.ok) {
-      callbacks.onError(`HTTP ${response.status}: ${response.statusText}`)
-      return
-    }
+  async getRun(runId: string): Promise<AgentRun> {
+    return apiGet<AgentRun>(`/agents/runs/${encodeURIComponent(runId)}`)
+  },
 
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    if (!reader) {
-      callbacks.onError('No response body')
-      return
-    }
+  async orchestrate(goal: string, context: string, callbacks: OrchestrateCallbacks, signal?: AbortSignal, agentIds?: string[]): Promise<void> {
+    try {
+      for await (const event of streamSSE('/agents/orchestrate', { body: { goal, context, agent_ids: agentIds ?? [] }, signal })) {
+        if (event.status === 'error') {
+          callbacks.onError(event.message || (event.data?.error as string) || 'Could not orchestration')
+          return
+        }
 
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+        const phase = event.phase
+        const d = event.data ?? {}
 
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
+        if (phase === 'PLAN' && event.status === 'success') {
+          callbacks.onPlan?.((d.tasks as OrchestrateTask[]) ?? [])
+          continue
+        }
 
-      for (const line of lines) {
-        const trimmed = line.trimEnd()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload) continue
-
-        try {
-          const envelope = JSON.parse(payload) as {
-            stream?: string
-            phase?: string
-            status?: string
-            data?: Record<string, unknown>
-            message?: string
+        if (phase === 'EXECUTE' && event.status === 'working') {
+          if (d.level !== undefined) {
+            callbacks.onLevelChange?.(d.level as number, (d.levels as number) ?? 1, (d.tasks as string[]) ?? [])
           }
+          continue
+        }
 
-          const phase = envelope.phase
-          const status = envelope.status
-          const d = envelope.data ?? {}
-
-          if (status === 'error') {
-            const errStr = typeof d.error === 'string' ? d.error : envelope.message || 'Orchestration failed'
-            callbacks.onError(errStr)
-            return
+        if (phase === 'EXECUTE') {
+          const taskId = d.task_id as string | undefined
+          if (taskId) {
+            callbacks.onTaskStatus?.(
+              taskId,
+              event.status ?? 'unknown',
+              (d.agent as string) ?? '',
+              (d.description as string) ?? '',
+              d.result_preview as string | undefined,
+            )
           }
+          continue
+        }
 
-          if (phase === 'PLAN' && status === 'success') {
-            const tasks = (d.tasks as OrchestrateTask[]) ?? []
-            callbacks.onPlan?.(tasks)
-            continue
-          }
+        if (phase === 'COMPOSE' && event.status === 'working') {
+          callbacks.onCompose?.()
+          continue
+        }
 
-          if (phase === 'EXECUTE' && status === 'working') {
-            if (d.level !== undefined) {
-              callbacks.onLevelChange?.(d.level as number, (d.levels as number) ?? 1, (d.tasks as string[]) ?? [])
-            }
-            continue
-          }
-
-          if (phase === 'EXECUTE') {
-            const taskId = d.task_id as string | undefined
-            if (taskId) {
-              callbacks.onTaskStatus?.(
-                taskId,
-                status ?? 'unknown',
-                (d.agent as string) ?? '',
-                (d.description as string) ?? '',
-                d.result_preview as string | undefined,
-              )
-            }
-            continue
-          }
-
-          if (phase === 'COMPOSE' && status === 'working') {
-            callbacks.onCompose?.()
-            continue
-          }
-
-          if (status === 'complete') {
-            const resp = (d.response as string) ?? ''
-            const tasks = (d.tasks as OrchestrateTask[]) ?? []
-            callbacks.onComplete(resp, tasks)
-            return
-          }
-        } catch {
-          // skip malformed lines
+        if (event.status === 'complete') {
+          callbacks.onComplete((d.response as string) ?? '', (d.tasks as OrchestrateTask[]) ?? [])
+          return
         }
       }
+      callbacks.onError('Stream ended unexpectedly')
+    } catch (err) {
+      callbacks.onError(err instanceof Error ? err.message : 'Connection error')
     }
-
-    callbacks.onError('Stream ended unexpectedly')
   },
 }

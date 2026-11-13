@@ -49,4 +49,16 @@ describe('imagesController', () => {
     apiClient.apiPost.mockRejectedValue(new Error('Generation failed'))
     await expect(imagesController.generate('fail')).rejects.toThrow('Generation failed')
   })
+
+  it('gallery returns API response directly', async () => {
+    apiClient.apiGet.mockResolvedValue({ images: [{ id: '2', path: '/img/dog.png', created: 2000 }] })
+    const result = await imagesController.gallery()
+    expect(result.images[0].id).toBe('2')
+  })
+
+  it('styles returns API response directly', async () => {
+    apiClient.apiGet.mockResolvedValue({ styles: [['sketch', 'Sketch']] })
+    const result = await imagesController.styles()
+    expect(result.styles[0][0]).toBe('sketch')
+  })
 })

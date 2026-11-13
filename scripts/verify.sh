@@ -21,7 +21,6 @@ echo "Checking required files..."
 files=(
     "package.json"
     "apps/api/server/main.py"
-    "packages/core-py/domains/ui/api_server.py"
     "apps/web/package.json"
     "apps/web/app/(app)/page.tsx"
     "apps/web/app/(app)/chat/page.tsx"
@@ -46,7 +45,7 @@ if [ "$all_found" = true ]; then
     echo ""
     if python3 -m ruff --version &>/dev/null; then
         echo "Ruff smoke (same rules as CI)..."
-        python3 -m ruff check tests/ apps/cli/ apps/api/server/ train_sloughgpt.py packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82 || {
+        python3 -m ruff check tests/ apps/cli/ apps/api/server/ domain/training/_internal/checkpoint_utils.py --select E9,F63,F7,F82 || {
             echo "❌ Ruff smoke failed"
             exit 1
         }
@@ -60,7 +59,7 @@ if [ "$all_found" = true ]; then
     if command -v node &>/dev/null && [ -d "apps/web/node_modules" ]; then
         echo "Web npm run ci (apps/web)..."
         (cd apps/web && npm run ci) || {
-            echo "❌ Web npm run ci failed (clean .next, lint, typecheck, test, next build)"
+            echo "❌ Web npm run ci failed (lint, typecheck, test, vite build)"
             exit 1
         }
         echo "✓ Web npm run ci passed"
@@ -88,13 +87,13 @@ if [ "$all_found" = true ]; then
     echo "To start SloughGPT:"
     echo "  API + web (one terminal): ./scripts/dev-stack.sh  |  make dev-stack  |  npm install && npm run dev:stack"
     echo "  Or separately:"
-    echo "  1. API:  MAN_API_PORT=8000 python3 apps/api/server/main.py"
+    echo "  1. API:  SLO_API_PORT=8000 python3 apps/api/server/main.py"
     echo "     or:  cd apps/api/server && python3 -m uvicorn main:app --reload --port 8000"
     echo "  2. Web: cd apps/web && npm run dev"
     echo ""
     echo "Docker: docker compose -f infra/docker/docker-compose.yml up -d api"
     echo ""
-    echo "Then open the web dev URL (often http://localhost:3000)"
+    echo "Then open the web dev URL (often http://localhost:5173)"
     echo ""
     echo "With a repo .venv, you can prefix commands:"
     echo "  ./run.sh python3 -m pytest tests/ -q"
@@ -115,8 +114,7 @@ if [ "$all_found" = true ]; then
     echo "  python3 -m pytest tests/test_sdk.py -q"
     echo ""
     echo "Python core CI parity (job test in reusable-ci-core.yml), training-focused copy/paste subset:"
-    echo "  python3 -m pytest tests/test_checkpoint_utils.py tests/test_config.py tests/test_domains_errors.py tests/test_train_sloughgpt_generate_text.py tests/test_train_sloughgpt_resume.py tests/test_sloughgpt_trainer_smoke.py tests/test_sloughgpt_trainer_resume.py tests/test_sloughgpt_trainer_progress_callback.py tests/test_cli_train_export_stem.py tests/test_cli_train_api_payload.py tests/test_training_router_kwds.py tests/test_training_schemas.py tests/test_lm_eval_char.py tests/test_cli_local_soul_candidates.py tests/test_soul_engine_conversation.py tests/test_repo_root_package_json.py tests/test_sloughgpt_colab_notebook.py -q"
-    echo "  python3 train_sloughgpt.py --help"
+    echo "  python3 -m pytest tests/test_checkpoint_utils.py tests/test_config.py tests/test_domains_errors.py tests/test_sloughgpt_trainer_smoke.py tests/test_sloughgpt_trainer_progress_callback.py tests/test_cli_train_export_stem.py tests/test_cli_train_api_payload.py tests/test_training_router_kwds.py tests/test_training_schemas.py tests/test_lm_eval_char.py tests/test_cli_local_soul_candidates.py tests/test_soul_engine_conversation.py tests/test_repo_root_package_json.py tests/test_sloughgpt_colab_notebook.py -q"
     echo "  Full pytest module list (adds quantization, optimizations, benchmarking, inference, api, server, security, …): .github/workflows/reusable-ci-core.yml → Run core tests"
     echo ""
     echo "Standards CI parity (job standards-schemas):"

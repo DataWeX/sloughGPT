@@ -6,40 +6,124 @@ Resumes partial downloads even after power loss, process crash, or
 days-long gaps between sessions — as long as the partial file on disk
 and server's ``ETag`` still match.
 
+This package is deliberately HuggingFace-agnostic.  It downloads any URL.
+The HuggingFace-specific model download/resume/verify workflows live in
+the application layer (``domain.infrastructure.hf_hub``), composed from
+the generic primitives here (``downloader``, ``state``, ``verify``).
+
+Submodules:
+    - ``download``: direct file download with resume
+    - ``resolve``: extract real download URLs from ad-heavy pages
+    - ``compress``: LZ4 compression/decompression (optional, requires lz4)
+
+Features:
+    - Cross-session resume via HTTP Range headers
+    - Auto-detect already-compressed content (skip double compression)
+    - Checksum-based skip (avoid re-downloading identical files)
+    - Size estimation before download
+    - LZ4 compression support (optional)
+
 Use cases:
-    1. Download any URL::
+    1. Direct download::
 
         download("https://example.com/bigfile.iso", "/tmp/bigfile.iso")
 
-    2. Download a HuggingFace model (convenience plugin)::
+    2. Compressed download (server sends LZ4, client decompresses)::
 
-        download_hf_model("Qwen/Qwen2.5-0.5B-Instruct")
+        download("https://example.com/bigfile.iso.lz4", "/tmp/bigfile.iso", compressed=True)
 
-    3. CLI::
+    3. Resolve + download (scrape page, find real link)::
+
+        from downcraft.resolve import resolve_and_download
+        resolve_and_download("https://example.com/download-page", "/tmp/file.zip")
+
+    4. Estimate download size::
+
+        from downcraft import estimate_download_size
+        info = estimate_download_size("https://example.com/bigfile.iso")
+        print(f"Size: {info['total_bytes'] / 1e6:.1f} MB")
+
+    5. CLI::
 
         python -m downcraft url https://...
-        python -m downcraft hf Qwen/Qwen2.5-0.5B-Instruct
+        python -m downcraft resolve https://example.com/download-page
+        python -m downcraft estimate https://example.com/bigfile.iso
 """
 
 import logging
-import os
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union
+from typing import Dict, Optional, Union
 
-from . import downloader, state
-from . import hf_hub
-from . import verify
+from .download import DownloadError, WireStats, download_file, download_range, state
+from .download.multipart import GroupResult, PartResult, download_parts, parse_urls_file
+from .resolve import (
+    patterns,
+    resolve_and_download,
+    resolve_page,
+    resolve_page_browser,
+    resolve_with_browser_fallback,
+)
+from .server import CaptureEntry, start_capture_server
+
+# Compression APIs (optional dependency)
+try:
+    from .download.compress import (
+        CompressedFileServer,
+        CompressionResult,
+        auto_decompress,
+        compress_bytes,
+        compress_file,
+        compress_stream,
+        compressed_file_iterator,
+        decompress_bytes,
+        decompress_file,
+        decompress_stream,
+        is_compressed_file,
+        peek_compressed_header,
+    )
+
+    _HAS_COMPRESSION = True
+except ImportError:
+    _HAS_COMPRESSION = False
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "download",
-    "download_hf_model",
-    "hf_hub",
+    "resolve_page",
+    "resolve_and_download",
+    "resolve_page_browser",
+    "resolve_with_browser_fallback",
     "state",
-    "downloader",
-    "verify",
+    "patterns",
+    "download_file",
+    "download_range",
+    "DownloadError",
+    "WireStats",
+    "download_parts",
+    "GroupResult",
+    "PartResult",
+    "parse_urls_file",
+    "start_capture_server",
+    "CaptureEntry",
+    # Compression (if lz4 installed)
+    "compress_file",
+    "decompress_file",
+    "compress_bytes",
+    "decompress_bytes",
+    "compress_stream",
+    "decompress_stream",
+    "auto_decompress",
+    "is_compressed_file",
+    "peek_compressed_header",
+    "compressed_file_iterator",
+    "CompressedFileServer",
+    "CompressionResult",
+    # Download helpers
+    "estimate_download_size",
+    "get_file_size",
 ]
 
 
@@ -47,19 +131,27 @@ __all__ = [
 # Generic download — any URL
 # ---------------------------------------------------------------------------
 
+
 def download(
     url: str,
-    dest: Union[str, Path],
+    dest: str | Path,
     expected_size: int = 0,
     checksum: str = "",
     label: str = "",
-    on_progress: Optional[Callable[[int, int, float], None]] = None,
-) -> Dict:
+    on_progress: Callable[[int, int, float], None] | None = None,
+    compressed: bool = False,
+    skip_if_exists: bool = True,
+) -> dict:
     """Download a single file from any URL with cross-session resume.
 
     Uses ``~/.downcraft/state.json`` to track progress so that
     if the process dies mid-download, the next call resumes from
     the last byte received (via HTTP ``Range`` header).
+
+    Features:
+        - Auto-detects already-compressed content (skips double compression)
+        - Checksum-based skip (avoids re-downloading identical files)
+        - Cross-session resume via HTTP Range headers
 
     Args:
         url: HTTP/HTTPS URL to download.
@@ -68,20 +160,62 @@ def download(
         checksum: SHA-256 hex string to verify after download.
         label: Human label for logging (defaults to filename).
         on_progress: Called per-chunk with ``(bytes_downloaded, total_bytes, speed_bps)``.
+        compressed: If True, expect LZ4-compressed response and decompress on-the-fly.
+        skip_if_exists: If True and checksum provided, skip download if file exists with matching checksum.
 
     Returns:
-        Dict with keys: ``status``, ``dest``, ``elapsed``, ``total_bytes``.
+        Dict with keys: ``status``, ``dest``, ``elapsed``, ``total_bytes``,
+        plus bandwidth accounting for this call: ``wire_bytes`` (body bytes
+        on the wire), ``decoded_bytes``, ``saved_bytes``, ``saved_pct`` and
+        ``content_encoding``.  ``saved_*`` are ``None`` when the wire size
+        could not be measured (encoded response without Content-Length).
+        Skip paths report zeros (nothing was fetched).
     """
+    from .download.http import _verify_checksum, download_file
+
     dest = Path(dest)
     label = label or dest.name
     st = state.get_state()
     lookup_key = url  # use URL as the state tracking key
 
-    # Check existing state
+    # Skip download if file exists with matching checksum
+    if skip_if_exists and checksum and dest.exists():
+        if _verify_checksum(dest, checksum):
+            logger.info("%s already exists with matching checksum", label)
+            return {
+                "status": "already_downloaded",
+                "dest": str(dest),
+                "label": label,
+                "wire_bytes": 0,
+                "decoded_bytes": 0,
+                "saved_bytes": 0,
+                "saved_pct": 0.0,
+                "content_encoding": "identity",
+            }
+
+    # Check existing state — only skip when the destination is actually on disk.
+    # State is keyed by URL; a prior download to a different path (or a
+    # deleted file) must not short-circuit a new download.
     existing = st.get(lookup_key)
-    if existing and existing.status == "complete":
+    if existing and existing.status == "complete" and dest.exists():
         logger.info("%s already downloaded", label)
-        return {"status": "already_downloaded", "dest": str(dest), "label": label}
+        return {
+            "status": "already_downloaded",
+            "dest": str(dest),
+            "label": label,
+            "wire_bytes": 0,
+            "decoded_bytes": 0,
+            "saved_bytes": 0,
+            "saved_pct": 0.0,
+            "content_encoding": "identity",
+        }
+    if existing and existing.status == "complete" and not dest.exists():
+        logger.warning(
+            "%s marked complete in state but missing on disk — re-downloading",
+            label,
+        )
+        st.set_status(lookup_key, "queued")
+        st.flush()
 
     start = time.time()
     total_bytes = [0]
@@ -104,16 +238,20 @@ def download(
             on_progress(bytes_done, max(bytes_done, total), speed)
 
     st.create(lookup_key, str(dest.parent))
+    stats = WireStats()
 
     try:
-        downloader.download_file(
+        download_file(
             url=url,
             dest=dest,
             expected_size=expected_size,
             checksum=checksum,
             on_chunk=_chunk_cb,
+            compressed=compressed,
+            skip_if_exists=False,  # Already checked above
+            stats=stats,
         )
-    except downloader.DownloadError:
+    except DownloadError:
         st.set_status(lookup_key, "failed", error=f"Failed to download {label}")
         st.flush()
         raise
@@ -126,162 +264,9 @@ def download(
         "dest": str(dest),
         "elapsed": round(elapsed, 1),
         "total_bytes": total_bytes[0],
+        "wire_bytes": stats.wire_bytes,
+        "decoded_bytes": stats.decoded_bytes,
+        "saved_bytes": stats.saved_bytes,
+        "saved_pct": round(stats.saved_pct, 1) if stats.saved_pct is not None else None,
+        "content_encoding": stats.content_encoding,
     }
-
-
-# ---------------------------------------------------------------------------
-# HuggingFace model download (one use case)
-# ---------------------------------------------------------------------------
-
-def download_hf_model(
-    model_id: str,
-    hf_home: Optional[str] = None,
-    on_progress: Optional[Callable[[str, int, int, float], None]] = None,
-    on_file_complete: Optional[Callable[[str, str], None]] = None,
-    ignore_cache: bool = False,
-) -> Dict:
-    """Download a HuggingFace model with cross-session resume.
-
-    Wraps ``download()`` for each file in the model repo, using
-    the ``~/.downcraft/state.json`` persistent tracker so that
-    multi-file model downloads resume across restarts.
-
-    Args:
-        model_id: HF model ID (e.g. ``"gpt2"``, ``"Qwen/Qwen2.5-0.5B-Instruct"``).
-        hf_home: Override HF cache directory.
-        on_progress: Called per-chunk with ``(model_id, bytes_downloaded, total_bytes, speed_bps)``.
-        on_file_complete: Called when each file finishes ``(model_id, file_path)``.
-        ignore_cache: If True, redownload even if already fully cached.
-
-    Returns:
-        Dict with keys: ``status``, ``cache_dir``, ``elapsed``, ``total_bytes``.
-    """
-    if hf_home is None:
-        hf_home = os.environ.get("HF_HOME", "")
-
-    st = state.get_state()
-
-    # Quick check — already complete?
-    existing = st.get(model_id)
-    if existing and existing.status == "complete" and not ignore_cache:
-        logger.info("%s already fully downloaded", model_id)
-        return {
-            "status": "already_cached",
-            "model_id": model_id,
-            "cache_dir": existing.cache_dir,
-        }
-
-    # Resolve cache directory
-    cache_dir = str(hf_hub.get_cache_dir(model_id, hf_home))
-    files = hf_hub.list_model_files(model_id)
-    weight_files = [f for f in files if not f.is_ignored]
-
-    if not weight_files:
-        raise RuntimeError(f"No downloadable files found for {model_id}")
-
-    logger.info(
-        "Resolved %d files for %s (%.2f GB total)",
-        len(weight_files),
-        model_id,
-        sum(f.size for f in weight_files) / (1024 ** 3),
-    )
-
-    st_state = st.create(model_id, cache_dir)
-    start = time.time()
-    total_all = sum(f.size for f in weight_files)
-
-    for hf_file in weight_files:
-        rel_path = hf_file.path
-        dest = Path(cache_dir) / "snapshots" / "default" / rel_path
-
-        existing_file = st_state.files.get(rel_path)
-        if existing_file and existing_file.complete:
-            continue
-
-        chunk_cb = _make_hf_chunk_cb(
-            st, model_id, rel_path,
-            hf_file.download_url, hf_file.size,
-            hf_file.checksum, start, total_all, on_progress,
-        )
-
-        try:
-            downloader.download_file(
-                url=hf_file.download_url,
-                dest=dest,
-                expected_size=hf_file.size,
-                checksum=hf_file.checksum,
-                on_chunk=chunk_cb,
-                on_complete=lambda p: (
-                    on_file_complete(model_id, rel_path)
-                    if on_file_complete else None
-                ),
-            )
-            st.update_file_progress(
-                model_id, rel_path, hf_file.download_url,
-                hf_file.size, hf_file.size,
-                checksum=hf_file.checksum, complete=True,
-            )
-        except downloader.DownloadError:
-            st.set_status(model_id, "failed", error=f"Failed on {rel_path}")
-            st.flush()
-            raise
-
-    st.set_status(model_id, "complete")
-    st.flush()
-    elapsed = time.time() - start
-    logger.info(
-        "Downloaded %s in %.1fs (%.2f MB/s)",
-        model_id, elapsed,
-        (total_all / elapsed / 1e6) if elapsed > 0 else 0,
-    )
-
-    return {
-        "status": "complete",
-        "model_id": model_id,
-        "cache_dir": cache_dir,
-        "elapsed": round(elapsed, 1),
-        "total_bytes": total_all,
-    }
-
-
-def _make_hf_chunk_cb(
-    st_obj,
-    model_id: str,
-    rel_path: str,
-    download_url: str,
-    file_size: int,
-    checksum: str,
-    start_time: float,
-    total_all: int,
-    on_progress: Optional[Callable],
-) -> Callable:
-    """Factory for HF file chunk callback with persistent state updates."""
-    prev_pct = [0]
-
-    def _cb(bytes_done: int, _total: int):
-        pct = int(bytes_done / file_size * 100) if file_size else 0
-        if pct != prev_pct[0] and pct % 25 == 0:
-            logger.info("  %s: %dMB/%dMB (%d%%)", rel_path,
-                         bytes_done // (1024*1024),
-                         file_size // (1024*1024) if file_size else 0, pct)
-            prev_pct[0] = pct
-
-        st_obj.update_file_progress(
-            model_id, rel_path, download_url,
-            bytes_done, file_size,
-            checksum=checksum,
-            complete=(bytes_done >= file_size and file_size > 0),
-        )
-
-        ms = st_obj.get(model_id)
-        all_done = sum(f.bytes_downloaded for f in ms.files.values()) if ms else bytes_done
-        elapsed = time.time() - start_time
-        speed = all_done / elapsed if elapsed > 0 else 0
-
-        if on_progress:
-            on_progress(model_id, all_done, total_all, speed)
-
-    return _cb
-
-
-download_model_sync = download_hf_model

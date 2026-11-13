@@ -2,11 +2,10 @@
 Demonstration: How the ConversationEngine integrates with existing infrastructure.
 """
 
-import sys
 import os
 import tempfile
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from importlib.util import spec_from_file_location, module_from_spec
 
 
 def demo_conversation_engine():
@@ -15,9 +14,7 @@ def demo_conversation_engine():
     print("=" * 60)
 
     # Load conversation engine - absolute path
-    ce_path = Path(
-        "/Users/mac/sloughGPT/packages/core-py/domains/infrastructure/conversation_engine.py"
-    )
+    ce_path = Path("/Users/mac/sloughGPT/domain/infrastructure/conversation_engine.py")
     spec = spec_from_file_location("conversation_engine", ce_path)
     ce_module = module_from_spec(spec)
     spec.loader.exec_module(ce_module)
@@ -33,7 +30,7 @@ def demo_conversation_engine():
     msg1 = engine.add_message(
         session_id="chat_abc123", role="user", content="Hello, how are you?", model="gpt2"
     )
-    print(f"   User: Hello, how are you?")
+    print("   User: Hello, how are you?")
     print(f"   -> Saved to DB (id: {msg1.id[:20]}...)")
 
     # Simulate: Model generates response
@@ -44,7 +41,7 @@ def demo_conversation_engine():
         model="gpt2",
         tokens=10,
     )
-    print(f"   Assistant: I'm doing great! How can I help you today?")
+    print("   Assistant: I'm doing great! How can I help you today?")
     print(f"   -> Saved to DB (id: {msg2.id[:20]}...)")
 
     # Continue conversation
@@ -88,7 +85,7 @@ def demo_conversation_engine():
 How it works with existing infrastructure:
 
   1. Frontend sends message with session_id
-  2. /chat/stream saves user message to conversation DB
+  2. POST /chat saves user message to conversation DB
   3. Model generates response
   4. Response saved to conversation DB
   5. Next message: _build_context_prompt() fetches history

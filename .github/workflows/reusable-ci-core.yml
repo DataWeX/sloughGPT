@@ -22,9 +22,13 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: apps/api/server/requirements.txt
-      - run: pip install ruff
-      - name: Ruff syntax check
-        run: ruff check packages/core-py/ apps/api/server/ --select E9,F63,F7,F82 --exclude '__pycache__'
+      - run: pip install ruff mypy
+      - name: Ruff lint
+        run: ruff check domain/ apps/api/server/ --exclude '__pycache__'
+      - name: Ruff format check
+        run: ruff format --check apps/api/server/ --exclude '__pycache__'
+      - name: Mypy type check
+        run: mypy domain/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
 
   test:
     runs-on: ubuntu-latest
@@ -39,50 +43,49 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart
-          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist requests
+          # torch/transformers/peft removed 2026-11-12 — same torch-free
+          # closure as ci_cd test-core-py (card 20261112_062436); pyyaml kept
+          # as a direct dep (domain/benchmark/weighted.py, module level).
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart pyyaml
+          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist pytest-timeout requests
 
       - name: Core-py tests
         run: |
-          cd packages/core-py
-          python -m pytest tests/ \
-            --ignore=tests/test_hf_finetune.py \
-            --ignore=tests/test_multimodal_generation.py \
-            --ignore=tests/test_multimodal_v2.py \
-            --ignore=tests/test_server_integration.py \
-            --ignore=tests/test_process_isolation.py \
-            --ignore=tests/test_hf_dpo.py \
-            --ignore=tests/test_unified_pipeline_run.py \
-            --ignore=tests/test_numpy_engine.py \
-            --ignore=tests/test_safetensors_loader.py \
-            --ignore=tests/test_executor_endpoints.py \
-            --ignore=tests/test_shell_integration.py \
-            --ignore=tests/test_morph_tokenizer.py \
-            --ignore=tests/test_point_library.py \
-            --ignore=tests/test_slonet_compute_sensitivity.py \
-            --ignore=tests/test_slonet_provider.py \
-            --ignore=tests/test_shell_repl.py \
+          python -m pytest tests/core-py/ \
+            --ignore=tests/core-py/test_server_integration.py \
+            --ignore=tests/core-py/test_process_isolation.py \
+            --ignore=tests/core-py/test_numpy_engine.py \
+            --ignore=tests/core-py/test_safetensors_loader.py \
+            --ignore=tests/core-py/test_morph_tokenizer.py \
+            --ignore=tests/core-py/test_point_library.py \
+            --ignore=tests/core-py/test_slonet_compute_sensitivity.py \
+            --ignore=tests/core-py/test_slonet_provider.py \
+            --ignore=tests/core-py/test_shell_repl.py \
+            --cov=domain --cov-report=term-missing --cov-fail-under=50 \
             -q --tb=short
 
       - name: Server tests
         working-directory: apps/api/server
-        run: python -m pytest tests/ -q --tb=short
+        run: python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=30 -q --tb=short
 
-      # DISABLED: ~100 pre-existing failures from success_response wrapper and dead imports
-      # - name: Root tests
-      #   run: |
-      #     python -m pytest tests/ \
-      #       --override-ini="testpaths=tests" \
-      #       --override-ini="addopts=" \
-      #       --ignore=tests/test_checkpoint_utils.py \
-      #       --ignore=tests/test_knowledge_graph.py \
-      #       --ignore=tests/test_lm_eval_char.py \
-      #       --ignore=tests/test_rag.py \
-      #       --ignore=tests/test_train_sloughgpt_generate_text.py \
-      #       --ignore=tests/test_train_sloughgpt_resume.py \
-      #       --ignore=tests/server/ \
-      #       -q --tb=short
+      - name: Root tests
+        run: |
+          python -m pytest tests/ \
+            --override-ini="testpaths=tests" \
+            --override-ini="addopts=" \
+            --ignore=tests/test_checkpoint_utils.py \
+            --ignore=tests/test_knowledge_graph.py \
+            --ignore=tests/test_lm_eval_char.py \
+            --ignore=tests/test_rag.py \
+            --ignore=tests/server/ \
+            --ignore=tests/test_auto_train_integration.py \
+            --ignore=tests/test_chat_loop_e2e.py \
+            --ignore=tests/test_chat_trainer.py \
+            --ignore=tests/test_cli_chat.py \
+            --ignore=tests/test_continual_learner.py \
+            --ignore=tests/test_websocket_training.py \
+            --ignore=tests/test_training_monitor.py \
+            -q --tb=short
 
       - name: Upload test results
         if: ${{ inputs.upload_test_artifact && always() }}
@@ -90,3 +93,22 @@ jobs:
         with:
           name: test-results
           path: tests/
+
+  quantization-gate:
+    # Quantization regression gate: tiny-fixture validate + baseline check.
+    # Deterministic in-process fixture (np.random.seed(0), no model downloads),
+    # so quality/compression gates are machine-stable. Tiny speed metrics are
+    # informational only; the committed quantization_baseline.json (tiny
+    # int8/int4) is the reference.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+      - name: Quantization validate + baseline gate
+        run: python scripts/benchmark_quantization.py --validate --bits 8,4 --baseline quantization_baseline.json

@@ -1,60 +1,103 @@
 'use client'
 
-import { Button } from '@sloughgpt/strui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@sloughgpt/strui'
+import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, Textarea, ToggleGroup, ToggleGroupItem } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
+import type { TestModelResult } from '@/hooks/useTestDialog'
 
 interface TestModelDialogProps {
   open: boolean
   prompt: string
-  output: string
+  result: TestModelResult | null
   loading: boolean
+  streaming: boolean
+  streamingText: string
+  responseFormat: 'text' | 'json'
   onClose: () => void
   onPromptChange: (value: string) => void
   onGenerate: () => void
   onClear: () => void
+  onResponseFormatChange: (format: 'text' | 'json') => void
 }
 
 export function TestModelDialog({
   open,
   prompt,
-  output,
+  result,
   loading,
+  streaming,
+  streamingText,
+  responseFormat,
   onClose,
   onPromptChange,
   onGenerate,
   onClear,
+  onResponseFormatChange,
 }: TestModelDialogProps) {
-  if (!open) return null
+  const displayText = streaming ? streamingText : result?.response || ''
+  const showError = !streaming && result?.error
+  const showOutput = !streaming && result?.response
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-background rounded-lg border border-border shadow-xl w-full max-w-lg mx-4 p-5 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Test the model</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm">&times;</button>
-        </div>
-        <textarea
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Test the model</DialogTitle>
+        </DialogHeader>
+        <Textarea
+          aria-label="Test prompt"
           value={prompt}
           onChange={e => onPromptChange(e.target.value)}
           placeholder="Type a prompt to test the trained model..."
           rows={3}
-          className="w-full rounded-md border border-border/60 bg-background p-2 text-xs font-mono text-foreground resize-none"
+          className="text-[11px] font-mono resize-none"
         />
-        <div className="flex gap-2">
-          <Button size="sm" onClick={onGenerate} disabled={loading || !prompt.trim()}>
-            {loading ? 'Generating...' : 'Generate'}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onClear}>
-            Clear
-          </Button>
+        <div className="flex items-center gap-2">
+          <ToggleGroup
+            type="single"
+            value={responseFormat}
+            onValueChange={(v) => { if (v) onResponseFormatChange(v as 'text' | 'json') }}
+            size="sm"
+          >
+            <ToggleGroupItem value="text" className="text-[10px] h-6 px-1.5">Text</ToggleGroupItem>
+            <ToggleGroupItem value="json" className="text-[10px] h-6 px-1.5">JSON</ToggleGroupItem>
+          </ToggleGroup>
+          <div className="flex gap-1.5 ml-auto">
+            <Button size="sm" className="h-7 text-[11px]" onClick={onGenerate} disabled={loading || !prompt.trim()}>
+              {loading ? 'Generating...' : 'Generate'}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={onClear}>
+              Clear
+            </Button>
+          </div>
         </div>
-        {output && (
-          <div className="rounded-md border border-border/50 bg-muted/30 p-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Output</p>
-            <p className="text-xs font-mono whitespace-pre-wrap text-foreground">{output}</p>
+
+        {(streaming || showOutput || showError) && (
+          <div className="space-y-1.5">
+            {showError && (
+              <StatusBanner variant="error" message={result!.error || 'An error occurred'} dismissible={false} />
+            )}
+
+            {(streaming || showOutput) && (
+              <div className="rounded-lg border border-border/50 bg-muted/20 p-2.5">
+                <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-0.5">
+                  Output {streaming && <span className="text-primary animate-pulse">streaming...</span>}
+                </p>
+                <p className="text-[11px] font-mono whitespace-pre-wrap text-foreground">
+                  {displayText}
+                  {streaming && <span className="inline-block w-1 h-2.5 bg-primary/70 animate-pulse ml-0.5" />}
+                </p>
+              </div>
+            )}
+
+            {showOutput && (result!.model || result!.tokens_generated > 0) && (
+              <div className="flex gap-2.5 text-[9px] text-muted-foreground/60 tabular-nums">
+                {result!.model && <span>Model: {result!.model}</span>}
+                {result!.tokens_generated > 0 && <span>Tokens: {result!.tokens_generated}</span>}
+              </div>
+            )}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

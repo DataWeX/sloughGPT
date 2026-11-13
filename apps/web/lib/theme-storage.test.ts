@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { THEME_IDS, isStoredThemeId } from './theme-storage'
+import {
+  THEME_IDS,
+  isStoredThemeId,
+  PALETTE_IDS,
+  PALETTE_LABELS,
+  PALETTE_COLORS,
+  isStoredPaletteId,
+} from './theme-storage'
 
 describe('THEME_IDS', () => {
   it('contains 7 theme ids', () => {
@@ -27,5 +34,53 @@ describe('isStoredThemeId', () => {
 
   it('returns false for undefined', () => {
     expect(isStoredThemeId(undefined as unknown as string | null)).toBe(false)
+  })
+
+  it('returns true for every valid theme id', () => {
+    for (const id of THEME_IDS) {
+      expect(isStoredThemeId(id)).toBe(true)
+    }
+  })
+
+  it('has exactly 7 themes', () => {
+    expect(THEME_IDS).toHaveLength(7)
+  })
+})
+
+describe('PALETTE_IDS', () => {
+  it('contains 4 palette ids', () => {
+    expect(PALETTE_IDS).toEqual(['noir-violet', 'neural-precision', 'system-cobalt', 'rose-blue'])
+  })
+
+  it('has labels for every palette', () => {
+    for (const id of PALETTE_IDS) {
+      expect(PALETTE_LABELS[id]).toBeDefined()
+      expect(typeof PALETTE_LABELS[id]).toBe('string')
+    }
+  })
+
+  it('system-cobalt projects its label and swatch from the palette protocol', () => {
+    expect(PALETTE_LABELS['system-cobalt']).toBe('Operating System Blue')
+    expect(PALETTE_COLORS['system-cobalt']).toBe('#17599d')
+  })
+
+  it('rose-blue projects its label and swatch from the palette protocol', () => {
+    expect(PALETTE_LABELS['rose-blue']).toBe('Rose Blue')
+    expect(PALETTE_COLORS['rose-blue']).toBe('#5a5fc0')
+  })
+})
+
+describe('isStoredPaletteId', () => {
+  it('returns true for valid palette id', () => {
+    expect(isStoredPaletteId('noir-violet')).toBe(true)
+    expect(isStoredPaletteId('neural-precision')).toBe(true)
+    expect(isStoredPaletteId('system-cobalt')).toBe(true)
+    expect(isStoredPaletteId('rose-blue')).toBe(true)
+  })
+
+  it('returns false for invalid palette id', () => {
+    expect(isStoredPaletteId('solarized')).toBe(false)
+    expect(isStoredPaletteId('')).toBe(false)
+    expect(isStoredPaletteId(null)).toBe(false)
   })
 })

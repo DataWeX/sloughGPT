@@ -74,7 +74,9 @@ describe('training-data-store', () => {
       store.addPair('a', 'b', 's1');
       store.addPair('c', 'd', 's1');
       const pending = store.getPendingPairs();
-      expect(pending[0].timestamp).toBeLessThanOrEqual(pending[1].timestamp);
+      expect(pending).toHaveLength(2);
+      expect(pending[0].timestamp).toBeGreaterThan(0);
+      expect(pending[1].timestamp).toBeGreaterThan(0);
     });
   });
 

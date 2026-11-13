@@ -3,12 +3,12 @@
 LoRA Fine-tuning Example - Parameter-efficient training.
 
 YAML + CLI parity: enable LoRA in ``config.yaml`` (``lora.enabled``) or pass
-``python3 cli.py train --use-lora --lora-rank 8 …`` — see ``apps/cli/README.md``.
-Native ``step_*.pt`` checkpoints include char vocab maps; see ``docs/policies/CONTRIBUTING.md``
+``sloughgpt train --use-lora --lora-rank 8 …`` — see ``apps/cli/README.md``.
+Native trainer ``*.soul`` checkpoints include char vocab maps; see ``docs/policies/CONTRIBUTING.md``
 (*Checkpoint vocabulary*).
 """
 
-from domains.training.train_pipeline import SloughGPTTrainer
+from domain.training._internal.train_pipeline import SloughGPTTrainer
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
 
     # Create trainer with LoRA enabled
     trainer = SloughGPTTrainer(
-        data_path='datasets/shakespeare/input.txt',
+        data_path='data/shakespeare/input.txt',
         n_embed=256,
         n_layer=6,
         n_head=8,
@@ -43,8 +43,8 @@ def main():
     text = trainer.generate("Once upon a time", max_tokens=100)
     print(f"\nGenerated: {text[:200]}...")
 
-    trainer.save("models/lora_model.pt")
-    print("\nLoRA model saved!")
+    trainer.save("models/lora_model")
+    print("\nLoRA model saved as models/lora_model.soul!")
 
 
 if __name__ == "__main__":

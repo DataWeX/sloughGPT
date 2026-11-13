@@ -1,6 +1,7 @@
 'use client'
 
-import { type ReactNode, useState, useRef, useCallback, KeyboardEvent } from 'react'
+import type { KeyboardEvent } from 'react'
+import { type ReactNode, useState, useRef, useCallback } from 'react'
 import { cn } from '../../lib/cn'
 
 /* ── Chip ───────────────────────────────────────────────────── */
@@ -12,7 +13,7 @@ interface ChipProps {
   icon?: ReactNode
   removable?: boolean
   onRemove?: () => void
-  variant?: 'default' | 'outline' | 'solid'
+  variant?: 'default' | 'outline' | 'solid' | 'success' | 'warning' | 'error'
   size?: 'xs' | 'sm' | 'default'
   disabled?: boolean
   className?: string
@@ -32,18 +33,28 @@ export function Chip({
 }: ChipProps) {
   const Tag = onClick ? 'button' : 'span'
 
-  const baseStyles = 'inline-flex items-center gap-1 rounded-full font-medium transition-all duration-150 select-none'
+  const baseStyles =
+    'inline-flex items-center gap-1 rounded-full font-medium transition-all duration-150 select-none'
 
   const variantStyles = {
     default: selected
       ? 'bg-primary text-primary-foreground shadow-sm'
-      : 'bg-primary/10 text-primary hover:bg-primary/20',
+      : 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
     outline: selected
       ? 'border border-primary bg-primary/10 text-primary'
       : 'border border-border bg-transparent text-foreground hover:border-primary/40 hover:text-primary',
     solid: selected
       ? 'bg-primary text-primary-foreground'
       : 'bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+    success: selected
+      ? 'bg-success text-white shadow-sm'
+      : 'bg-success/15 text-success hover:bg-success/25',
+    warning: selected
+      ? 'bg-warning text-white shadow-sm'
+      : 'bg-warning/15 text-warning hover:bg-warning/25',
+    error: selected
+      ? 'bg-destructive text-white shadow-sm'
+      : 'bg-destructive/15 text-destructive hover:bg-destructive/25',
   }
 
   const sizeStyles = {
@@ -64,7 +75,7 @@ export function Chip({
         variantStyles[variant],
         sizeStyles[size],
         onClick && !disabled && 'cursor-pointer',
-        disabled && 'opacity-50 cursor-not-allowed',
+        disabled && 'opacity-40 cursor-not-allowed',
         className,
       )}
     >
@@ -80,12 +91,23 @@ export function Chip({
           }}
           className={cn(
             'ml-0.5 flex items-center justify-center rounded-full transition-opacity',
-            'hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-primary/50',
+            'hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             disabled && 'pointer-events-none',
           )}
         >
-          <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="h-2.5 w-2.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2.5}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       )}
@@ -105,7 +127,15 @@ interface ChipsProps {
   className?: string
 }
 
-export function Chips({ value, onChange, options, max, variant = 'default', size = 'default', className }: ChipsProps) {
+export function Chips({
+  value,
+  onChange,
+  options,
+  max,
+  variant = 'default',
+  size = 'default',
+  className,
+}: ChipsProps) {
   const toggle = (optValue: string) => {
     if (value.includes(optValue)) {
       onChange(value.filter((v) => v !== optValue))
@@ -125,7 +155,9 @@ export function Chips({ value, onChange, options, max, variant = 'default', size
           icon={opt.icon}
           variant={variant}
           size={size}
-          disabled={opt.disabled || (!value.includes(opt.value) && max !== undefined && value.length >= max)}
+          disabled={
+            opt.disabled || (!value.includes(opt.value) && max !== undefined && value.length >= max)
+          }
         />
       ))}
     </div>
@@ -161,7 +193,10 @@ export function TagInput({
     (raw: string) => {
       const trimmed = raw.trim().replace(/,$/, '')
       if (!trimmed) return
-      if (value.includes(trimmed)) { setInput(''); return }
+      if (value.includes(trimmed)) {
+        setInput('')
+        return
+      }
       if (maxTags !== undefined && value.length >= maxTags) return
       onChange([...value, trimmed])
       setInput('')
@@ -190,7 +225,7 @@ export function TagInput({
         'flex flex-wrap items-center gap-1.5 min-h-10 px-2 py-1.5 rounded-lg border border-input bg-background',
         'transition-[border-color,box-shadow] duration-200',
         'focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2 focus-within:border-primary/60',
-        disabled && 'cursor-not-allowed opacity-50',
+        disabled && 'cursor-not-allowed opacity-40',
         className,
       )}
       onClick={() => inputRef.current?.focus()}

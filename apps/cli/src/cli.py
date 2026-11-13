@@ -1,180 +1,242 @@
 """
-SloughGPT CLI — Click-powered entry point with Rich output.
+SloughGPT CLI — pure Python entry point with ANSI output.
 
 Commands organized into logical groups. All delegate to existing
 cmd_* functions in commands/ modules.
 """
 
-import sys
+import logging
 import os
+import signal
+import sys
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Dict
 
-import click
+# bash backgrounds (`cmd &`) start with SIGINT set to SIG_IGN, and CPython
+# honours the inherited disposition — Ctrl+C during CLI startup would be
+# silently dropped until a command installs its own handler (see the
+# entry-point registration in commands/dev.py). default_int_handler
+# restores standard KeyboardInterrupt semantics for the whole window, so
+# early interrupts are honoured and `except KeyboardInterrupt` cleanup
+# paths in commands keep firing.
+signal.signal(signal.SIGINT, signal.default_int_handler)
 
-# Ensure both CLI core and core-py domains are on the path
+# Ensure repo root (domain shims) and CLI core are on the path
 _CLI_DIR = Path(__file__).resolve().parent
-_CORE_PY_DIR = _CLI_DIR.parent.parent.parent / "packages" / "core-py"
-for _p in [_CLI_DIR, str(_CORE_PY_DIR)]:
-    if str(_p) not in sys.path:
-        sys.path.insert(0, str(_p))
+_ROOT_DIR = _CLI_DIR.parent.parent.parent
+for _sys_path in [_CLI_DIR, str(_ROOT_DIR)]:
+    if str(_sys_path) not in sys.path:
+        sys.path.insert(0, str(_sys_path))
 
-from core.version import format_version_display
-from core.printer import printer
+# ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
+from domain.logging import (  # noqa: E402
+    BridgeHandler,
+    CLILogger,
+    set_global,
+    setup_logging,  # noqa: E402
+)
 
-# ── Helpers ───────────────────────────────────────────────────────────
+setup_logging(enable_console=False, enable_output_buffer=False)
+log = CLILogger("slo")
+set_global(log)
+_bridge = BridgeHandler(log)
+logging.root.addHandler(_bridge)
 
+from core.framework import (
+    # constants
+    BOLD as _BOLD,
+)
+from core.framework import (
+    CYAN as _CYAN,
+)
+from core.framework import (
+    DIM as _DIM,
+)
 
-def _chat_repository_root() -> Path:
-    return Path(__file__).resolve().parent.parent.parent.parent
+# ── CLI framework (replaces Click) ───────────────────────────────────
+from core.framework import (
+    Option,
+    click,
+    echo,
+)
+from core.framework import (
+    c as _c,
+)
+from core.framework import (
+    p as _p,
+)
+from core.helpers import (
+    ns as _ns,
+)
+from core.slo_cli import _SUGGESTIONS
+from core.version import format_version_display  # noqa: E402
 
-
-def _chat_uvicorn_bind_host(client_host: str) -> str:
-    if client_host in ("localhost", "127.0.0.1"):
-        return "127.0.0.1"
-    return client_host
-
-
-def _chat_find_available_port(bind_host: str, start_port: int, max_attempts: int = 10) -> int:
-    from domains.shared import find_available_port
-    return find_available_port(host=bind_host, start_port=start_port, max_attempts=max_attempts)
-
-
-def _chat_wait_for_health(base_url: str, timeout_sec: float = 45.0) -> bool:
-    import time
-    import requests
-    deadline = time.monotonic() + timeout_sec
-    url = f"{base_url.rstrip('/')}/health"
-    while time.monotonic() < deadline:
-        try:
-            r = requests.get(url, timeout=2)
-            if r.status_code == 200:
-                return True
-        except Exception:
-            pass
-        time.sleep(0.25)
-    return False
-
-
-def _train_export_stem_slug(part: str, fallback: str) -> str:
-    import re
-    s = re.sub(r"[^a-zA-Z0-9._-]+", "-", (part or "").strip()).strip("-")
-    return s[:64] or fallback
-
-
-def _train_export_default_stem(model_name: str, dataset_label: str) -> str:
-    from datetime import datetime
-    stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    return f"{_train_export_stem_slug(model_name, 'model')}-{_train_export_stem_slug(dataset_label, 'data')}-{stamp}"
-
-
-def _local_soul_candidate_paths(models_dir: Path, *, default_name: str = "sloughgpt.soul") -> list[Path]:
-    default = models_dir / default_name
-    out: list[Path] = []
-    if default.exists():
-        out.append(default)
-    if models_dir.is_dir():
-        others = sorted(
-            (p for p in models_dir.glob("*.soul") if p != default),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        out.extend(others)
-    return out
-
-
-def _apply_optimized_train_preset(config, args) -> bool:
-    if not getattr(args, "optimized", False):
-        return False
-    config.training.use_mixed_precision = True
-    config.training.mixed_precision_dtype = "fp16"
-    return True
-
-
-# ── Namespace marshaller ──────────────────────────────────────────────
-
-
-def _ns(**kwargs) -> SimpleNamespace:
-    """Build a SimpleNamespace from keyword arguments."""
-    return SimpleNamespace(**kwargs)
-
-
-# ── Docker helpers ────────────────────────────────────────────────────
-
-
-def _docker_compose_file():
-    return _chat_repository_root() / "infra" / "docker" / "docker-compose.yml"
-
-
-def _docker_action(action: str, a):
-    import subprocess
-    compose = _docker_compose_file()
-    if not compose.is_file():
-        printer.error(f"Compose file not found: {compose}")
-        return
-
-    if action == "start":
-        profile = []
-        if getattr(a, "dev", False):
-            profile = ["--profile", "dev"]
-        elif getattr(a, "gpu", False):
-            profile = ["--profile", "gpu"]
-        printer.step("Starting Docker services...")
-        subprocess.run(["docker", "compose", "-f", str(compose), "up", "-d", *profile])
-        printer.success("Services started")
-        subprocess.run(["docker", "compose", "-f", str(compose), "ps"])
-
-    elif action == "stop":
-        printer.step("Stopping Docker services...")
-        subprocess.run(["docker", "compose", "-f", str(compose), "down"])
-        printer.success("Services stopped")
-
-    elif action == "status":
-        subprocess.run(["docker", "compose", "-f", str(compose), "ps"])
-
-    elif action == "logs":
-        cmd = ["docker", "compose", "-f", str(compose), "logs", "-f"]
-        if getattr(a, "service", None):
-            cmd.append(a.service)
-        subprocess.run(cmd)
-
-    elif action == "build":
-        cmd = ["docker", "compose", "-f", str(compose), "build"]
-        if getattr(a, "no_cache", False):
-            cmd.append("--no-cache")
-        printer.step("Building Docker images...")
-        subprocess.run(cmd)
-        printer.success("Build complete")
-
-    elif action == "shell":
-        service = getattr(a, "service", "api")
-        subprocess.run(["docker", "compose", "-f", str(compose), "exec", service, "/bin/bash"])
+_TTY = sys.stdout.isatty()  # re-export for backward compat
 
 
 # ── Top-level CLI ─────────────────────────────────────────────────────
 
 
 @click.group(invoke_without_command=True)
+@click.version_option(package_name="sloughgpt", prog_name="sloughgpt")
 @click.option("--host", default="localhost", help="API hostname", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("-c", "--config", default="config.yaml", help="Config path", show_default=True)
+@click.option("--json", "output_json", is_flag=True, help="JSON output for commands")
+@click.option("--no-color", is_flag=True, help="Disable ANSI color output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress non-essential output")
+@click.option("--timeout", default=10, type=int, help="HTTP timeout in seconds", show_default=True)
 @click.pass_context
-def cli(ctx, host: str, port: int, config: str):
+def cli(
+    ctx,
+    host: str,
+    port: int,
+    config: str,
+    output_json: bool,
+    no_color: bool,
+    quiet: bool,
+    timeout: int,
+):
     """SloughGPT CLI — train, chat, serve, and manage models."""
     ctx.ensure_object(dict)
     ctx.obj["host"] = host
     ctx.obj["port"] = port
     ctx.obj["config"] = config
+    ctx.obj["json"] = output_json
+    ctx.obj["no_color"] = no_color
+    ctx.obj["quiet"] = quiet
+    ctx.obj["timeout"] = timeout
+
+    if no_color:
+        os.environ["NO_COLOR"] = "1"
+        os.environ["SLO_NO_COLOR"] = "1"
 
     if ctx.invoked_subcommand is None:
-        version_line = f"SloughGPT CLI — {format_version_display()}"
-        click.echo()
-        click.echo(f"  {version_line}")
-        click.echo(f"  {'─' * len(version_line)}")
-        click.echo()
-        click.echo(ctx.get_help())
-        click.echo()
+        _show_welcome_banner()
+
+
+def _show_welcome_banner():
+    """Show a polished welcome banner with version and quick start."""
+    import sys
+
+    # Get version
+    try:
+        version = format_version_display()
+    except Exception:
+        version = "dev"
+
+    # ANSI helpers
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+    _MAGENTA = "\033[35m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    # ── ASCII art header ──────────────────────────────────
+    _line()
+    _line(f"  {_c('  ┌──────────────────────────────────────┐', _DIM)}")
+    _line(
+        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('   ████████╗██╗     ██████╗            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('   ╚══██╔══╝██║     ██╔═══██╗           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ███████╗╚██████╔╝           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ╚═╝   ╚══════╝ ╚═════╝            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(f"  {_c('  └──────────────────────────────────────┘', _DIM)}")
+    _line()
+    _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
+    _line(f"  {_c('  ─────────────────────────────────────────', _DIM)}")
+    _line()
+
+    # Quick start commands
+    _line(f"  {_c('Quick Start:', _BOLD)}")
+    _line(f"    {_c('sloughgpt start', _CYAN)}        Getting started guide")
+    _line(f"    {_c('sloughgpt chat', _CYAN)}         Start chatting with AI")
+    _line(f"    {_c('sloughgpt model list', _CYAN)}   List available models")
+    _line(f"    {_c('sloughgpt shell', _CYAN)}        Interactive shell")
+    _line()
+
+    # Server status
+    _show_server_status()
+
+    _line()
+    _line(f"  {_c("Run 'sloughgpt --help' to see all commands", _DIM)}")
+    _line()
+
+
+def _show_server_status():
+    """Check and display server status."""
+    import sys
+
+    import requests
+
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    _line(f"  {_c('Server Status:', _BOLD)}")
+
+    try:
+        response = requests.get("http://localhost:8000/health", timeout=2)
+        if response.status_code == 200:
+            raw = response.json()
+            data = raw.get("data", raw)
+
+            if data.get("model_loaded"):
+                model = data.get("model_type", "unknown")
+                _line(f"    {_c('ok', _GREEN)} Server running (model: {model})")
+            else:
+                _line(f"    {_c('warn', _YELLOW)} Server running (no model loaded)")
+        else:
+            _line(f"    {_c('err', _RED)} Server unreachable")
+    except requests.exceptions.ConnectionError:
+        _line(f"    {_c('·', _DIM)} Server not running")
+    except Exception:
+        _line(f"    {_c('·', _DIM)} Server status unknown")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -184,9 +246,8 @@ def cli(ctx, host: str, port: int, config: str):
 
 @cli.command(help="Welcome guide with next steps")
 def start():
-    from commands import dev
-    root = _chat_repository_root()
-    click.echo(f"""
+    root = os.getcwd()
+    echo(f"""
 SloughGPT — getting started
 ===========================
 
@@ -194,7 +255,7 @@ SloughGPT — getting started
        python3 -m pip install -e ".[dev]"
 
   2. Verify environment:
-       sloughgpt system doctor
+       sloughgpt system mole
 
   3. First training run:
        sloughgpt train quick
@@ -216,24 +277,97 @@ Version: {format_version_display()}
 """)
 
 
-@cli.command(help="Launch interactive terminal UI")
+from commands.logs import logs as _logs_cmd
+from commands.logs import monitor as _monitor_cmd
+
+
+# Wrap Click commands so our framework can dispatch to them
+class _ClickCommandWrapper:
+    """Wraps a Click command to work with our inline framework."""
+
+    def __init__(self, click_cmd):
+        self.click_cmd = click_cmd
+        self.name = click_cmd.name
+        self.help = click_cmd.help or ""
+        # Propagate click's hidden flag so migration aliases (e.g. `monitor`,
+        # merged into `logs --dashboard` — card 8182563a) dispatch but never
+        # appear in help listings.
+        self.hidden = getattr(click_cmd, "hidden", False)
+        self.options = []
+        self.arguments = []
+        # Extract params from Click command for display
+        for param in click_cmd.params:
+            if hasattr(param, "opts"):
+                names = param.opts
+                self.options.append(
+                    Option(
+                        names,
+                        help=param.help or "",
+                        default=param.default,
+                        is_flag=param.is_flag if hasattr(param, "is_flag") else False,
+                        type=type(param.type).__name__ if hasattr(param.type, "__name__") else str,
+                    )
+                )
+
+    def __call__(self, **kwargs):
+        # Build args list from kwargs
+        args = []
+        for k, v in kwargs.items():
+            if v is None:
+                continue
+            if isinstance(v, bool):
+                if v:
+                    args.append(f"--{k.replace('_', '-')}")
+            else:
+                args.append(f"--{k.replace('_', '-')}={v}")
+        self.click_cmd.main(args=args, standalone_mode=False)
+
+
+cli.add_command(_ClickCommandWrapper(_logs_cmd), "logs")
+cli.add_command(_ClickCommandWrapper(_monitor_cmd), "monitor")
+
+
+@cli.command(help="Launch interactive terminal UI (split-pane curses)")
 @click.pass_context
 def tui(ctx):
-    from apps.tui.interactive import main as tui_main
-    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"])
-    tui_main(["--host", args.host, "--port", str(args.port)])
+    """Launch the split-pane curses TUI."""
+    ctx.invoke(shell, command=None, tui=True, line=False)
 
 
 @cli.command(help="Launch interactive shell REPL")
 @click.option("--command", "-c", help="Run a single command and exit")
+@click.option(
+    "--tui/--no-tui", default=None, is_flag=True, help="Curses TUI mode (default when TTY)"
+)
+@click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
+@click.option(
+    "--remote",
+    is_flag=True,
+    help="Talk to an API server over HTTP instead of the in-process core",
+)
 @click.pass_context
-def shell(ctx, command):
-    """Launch the SloughGPT interactive shell REPL."""
-    from domains.shell.repl import ShellREPL
-    from domains.shell.kernel import DaitRuntime
+def shell(ctx, command, tui, line, remote):
+    """Launch the SloughGPT interactive shell REPL.
 
+    By default the shell runs the domain core in-process — no API server
+    needed (card ad4f5ec2). Pass ``--remote`` (or set ``MAN_API_URL``) to
+    dispatch every command to a running API server over HTTP instead.
+    """
+    from domain.shell import DaitRuntime, ShellREPL
+    from domain.shell._internal.config import set_remote_mode
+
+    if remote:
+        set_remote_mode(True)
     os = DaitRuntime()
-    repl = ShellREPL(os)
+    # Default to TUI when TTY, line mode when piped or --line
+    use_tui = True
+    if line:
+        use_tui = False
+    elif tui is not None:
+        use_tui = tui
+    elif not sys.stdout.isatty():
+        use_tui = False
+    repl = ShellREPL(os, use_tui=True if use_tui else None)
     if command:
         commands, is_bg, should_time = repl._parse_pipeline(command)
         if is_bg:
@@ -244,7 +378,7 @@ def shell(ctx, command):
             expanded = repl._expand_alias(command)
             out = repl._execute_single(expanded, "")
             if out:
-                click.echo(out, nl=False)
+                echo(out, nl=False)
     else:
         repl.run()
 
@@ -262,11 +396,60 @@ def completion(shell):
     """
     _shell = shell.lower()
     if _shell == "bash":
-        click.echo(f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace("{{COMPLETE}}", "_COMPLETE").replace("{{prog}}", "sloughgpt"))
+        echo(
+            f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace(
+                "{{COMPLETE}}", "_COMPLETE"
+            ).replace("{{prog}}", "sloughgpt")
+        )
     elif _shell == "zsh":
-        click.echo(f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace("{{COMPLETE}}", "_COMPLETE").replace("{{prog}}", "sloughgpt"))
+        echo(
+            f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace(
+                "{{COMPLETE}}", "_COMPLETE"
+            ).replace("{{prog}}", "sloughgpt")
+        )
     elif _shell == "fish":
-        click.echo(f"source (_{{COMPLETE}}={_shell}_complete sloughgpt | psub)")
+        echo(f"source (_{{COMPLETE}}={_shell}_complete sloughgpt | psub)")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Gates — static invariant checks as a product feature (card 20261112_060632)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Run the static gates (command parity, domain baseline, router manifest)")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Also fail on known (baselined) findings — debt the baseline tolerates",
+)
+def gates(strict):
+    """Report on the repo's static invariants without running the test suite.
+
+    \b
+    Examples:
+      sloughgpt gates             # fail only on new drift
+      sloughgpt gates --strict    # also fail on baselined known gaps
+    """
+    from domain.gates import run_gates
+
+    reports = run_gates()
+    failed = False
+    for report in reports:
+        mark = "ok" if report.ok else "FAIL"
+        echo(f"  {report.name}: {mark}" + (f" ({len(report.known)} known)" if report.known else ""))
+        for finding in report.findings:
+            echo(f"    - {finding}")
+        if strict:
+            for known in report.known:
+                echo(f"    ~ {known}")
+        if not report.ok:
+            failed = True
+        elif strict and report.known:
+            failed = True
+    if failed:
+        echo("gates: FAILED" + (" (--strict)" if strict else ""))
+        sys.exit(1)
+    echo("gates: all green")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -274,20 +457,21 @@ def completion(shell):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@cli.command(help="Interactive chat with API")
+@cli.command(help="Interactive chat")
 @click.option("--no-serve", is_flag=True, help="Don't auto-start server")
-@click.option("--auto-model", default=None, help="Auto-load model")
-@click.option("--load-mode", type=click.Choice(["local", "api"]), default="local")
-@click.option("--device", default="auto", help="Device hint")
-@click.option("--max-tokens", default=100, type=int, help="Max tokens per reply")
-@click.option("--temperature", default=0.8, type=float, help="Temperature")
 @click.pass_context
-def chat(ctx, no_serve, auto_model, load_mode, device, max_tokens, temperature):
+def chat(ctx, no_serve):
     from commands.chat import cmd_chat
+
     args = _ns(
-        no_serve=no_serve, auto_model=auto_model,
-        load_mode=load_mode, device=device, max_tokens=max_tokens,
-        temperature=temperature, host=ctx.obj["host"], port=ctx.obj["port"],
+        no_serve=no_serve,
+        auto_model=None,
+        load_mode="local",
+        device="auto",
+        max_tokens=64,
+        temperature=0.7,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
     )
     cmd_chat(args)
 
@@ -300,9 +484,14 @@ def chat(ctx, no_serve, auto_model, load_mode, device, max_tokens, temperature):
 @click.pass_context
 def generate(ctx, prompt, model, max_tokens, temperature):
     from commands.chat import cmd_generate
+
     args = _ns(
-        prompt=prompt, model=model, max_tokens=max_tokens,
-        temperature=temperature, host=ctx.obj["host"], port=ctx.obj["port"],
+        prompt=prompt,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
     )
     cmd_generate(args)
 
@@ -311,25 +500,46 @@ def generate(ctx, prompt, model, max_tokens, temperature):
 @click.option("--model", default=None, help="Model path")
 @click.option("--web-port", default=3000, type=int, help="Web dev server port")
 @click.option("--watch-web", is_flag=True, help="Watch web files for changes")
+@click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
 @click.pass_context
-def dev(ctx, model, web_port, watch_web):
+def dev(ctx, model, web_port, watch_web, auto_download):
     from commands.dev import cmd_dev
+
     args = _ns(
-        model=model, web_port=web_port, watch_web=watch_web,
-        port=ctx.obj["port"], host=ctx.obj["host"],
+        model=model,
+        web_port=web_port,
+        watch_web=watch_web,
+        port=ctx.obj["port"],
+        host=ctx.obj["host"],
+        auto_download=auto_download,
     )
     cmd_dev(args)
 
 
-@cli.command(help="Start HTTP inference server (with --web: full FastAPI + frontend)")
+@cli.command(
+    help="Start HTTP inference server (with --web: full FastAPI + frontend, --mobile: API + React Native)"
+)
 @click.option("--host", default="localhost", help="Bind address", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
-@click.option("--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and open browser")
+@click.option(
+    "--web", is_flag=True, help="Start full FastAPI server + Vite web UI and opens browser"
+)
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
-def serve(host, port, model, web, web_port):
+@click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
+@click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
+def serve(host, port, model, web, mobile, web_port, auto_download):
     from commands.dev import cmd_serve
-    args = _ns(host=host, port=port, model=model, web=web, web_port=web_port)
+
+    args = _ns(
+        host=host,
+        port=port,
+        model=model,
+        web=web,
+        mobile=mobile,
+        web_port=web_port,
+        auto_download=auto_download,
+    )
     cmd_serve(args)
 
 
@@ -340,860 +550,593 @@ def serve(host, port, model, web, web_port):
 @click.pass_context
 def hf_serve(ctx, model_name, mode, device):
     from commands.dev import cmd_hf_serve
+
     args = _ns(
-        model=model_name, mode=mode, device=device,
-        host=ctx.obj["host"], port=ctx.obj["port"],
+        model=model_name,
+        mode=mode,
+        device=device,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
     )
     cmd_hf_serve(args)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# model  — list, info, download, export, benchmark, compare
+# model — list, inspect, download, export, and benchmark models
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.model import register as _register_model
 
-@cli.group(help="List, inspect, download, export, and benchmark models")
-@click.pass_context
-def model(ctx):
-    pass
-
-
-@model.command("list", help="List available models")
-@click.pass_context
-def model_list(ctx):
-    from commands.models import cmd_models
-    cmd_models(_ns())
-
-
-@model.command("info", help="Show checkpoint info")
-@click.argument("checkpoint", default="models/sloughgpt.pt")
-def model_info(checkpoint):
-    from commands.models import _cmd_models_info
-    _cmd_models_info(_ns(model=checkpoint))
-
-
-@model.command("download", help="Download model from HuggingFace")
-@click.argument("model_id")
-def model_download(model_id):
-    from commands.models import _cmd_models_download
-    _cmd_models_download(_ns(model_id=model_id))
-
-
-@model.command("export", help="Export model to different formats")
-@click.argument("checkpoint", default="models/sloughgpt.pt")
-@click.option("--output", "-o", help="Output path")
-@click.option("--format", "-f", "fmt",
-    type=click.Choice(["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m",
-                       "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "torch",
-                       "torchscript", "sou", "all"]),
-    default="safetensors", help="Export format")
-@click.option("--quantize", type=click.Choice(["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"]))
-@click.option("--seq-len", default=128, type=int, help="Sequence length for ONNX")
-@click.option("--opset", default=17, type=int, help="ONNX opset")
-@click.option("--ctx", "n_ctx", default=2048, type=int, help="Context length for GGUF")
-@click.option("--soul-name", default=None, help="Slo name")
-@click.option("--metadata", multiple=True, help="Metadata KEY=VALUE")
-def model_export(checkpoint, output, fmt, quantize, seq_len, opset, n_ctx, soul_name, metadata):
-    from commands.models import cmd_export_cli
-    args = _ns(
-        model=checkpoint, output=output, format=fmt, quantization=quantize,
-        seq_len=seq_len, opset=opset, n_ctx=n_ctx, soul_name=soul_name,
-        metadata=list(metadata) or None,
-    )
-    cmd_export_cli(args)
-
-
-@model.command("benchmark", help="Run performance benchmarks")
-@click.option("--checkpoint", "-m", default="gpt2", help="Model to benchmark")
-@click.option("--device", "-d", type=click.Choice(["auto", "cpu", "cuda", "mps"]), default="auto")
-@click.option("--test", "-t", type=click.Choice(["all", "latency", "throughput"]), default="all")
-@click.option("--runs", "-r", default=10, type=int, help="Number of runs")
-@click.option("--tokens", "-k", default=50, type=int, help="Max new tokens")
-@click.option("--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt")
-def model_benchmark(checkpoint, device, test, runs, tokens, prompt):
-    from commands.models import cmd_benchmark
-    args = _ns(model=checkpoint, device=device, test=test, runs=runs, tokens=tokens, prompt=prompt)
-    cmd_benchmark(args)
-
-
-@model.command("compare", help="Compare models or benchmarks")
-def model_compare():
-    from commands.models import _cmd_models_compare
-    _cmd_models_compare(_ns())
-
+_register_model(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# dataset  — list, stats, search, import, export, validate
+# dataset — list, import, export, and validate datasets
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.dataset import register as _register_dataset
 
-@cli.group(help="List, import, export, and validate datasets")
-@click.pass_context
-def dataset(ctx):
-    pass
-
-
-@dataset.command("list", help="List available datasets")
-def dataset_list():
-    from commands.data import cmd_datasets
-    cmd_datasets(_ns())
-
-
-@dataset.command("stats", help="Show dataset statistics")
-@click.argument("name")
-def dataset_stats(name):
-    from commands.data import cmd_dataset_stats
-    args = _ns(name=name)
-    cmd_dataset_stats(args)
-
-
-@dataset.command("search", help="Search online datasets")
-@click.argument("query")
-@click.option("--limit", "-n", default=10, type=int, help="Max results")
-@click.option("--source", type=click.Choice(["hf", "github"]), default="hf")
-def dataset_search(query, limit, source):
-    from commands.data import cmd_dataset_search
-    args = _ns(query=query, limit=limit, source=source)
-    cmd_dataset_search(args)
-
-
-@dataset.command("import", help="Import dataset from various sources")
-@click.argument("source", type=click.Choice(["github", "hf", "url", "local"]))
-@click.argument("identifier")
-@click.argument("name", required=False)
-def dataset_import(source, identifier, name):
-    from commands.data import cmd_dataset_import
-    args = _ns(**({"url": identifier} if source in ("github", "url") else {"dataset_id": identifier}), name=name)
-    cmd_dataset_import(args, source)
-
-
-@dataset.command("export", help="Export dataset to zip")
-@click.argument("name")
-@click.option("--output", "-o", help="Output zip file")
-def dataset_export(name, output):
-    from commands.data import cmd_dataset_export
-    args = _ns(name=name, output=output)
-    cmd_dataset_export(args)
-
-
-@dataset.command("validate", help="Validate dataset file")
-@click.argument("path")
-def dataset_validate(path):
-    from commands.data import cmd_data_tool
-    cmd_data_tool(_ns(path=path), "validate")
-
-
-@dataset.command("info", help="Show file or directory statistics")
-@click.argument("path")
-def dataset_info(path):
-    from commands.data import cmd_data_tool
-    cmd_data_tool(_ns(path=path), "stats")
-
+_register_dataset(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# train  — start, quick, auto, self, eval, monitor, rlhf, demo, cloud
+# train — training, evaluation, and monitoring
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.train import register as _register_train
 
-@cli.group(help="Train, evaluate, and monitor models")
-@click.pass_context
-def train(ctx):
-    pass
-
-
-@train.command("start", help="Full training pipeline")
-@click.option("--dataset", default="shakespeare", help="Dataset name")
-@click.option("--epochs", default=3, type=int, help="Training epochs")
-@click.option("--batch-size", default=32, type=int, help="Batch size")
-@click.option("--lr", default=0.01, type=float, help="Learning rate")
-@click.option("--api", is_flag=True, help="Use API training")
-@click.option("--resume", default=None, help="Resume from checkpoint")
-@click.option("--resume-latest", is_flag=True, help="Resume latest")
-@click.option("--save-stem", default=None, help="Output filename stem")
-@click.option("--optimized", is_flag=True, help="Apply fp16 optimizations")
-@click.pass_context
-def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest, save_stem, optimized):
-    from commands.train import cmd_train
-    kwargs = dict(
-        dataset=dataset, epochs=epochs, batch_size=batch_size, lr=lr,
-        api=api, resume=resume, resume_latest=resume_latest,
-        save_stem=save_stem, optimized=optimized,
-        host=ctx.obj["host"], port=ctx.obj["port"], config=ctx.obj["config"],
-    )
-    cmd_train(_ns(**kwargs))
-
-
-@train.command("quick", help="Smoke test: train briefly and generate")
-@click.option("--dataset", "-d", default="datasets/shakespeare/input.txt", help="Corpus file")
-@click.option("--prompt", default="The king", help="Generation prompt")
-@click.option("--epochs", default=1, type=int, help="Training epochs")
-@click.option("--steps", default=100, type=int, help="Max steps")
-@click.option("--embed", default=128, type=int, help="Embedding size")
-@click.option("--layers", default=4, type=int, help="Transformer layers")
-@click.option("--heads", default=4, type=int, help="Attention heads")
-@click.option("--block", default=128, type=int, help="Context length")
-@click.option("--batch", default=16, type=int, help="Batch size")
-@click.option("--lr", default=1e-3, type=float, help="Learning rate")
-@click.option("--max-tokens", default=100, type=int, help="Generated tokens")
-@click.option("--temperature", default=0.8, type=float, help="Temperature")
-@click.option("--output", default="models/quick.pt", help="Output path")
-@click.option("--no-optimize", is_flag=True, help="Disable optimizations")
-@click.option("--soul-name", default="SloughGPT-Quick", help="Slo name")
-@click.option("--datasets", help="Comma-separated datasets (overrides --dataset)")
-@click.option("--ratios", help="Comma-separated dataset ratios")
-@click.option("--preset", type=click.Choice(["tiny", "small", "medium", "large"]), help="Model preset")
-@click.pass_context
-def train_quick(ctx, **kwargs):
-    from commands.train import cmd_quick
-    kwargs["host"] = ctx.obj["host"]
-    kwargs["port"] = ctx.obj["port"]
-    cmd_quick(_ns(**kwargs))
-
-
-@train.command("auto", help="Control auto-training via API")
-@click.argument("action", type=click.Choice(["start", "stop", "status"]))
-@click.option("--teacher", default="gpt2", help="Teacher model")
-@click.option("--temperature", default=0.8, type=float, help="Temperature")
-@click.option("--steps", default=1000, type=int, help="Max steps")
-@click.pass_context
-def train_auto(ctx, action, teacher, temperature, steps):
-    from commands.train import _cmd_autotrain
-    args = _ns(
-        action=action, teacher=teacher, temperature=temperature,
-        steps=steps, host=ctx.obj["host"], port=ctx.obj["port"],
-    )
-    _cmd_autotrain(args)
-
-
-@train.command(name="self", help="Model talks to itself")
-@click.option("--steps", default=1000, type=int, help="Training steps")
-@click.option("--model", default="gpt2", help="Teacher model")
-@click.option("--temperature", default=0.8, type=float, help="Temperature")
-@click.option("--max-tokens", default=50, type=int, help="Max tokens per generation")
-@click.option("--seed", default="Hello", help="Starting text")
-@click.option("--forever", is_flag=True, help="Run until Ctrl+C")
-def train_self(steps, model, temperature, max_tokens, seed, forever):
-    from commands.train import _cmd_self_train
-    args = _ns(
-        steps=steps, model=model, temperature=temperature,
-        max_tokens=max_tokens, seed=seed, forever=forever,
-    )
-    _cmd_self_train(args)
-
-
-@train.command("eval", help="Evaluate model perplexity")
-@click.option("--checkpoint", default="models/sloughgpt.pt", help="Checkpoint path")
-@click.option("--data", default="datasets/shakespeare/input.txt", help="Eval text")
-@click.option("--device", default="cpu", help="Device for scoring")
-@click.option("--no-strict", is_flag=True, help="Allow partial load")
-@click.option("--benchmark", is_flag=True, help="Run benchmark")
-def train_eval(checkpoint, data, device, no_strict, benchmark):
-    from commands.train import cmd_eval
-    args = _ns(checkpoint=checkpoint, data=data, device=device, no_strict=no_strict, benchmark=benchmark)
-    cmd_eval(args)
-
-
-@train.command("monitor", help="Monitor training jobs")
-@click.option("--watch", is_flag=True, help="Continuous watch")
-@click.option("--interval", default=5, type=int, help="Refresh interval (s)")
-@click.pass_context
-def train_monitor(ctx, watch, interval):
-    from commands.train import _cmd_monitor
-    args = _ns(watch=watch, interval=interval, host=ctx.obj["host"], port=ctx.obj["port"])
-    _cmd_monitor(args)
-
-
-@train.command("rlhf", help="Run RLHF demo")
-@click.option("--steps", default=20, type=int, help="PPO steps")
-def train_rlhf(steps):
-    from commands.train import cmd_rlhf
-    args = _ns(steps=steps)
-    cmd_rlhf(args)
-
-
-@train.command("demo", help="Run system demos (RAG, KG, EWC)")
-@click.option("--component", type=click.Choice(["all", "rag", "kg", "ewc", "inference"]), default="all")
-def train_demo(component):
-    from commands.train import cmd_demo
-    args = _ns(component=component)
-    cmd_demo(args)
-
-
-@train.command("cloud", help="Setup Pinecone vector store")
-@click.option("--api-key", help="Pinecone API key")
-@click.option("--index", default="sloughgpt", help="Index name")
-@click.option("--dimension", default=768, type=int, help="Vector dimension")
-@click.option("--environment", default="us-east-1", help="Pinecone environment")
-def train_cloud(api_key, index, dimension, environment):
-    from commands.train import cmd_cloud_setup
-    args = _ns(api_key=api_key, index=index, dimension=dimension, environment=environment)
-    cmd_cloud_setup(args)
-
-
-@train.command("embed", help="Train a text embedder on your corpus (no downloads)")
-@click.option("--corpus", default=None, help="Text file or directory to train on (default: knowledge + chat history)")
-@click.option("--epochs", default=20, type=int, help="Training epochs")
-@click.option("--lr", default=3e-4, type=float, help="Learning rate")
-@click.option("--batch-size", default=32, type=int, help="Batch size")
-@click.option("--embed-dim", default=384, type=int, help="Embedding dimension")
-@click.option("--vocab-size", default=4096, type=int, help="Max vocabulary size")
-@click.option("--output", default=None, help="Output checkpoint path")
-@click.option("--test", default=None, help="Test: embed a query string and print top matches")
-def train_embed(corpus, epochs, lr, batch_size, embed_dim, vocab_size, output, test):
-    """Train a text embedder on your own data using contrastive learning.
-
-    \b
-    Examples:
-      sloughgpt train embed                          # train on knowledge + chat history
-      sloughgpt train embed --corpus datasets/       # train on a directory of text files
-      sloughgpt train embed --corpus my_corpus.txt   # train on a single file
-      sloughgpt train embed --test "neural networks" # embed a test query
-    """
-    from commands.train import cmd_train_embed
-    args = _ns(
-        corpus=corpus, epochs=epochs, lr=lr, batch_size=batch_size,
-        embed_dim=embed_dim, vocab_size=vocab_size, output=output, test=test,
-    )
-    cmd_train_embed(args)
-
+_register_train(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# distill — knowledge distillation from teacher → student
+# token-tree — train, encode, decode, and query a tree tokenizer
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.token_tree import register as _register_token_tree
 
-@train.command("distill", help="Distill a teacher model into a smaller student")
-@click.argument("text_source", required=False, default=None)
-@click.option("--file", "-f", default=None, help="Text file to train on")
-@click.option("--epochs", default=10, type=int, help="Training epochs")
-@click.option("--lr", default=3e-4, type=float, help="Learning rate")
-@click.option("--batch-size", default=8, type=int, help="Batch size")
-@click.option("--n-embed", default=128, type=int, help="Student embedding size")
-@click.option("--n-layer", default=4, type=int, help="Student layers")
-@click.option("--n-head", default=4, type=int, help="Student attention heads")
-@click.option("--block-size", default=128, type=int, help="Context length")
-@click.option("--temperature", default=4.0, type=float, help="Distillation temperature")
-@click.option("--dropout", default=0.1, type=float, help="Dropout rate")
-@click.option("--checkpoint-dir", default="models/auto-training", help="Save directory")
-@click.option("--log-interval", default=10, type=int, help="Log every N steps")
-@click.option("--preset", type=click.Choice(["tiny", "small", "medium"]), help="Architecture preset")
-@click.option("--api", is_flag=True, help="Use server API instead of local")
-@click.option("--json", "json_output", is_flag=True, help="JSON output")
-@click.option("--resume", default=None, help="Resume from checkpoint path (.soul file)")
-@click.pass_context
-def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_layer,
-                  n_head, block_size, temperature, dropout, checkpoint_dir,
-                  log_interval, preset, api, json_output, resume):
-    """Distill GPT-2 into a smaller, faster student model.
-
-    \b
-    Examples:
-      sloughgpt train distill datasets/shakespeare/input.txt
-      sloughgpt train distill -f my_book.txt --epochs 20 --preset small
-      sloughgpt train distill datasets/shakespeare/input.txt --api
-      sloughgpt train distill datasets/shakespeare/input.txt --n-embed 64 --n-layer 2
-      sloughgpt train distill datasets/shakespeare/input.txt --resume models/auto-training/checkpoint.soul
-    """
-    from commands.train import cmd_distill
-    args = _ns(
-        text_source=text_source, file=file, epochs=epochs, lr=lr,
-        batch_size=batch_size, n_embed=n_embed, n_layer=n_layer,
-        n_head=n_head, block_size=block_size, temperature=temperature,
-        dropout=dropout, checkpoint_dir=checkpoint_dir,
-        log_interval=log_interval, preset=preset, api=api,
-        json_output=json_output, host=ctx.obj["host"], port=ctx.obj["port"],
-        resume=resume,
-    )
-    cmd_distill(args)
-
+_register_token_tree(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
 # checkpoint — list, load, delete training checkpoints
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@cli.group(help="List, load, and delete training checkpoints")
-def checkpoint():
-    pass
+# ═══════════════════════════════════════════════════════════════════════
+# checkpoint — training checkpoint management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.checkpoint import register as _register_checkpoint
+
+_register_checkpoint(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# knowledge — semantic knowledge operations
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.knowledge import register as _register_knowledge
+
+_register_knowledge(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# experiment — ML experiment tracking
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.experiment import register as _register_experiment
+
+_register_experiment(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# error — error monitoring
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.error import register as _register_error
+
+_register_error(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# logger — live error catch for the agent fix flow
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.logger import register as _register_logger
+
+_register_logger(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# memory — auto-memory layer management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.memory import register as _register_memory
+
+_register_memory(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# personality — soul personality files
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.personality import register as _register_personality
+
+_register_personality(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# adapter — per-user LoRA adapter management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.adapter import register as _register_adapter
+
+_register_adapter(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# feedback — export and prepare feedback data
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.feedback import register as _register_feedback
+
+_register_feedback(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# agent — manage and execute AI agents
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.agent import register as _register_agent
+
+_register_agent(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# session — chat session management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.session import register as _register_session
+
+_register_session(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# tokenizer — text tokenization
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.tokenizer import register as _register_tokenizer
+
+_register_tokenizer(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# vector — vector store for semantic search
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.vector import register as _register_vector
+
+_register_vector(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# system — system information and health
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.system import register as _register_system
+
+_register_system(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# docker — container management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.docker import register as _register_docker
+
+_register_docker(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# simulate — boot kernel, load model, run inference, dump metrics
+# ═══════════════════════════════════════════════════════════════════════
 
 
-@checkpoint.command("list", help="List all training checkpoints")
-@click.option("--sort", type=click.Choice(["date", "size", "name"]), default="date", help="Sort order")
-@click.option("--json", "json_output", is_flag=True, help="JSON output")
+@cli.command(help="Boot kernel, load model, run inference — hardware simulator")
+@click.option("--model", default="mock", help="Model name to load (default: mock)")
+@click.option("--prompt", default="Hello, world", help="Prompt for generation")
+@click.option("--max-tokens", default=20, type=int, help="Max tokens to generate")
+@click.option("--iterations", default=1, type=int, help="Number of inference iterations")
+@click.option("--layers", default=2, type=int, help="Number of transformer layers (mock model)")
+@click.option("--d-model", default=64, type=int, help="Model dimension (mock model)")
+@click.option("--vocab-size", default=256, type=int, help="Vocabulary size (mock model)")
+@click.option("--profile", is_flag=True, help="Show detailed timing profile")
+@click.option(
+    "--run-asm", "asm_source", default=None, help="Run VM assembly program instead of inference"
+)
+@click.option("--self-test", "do_self_test", is_flag=True, help="Run built-in VM self-test")
 @click.pass_context
-def checkpoint_list(ctx, sort, json_output):
-    """List all saved training checkpoints.
+def simulate(
+    ctx,
+    model: str,
+    prompt: str,
+    max_tokens: int,
+    iterations: int,
+    layers: int,
+    d_model: int,
+    vocab_size: int,
+    profile: bool,
+    asm_source: str | None,
+    do_self_test: bool,
+):
+    """Boot the kernel, load a model, run inference, and print metrics."""
+    import sys
+    import time
 
-    \b
-    Examples:
-      sloughgpt checkpoint list
-      sloughgpt checkpoint list --sort size
-      sloughgpt checkpoint list --json
-    """
-    import requests
-    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.get(f"{base_url}/auto-train/checkpoints", timeout=10)
-    if resp.status_code != 200:
-        printer.error(f"Failed to list checkpoints: {resp.text}")
+    import numpy as np
+
+    # ANSI helpers
+    _tty = sys.stdout.isatty()
+
+    def _c(text, code):
+        return f"{code}{text}\033[0m" if _tty else text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _MAGENTA = "\033[35m"
+    _BLUE = "\033[34m"
+
+    def _p(text=""):
+        sys.stdout.write(text + "\n")
+        sys.stdout.flush()
+
+    def _table(headers, rows, col_styles=None):
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i in range(min(len(row), len(widths))):
+                widths[i] = max(widths[i], len(str(row[i])))
+        hdr = "  ".join(_c(h.ljust(widths[i]), _BOLD, _tty) for i, h in enumerate(headers))
+        sep = "  ".join("-" * w for w in widths)
+        _p(hdr)
+        _p(sep)
+        for row in rows:
+            cells = []
+            for i in range(len(headers)):
+                val = str(row[i]) if i < len(row) else ""
+                cells.append(val.ljust(widths[i]))
+            _p("  ".join(cells))
+
+    _p(f"\n{_c('Kernel Simulation', _BOLD + _CYAN)}\n")
+
+    # ── Self-test mode ──
+    if do_self_test:
+        from domain.shell import self_test
+
+        _p(f"{_c('Running VM self-test...', _BOLD)}\n")
+        results = self_test()
+        for line in results:
+            _p(line)
+        _p()
         return
-    checkpoints = resp.json()
-    if not checkpoints:
-        printer.info("No checkpoints found")
+
+    # ── Run assembly mode ──
+    if asm_source:
+        from domain.shell import VMRunner
+
+        _p(f"{_c('Running VM assembly...', _BOLD)}\n")
+        runner = VMRunner()
+        t0 = time.perf_counter()
+        output = runner.assemble_and_run(asm_source, trace=profile)
+        elapsed = time.perf_counter() - t0
+        for line in output:
+            _p(f"  {line}")
+        _p(
+            f"\n  {_c(f'Completed in {elapsed * 1000:.2f}ms, {runner.cpu._step_count} steps', _DIM)}"
+        )
+        if profile:
+            trace = runner.cpu.get_trace()
+            if trace:
+                _p()
+                _table(
+                    ["Step", "PC", "Instruction", "Registers"],
+                    [
+                        [
+                            str(e.cycle),
+                            str(e.pc),
+                            e.instruction,
+                            ", ".join(f"{k}={v}" for k, v in e.registers.items()),
+                        ]
+                        for e in trace[:50]
+                    ],
+                )
+                if len(trace) > 50:
+                    _p(f"  ... ({len(trace) - 50} more)")
+        _p()
         return
 
-    if json_output:
-        printer.print_json(checkpoints)
-        return
+    # ── Boot ──
+    t0 = time.perf_counter()
+    from domain.shell import Kernel
 
-    printer.header(f"Training Checkpoints ({len(checkpoints)})")
-    rows = []
-    for cp in checkpoints:
-        name = cp.get("name", "unknown")
-        size = cp.get("size_mb", 0)
-        traits = cp.get("traits", {})
-        trait_str = ", ".join(f"{k}={v:.2f}" for k, v in traits.items() if v != 0.5) if traits else ""
-        rows.append([name, f"{size:.1f} MB", trait_str or "-"])
-    printer.table(["Name", "Size", "Traits"], rows)
+    k = Kernel()
+    boot_msg = k.boot()
+    t_boot = time.perf_counter() - t0
+    _p(f"  {_c('ok', _GREEN)} Booted in {t_boot * 1000:.1f}ms — {boot_msg}")
 
+    try:
+        # ── Register devices ──
+        k.register_devices()
+        _p(f"  {_c('ok', _GREEN)} {k.devices.stats()['total_devices']} devices registered")
 
-@checkpoint.command("load", help="Load a checkpoint into the model")
-@click.argument("name")
-@click.pass_context
-def checkpoint_load(ctx, name):
-    """Load a training checkpoint into the active model.
+        # ── Load model ──
+        t1 = time.perf_counter()
+        if model == "mock":
 
-    \b
-    Example:
-      sloughgpt checkpoint load my-checkpoint.soul
-    """
-    import requests
-    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.post(f"{base_url}/auto-train/checkpoints/{name}/load", timeout=30)
-    if resp.status_code == 200:
-        data = resp.json()
-        printer.success(f"Loaded checkpoint: {name}")
-        for k, v in data.items():
-            if k not in ("status",):
-                printer.key_value(k, str(v))
-    else:
-        printer.error(f"Failed to load: {resp.text}")
+            class MockModel:
+                def __init__(self):
+                    self.call_count = 0
+                    self.total_tokens = 0
 
+                def __call__(self, input_ids):
+                    self.call_count += 1
+                    self.total_tokens += input_ids.size
+                    return np.random.randn(
+                        input_ids.shape[0], input_ids.shape[1], vocab_size
+                    ).astype(np.float32)
 
-@checkpoint.command("delete", help="Delete a training checkpoint")
-@click.argument("name")
-@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
-@click.pass_context
-def checkpoint_delete(ctx, name, yes):
-    """Delete a training checkpoint.
+                def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
+                    self.call_count += 1
+                    self.total_tokens += max_tokens
+                    return list(range(10, 10 + max_tokens))
 
-    \b
-    Example:
-      sloughgpt checkpoint delete my-checkpoint.soul
-    """
-    if not yes:
-        click.confirm(f"Delete checkpoint '{name}'?", abort=True)
-    import requests
-    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.delete(f"{base_url}/auto-train/checkpoints/{name}", timeout=10)
-    if resp.status_code == 200:
-        printer.success(f"Deleted: {name}")
-    else:
-        printer.error(f"Failed to delete: {resp.text}")
+                def forward(self, inputs):
+                    self.call_count += 1
+                    ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
+                    self.total_tokens += ids.size
+                    return {
+                        "logits": np.random.randn(ids.shape[0], ids.shape[1], vocab_size).astype(
+                            np.float32
+                        )
+                    }
 
+            mock = MockModel()
+            k.engine.load_model(model, mock)
+        else:
+            from domain.shell import NPUDevice
 
-# ═══════════════════════════════════════════════════════════════════════
-# personality  — list, load, info, create, export
-# ═══════════════════════════════════════════════════════════════════════
+            npu = NPUDevice(name="npu")
+            npu.open()
+            # LOAD takes (path, name). An explicit .slnc path loads for real;
+            # an HF id is not a device file, so LOAD fails and the existing
+            # mock fallback below reports it (the NPU loads files, not ids).
+            source = model if model.endswith(".slnc") else f"huggingface:{model}"
+            result = npu.ioctl("LOAD", source, model)
+            if not result.success:
+                _p(f"  {_c(f"⚠ Could not load '{model}': {result.error}", _YELLOW)}")
+                _p(
+                    f"  {_c('Falling back to mock model. Install transformers for real models.', _DIM)}"
+                )
 
+                class FallbackModel:
+                    def __init__(self):
+                        self.call_count = 0
+                        self.total_tokens = 0
 
-# ═══════════════════════════════════════════════════════════════════════
-# knowledge  — search, duplicates, categorize, gaps, ingest
-# ═══════════════════════════════════════════════════════════════════════
+                    def __call__(self, input_ids):
+                        self.call_count += 1
+                        self.total_tokens += input_ids.size
+                        return np.random.randn(
+                            input_ids.shape[0], input_ids.shape[1], vocab_size
+                        ).astype(np.float32)
 
+                    def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
+                        self.call_count += 1
+                        self.total_tokens += max_tokens
+                        return list(range(10, 10 + max_tokens))
 
-@cli.group(help="Semantic knowledge operations — search, dedup, categorize, gaps")
-def knowledge():
-    pass
+                    def forward(self, inputs):
+                        self.call_count += 1
+                        ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
+                        self.total_tokens += ids.size
+                        return {
+                            "logits": np.random.randn(
+                                ids.shape[0], ids.shape[1], vocab_size
+                            ).astype(np.float32)
+                        }
 
+                k.engine.load_model(model, FallbackModel())
+            else:
+                provider = npu.model(model).provider
+                k.engine.load_model(model, provider)
+        t_load = time.perf_counter() - t1
+        _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load * 1000:.1f}ms")
 
-@knowledge.command("search", help="Search codebase with natural language")
-@click.argument("query")
-@click.option("--path", default=".", help="Directory to search")
-@click.option("--top-k", default=10, type=int, help="Max results")
-@click.option("--extensions", default=None, help="Comma-separated file extensions")
-@click.pass_context
-def knowledge_search(ctx, query, path, top_k, extensions):
-    """Search your codebase using natural language.
+        # ── Tokenize ──
+        t2 = time.perf_counter()
+        tokens = k.tokenize(prompt)
+        t_tok = time.perf_counter() - t2
+        _p(
+            f"  {_c('ok', _GREEN)} Tokenized '{prompt[:40]}...' -> {len(tokens)} tokens in {t_tok * 1000:.2f}ms"
+        )
 
-    \b
-    Examples:
-      sloughgpt knowledge search "how does embedding work"
-      sloughgpt knowledge search "training loop" --path packages/core-py
-      sloughgpt knowledge search "error handling" --extensions py,ts
-    """
-    import requests
-    exts = extensions.split(",") if extensions else None
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/search-files",
-                      json={"query": query, "path": path, "top_k": top_k, "extensions": exts})
-    if r.status_code != 200:
-        printer.error(f"Search failed: {r.text}")
-        return
-    data = r.json()
-    printer.header(f"Found {len(data['results'])} results (indexed {data['indexed_files']} files)")
-    for i, res in enumerate(data["results"], 1):
-        printer.info(f"[{res['score']:.3f}] {res['path']}:{res['line']}")
-        snippet = res['snippet'].replace('\n', ' ')[:100]
-        printer.info(f"  {snippet}")
-        print()
+        # ── Create inference process ──
+        from domain.shell import NeuralProcessType
 
+        proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name=model)
 
-@knowledge.command("dedup", help="Check for duplicate knowledge")
-@click.argument("content")
-@click.option("--threshold", default=0.85, type=float, help="Similarity threshold")
-@click.pass_context
-def knowledge_dedup(ctx, content, threshold):
-    """Check if content already exists in the knowledge base.
+        # ── Warmup ──
+        input_ids = np.array([tokens])
+        _ = k.forward(proc, {"input_ids": input_ids})
 
-    \b
-    Example:
-      sloughgpt knowledge dedup "neural networks learn from data"
-    """
-    import requests
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/check-duplicate",
-                      json={"content": content, "threshold": threshold})
-    if r.status_code != 200:
-        printer.error(f"Check failed: {r.text}")
-        return
-    data = r.json()
-    if data["is_duplicate"]:
-        printer.warning(f"DUPLICATE (score: {data['score']:.3f})")
-        printer.info(f"  Existing: {data['best_match'][:100]}")
-    else:
-        printer.success(f"Unique (best match score: {data['score']:.3f})")
+        # ── Inference iterations ──
+        latencies = []
+        tokens_generated = []
+        for i in range(iterations):
+            t3 = time.perf_counter()
+            gen = k.generate(model, prompt, max_tokens=max_tokens)
+            t_inf = time.perf_counter() - t3
+            latencies.append(t_inf)
+            tokens_generated.append(gen["token_count"] if gen else 0)
 
+        # ── Metrics ──
+        avg_latency = sum(latencies) / len(latencies)
+        total_tokens = sum(tokens_generated)
+        throughput = total_tokens / sum(latencies) if sum(latencies) > 0 else 0
 
-@knowledge.command("categorize", help="Auto-categorize content")
-@click.argument("content")
-@click.pass_context
-def knowledge_categorize(ctx, content):
-    """Auto-assign a topic to content based on existing categories.
+        # ── KV Cache ──
+        cache = k.create_kv_cache("sim-cache", num_layers=layers, head_dim=d_model // 4)
+        cache.initialize(num_heads=4)
+        for step in range(min(10, max_tokens)):
+            k0 = np.random.randn(4, d_model // 4)
+            v0 = np.random.randn(4, d_model // 4)
+            cache.update(step % layers, k0, v0)
+            cache.advance(1)
 
-    \b
-    Example:
-      sloughgpt knowledge categorize "gradient descent optimizes loss"
-    """
-    import requests
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/categorize",
-                      json={"content": content})
-    if r.status_code != 200:
-        printer.error(f"Categorize failed: {r.text}")
-        return
-    data = r.json()
-    printer.success(f"Topic: {data['topic']}")
-    if data["suggestions"]:
-        printer.info("Suggestions:")
-        for s in data["suggestions"]:
-            printer.info(f"  {s['topic']} ({s['score']:.3f})")
+        # ── Neural stats ──
+        ns = k.neural_stats()
 
+        # ── Kernel stats ──
+        ks = k.stats()
 
-@knowledge.command("gaps", help="Find knowledge gaps")
-@click.pass_context
-def knowledge_gaps(ctx):
-    """Show under-represented topics in your knowledge base."""
-    import requests
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/gaps")
-    if r.status_code != 200:
-        printer.error(f"Gaps failed: {r.text}")
-        return
-    data = r.json()
-    printer.header(f"Knowledge gaps ({data['total_facts']} facts, {len(data['topics'])} topics)")
-    if data["gaps"]:
-        for g in data["gaps"]:
-            printer.info(f"  {g['topic']}: {g['suggestion']}")
-    else:
-        printer.success("No significant gaps found")
+        # ── Print results ──
+        _p()
+        _table(
+            ["Metric", "Value"],
+            [
+                ["Boot time", f"{t_boot * 1000:.1f}ms"],
+                ["Model load", f"{t_load * 1000:.1f}ms"],
+                ["Tokenize", f"{t_tok * 1000:.2f}ms"],
+                ["Tokens in prompt", str(len(tokens))],
+                ["Iterations", str(iterations)],
+                ["Avg latency", f"{avg_latency * 1000:.1f}ms"],
+                ["Total tokens generated", str(total_tokens)],
+                ["Throughput", f"{throughput:.1f} tok/s"],
+                ["Processes", str(ks["process_count"])],
+                ["KV cache layers", str(ns["kv_caches"])],
+                ["KV cache memory", f"{ns['gradient_accumulator']['step_count']} steps"],
+                ["Uptime", f"{k.uptime:.2f}s"],
+            ],
+        )
 
+        if profile:
+            _p()
+            _table(
+                ["Iter", "Latency", "Tokens", "tok/s"],
+                [
+                    [
+                        str(i + 1),
+                        f"{lat * 1000:.1f}ms",
+                        str(tok),
+                        f"{tok / lat:.1f}" if lat > 0 else "0.0",
+                    ]
+                    for i, (lat, tok) in enumerate(zip(latencies, tokens_generated))
+                ],
+            )
 
-@knowledge.command("ingest", help="Bulk ingest texts with dedup")
-@click.argument("texts", nargs=-1)
-@click.option("--topic", default="imported", help="Topic tag")
-@click.option("--file", "file_path", default=None, help="Read texts from file (one per line)")
-@click.pass_context
-def knowledge_ingest(ctx, texts, topic, file_path):
-    """Bulk ingest texts with automatic deduplication.
+        _p(f"\n{_c('Simulation complete.', _BOLD + _GREEN)}\n")
 
-    \b
-    Examples:
-      sloughgpt knowledge ingest "fact 1" "fact 2" "fact 3"
-      sloughgpt knowledge ingest --file facts.txt --topic ml
-    """
-    import requests
-    items = list(texts)
-    if file_path:
-        with open(file_path) as f:
-            items.extend(line.strip() for line in f if line.strip())
-    if not items:
-        printer.error("No texts to ingest")
-        return
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/bulk-ingest",
-                      json={"items": items, "topic": topic})
-    if r.status_code != 200:
-        printer.error(f"Ingest failed: {r.text}")
-        return
-    data = r.json()
-    printer.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
+    finally:
+        k.shutdown()
+        _p(f"  {_c('Kernel shut down.', _DIM)}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# personality  — list, load, info, create, export
+# Collections — data feed ingestion
+# ═══════════════════════════════════════════════════════════════════════
+# collect — data collection from files, URLs, RSS, and APIs
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.collect import register as _register_collect
 
-@cli.group(help="List, load, and manage .soul personality files")
-def personality():
-    pass
-
-
-@personality.command("list", help="List built-in personalities")
-def personality_list():
-    from commands.models import _cmd_models_personalities
-    _cmd_models_personalities(_ns())
-
-
-@personality.command("load", help="Load soul via API")
-@click.argument("path")
-@click.pass_context
-def personality_load(ctx, path):
-    from commands.models import cmd_soul
-    cmd_soul(_ns(load=path, host=ctx.obj["host"], port=ctx.obj["port"]))
-
-
-@personality.command("info", help="Inspect soul file")
-@click.argument("path")
-def personality_info(path):
-    from commands.models import cmd_soul
-    cmd_soul(_ns(info=path))
-
-
-@personality.command("create", help="Create new soul from checkpoint")
-@click.option("--checkpoint", "-m", required=True, help="Weights path")
-@click.option("--name", "-n", required=True, help="Soul name")
-@click.option("--dataset", "-d", help="Dataset citation")
-@click.option("--epochs", "-e", default=0, type=int, help="Epoch count")
-@click.option("--lineage", default="nanogpt", help="Architecture label")
-@click.option("--tags", default="", help="Comma-separated tags")
-@click.option("--output", "-o", help="Output .soul path")
-def personality_create(checkpoint, name, dataset, epochs, lineage, tags, output):
-    from commands.models import cmd_soul
-    args = _ns(
-        create=output or f"models/{name}.soul", model=checkpoint,
-        name=name, dataset=dataset, epochs=epochs, lineage=lineage, tags=tags,
-    )
-    cmd_soul(args)
-
+_register_collect(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# adapter  — list, info, merge, delete
+# companion — AI companion management and chat
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.companion import register as _register_companion
 
-@cli.group(help="Manage per-user LoRA adapters")
-def adapter():
-    pass
-
-
-@adapter.command("list", help="List LoRA adapters")
-def adapter_list():
-    from commands.train import _cmd_user_adapters
-    _cmd_user_adapters(_ns(action="list"))
-
-
-@adapter.command("info", help="Show adapter info")
-@click.argument("user")
-def adapter_info(user):
-    from commands.train import _cmd_user_adapters
-    _cmd_user_adapters(_ns(action="info", user=user))
-
-
-@adapter.command("merge", help="Merge adapters")
-@click.option("--users", required=True, help="Comma-separated user IDs")
-def adapter_merge(users):
-    from commands.train import _cmd_user_adapters
-    _cmd_user_adapters(_ns(action="merge", users=users))
-
-
-@adapter.command("delete", help="Delete adapter")
-@click.argument("user")
-def adapter_delete(user):
-    from commands.train import _cmd_user_adapters
-    _cmd_user_adapters(_ns(action="delete", user=user))
-
+_register_companion(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# feedback  — export, prepare
+# images — image generation and gallery
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.images import register as _register_images
 
-@cli.group(help="Export and prepare feedback data")
-def feedback():
-    pass
-
-
-@feedback.command("export", help="Export feedback data")
-@click.option("--format", type=click.Choice(["jsonl", "dpo"]), default="jsonl")
-@click.option("--output", default="data/training_feedback.jsonl")
-def feedback_export(fmt, output):
-    from commands.train import _cmd_feedback_export
-    args = _ns(format=fmt, output=output)
-    _cmd_feedback_export(args)
-
-
-@feedback.command("prepare", help="Prepare training data from feedback")
-@click.option("--format", type=click.Choice(["all", "dpo", "sft", "reward"]), default="all")
-@click.option("--output")
-@click.option("--stats-only", is_flag=True)
-def feedback_prepare(fmt, output, stats_only):
-    from commands.train import _cmd_feedback_train
-    args = _ns(format=fmt, output=output, stats_only=stats_only)
-    _cmd_feedback_train(args)
-
+_register_images(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# system  — status, info, health, stats, doctor, optimize, setup
+# multimodal — multimodal capabilities (vision, speech, video)
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.multimodal import register as _register_multimodal
 
-@cli.group(help="System information, health, and environment tools")
-def system():
-    pass
-
-
-@system.command("status", help="Show live system status")
-@click.option("--watch", is_flag=True, help="Auto-refresh")
-@click.option("--interval", default=3, type=int, help="Refresh interval")
-def system_status(watch, interval):
-    from commands.system import cmd_status
-    cmd_status(_ns(watch=watch, interval=interval))
-
-
-@system.command("info", help="Show system information")
-def system_info():
-    from commands.system import cmd_system
-    cmd_system(_ns())
-
-
-@system.command("health", help="Quick API health check")
-@click.pass_context
-def system_health(ctx):
-    from commands.dev import cmd_health
-    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"])
-    cmd_health(args)
-
-
-@system.command("stats", help="Show models/datasets statistics")
-def system_stats():
-    from commands.system import cmd_stats
-    cmd_stats(_ns())
-
-
-@system.command("doctor", help="Run environment checks")
-def system_doctor():
-    from commands.system import cmd_config_check
-    cmd_config_check(_ns())
-
-
-@system.command("config", help="Show or validate configuration")
-@click.option("--validate", "do_validate", is_flag=True, help="Validate .env file")
-@click.option("--env", default=".env", help="Dotenv file")
-@click.option("--generate", "do_generate", is_flag=True, help="Generate secrets")
-@click.option("--type", "secret_type", type=click.Choice(["api-key", "jwt-secret", "all"]), default="all")
-def system_config(do_validate, env, do_generate, secret_type):
-    if do_generate:
-        from commands.system import cmd_config_generate
-        cmd_config_generate(_ns(type=secret_type))
-    elif do_validate:
-        from commands.system import cmd_config_validate
-        cmd_config_validate(_ns(env=env))
-    else:
-        from commands.system import cmd_config_check
-        cmd_config_check(_ns())
-
-
-@system.command("optimize", help="Show or apply optimization settings")
-@click.option("--apply", "do_apply", is_flag=True, help="Apply optimizations")
-def system_optimize(do_apply):
-    from commands.system import cmd_optimize
-    cmd_optimize(_ns(optimize=do_apply))
-
-
-@system.command("setup", help="Bootstrap environment")
-@click.option("--gpu", is_flag=True, help="GPU support")
-@click.option("--docker-only", is_flag=True, help="Docker only")
-@click.option("--local-only", is_flag=True, help="Local only")
-@click.option("--venv", default=".venv", help="Virtual env directory")
-def system_setup(gpu, docker_only, local_only, venv):
-    from commands.system import cmd_setup
-    args = _ns(gpu=gpu, docker_only=docker_only, local_only=local_only, venv=venv)
-    cmd_setup(args)
-
-
-@system.command("api", help="Test API endpoints or authentication")
-@click.argument("action", type=click.Choice(["status", "test", "auth"]), default="status")
-@click.pass_context
-def system_api(ctx, action):
-    from commands.dev import cmd_api_status, cmd_api_test, cmd_api_auth
-    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"])
-    {
-        "status": cmd_api_status,
-        "test": cmd_api_test,
-        "auth": cmd_api_auth,
-    }[action](args)
-
+_register_multimodal(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# docker  — start, stop, status, logs, build, shell
+# meta-weights — feedback-driven meta-weight adaptation
 # ═══════════════════════════════════════════════════════════════════════
 
+from groups.meta_weights import register as _register_meta_weights
 
-@cli.group(help="Docker compose workflows")
-def docker():
-    pass
+_register_meta_weights(cli)
 
+# ═══════════════════════════════════════════════════════════════════════
+# learn — continual learning from web, feeds, and knowledge
+# ═══════════════════════════════════════════════════════════════════════
 
-@docker.command("start", help="Start Docker services")
-@click.option("--gpu", is_flag=True, help="Use GPU profile")
-@click.option("--dev", is_flag=True, help="Use dev profile")
-def docker_start(gpu, dev):
-    _docker_action("start", _ns(gpu=gpu, dev=dev))
+from groups.learn import register as _register_learn
 
+_register_learn(cli)
 
-@docker.command("stop", help="Stop Docker services")
-def docker_stop():
-    _docker_action("stop", _ns())
+# ═══════════════════════════════════════════════════════════════════════
+# world — Render and simulate the programmable world
+# ═══════════════════════════════════════════════════════════════════════
 
+from groups.world import register as _register_world
 
-@docker.command("status", help="Show Docker status")
-def docker_status():
-    _docker_action("status", _ns())
+_register_world(cli)
 
+# ═══════════════════════════════════════════════════════════════════════
+# vm — x86 Virtual Machine console and management
+# ═══════════════════════════════════════════════════════════════════════
 
-@docker.command("logs", help="Show Docker logs")
-@click.argument("service", required=False)
-def docker_logs(service):
-    _docker_action("logs", _ns(service=service))
+from groups.vm import register as _register_vm
 
+_register_vm(cli)
 
-@docker.command("build", help="Build Docker images")
-@click.option("--no-cache", is_flag=True, help="Build without cache")
-def docker_build(no_cache):
-    _docker_action("build", _ns(no_cache=no_cache))
+# ═══════════════════════════════════════════════════════════════════════
+# build — Buildroot image building
+# ═══════════════════════════════════════════════════════════════════════
 
+from groups.build import register as _register_build
 
-@docker.command("shell", help="Shell into container")
-@click.argument("service", default="api")
-def docker_shell(service):
-    _docker_action("shell", _ns(service=service))
+_register_build(cli)
 
+# ═══════════════════════════════════════════════════════════════════════
+# voice — text-to-speech and speech-to-text
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.voice import register as _register_voice
+
+_register_voice(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# security — audit logs and API key management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.security import register as _register_security
+
+_register_security(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# docstore — server-side document store
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.docstore import register as _register_docstore
+
+_register_docstore(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# db — MogDB embedded database: migrate, sync, status
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.db import register as _register_db
+
+_register_db(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# feeds — RSS and JSON feed generation
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.feeds import register as _register_feeds
+
+_register_feeds(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Entry point
@@ -1201,7 +1144,42 @@ def docker_shell(service):
 
 
 def main():
-    cli(obj={})
+    # Parse command path for post-execution suggestions
+    _argv = sys.argv[1:]
+    _cmd_parts = []
+    for _a in _argv:
+        if _a.startswith("-"):
+            break
+        _cmd_parts.append(_a)
+    _cmd_path = _cmd_parts[0] if _cmd_parts else ""
+
+    _exit_code = 0
+    try:
+        cli(obj={})
+    except SystemExit as e:
+        if e.code is None:
+            _exit_code = 0
+        elif isinstance(e.code, int):
+            _exit_code = e.code
+        else:
+            print(e.code, file=sys.stderr)
+            _exit_code = 1
+    except KeyboardInterrupt:
+        # Interrupted during dispatch, before a command handler took over.
+        _p()
+        _p(f"  {_c('Interrupted', _BOLD)}")
+        sys.exit(130)
+
+    # Show post-command suggestions (TTY only)
+    if _cmd_path and sys.stdout.isatty():
+        _tip = _SUGGESTIONS.get(_cmd_path)
+        if _tip:
+            _p()
+            _p(f"  {_c('💡', _DIM)} {_c('Tip:', _BOLD)} {_c(f'sloughgpt {_tip}', _CYAN)}")
+            _p()
+
+    if _exit_code:
+        sys.exit(_exit_code)
 
 
 if __name__ == "__main__":

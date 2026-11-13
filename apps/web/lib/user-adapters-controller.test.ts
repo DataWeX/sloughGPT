@@ -18,19 +18,25 @@ import { userAdaptersController } from './user-adapters-controller'
 describe('userAdaptersController.list', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /user-adapters and returns stats', async () => {
+  it('GETs /user-adapters and returns stats + adapters', async () => {
     apiClient.apiGet.mockResolvedValue({
-      total_users: 5,
-      total_size_bytes: 1024,
-      total_size_mb: 1.0,
-      adapter_rank: 8,
-      model_dim: 768,
-      avg_size_per_user_kb: 204.8,
+      adapters: [
+        { user_id: 'u1', rank: 8, alpha: 16, model_dim: 768, created_at: '', updated_at: '', feedback_count: 5 },
+      ],
+      stats: {
+        total_users: 5,
+        total_size_bytes: 1024,
+        total_size_mb: 1.0,
+        adapter_rank: 8,
+        model_dim: 768,
+        avg_size_per_user_kb: 204.8,
+      },
     })
 
     const result = await userAdaptersController.list()
-    expect(result.total_users).toBe(5)
-    expect(result.adapter_rank).toBe(8)
+    expect(result.stats.total_users).toBe(5)
+    expect(result.stats.adapter_rank).toBe(8)
+    expect(result.adapters).toHaveLength(1)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/user-adapters')
   })
 })

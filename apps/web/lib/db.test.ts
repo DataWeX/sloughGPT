@@ -1,77 +1,135 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ── Mock Dexie with in-memory tables ─────────────────────────────────
+// ── Mock the HTTP client with an in-memory DocStore ───────────────────
+// Mirrors the backend contract (/docstore/{collection}[/{id}]) so the
+// db.ts client can be tested end-to-end without a live server.
 
-const { tables, FakeDexie } = vi.hoisted(() => {
-  const tables = new Map<string, Map<string, any>>()
+const { store, apiGet, apiPut, apiPatch, apiDelete, apiPost } = vi.hoisted(() => {
+  const store = new Map<string, Map<string, unknown>>()
 
-  class FakeTable {
-    private _key: string
-    constructor(key: string) { this._key = key }
-
-    private _data() {
-      if (!tables.has(this._key)) tables.set(this._key, new Map())
-      return tables.get(this._key)!
-    }
-
-    put(obj: any) { this._data().set(obj.id, { ...obj }) }
-    get(id: string) { return this._data().get(id) }
-    delete(id: string) { this._data().delete(id) }
-    clear() { tables.delete(this._key) }
-
-    update(id: string, updates: any) {
-      const d = this._data()
-      const existing = d.get(id)
-      if (existing) d.set(id, { ...existing, ...updates })
-    }
-
-    toArray() { return [...this._data().values()] }
-
-    orderBy(field: string) {
-      return {
-        reverse: () => ({
-          toArray: () =>
-            [...this._data().values()].sort((a, b) => {
-              const av = a[field] ?? ''
-              const bv = b[field] ?? ''
-              return av < bv ? 1 : av > bv ? -1 : 0
-            }),
-        }),
-        toArray: () =>
-          [...this._data().values()].sort((a, b) => {
-            const av = a[field] ?? ''
-            const bv = b[field] ?? ''
-            return av < bv ? -1 : av > bv ? 1 : 0
-          }),
-      }
-    }
-
-    where(field: string) {
-      return {
-        equals: (val: any) => ({
-          toArray: () => [...this._data().values()].filter(v => v[field] == val),
-        }),
-      }
-    }
+  function coll(url: string): Map<string, unknown> {
+    const name = url.split('?')[0].split('/').filter(Boolean)[1]
+    if (!store.has(name)) store.set(name, new Map())
+    return store.get(name)!
   }
 
-  class FakeDexie {
-    sessions = new FakeTable('sessions')
-    pendingMessages = new FakeTable('pending')
-    version() { return { stores() {} } }
-  }
+  const apiGet = vi.fn(async (url: string): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    // Backend-backed session search: scan the stored sessions for the query
+    // in the session name or message content, backend response shaped.
+    if (parts[0] === 'chat' && parts[1] === 'sessions' && parts[2] === 'search') {
+      const q = (new URLSearchParams(url.split('?')[1] ?? '').get('q') ?? '').toLowerCase()
+      const limit = Number(new URLSearchParams(url.split('?')[1] ?? '').get('limit') ?? 30)
+      const sessions = [...(store.get('sessions')?.values() ?? [])] as any[]
+      const hits = sessions
+        .map((s) => {
+          const messages = Array.isArray(s.messages) ? s.messages : []
+          const matched = messages.filter((m: any) =>
+            String(m.content ?? '')
+              .toLowerCase()
+              .includes(q),
+          )
+          const nameHit = String(s.name ?? '')
+            .toLowerCase()
+            .includes(q)
+          return { s, matched, score: matched.length + (nameHit ? 1 : 0) }
+        })
+        .filter((h) => h.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+      return hits.map((h) => ({
+        id: h.s.id,
+        name: h.s.name,
+        matches: h.matched,
+        created_at: h.s.createdAt,
+        updated_at: h.s.updatedAt,
+      }))
+    }
+    const id = parts[2]
+    if (id) return coll(url).get(id) ?? null
+    let list = [...coll(url).values()]
+    const qs = new URLSearchParams(url.split('?')[1] ?? '')
+    if (qs.get('sort')) {
+      const field = qs.get('sort')!
+      const dir = Number(qs.get('dir') ?? -1)
+      list = list.sort((a: any, b: any) => {
+        const av = a[field] ?? ''
+        const bv = b[field] ?? ''
+        return av < bv ? -dir : av > bv ? dir : 0
+      })
+    }
+    if (qs.get('limit')) list = list.slice(0, Number(qs.get('limit')))
+    return list
+  })
 
-  return { tables, FakeDexie }
+  const apiPut = vi.fn(async (url: string, body?: any): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    const id = decodeURIComponent(parts[2])
+    const m = coll(url)
+    const created = !m.has(id)
+    m.set(id, { ...body, id })
+    return { id, created }
+  })
+
+  const apiPatch = vi.fn(async (url: string, body?: any): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    const id = decodeURIComponent(parts[2])
+    const m = coll(url)
+    const existing = m.get(id)
+    if (!existing) return { modified: 0 }
+    m.set(id, { ...(existing as object), ...(body ?? {}) })
+    return { modified: 1 }
+  })
+
+  const apiDelete = vi.fn(async (url: string): Promise<any> => {
+    const parts = url.split('?')[0].split('/').filter(Boolean)
+    if (parts.length === 2) {
+      coll(url).clear()
+      return { cleared: true }
+    }
+    const id = decodeURIComponent(parts[2])
+    const deleted = coll(url).delete(id)
+    return { deleted }
+  })
+
+  const apiPost = vi.fn(async (url: string, body?: any): Promise<any> => {
+    const m = coll(url)
+    let count = 0
+    for (const doc of body?.docs ?? []) {
+      if (!doc?.id) continue
+      m.set(doc.id, { ...doc })
+      count++
+    }
+    return { imported: count }
+  })
+
+  return { store, apiGet, apiPut, apiPatch, apiDelete, apiPost }
 })
 
-vi.mock('dexie', () => ({ default: FakeDexie }))
+vi.mock('@/lib/http-client', () => ({ apiGet, apiPut, apiPatch, apiDelete, apiPost }))
 
-import { chatDB, type ChatSession, type ChatMessage } from './db'
+// Override the global @/lib/db mock with the real module (which uses the mocked http-client)
+vi.mock('@/lib/db', async () => {
+  const actual = await vi.importActual<typeof DbModule>('./db')
+  return actual
+})
 
-beforeEach(() => { tables.clear() })
-afterEach(() => { tables.clear() })
+import { chatDB, createChatDB, DbCircuitBreaker, type ChatSession, type ChatMessage } from './db'
+import type * as DbModule from './db'
 
-const testMsg: ChatMessage = { id: 'm1', role: 'user', content: 'hello', timestamp: new Date('2024-01-01') }
+beforeEach(() => {
+  store.clear()
+})
+afterEach(() => {
+  store.clear()
+})
+
+const testMsg: ChatMessage = {
+  id: 'm1',
+  role: 'user',
+  content: 'hello',
+  timestamp: new Date('2024-01-01'),
+}
 
 const testSession: ChatSession = {
   id: 's1',
@@ -118,7 +176,7 @@ describe('chatDB', () => {
       await chatDB.saveSession({ ...testSession, id: 'c' })
       vi.useRealTimers()
       const all = await chatDB.loadSessions()
-      expect(all.map(s => s.id)).toEqual(['a', 'c', 'b'])
+      expect(all.map((s) => s.id)).toEqual(['a', 'c', 'b'])
     })
 
     it('returns empty array when no sessions', async () => {
@@ -156,6 +214,49 @@ describe('chatDB', () => {
     })
   })
 
+  describe('empty-id guards', () => {
+    // docUrl(coll, '') collapses to the collection path: PUT/PATCH → 405,
+    // DELETE → wipes the whole collection. Guards must fail fast instead.
+    it('saveSession with empty id is a no-op (no PUT to collection path)', async () => {
+      const before = apiPut.mock.calls.length
+      await chatDB.saveSession({ ...testSession, id: '' })
+      expect(apiPut.mock.calls.length).toBe(before)
+      expect(await chatDB.loadSessions()).toEqual([])
+    })
+
+    it('deleteSession with empty id does NOT wipe the collection', async () => {
+      await chatDB.saveSession(testSession)
+      const before = apiDelete.mock.calls.length
+      await chatDB.deleteSession('')
+      expect(apiDelete.mock.calls.length).toBe(before)
+      expect(await chatDB.loadSessions()).toHaveLength(1)
+    })
+
+    it('updateSession with empty id is a no-op', async () => {
+      const before = apiPatch.mock.calls.length
+      await chatDB.updateSession('', { starred: true })
+      expect(apiPatch.mock.calls.length).toBe(before)
+    })
+
+    it('loadSession with empty id returns undefined without a request', async () => {
+      const before = apiGet.mock.calls.length
+      expect(await chatDB.loadSession('')).toBeUndefined()
+      expect(apiGet.mock.calls.length).toBe(before)
+    })
+
+    it('deleteDraft with empty sessionId does NOT wipe the drafts collection', async () => {
+      const before = apiDelete.mock.calls.length
+      await chatDB.deleteDraft('')
+      expect(apiDelete.mock.calls.length).toBe(before)
+    })
+
+    it('setKV with empty key is a no-op', async () => {
+      const before = apiPut.mock.calls.length
+      await chatDB.setKV('', { any: 1 })
+      expect(apiPut.mock.calls.length).toBe(before)
+    })
+  })
+
   describe('clearAllSessions', () => {
     it('removes all sessions', async () => {
       await chatDB.saveSession(testSession)
@@ -187,27 +288,63 @@ describe('chatDB', () => {
 
   describe('pending messages', () => {
     it('savePendingMessage stores a message', async () => {
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'test', createdAt: '2024-01-01', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'test',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
       const all = await chatDB.getPendingMessages()
       expect(all).toHaveLength(1)
     })
 
     it('getPendingMessages returns sorted by createdAt', async () => {
-      await chatDB.savePendingMessage({ id: 'p2', sessionId: 's1', content: 'b', createdAt: '2024-01-02', retries: 0 })
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'a', createdAt: '2024-01-01', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p2',
+        sessionId: 's1',
+        content: 'b',
+        createdAt: '2024-01-02',
+        retries: 0,
+      })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'a',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
       const all = await chatDB.getPendingMessages()
-      expect(all.map(p => p.id)).toEqual(['p1', 'p2'])
+      expect(all.map((p) => p.id)).toEqual(['p1', 'p2'])
     })
 
     it('deletePendingMessage removes by id', async () => {
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'x', createdAt: '2024-01-01', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'x',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
       await chatDB.deletePendingMessage('p1')
       expect(await chatDB.getPendingMessages()).toEqual([])
     })
 
     it('clearPendingMessages removes all', async () => {
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'x', createdAt: '2024-01-01', retries: 0 })
-      await chatDB.savePendingMessage({ id: 'p2', sessionId: 's2', content: 'y', createdAt: '2024-01-02', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'x',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
+      await chatDB.savePendingMessage({
+        id: 'p2',
+        sessionId: 's2',
+        content: 'y',
+        createdAt: '2024-01-02',
+        retries: 0,
+      })
       await chatDB.clearPendingMessages()
       expect(await chatDB.getPendingMessages()).toEqual([])
     })
@@ -249,16 +386,186 @@ describe('chatDB', () => {
         ...testSession,
         id: 'many',
         messages: [
-          { id: 'm1', role: 'user' as const, content: 'hello world', timestamp: new Date('2024-01-01') },
-          { id: 'm2', role: 'assistant' as const, content: 'hello again', timestamp: new Date('2024-01-01') },
+          {
+            id: 'm1',
+            role: 'user' as const,
+            content: 'hello world',
+            timestamp: new Date('2024-01-01'),
+          },
+          {
+            id: 'm2',
+            role: 'assistant' as const,
+            content: 'hello again',
+            timestamp: new Date('2024-01-01'),
+          },
         ],
       }
-      const sOne = { ...testSession, id: 'one', messages: [{ id: 'm3', role: 'user' as const, content: 'hello', timestamp: new Date('2024-01-01') }] }
+      const sOne = {
+        ...testSession,
+        id: 'one',
+        messages: [
+          { id: 'm3', role: 'user' as const, content: 'hello', timestamp: new Date('2024-01-01') },
+        ],
+      }
       await chatDB.saveSession(sMany)
       await chatDB.saveSession(sOne)
       const results = await chatDB.searchAllSessions('hello')
       expect(results[0].session.id).toBe('many')
       expect(results[1].session.id).toBe('one')
     })
+  })
+
+  describe('knowledge', () => {
+    it('addKnowledge then getKnowledge sorted by timestamp desc', async () => {
+      await chatDB.addKnowledge({ id: 'k1', content: 'old', timestamp: 1 })
+      await chatDB.addKnowledge({ id: 'k2', content: 'new', timestamp: 2 })
+      const all = await chatDB.getKnowledge()
+      expect(all.map((k) => k.id)).toEqual(['k2', 'k1'])
+    })
+
+    it('updateKnowledge merges content', async () => {
+      await chatDB.addKnowledge({ id: 'k1', content: 'a', timestamp: 1 })
+      await chatDB.updateKnowledge('k1', { content: 'b' })
+      const item = await chatDB.getKnowledge()
+      expect(item[0].content).toBe('b')
+    })
+
+    it('importKnowledge bulk upserts', async () => {
+      await chatDB.importKnowledge([{ id: 'k1', content: 'x', timestamp: 0 }])
+      expect(await chatDB.getKnowledge()).toHaveLength(1)
+    })
+
+    it('clearKnowledge removes all', async () => {
+      await chatDB.addKnowledge({ id: 'k1', content: 'x', timestamp: 1 })
+      await chatDB.clearKnowledge()
+      expect(await chatDB.getKnowledge()).toEqual([])
+    })
+  })
+
+  describe('bookmarks', () => {
+    it('addBookmark then removeBookmark', async () => {
+      await chatDB.addBookmark({ id: 'b1', content: 'c', role: 'user', timestamp: 1 })
+      expect(await chatDB.getBookmarks()).toHaveLength(1)
+      await chatDB.removeBookmark('b1')
+      expect(await chatDB.getBookmarks()).toEqual([])
+    })
+  })
+
+  describe('prompts', () => {
+    it('savePrompt then importPrompts then getPrompts', async () => {
+      await chatDB.savePrompt({
+        id: 'p1',
+        name: 'n',
+        description: 'd',
+        prompt: 'p',
+        icon: '',
+        category: 'a',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      await chatDB.importPrompts([
+        {
+          id: 'p2',
+          name: 'n2',
+          description: 'd2',
+          prompt: 'p2',
+          icon: '',
+          category: 'b',
+          createdAt: 2,
+          updatedAt: 2,
+        },
+      ])
+      const all = await chatDB.getPrompts()
+      expect(all.map((p) => p.id).sort()).toEqual(['p1', 'p2'])
+      await chatDB.deletePrompt('p1')
+      expect(await chatDB.getPrompts()).toHaveLength(1)
+    })
+  })
+
+  describe('drafts & kv', () => {
+    it('saveDraft, getDraft, deleteDraft', async () => {
+      expect(await chatDB.getDraft('s1')).toBe('')
+      await chatDB.saveDraft('s1', 'hello draft')
+      expect(await chatDB.getDraft('s1')).toBe('hello draft')
+      await chatDB.saveDraft('s1', '')
+      expect(await chatDB.getDraft('s1')).toBe('')
+    })
+
+    it('setKV/getKV/deleteKV round trip', async () => {
+      expect(await chatDB.getKV('theme')).toBeUndefined()
+      await chatDB.setKV('theme', 'dark')
+      expect(await chatDB.getKV('theme')).toBe('dark')
+      await chatDB.deleteKV('theme')
+      expect(await chatDB.getKV('theme')).toBeUndefined()
+    })
+  })
+})
+
+describe('chatDB — circuit breaker', () => {
+  const realPut = apiPut.getMockImplementation()!
+
+  // Each test gets a fresh breaker + handle so the closed (false) state is
+  // guaranteed without module-level resets.
+  function freshHandle() {
+    const breaker = new DbCircuitBreaker()
+    return { breaker, chatDB: createChatDB(breaker) }
+  }
+
+  function failErrorsPut() {
+    apiPut.mockImplementation(async (url: string, body?: any) => {
+      if (url.startsWith('/docstore/errors')) throw new Error('DocStore unavailable')
+      return realPut(url, body)
+    })
+  }
+
+  afterEach(() => {
+    apiPut.mockImplementation(realPut)
+  })
+
+  it('addError triggers the circuit breaker on server failure, then short-circuits', async () => {
+    const { breaker, chatDB: fresh } = freshHandle()
+    expect(breaker.isDead()).toBe(false)
+    failErrorsPut()
+    await fresh.addError('test-trigger')
+    expect(breaker.isDead()).toBe(true)
+
+    const putSpy = vi.fn()
+    apiPut.mockImplementation(putSpy)
+    await fresh.addError('test-after-dead')
+    expect(putSpy).not.toHaveBeenCalled()
+  })
+
+  it('getErrors returns empty when the DB is dead', async () => {
+    const { breaker, chatDB: fresh } = freshHandle()
+    failErrorsPut()
+    await fresh.addError('x')
+    expect(breaker.isDead()).toBe(true)
+
+    expect(await fresh.getErrors()).toEqual([])
+  })
+
+  it('clearErrors is a no-op when the DB is dead', async () => {
+    const { breaker, chatDB: fresh } = freshHandle()
+    failErrorsPut()
+    await fresh.addError('x')
+    expect(breaker.isDead()).toBe(true)
+
+    apiDelete.mockClear()
+    await fresh.clearErrors()
+    expect(apiDelete).not.toHaveBeenCalled()
+  })
+
+  it('does not leak dead state across handles', async () => {
+    const a = freshHandle()
+    failErrorsPut()
+    await a.chatDB.addError('x')
+    expect(a.breaker.isDead()).toBe(true)
+
+    apiPut.mockImplementation(realPut)
+    apiPut.mockClear()
+    const b = freshHandle()
+    expect(b.breaker.isDead()).toBe(false)
+    await b.chatDB.addError('ok')
+    expect(apiPut).toHaveBeenCalledTimes(1)
   })
 })

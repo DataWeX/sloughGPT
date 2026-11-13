@@ -53,3 +53,19 @@ repos:
         types: [python, ts, tsx, yaml, toml]
         pass_filenames: true
         stages: [pre-commit]
+
+      - id: check-feature-tags
+        name: Check FEATURE tags
+        entry: bash -c 'PYTHONPATH=. python3 scripts/check_feature_tags.py --validate'
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: check-raw-threads
+        name: Check raw threading.Thread sites
+        entry: python3 scripts/check_raw_threads.py
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]

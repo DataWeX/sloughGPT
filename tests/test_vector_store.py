@@ -2,14 +2,14 @@
 Tests for Vector Store Integration - Pinecone
 """
 
-import pytest
 import numpy as np
-from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
-from domains.inference.vector_store import (
-    VectorEntry,
+
+from domain.inference._internal.vector_store import (
     QueryResult,
+    VectorEntry,
     simple_embed,
 )
+from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
 
 
 class TestPineconeVectorStore:
@@ -55,8 +55,8 @@ class TestSimpleEmbed:
 
     def test_embed_different_texts(self):
         """Test different texts give different embeddings."""
-        vec1 = simple_embed("python programming")
-        vec2 = simple_embed("machine learning")
+        vec1 = simple_embed("hello world")
+        vec2 = simple_embed("goodbye moon")
         assert not np.allclose(vec1, vec2)
 
 

@@ -8,14 +8,14 @@ import time
 from pathlib import Path
 
 import pytest
-
-from mogdb import MogDB, Collection, Document, ObjectId, match_document
+from mogdb import Collection, Document, MogDB, ObjectId, match_document
+from mogdb.collection import ASCENDING, DESCENDING
 from mogdb.index import Index, SortedIndex
-
 
 # =========================================================================
 # Document & ObjectId
 # =========================================================================
+
 
 class TestObjectId:
     def test_generates_24_char_hex(self):
@@ -73,6 +73,7 @@ class TestDocument:
 # =========================================================================
 # Query engine
 # =========================================================================
+
 
 class TestQuery:
     def test_exact_match(self):
@@ -149,6 +150,7 @@ class TestQuery:
 # =========================================================================
 # Collection CRUD
 # =========================================================================
+
 
 @pytest.fixture
 def coll():
@@ -353,6 +355,7 @@ class TestCollectionDrop:
 # Persistence
 # =========================================================================
 
+
 class TestPersistence:
     def test_survives_collection_reopen(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -376,6 +379,83 @@ class TestPersistence:
                 lines = f.readlines()
             assert len(lines) >= 1
             c.drop()
+
+    def test_journal_replay_applies_update(self):
+        """An update op must merge into the inserted doc, not clobber it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay", path)
+            c1.insert_one({"id": "n1", "title": "original", "status": "open"})
+            c1.update_one(
+                {"id": "n1"},
+                {"$set": {"title": "updated", "status": "done"}},
+            )
+            del c1
+
+            c2 = Collection("replay", path)
+            doc = c2.find_one({"id": "n1"})
+            assert doc is not None
+            assert doc["title"] == "updated"
+            assert doc["status"] == "done"
+            assert "update" not in doc
+            c2.drop()
+
+    def test_journal_replay_applies_unset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay2", path)
+            c1.insert_one({"id": "n2", "body": "text", "tags": "keep"})
+            c1.update_one({"id": "n2"}, {"$unset": {"body": ""}})
+            del c1
+
+            c2 = Collection("replay2", path)
+            doc = c2.find_one({"id": "n2"})
+            assert "body" not in doc
+            assert doc["tags"] == "keep"
+            c2.drop()
+
+    def test_journal_replay_applies_delete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay3", path)
+            c1.insert_many([{"id": f"n{i}", "v": i} for i in range(5)])
+            c1.delete_one({"id": "n2"})
+            del c1
+
+            c2 = Collection("replay3", path)
+            assert c2.count() == 4
+            assert c2.find_one({"id": "n2"}) is None
+            assert c2.find_one({"id": "n4"}) is not None
+            c2.drop()
+
+    def test_journal_replay_applies_update_many(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay4", path)
+            c1.insert_many([{"id": f"n{i}", "status": "open"} for i in range(4)])
+            c1.update_many({}, {"$set": {"status": "done"}})
+            del c1
+
+            c2 = Collection("replay4", path)
+            docs = c2.find()
+            assert len(docs) == 4
+            assert all(d["status"] == "done" for d in docs)
+            assert all("update" not in d for d in docs)
+            c2.drop()
+
+    def test_journal_replay_delete_many(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay5", path)
+            c1.insert_many([{"id": f"n{i}", "v": i} for i in range(6)])
+            c1.delete_many({"v": {"$lt": 3}})
+            del c1
+
+            c2 = Collection("replay5", path)
+            assert c2.count() == 3
+            assert c2.find_one({"id": "n0"}) is None
+            assert c2.find_one({"id": "n5"}) is not None
+            c2.drop()
 
     def test_journal_appends_on_update(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -428,10 +508,81 @@ class TestPersistence:
             assert c.compact() == 0
             c.drop()
 
+    def test_snapshot_framing_not_loaded_as_document(self):
+        """A ``{"_mogdb_meta": ...}`` first line is snapshot framing, not data.
+
+        Document() would mint it an _id and every load would surface a fresh
+        key-less document through find() (card a3a6569f: GET /companion/presets
+        returned a raw meta row and broke clients doing p["id"]).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            snapshot = path / "frame.mogdb"
+            snapshot.write_text(
+                '{"_mogdb_meta": {"seq": 1000000000222, "v": 1}}\n'
+                + json.dumps({"id": "warm", "name": "Warm Friend"}) + "\n"
+                + json.dumps({"id": "curious", "name": "Curious Friend"}) + "\n"
+            )
+
+            c = Collection("frame", path)
+            assert c.count() == 2
+            assert all("_mogdb_meta" not in d for d in c.find())
+            assert all("_id" in d for d in c.find())
+            c.drop()
+
+    def test_snapshot_minted_meta_doc_skipped_anywhere(self):
+        """A meta row already minted into a snapshot (carrying _id) is dropped too.
+
+        compact() rewrites every in-memory document, so a meta row minted by an
+        earlier buggy load can freeze into the snapshot at an arbitrary line.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            snapshot = path / "poison.mogdb"
+            snapshot.write_text(
+                json.dumps({"id": "real", "v": 1}) + "\n"
+                + json.dumps(
+                    {
+                        "_mogdb_meta": {"seq": 7, "v": 1},
+                        "_id": "leaked",
+                        "_created": 1.0,
+                        "_updated": 1.0,
+                    }
+                )
+                + "\n"
+            )
+
+            c = Collection("poison", path)
+            assert c.count() == 1
+            assert c.find_one({"_id": "leaked"}) is None
+            c.drop()
+
+    def test_journal_replay_skips_meta_insert(self):
+        """A journaled insert of engine framing must not re-materialize it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            journal = path / "jmeta.journal.jsonl"
+            journal.write_text(
+                json.dumps({"op": "insert", "data": {"id": "real", "v": 1}}) + "\n"
+                + json.dumps(
+                    {
+                        "op": "insert",
+                        "data": {"_mogdb_meta": {"seq": 3, "v": 1}, "_id": "leaked"},
+                    }
+                )
+                + "\n"
+            )
+
+            c = Collection("jmeta", path)
+            assert c.count() == 1
+            assert c.find_one({"_id": "leaked"}) is None
+            c.drop()
+
 
 # =========================================================================
 # MogDB
 # =========================================================================
+
 
 class TestMogDB:
     def test_create_and_get_collection(self):
@@ -502,6 +653,7 @@ class TestMogDB:
 # =========================================================================
 # Index
 # =========================================================================
+
 
 class TestIndex:
     def test_add_and_lookup(self):
@@ -576,6 +728,7 @@ class TestSortedIndex:
 # Concurrency
 # =========================================================================
 
+
 class TestConcurrency:
     def test_concurrent_inserts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -634,6 +787,7 @@ class TestConcurrency:
 # Edge cases
 # =========================================================================
 
+
 class TestEdgeCases:
     def test_large_document(self, coll):
         big = {"data": "x" * 100_000}
@@ -691,3 +845,732 @@ class TestEdgeCases:
         coll.insert_many([{"a": 1}, {"a": 2}])
         assert coll.delete_many({}) == 2
         assert coll.count() == 0
+
+
+# ======================================================================
+# New tests for bug fixes and features
+# ======================================================================
+
+
+class TestQueryOperators:
+    def test_regex_with_options(self):
+        """$regex + $options should work together (was CRITICAL bug)."""
+        assert match_document(
+            {"name": "Hello World"}, {"name": {"$regex": "hello", "$options": "i"}}
+        )
+        assert not match_document({"name": "Hello World"}, {"name": {"$regex": "hello"}})
+        assert match_document({"name": "Hello World"}, {"name": {"$regex": "^Hello"}})
+        assert match_document(
+            {"name": "Hello World"}, {"name": {"$regex": "world$", "$options": "i"}}
+        )
+
+    def test_string_comparison_gt(self):
+        """$gt should work on strings."""
+        assert match_document({"name": "Charlie"}, {"name": {"$gt": "Alice"}})
+        assert not match_document({"name": "Alice"}, {"name": {"$gt": "Charlie"}})
+
+    def test_string_comparison_lt(self):
+        """$lt should work on strings."""
+        assert match_document({"name": "Alice"}, {"name": {"$lt": "Charlie"}})
+        assert not match_document({"name": "Charlie"}, {"name": {"$lt": "Alice"}})
+
+    def test_string_comparison_range(self):
+        """Combined $gt/$lt on strings."""
+        assert match_document({"name": "Bob"}, {"name": {"$gt": "Alice", "$lt": "Charlie"}})
+        assert not match_document({"name": "Dave"}, {"name": {"$gt": "Alice", "$lt": "Charlie"}})
+
+    def test_not_operator(self):
+        """$not should negate a sub-condition."""
+        assert match_document({"x": 5}, {"x": {"$not": {"$gt": 10}}})
+        assert not match_document({"x": 15}, {"x": {"$not": {"$gt": 10}}})
+
+    def test_type_operator(self):
+        """$type should check field type."""
+        assert match_document({"x": "hello"}, {"x": {"$type": "string"}})
+        assert not match_document({"x": 42}, {"x": {"$type": "string"}})
+        assert match_document({"x": 42}, {"x": {"$type": "int"}})
+        assert match_document({"x": 3.14}, {"x": {"$type": "number"}})
+        assert match_document({"x": 42}, {"x": {"$type": "number"}})
+
+    def test_size_operator(self):
+        """$size should check array length."""
+        assert match_document({"tags": [1, 2, 3]}, {"tags": {"$size": 3}})
+        assert not match_document({"tags": [1, 2]}, {"tags": {"$size": 3}})
+        assert not match_document({"tags": "not_array"}, {"tags": {"$size": 3}})
+
+
+class TestUpdateOperators:
+    def test_inc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("inc", Path(tmp))
+            c.insert_one({"counter": 10})
+            c.update_one({}, {"$inc": {"counter": 5}})
+            assert c.find_one()["counter"] == 15
+            c.drop()
+
+    def test_mul(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("mul", Path(tmp))
+            c.insert_one({"price": 10, "qty": 3})
+            c.update_one({}, {"$mul": {"price": 1.1}})
+            doc = c.find_one()
+            assert doc["price"] == 11.0
+            assert doc["qty"] == 3
+            c.drop()
+
+    def test_push(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("push", Path(tmp))
+            c.insert_one({"tags": ["a"]})
+            c.update_one({}, {"$push": {"tags": "b"}})
+            assert c.find_one()["tags"] == ["a", "b"]
+            c.drop()
+
+    def test_push_creates_array(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("push_new", Path(tmp))
+            c.insert_one({"name": "test"})
+            c.update_one({}, {"$push": {"tags": "new"}})
+            assert c.find_one()["tags"] == ["new"]
+            c.drop()
+
+    def test_pull(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("pull", Path(tmp))
+            c.insert_one({"tags": ["a", "b", "c"]})
+            c.update_one({}, {"$pull": {"tags": "b"}})
+            assert c.find_one()["tags"] == ["a", "c"]
+            c.drop()
+
+    def test_add_to_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("addtoset", Path(tmp))
+            c.insert_one({"tags": ["a", "b"]})
+            c.update_one({}, {"$addToSet": {"tags": "b"}})
+            assert c.find_one()["tags"] == ["a", "b"]
+            c.update_one({}, {"$addToSet": {"tags": "c"}})
+            assert c.find_one()["tags"] == ["a", "b", "c"]
+            c.drop()
+
+    def test_set_dot_notation(self):
+        """$set with dot-notation should create nested structure."""
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("dotset", Path(tmp))
+            c.insert_one({"user": {"name": "Alice"}})
+            c.update_one({}, {"$set": {"user.age": 30}})
+            doc = c.find_one()
+            assert doc["user"]["age"] == 30
+            assert doc["user"]["name"] == "Alice"
+            c.drop()
+
+    def test_set_deep_nesting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("deepset", Path(tmp))
+            c.insert_one({})
+            c.update_one({}, {"$set": {"a.b.c": 42}})
+            doc = c.find_one()
+            assert doc["a"]["b"]["c"] == 42
+            c.drop()
+
+    def test_unset_dot_notation(self):
+        """$unset with dot-notation should remove nested keys."""
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("dotunset", Path(tmp))
+            c.insert_one({"user": {"name": "Alice", "age": 30}})
+            c.update_one({}, {"$unset": {"user.age": ""}})
+            doc = c.find_one()
+            assert "age" not in doc["user"]
+            assert doc["user"]["name"] == "Alice"
+            c.drop()
+
+
+class TestDatabaseDiskOnly:
+    def test_list_collections_includes_disk(self):
+        """list_collections should find collections on disk not yet loaded."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = MogDB(tmp)
+            db.collection("coll_a").insert_one({"x": 1})
+            db.close()
+
+            db2 = MogDB(tmp, compact_on_close=False)
+            names = db2.list_collections()
+            assert "coll_a" in names
+            db2.drop_collection("coll_a")
+
+    def test_drop_collection_disk_only(self):
+        """drop_collection should work on disk-only collections."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = MogDB(tmp)
+            db.collection("to_drop").insert_one({"x": 1})
+            db.close()
+
+            db2 = MogDB(tmp, compact_on_close=False)
+            assert "to_drop" in db2.list_collections()
+            db2.drop_collection("to_drop")
+            assert "to_drop" not in db2.list_collections()
+
+
+class TestIndexIntegration:
+    def test_create_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("idx", Path(tmp))
+            idx = c.create_index("status")
+            c.insert_one({"status": "active"})
+            c.insert_one({"status": "active"})
+            c.insert_one({"status": "inactive"})
+            assert len(idx.lookup("active")) == 2
+            assert len(idx.lookup("inactive")) == 1
+            c.drop()
+
+    def test_unique_index_violation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("uidx", Path(tmp))
+            c.create_index("code", unique=True)
+            c.insert_one({"code": "A"})
+            import pytest
+
+            with pytest.raises(ValueError):
+                c.insert_one({"code": "A"})
+            c.drop()
+
+    def test_index_updated_on_modify(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("idxupd", Path(tmp))
+            c.create_index("status")
+            c.insert_one({"status": "old"})
+            doc_id = c.find_one()["_id"]
+            c.update_one({"_id": doc_id}, {"$set": {"status": "new"}})
+            idx = c._indexes["status"]
+            assert len(idx.lookup("old")) == 0
+            assert len(idx.lookup("new")) == 1
+            c.drop()
+
+    def test_index_removed_on_delete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("idxdel", Path(tmp))
+            c.create_index("status")
+            c.insert_one({"status": "active"})
+            doc_id = c.find_one()["_id"]
+            c.delete_one({"_id": doc_id})
+            idx = c._indexes["status"]
+            assert len(idx.lookup("active")) == 0
+            c.drop()
+
+
+class TestSortedIndexMethods:
+    def test_update(self):
+        idx = SortedIndex("score")
+        idx.add("doc1", 10)
+        idx.update("doc1", 10, 20)
+        assert idx.range(gte=15, lte=25) == ["doc1"]
+        assert idx.range(gte=5, lte=15) == []
+
+    def test_clear(self):
+        idx = SortedIndex("score")
+        idx.add("doc1", 10)
+        idx.add("doc2", 20)
+        idx.clear()
+        assert idx.range() == []
+
+
+class TestDocumentTimestamp:
+    def test_updated_preserved_on_reload(self):
+        """_updated should not be overwritten when loading from disk."""
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ts", Path(tmp))
+            c.insert_one({"x": 1})
+            doc = c.find_one()
+            original_updated = doc["_updated"]
+            c.compact()
+
+            c2 = Collection("ts", Path(tmp))
+            reloaded = c2.find_one()
+            assert reloaded["_updated"] == original_updated
+            c2.drop()
+
+    def test_insert_many_survives_reopen(self):
+        """insert_many data should persist across collection reopens."""
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("batch", Path(tmp))
+            c.insert_many([{"a": 1}, {"a": 2}, {"a": 3}])
+            assert c.count() == 3
+            del c
+
+            c2 = Collection("batch", Path(tmp))
+            assert c2.count() == 3
+            c2.drop()
+
+
+# =========================================================================
+# Atomic find-and-modify
+# =========================================================================
+
+
+class TestFindOneAndUpdate:
+    def test_returns_old_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fou", Path(tmp))
+            c.insert_one({"name": "Alice", "score": 10})
+            old = c.find_one_and_update({"name": "Alice"}, {"$set": {"score": 20}})
+            assert old["score"] == 10
+
+    def test_returns_new_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fou", Path(tmp))
+            c.insert_one({"name": "Alice", "score": 10})
+            new = c.find_one_and_update(
+                {"name": "Alice"}, {"$inc": {"score": 5}}, return_document="after"
+            )
+            assert new["score"] == 15
+
+    def test_returns_none_on_no_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fou", Path(tmp))
+            c.insert_one({"name": "Alice"})
+            result = c.find_one_and_update({"name": "Bob"}, {"$set": {"x": 1}})
+            assert result is None
+
+    def test_modifies_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fou", Path(tmp))
+            c.insert_one({"name": "Alice", "v": 1})
+            c.find_one_and_update({"name": "Alice"}, {"$inc": {"v": 10}})
+            assert c.find_one({"name": "Alice"})["v"] == 11
+
+
+class TestFindOneAndReplace:
+    def test_returns_old_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("for", Path(tmp))
+            c.insert_one({"name": "Alice", "age": 30})
+            old = c.find_one_and_replace({"name": "Alice"}, {"name": "Alice", "age": 31})
+            assert old["age"] == 30
+
+    def test_returns_new_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("for", Path(tmp))
+            c.insert_one({"name": "Alice", "age": 30})
+            new = c.find_one_and_replace(
+                {"name": "Alice"}, {"name": "Alice", "age": 31}, return_document="after"
+            )
+            assert new["age"] == 31
+
+    def test_preserves_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("for", Path(tmp))
+            old_id = c.insert_one({"name": "Alice", "age": 30})
+            c.find_one_and_replace({"name": "Alice"}, {"name": "Alice", "age": 31})
+            doc = c.find_one({"_id": old_id})
+            assert doc is not None
+            assert doc["age"] == 31
+
+    def test_returns_none_on_no_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("for", Path(tmp))
+            c.insert_one({"name": "Alice"})
+            result = c.find_one_and_replace({"name": "Bob"}, {"name": "Bob"})
+            assert result is None
+
+
+class TestFindOneAndDelete:
+    def test_returns_deleted_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fod", Path(tmp))
+            c.insert_one({"name": "Alice", "score": 10})
+            deleted = c.find_one_and_delete({"name": "Alice"})
+            assert deleted["name"] == "Alice"
+            assert deleted["score"] == 10
+
+    def test_removes_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fod", Path(tmp))
+            c.insert_one({"name": "Alice"})
+            c.find_one_and_delete({"name": "Alice"})
+            assert c.find_one({"name": "Alice"}) is None
+
+    def test_returns_none_on_no_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fod", Path(tmp))
+            c.insert_one({"name": "Alice"})
+            result = c.find_one_and_delete({"name": "Bob"})
+            assert result is None
+            assert c.count() == 1
+
+    def test_only_deletes_first_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("fod", Path(tmp))
+            c.insert_many([{"x": 1}, {"x": 1}, {"x": 1}])
+            c.find_one_and_delete({"x": 1})
+            assert c.count() == 2
+
+
+# =========================================================================
+# Projection
+# =========================================================================
+
+
+class TestProjection:
+    def test_inclusion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("proj", Path(tmp))
+            c.insert_one({"name": "Alice", "age": 30, "email": "a@b.com"})
+            result = c.find_one({"name": "Alice"}, projection={"name": 1, "age": 1})
+            assert set(result.keys()) == {"_id", "name", "age"}
+
+    def test_exclusion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("proj", Path(tmp))
+            c.insert_one({"name": "Alice", "age": 30, "secret": "x"})
+            result = c.find_one({"name": "Alice"}, projection={"secret": 0})
+            assert "secret" not in result
+            assert result["name"] == "Alice"
+
+    def test_find_with_projection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("proj", Path(tmp))
+            c.insert_one({"name": "Alice", "age": 30})
+            c.insert_one({"name": "Bob", "age": 25})
+            results = c.find(projection={"name": 1})
+            for r in results:
+                assert set(r.keys()) == {"_id", "name"}
+
+    def test_projection_none_returns_all(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("proj", Path(tmp))
+            c.insert_one({"a": 1, "b": 2})
+            result = c.find_one(projection=None)
+            assert "a" in result and "b" in result
+
+    def test_projection_empty_dict_returns_all(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("proj", Path(tmp))
+            c.insert_one({"a": 1, "b": 2})
+            result = c.find_one(projection={})
+            assert "a" in result and "b" in result
+
+
+# =========================================================================
+# TTL indexes
+# =========================================================================
+
+
+class TestTTLIndex:
+    def test_create_ttl_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ttl", Path(tmp))
+            c.create_ttl_index("created_at", expire_after_seconds=1)
+            assert c._ttl_index == "created_at"
+            assert c._ttl_seconds == 1
+
+    def test_expired_documents_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ttl", Path(tmp))
+            c.create_ttl_index("ts", expire_after_seconds=5)
+            c.insert_one({"val": 1, "ts": time.time() - 10})  # expired (10s ago, TTL 5s)
+            c.insert_one({"val": 2, "ts": time.time()})  # not expired
+            # Force expiration check
+            c._last_expire_check = 0
+            c._expire_documents()
+            assert c.count() == 1
+            assert c.find_one({"val": 2}) is not None
+
+    def test_non_expired_documents_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ttl", Path(tmp))
+            c.create_ttl_index("ts", expire_after_seconds=3600)
+            c.insert_one({"val": 1, "ts": time.time()})
+            c._last_expire_check = 0
+            c._expire_documents()
+            assert c.count() == 1
+
+    def test_throttled_to_once_per_60s(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ttl", Path(tmp))
+            c.create_ttl_index("ts", expire_after_seconds=0)
+            c.insert_one({"ts": time.time() - 10})
+            c._expire_documents()  # first call: runs (throttle was 0)
+            assert c.count() == 0  # expired on first call
+            # Insert another expired doc
+            c.insert_one({"ts": time.time() - 10})
+            c._expire_documents()  # second call: throttled (< 60s since last)
+            assert c.count() == 1  # not expired due to throttle
+
+    def test_find_triggers_expiration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ttl", Path(tmp))
+            c.create_ttl_index("ts", expire_after_seconds=0)
+            c.insert_one({"ts": time.time() - 10})
+            c._last_expire_check = 0
+            c.find()  # triggers _expire_documents
+            assert c.count() == 0
+
+    def test_aggregate_triggers_expiration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ttl", Path(tmp))
+            c.create_ttl_index("ts", expire_after_seconds=0)
+            c.insert_one({"ts": time.time() - 10})
+            c._last_expire_check = 0
+            c.aggregate([{"$match": {}}])
+            assert c.count() == 0
+
+    def test_drop_index_clears_ttl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("ttl", Path(tmp))
+            c.create_ttl_index("ts", expire_after_seconds=60)
+            c.drop_index("ts")
+            assert c._ttl_index is None
+            assert c._ttl_seconds is None
+
+
+# =========================================================================
+# Capped collections
+# =========================================================================
+
+
+class TestCappedCollection:
+    def test_max_count_enforced(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("cap", Path(tmp), max_count=3)
+            c.insert_many([{"i": i} for i in range(5)])
+            assert c.count() == 3
+            # Oldest docs (0, 1) should be evicted
+            ids = {d["i"] for d in c.find()}
+            assert ids == {2, 3, 4}
+
+    def test_max_count_single_insert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("cap", Path(tmp), max_count=2)
+            c.insert_one({"a": 1})
+            c.insert_one({"a": 2})
+            c.insert_one({"a": 3})
+            assert c.count() == 2
+            assert c.find_one({"a": 1}) is None
+
+    def test_max_count_via_db_factory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = MogDB(tmp)
+            c = db.collection("cap", max_count=2)
+            c.insert_many([{"i": i} for i in range(4)])
+            assert c.count() == 2
+
+    def test_capped_with_indexes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("cap", Path(tmp), max_count=3)
+            c.create_index("val")
+            for i in range(5):
+                c.insert_one({"val": i})
+            assert c.count() == 3
+            # Index should be consistent
+            idx = c._indexes["val"]
+            assert len(idx.lookup(2)) == 1
+            assert len(idx.lookup(0)) == 0  # evicted
+
+
+# =========================================================================
+# SortedIndex integration
+# =========================================================================
+
+
+class TestSortedIndexIntegration:
+    def test_create_sorted_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("si", Path(tmp))
+            idx = c.create_sorted_index("age")
+            assert isinstance(idx, SortedIndex)
+            assert "age" in c._sorted_indexes
+
+    def test_sorted_index_populated_on_create(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("si", Path(tmp))
+            c.insert_many([{"age": 30}, {"age": 20}, {"age": 25}])
+            idx = c.create_sorted_index("age")
+            assert len(idx._entries) == 3
+
+    def test_sorted_index_updated_on_insert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("si", Path(tmp))
+            c.create_sorted_index("score")
+            c.insert_one({"score": 100})
+            assert len(c._sorted_indexes["score"]._entries) == 1
+
+    def test_sorted_index_updated_on_delete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("si", Path(tmp))
+            c.create_sorted_index("score")
+            c.insert_one({"score": 100})
+            c.delete_one({"score": 100})
+            assert len(c._sorted_indexes["score"]._entries) == 0
+
+    def test_sorted_index_range_query(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("si", Path(tmp))
+            c.create_sorted_index("age")
+            c.insert_many([{"age": 20}, {"age": 25}, {"age": 30}, {"age": 35}])
+            ids = c._sorted_indexes["age"].range(gte=25, lte=30)
+            assert len(ids) == 2
+
+
+# =========================================================================
+# Aggregation pipeline
+# =========================================================================
+
+
+class TestAggregate:
+    def test_match_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"x": 1}, {"x": 2}, {"x": 3}])
+            result = c.aggregate([{"$match": {"x": {"$gt": 1}}}])
+            assert len(result) == 2
+            assert all(d["x"] > 1 for d in result)
+
+    def test_project_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_one({"name": "Alice", "age": 30, "secret": "x"})
+            result = c.aggregate([{"$project": {"name": 1, "age": 1}}])
+            assert len(result) == 1
+            assert set(result[0].keys()) == {"_id", "name", "age"}
+
+    def test_sort_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"x": 3}, {"x": 1}, {"x": 2}])
+            result = c.aggregate([{"$sort": {"x": 1}}])
+            assert [d["x"] for d in result] == [1, 2, 3]
+
+    def test_sort_stage_descending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"x": 1}, {"x": 3}, {"x": 2}])
+            result = c.aggregate([{"$sort": {"x": -1}}])
+            assert [d["x"] for d in result] == [3, 2, 1]
+
+    def test_skip_and_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"i": i} for i in range(10)])
+            result = c.aggregate([{"$skip": 3}, {"$limit": 2}])
+            assert len(result) == 2
+            assert result[0]["i"] == 3
+            assert result[1]["i"] == 4
+
+    def test_group_sum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many(
+                [
+                    {"dept": "eng", "salary": 100},
+                    {"dept": "eng", "salary": 200},
+                    {"dept": "sales", "salary": 150},
+                ]
+            )
+            result = c.aggregate([{"$group": {"_id": "$dept", "total": {"$sum": "$salary"}}}])
+            by_dept = {d["_id"]: d["total"] for d in result}
+            assert by_dept["eng"] == 300
+            assert by_dept["sales"] == 150
+
+    def test_group_avg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"x": 10}, {"x": 20}, {"x": 30}])
+            result = c.aggregate([{"$group": {"_id": None, "avg_x": {"$avg": "$x"}}}])
+            assert result[0]["avg_x"] == 20.0
+
+    def test_group_min_max(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"x": 5}, {"x": 1}, {"x": 9}])
+            result = c.aggregate(
+                [{"$group": {"_id": None, "mn": {"$min": "$x"}, "mx": {"$max": "$x"}}}]
+            )
+            assert result[0]["mn"] == 1
+            assert result[0]["mx"] == 9
+
+    def test_group_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"a": 1}, {"a": 1}, {"a": 2}])
+            result = c.aggregate([{"$group": {"_id": "$a", "count": {"$sum": 1}}}])
+            by_a = {d["_id"]: d["count"] for d in result}
+            assert by_a[1] == 2
+            assert by_a[2] == 1
+
+    def test_group_first_last(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"g": "a", "v": 1}, {"g": "a", "v": 2}, {"g": "a", "v": 3}])
+            result = c.aggregate(
+                [{"$group": {"_id": "$g", "first": {"$first": "$v"}, "last": {"$last": "$v"}}}]
+            )
+            assert result[0]["first"] == 1
+            assert result[0]["last"] == 3
+
+    def test_group_push(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"g": "a", "v": 1}, {"g": "a", "v": 2}])
+            result = c.aggregate([{"$group": {"_id": "$g", "vals": {"$push": "$v"}}}])
+            assert sorted(result[0]["vals"]) == [1, 2]
+
+    def test_group_add_to_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many([{"g": "a", "v": 1}, {"g": "a", "v": 1}, {"g": "a", "v": 2}])
+            result = c.aggregate([{"$group": {"_id": "$g", "unique": {"$addToSet": "$v"}}}])
+            assert sorted(result[0]["unique"]) == [1, 2]
+
+    def test_unwind_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_one({"name": "Alice", "tags": ["a", "b"]})
+            c.insert_one({"name": "Bob", "tags": []})
+            result = c.aggregate([{"$unwind": "$tags"}])
+            assert len(result) == 3  # Alice's 2 tags + Bob's None
+            names_tags = {(d["name"], d.get("tags")) for d in result}
+            assert ("Alice", "a") in names_tags
+            assert ("Alice", "b") in names_tags
+            assert ("Bob", None) in names_tags
+
+    def test_multi_stage_pipeline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("agg", Path(tmp))
+            c.insert_many(
+                [
+                    {"dept": "eng", "salary": 100},
+                    {"dept": "eng", "salary": 200},
+                    {"dept": "sales", "salary": 150},
+                    {"dept": "sales", "salary": 50},
+                ]
+            )
+            result = c.aggregate(
+                [
+                    {"$match": {"salary": {"$gt": 80}}},
+                    {"$group": {"_id": "$dept", "avg": {"$avg": "$salary"}}},
+                    {"$sort": {"avg": -1}},
+                ]
+            )
+            assert result[0]["_id"] == "eng"
+            assert result[0]["avg"] == 150.0
+            assert result[1]["_id"] == "sales"
+            assert result[1]["avg"] == 150.0
+
+
+# =========================================================================
+# ASCENDING / DESCENDING constants
+# =========================================================================
+
+
+class TestSortConstants:
+    def test_constants(self):
+        assert ASCENDING == 1
+        assert DESCENDING == -1
+
+    def test_find_with_constants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Collection("sc", Path(tmp))
+            c.insert_many([{"x": 3}, {"x": 1}, {"x": 2}])
+            result = c.find(sort=[("x", ASCENDING)])
+            assert [d["x"] for d in result] == [1, 2, 3]
+            result = c.find(sort=[("x", DESCENDING)])
+            assert [d["x"] for d in result] == [3, 2, 1]

@@ -5,7 +5,7 @@ import { renderHook, cleanup } from '@testing-library/react'
 
 const mockPush = vi.fn()
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 
@@ -20,7 +20,10 @@ beforeEach(() => {
   mockPush.mockReset()
 })
 
-function keydown(key: string, mods: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {}) {
+function keydown(
+  key: string,
+  mods: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {},
+) {
   const ev = new KeyboardEvent('keydown', {
     key,
     ctrlKey: mods.ctrl ?? false,
@@ -39,28 +42,22 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/chat')
   })
 
-  it('Ctrl+2 navigates to /models', () => {
+  it('Ctrl+2 navigates to /training', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('2', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/models')
-  })
-
-  it('Ctrl+3 navigates to /knowledge', () => {
-    renderHook(() => useGlobalShortcuts())
-    keydown('3', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/knowledge')
-  })
-
-  it('Ctrl+4 navigates to /training', () => {
-    renderHook(() => useGlobalShortcuts())
-    keydown('4', { ctrl: true })
     expect(mockPush).toHaveBeenCalledWith('/training')
   })
 
-  it('Ctrl+5 navigates to /datasets', () => {
+  it('Ctrl+3 navigates to /datasets', () => {
+    renderHook(() => useGlobalShortcuts())
+    keydown('3', { ctrl: true })
+    expect(mockPush).toHaveBeenCalledWith('/datasets')
+  })
+
+  it('Ctrl+5 navigates to agents', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('5', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/datasets')
+    expect(mockPush).toHaveBeenCalledWith('/agents')
   })
 
   it('Ctrl+n dispatches new-chat event', () => {
@@ -72,10 +69,10 @@ describe('useGlobalShortcuts', () => {
     window.removeEventListener('new-chat', fn)
   })
 
-  it('Ctrl+Shift+A navigates to /monitoring', () => {
+  it('Ctrl+Shift+A navigates to /settings', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('A', { ctrl: true, shift: true })
-    expect(mockPush).toHaveBeenCalledWith('/monitoring')
+    expect(mockPush).toHaveBeenCalledWith('/settings')
   })
 
   it('Ctrl+Shift+F dispatches search-conversations event', () => {
@@ -130,8 +127,26 @@ describe('useGlobalShortcuts', () => {
 
   it('does not navigate for unknown key', () => {
     renderHook(() => useGlobalShortcuts())
-    keydown('9', { ctrl: true })
+    keydown('0', { ctrl: true })
     expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+Shift+M dispatches toggle-dark-mode', () => {
+    const fn = vi.fn()
+    window.addEventListener('toggle-dark-mode', fn)
+    renderHook(() => useGlobalShortcuts())
+    keydown('M', { ctrl: true, shift: true })
+    expect(fn).toHaveBeenCalledTimes(1)
+    window.removeEventListener('toggle-dark-mode', fn)
+  })
+
+  it('Ctrl+M without shift does not toggle dark mode', () => {
+    const fn = vi.fn()
+    window.addEventListener('toggle-dark-mode', fn)
+    renderHook(() => useGlobalShortcuts())
+    keydown('M', { ctrl: true })
+    expect(fn).not.toHaveBeenCalled()
+    window.removeEventListener('toggle-dark-mode', fn)
   })
 
   it('removes event listener on unmount', () => {

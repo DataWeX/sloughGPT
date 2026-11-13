@@ -12,19 +12,36 @@
 import {create} from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as slonet from '../services/onnx-inference-service';
+import * as souLoader from '../services/sou-loader';
 import * as llamaRn from '../services/llama-rn-service';
+import {useProvidersStore} from './providers-store';
 import type {LocalGenerateResult, HybridState, RoutingDecision, ActiveEngine, OnTokenCallback} from '../types/local-inference';
+import type {ProviderId, InferenceTarget} from '../types/providers';
 
 const STORAGE_KEY = '@sloughgpt/hybrid_config';
+
+/** Known local/remote engines (not third-party provider IDs). */
+const KNOWN_ENGINES = new Set(['slonet', 'qwen', 'remote']);
 
 // ── Pure routing (O(1), no string scanning at all) ─────────────────────
 
 function _route(_content: string, state: HybridState): RoutingDecision {
-  // Offline-only mode: never route to remote
+  // Offline-only mode: never route to remote or third-party
   if (state.offlineOnly) {
     if (state.slonet.loaded) return {target: 'local', engine: 'slonet'};
     if (state.qwen.loaded) return {target: 'local', engine: 'qwen'};
     return {target: 'remote', reason: 'offline-only — load a local engine in Settings'};
+  }
+
+  // Third-party provider selected
+  if (!KNOWN_ENGINES.has(state.activeEngine)) {
+    const providerId = state.activeEngine as ProviderId;
+    const providerConfig = useProvidersStore.getState().providers[providerId];
+    if (providerConfig?.enabled && providerConfig.apiKey) {
+      return {target: providerId, reason: `third-party provider: ${providerConfig.name}`};
+    }
+    // Provider not configured — fall through to self-hosted remote
+    return {target: 'remote', reason: `${providerId} not configured — using self-hosted`};
   }
 
   if (state.activeEngine === 'remote') {
@@ -54,6 +71,7 @@ interface HybridStoreState extends HybridState {
   setActiveEngine: (engine: ActiveEngine) => Promise<void>;
   setOfflineOnly: (enabled: boolean) => Promise<void>;
   loadSloNet: (checkpointName?: string) => Promise<void>;
+  loadSloNetFromSou: () => Promise<void>;
   loadQwen: (onProgress?: (f: number) => void) => Promise<void>;
   unloadSloNet: () => void;
   unloadQwen: () => Promise<void>;
@@ -63,6 +81,7 @@ interface HybridStoreState extends HybridState {
     content: string,
     messages: Array<{role: string; content: string}>,
     onToken?: OnTokenCallback,
+    opts?: { maxTokens?: number; temperature?: number; topK?: number; topP?: number },
   ) => Promise<LocalGenerateResult | null>;
 }
 
@@ -113,6 +132,22 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
     }
   },
 
+  loadSloNetFromSou: async () => {
+    set({downloadProgress: 0, lastError: null});
+    try {
+      const result = await souLoader.pickAndLoadSou();
+      if (result) {
+        set({
+          slonet: {...get().slonet, loaded: true, modelName: result.name},
+          downloadProgress: 1,
+          activeEngine: 'slonet',
+        });
+      }
+    } catch (err: any) {
+      set({lastError: err.message, downloadProgress: 0});
+    }
+  },
+
   loadQwen: async onProgress => {
     set({downloadProgress: 0, lastError: null});
     try {
@@ -146,13 +181,18 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
 
   decideRoute: (content: string) => _route(content, get()),
 
-  executeLocal: async (content, messages, onToken) => {
+  executeLocal: async (content, messages, onToken, opts) => {
     const route = get().decideRoute(content);
     if (route.target !== 'local') return null;
 
+    const maxTokens = opts?.maxTokens ?? 64;
+    const temperature = opts?.temperature ?? 0.7;
+    const topK = opts?.topK ?? 40;
+    const topP = opts?.topP ?? 0.85;
+
     try {
       if (route.engine === 'slonet') {
-        const result = await slonet.generate(content, 64, 0.8, 40, 0.9, 0, onToken);
+        const result = await slonet.generate(content, maxTokens, temperature, topK, topP, 0, onToken);
         return result;
       }
 

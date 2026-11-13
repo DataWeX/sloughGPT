@@ -1,0 +1,285 @@
+"""
+Tests for the session router — context store, messages, inspector.
+
+Regenerate lives on the chat router (`POST /chat/{session_id}/regenerate`).
+"""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from apps.api.server.routers.system import router
+
+
+def _make_app():
+    _app = FastAPI()
+    _app.include_router(router)
+    return _app
+
+
+@pytest.fixture
+def app():
+    return _make_app()
+
+
+@pytest.fixture
+def client(app):
+    return TestClient(app, raise_server_exceptions=False)
+
+
+class TestSetSessionContext:
+    """POST /session/{session_id}/context"""
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.store_context")
+    def test_set_context_with_messages(self, mock_store, client):
+        mock_store.return_value = {
+            "status": "stored",
+            "session_id": "sess-1",
+            "message_count": 2,
+        }
+        resp = client.post(
+            "/session/sess-1/context",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi there"},
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert body["data"]["message_count"] == 2
+
+    def test_set_context_empty(self, client):
+        resp = client.post("/session/sess-1/context", json={})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "success"
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.store_context")
+    def test_set_context_with_system_prompt(self, mock_store, client):
+        mock_store.return_value = {
+            "status": "stored",
+            "session_id": "sess-2",
+            "message_count": 1,
+        }
+        resp = client.post(
+            "/session/sess-2/context",
+            json={
+                "system_prompt": "You are helpful.",
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"]["session_id"] == "sess-2"
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.store_context")
+    def test_set_context_with_knowledge(self, mock_store, client):
+        mock_store.return_value = {
+            "status": "stored",
+            "session_id": "sess-3",
+            "message_count": 1,
+        }
+        resp = client.post(
+            "/session/sess-3/context",
+            json={
+                "knowledge": ["fact1", "fact2"],
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"]["session_id"] == "sess-3"
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.store_context")
+    def test_set_context_store_via_kwargs_passes_messages(self, mock_store, client):
+        mock_store.return_value = {"status": "stored", "message_count": 1}
+        client.post(
+            "/session/sess-x/context",
+            json={
+                "messages": [{"role": "assistant", "content": "ok"}],
+            },
+        )
+        args, kwargs = mock_store.call_args
+        assert args[0] == "sess-x"
+        assert args[1][0]["role"] == "assistant"
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.store_context")
+    def test_set_context_store_propagates_error(self, mock_store):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(_make_app(), raise_server_exceptions=False)
+        mock_store.side_effect = RuntimeError("disk full")
+        resp = client.post(
+            "/session/sess-x/context",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
+        assert resp.status_code == 500
+
+
+class TestGetSessionMessages:
+    """GET /session/{session_id}/messages"""
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_get_messages(self, mock_get, client):
+        mock_get.return_value = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ]
+        resp = client.get("/session/sess-1/messages")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert len(body["data"]["messages"]) == 2
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_get_messages_empty(self, mock_get, client):
+        mock_get.return_value = []
+        resp = client.get("/session/sess-1/messages")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["messages"] == []
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_get_messages_error(self, mock_get, client):
+        mock_get.side_effect = RuntimeError("storage error")
+        resp = client.get("/session/sess-1/messages")
+        assert resp.status_code == 500
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_get_messages_returns_session_id(self, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": "Hi"}]
+        resp = client.get("/session/my-session-42/messages")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"]["session_id"] == "my-session-42"
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_get_messages_long_history(self, mock_get, client):
+        messages = [
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"msg-{i}"}
+            for i in range(50)
+        ]
+        mock_get.return_value = messages
+        resp = client.get("/session/sess-long/messages")
+        assert resp.status_code == 200
+        assert len(resp.json()["data"]["messages"]) == 50
+
+    def test_get_messages_wrong_method_is_405(self, client):
+        resp = client.post("/session/sess-1/messages")
+        assert resp.status_code == 405
+
+
+class TestSessionInspector:
+    """GET /session/{session_id}/inspector"""
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_inspector_returns_structure(self, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": "Hi"}]
+        resp = client.get("/session/sess-1/inspector")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "session" in body
+        assert "knowledge" in body
+        assert "traits" in body
+        assert "feedback" in body
+        assert body["session"]["id"] == "sess-1"
+        assert body["session"]["message_count"] == 1
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_inspector_empty_session(self, mock_get, client):
+        mock_get.return_value = []
+        resp = client.get("/session/sess-empty/inspector")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["session"]["message_count"] == 0
+        assert body["session"]["messages"] == []
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_inspector_respects_last_ten(self, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": f"m{i}"} for i in range(25)]
+        resp = client.get("/session/sess-25/inspector")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["session"]["message_count"] == 25
+        assert len(body["session"]["messages"]) == 10
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_inspector_has_workspace_and_modes(self, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": "Hi"}]
+        resp = client.get("/session/sess-1/inspector")
+        body = resp.json()["data"]
+        assert "workspace" in body
+        assert "modes" in body
+        assert {"personality", "memory", "style", "task"} <= set(body["modes"])
+
+
+class TestSessionMethodMismatch:
+    """Wrong HTTP methods on session routes."""
+
+    def test_context_get_405(self, client):
+        resp = client.get("/session/sess-1/context")
+        assert resp.status_code == 405
+
+    def test_messages_post_405(self, client):
+        resp = client.post("/session/sess-1/messages")
+        assert resp.status_code == 405
+
+    def test_inspector_post_405(self, client):
+        resp = client.post("/session/sess-1/inspector")
+        assert resp.status_code == 405
+
+    def test_session_regenerate_is_404(self, client):
+        """Regenerate moved to chat — no session alias remains."""
+        resp = client.post("/session/sess-1/regenerate")
+        assert resp.status_code == 404
+
+
+class TestSessionContextValidation:
+    """SessionContext request body validation."""
+
+    def test_messages_wrong_type_422(self, client):
+        resp = client.post("/session/sess-1/context", json={"messages": "not a list"})
+        assert resp.status_code == 422
+
+    def test_system_prompt_wrong_type_422(self, client):
+        resp = client.post("/session/sess-1/context", json={"system_prompt": 42})
+        assert resp.status_code == 422
+
+    def test_knowledge_wrong_type_422(self, client):
+        resp = client.post("/session/sess-1/context", json={"knowledge": "not-a-list"})
+        assert resp.status_code == 422
+
+
+class TestInspectorEdgePaths:
+    """Inspector error and data-source branches."""
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    def test_inspector_error_returns_500(self, mock_get, client):
+        mock_get.side_effect = RuntimeError("storage error")
+        resp = client.get("/session/sess-1/inspector")
+        assert resp.status_code == 500
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.infrastructure.context_core.get_context_core")
+    def test_inspector_includes_workspace(self, mock_cc, mock_get, client):
+        mock_get.return_value = [{"role": "user", "content": "Hi"}]
+        cc = MagicMock()
+        cc.get_context_inspector.return_value = {
+            "working_memory": ["note1"],
+            "semantic_keys": ["k1"],
+            "episodic_count": 3,
+            "sensory_buffer_size": 5,
+            "system_prompt": "You are a helper.",
+        }
+        mock_cc.return_value = cc
+        resp = client.get("/session/sess-1/inspector")
+        assert resp.status_code == 200
+        ws = resp.json()["data"]["workspace"]
+        assert ws["working_memory"] == ["note1"]
+        assert ws["episodic_count"] == 3
+        assert ws["system_prompt"] == "You are a helper."

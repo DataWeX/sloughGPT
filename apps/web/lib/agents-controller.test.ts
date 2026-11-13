@@ -75,6 +75,30 @@ describe('agentsController.execute', () => {
   })
 })
 
+describe('agentsController.listRuns', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GETs /agents/runs', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      runs: [{ id: 'run_1', goal: 'Research', status: 'completed', tasks: [], completed_count: 1, failed_count: 0, logs: [] }],
+      count: 1,
+    })
+
+    const result = await agentsController.listRuns(20)
+    expect(result.count).toBe(1)
+    expect(result.runs[0].id).toBe('run_1')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/agents/runs?limit=20')
+  })
+
+  it('GETs run detail', async () => {
+    apiClient.apiGet.mockResolvedValue({ id: 'run_1', goal: 'Research', status: 'completed', tasks: [], completed_count: 1, failed_count: 0, logs: ['started'] })
+
+    const result = await agentsController.getRun('run_1')
+    expect(result.goal).toBe('Research')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/agents/runs/run_1')
+  })
+})
+
 describe('agentsController.orchestrate', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
@@ -122,13 +146,29 @@ describe('agentsController.orchestrate', () => {
       'http://127.0.0.1:9/agents/orchestrate',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ goal: 'test goal', context: 'context' }),
+        body: JSON.stringify({ goal: 'test goal', context: 'context', agent_ids: [] }),
       }),
     )
     expect(planFn).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: '1' })]))
     expect(statusFn).toHaveBeenCalled()
     expect(composeFn).toHaveBeenCalled()
     expect(completeFn).toHaveBeenCalledWith('final result', [])
+  })
+
+  it('passes agentIds through to the payload', async () => {
+    mockFetchSSE([
+      JSON.stringify({ stream: 'agent-orchestrate', phase: 'COMPLETE', status: 'complete', data: { response: 'done', tasks: [] } }),
+    ])
+
+    await agentsController.orchestrate('goal', 'ctx', { onComplete: vi.fn(), onError: vi.fn() }, undefined, ['a1', 'a2'])
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:9/agents/orchestrate',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ goal: 'goal', context: 'ctx', agent_ids: ['a1', 'a2'] }),
+      }),
+    )
   })
 
   it('calls onError on HTTP error', async () => {

@@ -95,7 +95,7 @@ describe('chat-commands', () => {
     const cmd = cmds.find(c => c.command === '/model')!
     await cmd.execute(['bad-model'], ctx)
     const lastMsg = (ctx.addSystemMessage as any).mock.calls.at(-1)?.[0]
-    expect(lastMsg).toContain('Failed')
+    expect(lastMsg).toContain('Could not')
   })
 
   // /soul

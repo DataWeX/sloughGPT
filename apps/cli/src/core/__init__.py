@@ -1,1 +1,1 @@
-"""CLI core modules (printer, validator, version)."""
+"""CLI core modules (validator, version)."""

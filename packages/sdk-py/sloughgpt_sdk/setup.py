@@ -3,10 +3,11 @@ SloughGPT SDK - Python Package Setup
 """
 
 import os
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 readme_path = os.path.join(os.path.dirname(__file__), "README.md")
-with open(readme_path, "r", encoding="utf-8") as fh:
+with open(readme_path, encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(

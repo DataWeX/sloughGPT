@@ -1,97 +1,429 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useApiHealth } from '@/hooks/useApiHealth'
+import { useEffect, useState, useCallback } from 'react'
+import Link from '@/vite/next-compat/link'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
+import { useConsciousnessStatus, getQualiaMood } from '@/hooks/useConsciousnessStatus'
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
-import { cn } from '@/lib/cn'
+import { useErrorStore } from '@/lib/error-store'
+import { serverNow } from '../../lib/clock'
+import { useErrorStream } from '@/hooks/useErrorStream'
+import {
+  cn,
+  Button,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  IconX,
+  Spinner,
+} from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
+import { logger } from '@/lib/dev-log'
+import { formatDuration } from '@/lib/formatDuration'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
+import { useModelReadiness } from '@/lib/store'
+
+/** Errors older than this drop out of the errs badge: the badge reports what
+ *  is going wrong NOW, not the undismissed backlog since page load (which
+ *  produced live-but-"21 errs" screens nothing could clear). */
+export const ERROR_BADGE_TTL_MS = 10 * 60_000
+
+function getFailureSummary(
+  failures: { kind: string; timeoutMs: number; error: string; timestamp: number }[],
+): string {
+  if (failures.length === 0) return ''
+  const last = failures[0]
+  if (last.kind === 'timeout') return `timeout after ${last.timeoutMs / 1000}s`
+  if (last.kind === 'connection_refused') return 'connection refused'
+  return last.error.slice(0, 40)
+}
 
 export function StatusBar() {
-  const { state: health } = useApiHealth()
-  const summary = useApiMonitor((s) => s.healthSummary)
+  const { health, healthLegacy, connectionStatus } = useLiveStatus()
+  const recentFailures = useApiMonitor((s) => s.recentFailures)
+  const failureCount = useApiMonitor((s) => s.failureCount)
+  const lastOffline = useApiMonitor((s) => s.lastOffline)
+  const clearFailures = useApiMonitor((s) => s.clearFailures)
+  const errorCount = useErrorStore((s) =>
+    s.errors.reduce(
+      (sum, e) => (serverNow() - e.timestamp < ERROR_BADGE_TTL_MS ? sum + e.count : sum),
+      0,
+    ),
+  )
+  const { connected: errorStreamConnected, totalReceived: errorStreamTotal } = useErrorStream()
+  const modelReadiness = useModelReadiness()
   const [soulName, setSoulName] = useState<string | null>(null)
   const [archetypeLabel, setArchetypeLabel] = useState<string | null>(null)
   const [unseenCount, setUnseenCount] = useState(0)
+  const [now, setNow] = useState(Date.now())
+  const [retrying, setRetrying] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const { status: consciousnessStatus } = useConsciousnessStatus()
 
   useEffect(() => {
-    setUnseenCount(getUnseenCount())
-    const handler = () => setUnseenCount(getUnseenCount())
+    getUnseenCount()
+      .then(setUnseenCount)
+      .catch(() => setUnseenCount(0))
+    const handler = () => {
+      getUnseenCount()
+        .then(setUnseenCount)
+        .catch(() => {})
+    }
     window.addEventListener('whatsnew-updated', handler)
     return () => window.removeEventListener('whatsnew-updated', handler)
   }, [])
 
   useEffect(() => {
-    if (health === null || health === 'offline') return
-    soulsController.getCurrent().then(async (s) => {
-      if (s && 'name' in s) {
-        const name = (s as any).name
+    if (connectionStatus === 'connected' && health !== null) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [connectionStatus, health])
+
+  const currentSoul = health?.soul ?? null
+
+  useEffect(() => {
+    if (health === null || connectionStatus !== 'connected') return
+    let cancelled = false
+    soulsController
+      .getCurrent()
+      .then(async (s) => {
+        if (cancelled || !s || !('name' in s)) return
+        const name = s.name
         setSoulName(name)
         try {
           const w = await soulsController.getTraitWeights()
-          if (w && !('error' in w)) {
-            const arch = deriveArchetype(w as any)
+          if (!cancelled && w && !('error' in w)) {
+            const arch = deriveArchetype(w as Record<string, Record<string, number>>)
             setArchetypeLabel(arch.label)
           }
-        } catch {}
-      }
-    }).catch(() => {})
-  }, [health])
+        } catch {
+          logger.warning('StatusBar: failed to fetch trait weights', {})
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [connectionStatus, currentSoul])
 
-  const score = summary?.score
-  const dot = health === null ? 'bg-muted-foreground/50' :
-    health === 'offline' ? 'bg-destructive' :
-    score != null && score < 50 ? 'bg-destructive' :
-    score != null && score < 80 ? 'bg-warning' :
-    health.model_loaded ? 'bg-success' : 'bg-warning'
+  const handleRetry = useCallback(async () => {
+    setRetrying(true)
+    try {
+      // One retry path for every surface (see lib/backend-retry): silent
+      // /health probe, then revalidate cached views in place — never a
+      // document reload, which threw away drafts and in-flight streams.
+      await probeBackendAndRevalidate()
+    } finally {
+      setTimeout(() => setRetrying(false), 1000)
+    }
+  }, [])
 
-  const statusText = health === null ? 'Connecting...' :
-    health === 'offline' ? 'Offline' :
-    summary?.summary || (health.model_loaded ? health.model_type : 'No model')
+  const handleClearFailures = useCallback(() => {
+    clearFailures()
+  }, [clearFailures])
+
+  const score = health?.health_score
+  const dotColor =
+    connectionStatus === 'connecting'
+      ? 'bg-muted-foreground/50'
+      : connectionStatus === 'offline'
+        ? 'bg-destructive'
+        : connectionStatus === 'error'
+          ? 'bg-destructive'
+          : connectionStatus === 'reloading'
+            ? 'bg-destructive animate-pulse'
+            : score != null && score < 50
+              ? 'bg-destructive'
+              : score != null && score < 80
+                ? 'bg-warning'
+                : health?.model_loaded
+                  ? 'bg-success'
+                  : 'bg-warning'
+
+  let statusText: string
+  if (connectionStatus === 'connecting' && health === null) {
+    statusText = 'Connecting...'
+  } else if (connectionStatus === 'error') {
+    // 'error' = reload protection engaged (3 reloads in the window). It is a
+    // live, recoverable state — the fallback poll keeps running and the first
+    // successful health response clears it — so it must not fall through to
+    // the healthy branch and print "No model".
+    const elapsed = lastOffline ? formatDuration((now - lastOffline) / 1000) : ''
+    statusText = `Not responding — retrying${elapsed ? ` (${elapsed})` : ''}`
+  } else if (connectionStatus === 'offline') {
+    const elapsed = lastOffline ? formatDuration((now - lastOffline) / 1000) : ''
+    const failInfo = getFailureSummary(recentFailures)
+    statusText = failInfo
+      ? `Offline — ${failInfo}${elapsed ? ` (${elapsed})` : ''}`
+      : `Offline${elapsed ? ` (${elapsed})` : ''}`
+  } else if (connectionStatus === 'connecting' && health !== null) {
+    // A drop mid-stream: the last snapshot is still here, but claiming
+    // "healthy" while reconnecting is a lie. The model stays named in the
+    // detail rows — only the verdict changes.
+    statusText = 'Reconnecting…'
+  } else {
+    statusText =
+      health?.health_summary || (health?.model_loaded ? health.model_type || 'Loaded' : 'No model')
+  }
+
+  const hasFailures = failureCount > 0 && connectionStatus !== 'connected'
+  const isOffline = connectionStatus === 'offline'
+  const isOnline = connectionStatus === 'connected' && health !== null
 
   return (
-    <Link href="/monitoring" className="flex shrink-0 h-6 sm:h-7 items-center justify-between px-2 sm:px-3 border-t border-border/30 bg-muted/20 text-[10px] text-muted-foreground/70 hover:bg-muted/40 transition-colors" aria-label="System health and model status">
-      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
-        <span className="flex items-center gap-1" aria-live="polite" aria-atomic="true">
-          <span className={cn("inline-block h-1.5 w-1.5 rounded-full shrink-0", dot)} aria-hidden="true" />
-          <span className="truncate max-w-[200px] sm:max-w-none">{statusText}</span>
-        </span>
-        {soulName && archetypeLabel && (
-          <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/8 text-primary/80 text-[9px] font-medium leading-none">
-            {archetypeLabel}
+    <div className="sl-status-bar" role="status" aria-live="polite" aria-atomic="true">
+      {/* Compact row — always visible */}
+      <div className="sl-status-bar-row">
+        {/* Left: Status dot + text */}
+        <Link
+          href="/settings"
+          prefetch={false}
+          className="sl-status-bar-status"
+          aria-label="System health"
+        >
+          <span className={cn('sl-status-bar-dot', dotColor)} aria-hidden="true" />
+          <span className="truncate max-w-[180px] sm:max-w-none" title={statusText}>
+            {statusText}
           </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2 sm:gap-3">
-        <button
-          onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-output-panel')) }}
-          className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors"
-          aria-label="Toggle server output"
-          title="Server output"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-        </button>
-        <button
-          onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-whatsnew')) }}
-          className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors relative"
-          aria-label={unseenCount > 0 ? `${unseenCount} new feature${unseenCount === 1 ? '' : 's'}` : "What's new"}
-          title="What's new"
-        >
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M13 11h-2v-2h2v2zm0 6h-2v-6h2v6zm1-15H6v2h8V2zm4 4H2v14h16V6zM4 18V8h12v10H4z"/></svg>
-          {unseenCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium leading-none">
-              {unseenCount > 9 ? '9+' : unseenCount}
+          {isOnline && <span className="sl-badge sl-badge-success">live</span>}
+        </Link>
+
+        {/* Right: Actions + metrics */}
+        <div className="sl-status-bar-actions">
+          {/* Failure count */}
+          {hasFailures && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="sl-badge sl-badge-destructive cursor-help" role="status">
+                  {failureCount} fail{failureCount !== 1 ? 's' : ''}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" variant="muted" className="max-w-64">
+                <div className="space-y-1.5">
+                  <p className="font-medium text-destructive">Connection Failures</p>
+                  {recentFailures.slice(0, 3).map((f, i) => (
+                    <div key={i} className="text-[10px] text-muted-foreground">
+                      <span className="font-mono">
+                        {new Date(f.timestamp).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        })}
+                      </span>
+                      <span className="mx-1">·</span>
+                      <span>
+                        {f.kind === 'timeout'
+                          ? `Timeout (${f.timeoutMs / 1000}s)`
+                          : f.kind === 'connection_refused'
+                            ? 'Connection refused'
+                            : f.error.slice(0, 30)}
+                      </span>
+                    </div>
+                  ))}
+                  {recentFailures.length > 3 && (
+                    <p className="text-[9px] text-muted-foreground/70">
+                      +{recentFailures.length - 3} more
+                    </p>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Error count — recent window only; click clears the backlog */}
+          {errorCount > 0 && (
+            <button
+              type="button"
+              className="sl-badge sl-badge-destructive"
+              onClick={() => useErrorStore.getState().clearErrors()}
+              aria-label="Clear error count"
+              title={`Errors in the last ${Math.round(ERROR_BADGE_TTL_MS / 60_000)} minutes — click to clear`}
+            >
+              {errorCount} err{errorCount !== 1 ? 's' : ''}
+            </button>
+          )}
+
+          {/* Error stream */}
+          {errorStreamConnected && (
+            <span
+              className="sl-badge sl-badge-success"
+              title={`${errorStreamTotal} error events received`}
+            >
+              <span className="h-1 w-1 rounded-full bg-success animate-pulse" />
+              stream
             </span>
           )}
-        </button>
-        {summary?.tokens_per_sec ? (
-          <span className="hidden sm:inline tabular-nums">{summary.tokens_per_sec.toFixed(0)} t/s</span>
-        ) : health !== null && health !== 'offline' && health.inference_count != null ? (
-          <span className="hidden sm:inline">{health.inference_count} response{health.inference_count !== 1 ? 's' : ''}</span>
-        ) : null}
+
+          {/* Soul archetype */}
+          {soulName && archetypeLabel && (
+            <span className="sl-badge sl-badge-primary">{archetypeLabel}</span>
+          )}
+
+          {/* Consciousness status */}
+          {consciousnessStatus && consciousnessStatus.enabled && (
+            <span
+              className="sl-badge sl-badge-secondary"
+              title={`Consciousness: ${consciousnessStatus.level}/3 | Mood: ${getQualiaMood(consciousnessStatus.current_qualia)}`}
+            >
+              <span className="h-1 w-1 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+              {getQualiaMood(consciousnessStatus.current_qualia) || `L${consciousnessStatus.level}`}
+            </span>
+          )}
+
+          {/* Token rate or inference count */}
+          {isOnline && health?.tokens_per_sec ? (
+            <span className="sl-status-bar-metric tabular-nums">
+              <span className="h-1 w-1 rounded-full bg-success animate-pulse" aria-hidden="true" />
+              {health.tokens_per_sec.toFixed(0)} tok/s
+            </span>
+          ) : isOnline && health?.inference_count != null ? (
+            <span className="sl-status-bar-metric tabular-nums">
+              {health.inference_count} req{health.inference_count !== 1 ? 's' : ''}
+            </span>
+          ) : null}
+
+          {/* What's new — always visible */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              window.dispatchEvent(new CustomEvent('toggle-whatsnew'))
+            }}
+            className="sl-status-bar-btn relative"
+            aria-label={
+              unseenCount > 0
+                ? `${unseenCount} new feature${unseenCount === 1 ? '' : 's'}`
+                : "What's new"
+            }
+            title="What's new"
+          >
+            <svg
+              className="h-3 w-3"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 5v3l2 1" />
+            </svg>
+            {unseenCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[8px] font-medium leading-none">
+                {unseenCount > 9 ? '9+' : unseenCount}
+              </span>
+            )}
+          </button>
+
+          {/* Expand toggle */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setExpanded(!expanded)
+            }}
+            className="sl-status-bar-btn"
+            aria-label={expanded ? 'Collapse details' : 'Expand details'}
+            aria-expanded={expanded}
+          >
+            <svg
+              className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')}
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 6l4 4 4-4" />
+            </svg>
+          </button>
+        </div>
       </div>
-    </Link>
+
+      {/* Expanded row — details */}
+      {expanded && (
+        <div className="sl-status-bar-details">
+          <div className="sl-status-bar-detail-group">
+            <span className="sl-status-bar-detail-label">Model</span>
+            <span className="sl-status-bar-detail-value">{health?.model_type || '—'}</span>
+          </div>
+          <div className="sl-status-bar-detail-group">
+            <span className="sl-status-bar-detail-label">Requests</span>
+            <span className="sl-status-bar-detail-value tabular-nums">
+              {health?.inference_count ?? '—'}
+            </span>
+          </div>
+          <div className="sl-status-bar-detail-group">
+            <span className="sl-status-bar-detail-label">Uptime</span>
+            <span className="sl-status-bar-detail-value tabular-nums">
+              {health?.uptime_seconds ? formatDuration(health.uptime_seconds) : '—'}
+            </span>
+          </div>
+          {modelReadiness && !modelReadiness.ready && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Loading</span>
+              <span className="sl-status-bar-detail-value text-warning">
+                {modelReadiness.message}
+              </span>
+            </div>
+          )}
+          <div className="sl-status-bar-detail-spacer" />
+          {/* Retry & Clear buttons (only when offline/errored) */}
+          {isOffline && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 p-0 text-destructive/70 hover:text-destructive"
+              onClick={handleRetry}
+              disabled={retrying}
+              aria-label="Retry connection"
+              title="Retry"
+            >
+              <Spinner className="h-3 w-3" />
+            </Button>
+          )}
+          {hasFailures && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 p-0 text-muted-foreground/50 hover:text-muted-foreground"
+              onClick={handleClearFailures}
+              aria-label="Clear failures"
+              title="Clear"
+            >
+              <IconX className="h-3 w-3" />
+            </Button>
+          )}
+          {/* Output panel */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              window.dispatchEvent(new CustomEvent('toggle-output-panel'))
+            }}
+            className="sl-status-bar-btn"
+            aria-label="Toggle service output"
+            title="Service output"
+          >
+            <svg
+              className="h-3 w-3"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 4h12M2 8h12M2 12h8" />
+            </svg>
+          </button>
+        </div>
+      )}
+    </div>
   )
 }

@@ -1,0 +1,168 @@
+# Transport Projections — capability → contract → transport
+
+> **Doctrine:** the _Endpoint & Transport Rule_ in the root
+> [AGENTS.md](../AGENTS.md). **How to write a handler today:** the _Router
+> Playbook_ in [PRODUCT_ENGINEERING.md](PRODUCT_ENGINEERING.md#router-playbook).
+> **Endpoint inventory:** [routers.md](routers.md).
+> This file is the pattern between them — what a capability _is_ before it
+> becomes a route, and why "endpoint" stops being a noun you build.
+
+## Two wrong answers, one mistake
+
+"How does the web reach core?" has two tempting shapes. Both are conveyor-belt
+thinking:
+
+| Shape                           | What it is                          | What it costs                                                                                                     |
+| ------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **N hand-laid feature routers** | one belt per feature                | the contract written N times (handler, client, docs, tests); every capability becomes an endpoint _project_       |
+| **One generic tool surface**    | `GET /tools` + `POST /tools/{name}` | a god-endpoint: kills GET/POST semantics, per-route auth scopes, OpenAPI paths, cacheability, route-level metrics |
+
+Same mistake: **transport treated as something you build.** The fix is not a
+better belt — it is to stop confusing three different things that a hand-written
+router fuses into one: the **contract** (what a capability means), the
+**transport** (how a process boundary is crossed), and the **registration**
+(how the app learns the capability exists).
+
+## The pattern: descriptor → projection → registration
+
+**1. Contract — declared once, per module.** A capability is a descriptor:
+`{name, params (JSON Schema), result, auth_scope, idempotent, version}`. It is
+the single source of truth; routes, clients, docs and tests are _derived_ from
+it (the contract-first / OpenAPI / JSON-Schema school). In this repo that
+descriptor is `ToolSpec` (`domain/agents/_internal/tools.py`): `parameters` is
+stored, `params` derives the JSON Schema view — one declaration, two views,
+never stored twice.
+
+**2. Projections — adapters that emit the transport.** Real routes, generated
+rather than hand-written: a module declares its descriptor, a `create_router(spec, route, handler)`
+helper emits the fragment — `GET /tools/mole/report` for reads,
+`POST /tools/mole/check` for actions — with proper verbs, status codes,
+`success_response` envelopes and `classify_and_raise` errors, all from the one
+entry. FastAPI composes the fragments (`include_router` → `app.openapi()`
+merges), so **the contract itself is modular**. The same descriptor projects
+everywhere else:
+
+| Projection          | Consumer                                                   | Status here                                                                                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| HTTP route fragment | web / mobile / SDK clients                                 | ✅ `create_router(spec, route, handler)`                                                                                                                                                                           |
+| SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                                                                                                                                                                                        |
+| CLI subcommand      | `cli.py` shell                                             | ❌ not projected                                                                                                                                                                                                   |
+| Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly                                                                                                                                                                        |
+| TS client helper    | `http-client.ts` (the only API surface allowed)            | ✅ `gen_ts_contracts.py` → one self-contained, byte-identical artifact per frontend (`lib/protocol/contracts.gen.ts`, SDK `src/contracts.gen.ts`, mobile `src/services/contracts.gen.ts`); rest still hand-written |
+
+**3. Registration — microkernel, not a switchyard.** Each module self-registers
+at boot (import side-effect or a `@tool(descriptor)` decorator — the WordPress
+REST / VS Code extension / POSIX loadable-module workflow). The app never
+contains a central list of features to include; composition is discovered. The
+workflow layer that makes it enforce itself without hierarchy: a **CI
+contract-check** — every descriptor must carry JSON-Schema params, an auth
+scope, and a contract test; the **OpenAPI diff is reviewed like code**
+(contract testing / Pact-style consumer-driven checks).
+
+The one-line hexagonal framing: **core = capability, transports (HTTP/SSE/CLI/
+agent) = adapters, web/CLI/agents = clients of one contract.**
+
+## Registering a capability (target workflow)
+
+1. **Boundary test** — same process → function call; different process →
+   transport crossing. A new crossing is named in a kanban card before code.
+2. **Declare the descriptor** in the module — name, params, result,
+   `auth_scope`, `idempotent`, `version`.
+3. **Self-register at boot** — one registry entry; no edit to any central
+   feature list.
+4. **Emit the projections** — route fragment (via `create_router`), SSE frame,
+   CLI subcommand, TS helper. Auth scope and version come from the descriptor,
+   so there is _one_ auth decision and _one_ versioning story.
+5. **Contract gate** — `scripts/check_contract.py` validates the descriptors and
+   cross-checks the registry against the routes FastAPI serves (blocking), and
+   diffs the route inventory against a committed baseline (report-only until
+   the grandfathered backlog clears); `scripts/gen_router_manifest.py --check`
+   keeps the boot manifest honest. Both run as the `contract-gate` CI job.
+   `scripts/check_docs_api_parity.py` remains the doc/code parity hook.
+
+Registering a capability is a **registry entry, never an endpoint project**.
+
+## Guardrails
+
+- **No god-endpoint.** Reject both N hand-written routers and a single generic
+  `POST /tools/{name}` switchyard. If single-call semantics are ever wanted,
+  the honest standard is **JSON-RPC 2.0** (`/rpc`, typed versioned methods,
+  introspectable — the LSP/Ethereum pattern), not an ad-hoc switchyard.
+- **One envelope, one auth story, one versioning story** — those are exactly
+  what a shared projection gives you; a hand-written router re-decides them
+  per file (today: `schemas/common.py` imported by 58 routers).
+- **Two tool tiers, one contract, never cross** — internal/model-facing
+  tooling (function-calling, `domain/tools`, the inference UI's tool list) vs
+  external utility tooling (Mole and other app-internal helpers). Both
+  are descriptors; only the first is visible to the model.
+- **Grandfathered, not purged** — the 57 existing routers migrate only when
+  next touched (Router Playbook rule 5), and the hand-built declaration
+  count is frozen by the ratchet above: 697 sites, may only shrink.
+
+## Where it stands
+
+| Piece                                          | State                                                                                                                                                                            |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Descriptor (`ToolSpec` + derived `params`)     | ✅ contract half exists                                                                                                                                                          |
+| `ToolRegistry` (agent-facing projection)       | ✅ reads the descriptor                                                                                                                                                          |
+| `create_router(spec, route, handler)` emission | ✅ `infrastructure/contract.py` — pilot: `GET /contracts`                                                                                                                        |
+| Boot-time self-registration                    | ✅ generated `routers/_manifest.py` + `scripts/gen_router_manifest.py --check`                                                                                                   |
+| CI contract check (descriptor + OpenAPI diff)  | ✅ descriptor/registry blocking, route-baseline diff report-only, **declaration-style ratchet blocking** — new hand-built sites fail against `handbuilt-routes-baseline.json`    |
+| TS projection of the contract                  | ✅ `scripts/gen_ts_contracts.py` → `contracts.gen.ts` for web, SDK and mobile (freshness gated by `tests/contract/test_ts_contracts.py`); consumers still hand-write their calls |
+
+### Census — hand-built route declarations (2026-11-04)
+
+Measured by the ratchet's own scanner (`check_contract.py --static`):
+
+| Where                   | Hand-built sites | Modules |
+| ----------------------- | ---------------: | ------: |
+| `routers/*.py`          |              629 |      60 |
+| `training/*.py`         |               67 |      14 |
+| `main.py`               |                1 |       1 |
+| **grandfathered total** |          **697** |  **75** |
+
+Largest offenders: `models.py` 42, `settings.py` 41, `consciousness.py` 35,
+`kb.py` 34, `mobile.py` 33. Out of scope by design: test fixtures (149
+sites — throwaway apps by design) and `infrastructure/contract.py` (the
+projection's own `add_api_route`). `create_router` is used by exactly one
+module today — `routers/contracts.py`, the pilot. Known
+declared-but-hand-registered offender: `routers/llm_v1.py` (3 `ToolSpec`s,
+3 `add_api_route` sites).
+
+**Ruling (2026-11-05, card `20261104_151035`): llm_v1 stays grandfathered —
+the projection cannot express its wire yet.** A straight migration was
+attempted and is blocked by four mismatches, each pinned by
+`apps/api/server/tests/test_llm_v1_router.py`:
+
+1. **Envelope.** `_build_endpoint` wraps every result in `success_response()`
+   (`{status, data}`); `test_nonstream_is_raw_wire_shape_no_envelope` asserts
+   the raw OpenAI shape (no `status`/`data`). `/v1` is an external
+   OpenAI-compatible wire — the envelope would break every OpenAI client.
+2. **SSE.** `chat_completions` returns `StreamingResponse` when
+   `stream=True`; the projection's dict wrap would kill the stream.
+3. **Handler shape.** Handlers take one pydantic model (`req: ChatBody`); the
+   projection calls `handler(**flat_payload)`. `_check_handler_accepts`
+   would refuse at boot ("the contract is the call signature").
+4. **Descriptor incompleteness.** `ChatBody` carries 12 fields with `ge/le`
+   constraints (`top_p`, `top_k`, `stream_options`, …); the ToolSpec declares
+   6 and `ToolParam` has no constraint vocabulary — descriptor-derived
+   validation would silently drop fields a test pins at the provider
+   (`top_p=0.85`).
+
+**What unlocks the migration** (one projection capability, then the
+migration lands on top): a raw-wire facet on the descriptor/projection —
+`envelope: bool = True` (default keeps the pilot byte-identical), Response
+passthrough for SSE, and body-model-from-handler-signature so `ChatBody`
+stays the validator. Until then: the 3 llm_v1 sites are frozen by the
+ratchet like the rest of the 697, and any new `/v1` route must follow
+llm_v1's hand-built pattern **or** the raw-wire facet must be built first —
+never a third way.
+
+**The ratchet:** any new `@router.get` / `add_api_route` site — in a new
+file or a grandfathered one — fails `check_contract.py --static`. Migration
+is the only way down, and each shrink lands as a reviewed baseline edit
+(`--write-declaration-baseline` regenerates).
+
+Grandfather note: `get_all_routers()`'s deferred-import list exists for a real
+reason (90 s → 8 s cold start) — self-registration must preserve lazy loading,
+not fight it.

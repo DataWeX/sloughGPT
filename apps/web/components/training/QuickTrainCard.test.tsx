@@ -1,0 +1,289 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import React from 'react'
+import { makeDatasets } from './__test-helper'
+
+vi.mock('@sloughgpt/strui', () => ({
+  Card: ({ children }: any) => <div>{children}</div>,
+  CardHeader: ({ children }: any) => <div>{children}</div>,
+  CardTitle: ({ children }: any) => <div>{children}</div>,
+  CardContent: ({ children }: any) => <div>{children}</div>,
+  Button: ({ children, onClick, disabled }: any) => (
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
+  Input: (props: any) => <input {...props} />,
+  Label: ({ children }: any) => <label>{children}</label>,
+  Progress: ({ value }: any) => <div data-testid="progress">{value}</div>,
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  SelectTrigger: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  SelectValue: ({ children }: any) => <span>{children}</span>,
+  SelectContent: ({ children }: any) => <div>{children}</div>,
+  SelectItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  FoldSection: ({ children, heading }: any) => <div><span>{heading}</span>{children}</div>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}))
+
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({
+    variant,
+    message,
+    onDismiss,
+  }: {
+    variant: string
+    message: string
+    onDismiss?: () => void
+  }) => (
+    <div data-variant={variant}>
+      <span>{message}</span>
+      {onDismiss && <button onClick={onDismiss}>Dismiss</button>}
+    </div>
+  ),
+}))
+
+vi.mock('@/components/training/DatasetSelector', () => ({
+  DatasetSelector: (props: any) => (
+    <div data-testid="dataset-selector">{props.value || 'none'}</div>
+  ),
+}))
+
+vi.mock('@/lib/training-controller', () => ({
+  trainingJobsController: { loadCheckpoint: vi.fn(async () => ({ status: 'loaded' })) },
+}))
+
+import { trainingJobsController } from '@/lib/training-controller'
+import { QuickTrainCard, TURBO_DEFAULTS } from './QuickTrainCard'
+import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
+import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
+
+function makeSession(overrides: Record<string, any> = {}): UseTrainingSessionReturn {
+  return {
+    turboPhase: 'idle',
+    turboProgress: 0,
+    turboGlobalStep: 0,
+    turboTotalSteps: 0,
+    turboEta: null,
+    turboStepsPerSec: null,
+    turboElapsedSeconds: null,
+    turboLoss: null,
+    turboResult: null,
+    turboError: null,
+    startTurboTrain: vi.fn(),
+    stopTurboTrain: vi.fn(),
+    ...overrides,
+  } as unknown as UseTrainingSessionReturn
+}
+
+describe('QuickTrainCard', () => {
+  afterEach(cleanup)
+
+  it('renders dataset selector and config inputs in idle phase', () => {
+    const datasets = makeDatasets({ selectedDataset: '1' })
+    render(
+      <QuickTrainCard
+        datasets={datasets as unknown as UseTrainingDatasetsReturn}
+        session={makeSession()}
+        addToast={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('dataset-selector')).toBeDefined()
+    expect(screen.getByText(/Training rounds|Epochs/)).toBeDefined()
+    expect(screen.getByText(/Meaning size|Embed/)).toBeDefined()
+    expect(screen.getByText(/Start training|Start turbo train/)).toBeDefined()
+  })
+
+  it('disables start when no dataset is selected', () => {
+    const datasets = makeDatasets({ selectedDataset: '' })
+    const addToast = vi.fn()
+    render(
+      <QuickTrainCard
+        datasets={datasets as unknown as UseTrainingDatasetsReturn}
+        session={makeSession()}
+        addToast={addToast}
+      />,
+    )
+    const start = screen.getByText(/Start training|Start turbo train/) as HTMLButtonElement
+    expect(start.disabled).toBe(true)
+    expect(addToast).not.toHaveBeenCalled()
+  })
+
+  it('starts turbo training with selected dataset and defaults', () => {
+    const datasets = makeDatasets({ selectedDataset: '1' })
+    const session = makeSession()
+    render(
+      <QuickTrainCard
+        datasets={datasets as unknown as UseTrainingDatasetsReturn}
+        session={session}
+        addToast={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByText(/Start training|Start turbo train/))
+    expect(session.startTurboTrain).toHaveBeenCalledWith(
+      '1',
+      TURBO_DEFAULTS,
+      expect.any(Function),
+      undefined,
+    )
+  })
+
+  it('renders live progress and stop during training', () => {
+    const session = makeSession({
+      turboPhase: 'training',
+      turboProgress: 42,
+      turboGlobalStep: 42,
+      turboTotalSteps: 100,
+      turboStepsPerSec: 2.5,
+      turboEta: 30,
+      turboElapsedSeconds: 10,
+      turboLoss: 1.5,
+    })
+    render(
+      <QuickTrainCard
+        datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn}
+        session={session}
+        addToast={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('progress')).toBeDefined()
+    expect(screen.getAllByText('42').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('2.5')).toBeDefined()
+    expect(screen.getByText('30s')).toBeDefined()
+    expect(screen.getByText('10s')).toBeDefined()
+    expect(screen.getByText('1.5000')).toBeDefined()
+    fireEvent.click(screen.getByText('Stop'))
+    expect(session.stopTurboTrain).toHaveBeenCalled()
+  })
+
+  it('shows completion result with train-another action', () => {
+    const session = makeSession({
+      turboPhase: 'complete',
+      turboResult: {
+        status: 'complete',
+        final_loss: 0.9,
+        total_steps: 100,
+        model_path: '/models/x.soul',
+      },
+    })
+    render(
+      <QuickTrainCard
+        datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn}
+        session={session}
+        addToast={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Training complete!')).toBeDefined()
+    expect(screen.getByText(/Final loss: 0.9000/)).toBeDefined()
+    fireEvent.click(screen.getByText('Train another'))
+    expect(session.stopTurboTrain).toHaveBeenCalled()
+  })
+
+  it('loads the trained model for chat from the result model path', async () => {
+    const addToast = vi.fn()
+    const session = makeSession({
+      turboPhase: 'complete',
+      turboResult: {
+        status: 'complete',
+        final_loss: 0.9,
+        total_steps: 100,
+        model_path: 'models/turbo-trained/turbo_42.soul',
+      },
+    })
+    render(
+      <QuickTrainCard
+        datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn}
+        session={session}
+        addToast={addToast}
+      />,
+    )
+    fireEvent.click(screen.getByText('Load for chat'))
+    await vi.waitFor(() => {
+      expect(trainingJobsController.loadCheckpoint).toHaveBeenCalledWith('turbo_42.soul')
+    })
+    await vi.waitFor(() => {
+      expect(addToast).toHaveBeenCalledWith('Loaded trained version: turbo_42.soul', 'success')
+    })
+  })
+
+  it('reports a failure toast when loading the model fails', async () => {
+    vi.mocked(trainingJobsController.loadCheckpoint).mockRejectedValueOnce(new Error('boom'))
+    const addToast = vi.fn()
+    const session = makeSession({
+      turboPhase: 'complete',
+      turboResult: {
+        status: 'complete',
+        final_loss: 0.5,
+        total_steps: 50,
+        model_path: 'models/turbo-trained/bad.soul',
+      },
+    })
+    render(
+      <QuickTrainCard
+        datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn}
+        session={session}
+        addToast={addToast}
+      />,
+    )
+    fireEvent.click(screen.getByText('Load for chat'))
+    await vi.waitFor(() => {
+      expect(addToast).toHaveBeenCalledWith('Could not load trained version: boom', 'error')
+    })
+  })
+
+  it('shows error state with dismiss action', () => {
+    const session = makeSession({ turboPhase: 'error', turboError: 'oom' })
+    render(
+      <QuickTrainCard
+        datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn}
+        session={session}
+        addToast={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('oom')).toBeDefined()
+    fireEvent.click(screen.getByText('Dismiss'))
+    expect(session.stopTurboTrain).toHaveBeenCalled()
+  })
+})

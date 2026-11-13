@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./*"],
+      "@sloughgpt/strui": ["../../packages/strui/src"],
+      "@sloughgpt/strui/*": ["../../packages/strui/src/*"]
+    }
+  }
+}

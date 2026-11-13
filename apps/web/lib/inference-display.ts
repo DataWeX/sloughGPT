@@ -26,7 +26,8 @@ export function catalogIdMatchesRuntime(catalogId: string, runtimeType: string):
  *   "gpt2-xl" → "GPT 2 XL"
  *   "microsoft/Phi-3.5-mini-instruct" → "Phi 3.5 Mini Instruct"
  */
-export function modelDisplayName(modelId: string): string {
+export function modelDisplayName(modelId: string | null | undefined): string {
+  if (!modelId) return 'Unknown'
   let name = modelId.includes('/') ? modelId.split('/').pop()! : modelId
 
   // Strip cache prefix: "models--org--model" → "model"

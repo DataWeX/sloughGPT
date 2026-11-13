@@ -4,7 +4,8 @@ Inference Example - Generate text with trained model
 """
 
 import torch
-from domains.models import SloughGPTModel
+
+from domain.models import SloughGPTModel
 
 
 def main():

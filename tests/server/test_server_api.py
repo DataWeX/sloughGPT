@@ -5,11 +5,13 @@ All tests marked ``slow`` (deselected by default). Run explicitly with:
   ``pytest tests/server/test_server_api.py -m slow``
 """
 
+from unittest.mock import patch
+
 import pytest
-from fastapi.testclient import TestClient
 
 try:
     from apps.api.server.tests.test_support import get_test_client
+
     client = get_test_client()
 except Exception:
     pytest.skip("Server app not available", allow_module_level=True)
@@ -55,15 +57,143 @@ class TestModelEndpoints:
 
 class TestInferenceEndpoints:
     def test_inference_generate_503_when_no_provider(self):
-        """Should error gracefully when no model is loaded."""
-        response = client.post("/inference/generate", json={"prompt": "Hi"})
-        assert response.status_code == 503
+        """Should error gracefully when no provider is available."""
+        with (
+            patch("apps.api.server.routers.inference.get_provider", return_value=None),
+            patch("apps.api.server.state.model", "gpt2", create=True),
+        ):
+            response = client.post("/inference/generate", json={"prompt": "Hi"})
+            assert response.status_code == 503
+
+
+class TestInfoEndpoints:
+    def test_info_returns_version(self):
+        response = client.get("/info")
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("api_version") == "1.0.0"
+
+    def test_info_includes_model_block(self):
+        response = client.get("/info")
+        data = response.json()
+        model = data.get("model", {})
+        assert "type" in model
+        assert "loaded" in model
+        assert isinstance(model["loaded"], bool)
+
+    def test_info_includes_host_block(self):
+        response = client.get("/info")
+        data = response.json()
+        host = data.get("host", {})
+        assert "platform" in host
+        assert "python_version" in host
+
+    def test_info_soul_ok(self):
+        response = client.get("/info/soul")
+        assert response.status_code == 200
+
+
+class TestUnknownRoute:
+    def test_unknown_route_404(self):
+        response = client.get("/nonexistent-path-xyz")
+        assert response.status_code == 404
+
+    def test_unknown_route_post_404(self):
+        response = client.post("/nonexistent-path-xyz", json={})
+        assert response.status_code == 404
+
+
+class TestInvalidRequests:
+    def test_generate_missing_payload_422(self):
+        with patch("state.model", object()):
+            response = client.post("/inference/generate", json={})
+            assert response.status_code == 422
+
+    def test_generate_no_prompt_422(self):
+        with patch("state.model", object()):
+            response = client.post("/inference/generate")
+            assert response.status_code == 422
+
+
+class TestProvidersEndpoints:
+    def test_providers_ok(self):
+        response = client.get("/providers")
+        assert response.status_code == 200
+        assert "data" in response.json()
+
+    def test_providers_has_status(self):
+        response = client.get("/providers")
+        assert "status" in response.json()
+
+
+class TestKnowledgeStatsDetails:
+    def test_knowledge_stats_topics(self):
+        response = client.get("/knowledge/stats")
+        data = response.json().get("data", {})
+        assert isinstance(data.get("topics", {}), dict)
+        assert isinstance(data.get("topic_count", 0), int)
+
+
+class TestTokenizerStatsDetails:
+    def test_tokenizer_vocab_size_int(self):
+        response = client.get("/tokenizer/stats")
+        data = response.json().get("data", response.json())
+        assert isinstance(data["vocab_size"], int)
+
+    def test_tokenizer_has_merges(self):
+        response = client.get("/tokenizer/stats")
+        data = response.json().get("data", response.json())
+        assert "merged_subwords" in data or "num_merges" in data
+
+
+class TestSystemEndpoints:
+    def test_executor_status_ok(self):
+        response = client.get("/system/executor")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert "initialized" in data
+        assert "active_jobs" in data
+        assert isinstance(data.get("active_jobs", 0), int)
+
+    def test_executor_uninitialized_reports_zero_jobs(self):
+        from domain.training._internal.executor import _instance as executor_instance
+
+        if executor_instance is None:
+            response = client.get("/system/executor")
+            data = response.json()["data"]
+            assert data.get("initialized") is False
+            assert data.get("active_jobs") == 0
+
+
+class TestStatsEndpoints:
+    def test_tokenizer_stats_ok(self):
+        response = client.get("/tokenizer/stats")
+        assert response.status_code == 200
+        data = response.json().get("data", response.json())
+        assert "vocab_size" in data
+
+    def test_knowledge_stats_shape(self):
+        response = client.get("/knowledge/stats")
+        assert response.status_code == 200
+        data = response.json()
+        payload = data.get("data", data)
+        assert isinstance(payload, dict)
+        assert "total_items" in payload
 
 
 class TestAutoTrainEndpoints:
     @pytest.mark.slow
     def test_list_checkpoints(self):
-        response = client.get("/auto-train/checkpoints")
+        # /auto-train/checkpoints was removed by c02788ca4 (109-file
+        # training+shell cleanup); the successor is GET
+        # /training/checkpoints (training/router.py, committed) — but the
+        # training router is NOT in origin/main's boot manifest
+        # (routers/_manifest.py), so only in-flight lanes that mount it
+        # serve it. Retarget + skip-on-404 rather than race those lanes
+        # (card c59d5be7).
+        response = client.get("/training/checkpoints")
+        if response.status_code == 404:
+            pytest.skip("/training router unmounted in origin/main manifest (in-flight)")
         assert response.status_code == 200
         data = response.json()
         payload = data.get("data", data)

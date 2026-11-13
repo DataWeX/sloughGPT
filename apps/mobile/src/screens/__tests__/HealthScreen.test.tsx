@@ -1,8 +1,6 @@
 import React from 'react';
 import {render, fireEvent, waitFor} from '@/test-utils';
 
-// ── Module-level mocks ──────────────────────────────────────────────────
-
 const mockNavigate = jest.fn();
 
 jest.mock('react-native-safe-area-context', () => {
@@ -29,23 +27,49 @@ jest.mock('../../components/StatusBadge', () => ({
   },
 }));
 
+jest.mock('../../components/Icon', () => ({
+  Icon: ({name, size, color}: any) => {
+    const React = require('react');
+    const {Text} = require('react-native');
+    return React.createElement(Text, {}, '');
+  },
+}));
+
 import {api} from '../../services/api-client';
 const mockApiGet = api.get as jest.Mock;
 
-// ── Default mock health data ────────────────────────────────────────────
-
 const detailedHealth: any = {
-  api: {status: 'healthy', model_loaded: true, model_name: 'gpt2'},
+  status: 'healthy',
+  uptime_seconds: 86400,
+  timestamp: new Date().toISOString(),
+  request_count: 150,
+  error_count: 2,
+  avg_latency_ms: 120,
+  requests_per_minute: 5.2,
+  inference_count: 50,
+  total_tokens: 12000,
+  tokens_per_sec: 12.5,
+  avg_tokens_per_request: 240,
+  model_loaded: true,
+  model_loading: false,
+  model_type: 'gpt2',
+  device: 'cpu',
+  soul: 'friendly',
   system: {
     cpu_percent: 45.2,
     memory_percent: 62.3,
-    memory_used_gb: 4.8,
-    memory_total_gb: 8.0,
-    disk_used_gb: 120.5,
-    disk_free_gb: 256.3,
-    disk_total_gb: 376.8,
-    uptime: 86400,
+    memory_available_mb: 3072,
+    open_files: 128,
+    threads: 24,
+    rss_mb: 2048,
   },
+  gpu: {backend: 'unknown'},
+  health_score: {score: 85, status: 'healthy', diagnoses: []},
+  kv_sessions: {enabled: true, active_sessions: 2, cached_tokens: 1500, ttl_seconds: 300},
+  training_pool: {active_jobs: 0, max_workers: 2, total_tracked: 5},
+  lifecycle: {phase: 'running', is_running: true, in_flight: 3},
+  recent_errors: [],
+  status_message: 'Healthy',
 };
 
 beforeEach(() => {
@@ -58,7 +82,6 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const {HealthScreen} = require('../HealthScreen');
 
 describe('HealthScreen', () => {
@@ -79,7 +102,7 @@ describe('HealthScreen', () => {
     });
   });
 
-  it('shows active model name', async () => {
+  it('shows model type', async () => {
     mockApiGet.mockResolvedValue(detailedHealth);
     const {getByText} = await render(<HealthScreen />);
     await waitFor(() => {
@@ -95,19 +118,27 @@ describe('HealthScreen', () => {
     });
   });
 
-  it('shows memory used/total', async () => {
+  it('shows memory percent', async () => {
     mockApiGet.mockResolvedValue(detailedHealth);
     const {getByText} = await render(<HealthScreen />);
     await waitFor(() => {
-      expect(getByText(/4\.8.*8\.0/)).toBeTruthy();
+      expect(getByText('62.3%')).toBeTruthy();
     });
   });
 
-  it('shows disk used/total', async () => {
+  it('shows health score', async () => {
     mockApiGet.mockResolvedValue(detailedHealth);
     const {getByText} = await render(<HealthScreen />);
     await waitFor(() => {
-      expect(getByText(/120\.5.*376\.8/)).toBeTruthy();
+      expect(getByText('85')).toBeTruthy();
+    });
+  });
+
+  it('shows soul name', async () => {
+    mockApiGet.mockResolvedValue(detailedHealth);
+    const {getByText} = await render(<HealthScreen />);
+    await waitFor(() => {
+      expect(getByText('friendly')).toBeTruthy();
     });
   });
 
@@ -115,7 +146,7 @@ describe('HealthScreen', () => {
     mockApiGet.mockResolvedValue(detailedHealth);
     const {getByText} = await render(<HealthScreen />);
     await waitFor(() => {
-      expect(getByText('24h 0m')).toBeTruthy();
+      expect(getByText('1d 0h')).toBeTruthy();
     });
   });
 

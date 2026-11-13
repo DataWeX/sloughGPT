@@ -41,4 +41,35 @@ describe('ComparisonTableCard', () => {
     const greenDots = document.querySelectorAll('.text-success')
     expect(greenDots.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('handles single result', () => {
+    const results: [string, any][] = [['gpt2', result(10, 200)]]
+    const { container } = render(<ComparisonTableCard completedResults={results} models={models} bestMetrics={{}} />)
+    const rows = container.querySelectorAll('tbody tr')
+    expect(rows.length).toBe(1)
+  })
+
+  it('handles three or more results', () => {
+    const results: [string, any][] = [
+      ['gpt2', result(5, 200)],
+      ['qwen', result(20, 100)],
+      ['llama', result(15, 150)],
+    ]
+    const { container } = render(<ComparisonTableCard completedResults={results} models={models} bestMetrics={{}} />)
+    const rows = container.querySelectorAll('tbody tr')
+    expect(rows.length).toBe(3)
+  })
+
+  it('shows table with rows', () => {
+    const results: [string, any][] = [['gpt2', result(10, 200)]]
+    const { container } = render(<ComparisonTableCard completedResults={results} models={models} bestMetrics={{}} />)
+    expect(container.querySelector('tbody')).toBeDefined()
+    expect(container.querySelectorAll('tbody tr').length).toBe(1)
+  })
+
+  it('handles empty bestMetrics', () => {
+    const results: [string, any][] = [['gpt2', result(10, 200)]]
+    const { container } = render(<ComparisonTableCard completedResults={results} models={models} bestMetrics={{}} />)
+    expect(container.querySelectorAll('tbody tr').length).toBe(1)
+  })
 })

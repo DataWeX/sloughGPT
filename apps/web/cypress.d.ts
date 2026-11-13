@@ -15,11 +15,11 @@ declare namespace Cypress {
     /** Mock /system/* and /health/detailed endpoints */
     mockSystem(): Chainable<null>
 
-    /** Mock /tokenizer/* endpoints */
-    mockTokenizer(): Chainable<null>
-
     /** Mock /knowledge CRUD endpoints */
     mockKnowledge(items?: string[]): Chainable<null>
+
+    /** Catch-all 200 for unmocked endpoints (registered before specific mocks) */
+    mockApiFallback(): Chainable<null>
 
     /** Mock all endpoints via individual mocks */
     mockAll(): Chainable<null>
@@ -33,7 +33,7 @@ declare namespace Cypress {
     /** Mock /agents CRUD and execute endpoints */
     mockAgents(overrides?: any[]): Chainable<null>
 
-    /** Mock /models/export/formats and /models/export endpoints */
-    mockExport(): Chainable<null>
+    /** Mock /vm/run, /vm/builtins, /vm/info, and training job endpoints */
+    mockVm(runOverrides?: Record<string, unknown>): Chainable<null>
   }
 }

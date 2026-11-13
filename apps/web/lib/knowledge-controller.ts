@@ -138,12 +138,7 @@ export const knowledgeController = {
     formData.append('topic', topic)
     formData.append('chunk_size', String(chunkSize))
     formData.append('overlap', String(overlap))
-    const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/knowledge/ingest-file`, {
-      method: 'POST',
-      body: formData,
-    })
-    if (!resp.ok) throw new Error(`Upload failed: ${resp.statusText}`)
-    return resp.json()
+    return apiPost('/knowledge/ingest-file', formData, { raw: true })
   },
 
   async searchFiles(query: string, path = '.', extensions?: string[], topK = 10): Promise<{
@@ -202,5 +197,17 @@ export const knowledgeController = {
     info: { embed_dim: number; vocab_size: number; path: string } | null
   }> {
     return apiGet('/knowledge/embedder-status')
+  },
+
+  async getDueReviews(): Promise<{ due_ids: string[]; stats: { due_count: number; total_scheduled: number } }> {
+    return apiGet('/knowledge/reviews/due')
+  },
+
+  async scheduleReview(itemId: string, performance: number): Promise<{ item_id: string; next_review: number }> {
+    return apiPost(`/knowledge/reviews/${encodeURIComponent(itemId)}/schedule?performance=${performance}`)
+  },
+
+  async label(text: string): Promise<{ label: string; confidence: number; reason: string; scores: Record<string, number> }> {
+    return apiGet(`/knowledge/label?text=${encodeURIComponent(text)}`)
   },
 }

@@ -5,7 +5,7 @@ describe('Settings page', () => {
   })
 
   it('renders the page header', () => {
-    cy.contains('Settings').should('be.visible')
+    cy.contains('h1', 'Settings').should('be.visible')
   })
 
   it('shows appearance settings', () => {
@@ -13,11 +13,13 @@ describe('Settings page', () => {
   })
 
   it('shows chat defaults', () => {
-    cy.contains('Chat defaults').should('be.visible')
+    cy.contains('Chat defaults').scrollIntoView().should('be.visible')
   })
 
   it('has theme toggle', () => {
-    cy.get('[role="combobox"], select').should('exist')
+    cy.contains('button', 'Light').should('exist')
+    cy.contains('button', 'Dark').should('exist')
+    cy.contains('button', 'System').should('exist')
   })
 
   it('has temperature slider', () => {

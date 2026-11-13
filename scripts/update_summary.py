@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Pre-commit hook: stamp latest commit hash into anchored_summary.md."""
-import subprocess
+
 import pathlib
+import subprocess
 
 summary = pathlib.Path("anchored_summary.md")
 if not summary.exists():
@@ -9,7 +10,8 @@ if not summary.exists():
 
 result = subprocess.run(
     ["git", "log", "--oneline", "-1"],
-    capture_output=True, text=True,
+    capture_output=True,
+    text=True,
 )
 commit_line = result.stdout.strip()
 
@@ -28,3 +30,6 @@ summary.write_text(
     + f"No active task. Last commit: {commit_line}\n\n"
     + after.lstrip("\n")
 )
+
+# Re-stage so the commit doesn't fail with "file modified"
+subprocess.run(["git", "add", str(summary)], capture_output=True)

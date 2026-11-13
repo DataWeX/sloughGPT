@@ -1,5 +1,8 @@
 'use client'
 
+import { chatDB } from '@/lib/db'
+import { todayDateString } from '@/lib/format-bytes'
+
 export const CURRENT_SESSION_KEY = 'man_current_conversation'
 
 export interface ChatMessage {
@@ -8,13 +11,26 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   images?: ImageAttachment[]
+  audio?: AudioAttachment
+  reactions?: Record<string, number>
   isError?: boolean
+  pinned?: boolean
+  toolCalls?: Array<{ id?: string; name?: string; arguments?: string; status?: string }>
+  /** Per-turn stream metrics, set when the assistant turn completes. */
+  metrics?: { tokens?: number; elapsedMs?: number }
 }
 
 export interface ImageAttachment {
   id: string
   dataUrl: string
   name: string
+}
+
+export interface AudioAttachment {
+  id: string
+  url: string
+  durationMs: number
+  waveform?: number[]
 }
 
 export interface ChatSession {
@@ -67,12 +83,12 @@ export function stripAssistantPrefix(text: string): string {
 
 const USER_ID_KEY = 'man_user_id'
 
-export function getOrCreateUserId(): string {
+export async function getOrCreateUserId(): Promise<string> {
   if (typeof window === 'undefined') return 'default'
-  const existing = localStorage.getItem(USER_ID_KEY)
+  const existing = await chatDB.getKV<string>(USER_ID_KEY)
   if (existing) return existing
   const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  localStorage.setItem(USER_ID_KEY, id)
+  await chatDB.setKV(USER_ID_KEY, id)
   return id
 }
 
@@ -105,7 +121,7 @@ export function exportConversationAsMarkdown(messages: ChatMessage[]): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `chat-${new Date().toISOString().slice(0, 10)}.md`
+  a.download = `chat-${todayDateString()}.md`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -138,4 +154,8 @@ export function formatUptime(seconds: number): string {
   if (d > 0) return `${d}d ${h}h ${m}m`
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
+}
+
+export function shortModelName(id: string): string {
+  return id.includes('/') ? id.split('/').pop() || id : id
 }

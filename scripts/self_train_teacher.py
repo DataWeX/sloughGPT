@@ -3,7 +3,6 @@
 Teacher-student self-training: gpt2 generates → SloughGPT learns
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -14,7 +13,7 @@ for p in [ROOT / "apps" / "api" / "server", ROOT / "packages" / "core-py", ROOT]
         sys.path.insert(0, str(p))
 
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def generate_from_teacher(prompts: list, model_name: str = "gpt2", max_tokens: int = 30) -> list:
@@ -28,7 +27,9 @@ def generate_from_teacher(prompts: list, model_name: str = "gpt2", max_tokens: i
     for prompt in prompts:
         inputs = tokenizer(prompt, return_tensors="pt")
         with torch.no_grad():
-            out = model.generate(**inputs, max_new_tokens=max_tokens, temperature=0.8, do_sample=True)
+            out = model.generate(
+                **inputs, max_new_tokens=max_tokens, temperature=0.8, do_sample=True
+            )
         text = tokenizer.decode(out[0])
         outputs.append(text.strip())
         print(f"  {prompt} → {text[:50]}...")
@@ -38,6 +39,7 @@ def generate_from_teacher(prompts: list, model_name: str = "gpt2", max_tokens: i
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--teacher", default="gpt2")
     parser.add_argument("--prompts", nargs="*", default=["Hello", "The", "Once", "In", "With"])

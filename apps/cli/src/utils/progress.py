@@ -2,13 +2,12 @@
 Progress bars and spinners for CLI operations.
 
 Provides visual feedback for long-running operations.
-Uses Rich for terminal-formatted progress bars with ETA, speed, and color.
+Uses raw ANSI escape codes for terminal-formatted progress bars with ETA, speed, and color.
 """
-import os
+
 import sys
-import time
 import threading
-from typing import Optional, Callable
+import time
 
 
 def _is_terminal() -> bool:
@@ -46,6 +45,7 @@ class ProgressBar:
         self._update_interval = 0.1
         self._last_rendered = ""
         self._last_pct = -1
+        self._last_desc = ""
         self._is_tty = _is_terminal()
 
     def update(self, n: int = 1):
@@ -63,7 +63,8 @@ class ProgressBar:
         self.current = self.total
         self._render()
         if self._is_tty:
-            sys.stdout.write("\n")
+            # Clear the progress bar line and move to next line
+            sys.stdout.write(f"\r\033[2K{self._last_rendered}\n")
             sys.stdout.flush()
         self._last_rendered = ""
 
@@ -114,9 +115,10 @@ class ProgressBar:
         line = " ".join(parts)
 
         if self._is_tty:
-            # TTY: overwrite in-place using \r + space padding
-            pad_len = max(0, len(self._last_rendered) - len(line))
-            sys.stdout.write(f"\r{line}{' ' * pad_len}\r")
+            # TTY: use ANSI escape to clear line, then print
+            # \033[2K clears the entire line
+            # \r moves cursor to start of line
+            sys.stdout.write(f"\r\033[2K{line}")
             sys.stdout.flush()
         else:
             # Non-TTY (piped/redirected): just print the line
@@ -182,7 +184,7 @@ class Spinner:
 
 def progress_iter(
     iterable,
-    total: Optional[int] = None,
+    total: int | None = None,
     desc: str = "",
     width: int = 40,
 ) -> ProgressBar:

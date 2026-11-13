@@ -1,0 +1,1594 @@
+"""
+GPU/Accelerator Layer for SloLib
+
+Three backends:
+- **Metal**: Apple Silicon awareness with numpy compute (platform detection)
+- **CUDA**: NVIDIA GPU via CuPy (pip install cupy-cuda12x)
+- **CPU**: Pure NumPy (always works, no dependencies)
+
+Torch is not a backend here — see ``_REMOVED_BACKENDS``. SloNet's NumPy engine
+is the only training engine; the backends above are kernel providers for it.
+
+Usage:
+    acc = get_accelerator()
+    c = acc.matmul(a, b)
+    y = acc.layer_norm(x, weight, bias)
+    attn = acc.scaled_dot_attention(q, k, v, mask=mask)
+"""
+
+from __future__ import annotations
+
+import ctypes
+import logging
+import math
+import os  # noqa: F401 — used in function bodies below
+import sys
+import threading
+import time
+from typing import Any
+
+import numpy as np
+
+logger = logging.getLogger("slo.gpu")
+
+
+# =============================================================================
+# DISPATCH COUNTERS — where did the matmuls actually run? (StepTrace tripwire)
+# =============================================================================
+# Cumulative counters for the per-step reduction set (see
+# domain/training/_internal/trace.py). The training path counts path
+# attribution at the slonet._matmul seam; the CuPy backend counts the
+# host<->device byte traffic it performs. Read via dispatch_stats() — a
+# snapshot copy, never reset — and diff before/after a window for that
+# window's delta (read-only snapshots keep concurrent readers safe; no
+# hidden global state mutation).
+
+_DISPATCH_STATS: dict[str, int] = {
+    "gpu_matmuls": 0,  # eligible matmuls computed on an accelerator
+    "cpu_matmuls": 0,  # eligible matmuls computed on the CPU
+    "fallbacks": 0,  # accelerator attempts that raised and degraded to CPU
+    "h2d_bytes": 0,  # host->device transfer payload (matmul path, v1 scope)
+    "d2h_bytes": 0,  # device->host transfer payload (matmul path, v1 scope)
+}
+
+
+def count_dispatch(key: str, amount: int = 1) -> None:
+    """Increment a dispatch counter. Unknown keys raise (typo protection)."""
+    _DISPATCH_STATS[key] += amount
+
+
+def dispatch_stats() -> dict[str, int]:
+    """Snapshot of the cumulative dispatch counters (a copy — never resets)."""
+    return dict(_DISPATCH_STATS)
+
+
+# =============================================================================
+# BUFFER POOL — reuse numpy arrays to reduce allocation overhead
+# =============================================================================
+
+
+class _BufferPool:
+    """Simple memory pool that reuses numpy arrays of matching shape/dtype.
+    Avoids repeated malloc/free for frequently-used buffer sizes.
+
+    Usage::
+        pool = _BufferPool()
+        buf = pool.get((128, 768), np.float32)
+        # ... use buf ...
+        pool.put(buf)  # returns to pool
+    """
+
+    def __init__(self, max_pool_size: int = 64):
+        self._pool: dict[tuple, list[np.ndarray]] = {}
+        self._max_pool_size = max_pool_size
+        self._hits = 0
+        self._misses = 0
+
+    def get(self, shape: tuple[int, ...], dtype=np.float32) -> np.ndarray:
+        key = (shape, np.dtype(dtype))
+        bucket = self._pool.get(key)
+        if bucket:
+            self._hits += 1
+            return bucket.pop()
+        self._misses += 1
+        return np.empty(shape, dtype=dtype)
+
+    def put(self, arr: np.ndarray) -> None:
+        key = (arr.shape, np.dtype(arr.dtype))
+        bucket = self._pool.setdefault(key, [])
+        if len(bucket) < self._max_pool_size:
+            bucket.append(arr)
+
+    def stats(self) -> dict[str, Any]:
+        return {"hits": self._hits, "misses": self._misses}
+
+    def clear(self) -> None:
+        self._pool.clear()
+        self._hits = 0
+        self._misses = 0
+
+
+_POOL = _BufferPool()
+
+
+# =============================================================================
+# DEVICE DETECTION
+# =============================================================================
+
+_BACKEND: _Accelerator | None = None
+
+# Probe lifecycle — one bounded, off-thread detection per reset epoch.
+#
+# Incident 2026-10-29 05:06 (:8000 fully stopped serving): the lazy cupy
+# first-import hung natively under the health path, and because the cache
+# only filled AFTER detection returned, every concurrent get_accelerator()
+# caller re-entered detection and piled onto the poisoned import lock.
+# Now: a single daemon probe per epoch; callers wait at most
+# _PROBE_TIMEOUT (env SLO_ACCEL_PROBE_TIMEOUT, default 5s); a hung or
+# failed probe serves the CPU fallback instead of wedging the caller; a
+# late probe result supersedes the fallback when it lands.
+_PROBE_LOCK = threading.Lock()
+_PROBE_DONE = threading.Event()
+_PROBE_GEN = 0
+_PROBE_STARTED = False
+_PROBE_LATCHED = False
+_PROBE_TIMEOUT = float(os.environ.get("SLO_ACCEL_PROBE_TIMEOUT", "5"))
+_CPU_FALLBACK: _Accelerator | None = None
+
+
+def get_accelerator() -> _Accelerator:
+    global _PROBE_LATCHED
+
+    acc = _BACKEND
+    if acc is not None:
+        return acc
+
+    if not _PROBE_LATCHED:
+        _ensure_probe()
+        if _PROBE_DONE.wait(_PROBE_TIMEOUT):
+            if _BACKEND is not None:
+                return _BACKEND
+            # Probe finished without a result — hard failure inside detection.
+            logger.warning("Accelerator probe failed — using CPU fallback", extra={"tag": "GPU"})
+        else:
+            logger.warning(
+                "Accelerator probe still running after %.1fs — using CPU fallback "
+                "(probe continues in background; its result applies once it lands)",
+                _PROBE_TIMEOUT,
+                extra={"tag": "GPU"},
+            )
+        _PROBE_LATCHED = True
+
+    # Late completion: a probe that lands after the latch still wins.
+    acc = _BACKEND
+    return acc if acc is not None else _cpu_fallback()
+
+
+def _ensure_probe() -> None:
+    """Start the detection probe at most once per reset epoch (daemon thread)."""
+    global _PROBE_STARTED
+    with _PROBE_LOCK:
+        if _PROBE_STARTED:
+            return
+        _PROBE_STARTED = True
+        gen = _PROBE_GEN
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): _PROBE_STARTED is already set, so a dropped
+        # fire-and-forget submit would leave detection dead for this epoch —
+        # the engine never drops.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        get_engine().spawn(_run_probe, gen, name="accel-probe")
+
+
+def _run_probe(gen: int) -> None:
+    global _BACKEND
+    try:
+        result = _detect_best_backend()
+        if gen == _PROBE_GEN:
+            _BACKEND = result
+            logger.info(
+                "Accelerator probe complete: %s (%s)",
+                getattr(result, "name", "?"),
+                getattr(result, "device_type", "?"),
+                extra={"tag": "GPU"},
+            )
+    except Exception as e:
+        logger.warning("Accelerator probe failed: %s", e, extra={"tag": "GPU"})
+    finally:
+        if gen == _PROBE_GEN:
+            _PROBE_DONE.set()
+
+
+def _cpu_fallback() -> _Accelerator:
+    global _CPU_FALLBACK
+    if _CPU_FALLBACK is None:
+        _CPU_FALLBACK = _CPUBackend()
+    return _CPU_FALLBACK
+
+
+def prewarm_accelerator() -> None:
+    """Kick detection without waiting — the first (possibly slow) import
+    happens at boot in the background, not under a live /health request."""
+    _ensure_probe()
+
+
+def reset_accelerator() -> None:
+    # _PROBE_DONE MUST be in this list: without it the rebind below creates a
+    # function-local and the module keeps the previous epoch's already-SET
+    # event, so the next get_accelerator() sees wait() return instantly with
+    # _BACKEND still None and latches the CPU fallback — CUDA silently gone for
+    # the process (found 2026-11-02 when this probe landed on main; the fork's
+    # suite was green because it counted probe calls, not served backends).
+    global _BACKEND, _PROBE_GEN, _PROBE_STARTED, _PROBE_LATCHED, _CPU_FALLBACK, _PROBE_DONE
+    with _PROBE_LOCK:
+        _PROBE_GEN += 1  # discard any in-flight probe from the old epoch
+        _BACKEND = None
+        _PROBE_STARTED = False
+        _PROBE_LATCHED = False
+        _PROBE_DONE = threading.Event()  # old probes may still set the old event
+        _CPU_FALLBACK = None
+
+
+def set_accelerator_precision(mode: str = "auto") -> str:
+    """Switch accelerator precision on-the-fly.
+
+    Args:
+        mode: ``"auto"`` (benchmark), ``"fp32"``, or ``"fp16"``
+
+    Returns:
+        The active precision mode string.
+
+    On GPU backends (Metal, CUDA) fp16 can provide ~2x speedup via
+    tensor-core operations. On CPU this is a no-op — fp16 numpy arrays
+    are promoted to fp32 for ``matmul``.
+    """
+    acc = get_accelerator()
+    return acc.set_precision(mode)
+
+
+# =============================================================================
+# EXPLICIT SELECTION + PER-THREAD PIN
+# =============================================================================
+#
+# ``SLO_ACCEL_BACKEND`` is a declaration, not a hint. Unset/``auto`` keeps the
+# historical priority order (CUDA > Metal > OpenCL > CPU) byte-identical; any
+# other value either resolves or fails. Silent degradation is the class the
+# dispatch counters were added for — a run that *thought* it was on the GPU and
+# quietly was not is worse than a run that refuses at boot.
+
+_BACKEND_ALIASES = {
+    "cupy": "cuda",
+    "gpu": "cuda",
+    "nvidia": "cuda",
+    "mps": "metal",
+    "apple": "metal",
+    "numpy": "cpu",
+}
+
+#: Backends that shipped once and were deliberately removed. A declaration for
+#: one of these must explain *why* it is gone — "unknown backend" would send the
+#: next reader looking for a typo instead of the ruling.
+_REMOVED_BACKENDS = {
+    "torch": (
+        "torch was removed — SloNet's NumPy engine is the only training backend; "
+        "use cpu|auto, or cuda/metal/opencl for the in-repo GPU kernels"
+    ),
+    "pytorch": (
+        "torch was removed — SloNet's NumPy engine is the only training backend; "
+        "use cpu|auto, or cuda/metal/opencl for the in-repo GPU kernels"
+    ),
+}
+
+
+def _backend_classes() -> dict[str, type[_Accelerator]]:
+    """The one declaration of which backends exist (canonical names only)."""
+    return {
+        "cpu": _CPUBackend,
+        "cuda": _CUDABackend,
+        "metal": _MetalBackend,
+        "opencl": _OpenCLBackend,
+    }
+
+
+def known_backends() -> frozenset[str]:
+    """Every name ``select_backend`` resolves: canonical names plus aliases.
+
+    ``TrainerConfig`` validates against this instead of keeping its own list —
+    one declaration, so the config vocabulary cannot drift from the seam.
+    """
+    return frozenset(_backend_classes()) | frozenset(_BACKEND_ALIASES)
+
+
+def removed_backend_reason(name: str) -> str | None:
+    """Why ``name`` is no longer a backend, or ``None`` if it never was one.
+
+    Shared by ``select_backend`` (refuses at resolution) and ``TrainerConfig``
+    (refuses at validation) so both say the same sentence.
+    """
+    key = str(name or "").strip().lower()
+    return _REMOVED_BACKENDS.get(_BACKEND_ALIASES.get(key, key))
+
+
+def requested_backend() -> str:
+    """Backend named by ``SLO_ACCEL_BACKEND`` (lower-case, ``auto`` when unset)."""
+    return os.environ.get("SLO_ACCEL_BACKEND", "auto").strip().lower() or "auto"
+
+
+def _backend_factory(name: str):
+    return _backend_classes().get(name)
+
+
+def select_backend(name: str) -> _Accelerator:
+    """Build the named backend or raise — never fall back silently.
+
+    Raises:
+        ValueError: unknown backend name — or a backend that was removed
+            (``torch``), with the reason attached.
+        RuntimeError: known backend, unavailable on this host (no CUDA driver,
+            no Metal platform, no pyopencl, ...).
+    """
+    key = str(name or "").strip().lower()
+    key = _BACKEND_ALIASES.get(key, key)
+    removed = removed_backend_reason(key)
+    if removed is not None:
+        raise ValueError(f"accelerator backend {key!r} is not supported: {removed}")
+    factory = _backend_factory(key)
+    if factory is None:
+        raise ValueError(
+            f"unknown accelerator backend {name!r}; known: auto, "
+            f"{', '.join(sorted(known_backends()))} (removed: "
+            f"{', '.join(sorted(_REMOVED_BACKENDS))})"
+        )
+    acc = factory()
+    if not acc.is_available():
+        raise RuntimeError(f"accelerator backend {key!r} is not available on this host")
+    return acc
+
+
+def accelerator_for(device: str = "auto") -> _Accelerator:
+    """Resolve a declared device string to a backend instance.
+
+    ``"auto"`` asks the detector (bounded probe, CPU fallback). Everything else
+    is a declaration: it resolves or raises (see :func:`select_backend`).
+    """
+    key = str(device or "auto").strip().lower()
+    if key in ("", "auto"):
+        return get_accelerator()
+    return select_backend(key)
+
+
+#: Per-thread backend pin. Training runs in worker threads, so the pin is
+#: thread-scoped: a ``device="cpu"`` run cannot silence the GPU for inference
+#: or for a second job in the same process.
+_TLS = threading.local()
+
+
+def override_accelerator() -> _Accelerator | None:
+    """The backend pinned to *this* thread, or ``None`` (global detection)."""
+    return getattr(_TLS, "accelerator", None)
+
+
+def push_accelerator(acc: _Accelerator | None) -> _Accelerator | None:
+    """Pin *acc* for this thread; returns the previous pin (pass it to pop)."""
+    previous = override_accelerator()
+    _TLS.accelerator = acc
+    return previous
+
+
+def pop_accelerator(previous: _Accelerator | None) -> None:
+    """Restore the pin returned by :func:`push_accelerator`."""
+    _TLS.accelerator = previous
+
+
+def _detect_best_backend() -> _Accelerator:
+    # A declared backend wins over detection. When it is unavailable the probe
+    # (a daemon thread at boot) logs an error and serves CPU; the loud failure
+    # for training is ``accelerator_for``, which raises instead.
+    requested = requested_backend()
+    if requested not in ("", "auto"):
+        try:
+            selected = select_backend(requested)
+            logger.info(
+                "Accelerator: SLO_ACCEL_BACKEND=%s selected %s",
+                requested,
+                selected.name,
+                extra={"tag": "GPU"},
+            )
+            return selected
+        except Exception as e:
+            logger.error(
+                "SLO_ACCEL_BACKEND=%s unavailable (%s) — serving the CPU backend",
+                requested,
+                e,
+                extra={"tag": "GPU"},
+            )
+            return _cpu_fallback()
+
+    candidates: list[tuple[str, _Accelerator, int]] = []
+
+    # --- Metal (macOS) ---
+    if sys.platform == "darwin":
+        try:
+            metal = _MetalBackend()
+            if metal.is_available():
+                vram = metal.vram_gb()
+                priority = 100 + vram  # discrete GPUs score higher
+                candidates.append(("metal", metal, priority))
+        except Exception as e:
+            logger.debug("Metal detection failed: %s", e)
+
+    # --- CUDA (NVIDIA) ---
+    try:
+        cuda = _CUDABackend()
+        if cuda.is_available():
+            vram = cuda.vram_gb()
+            priority = 200 + vram  # CUDA is the fastest GPU path
+            candidates.append(("cuda", cuda, priority))
+    except Exception as e:
+        logger.debug("CUDA detection failed: %s", e)
+
+    # --- OpenCL (Intel iGPU / AMD dGPU / integrated) ---
+    try:
+        opencl = _OpenCLBackend()
+        if opencl.is_available():
+            vram = opencl.vram_gb()
+            priority = 50 + vram
+            candidates.append(("opencl", opencl, priority))
+    except Exception as e:
+        logger.debug("OpenCL detection failed: %s", e)
+
+    # --- CPU with SIMD ---
+    cpu = _CPUBackend()
+    priority = 0
+    if cpu.has_openblas():
+        priority = 20 + cpu.openblas_threads()
+    elif cpu.has_simd():
+        priority = 10
+    candidates.append(("cpu", cpu, priority))
+
+    # Pick highest priority
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    best_name, best_acc, _ = candidates[0]
+    return best_acc
+
+
+class _Accelerator:
+    """Base accelerator interface."""
+
+    name: str = "base"
+    device_type: str = "cpu"
+    compute_tier: str = "lite"
+    desc: str = ""
+
+    # Precision control
+    _fp16_mode: bool = False
+    _fp16_available: bool = False  # True if the backend supports hardware fp16
+
+    def set_precision(self, mode: str) -> str:
+        """Switch compute precision on-the-fly.
+
+        Args:
+            mode: ``"auto"`` (benchmark), ``"fp32"``, or ``"fp16"``
+
+        Returns:
+            The active precision mode string (``"fp32"`` or ``"fp16"``).
+        """
+        if mode == "fp16" and self._fp16_available:
+            self._fp16_mode = True
+            return "fp16"
+        if mode == "auto":
+            return self._prec_benchmark()
+        self._fp16_mode = False
+        return "fp32"
+
+    def _prec_benchmark(self) -> str:
+        """Run a quick matmul benchmark to determine faster precision.
+
+        Returns ``"fp16"`` if fp16 is available and at least 10% faster,
+        else ``"fp32"``.
+        """
+        if not self._fp16_available:
+            return "fp32"
+        try:
+            a = np.random.randn(512, 512).astype(np.float32)
+            b = np.random.randn(512, 512).astype(np.float32)
+            # Warmup
+            for _ in range(3):
+                self.matmul(a, b)
+            # Benchmark fp32
+            t0 = time.perf_counter()
+            for _ in range(10):
+                self.matmul(a, b)
+            t_fp32 = (time.perf_counter() - t0) / 10
+            # Benchmark fp16
+            self._fp16_mode = True
+            for _ in range(3):
+                self.matmul(a, b)
+            t0 = time.perf_counter()
+            for _ in range(10):
+                self.matmul(a, b)
+            t_fp16 = (time.perf_counter() - t0) / 10
+            # Restore fp32 default
+            self._fp16_mode = False
+            speedup = t_fp32 / max(t_fp16, 1e-10)
+            choice = "fp16" if speedup > 1.1 else "fp32"
+            logger.info(
+                "Accelerator precision benchmark: fp32=%.2fms, fp16=%.2fms, speedup=%.2fx → %s",
+                t_fp32 * 1000,
+                t_fp16 * 1000,
+                speedup,
+                choice,
+                extra={"tag": "GPU"},
+            )
+            if choice == "fp16":
+                self._fp16_mode = True
+            return choice
+        except Exception as e:
+            logger.debug("Precision benchmark failed: %s", e)
+            self._fp16_mode = False
+            return "fp32"
+
+    def array_module(self):
+        """The numpy-compatible array module this backend computes with.
+
+        Base/Metal/OpenCL compute with numpy. The CUDA backend returns
+        cupy, so callers can keep data device-resident across whole
+        operations — the high-level ops above return numpy per call,
+        which is right for NN layers but unusable for a per-bounce
+        tracer loop (every call would cross PCIe).
+        """
+        return np
+
+    def is_available(self) -> bool:
+        return True
+
+    def vram_gb(self) -> float:
+        return 0.0
+
+    def memory_hint(self) -> dict[str, Any]:
+        return {"tier": self.compute_tier}
+
+    def sync(self) -> None:
+        """No-op on CPU — operations are synchronous."""
+
+    def to_device(self, arr: np.ndarray) -> np.ndarray:
+        return arr.astype(np.float32)
+
+    def from_device(self, arr: Any) -> np.ndarray:
+        return np.asarray(arr)
+
+    def matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        return np.matmul(a, b)
+
+    def add(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        return a + b
+
+    def sub(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        return a - b
+
+    def mul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        return a * b
+
+    def div(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        return a / b
+
+    def pow(self, a: np.ndarray, p: float) -> np.ndarray:
+        return a**p
+
+    def sqrt(self, a: np.ndarray) -> np.ndarray:
+        return np.sqrt(a)
+
+    def exp(self, a: np.ndarray) -> np.ndarray:
+        return np.exp(a)
+
+    def log(self, a: np.ndarray) -> np.ndarray:
+        return np.log(a)
+
+    def sum(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
+        return a.sum(axis=axis)
+
+    def mean(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
+        return a.mean(axis=axis)
+
+    def max(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
+        return a.max(axis=axis)
+
+    def min(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
+        return a.min(axis=axis)
+
+    def abs(self, a: np.ndarray) -> np.ndarray:
+        return np.abs(a)
+
+    def neg(self, a: np.ndarray) -> np.ndarray:
+        return -a
+
+    def clamp(self, a: np.ndarray, lo: float, hi: float) -> np.ndarray:
+        return np.clip(a, lo, hi)
+
+    def where(self, cond: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        return np.where(cond, a, b)
+
+    def gather(self, a: np.ndarray, dim: int, index: np.ndarray) -> np.ndarray:
+        return np.take_along_axis(a, index.astype(int), axis=dim)
+
+    def scatter(self, a: np.ndarray, dim: int, index: np.ndarray, src: np.ndarray) -> np.ndarray:
+        result = a.copy()
+        np.put_along_axis(result, index.astype(int), src, axis=dim)
+        return result
+
+    def pad(
+        self, a: np.ndarray, pad_width, mode: str = "constant", constant_values: float = 0.0
+    ) -> np.ndarray:
+        return np.pad(a, pad_width, mode=mode, constant_values=constant_values)
+
+    def softmax(self, a: np.ndarray, axis: int = -1) -> np.ndarray:
+        a_max = a.max(axis=axis, keepdims=True)
+        exp_a = np.exp(a - a_max)
+        return exp_a / exp_a.sum(axis=axis, keepdims=True)
+
+    def log_softmax(self, a: np.ndarray, axis: int = -1) -> np.ndarray:
+        a_max = a.max(axis=axis, keepdims=True)
+        return a - a_max - np.log(np.exp(a - a_max).sum(axis=axis, keepdims=True))
+
+    def layer_norm(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
+        mean = x.mean(axis=-1, keepdims=True)
+        var = x.var(axis=-1, keepdims=True)
+        return ((x - mean) / np.sqrt(var + eps)) * weight + bias
+
+    def rms_norm(self, x: np.ndarray, weight: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+        rms = np.sqrt(np.mean(x**2, axis=-1, keepdims=True) + eps)
+        return (x / rms) * weight
+
+    def gelu(self, x: np.ndarray) -> np.ndarray:
+        return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
+
+    def silu(self, x: np.ndarray) -> np.ndarray:
+        return x / (1 + np.exp(-x))
+
+    def relu(self, x: np.ndarray) -> np.ndarray:
+        return np.maximum(x, 0)
+
+    def fused_add_mul(self, a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
+        """Fused a + b * c — one pass instead of two."""
+        return a + b * c
+
+    def fused_mul_add(self, a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
+        """Fused a * b + c — common in linear layers (weight @ input + bias)."""
+        return a * b + c
+
+    def fused_layernorm_gelu(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
+        """Fused layer_norm + gelu — one pass over x instead of two."""
+        mean = x.mean(axis=-1, keepdims=True)
+        var = x.var(axis=-1, keepdims=True)
+        normed = (x - mean) / np.sqrt(var + eps)
+        scaled = normed * weight + bias
+        return 0.5 * scaled * (1 + np.tanh(np.sqrt(2 / np.pi) * (scaled + 0.044715 * scaled**3)))
+
+    def fused_layernorm_silu(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
+        """Fused layer_norm + silu — one pass."""
+        mean = x.mean(axis=-1, keepdims=True)
+        var = x.var(axis=-1, keepdims=True)
+        normed = (x - mean) / np.sqrt(var + eps)
+        scaled = normed * weight + bias
+        return scaled / (1 + np.exp(-scaled))
+
+    def sigmoid(self, x: np.ndarray) -> np.ndarray:
+        return 1 / (1 + np.exp(-np.clip(x, -500, 500)))
+
+    def tanh(self, x: np.ndarray) -> np.ndarray:
+        return np.tanh(x)
+
+    def _scores_sn(self, q: np.ndarray, k: np.ndarray) -> np.ndarray:
+        """Compute Q @ K^T with shape [B, H, N, S] using matmul (faster than einsum)."""
+        B, H, N, E = q.shape
+        S = k.shape[2]
+        return (q.reshape(B * H, N, E) @ k.reshape(B * H, S, E).transpose(0, 2, 1)).reshape(
+            B, H, N, S
+        )
+
+    def _apply_attn(self, attn: np.ndarray, v: np.ndarray) -> np.ndarray:
+        """Apply attention weights to V with shape [B, H, N, E] using matmul."""
+        B, H, N, S = attn.shape
+        E = v.shape[3]
+        return (attn.reshape(B * H, N, S) @ v.reshape(B * H, S, E)).reshape(B, H, N, E)
+
+    def scaled_dot_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
+        causal: bool = False,
+    ) -> np.ndarray:
+        """Scaled dot-product attention with optimizations.
+
+        Uses matmul (BLAS) instead of einsum for 3-9x speedup on common sizes.
+        Falls back to tiled online-softmax for very large sequences (N*S > 65536).
+        Q: [B, H, N, E], K: [B, H, S, E], V: [B, H, S, E]
+        Returns: [B, H, N, E]
+        """
+        B, H, N, E = q.shape
+        S = k.shape[2]
+        if scale is None:
+            scale = 1.0 / math.sqrt(E)
+
+        if N * S > 65536:
+            return self.fused_softmax_attention(q, k, v, mask=mask, scale=scale, causal=causal)
+
+        scores = self._scores_sn(q, k) * scale
+
+        if mask is not None:
+            scores = scores + mask
+
+        if causal and N > 0 and S > 0:
+            causal_mask = np.triu(np.full((N, S), -1e9, dtype=np.float32), k=1)
+            scores = scores + causal_mask[None, None, :, :]
+
+        a_max = scores.max(axis=-1, keepdims=True)
+        exp_s = np.exp(scores - a_max)
+        attn = exp_s / exp_s.sum(axis=-1, keepdims=True)
+        return self._apply_attn(attn, v)
+
+    def multi_head_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        num_heads: int,
+        mask: np.ndarray | None = None,
+        causal: bool = False,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        B, N, C = q.shape
+        E = C // num_heads
+        q = q.reshape(B, N, num_heads, E).transpose(0, 2, 1, 3)  # [B, H, N, E]
+        k = k.reshape(B, -1, num_heads, E).transpose(0, 2, 1, 3)
+        v = v.reshape(B, -1, num_heads, E).transpose(0, 2, 1, 3)
+        out = self.scaled_dot_attention(q, k, v, mask=mask, causal=causal)
+        attn_weights = self._scores_sn(q, k)  # [B, H, N, S] for return
+        out = out.transpose(0, 2, 1, 3).reshape(B, N, C)
+        return out, attn_weights
+
+    def conv2d(
+        self,
+        x: np.ndarray,
+        weight: np.ndarray,
+        bias: np.ndarray | None = None,
+        stride: int = 1,
+        padding: int = 0,
+        groups: int = 1,
+    ) -> np.ndarray:
+        n, c, h, w = x.shape
+        oc, ic, kh, kw = weight.shape
+        if padding > 0:
+            x = np.pad(x, [(0, 0), (0, 0), (padding, padding), (padding, padding)], mode="constant")
+        oh = (x.shape[2] - kh) // stride + 1
+        ow = (x.shape[3] - kw) // stride + 1
+
+        cols = self._im2col(x, kh, kw, stride)
+        w_col = weight.reshape(oc, -1)
+        out = self.matmul(w_col, cols.T).T.reshape(n, oh, ow, oc).transpose(0, 3, 1, 2)
+
+        if bias is not None:
+            out = out + bias[:, None, None]
+        return out
+
+    def _im2col(self, x: np.ndarray, kh: int, kw: int, stride: int) -> np.ndarray:
+        n, c, h, w = x.shape
+        oh = (h - kh) // stride + 1
+        ow = (w - kw) // stride + 1
+        strides = x.strides
+        view_shape = (n, c, oh, ow, kh, kw)
+        view_strides = (
+            strides[0],
+            strides[1],
+            strides[2] * stride,
+            strides[3] * stride,
+            strides[2],
+            strides[3],
+        )
+        view = np.lib.stride_tricks.as_strided(
+            x, shape=view_shape, strides=view_strides, writeable=False
+        )
+        return view.transpose(0, 2, 3, 1, 4, 5).reshape(n * oh * ow, c * kh * kw)
+
+    def max_pool2d(self, x: np.ndarray, kernel_size: int, stride: int) -> np.ndarray:
+        n, c, h, w = x.shape
+        oh = (h - kernel_size) // stride + 1
+        ow = (w - kernel_size) // stride + 1
+        strides = x.strides
+        view_shape = (n, c, oh, ow, kernel_size, kernel_size)
+        view_strides = (
+            strides[0],
+            strides[1],
+            strides[2] * stride,
+            strides[3] * stride,
+            strides[2],
+            strides[3],
+        )
+        view = np.lib.stride_tricks.as_strided(
+            x, shape=view_shape, strides=view_strides, writeable=False
+        )
+        return view.max(axis=(4, 5))
+
+    def avg_pool2d(self, x: np.ndarray, kernel_size: int, stride: int) -> np.ndarray:
+        n, c, h, w = x.shape
+        oh = (h - kernel_size) // stride + 1
+        ow = (w - kernel_size) // stride + 1
+        strides = x.strides
+        view_shape = (n, c, oh, ow, kernel_size, kernel_size)
+        view_strides = (
+            strides[0],
+            strides[1],
+            strides[2] * stride,
+            strides[3] * stride,
+            strides[2],
+            strides[3],
+        )
+        view = np.lib.stride_tricks.as_strided(
+            x, shape=view_shape, strides=view_strides, writeable=False
+        )
+        return view.mean(axis=(4, 5))
+
+    def fused_softmax_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
+        causal: bool = False,
+    ) -> np.ndarray:
+        """Fused softmax(QK^T)V with online-softmax tiling for large sequences.
+        All einsums replaced with matmul for 3-9x speedup.
+        """
+        B, H, N, E = q.shape
+        S = k.shape[2]
+        if scale is None:
+            scale = 1.0 / math.sqrt(E)
+        if N * S < 256 * 256:
+            scores = self._scores_sn(q, k) * scale
+            if mask is not None:
+                scores = scores + mask
+            if causal:
+                causal_mask = np.triu(np.full((N, S), -1e9, dtype=np.float32), k=1)
+                scores = scores + causal_mask[None, None, :, :]
+            attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+            attn = attn / attn.sum(axis=-1, keepdims=True)
+            return self._apply_attn(attn, v)
+        tile_s = min(128, S)
+        np.zeros((B, H, N, E), dtype=np.float32)
+        for t_start in range(0, S, tile_s):
+            t_end = min(t_start + tile_s, S)
+            k_tile = k[:, :, t_start:t_end, :]
+            v_tile = v[:, :, t_start:t_end, :]
+            T = t_end - t_start
+            q2 = q.reshape(B * H, N, E)
+            k2 = k_tile.reshape(B * H, T, E)
+            scores_tile = (q2 @ k2.transpose(0, 2, 1)).reshape(B, H, N, T) * scale
+            if mask is not None:
+                scores_tile = scores_tile + mask[:, :, :, t_start:t_end]
+            if causal:
+                cm = np.triu(np.full((N, T), -1e9, dtype=np.float32), k=1 - t_start)
+                scores_tile = scores_tile + cm[None, None, :, :]
+            m_prev = getattr(self, "_fus_attn_m", np.full((B, H, N, 1), -1e9, dtype=np.float32))
+            if t_start == 0:
+                m_prev[:] = -1e9
+            m_new = np.maximum(m_prev, scores_tile.max(axis=-1, keepdims=True))
+            p_tile = np.exp(scores_tile - m_new)
+            if t_start == 0:
+                self._fus_attn_s = p_tile.sum(axis=-1, keepdims=True)
+                p2 = p_tile.reshape(B * H, N, T)
+                v2 = v_tile.reshape(B * H, T, E)
+                self._fus_attn_o = (p2 @ v2).reshape(B, H, N, E)
+            else:
+                rescale = np.exp(m_prev - m_new)
+                s_old = self._fus_attn_s * rescale
+                s_new = s_old + p_tile.sum(axis=-1, keepdims=True)
+                o_old = self._fus_attn_o * rescale
+                p2 = p_tile.reshape(B * H, N, T)
+                v2 = v_tile.reshape(B * H, T, E)
+                self._fus_attn_o = o_old + (p2 @ v2).reshape(B, H, N, E)
+                self._fus_attn_s = s_new
+            self._fus_attn_m = m_new
+        return self._fus_attn_o / self._fus_attn_s
+
+    def fused_layer_norm_gelu(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
+        """Fused layer_norm + gelu — one pass over x instead of two."""
+        mean = x.mean(axis=-1, keepdims=True)
+        var = x.var(axis=-1, keepdims=True)
+        normed = (x - mean) / np.sqrt(var + eps)
+        scaled = normed * weight + bias
+        return 0.5 * scaled * (1 + np.tanh(np.sqrt(2 / np.pi) * (scaled + 0.044715 * scaled**3)))
+
+    def embedding_lookup(self, indices: np.ndarray, weight: np.ndarray) -> np.ndarray:
+        flat = np.clip(indices.astype(int).flatten(), 0, weight.shape[0] - 1)
+        return weight[flat].reshape(list(indices.shape) + [weight.shape[1]])
+
+    def cross_entropy(self, logits: np.ndarray, targets: np.ndarray) -> float:
+        flat_l = logits.reshape(-1, logits.shape[-1])
+        x_max = flat_l.max(axis=-1, keepdims=True)
+        log_probs = flat_l - x_max - np.log(np.exp(flat_l - x_max).sum(axis=-1, keepdims=True))
+        flat_t = targets.astype(np.int64).flatten()
+        valid = (flat_t >= 0) & (flat_t < log_probs.shape[1])
+        idx = np.arange(len(flat_t))[valid]
+        losses = -log_probs[idx, flat_t[valid]]
+        return float(losses.mean()) if losses.size > 0 else 0.0
+
+    def embedding(self, indices: np.ndarray, weight: np.ndarray) -> np.ndarray:
+        return self.embedding_lookup(indices, weight)
+
+    def one_hot(self, indices: np.ndarray, num_classes: int) -> np.ndarray:
+        flat = indices.flatten().astype(int)
+        n = len(flat)
+        result = np.zeros((n, num_classes), dtype=np.float32)
+        valid = (flat >= 0) & (flat < num_classes)
+        result[np.arange(n)[valid], flat[valid]] = 1.0
+        return result.reshape(list(indices.shape) + [num_classes])
+
+    def concat(self, arrays: list[np.ndarray], axis: int = 0) -> np.ndarray:
+        return np.concatenate(arrays, axis=axis)
+
+    def stack(self, arrays: list[np.ndarray], axis: int = 0) -> np.ndarray:
+        return np.stack(arrays, axis=axis)
+
+    def permute(self, a: np.ndarray, axes: tuple[int, ...]) -> np.ndarray:
+        return np.transpose(a, axes)
+
+    def reshape(self, a: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
+        return a.reshape(shape)
+
+    def transpose(self, a: np.ndarray, axes: tuple[int, ...] | None = None) -> np.ndarray:
+        if axes:
+            return np.transpose(a, axes)
+        return a.T
+
+    def topk(
+        self, a: np.ndarray, k: int, dim: int = -1, largest: bool = True
+    ) -> tuple[np.ndarray, np.ndarray]:
+        sorted_idx = np.argsort(a, axis=dim)
+        if largest:
+            sorted_idx = sorted_idx[..., ::-1]
+        indices = sorted_idx[..., :k]
+        values = np.take_along_axis(a, indices, axis=dim)
+        return values, indices
+
+    def multinomial(
+        self, probs: np.ndarray, num_samples: int, replacement: bool = False
+    ) -> np.ndarray:
+        flat = probs.flatten().astype(np.float64)
+        flat = np.maximum(flat, 0)
+        total = flat.sum()
+        if total > 0:
+            flat = flat / total
+        indices = np.random.choice(len(flat), size=num_samples, p=flat, replace=replacement)
+        return indices.reshape(1, num_samples)
+
+    def dropout(self, x: np.ndarray, p: float, training: bool = True) -> np.ndarray:
+        if not training or p == 0:
+            return x
+        mask = (np.random.rand(*x.shape) > p).astype(np.float32)
+        return x * mask / (1 - p)
+
+    def batch_norm_2d(
+        self,
+        x: np.ndarray,
+        gamma: np.ndarray,
+        beta: np.ndarray,
+        running_mean: np.ndarray,
+        running_var: np.ndarray,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        training: bool = True,
+    ) -> np.ndarray:
+        if training:
+            mean = x.mean(axis=(0, 2, 3), keepdims=True)
+            var = x.var(axis=(0, 2, 3), keepdims=True)
+            running_mean[...] = momentum * mean.squeeze() + (1 - momentum) * running_mean
+            running_var[...] = momentum * var.squeeze() + (1 - momentum) * running_var
+        else:
+            mean = running_mean.reshape(1, -1, 1, 1)
+            var = running_var.reshape(1, -1, 1, 1)
+        return ((x - mean) / np.sqrt(var + eps)) * gamma[:, None, None] + beta[:, None, None]
+
+    def batch_norm_1d(
+        self,
+        x: np.ndarray,
+        gamma: np.ndarray,
+        beta: np.ndarray,
+        running_mean: np.ndarray,
+        running_var: np.ndarray,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        training: bool = True,
+    ) -> np.ndarray:
+        if training:
+            mean = x.mean(axis=0, keepdims=True)
+            var = x.var(axis=0, keepdims=True)
+            running_mean[...] = momentum * mean.squeeze() + (1 - momentum) * running_mean
+            running_var[...] = momentum * var.squeeze() + (1 - momentum) * running_var
+        else:
+            mean = running_mean.reshape(1, -1)
+            var = running_var.reshape(1, -1)
+        return ((x - mean) / np.sqrt(var + eps)) * gamma + beta
+
+
+class _CPUBackend(_Accelerator):
+    """CPU backend with SIMD support detection.
+
+    Detects: OpenBLAS (MKL/OpenBLAS multi-threaded), AVX2/AVX512 intrinsics,
+    Apple Accelerate framework (macOS), or plain NumPy fallback.
+    """
+
+    name = "cpu"
+    device_type = "cpu"
+    _openblas_threads_cache: int | None = None
+
+    def has_openblas(self) -> bool:
+        try:
+            import ctypes.util
+
+            return bool(
+                ctypes.util.find_library("openblas") or ctypes.util.find_library("libopenblas")
+            )
+        except Exception as e:
+            logger.debug("OpenBLAS detection failed: %s", e)
+            return False
+
+    def has_simd(self) -> bool:
+        try:
+            import platform
+
+            arch = platform.machine()
+            # x86_64 almost always has SSE/AVX
+            if arch in ("x86_64", "AMD64"):
+                return True
+            # ARM (Apple Silicon, Raspberry Pi) has NEON
+            if arch in ("arm64", "aarch64"):
+                return True
+        except Exception as e:
+            logger.debug("SIMD detection failed: %s", e)
+        return False
+
+    def openblas_threads(self) -> int:
+        if self._openblas_threads_cache is not None:
+            return self._openblas_threads_cache
+        try:
+            import os  # noqa: F401 — used in function bodies below
+
+            # Check OMP_NUM_THREADS / OPENBLAS_NUM_THREADS
+            n = int(os.environ.get("OPENBLAS_NUM_THREADS", os.environ.get("OMP_NUM_THREADS", "0")))
+            if n > 0:
+                self._openblas_threads_cache = n
+                return n
+            # Try ResourceManager first, then cpu count - 1
+            try:
+                from domain.infrastructure._internal.resource_manager import get_resource_manager
+
+                n = get_resource_manager().omp_num_threads
+            except Exception as e:
+                logger.debug("ResourceManager thread count failed: %s", e)
+                n = max(1, (os.cpu_count() or 1) - 1)
+            self._openblas_threads_cache = n
+            return n
+        except Exception as e:
+            logger.debug("OpenBLAS thread detection failed: %s", e)
+            self._openblas_threads_cache = 1
+            return 1
+
+    def vram_gb(self) -> float:
+        try:
+            import psutil
+
+            return psutil.virtual_memory().total / (1024**3) * 0.5  # 50% for compute
+        except Exception as e:
+            logger.debug("psutil VRAM detection failed: %s", e)
+
+        # Fallback 1: /proc/meminfo (Linux)
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemTotal:"):
+                        kb = int(line.split()[1])
+                        return (kb / (1024**2)) * 0.5
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("slo.gpu").debug(
+                "Failed to read /proc/meminfo for GPU memory fallback: %s", exc
+            )
+
+        # Fallback 2: sysctl (macOS / BSD)
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return int(result.stdout.strip()) / (1024**3) * 0.5
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("slo.gpu").debug(
+                "Failed to read sysctl hw.memsize for GPU memory fallback: %s", exc
+            )
+
+        # Fallback 3: wmic (Windows)
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["wmic", "os", "get", "TotalVisibleMemorySize", "/Value"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    if line.startswith("TotalVisibleMemorySize="):
+                        kb = int(line.split("=")[1])
+                        return (kb / (1024**2)) * 0.5
+        except Exception:
+            pass
+
+        logger.warning("All VRAM detection methods failed, defaulting to 8.0 GB")
+        return 8.0
+
+    @property
+    def compute_tier(self) -> str:
+        cores = self.openblas_threads()
+        vram = self.vram_gb()
+        if cores >= 8 and vram >= 16:
+            return "full"
+        elif cores >= 4 and vram >= 8:
+            return "medium"
+        return "lite"
+
+    def memory_hint(self) -> dict[str, Any]:
+        tier = self.compute_tier
+        threads = self.openblas_threads()
+        return {
+            "tier": tier,
+            "threads": threads,
+            "max_batch": 8 if tier == "full" else 4 if tier == "medium" else 2,
+            "max_seq_len": 512 if tier == "full" else 256,
+            "recommend_openmp": self.has_openblas(),
+            "recommend_quantization": tier != "full",
+        }
+
+    def softmax(self, a: np.ndarray, axis: int = -1) -> np.ndarray:
+        a_max = a.max(axis=axis, keepdims=True)
+        exp_a = np.exp(a - a_max)
+        return exp_a / exp_a.sum(axis=axis, keepdims=True)
+
+
+class _MetalBackend(_Accelerator):
+    """Metal (Apple GPU) backend — numpy compute on Apple Silicon.
+
+    Detects MPS availability via a platform check (``ml_types._mps_available``,
+    no torch import). All compute ops use the base ``_Accelerator`` numpy
+    implementations; there is no GPU dispatch. This mirrors the project's
+    ``training/gpu/accelerator.py`` Metal accelerator, which computes in numpy.
+    Ops not overridden here fall through to the base _Accelerator numpy impl.
+    """
+
+    name = "metal"
+    device_type = "gpu"
+    _fp16_available = False
+
+    def is_available(self) -> bool:
+        try:
+            from domain.infrastructure._internal.ml_types import _mps_available
+
+            return _mps_available()
+        except Exception as e:
+            logger.debug("Metal availability check failed: %s", e)
+            return False
+
+    def to_device(self, arr):
+        return np.asarray(arr, dtype=np.float32)
+
+    def from_device(self, arr):
+        return np.asarray(arr, dtype=np.float32)
+
+    def sync(self) -> None:
+        pass
+
+    def vram_gb(self) -> float:
+        return 8.0
+
+    # Use base class numpy implementations for all compute ops
+
+
+def _cuda_driver_present() -> bool:
+    """Cheap driver-presence check (dlopen only — no cuInit, no cupy import).
+
+    Runs BEFORE the cupy import so machines without an NVIDIA driver fail in
+    milliseconds instead of paying cupy's expensive first-import (which can
+    hang natively on a broken/mismatched driver — the 2026-10-29 :8000
+    wedge). A present-but-broken driver is then still bounded by the
+    per-epoch probe timeout in get_accelerator().
+    """
+    if sys.platform == "darwin":
+        return False  # Metal covers CUDA-less macs
+    lib = "nvcuda.dll" if sys.platform == "win32" else "libcuda.so.1"
+    try:
+        ctypes.CDLL(lib)
+        return True
+    except OSError:
+        return False
+
+
+class _CUDABackend(_Accelerator):
+    """CUDA (NVIDIA GPU) backend via CuPy.
+
+    Install: pip install cupy-cuda12x
+    Provides the fastest GPU compute path for NVIDIA cards.
+    """
+
+    name = "cuda"
+    device_type = "gpu"
+    _fp16_available = True
+
+    def __init__(self):
+        self._cp = None
+
+    def is_available(self) -> bool:
+        if not _cuda_driver_present():
+            # No NVIDIA driver: skip cupy's import entirely — on driverless
+            # machines it is the slow/hanging operation being guarded
+            # (incident 2026-10-29: first import wedged the whole server).
+            logger.debug("CUDA skipped: no NVIDIA driver present")
+            return False
+        try:
+            import cupy as cp
+
+            self._cp = cp
+            return True
+        except Exception as e:
+            logger.debug("CUDA availability check failed: %s", e)
+            return False
+
+    def array_module(self):
+        """cupy when the package imported AND a device is usable, else numpy.
+
+        ``is_available`` only proves the package imports (it may be
+        installed on a GPU-less machine) — callers that will launch
+        kernels must still probe, but this never hands back a module
+        that cannot even allocate.
+        """
+        return self._cp if self._cp is not None else np
+
+    def sync(self) -> None:
+        if self._cp:
+            self._cp.cuda.Stream.null.synchronize()
+
+    def vram_gb(self) -> float:
+        if self._cp:
+            try:
+                mem = self._cp.cuda.Device().mem_info()
+                return mem[1] / (1024**3)
+            except Exception as e:
+                logger.debug("CUDA VRAM detection failed: %s", e)
+        return 4.0
+
+    @property
+    def compute_tier(self) -> str:
+        vram = self.vram_gb()
+        if vram >= 8:
+            return "full"
+        elif vram >= 4:
+            return "medium"
+        return "lite"
+
+    def memory_hint(self) -> dict[str, Any]:
+        vram = self.vram_gb()
+        tier = self.compute_tier
+        return {
+            "vram_gb": vram,
+            "tier": tier,
+            "max_batch": int(64 * (vram / 8)),
+            "max_seq_len": 2048 if tier == "full" else 1024 if tier == "medium" else 512,
+            "recommend_flash_attention": True,
+            "recommend_quantization": tier != "full",
+        }
+
+    def _dtype(self):
+        return self._cp.float16 if self._fp16_mode else self._cp.float32
+
+    def to_device(self, arr: np.ndarray) -> Any:
+        if self._cp:
+            return self._cp.asarray(arr, dtype=self._dtype())
+        return arr.astype(np.float32)
+
+    def from_device(self, arr: Any) -> np.ndarray:
+        if self._cp and hasattr(arr, "get"):
+            # Always return fp32 to numpy callers
+            return arr.get().astype(np.float32)
+        return np.asarray(arr)
+
+    def matmul(self, a: Any, b: Any) -> np.ndarray:
+        # Detect an on-device CuPy array by type, NOT by a ``.device`` attribute:
+        # NumPy >= 2 added ``np.ndarray.device`` (== "cpu"), so ``hasattr(x, "device")``
+        # can no longer tell a CPU numpy array from a GPU cupy one and would skip the
+        # host->device transfer, feeding raw numpy into cp.matmul (TypeError -> CPU fallback).
+        if self._cp and not self._fp16_mode:
+            a_dev = a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a)
+            b_dev = b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b)
+            if a_dev is not a:
+                count_dispatch("h2d_bytes", int(getattr(a_dev, "nbytes", getattr(a, "nbytes", 0))))
+            if b_dev is not b:
+                count_dispatch("h2d_bytes", int(getattr(b_dev, "nbytes", getattr(b, "nbytes", 0))))
+            out = self._cp.asnumpy(self._cp.matmul(a_dev, b_dev))
+            count_dispatch("d2h_bytes", int(out.nbytes))
+            return out
+        if self._cp:
+            a_arr = (
+                a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a, dtype=self._dtype())
+            )
+            b_arr = (
+                b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b, dtype=self._dtype())
+            )
+            if a_arr is not a:
+                count_dispatch("h2d_bytes", int(getattr(a_arr, "nbytes", getattr(a, "nbytes", 0))))
+            if b_arr is not b:
+                count_dispatch("h2d_bytes", int(getattr(b_arr, "nbytes", getattr(b, "nbytes", 0))))
+            out = self._cp.asnumpy(self._cp.matmul(a_arr, b_arr))
+            count_dispatch("d2h_bytes", int(out.nbytes))
+            return out.astype(np.float32)
+        return np.matmul(np.asarray(a), np.asarray(b))
+
+    def scaled_dot_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
+        causal: bool = False,
+    ) -> np.ndarray:
+        if self._cp:
+            q_c, k_c, v_c = self._cp.asarray(q), self._cp.asarray(k), self._cp.asarray(v)
+            m_c = self._cp.asarray(mask) if mask is not None else None
+            if scale is None:
+                scale = 1.0 / math.sqrt(q_c.shape[-1])
+            scores = self._cp.einsum("bhnd,bhkd->bhnk", q_c, k_c) * scale
+            if m_c is not None:
+                scores = scores + m_c
+            if causal:
+                n, s = q_c.shape[2], k_c.shape[2]
+                scores = self._cp.where(
+                    self._cp.triu(self._cp.ones((n, s)), k=1) == 0, scores, -1e9
+                )
+            attn = self._cp.exp(scores - scores.max(axis=-1, keepdims=True))
+            attn = attn / attn.sum(axis=-1, keepdims=True)
+            out = self._cp.einsum("bhnk,bhkd->bhnd", attn, v_c)
+            return self._cp.asnumpy(out)
+        return super().scaled_dot_attention(q, k, v, mask=mask, scale=scale, causal=causal)
+
+    def layer_norm(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
+        if self._cp:
+            x_c, w_c, b_c = self._cp.asarray(x), self._cp.asarray(weight), self._cp.asarray(bias)
+            mean = x_c.mean(axis=-1, keepdims=True)
+            var = x_c.var(axis=-1, keepdims=True)
+            return self._cp.asnumpy(((x_c - mean) / self._cp.sqrt(var + eps)) * w_c + b_c)
+        return super().layer_norm(x, weight, bias, eps)
+
+    def gelu(self, x: np.ndarray) -> np.ndarray:
+        if self._cp:
+            x_c = self._cp.asarray(x)
+            return self._cp.asnumpy(
+                0.5
+                * x_c
+                * (1 + self._cp.tanh(self._cp.sqrt(2 / self._cp.pi) * (x_c + 0.044715 * x_c**3)))
+            )
+        return super().gelu(x)
+
+
+# =============================================================================
+# OpenCL BACKEND (Intel iGPU, AMD dGPU, integrated GPUs on Linux/Windows)
+# =============================================================================
+
+
+class _OpenCLBackend(_Accelerator):
+    """OpenCL backend for Intel/AMD GPUs on non-Apple platforms.
+
+    Uses pyopencl for cross-vendor GPU compute. Supports:
+    - Intel HD/UHD integrated graphics (Linux/Windows)
+    - AMD Radeon (Linux/Windows, via AMD ROCm or proprietary driver)
+    - Intel Arc discrete GPUs
+
+    Install: pip install pyopencl
+    Falls back to CPU if pyopencl is unavailable.
+    """
+
+    name = "opencl"
+    device_type = "gpu"
+
+    def __init__(self):
+        self._cl = None
+        self._platform = None
+        self._device = None
+        self._queue = None
+        self._build_opts = ""
+
+    def is_available(self) -> bool:
+        try:
+            import pyopencl as cl
+
+            cl.create_some_context(interactive=False)
+            self._cl = cl
+            return True
+        except Exception as e:
+            logger.debug("OpenCL availability check failed: %s", e)
+            return False
+
+    def sync(self) -> None:
+        if self._queue is not None:
+            self._queue.finish()
+
+    def vram_gb(self) -> float:
+        if self._cl is None:
+            return 0.0
+        try:
+            dev = self._cl.get_platforms()[0].get_devices()[0]
+            return dev.global_mem_size / (1024**3)
+        except Exception as e:
+            logger.debug("OpenCL VRAM detection failed: %s", e)
+            return 1.0
+
+    @property
+    def compute_tier(self) -> str:
+        vram = self.vram_gb()
+        if vram >= 4:
+            return "full"
+        elif vram >= 2:
+            return "medium"
+        return "lite"
+
+    def memory_hint(self) -> dict[str, Any]:
+        vram = self.vram_gb()
+        tier = self.compute_tier
+        return {
+            "vram_gb": vram,
+            "tier": tier,
+            "max_batch": int(16 * (vram / 4)),
+            "max_seq_len": 512 if tier == "full" else 256,
+            "recommend_quantization": tier != "full",
+        }
+
+    def _ensure_context(self):
+        if self._cl is None:
+            self._cl = __import__("pyopencl")
+        if self._queue is None:
+            ctx = self._cl.create_some_context(interactive=False)
+            self._queue = self._cl.CommandQueue(ctx)
+            self._device = ctx.devices[0]
+
+    def to_device(self, arr: np.ndarray) -> Any:
+        self._ensure_context()
+        mf = self._cl.mem_flags
+        buf = self._cl.Buffer(
+            self._queue.context, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=arr.astype(np.float32)
+        )
+        return buf
+
+    def from_device(self, arr: Any) -> np.ndarray:
+        result = np.empty(arr.shape, dtype=np.float32)
+        self._cl.enqueue_copy(self._queue, result, arr)
+        return result
+
+    def matmul(self, a: Any, b: Any) -> np.ndarray:
+        if isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
+            return np.matmul(a, b)
+        return np.matmul(np.asarray(a), np.asarray(b))
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+
+def to_gpu(arr: np.ndarray) -> Any:
+    """Move array to accelerator device (GPU if available)."""
+    return get_accelerator().to_device(arr)
+
+
+def from_gpu(arr: Any) -> np.ndarray:
+    """Move array from accelerator device back to CPU numpy."""
+    return get_accelerator().from_device(arr)
+
+
+def gelu(x: np.ndarray) -> np.ndarray:
+    return get_accelerator().gelu(x)
+
+
+def silu(x: np.ndarray) -> np.ndarray:
+    return get_accelerator().silu(x)
+
+
+def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
+    return get_accelerator().softmax(x, axis=axis)
+
+
+def benchmark_accelerators() -> dict[str, dict[str, Any]]:
+    """Benchmark all available backends: matmul + layernorm + gelu.
+
+    Returns dict of backend_name -> {gflops, memory_gb, tier, status}.
+    """
+    import time
+
+    results: dict[str, dict[str, Any]] = {}
+
+    A = np.random.randn(256, 256).astype(np.float32)
+    B = np.random.randn(256, 256).astype(np.float32)
+    X = np.random.randn(128, 256).astype(np.float32)
+    W = np.random.randn(256).astype(np.float32)
+    Bv = np.random.randn(256).astype(np.float32)
+
+    backends: list[tuple[str, _Accelerator]] = [
+        ("cpu", _CPUBackend()),
+        ("metal", _MetalBackend()),
+        ("cuda", _CUDABackend()),
+        ("opencl", _OpenCLBackend()),
+    ]
+
+    for name, backend in backends:
+        if not backend.is_available():
+            results[name] = {"status": "unavailable", "gflops": 0.0}
+            continue
+
+        try:
+            t0 = time.perf_counter()
+            for _ in range(20):
+                c = backend.matmul(A, B)
+                c = backend.layer_norm(X, W, Bv)
+                c = backend.gelu(c)
+            if hasattr(backend, "sync"):
+                backend.sync()
+            elapsed = time.perf_counter() - t0
+
+            flops = 20 * (2 * 256 * 256 * 256 + 2 * 128 * 256 + 2 * 128 * 256)
+            gflops = flops / elapsed / 1e9
+
+            results[name] = {
+                "status": "ok",
+                "gflops": round(gflops, 2),
+                "vram_gb": round(backend.vram_gb(), 1),
+                "tier": backend.compute_tier,
+            }
+        except Exception as e:
+            results[name] = {"status": f"error: {e}", "gflops": 0.0}
+
+    logger.info("", extra={"tag": "INFRA"})
+    for name, r in sorted(results.items(), key=lambda x: -x[1].get("gflops", 0)):
+        bar = "=" * int(r.get("gflops", 0) * 2)
+        tier = r.get("tier", "?")
+        vram = f"{r['vram_gb']}GB" if r.get("vram_gb") else ""
+        logger.info(
+            "  %s %6.1f GF/s %s %s %s [%s]",
+            name,
+            r["gflops"],
+            bar,
+            tier,
+            vram,
+            r["status"],
+            extra={"tag": "INFRA"},
+        )
+
+    return results

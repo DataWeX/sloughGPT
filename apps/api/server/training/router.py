@@ -1,10 +1,26 @@
 """FastAPI routes for char-level training and job orchestration.
 
-Trainer ``step_*.pt`` charset maps: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+Trainer ``*.soul`` checkpoint charset maps: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+
+Descriptor-projected (card 20261104_151036): 27 ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Envelope split
+byte-parity: the 13 handlers that wrapped in ``success_response`` had their
+inner wrap stripped (group A — the projection's wrap emits identical
+``{status, data}`` bytes); the 14 bare-payload handlers keep raw wire
+(``envelope=False``) — including the ``message="loaded"`` self-wrap, the
+``FileResponse``/raw ``Response`` passthroughs and both SSE streams. The two
+``Depends(require_auth_if_enabled)`` routes carry
+``auth_scope="authenticated"``; the other 25 are public (edge 3: reproduce
+the hand-built auth chain). Descriptions are derived from the handler
+docstrings with ``inspect.cleandoc`` — the exact expression FastAPI used
+on the hand-built routes, so they match by construction; summaries are
+pinned explicitly (FastAPI derives them from ``route.name``, which for a
+projected route would be the generated endpoint's name, not the handler's).
 """
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import shutil
@@ -12,2000 +28,193 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Request
+from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router
+from schemas.common import raise_error
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from domain.agents import ToolParam, ToolSpec
+from domain.shared import find_repo_root
 
-try:
-    from domains.api.sse_envelope import sse_event, sse_error, sse_complete
-except ImportError:
-    def sse_event(stream, phase, status, data=None, meta=None, message=""):
-        import json as _j
-        return "data: " + _j.dumps({
-            "stream": stream, "phase": phase, "status": status,
-            "data": data or {}, "meta": meta or {}, "message": message
-        }) + "\n\n"
-    def sse_error(stream, phase, error, meta=None):
-        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
-    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
-        return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
-
+from .control import router as control_router
+from .controller import get_training_controller
+from .execution import router as execution_router
+from .feeds import router as feeds_router
+from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
+from .job_store import get_job_store
 from .jobs import training_jobs
-from .resolution import resolve_training_inputs
-from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, DistillStartRequest
-from .controller import get_training_controller, TrainingState
+from .jobs_api import router as jobs_router
 from .webhooks import (
-    get_webhook_store,
-    TRAINING_EVENTS,
     notify_training_event,
 )
-from .job_store import get_job_store
-from domains.training.executor import get_training_executor
 
-logger = logging.getLogger("man")
+logger = logging.getLogger("slo")
 
 router = APIRouter(tags=["training"])
 
+# Include sub-module routers
+router.include_router(execution_router)
+router.include_router(jobs_router)
+router.include_router(control_router)
 
-def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
-    """Add plain-language status message to a training job dict.
+# Include training data feed endpoints (live corpus over HTTP)
+router.include_router(feeds_router)
 
-    Translates raw numbers into human-readable descriptions:
-    - "Training... 60% done, about 2 minutes left"
-    - "Training complete! Model saved to models/..."
-    - "Training failed: CUDA out of memory"
-    """
-    summary = dict(job)
-    status = job.get("status", "unknown")
-    progress = job.get("progress", 0)
-    model = job.get("model", "")
-    dataset = job.get("dataset", "")
-    method = job.get("data_source", "")
-    explanation = job.get("explanation", "")
+# Include the live feed/job observability stream (SSE)
+from .live_stream import router as live_stream_router
 
-    if status == "running":
-        parts = [f"Training {model} on {dataset}"]
-        if progress > 0:
-            parts.append(f"{progress}% done")
-        epoch = job.get("current_epoch")
-        epochs = job.get("epochs")
-        if epoch is not None and epochs:
-            parts.append(f"epoch {epoch}/{epochs}")
-        summary["status_message"] = ", ".join(parts) + "..."
-    elif status == "completed":
-        if explanation:
-            summary["status_message"] = explanation
-        else:
-            summary["status_message"] = f"Training complete! Model: {model}"
-    elif status == "failed":
-        error = job.get("error", "Unknown error")
-        summary["status_message"] = f"Training failed: {error}"
-    elif status == "queued":
-        summary["status_message"] = f"Queued: {model} on {dataset}"
-    elif status == "stopping":
-        summary["status_message"] = "Stopping..."
-    else:
-        summary["status_message"] = f"Status: {status}"
+router.include_router(live_stream_router)
 
-    return summary
 
+def _finetuned_dir() -> Path:
+    """Absolute path to the HF fine-tuned models directory."""
+    return find_repo_root(Path(__file__).resolve()) / "models" / "hf-finetuned"
 
-def _sloughgpt_trainer_kwds(req_snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Build ``SloughGPTTrainer`` keyword arguments from a request ``model_dump()`` (except ``data_path``)."""
-    device = req_snapshot.get("device")
-    return {
-        "n_embed": int(req_snapshot.get("n_embed") or 128),
-        "n_layer": int(req_snapshot.get("n_layer") or 4),
-        "n_head": int(req_snapshot.get("n_head") or 4),
-        "block_size": int(req_snapshot.get("block_size") or 128),
-        "dropout": float(
-            req_snapshot.get("dropout") if req_snapshot.get("dropout") is not None else 0.1
-        ),
-        "batch_size": int(req_snapshot.get("batch_size") or 32),
-        "epochs": int(req_snapshot.get("epochs") or 3),
-        "lr": float(req_snapshot.get("learning_rate") or 1e-3),
-        "max_steps": req_snapshot.get("max_steps"),
-        "gradient_accumulation_steps": int(req_snapshot.get("gradient_accumulation_steps") or 1),
-        "max_grad_norm": float(
-            req_snapshot.get("max_grad_norm")
-            if req_snapshot.get("max_grad_norm") is not None
-            else 1.0
-        ),
-        "use_mixed_precision": bool(req_snapshot.get("use_mixed_precision", True)),
-        "mixed_precision_dtype": str(req_snapshot.get("mixed_precision_dtype") or "bf16"),
-        "checkpoint_dir": str(req_snapshot.get("checkpoint_dir") or "checkpoints"),
-        "checkpoint_interval": int(req_snapshot.get("checkpoint_interval") or 500),
-        "save_best_only": bool(req_snapshot.get("save_best_only", False)),
-        "max_checkpoints": int(req_snapshot.get("max_checkpoints") or 5),
-        "scheduler_type": str(req_snapshot.get("scheduler") or "cosine"),
-        "warmup_steps": int(
-            req_snapshot.get("warmup_steps")
-            if req_snapshot.get("warmup_steps") is not None
-            else 100
-        ),
-        "min_lr": float(
-            req_snapshot.get("min_lr") if req_snapshot.get("min_lr") is not None else 1e-5
-        ),
-        "weight_decay": float(
-            req_snapshot.get("weight_decay")
-            if req_snapshot.get("weight_decay") is not None
-            else 0.01
-        ),
-        "use_lora": bool(req_snapshot.get("use_lora", False)),
-        "lora_rank": int(req_snapshot.get("lora_rank") or 8),
-        "lora_alpha": int(req_snapshot.get("lora_alpha") or 16),
-        "log_interval": int(req_snapshot.get("log_interval") or 10),
-        "eval_interval": int(req_snapshot.get("eval_interval") or 100),
-        "device": device if device is not None and str(device).strip() != "" else None,
-    }
 
+def _write_finetuned_metadata(
+    model_dir: str | Path,
+    model: str,
+    dataset: str,
+    final_loss: float | None = None,
+    epochs: int | None = None,
+) -> None:
+    """Persist authoritative model/dataset metadata inside a fine-tuned model dir.
 
-@router.post("/train")
-async def train(request: TrainRequest):
-    """Start a training job (background thread).
-
-    ``SloughGPTTrainer`` writes periodic ``step_*.pt`` under ``checkpoint_dir`` with
-    ``stoi`` / ``itos`` / ``chars`` for char-LM eval; see
-    ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
-    """
-    from domains.training.dataset_manifest import ManifestError
-    from domains.training.train_pipeline import SloughGPTTrainer
-
-    try:
-        data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
-            request.dataset,
-            request.manifest_uri,
-            request.dataset_ref,
-        )
-    except ManifestError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    req_snapshot = request.model_dump()
-
-    def train_model(job_id: str) -> None:
-        try:
-            trainer = SloughGPTTrainer(
-                data_path=data_path_str,
-                **_sloughgpt_trainer_kwds(req_snapshot),
-            )
-            trainer.train()
-            safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
-            trainer.save(f"models/{safe_stem}_trained.pt")
-            training_jobs[job_id]["status"] = "completed"
-            training_jobs[job_id]["checkpoint"] = f"models/{safe_stem}_trained.pt"
-        except Exception as e:
-            logger.exception("Background /train failed: %s", e)
-            training_jobs[job_id]["status"] = "failed"
-            training_jobs[job_id]["error"] = str(e)
-
-    executor = get_training_executor()
-    job_id = f"train_{int(time.time())}"
-    training_jobs[job_id] = {
-        "status": "queued",
-        "data_path": data_path_str,
-        "output_checkpoint_stem": out_stem,
-        "epochs": request.epochs,
-    }
-    executor.submit(train_model, job_id)
-
-    out: dict[str, Any] = {
-        "status": "started",
-        "job_id": job_id,
-        "data_path": data_path_str,
-        "output_checkpoint_stem": out_stem,
-        "data_source": source_kind,
-        "epochs": request.epochs,
-        "message": "Training started in background",
-    }
-    if request.dataset is not None:
-        out["dataset"] = request.dataset.strip()
-    if manifest_meta is not None:
-        out["manifest"] = manifest_meta
-    return out
-
-
-@router.post("/train/resolve")
-async def train_resolve(body: TrainResolveRequest) -> dict[str, Any]:
-    """Resolve ``data_path`` and checkpoint stem (dry run; no training).
-
-    Does not write ``.pt`` artifacts. After ``POST /train`` or ``POST /training/start``,
-    native ``step_*.pt`` includes char vocab; see ``docs/policies/CONTRIBUTING.md``
-    (*Checkpoint vocabulary*).
-    """
-    from domains.training.dataset_manifest import ManifestError
-
-    try:
-        data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
-            body.dataset,
-            body.manifest_uri,
-            body.dataset_ref,
-        )
-    except ManifestError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    out: dict[str, Any] = {
-        "ok": True,
-        "data_path": data_path_str,
-        "output_checkpoint_stem": out_stem,
-        "data_source": source_kind,
-    }
-    if body.dataset is not None:
-        out["dataset"] = body.dataset.strip()
-    if manifest_meta is not None:
-        out["manifest"] = manifest_meta
-    return out
-
-
-@router.get("/train/status")
-async def train_status():
-    """Legacy training status stub."""
-    return {"status": "ready", "message": "Use /train endpoint to start training"}
-
-
-@router.get("/training/jobs")
-async def list_training_jobs():
-    """List all tracked training jobs with plain-language status.
-
-    Each job includes a ``status_message`` field with a human-readable
-    description of what's happening: "Training... 60% done" or
-    "Training complete! Model saved to models/...".
-    """
-    return [_job_summary(j) for j in training_jobs.values()]
-
-
-@router.get("/training/jobs/{job_id}")
-async def get_training_job(job_id: str):
-    """Get one training job by id with plain-language status."""
-    if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return _job_summary(training_jobs[job_id])
-
-
-@router.post("/training/jobs/{job_id}/stop")
-async def stop_training_job(job_id: str):
-    """Stop a specific training job by id."""
-    if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job = training_jobs[job_id]
-    if job.get("status") not in ("running", "queued", "starting"):
-        raise HTTPException(status_code=400, detail=f"Job is not running (status: {job.get('status', 'unknown')})")
-    job["status"] = "stopping"
-    return {"status": "stopping", "job_id": job_id}
-
-
-@router.get("/training/jobs/{job_id}/summary")
-async def get_training_summary(job_id: str):
-    """Plain-language summary of a training job.
-
-    Returns what was trained, what data was used, how it went,
-    and what to do next.  No ML jargon — just facts Alex can use.
-    """
-    if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job = training_jobs[job_id]
-
-    model = job.get("model", "unknown model")
-    dataset = job.get("dataset", "unknown dataset")
-    status = job.get("status", "unknown")
-    explanation = job.get("explanation", "")
-    checkpoint = job.get("checkpoint", "")
-    epochs = job.get("epochs")
-    current_epoch = job.get("current_epoch")
-    final_loss = job.get("loss")
-    rl = bool(job.get("reward_history"))
-
-    lines = []
-
-    if status == "completed":
-        lines.append(f"You trained {model} on {dataset}.")
-        if epochs:
-            lines.append(f"It learned from {epochs} passes over your data.")
-        if final_loss is not None:
-            if final_loss < 1.5:
-                lines.append(f"Loss is low ({final_loss:.2f}) — your AI learned well.")
-            elif final_loss < 3.0:
-                lines.append(f"Loss is moderate ({final_loss:.2f}) — your AI learned something, but could do better.")
-            else:
-                lines.append(f"Loss is high ({final_loss:.2f}) — your AI may need more data or more training.")
-        if rl:
-            lines.append("Personality reinforcement was applied — your AI learned to give better answers.")
-        if checkpoint:
-            lines.append(f"Your trained model is at: {checkpoint}")
-            lines.append("Load it in the Models page to use it in chat.")
-        else:
-            lines.append("The model was saved but the checkpoint path isn't available yet.")
-    elif status == "running":
-        progress = job.get("progress", 0)
-        lines.append(f"Training {model} on {dataset}... {progress}% done.")
-        if current_epoch is not None and epochs:
-            lines.append(f"Epoch {current_epoch} of {epochs}.")
-    elif status == "failed":
-        error = job.get("error", "Unknown error")
-        lines.append(f"Training failed: {error}")
-        lines.append("Try using a smaller model, or check that you have enough disk space.")
-    elif status == "queued":
-        lines.append(f"Training {model} on {dataset} is queued. It will start shortly.")
-    else:
-        lines.append(f"Training status: {status}")
-
-    return {
-        "job_id": job_id,
-        "summary": " ".join(lines),
-        "status": status,
-        "model": model,
-        "dataset": dataset,
-    }
-
-
-@router.delete("/training/jobs/{job_id}")
-async def delete_training_job(job_id: str):
-    """Delete a training job and optionally its checkpoint files.
-
-    Removes job from registry. If ``delete_files`` is true, removes checkpoint
-    files associated with the job from disk.
-    """
-    if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    job = training_jobs[job_id]
-    deleted_files = []
-
-    if job.get("checkpoint"):
-        checkpoint_path = Path(job["checkpoint"])
-        if checkpoint_path.exists():
-            try:
-                checkpoint_path.unlink()
-                deleted_files.append(str(checkpoint_path))
-            except OSError:
-                pass
-
-    if job.get("checkpoint_dir"):
-        checkpoint_dir = Path(job["checkpoint_dir"])
-        if checkpoint_dir.exists() and checkpoint_dir.is_dir():
-            try:
-                shutil.rmtree(checkpoint_dir)
-                deleted_files.append(str(checkpoint_dir))
-            except OSError:
-                pass
-
-    del training_jobs[job_id]
-
-    return {
-        "status": "deleted",
-        "job_id": job_id,
-        "deleted_files": deleted_files,
-    }
-
-
-@router.get("/training/export/{job_id}")
-async def export_training_job(job_id: str):
-    """Export a completed training job's checkpoint file."""
-    from fastapi.responses import FileResponse
-
-    if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    job = training_jobs[job_id]
-
-    if job.get("status") not in ("completed", "failed", "cancelled"):
-        raise HTTPException(status_code=400, detail="Job must be completed before export")
-
-    checkpoint = job.get("checkpoint")
-    if not checkpoint:
-        raise HTTPException(status_code=404, detail="No checkpoint found for this job")
-
-    checkpoint_path = Path(checkpoint)
-    if not checkpoint_path.exists():
-        raise HTTPException(status_code=404, detail="Checkpoint file not found on disk")
-
-    return FileResponse(
-        path=checkpoint_path,
-        filename=checkpoint_path.name,
-        media_type="application/octet-stream",
-    )
-
-
-@router.post("/training/export-text")
-async def export_feedback_pairs(request: Request):
-    """Export feedback conversation pairs with a minimum quality threshold."""
-    from controllers.feedback import get_feedback_controller
-    body = await request.json()
-    min_quality = body.get("min_quality", 0)
-    target_count = body.get("target_count", 100)
-    ctrl = get_feedback_controller()
-    pairs = []
-    feedback_file = ctrl.feedback_dir / "feedback.jsonl"
-    if feedback_file.exists():
-        with open(feedback_file) as f:
-            for line in f:
-                fb = json.loads(line)
-                if fb.get("user_message") and fb.get("assistant_response"):
-                    pairs.append(fb)
-                    if len(pairs) >= target_count:
-                        break
-    output_file = ctrl.feedback_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
-    with open(output_file, "w") as f:
-        json.dump({"pairs": pairs, "total": len(pairs)}, f, indent=2)
-    return {"pairs_count": len(pairs), "filepath": str(output_file), "status": "exported"}
-
-
-@router.post("/training/start")
-async def start_training(request: TrainingRequest):
-    """Start a tracked training job (web UI).
-
-    ``step_*.pt`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
-    for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
-    """
-    from domains.training.dataset_manifest import ManifestError
-
-    try:
-        data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
-            request.dataset,
-            request.manifest_uri,
-            request.dataset_ref,
-        )
-    except ManifestError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    job_id = f"job_{len(training_jobs) + 1}"
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": request.name,
-        "model": request.model,
-        "dataset": request.dataset.strip() if request.dataset else out_stem,
-        "data_path": data_path_str,
-        "output_checkpoint_stem": out_stem,
-        "data_source": source_kind,
-        "status": "running",
-        "progress": 0,
-        "epochs": request.epochs,
-        "current_epoch": 0,
-        "global_step": 0,
-        "loss": None,
-        "train_loss": None,
-        "eval_loss": None,
-        "loss_history": [],
-    }
-    if manifest_meta is not None:
-        job["manifest"] = manifest_meta
-    training_jobs[job_id] = job
-
-    # Update global training controller
-    controller = get_training_controller()
-    controller.start(job_id, request.name or "training")
-
-    # Trigger webhook notification for training started
-    try:
-        import asyncio
-
-        async def notify_async():
-            await notify_training_event(
-                "training.started",
-                {
-                    "job_id": job_id,
-                    "job_name": request.name or "training",
-                    "dataset": request.dataset,
-                    "epochs": request.epochs,
-                },
-            )
-
-        asyncio.create_task(notify_async())
-    except Exception as e:
-        logger.debug("Training webhook notification failed: %s", e)
-
-    req_snapshot = request.model_dump()
-    data_path_for_thread = data_path_str
-    out_stem_for_thread = out_stem
-    jid = job_id
-
-    def run_training(job_id_: str = jid) -> None:
-        from domains.training.train_pipeline import SloughGPTTrainer
-        from domains.training.wandb_helpers import create_training_tracker_for_api_job
-
-        tracker = None
-        try:
-            tracker = create_training_tracker_for_api_job(
-                job_id=jid,
-                job_name=str(req_snapshot.get("name") or "training"),
-                data_path=data_path_for_thread,
-                hyperparams=dict(req_snapshot),
-            )
-
-            def on_progress(info: dict[str, Any]) -> None:
-                rec = training_jobs.get(jid)
-                if not rec:
-                    return
-                rec["progress"] = int(info.get("progress_percent", rec.get("progress", 0)))
-                rec["current_epoch"] = int(info.get("epoch", rec.get("current_epoch", 0)))
-                rec["global_step"] = int(info.get("global_step", 0))
-                tl = info.get("train_loss")
-                if tl is not None:
-                    rec["train_loss"] = float(tl)
-                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(tl), "type": "train"})
-                el = info.get("eval_loss")
-                if el is not None:
-                    fe = float(el)
-                    rec["eval_loss"] = fe
-                    rec["loss"] = fe
-                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": fe, "type": "eval"})
-
-            trainer = SloughGPTTrainer(
-                data_path=data_path_for_thread,
-                **_sloughgpt_trainer_kwds(req_snapshot),
-                experiment_tracker=tracker,
-            )
-            result = trainer.train(on_progress=on_progress)
-            safe_stem = "".join(
-                c if c.isalnum() or c in "-_" else "_" for c in out_stem_for_thread
-            )[:120]
-            trainer.save(f"models/{safe_stem}_trained.pt")
-            training_jobs[jid]["status"] = "completed"
-            training_jobs[jid]["progress"] = 100
-            training_jobs[jid]["current_epoch"] = int(req_snapshot.get("epochs") or 3)
-            bel = result.get("best_eval_loss")
-            training_jobs[jid]["loss"] = bel if bel is not None and bel < float("inf") else None
-            training_jobs[jid]["checkpoint"] = f"models/{safe_stem}_trained.pt"
-            get_training_controller().complete()
-
-            # Trigger webhook notification (fire and forget)
-            try:
-                import asyncio
-
-                asyncio.run(
-                    notify_training_event(
-                        "training.completed",
-                        {
-                            "job_id": jid,
-                            "job_name": training_jobs[jid].get("name", "training"),
-                            "status": "completed",
-                            "loss": training_jobs[jid]["loss"],
-                            "checkpoint": training_jobs[jid]["checkpoint"],
-                        },
-                    )
-                )
-            except Exception as e:
-                logger.debug("Training completion webhook failed: %s", e)
-        except Exception as e:
-            logger.exception("Training job %s failed", jid)
-            training_jobs[jid]["status"] = "failed"
-            training_jobs[jid]["error"] = str(e)
-            training_jobs[jid]["progress"] = 0
-            get_training_controller().fail(str(e))
-
-            # Trigger webhook notification (fire and forget)
-            try:
-                import asyncio
-
-                asyncio.run(
-                    notify_training_event(
-                        "training.failed",
-                        {
-                            "job_id": jid,
-                            "job_name": training_jobs[jid].get("name", "training"),
-                            "status": "failed",
-                            "error": str(e),
-                        },
-                    )
-                )
-            except Exception:
-                pass
-        finally:
-            if tracker is not None:
-                try:
-                    tracker.end_run()
-                except Exception:
-                    logger.exception("W&B end_run failed for job %s", jid)
-
-    executor = get_training_executor()
-    executor.submit(run_training, jid)
-
-
-@router.post("/training/hf-start")
-async def start_hf_training(request: HFTrainingRequest):
-    """Fine-tune a HuggingFace model (causal LM) on text data with optional LoRA.
-
-    Uses transformers.Trainer + peft. The ``model`` field specifies which
-    HuggingFace model to fine-tune (e.g. ``Qwen/Qwen2.5-0.5B-Instruct``).
-
-    The ``dataset`` field must match a folder under ``datasets/`` containing
-    ``input.txt``.
-    """
-    import os
-
-    job_id = f"hf_job_{len(training_jobs) + 1}_{int(time.time())}"
-
-    # Resolve dataset path relative to repo root
-    _repo_root = Path(__file__).resolve().parents[4]
-    _datasets_dir = _repo_root / "datasets"
-    data_path_str = ""
-    if request.dataset:
-        ds_dir = _datasets_dir / request.dataset
-        ds_path = ds_dir / "input.txt"
-        if not ds_path.is_file():
-            ds_path = ds_dir / "corpus.jsonl"
-        if not ds_path.is_file():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.",
-            )
-        data_path_str = str(ds_path.resolve())
-    elif request.manifest_uri:
-        ds_path = Path(request.manifest_uri.replace("file://", ""))
-        if not ds_path.is_file():
-            raise HTTPException(status_code=400, detail=f"Manifest file not found: {ds_path}")
-        data_path_str = str(ds_path.resolve())
-    else:
-        raise HTTPException(status_code=400, detail="Provide a `dataset` or `manifest_uri`")
-
-    # Create output directory (repo-root relative)
-    safe_model = request.model.replace("/", "--")
-    output_dir = str(_repo_root / f"models/hf-finetuned/{safe_model}_{request.dataset or 'custom'}_{int(time.time())}")
-
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": request.name,
-        "model": request.model,
-        "dataset": request.dataset,
-        "data_path": data_path_str,
-        "status": "queued",
-        "progress": 0,
-        "epochs": request.epochs,
-        "current_epoch": 0,
-        "global_step": 0,
-        "loss": None,
-        "output_dir": output_dir,
-        "loss_history": [],
-        "reward_history": [],
-    }
-    training_jobs[job_id] = job
-
-    # Auto-configure when model not specified
-    model_name = request.model
-    if not model_name and data_path_str:
-        from domains.training.auto_config import auto_configure
-        _auto = auto_configure(
-            dataset=request.dataset,
-            dataset_path=data_path_str,
-            preferred_model=None,
-        )
-        model_name = _auto.model
-        job["model"] = model_name
-        job["explanation"] = _auto.explanation
-        # Apply auto-configured values where user didn't specify
-        if not request.rl_post_train:
-            request.rl_post_train = _auto.rl_post_train
-        request.use_lora = _auto.use_lora
-
-    data_path = data_path_str
-    req = request
-
-    def run_hf_training(job_id_: str = job_id) -> None:
-        jid = job_id
-        try:
-            training_jobs[jid]["status"] = "running"
-            get_job_store().create(jid, req.name, req.model_dump(), req.dataset)
-            get_job_store().mark_started(jid)
-
-            if req.rl_post_train:
-                from domains.training.hf_finetune import GRPOTrainer, RewardFn
-
-                def on_progress(info: dict[str, Any]) -> None:
-                    rec = training_jobs.get(jid)
-                    if not rec:
-                        return
-                    rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
-                    rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
-                    rec["global_step"] = info.get("step", rec.get("global_step", 0))
-                    rec["loss"] = info.get("loss", rec.get("loss"))
-                    loss_val = info.get("loss")
-                    reward_val = info.get("reward")
-                    if loss_val is not None:
-                        rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(loss_val), "type": "train"})
-                    if reward_val is not None:
-                        rec.setdefault("reward_history", []).append({"step": rec.get("global_step", 0), "value": float(reward_val)})
-                    get_job_store().update_progress(
-                        jid,
-                        rec["progress"],
-                        epoch=int(rec["current_epoch"]),
-                        step=int(rec["global_step"]),
-                        loss=rec["loss"],
-                    )
-
-                reward_mode = req.rl_reward_mode or "length"
-                if reward_mode == "keyword" and req.rl_reward_keywords:
-                    reward_fn = RewardFn(mode="keyword", keywords=req.rl_reward_keywords)
-                else:
-                    reward_fn = RewardFn(mode=reward_mode)
-
-                tuner = GRPOTrainer(
-                    model_name=model_name,
-                    prompts_path=data_path,
-                    output_dir=output_dir,
-                    num_generations=req.rl_num_generations,
-                    learning_rate=req.rl_learning_rate,
-                    kl_coef=req.rl_kl_coef,
-                    clip_range=req.rl_clip_range,
-                    epochs=req.epochs,
-                    max_new_tokens=req.rl_max_new_tokens,
-                    batch_size=req.batch_size,
-                    device=req.device,
-                    reward_fn=reward_fn,
-                    use_lora=req.use_lora,
-                    lora_rank=req.lora_rank,
-                    lora_alpha=req.lora_alpha,
-                )
-                result = tuner.train(on_progress=on_progress)
-            else:
-                from domains.training.hf_finetune import HFFineTuner
-
-                def on_progress(info: dict[str, Any]) -> None:
-                    rec = training_jobs.get(jid)
-                    if not rec:
-                        return
-                    rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
-                    rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
-                    rec["global_step"] = info.get("step", rec.get("global_step", 0))
-                    rec["loss"] = info.get("loss", rec.get("loss"))
-                    loss_val = info.get("loss")
-                    if loss_val is not None:
-                        rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(loss_val), "type": "train"})
-                    get_job_store().update_progress(
-                        jid,
-                        rec["progress"],
-                        epoch=int(rec["current_epoch"]),
-                        step=int(rec["global_step"]),
-                        loss=rec["loss"],
-                    )
-
-                tuner = HFFineTuner(
-                    model_name=model_name,
-                    data_path=data_path,
-                    output_dir=output_dir,
-                    use_lora=req.use_lora,
-                    lora_rank=req.lora_rank,
-                    lora_alpha=req.lora_alpha,
-                    epochs=req.epochs,
-                    batch_size=req.batch_size,
-                    learning_rate=req.learning_rate,
-                    max_seq_length=req.max_seq_length,
-                    warmup_steps=req.warmup_steps,
-                    device=req.device,
-                )
-                result = tuner.train(on_progress=on_progress)
-
-            training_jobs[jid]["status"] = "completed"
-            training_jobs[jid]["progress"] = 100
-            training_jobs[jid]["result"] = result
-            model_path = result.get("model_path", "")
-
-            # Build plain-language explanation
-            from domains.training.auto_config import plain_language_verdict
-            final_loss = result.get("final_loss")
-            final_reward = result.get("final_reward")
-
-            if req.rl_post_train and final_reward is not None:
-                # GRPO completed — use reward-based verdict
-                reward_delta = {"verdict": "improved" if final_reward > 0.5 else "mixed"}
-                training_jobs[jid]["explanation"] = (
-                    plain_language_verdict(reward_delta)
-                    + f" Model saved to {model_path}."
-                )
-            elif final_loss is not None:
-                # Standard fine-tune — use loss-based explanation
-                if final_loss < 2.0:
-                    training_jobs[jid]["explanation"] = (
-                        f"Training complete! Your AI learned from the data. "
-                        f"Final loss: {final_loss:.2f} (lower is better). "
-                        f"Model saved to {model_path}."
-                    )
-                else:
-                    training_jobs[jid]["explanation"] = (
-                        f"Training complete, but the loss is still high ({final_loss:.2f}). "
-                        f"Your AI may need more data or more epochs. "
-                        f"Model saved to {model_path}."
-                    )
-            else:
-                training_jobs[jid]["explanation"] = f"Training complete! Model saved to {model_path}."
-
-            get_job_store().mark_completed(jid, checkpoint_path=model_path)
-
-        except Exception as exc:
-            logger.exception("HF fine-tune job %s failed", job_id)
-            if jid in training_jobs:
-                training_jobs[jid]["status"] = "failed"
-            training_jobs[jid]["error"] = str(exc)
-            get_job_store().mark_failed(job_id, str(exc))
-
-    executor = get_training_executor()
-    executor.submit(run_hf_training, job_id)
-
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "message": f"HF fine-tune started: {request.model} on {request.dataset}",
-    }
-
-
-# ── Activity Training ──────────────────────────────────────────────
-
-
-# ── Visual Training ────────────────────────────────────────────────
-
-
-class VisualTrainRequest(BaseModel):
-    dataset: str
-    vision_encoder: str = "slonet"
-    llm: str = "gpt2"
-    connector_hidden_dim: int = 512
-    max_seq_length: int = 128
-    stage1_epochs: int = 5
-    stage2_epochs: int = 10
-    stage1_lr: float = 5e-4
-    stage2_lr: float = 2e-4
-    batch_size: int = 4
-    use_lora: bool = False
-    lora_rank: int = 8
-    freeze_vision: bool = True
-    name: Optional[str] = None
-
-
-class MergeLoRARequest(BaseModel):
-    """Request body for merging a LoRA adapter into its base model."""
-    adapter_path: str
-    output_path: Optional[str] = None
-    push_to_hub: bool = False
-    hub_model_id: Optional[str] = None
-
-
-@router.post("/training/merge-lora")
-async def merge_lora_adapter(request: MergeLoRARequest):
-    """Merge LoRA adapter weights into the base model and save the merged result.
-
-    Takes a path to a saved PEFT adapter directory (containing
-    adapter_config.json + adapter_model.bin), merges the low-rank matrices
-    back into the base weights, and saves a standalone model with no adapter
-    overhead.
+    The directory name is not a reliable source of truth: datasets can contain
+    underscores and legacy quick-train runs omit the model prefix entirely.
 
     Args:
-        request: MergeLoRARequest with adapter_path, optional output_path,
-            push_to_hub flag, and hub_model_id.
+        model_dir: Fine-tuned model directory (``output_dir``)
+        model: Base HuggingFace model id (e.g. ``gpt2``)
+        dataset: Dataset name used for training (may be empty)
+        final_loss: Final training loss if known
+        epochs: Number of epochs trained if known
+
+    Side effects:
+        - Writes ``metadata.json`` into ``model_dir``
+    """
+    try:
+        meta = {
+            "model": model,
+            "dataset": dataset,
+            "final_loss": final_loss,
+            "epochs": epochs,
+        }
+        (Path(model_dir) / "metadata.json").write_text(json.dumps(meta, indent=2))
+    except Exception as e:  # metadata is best-effort, never fail the job
+        logger.debug("Failed to write fine-tuned metadata: %s", e)
+
+
+def _read_finetuned_metadata(model_dir: Path) -> dict[str, Any]:
+    """Read persisted metadata from a fine-tuned model dir, or ``{}``.
+
+    Args:
+        model_dir: Fine-tuned model directory
 
     Returns:
-        Dict with status, merged_path, and base_model name.
-
-    Raises:
-        HTTPException: If merge fails (file not found, import error, etc.)
+        Dict with ``model``/``dataset``/``final_loss``/``epochs`` keys as present
     """
-    import os
     try:
-        from domains.training.hf_finetune import merge_lora_adapter as do_merge
-        result = do_merge(
-            adapter_path=request.adapter_path,
-            output_path=request.output_path,
-            push_to_hub=request.push_to_hub,
-            hub_model_id=request.hub_model_id,
-        )
-        return {
-            "status": "merged",
-            "merged_path": result,
-        }
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ImportError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        logger.error("LoRA merge failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Merge failed: {e}")
-
-
-@router.post("/training/visual-start")
-async def start_visual_training(request: VisualTrainRequest):
-    """Start a vision-language model (VLM) fine-tune on a visual dataset.
-
-    Uses the video trainer's VideoCaptionTrainer on an image-caption
-    dataset, running stage-1 connector tuning then stage-2 full fine-tune.
-    """
-    import uuid
-    job_id = str(uuid.uuid4())[:8]
-
-    datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
-    data_path = datasets_dir / request.dataset
-    if not data_path.exists():
-        data_path = datasets_dir / f"{request.dataset}.jsonl"
-    if not data_path.exists():
-        raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset}")
-    data_path_str = str(data_path)
-
-    out_stem = request.name or f"vlm_{job_id}"
-    output_dir = Path("models/video-training/checkpoints")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": request.name or f"VLM-{job_id}",
-        "model": f"{request.vision_encoder}+{request.llm}",
-        "dataset": request.dataset,
-        "status": "queued",
-        "progress": 0,
-        "epochs": request.stage1_epochs + request.stage2_epochs,
-        "current_epoch": 0,
-        "global_step": 0,
-        "loss": None,
-        "error": None,
-        "result": None,
-        "loss_history": [],
-    }
-    training_jobs[job_id] = job
-
-    def run_visual_training(job_id_: str = job_id) -> None:
-        try:
-            from domains.training.video_trainer import VideoCaptionTrainer
-
-            trainer = VideoCaptionTrainer()
-            trainer.build_vocab()
-
-            def on_progress(info: dict[str, Any]) -> None:
-                rec = training_jobs.get(job_id)
-                if not rec:
-                    return
-                rec["current_epoch"] = info.get("epoch", 0)
-                rec["global_step"] = info.get("step", 0)
-                loss = info.get("loss")
-                if loss is not None:
-                    rec["loss"] = float(loss)
-                    rec.setdefault("loss_history", []).append(
-                        {"step": info.get("step", 0), "value": float(loss)}
-                    )
-                rec["progress"] = info.get("progress", rec.get("progress", 0))
-
-            result = trainer.train(
-                data_path=data_path_str,
-                epochs=request.stage1_epochs + request.stage2_epochs,
-                batch_size=request.batch_size,
-                learning_rate=request.stage1_lr,
-                on_progress=on_progress,
-                output_dir=str(output_dir),
-            )
-
-            training_jobs[job_id]["status"] = "completed"
-            training_jobs[job_id]["progress"] = 100
-            training_jobs[job_id]["result"] = result
-
-            # Save checkpoint
-            ckpt_path = output_dir / f"{out_stem}.npz"
-            trainer.save_checkpoint(str(ckpt_path))
-            training_jobs[job_id]["checkpoint"] = str(ckpt_path)
-
-        except Exception as exc:
-            logger.exception("Visual training job %s failed", job_id)
-            if job_id in training_jobs:
-                training_jobs[job_id]["status"] = "failed"
-                training_jobs[job_id]["error"] = str(exc)
-
-    executor = get_training_executor()
-    executor.submit(run_visual_training, job_id)
-
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "message": f"Visual training started on {request.dataset}",
-    }
-
-
-# ── Distillation ────────────────────────────────────────────────────
-
-
-@router.post("/training/distill")
-async def start_distillation(request: DistillStartRequest):
-    """Knowledge distillation: teach a compact SloNet LSTM student from a teacher HF model.
-
-    Loads the teacher from the HF model registry, creates a SloNet LSTM student,
-    runs DistillationTrainer.step() in a loop, saves the student as a checkpoint.
-    """
-    import uuid
-    job_id = str(uuid.uuid4())[:8]
-
-    datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
-    data_path = datasets_dir / request.dataset
-    if not data_path.exists():
-        data_path = datasets_dir / f"{request.dataset}.jsonl"
-    if not data_path.exists():
-        raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset}")
-
-    input_file = data_path / "input.txt" if data_path.is_dir() else data_path
-    if data_path.is_dir():
-        candidates = [data_path / "input.txt", data_path / "corpus.jsonl", data_path / "train.txt"]
-        input_file = next((c for c in candidates if c.exists()), None)
-    if not input_file or not Path(input_file).exists():
-        raise HTTPException(status_code=400, detail="No training data file (input.txt/corpus.jsonl) in dataset")
-
-    data_str = Path(input_file).read_text(encoding="utf-8")
-    if not data_str.strip():
-        raise HTTPException(status_code=400, detail="Training data is empty")
-
-    out_stem = request.name or f"distill_{job_id}"
-    _REPO_ROOT = Path(__file__).resolve().parents[4]
-    output_dir = _REPO_ROOT / "models" / "auto-training"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": request.name or f"Distill-{job_id}",
-        "type": "distill",
-        "status": "queued",
-        "progress": 0,
-        "epochs": request.epochs,
-        "dataset": request.dataset,
-        "teacher_model": request.teacher_model,
-        "config": request.model_dump(),
-    }
-    training_jobs[job_id] = job
-
-    def _run_distill(job_id_: str = job_id):
-        """Background thread that runs distillation."""
-        try:
-            # Load teacher from model registry
-            from domains.infrastructure.model_registry import get_model_registry
-            registry = get_model_registry()
-            server = registry.get(request.teacher_model) if registry else None
-            if server is None:
-                # Try loading via HF controllers
-                from controllers.models import get_models_controller
-                ctrl = get_models_controller()
-                teacher_model = ctrl._hf_model
-                teacher_tokenizer = ctrl._tokenizer
-            else:
-                teacher_model = server._model_ref
-                teacher_tokenizer = getattr(server, "_tokenizer", None)
-
-            if teacher_model is None:
-                training_jobs[job_id]["status"] = "failed"
-                training_jobs[job_id]["error"] = f"Teacher model '{request.teacher_model}' not loaded"
-                return
-
-            # Tokenize training data
-            if teacher_tokenizer is not None:
-                tokens = teacher_tokenizer.encode(data_str[:100000])
-            else:
-                tokens = [ord(c) for c in data_str[:100000]]
-
-            # Build vocab from teacher or data
-            import numpy as np
-            import random as _random
-            _random.seed(42)
-            np.random.seed(42)
-
-            vocab = sorted(set(tokens))
-            stoi = {c: i for i, c in enumerate(vocab)}
-            itos = {i: c for c, i in stoi.items()}
-            vocab_size = len(stoi)
-
-            # Create student SloNet LSTM
-            from domains.training.slonet import SloNet, SloAdam
-            from domains.training.train_pipeline import TextDataset as _TextDataset
-
-            student = SloNet(
-                vocab_size=vocab_size,
-                embed_dim=request.embed_dim,
-                hidden_dim=request.embed_dim * 2,
-                n_layers=request.n_layers,
-                n_heads=request.n_heads or 4,
-                block_size=request.block_size,
-                padding_idx=0,
-            )
-
-            # Prepare data for training
-            block_size = request.block_size
-            token_ids = [stoi.get(t, 0) for t in tokens]
-            inputs_list = []
-            targets_list = []
-            for i in range(0, len(token_ids) - block_size, block_size // 2):
-                x = token_ids[i:i + block_size]
-                y = token_ids[i + 1:i + block_size + 1]
-                if len(x) == block_size and len(y) == block_size:
-                    inputs_list.append(x)
-                    targets_list.append(y)
-
-            if not inputs_list:
-                training_jobs[job_id]["status"] = "failed"
-                training_jobs[job_id]["error"] = "Not enough data for training"
-                return
-
-            inputs_np = np.array(inputs_list, dtype=np.int64)
-            targets_np = np.array(targets_list, dtype=np.int64)
-            n_samples = len(inputs_np)
-            batch_size = min(16, n_samples)
-
-            # Create teacher inputs wrapper
-            class _TeacherWrapper:
-                def __init__(self, model, tokenizer):
-                    self._model = model
-                    self._tokenizer = tokenizer
-                def __call__(self, x):
-                    import torch
-                    import numpy as np
-                    if isinstance(x, np.ndarray):
-                        seq = "".join(chr(max(32, min(126, t))) for t in x[0] if t < 256)
-                        inp = self._tokenizer(seq, return_tensors="pt", truncation=True, max_length=block_size)
-                        with torch.no_grad():
-                            out = self._model(**inp).logits
-                        out_np = out[:, :vocab_size, :].float().numpy()
-                        return np.squeeze(out_np, 0) if out_np.shape[0] == 1 else out_np[:, :vocab_size, :]
-                    return np.zeros((x.shape[0], vocab_size), dtype=np.float32)
-
-            teacher_wrapper = _TeacherWrapper(teacher_model, teacher_tokenizer)
-
-            from domains.training.distillation import DistillationTrainer, DistillationConfig
-            distill_cfg = DistillationConfig(
-                temperature=request.temperature,
-                alpha=request.alpha,
-                beta=request.beta,
-            )
-            trainer = DistillationTrainer(teacher_wrapper, student, distill_cfg)
-
-            # Training loop
-            epoch_losses = []
-            for epoch in range(request.epochs):
-                indices = list(range(n_samples))
-                _random.shuffle(indices)
-                epoch_loss = 0.0
-                n_batches = 0
-                for start in range(0, n_samples, batch_size):
-                    batch_idx = indices[start:start + batch_size]
-                    bx = inputs_np[batch_idx]
-                    by = targets_np[batch_idx]
-
-                    losses = trainer.step(bx, by)
-                    batch_loss = losses.get("total_loss", 0.0)
-                    epoch_loss += batch_loss
-                    n_batches += 1
-
-                avg_loss = epoch_loss / max(n_batches, 1)
-                epoch_losses.append(avg_loss)
-
-                training_jobs[job_id]["progress"] = int((epoch + 1) / request.epochs * 100)
-                training_jobs[job_id]["current_epoch"] = epoch + 1
-                training_jobs[job_id]["train_loss"] = avg_loss
-
-            # Save student checkpoint
-            safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
-            ckpt_path = output_dir / f"{safe_stem}_distilled.soul"
-
-            student.export_to_sou(str(ckpt_path), metadata={
-                "model_type": "slonet_lstm",
-                "teacher": request.teacher_model,
-                "distill_temperature": request.temperature,
-                "epochs": request.epochs,
-                "final_loss": float(epoch_losses[-1]) if epoch_losses else 0.0,
-                "embed_dim": request.embed_dim,
-                "n_layers": request.n_layers,
-                "vocab_size": vocab_size,
-                "stoi": stoi,
-                "itos": itos,
-            })
-
-            training_jobs[job_id].update({
-                "status": "completed",
-                "progress": 100,
-                "loss": float(epoch_losses[-1]) if epoch_losses else None,
-                "checkpoint": str(ckpt_path),
-                "loss_history": [
-                    {"step": i, "value": v, "type": "train"}
-                    for i, v in enumerate(epoch_losses)
-                ],
-            })
-            logger.info("Distillation complete: %s loss=%.4f", ckpt_path, epoch_losses[-1] if epoch_losses else 0)
-
-        except Exception as e:
-            logger.exception("Distillation job %s failed", job_id)
-            training_jobs[job_id]["status"] = "failed"
-            training_jobs[job_id]["error"] = str(e)
-
-    executor = get_training_executor()
-    executor.submit(_run_distill, job_id)
-
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "message": f"Distillation started: teacher={request.teacher_model} epochs={request.epochs}",
-    }
-
-
-@router.post("/training/quick")
-async def quick_train(request: QuickTrainRequest):
-    """One-click training: pick a dataset, we handle everything.
-
-    Analyses the dataset, picks the right method, model, epochs,
-    and learning rate automatically.  Returns the chosen config
-    with a plain-language explanation of what we're doing and why.
-
-    Optional ``model`` override if you want a specific model.
-    """
-    import os
-
-    from domains.training.auto_config import auto_configure
-
-    # Resolve dataset path
-    _repo_root = Path(__file__).resolve().parents[4]
-    _datasets_dir = _repo_root / "datasets"
-    ds_path = _datasets_dir / request.dataset
-
-    if not ds_path.exists():
-        raise HTTPException(status_code=404, detail=f"Dataset not found: {request.dataset}")
-
-    # Find the data file
-    input_file = ds_path / "input.txt"
-    corpus_file = ds_path / "corpus.jsonl"
-    data_file = input_file if input_file.exists() else (corpus_file if corpus_file.exists() else None)
-    if data_file is None:
-        raise HTTPException(status_code=400, detail=f"No input.txt or corpus.jsonl in {request.dataset}")
-
-    # Discover available models
-    available_models = ["gpt2"]
-    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
-    if hf_cache.exists():
-        for d in hf_cache.iterdir():
-            if d.name.startswith("models--"):
-                model_id = d.name.replace("models--", "").replace("--", "/")
-                available_models.append(model_id)
-
-    # Run auto-config
-    config = auto_configure(
-        dataset=request.dataset,
-        dataset_path=str(data_file),
-        available_models=available_models,
-        preferred_model=request.model,
-    )
-
-    if request.name:
-        config.dataset = request.name
-
-    # Now start training using the existing HF endpoint logic
-    job_id = f"quick_{len(training_jobs) + 1}_{int(time.time())}"
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": request.name or f"Quick: {request.dataset}",
-        "model": config.model,
-        "dataset": request.dataset,
-        "data_path": config.data_path,
-        "status": "queued",
-        "progress": 0,
-        "epochs": config.epochs,
-        "current_epoch": 0,
-        "global_step": 0,
-        "loss": None,
-        "output_dir": str(_repo_root / f"models/hf-finetuned/{request.dataset}_{int(time.time())}"),
-        "loss_history": [],
-        "reward_history": [],
-    }
-    training_jobs[job_id] = job
-
-    from domains.training.hf_finetune import HFFineTuner, GRPOTrainer, RewardFn
-
-    def _run_quick(job_id_: str = job_id):
-        jid = job_id
-        try:
-            training_jobs[jid]["status"] = "running"
-            get_job_store().create(jid, job["name"], {"auto_config": True, **config.to_dict()}, request.dataset)
-            get_job_store().mark_started(jid)
-
-            def on_progress(info: dict[str, Any]) -> None:
-                rec = training_jobs.get(jid)
-                if not rec:
-                    return
-                rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
-                rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
-                rec["global_step"] = info.get("step", rec.get("global_step", 0))
-                rec["loss"] = info.get("loss", rec.get("loss"))
-                loss_val = info.get("loss")
-                reward_val = info.get("reward")
-                if loss_val is not None:
-                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(loss_val), "type": "train"})
-                if reward_val is not None:
-                    rec.setdefault("reward_history", []).append({"step": rec.get("global_step", 0), "value": float(reward_val)})
-                get_job_store().update_progress(
-                    jid, rec["progress"],
-                    epoch=int(rec["current_epoch"]),
-                    step=int(rec["global_step"]),
-                    loss=rec["loss"],
-                )
-
-            if config.rl_post_train:
-                reward_fn = RewardFn(mode=config.rl_reward_mode)
-                trainer = GRPOTrainer(
-                    model_name=config.model,
-                    prompts_path=config.data_path,
-                    output_dir=job["output_dir"],
-                    num_generations=config.rl_num_generations,
-                    learning_rate=config.rl_learning_rate,
-                    kl_coef=config.rl_kl_coef,
-                    epochs=config.epochs,
-                    max_new_tokens=128,
-                    batch_size=config.batch_size,
-                    device=config.device,
-                    reward_fn=reward_fn,
-                    use_lora=config.use_lora,
-                    lora_rank=config.lora_rank,
-                    lora_alpha=config.lora_alpha,
-                )
-            else:
-                trainer = HFFineTuner(
-                    model_name=config.model,
-                    data_path=config.data_path,
-                    output_dir=job["output_dir"],
-                    use_lora=config.use_lora,
-                    lora_rank=config.lora_rank,
-                    lora_alpha=config.lora_alpha,
-                    epochs=config.epochs,
-                    batch_size=config.batch_size,
-                    learning_rate=config.learning_rate,
-                    max_seq_length=config.max_seq_length,
-                    warmup_steps=config.warmup_steps,
-                    device=config.device,
-                )
-
-            result = trainer.train(on_progress=on_progress)
-            training_jobs[jid]["status"] = "completed"
-            training_jobs[jid]["progress"] = 100
-            training_jobs[jid]["result"] = result
-
-            # Build plain-language completion message
-            from domains.training.auto_config import plain_language_verdict
-            model_path = result.get("model_path", "")
-            final_loss = result.get("final_loss")
-            final_reward = result.get("final_reward")
-
-            if config.rl_post_train and final_reward is not None:
-                reward_delta = {"verdict": "improved" if final_reward > 0.5 else "mixed"}
-                training_jobs[jid]["explanation"] = (
-                    plain_language_verdict(reward_delta)
-                    + f" Model saved to {model_path}."
-                )
-            elif final_loss is not None:
-                if final_loss < 2.0:
-                    training_jobs[jid]["explanation"] = (
-                        f"Training complete! Your AI learned from {config.dataset}. "
-                        f"Final loss: {final_loss:.2f}. "
-                        f"Model saved to {model_path}."
-                    )
-                else:
-                    training_jobs[jid]["explanation"] = (
-                        f"Training complete, but the loss is high ({final_loss:.2f}). "
-                        f"Your AI may need more data or more epochs. "
-                        f"Model saved to {model_path}."
-                    )
-            else:
-                training_jobs[jid]["explanation"] = config.explanation + f" Model saved to {model_path}."
-
-            get_job_store().mark_completed(jid, checkpoint_path=model_path)
-
-        except Exception as exc:
-            logger.exception("Quick train job %s failed", jid)
-            if jid in training_jobs:
-                training_jobs[jid]["status"] = "failed"
-                training_jobs[jid]["error"] = str(exc)
-            get_job_store().mark_failed(jid, str(exc))
-
-    executor = get_training_executor()
-    executor.submit(_run_quick, job_id)
-
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "config": {
-            "method": config.method,
-            "model": config.model,
-            "epochs": config.epochs,
-            "batch_size": config.batch_size,
-            "learning_rate": config.learning_rate,
-            "use_lora": config.use_lora,
-            "rl_enabled": config.rl_post_train,
-        },
-        "explanation": config.explanation,
-    }
-
-
-
-@router.post("/training/from-feedback")
-async def train_from_feedback():
-    """Train a model from collected feedback data.
-
-    This endpoint:
-    1. Exports feedback as training data (DPO format)
-    2. Starts training with the exported data
-    3. Returns the job ID for tracking
-    """
-    import os
-    import uuid
-    from pathlib import Path
-    from pydantic import BaseModel
-
-    class TrainFromFeedbackRequest(BaseModel):
-        epochs: int = 3
-        batch_size: int = 16
-        learning_rate: float = 1e-4
-        use_lora: bool = True
-
-    try:
-        from domains.feedback.training import FeedbackTrainer
-
-        trainer = FeedbackTrainer()
-
-        # Export feedback data
-        timestamp = int(time.time())
-        export_dir = Path("data/training_exports")
-        export_dir.mkdir(parents=True, exist_ok=True)
-
-        # Export as SFT format for training
-        sft_path = export_dir / f"feedback_sft_{timestamp}.jsonl"
-        count = trainer.export_sft(str(sft_path))
-
-        if count == 0:
-            return {"status": "no_data", "message": "No feedback data available for training"}
-
-        # Create training job
-        jid = f"feedback_train_{uuid.uuid4().hex[:8]}"
-        data_path = str(sft_path)
-        out_stem = f"feedback_model_{timestamp}"
-
-        training_jobs[jid] = {
-            "id": jid,
-            "name": f"Feedback Training {timestamp}",
-            "status": "running",
-            "progress": 0,
-            "dataset": str(sft_path),
-            "data_source": "feedback",
-            "epochs": 3,
-            "checkpoint_interval": 100,
-            "output_checkpoint_stem": out_stem,
-        }
-
-        # Update global training controller
-        get_training_controller().start(jid, f"Feedback Training {timestamp}")
-
-        def run_feedback_training(job_id_: str = jid):
-            try:
-                from domains.training.train_pipeline import SloughGPTTrainer
-
-                trainer = SloughGPTTrainer(
-                    data_path=data_path,
-                    n_embed=256,
-                    n_layer=6,
-                    n_head=8,
-                    block_size=256,
-                    epochs=3,
-                    batch_size=16,
-                    lr=1e-4,
-                    use_lora=True,
-                    lora_rank=8,
-                    lora_alpha=16,
-                    checkpoint_dir="models",
-                    checkpoint_interval=100,
-                    use_mixed_precision=True,
-                )
-
-                def on_progress(
-                    step: int, epoch: int, loss: Optional[float], loss_type: str = "train"
-                ):
-                    training_jobs[jid]["progress"] = min(99, int((epoch / 3) * 100))
-                    training_jobs[jid]["current_epoch"] = epoch
-                    if loss is not None:
-                        training_jobs[jid][loss_type] = float(loss)
-                        training_jobs[jid].setdefault("loss_history", []).append({"step": step, "value": float(loss), "type": loss_type})
-
-                result = trainer.train(on_progress=on_progress)
-                safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
-                trainer.save(f"models/{safe_stem}.pt")
-
-                training_jobs[jid]["status"] = "completed"
-                training_jobs[jid]["progress"] = 100
-                training_jobs[jid]["checkpoint"] = f"models/{safe_stem}.pt"
-                training_jobs[jid]["samples_used"] = count
-                get_training_controller().complete()
-
-                # Trigger webhook notification (fire and forget)
-                try:
-                    import asyncio
-
-                    asyncio.run(
-                        notify_training_event(
-                            "training.completed",
-                            {
-                                "job_id": jid,
-                                "job_name": training_jobs[jid].get("name", "feedback_training"),
-                                "status": "completed",
-                                "samples_used": count,
-                                "checkpoint": training_jobs[jid]["checkpoint"],
-                            },
-                        )
-                    )
-                except Exception as e:
-                    logger.debug("Feedback training webhook failed: %s", e)
-
-            except Exception as e:
-                logger.exception("Feedback training job %s failed", jid)
-                training_jobs[jid]["status"] = "failed"
-                training_jobs[jid]["error"] = str(e)
-                get_training_controller().fail(str(e))
-
-                # Trigger webhook notification
-                try:
-                    import asyncio
-
-                    asyncio.run(
-                        notify_training_event(
-                            "training.failed",
-                            {
-                                "job_id": jid,
-                                "job_name": training_jobs[jid].get("name", "feedback_training"),
-                                "status": "failed",
-                                "error": str(e),
-                            },
-                        )
-                    )
-                except Exception:
-                    pass
-
-        executor = get_training_executor()
-        executor.submit(run_feedback_training, jid)
-
-        return {
-            "status": "started",
-            "job_id": jid,
-            "samples": count,
-            "data_path": str(sft_path),
-            "message": "Training started from feedback data",
-        }
-
-    except Exception as e:
-        logger.exception("Failed to start feedback training")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return None
-
-
-# ===== TRAINING STATE CONTROLLER =====
-
-
-@router.get("/training/status")
-async def get_training_status():
-    """
-    Get comprehensive training system status.
-
-    Returns current state (idle/running/paused), current job info,
-    and statistics about completed/failed jobs.
-    """
-    controller = get_training_controller()
-    status = controller.get_status()
-
-    # Also include any running jobs from the job registry
-    running_jobs = [
-        {"id": jid, "name": job.get("name"), "progress": job.get("progress", 0)}
-        for jid, job in training_jobs.items()
-        if job.get("status") == "running"
-    ]
-
-    status["running_jobs"] = running_jobs
-    status["total_tracked_jobs"] = len(training_jobs)
-
-    return status
-
-
-@router.post("/training/control/start")
-async def control_start_training():
-    """
-    Request to start training.
-
-    Returns success/failure with current state.
-    Note: Actual training start happens via POST /training/start
-    """
-    controller = get_training_controller()
-
-    if controller.is_running():
-        return {
-            "success": False,
-            "message": "Training is already running",
-            **controller.get_status(),
-        }
-
-    if controller.is_paused():
-        return {
-            "success": False,
-            "message": "Training is paused. Use /training/control/resume to continue.",
-            **controller.get_status(),
-        }
-
-    return {
-        "success": True,
-        "message": "Ready to start training",
-        **controller.get_status(),
-    }
-
-
-@router.post("/training/control/pause")
-async def control_pause_training():
-    """
-    Pause current training.
-
-    Pauses the training loop if running.
-    """
-    controller = get_training_controller()
-    result = controller.pause()
-
-    # Notify the training job if it's listening
-    if result["success"]:
-        logger.info("Training pause requested")
-
-    return result
-
-
-@router.post("/training/control/resume")
-async def control_resume_training():
-    """
-    Resume paused training.
-
-    Continues training from where it was paused.
-    """
-    controller = get_training_controller()
-    result = controller.resume()
-
-    if result["success"]:
-        logger.info("Training resumed")
-
-    return result
-
-
-@router.post("/training/control/stop")
-async def control_stop_training():
-    """
-    Stop current training.
-
-    Gracefully stops the training job.
-    """
-    controller = get_training_controller()
-    result = controller.stop()
-
-    # Update all running jobs to stopping
-    if result["success"]:
-        for jid, job in training_jobs.items():
-            if job.get("status") == "running":
-                job["status"] = "stopping"
-        logger.info("Training stop requested")
-
-    return result
-
-
-@router.post("/training/control/reset")
-async def control_reset_training():
-    """
-    Reset training controller to idle state.
-
-    Use after training completes or fails to clear state.
-    """
-    controller = get_training_controller()
-    return controller.reset()
-
-
-@router.get("/training/is-running")
-async def is_training_running():
-    """
-    Quick check if training is currently running.
-
-    Useful for UI to conditionally show controls.
-    """
-    controller = get_training_controller()
-    return {
-        "is_running": controller.is_running(),
-        "is_paused": controller.is_paused(),
-        "is_idle": controller.is_idle(),
-        "state": controller.state.value,
-        "current_job": controller.current_job_id,
-    }
-
-
-# ===== WEBHOOK NOTIFICATIONS =====
-
-
-@router.get("/training/webhooks")
-async def list_webhooks():
-    """
-    List all registered webhooks.
-    """
-    store = get_webhook_store()
-    webhooks = store.list()
-
-    return {
-        "webhooks": [
-            {
-                "id": w.id,
-                "url": w.url,
-                "events": w.events,
-                "description": w.description,
-                "is_active": w.is_active,
-                "created_at": w.created_at.isoformat(),
-            }
-            for w in webhooks
-        ],
-        "available_events": TRAINING_EVENTS,
-    }
-
-
-@router.post("/training/webhooks")
-async def register_webhook(
-    url: str,
-    events: str,  # JSON stringified array
-    description: str = "",
-    secret: Optional[str] = None,
-):
-    """
-    Register a new webhook endpoint.
-
-    Args:
-        url: The URL to send notifications to
-        events: JSON stringified list of events (e.g., '["training.completed","training.failed"]')
-        description: Optional description
-        secret: Optional HMAC secret (generated if not provided)
-    """
-    # Parse events from JSON string
-    import json
-
-    try:
-        events_list = json.loads(events) if isinstance(events, str) else events
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid events format. Must be JSON array.")
-
-    # Validate URL
-    if not url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
-
-    # Validate events
-    invalid_events = [e for e in events_list if e not in TRAINING_EVENTS]
-    if invalid_events:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid events: {invalid_events}. Available: {TRAINING_EVENTS}",
-        )
-
-    store = get_webhook_store()
-    webhook_id = store.register(
-        url=url,
-        events=events_list,
-        secret=secret,
-        description=description,
-        headers=None,
-    )
-
-    webhook = store.get(webhook_id)
-
-    return {
-        "id": webhook_id,
-        "url": url,
-        "events": events,
-        "secret": webhook.secret if webhook else None,
-        "message": "Webhook registered successfully",
-    }
-
-
-@router.get("/training/webhooks/stats")
-async def get_webhook_stats():
-    """Get webhook statistics."""
-    store = get_webhook_store()
-    return store.get_stats()
-
-
-@router.delete("/training/webhooks/{webhook_id}")
-async def unregister_webhook(webhook_id: str):
-    """Unregister a webhook."""
-    store = get_webhook_store()
-
-    if not store.get(webhook_id):
-        raise HTTPException(status_code=404, detail="Webhook not found")
-
-    store.unregister(webhook_id)
-
-    return {"status": "deleted", "webhook_id": webhook_id}
-
-
-@router.get("/training/webhooks/{webhook_id}")
-async def get_webhook(webhook_id: str):
-    """Get webhook details (without secret)."""
-    store = get_webhook_store()
-    webhook = store.get(webhook_id)
-
-    if not webhook:
-        raise HTTPException(status_code=404, detail="Webhook not found")
-
-    return {
-        "id": webhook.id,
-        "url": webhook.url,
-        "events": webhook.events,
-        "description": webhook.description,
-        "is_active": webhook.is_active,
-        "created_at": webhook.created_at.isoformat(),
-    }
-
-
-@router.get("/training/webhooks/{webhook_id}/deliveries")
-async def get_webhook_deliveries(webhook_id: str, limit: int = 50):
-    """Get delivery log for a webhook."""
-    store = get_webhook_store()
-
-    if not store.get(webhook_id):
-        raise HTTPException(status_code=404, detail="Webhook not found")
-
-    deliveries = store.get_deliveries(webhook_id, limit=limit)
-
-    return {
-        "deliveries": [
-            {
-                "id": d.id,
-                "event": d.event,
-                "success": d.success,
-                "status_code": d.status_code,
-                "attempted_at": d.attempted_at.isoformat(),
-                "error": d.error,
-            }
-            for d in deliveries
-        ]
-    }
-
-
-class TestWebhookRequest(BaseModel):
-    url: str
-
-@router.post("/training/webhooks/test")
-async def test_webhook(req: TestWebhookRequest):
-    """
-    Send a test notification to a URL.
-
-    Useful for verifying webhook setup.
-    """
-    store = get_webhook_store()
-
-    # Register temporary webhook for test
-    webhook_id = store.register(
-        url=req.url,
-        events=TRAINING_EVENTS,
-        description="Temporary test webhook",
-    )
-
-    # Send test event
-    delivery = await store.deliver(
-        webhook_id=webhook_id,
-        event="training.completed",
-        payload={
-            "job_id": "test",
-            "job_name": "Test Training",
-            "status": "completed",
-            "message": "This is a test webhook notification",
-        },
-        retries=1,
-    )
-
-    # Clean up
-    store.unregister(webhook_id)
-
-    return {
-        "success": delivery.success,
-        "status_code": delivery.status_code,
-        "error": delivery.error,
-        "response_body": delivery.response_body,
-    }
-
-
-@router.get("/training/builds")
-async def list_builds():
-    """List all training builds (checkpoints + fine-tuned models + LoRA adapters).
-
-    Combines:
-      - ``GET /auto-train/checkpoints`` (SloNet checkpoints + LoRA .soul files)
-      - Completed HF fine-tune jobs from ``training_jobs``
-      - HF fine-tuned model directories under ``models/hf-finetuned/``
-    """
-    from routers.auto_train import _load_soul, _load_lora_soul
-    _repo_root = Path(__file__).resolve().parents[4]
-    _checkpoints_dir = _repo_root / "models" / "auto-training"
-    _lora_dir = _repo_root / "data" / "user_adapters"
-    _hf_finetuned_dir = _repo_root / "models" / "hf-finetuned"
-
-    builds = []
-
-    # 1. Auto-train checkpoints (.soul / .pt)
-    seen = set()
-    for ext in ("*.soul", "*.pt"):
-        for f in sorted(_checkpoints_dir.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
-            if f.name in seen:
-                continue
-            seen.add(f.name)
-            info = _load_soul(f.name)
-            if info:
-                info["build_type"] = "auto-train"
-                builds.append(info)
-
-    # 2. LoRA .soul files
-    for npz in sorted(_lora_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
-        if npz.name in seen:
-            continue
-        seen.add(npz.name)
-        info = _load_lora_soul(npz.name)
-        if info:
-            info["build_type"] = "lora"
-            builds.append(info)
-
-    # 3. Completed HF fine-tune jobs
-    from training.jobs import training_jobs
-    for jid, job in training_jobs.items():
-        if job.get("status") == "completed":
-            model_path = job.get("result", {}).get("model_path", "") if isinstance(job.get("result"), dict) else ""
-            builds.append({
-                "name": job.get("name") or jid,
-                "build_type": "hf-finetune",
-                "job_id": jid,
-                "model": job.get("model", ""),
-                "dataset": job.get("dataset", ""),
-                "loss": job.get("loss"),
-                "epochs": job.get("epochs"),
-                "model_path": model_path,
-                "created_at": job.get("started_at", ""),
-                "finished_at": job.get("completed_at", ""),
-            })
-
-    # 4. HF fine-tuned model directories on disk (for builds not tracked in memory)
-    if _hf_finetuned_dir.is_dir():
-        for d in sorted(_hf_finetuned_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            if d.is_dir() and d.name not in seen:
-                seen.add(d.name)
-                config_path = d / "config.json"
-                size_mb = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / (1024 * 1024)
-                builds.append({
-                    "name": d.name,
-                    "build_type": "hf-finetuned-dir",
-                    "model_path": str(d),
-                    "size_mb": round(size_mb, 1),
-                    "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
-                    "model": d.name.split("_")[0].replace("--", "/"),
-                    "dataset": d.name.split("_")[1] if "_" in d.name else "",
-                })
-
-    # 5. Visual (VLM) checkpoints
-    try:
-        from routers.visual import list_visual_checkpoints
-        vis_ckpts = await list_visual_checkpoints()
-        for ckpt in vis_ckpts:
-            if ckpt.get("name") in seen:
-                continue
-            seen.add(ckpt.get("name"))
-            builds.append({
-                "name": ckpt.get("name"),
-                "build_type": "vlm",
-                "model": ckpt.get("model", "vision"),
-                "dataset": ckpt.get("dataset", ""),
-                "loss": ckpt.get("loss"),
-                "epochs": ckpt.get("epochs"),
-                "model_path": ckpt.get("path", ""),
-                "size_mb": ckpt.get("size_mb"),
-                "created_at": ckpt.get("created_at", ""),
-                "finished_at": ckpt.get("finished_at", ""),
-            })
+        return json.loads((model_dir / "metadata.json").read_text())
     except Exception:
-        logger.debug("Visual checkpoints not available", exc_info=True)
+        return {}
 
-    return {"builds": builds}
+
+def _resolve_finetuned(name: str) -> Path:
+    """Resolve a fine-tuned model name to its directory, guarding against path traversal."""
+    base = _finetuned_dir().resolve()
+    target = (base / name).resolve()
+    if base not in target.parents:
+        raise_error("Invalid fine-tuned model name", "E_BAD_REQUEST", status_code=400)
+    if not target.is_dir():
+        raise_error(f"Fine-tuned model not found: {name}", "E_NOT_FOUND", status_code=404)
+    return target
+
+
+_finetuned_models_cache: tuple[float, dict] | None = None
+_FINETUNED_CACHE_TTL = 30.0
+
+
+async def list_finetuned_models():
+    """List HF fine-tuned model directories under ``models/hf-finetuned/``."""
+    global _finetuned_models_cache
+    base = _finetuned_dir()
+    now = time.monotonic()
+    if _finetuned_models_cache and (now - _finetuned_models_cache[0]) < _FINETUNED_CACHE_TTL:
+        return _finetuned_models_cache[1]
+    models = []
+    if base.is_dir():
+        for d in sorted(base.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not d.is_dir():
+                continue
+            size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+            meta = _read_finetuned_metadata(d)
+            display_name = d.name.split("_")[0].replace("--", "/")
+            models.append(
+                {
+                    "name": d.name,
+                    "model_path": str(d),
+                    "size_mb": round(size_bytes / (1024 * 1024), 1),
+                    "size_bytes": size_bytes,
+                    "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
+                    "model": meta.get("model") or display_name,
+                    "dataset": meta.get("dataset")
+                    or (d.name.split("_")[1] if "_" in d.name else ""),
+                    "model_name": d.name,
+                    "final_loss": meta.get("final_loss"),
+                    "epochs": meta.get("epochs") or 0,
+                }
+            )
+    result = {"models": models}
+    _finetuned_models_cache = (now, result)
+    return result
+
+
+async def load_finetuned_model(name: str):
+    """Load a fine-tuned model directory into chat (device=cpu).
+
+    Compiles the local fine-tuned model to .slnc on first load, then registers
+    it as the ``slonet-native`` provider via ``ModelsController.load_model_path``.
+    """
+    target = _resolve_finetuned(name)
+    from controllers.models import get_models_controller
+
+    result = get_models_controller().load_model_path(str(target), "cpu", identity=name)
+    if result.get("status") != "loaded":
+        raise_error(
+            result.get("error", "Failed to load fine-tuned model"),
+            "E_INFRA_STARTUP",
+            status_code=500,
+        )
+    return {
+        "status": "loaded",
+        "name": name,
+        "model_path": str(target),
+        "model_id": result.get("model_id"),
+    }
+
+
+async def delete_finetuned_model(name: str, auth_user: dict = Depends(require_auth_if_enabled)):
+    """Delete a fine-tuned model directory."""
+    target = _resolve_finetuned(name)
+    try:
+        shutil.rmtree(str(target))
+    except OSError as exc:
+        raise_error(f"Failed to delete model: {exc}", "E_DELETE_FAILED", status_code=500)
+    return {"status": "deleted", "name": name}
 
 
 # ===== JOB RECOVERY =====
 
 
-@router.get("/recovery/check")
 async def check_crashed_jobs(timeout_seconds: int = 300):
     """
     Check for jobs that may have crashed.
 
-    Jobs that are 'running' but haven't sent a heartbeat in timeout_seconds
-    are considered potentially crashed.
+    Jobs that are 'running' (or 'recovering') but haven't sent a heartbeat in
+    timeout_seconds are considered potentially crashed.
     """
     store = get_job_store()
     crashed = store.detect_crashed_jobs(timeout_seconds)
@@ -2017,7 +226,6 @@ async def check_crashed_jobs(timeout_seconds: int = 300):
     }
 
 
-@router.get("/recovery/recoverable")
 async def get_recoverable_jobs():
     """
     Get all jobs that can be recovered.
@@ -2033,51 +241,86 @@ async def get_recoverable_jobs():
     }
 
 
-@router.post("/recovery/recover/{job_id}")
-async def recover_job(job_id: str):
-    """
-    Recover and restart an interrupted/crashed job.
+async def get_recovery_events():
+    """Process-notification snapshot for the dock (contract v1).
 
-    Resumes training from the last checkpoint if available.
+    Boot-time events cannot ride the SSE streams — no client is connected
+    when they fire — so the frontend's initial notification state is this
+    REST projection of durable state (see training/process_events.py).
+    Live transitions after load ride the existing per-request SSE streams
+    and dedupe against these event_ids.
+    """
+    from training.process_events import CONTRACT_VERSION, boot_snapshot
+
+    store = get_job_store()
+    events = boot_snapshot(store)
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "count": len(events),
+        "events": events,
+    }
+
+
+def start_recovery(job_id: str) -> dict:
+    """Recover and restart an interrupted/failed job.
+
+    Also accepts a 'recovering' job whose heartbeat went stale (a previous
+    recovery run that died without completing). Resumes training from the last
+    checkpoint if available.
+
+    This is the ONE recovery path: the HTTP endpoint delegates here, and the
+    boot-time auto-resume hook calls it too, so the validation above (fail-
+    closed against the job's CURRENT status) guards every dispatch — a stale
+    notification action and a boot race both hit the same wall.
     """
     store = get_job_store()
     job = store.get(job_id)
 
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    if job["status"] not in ("interrupted", "failed"):
-        raise HTTPException(
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
+    if job["status"] not in ("interrupted", "failed") and not (
+        job["status"] == "recovering" and store.is_stale_heartbeat(job)
+    ):
+        raise_error(
+            f"Job status is '{job['status']}', only 'interrupted' or 'failed' jobs "
+            "(or a 'recovering' job with a stale heartbeat) can be recovered",
+            "E_BAD_REQUEST",
             status_code=400,
-            detail=f"Job status is '{job['status']}', only 'interrupted' or 'failed' jobs can be recovered",
         )
-
-    # Get config and checkpoint
+    # Get config and checkpoint. The store's checkpoint_dir column is only
+    # written on completion, so interrupted jobs have it NULL — the job's
+    # stored request config is the authoritative source for the scan directory.
     config = job.get("config", {})
     data_path = job.get("data_path", "")
     checkpoint_path = job.get("checkpoint_path", "")
-    checkpoint_dir = job.get("checkpoint_dir", "checkpoints")
+    checkpoint_dir = job.get("checkpoint_dir") or config.get("checkpoint_dir") or "checkpoints"
     job_name = job.get("name", "recovered_job")
 
-    # Find checkpoint
-    from pathlib import Path
+    # Resolve the checkpoint to resume from. A job's recorded path is loaded
+    # exactly once, here in the request handler (via the engine, card c48aaaad).
+    # The job explicitly points at it, so a recorded path that is missing,
+    # unsupported, or unreadable fails the recovery request loudly (422) —
+    # resuming from a different checkpoint would silently change what is being
+    # resumed. Only when the job recorded NO checkpoint path do we fall back to
+    # the newest file that actually loads (skipping partial/corrupt checkpoints
+    # — a crash mid-write can leave the newest file unreadable). The loaded
+    # bundle is handed to train() so no second load happens in the worker
+    # thread.
+    from domain.training.engine import get_training_engine
 
-    if checkpoint_path and Path(checkpoint_path).exists():
-        pass  # Use existing checkpoint_path
-    else:
-        # Try to find any checkpoint in the checkpoint dir
-        checkpoint_dir_path = Path(checkpoint_dir)
-        if checkpoint_dir_path.exists():
-            checkpoints = list(checkpoint_dir_path.glob("step_*.pt")) + list(
-                checkpoint_dir_path.glob("*.pt")
-            )
-            if checkpoints:
-                latest = max(checkpoints, key=lambda p: p.stat().st_mtime)
-                checkpoint_path = str(latest)
+    try:
+        checkpoint_path, resume_bundle = get_training_engine().resolve_resume_checkpoint(
+            checkpoint_path, checkpoint_dir
+        )
+    except ValueError as exc:
+        raise_error(str(exc), "E_VAL_REQUEST", status_code=422)
 
-    # Create recovery job in training_jobs
+    # Create recovery job in training_jobs. config is spread first so the
+    # explicit control fields (id, status, checkpoint_*) always win over any
+    # matching keys persisted in the original request config.
     recovery_job_id = f"recovery_{job_id}"
     recovery_job = {
+        **config,
         "id": recovery_job_id,
         "name": f"Recovered: {job_name}",
         "model": config.get("model", "sloughgpt"),
@@ -2090,12 +333,12 @@ async def recover_job(job_id: str):
         "checkpoint_path": checkpoint_path,
         "checkpoint_dir": checkpoint_dir,
         "original_job_id": job_id,
-        **config,
     }
     training_jobs[recovery_job_id] = recovery_job
 
-    # Update job store
-    store.update(job_id, status="recovering", crashed=0)
+    # Update job store — fresh heartbeat so an actively-recovered row is never
+    # mistaken for crashed or still-recoverable while the run is alive.
+    store.mark_recovering(job_id)
 
     # Update controller
     controller = get_training_controller()
@@ -2104,22 +347,36 @@ async def recover_job(job_id: str):
     # Start recovery in background thread
     jid = recovery_job_id
     checkpoint_for_recovery = checkpoint_path
+    cancel_event = threading.Event()
+    pause_event = threading.Event()
+    recovery_job["_cancel_event"] = cancel_event
+    recovery_job["_pause_event"] = pause_event
+
+    # Register with CancelManager
+    try:
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+
+        _mgr = get_cancel_manager()
+        op_id = _mgr.register(
+            op_type=OpType.TRAINING,
+            label=f"recover:{job_name}",
+            cancel_fn=lambda: cancel_event.set(),
+        )
+        _mgr.start(op_id)
+        recovery_job["_cancel_manager_op_id"] = op_id
+    except Exception as exc:
+        logger.warning("CancelManager registration failed for recovery training %s: %s", jid, exc)
 
     def run_recovery(job_id_: str = jid):
         try:
-            from domains.training.train_pipeline import SloughGPTTrainer
+            from domain.training.engine import get_training_engine
 
+            # Reuse the SAME trainer configuration builder as /training/start so
+            # the recovered run continues with the original job's hyperparameters
+            # (LoRA, dropout, scheduler, device, ...) instead of a fixed subset.
             trainer_config = {
                 "data_path": recovery_job.get("data_path", ""),
-                "epochs": recovery_job.get("epochs", 10),
-                "batch_size": recovery_job.get("batch_size", 32),
-                "lr": recovery_job.get("learning_rate", 1e-3),
-                "n_embed": recovery_job.get("n_embed", 256),
-                "n_layer": recovery_job.get("n_layer", 6),
-                "n_head": recovery_job.get("n_head", 8),
-                "block_size": recovery_job.get("block_size", 128),
-                "checkpoint_dir": recovery_job.get("checkpoint_dir", "checkpoints"),
-                "checkpoint_interval": recovery_job.get("checkpoint_interval", 500),
+                **_sloughgpt_trainer_kwds(recovery_job, data_path=recovery_job.get("data_path")),
             }
 
             def on_progress(info: dict):
@@ -2129,39 +386,68 @@ async def recover_job(job_id: str):
                 rec["progress"] = int(info.get("progress_percent", rec.get("progress", 0)))
                 rec["current_epoch"] = int(info.get("epoch", rec.get("current_epoch", 0)))
                 rec["global_step"] = int(info.get("global_step", 0))
+                rec["total_steps"] = int(info.get("total_steps", rec.get("total_steps", 0)))
+                rec["steps_per_sec"] = info.get("steps_per_sec", rec.get("steps_per_sec"))
+                rec["eta_s"] = info.get("eta_s", rec.get("eta_s"))
+                rec["elapsed_s"] = info.get("elapsed_s", rec.get("elapsed_s"))
+                aq = info.get("avg_quality")
+                if aq is not None:
+                    rec["avg_quality"] = float(aq)
                 tl = info.get("train_loss")
                 if tl is not None:
-                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": float(tl), "type": "train"})
+                    rec["train_loss"] = float(tl)
+                    rec.setdefault("loss_history", []).append(
+                        {
+                            "step": int(info.get("global_step", 0)),
+                            "value": float(tl),
+                            "type": "train",
+                        }
+                    )
                 el = info.get("eval_loss")
                 if el is not None:
-                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": float(el), "type": "eval"})
+                    fe = float(el)
+                    rec["eval_loss"] = fe
+                    rec["loss"] = fe
+                    rec.setdefault("loss_history", []).append(
+                        {"step": int(info.get("global_step", 0)), "value": fe, "type": "eval"}
+                    )
                 store.update_progress(
-                    jid, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
+                    job_id, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )
 
-            trainer = SloughGPTTrainer(**trainer_config)
-
-            # Resume from checkpoint if available
-            result = trainer.train(
+            # Resume from checkpoint if available (bundle pre-loaded once in the
+            # request handler — no disk load happens in this thread; the engine
+            # builds the trainer, trains, and hands it back — card c48aaaad)
+            trainer = get_training_engine().run_recovery_training(
+                config=trainer_config,
                 on_progress=on_progress,
-                resume=True,
-                resume_path=checkpoint_for_recovery,
+                resume=resume_bundle,
+                events={"cancel_event": cancel_event, "pause_event": pause_event},
             )
 
-            # Mark as completed
-            training_jobs[jid]["status"] = "completed"
+            # Mark as completed. The recovery job lives in-memory only; the
+            # persistent original row is the durable record, so terminal state
+            # and the produced checkpoint path are written to it.
+            if cancel_event.is_set():
+                _finish_job(jid, "cancelled")
+                training_jobs[jid]["progress"] = 0
+                store.update(job_id, status="interrupted")
+                controller.complete()
+                return
+
+            _finish_job(jid, "completed")
             training_jobs[jid]["progress"] = 100
-            store.mark_completed(
-                jid, checkpoint_for_recovery or trainer_config["checkpoint_dir"] + "/final.pt"
+            recovery_checkpoint = (
+                getattr(trainer, "_last_checkpoint_path", None) or checkpoint_for_recovery
             )
-            store.update(job_id, status="recovered")
+            training_jobs[jid]["checkpoint_path"] = recovery_checkpoint
+            training_jobs[jid]["checkpoint"] = recovery_checkpoint
+            store.mark_completed(job_id, recovery_checkpoint or "")
             controller.complete()
 
             # Trigger webhook
             try:
-                import asyncio
-
-                asyncio.run(
+                _run_async(
                     notify_training_event(
                         "training.completed",
                         {
@@ -2172,18 +458,21 @@ async def recover_job(job_id: str):
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Recovery webhook failed for %s: %s", jid, e)
 
+        except FileNotFoundError as e:
+            logger.error("Recovery failed (missing file): %s", e, extra={"tag": "TRAIN"})
+            _finish_job(jid, "failed", f"Data file not found: {e}")
+            store.mark_failed(job_id, f"Data file not found: {e}")
+            controller.fail()
         except Exception as e:
-            logger.error("Recovery failed: %s", e)
-            training_jobs[jid]["status"] = "failed"
-            training_jobs[jid]["error"] = str(e)
-            store.mark_failed(jid, str(e))
+            logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})
+            _finish_job(jid, "failed", str(e))
+            store.mark_failed(job_id, str(e))
             controller.fail()
 
-    executor = get_training_executor()
-    executor.submit(run_recovery, jid)
+    get_training_engine().executor_submit(run_recovery, jid)
 
     return {
         "status": "recovered",
@@ -2194,8 +483,13 @@ async def recover_job(job_id: str):
     }
 
 
-@router.delete("/recovery/abandon/{job_id}")
-async def abandon_recovery(job_id: str):
+async def recover_job(job_id: str):
+    """HTTP projection of start_recovery() — validation and execution are
+    shared with the boot-time auto-resume hook, never re-implemented."""
+    return start_recovery(job_id)
+
+
+async def abandon_recovery(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """
     Abandon a crashed job and mark it as permanently failed.
     """
@@ -2203,8 +497,7 @@ async def abandon_recovery(job_id: str):
     job = store.get(job_id)
 
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     store.update(job_id, status="abandoned")
 
     return {
@@ -2214,7 +507,6 @@ async def abandon_recovery(job_id: str):
     }
 
 
-@router.get("/recovery/stats")
 async def get_recovery_stats():
     """Get recovery statistics."""
     store = get_job_store()
@@ -2227,164 +519,1021 @@ async def get_recovery_stats():
     }
 
 
-# =============================================================================
-# Unified Pipeline Endpoints (additive — wraps UnifiedTrainingPipeline)
-# =============================================================================
-
-_unified_config: Optional[dict] = None
-_unified_cancel_event: Optional[threading.Event] = None
-
-
-class _UnifiedCancelled(Exception):
-    """Raised inside the unified worker thread when user requests cancel."""
+# ── Unified /training/* → core service + infrastructure wrapping ──────────────
+# Business logic: the training service layer (domain.training.engine's
+# raw-passthrough methods reach the _internal service/state/advisor/outcome/
+# monitor modules; this file never imports them directly).
+# HTTP wrapping: success_response, error classification, audit logging (this file)
 
 
-@router.post("/training/unified-stop")
-async def unified_stop():
-    """Cancel a running unified training pipeline."""
-    global _unified_cancel_event
-    if _unified_cancel_event is not None:
-        _unified_cancel_event.set()
-        return {"status": "cancelling", "message": "Cancelling unified training"}
-    return {"status": "idle", "message": "No unified training running"}
+async def training_log():
+    from domain.training.engine import get_training_engine
+
+    lines = await get_training_engine().get_log()
+    return {"lines": lines, "total": len(lines)}
 
 
-@router.post("/training/unified-start")
-async def unified_start(req: UnifiedStartRequest):
+async def training_stop():
+    """Stop all active training (auto-train, turbo, from-sessions)."""
+    from .sse_stream import stop_all_training
+
+    result = stop_all_training()
+    return result
+
+
+async def training_list_checkpoints():
+    from domain.training.engine import get_training_engine
+
+    checkpoints = await get_training_engine().list_stored_checkpoints()
+    return checkpoints
+
+
+async def training_delete_checkpoint(name: str):
+    from schemas.common import safe_audit_log
+
+    from domain.training.engine import get_training_engine
+
+    engine = get_training_engine()
+    if not engine.is_valid_ckpt_name(name):
+        raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
+    deleted = await engine.delete_checkpoint(name)
+    if deleted:
+        safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
+    return {"deleted": deleted, "name": name}
+
+
+async def training_load_checkpoint(name: str):
+    from schemas.common import classify_and_raise, success_response
+
+    from domain.training.engine import get_training_engine
+
+    try:
+        result = await get_training_engine().load_stored_checkpoint(name)
+        return success_response(data=result, message="loaded")
+    except Exception as e:
+        classify_and_raise(e, source="training.load_checkpoint")
+
+
+async def training_download_checkpoint(name: str):
+    from fastapi.responses import FileResponse
+    from schemas.common import raise_error
+
+    from domain.training.engine import get_training_engine
+
+    fp = await get_training_engine().download_checkpoint_path(name)
+    if fp:
+        return FileResponse(fp, media_type="application/octet-stream", filename=name)
+    raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
+
+
+async def training_checkpoint_info(name: str):
+    from schemas.common import classify_and_raise
+
+    from domain.training.engine import get_training_engine
+
+    try:
+        info = await get_training_engine().checkpoint_info(name)
+        return info
+    except Exception as e:
+        classify_and_raise(e, source="training.checkpoint_info")
+
+
+async def training_metrics_export():
+    import json as _json
+
+    from fastapi.responses import Response
+
+    from domain.training.engine import get_training_engine
+
+    checkpoints = await get_training_engine().get_all_checkpoint_data()
+    export = {
+        "exported_at": time.time(),
+        "total_checkpoints": len(checkpoints),
+        "checkpoints": checkpoints,
+    }
+    content = _json.dumps(export, indent=2, default=str)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=training-metrics.json"},
+    )
+
+
+async def training_cancel_from_sessions():
+    """Cancel session-based training."""
+    from .sse_stream import cancel_from_sessions
+
+    result = cancel_from_sessions()
+    return result
+
+
+async def training_stream(request: Request):
+    """SSE training stream."""
+    from pathlib import Path
+
+    from .sse_stream import build_training_sse_response
+
+    # Get training state for config
+    try:
+        from domain.training.engine import get_training_engine
+
+        config = get_training_engine().get_state().config or {}
+        if not config:
+            from schemas.common import success_response
+
+            return success_response(
+                data={
+                    "status": "error",
+                    "error": "No training state",
+                    "code": "E_STATE_IDLE",
+                    "http_status": 409,
+                }
+            )
+    except ImportError:
+        from schemas.common import success_response
+
+        return success_response(
+            data={
+                "status": "error",
+                "error": "auto_train not available",
+                "code": "E_STATE_IDLE",
+                "http_status": 409,
+            }
+        )
+
+    checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
+    return await build_training_sse_response(
+        request,
+        config,
+        task_name="auto-train",
+        task_type="training",
+        cm_label="auto-train",
+        checkpoints_dir=checkpoints_dir,
+    )
+
+
+async def training_from_sessions_stream(request: Request):
+    """SSE stream from sessions."""
+    from pathlib import Path
+
+    from .sse_stream import build_training_sse_response
+
+    try:
+        from domain.training.engine import get_training_engine
+
+        config = get_training_engine().get_state().config or {}
+        if not config or config.get("method") != "from-sessions":
+            from schemas.common import success_response
+
+            return success_response(
+                data={
+                    "status": "error",
+                    "error": "No from-sessions state",
+                    "code": "E_STATE_IDLE",
+                    "http_status": 409,
+                }
+            )
+    except ImportError:
+        from schemas.common import success_response
+
+        return success_response(
+            data={
+                "status": "error",
+                "error": "auto_train not available",
+                "code": "E_STATE_IDLE",
+                "http_status": 409,
+            }
+        )
+
+    checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
+    return await build_training_sse_response(
+        request,
+        config,
+        task_name="auto-train-sessions",
+        task_type="training-sessions",
+        cm_label="auto-train-sessions",
+        runtime_data_source="from-sessions",
+        checkpoints_dir=checkpoints_dir,
+    )
+
+
+# Include sub-routers
+from .turbo_endpoints import router as _turbo_router
+from .webhook_endpoints import router as _webhook_router
+
+router.include_router(_turbo_router)
+router.include_router(_webhook_router)
+
+# Consolidated from routers/ (card 20261101_154058) — the /training row's
+# remaining router gap; descriptor-projected, byte-identical paths.
+from .cloud_training import router as _cloud_training_router
+from .lora_eval import router as _lora_eval_router
+from .self_train import router as _self_train_router
+
+router.include_router(_self_train_router)
+router.include_router(_lora_eval_router)
+router.include_router(_cloud_training_router)
+
+
+async def get_training_recommendation(
+    dataset_path: str = "",
+    method: str = "distill",
+):
+    """Get training configuration recommendations based on dataset characteristics."""
+    try:
+        from pathlib import Path as _P
+
+        from domain.training.engine import get_training_engine
+
+        engine = get_training_engine()
+
+        dataset_size = 0
+        avg_quality = None
+
+        if dataset_path:
+            dp = _P(dataset_path).resolve()
+            repo_root = find_repo_root(Path(__file__).resolve())
+            datasets_dir = (repo_root / "datasets").resolve()
+            data_dir = (repo_root / "data").resolve()
+            if str(dp).startswith(str(datasets_dir)) or str(dp).startswith(str(data_dir)):
+                if dp.exists():
+                    if dp.is_file():
+                        try:
+                            with open(dp, encoding="utf-8", errors="ignore") as f:
+                                dataset_size = sum(1 for _ in f)
+                        except Exception:
+                            dataset_size = 0
+                    elif dp.is_dir():
+                        data_files = (
+                            list(dp.rglob("*.jsonl"))
+                            + list(dp.rglob("*.json"))
+                            + list(dp.rglob("*.txt"))
+                        )
+                        dataset_size = len(data_files)
+
+        # Get recommendation
+        recommendation = engine.recommend_training_config(
+            dataset_size=dataset_size,
+            method=method,
+            avg_quality=avg_quality,
+        )
+
+        # Get tips
+        tips = engine.get_training_tips(dataset_size=dataset_size)
+
+        return {
+            "dataset_size": dataset_size,
+            "recommendation": {
+                "learning_rate": recommendation.learning_rate,
+                "batch_size": recommendation.batch_size,
+                "epochs": recommendation.epochs,
+                "warmup_steps": recommendation.warmup_steps,
+                "early_stopping_patience": recommendation.early_stopping_patience,
+                "reason": recommendation.reason,
+                "confidence": recommendation.confidence,
+            },
+            "tips": tips,
+        }
+
+    except Exception as e:
+        logger.warning("Failed to generate training recommendation: %s", e)
+        return {
+            "dataset_size": 0,
+            "recommendation": {
+                "learning_rate": 3e-4,
+                "batch_size": 32,
+                "epochs": 20,
+                "warmup_steps": 50,
+                "early_stopping_patience": 5,
+                "reason": "Default recommendation",
+                "confidence": 0.5,
+            },
+            "tips": ["Could not analyze dataset. Using default configuration."],
+        }
+
+
+# ── Training Trends ─────────────────────────────────────────────────────
+
+
+async def get_training_trends(
+    model: str = "",
+    dataset: str = "",
+    limit: int = 100,
+):
+    """Get training history trends for the version tracker page.
+
+    Returns quality-over-time data, per-model breakdowns, and summary stats
+    from the outcome tracker JSONL file.
     """
-    Configure and start a unified training pipeline session.
+    try:
+        from domain.training.engine import get_training_engine
+
+        outcomes = get_training_engine().load_outcomes()
+
+        # Filter
+        if model:
+            outcomes = [o for o in outcomes if o.model == model]
+        if dataset:
+            outcomes = [o for o in outcomes if o.dataset == dataset]
+
+        # Sort by timestamp
+        outcomes.sort(key=lambda o: o.timestamp)
+
+        # Cap to limit
+        if len(outcomes) > limit:
+            outcomes = outcomes[-limit:]
+
+        if not outcomes:
+            return {
+                "runs": [],
+                "models": [],
+                "summary": {
+                    "total_runs": 0,
+                    "avg_quality": 0,
+                    "best_quality": 0,
+                    "avg_loss": 0,
+                    "trend": "stable",
+                },
+            }
+
+        # Build run list
+        runs = []
+        for o in outcomes:
+            runs.append(
+                {
+                    "run_id": o.run_id,
+                    "timestamp": o.timestamp,
+                    "dataset": o.dataset,
+                    "dataset_size": o.dataset_size,
+                    "model": o.model,
+                    "method": o.method,
+                    "epochs": o.epochs,
+                    "batch_size": o.batch_size,
+                    "learning_rate": o.learning_rate,
+                    "final_loss": o.final_loss,
+                    "best_loss": o.best_loss,
+                    "perplexity": o.perplexity,
+                    "converged": o.converged,
+                    "early_stopped": o.early_stopped,
+                    "quality_score": o.quality_score,
+                    "training_time_s": o.training_time_s,
+                }
+            )
+
+        # Per-model breakdown
+        model_map: dict[str, list] = {}
+        for r in runs:
+            m = r["model"] or "unknown"
+            model_map.setdefault(m, []).append(r)
+
+        models = []
+        for model_name, model_runs in model_map.items():
+            qualities = [r["quality_score"] for r in model_runs]
+            losses = [r["final_loss"] for r in model_runs if r["final_loss"] > 0]
+            models.append(
+                {
+                    "model": model_name,
+                    "total_runs": len(model_runs),
+                    "avg_quality": sum(qualities) / len(qualities) if qualities else 0,
+                    "best_quality": max(qualities) if qualities else 0,
+                    "avg_loss": sum(losses) / len(losses) if losses else 0,
+                    "latest_quality": model_runs[-1]["quality_score"],
+                    "improving": len(model_runs) >= 2
+                    and model_runs[-1]["quality_score"] > model_runs[0]["quality_score"],
+                }
+            )
+
+        models.sort(key=lambda m: m["best_quality"], reverse=True)
+
+        # Summary
+        all_qualities = [r["quality_score"] for r in runs]
+        all_losses = [r["final_loss"] for r in runs if r["final_loss"] > 0]
+
+        # Trend detection: compare last 3 vs first 3
+        trend = "stable"
+        if len(runs) >= 6:
+            first_3 = sum(r["quality_score"] for r in runs[:3]) / 3
+            last_3 = sum(r["quality_score"] for r in runs[-3:]) / 3
+            delta = last_3 - first_3
+            if delta > 0.05:
+                trend = "improving"
+            elif delta < -0.05:
+                trend = "declining"
+
+        summary = {
+            "total_runs": len(runs),
+            "avg_quality": sum(all_qualities) / len(all_qualities) if all_qualities else 0,
+            "best_quality": max(all_qualities) if all_qualities else 0,
+            "avg_loss": sum(all_losses) / len(all_losses) if all_losses else 0,
+            "trend": trend,
+        }
+
+        return {
+            "runs": runs,
+            "models": models,
+            "summary": summary,
+        }
+
+    except Exception as e:
+        logger.warning("Failed to load training trends: %s", e)
+        return {
+            "runs": [],
+            "models": [],
+            "summary": {
+                "total_runs": 0,
+                "avg_quality": 0,
+                "best_quality": 0,
+                "avg_loss": 0,
+                "trend": "stable",
+            },
+        }
+
+
+async def training_monitor_status():
+    """Training monitoring status and alerts.
+
+    Returns current monitoring state, alerts, and metrics history.
+    Useful for detecting training issues like loss divergence,
+    gradient explosion, or resource exhaustion.
+    """
+    from domain.training.engine import get_training_engine
+
+    monitor = get_training_engine().get_training_monitor()
+    return monitor.get_status()
+
+
+async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
+    """Get training alerts.
 
     Args:
-        req: UnifiedStartRequest with method, data_path, epochs, etc.
-
-    Returns:
-        dict with status and config summary
-
-    Side effects:
-        - Stores config for /training/unified-stream to consume
+        severity: Filter by severity (info, warning, error, critical)
+        limit: Maximum number of alerts to return
     """
-    global _unified_config
-    _unified_config = req.model_dump()
-    logger.info(
-        "Unified pipeline configured: method=%s data=%s epochs=%d",
-        req.method, req.data_path or req.dataset_name, req.epochs,
-    )
+    from domain.training.engine import get_training_engine
+
+    engine = get_training_engine()
+    monitor = engine.get_training_monitor()
+    severity_filter = engine.alert_severity(severity) if severity else None
+    alerts = monitor.get_alerts(severity=severity_filter, limit=limit)
     return {
-        "status": "ready",
-        "method": req.method,
-        "data_path": req.data_path or req.dataset_name or "",
-        "epochs": req.epochs,
-        "message": "Call GET /training/unified-stream to start training",
+        "alerts": [a.to_dict() for a in alerts],
+        "total": len(alerts),
     }
 
 
-@router.get("/training/unified-stream")
-async def unified_stream(request: Request):
+async def training_monitor_metrics(limit: int = 100):
+    """Get training metrics history.
+
+    Args:
+        limit: Maximum number of metrics snapshots to return
     """
-    SSE endpoint that runs the unified training pipeline and streams phase progress.
+    from domain.training.engine import get_training_engine
 
-    Phases: GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
+    monitor = get_training_engine().get_training_monitor()
+    metrics = monitor.get_metrics_history(limit=limit)
+    return {
+        "metrics": [m.to_dict() for m in metrics],
+        "total": len(metrics),
+    }
 
-    Each event uses the standard SSE envelope:
-        { stream, phase, status, data, meta, message }
 
-    Requires a prior POST to /training/unified-start.
+async def training_monitor_reset():
+    """Reset training monitor state."""
+    from domain.training.engine import get_training_engine
+
+    monitor = get_training_engine().get_training_monitor()
+    monitor.reset()
+    return {"message": "Monitor reset"}
+
+
+async def training_monitor_resources():
+    """Check system resources.
+
+    Returns CPU, memory, and GPU usage with alerts if thresholds exceeded.
     """
-    global _unified_config
-    if _unified_config is None:
-        return StreamingResponse(
-            iter([sse_error("unified-train", "idle",
-                            "No config — POST /training/unified-start first")]),
-            media_type="text/event-stream",
-        )
+    from domain.training.engine import get_training_engine
 
-    import asyncio
+    monitor = get_training_engine().get_training_monitor()
+    resources = monitor.check_resources()
+    return resources
 
-    global _unified_cancel_event
-    config = dict(_unified_config)
-    _unified_cancel_event = threading.Event()
-    queue: asyncio.Queue = asyncio.Queue()
-    loop = asyncio.get_running_loop()
 
-    def _enqueue(event_str: str) -> None:
-        loop.call_soon_threadsafe(queue.put_nowait, event_str)
+# ── Descriptor projection: one contract per route (card 20261104_151036) ──
+# Registration order mirrors the hand-built decorators exactly — the
+# parameterized pairs (/{name}, /{job_id}) come after their static siblings
+# where any shadowing is possible. Descriptions derive from the handler
+# docstrings (the expression FastAPI itself used); summaries are pinned to
+# the captured hand-built values.
 
-    def _worker():
-        try:
-            from domains.training.unified_pipeline import UnifiedTrainingPipeline, UnifiedTrainingConfig
-            from domains.training.sequence import TrainingRunConfig
+SPEC_FINETUNED_LIST = ToolSpec(
+    name="training.finetuned.list",
+    description=inspect.cleandoc(list_finetuned_models.__doc__ or ""),
+    parameters=[],
+    execute=list_finetuned_models,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
 
-            pipe_config = UnifiedTrainingConfig(**config)
-            run_config = TrainingRunConfig(
-                skip_generate=config.get("skip_generate", False),
-                skip_distill=config.get("skip_distill", False),
-                skip_train=config.get("skip_train", False),
-                skip_evaluate=config.get("skip_evaluate", False),
-                skip_deploy=config.get("skip_deploy", False),
-            )
-            pipeline = UnifiedTrainingPipeline(pipe_config, run_config=run_config)
+SPEC_FINETUNED_LOAD = ToolSpec(
+    name="training.finetuned.load",
+    description=inspect.cleandoc(load_finetuned_model.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=load_finetuned_model,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
 
-            def on_progress(progress):
-                if _unified_cancel_event is not None and _unified_cancel_event.is_set():
-                    raise _UnifiedCancelled("Training cancelled by user")
-                sse = progress.to_sse_event("unified-train")
-                _enqueue(sse_event("unified-train",
-                    progress.phase, progress.status,
-                    data=sse.get("data", {}), meta=sse.get("meta", {})))
+SPEC_FINETUNED_DELETE = ToolSpec(
+    name="training.finetuned.delete",
+    description=inspect.cleandoc(delete_finetuned_model.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=delete_finetuned_model,
+    auth_scope="authenticated",
+    idempotent=False,
+    version="1",
+)
 
-            pipeline.run(on_progress=on_progress)
-        except _UnifiedCancelled:
-            logger.info("Unified pipeline cancelled by user")
-            _enqueue(sse_complete("unified-train",
-                data={"cancelled": True, "message": "Training cancelled by user"},
-                message="Training cancelled"))
-        except Exception as e:
-            logger.exception("Unified pipeline worker error: %s", e)
-            _enqueue(sse_error("unified-train", "failed", str(e)))
-        finally:
-            _unified_cancel_event = None
+SPEC_RECOVERY_CHECK = ToolSpec(
+    name="training.recovery.check",
+    description=inspect.cleandoc(check_crashed_jobs.__doc__ or ""),
+    parameters=[ToolParam("timeout_seconds", "integer", "", False)],
+    execute=check_crashed_jobs,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
 
-    async def event_generator():
-        worker_task = loop.run_in_executor(None, _worker)
-        deadline = time.time() + 3600
-        try:
-            heartbeat_interval = 10.0
-            last_yield = time.time()
-            while True:
-                if time.time() > deadline:
-                    logger.error("Unified SSE timed out — no completion in 1 hour")
-                    yield sse_error("unified-train", "TIMEOUT", "Stream timed out")
-                    return
-                if await request.is_disconnected():
-                    if _unified_cancel_event is not None:
-                        _unified_cancel_event.set()
-                    worker_task.cancel()
-                    logger.info("Client disconnected from unified stream")
-                    return
-                remaining = heartbeat_interval - (time.time() - last_yield)
-                if remaining <= 0:
-                    remaining = heartbeat_interval
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=remaining)
-                except asyncio.TimeoutError:
-                    yield ": heartbeat\n\n"
-                    last_yield = time.time()
-                    continue
-                yield event
-                last_yield = time.time()
-                if event.startswith("data: "):
-                    try:
-                        ev = json.loads(event[6:])
-                        if ev.get("status") in ("complete", "error"):
-                            break
-                    except json.JSONDecodeError:
-                        pass
-            try:
-                await worker_task
-            except Exception:
-                pass
-        except asyncio.TimeoutError:
-            logger.error("Unified SSE queue timed out — no event for 60s")
-            yield sse_error("unified-train", "TIMEOUT", "No training progress for 60 seconds")
+SPEC_RECOVERY_RECOVERABLE = ToolSpec(
+    name="training.recovery.recoverable",
+    description=inspect.cleandoc(get_recoverable_jobs.__doc__ or ""),
+    parameters=[],
+    execute=get_recoverable_jobs,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+SPEC_RECOVERY_EVENTS = ToolSpec(
+    name="training.recovery.events",
+    description=inspect.cleandoc(get_recovery_events.__doc__ or ""),
+    parameters=[],
+    execute=get_recovery_events,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_RECOVERY_RECOVER = ToolSpec(
+    name="training.recovery.recover",
+    description=inspect.cleandoc(recover_job.__doc__ or ""),
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=recover_job,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_RECOVERY_ABANDON = ToolSpec(
+    name="training.recovery.abandon",
+    description=inspect.cleandoc(abandon_recovery.__doc__ or ""),
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=abandon_recovery,
+    auth_scope="authenticated",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_RECOVERY_STATS = ToolSpec(
+    name="training.recovery.stats",
+    description=inspect.cleandoc(get_recovery_stats.__doc__ or ""),
+    parameters=[],
+    execute=get_recovery_stats,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_LOG_GET = ToolSpec(
+    name="training.log.get",
+    description=inspect.cleandoc(training_log.__doc__ or ""),
+    parameters=[],
+    execute=training_log,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_STOP_ALL = ToolSpec(
+    name="training.stop.all",
+    description=inspect.cleandoc(training_stop.__doc__ or ""),
+    parameters=[],
+    execute=training_stop,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_LIST = ToolSpec(
+    name="training.checkpoints.list",
+    description=inspect.cleandoc(training_list_checkpoints.__doc__ or ""),
+    parameters=[],
+    execute=training_list_checkpoints,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_DELETE = ToolSpec(
+    name="training.checkpoints.delete",
+    description=inspect.cleandoc(training_delete_checkpoint.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_delete_checkpoint,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_LOAD = ToolSpec(
+    name="training.checkpoints.load",
+    description=inspect.cleandoc(training_load_checkpoint.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_load_checkpoint,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_DOWNLOAD = ToolSpec(
+    name="training.checkpoints.download",
+    description=inspect.cleandoc(training_download_checkpoint.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_download_checkpoint,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_INFO = ToolSpec(
+    name="training.checkpoints.info",
+    description=inspect.cleandoc(training_checkpoint_info.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_checkpoint_info,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_METRICS_EXPORT = ToolSpec(
+    name="training.metrics.export",
+    description=inspect.cleandoc(training_metrics_export.__doc__ or ""),
+    parameters=[],
+    execute=training_metrics_export,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_FROM_SESSIONS_CANCEL = ToolSpec(
+    name="training.from_sessions.cancel",
+    description=inspect.cleandoc(training_cancel_from_sessions.__doc__ or ""),
+    parameters=[],
+    execute=training_cancel_from_sessions,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_STREAM_LIVE = ToolSpec(
+    name="training.stream.live",
+    description=inspect.cleandoc(training_stream.__doc__ or ""),
+    parameters=[],
+    execute=training_stream,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_STREAM_FROM_SESSIONS = ToolSpec(
+    name="training.stream.from_sessions",
+    description=inspect.cleandoc(training_from_sessions_stream.__doc__ or ""),
+    parameters=[],
+    execute=training_from_sessions_stream,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_RECOMMEND_GET = ToolSpec(
+    name="training.recommend.get",
+    description=inspect.cleandoc(get_training_recommendation.__doc__ or ""),
+    parameters=[
+        ToolParam("dataset_path", "string", "", False),
+        ToolParam("method", "string", "", False),
+    ],
+    execute=get_training_recommendation,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_TRENDS_GET = ToolSpec(
+    name="training.trends.get",
+    description=inspect.cleandoc(get_training_trends.__doc__ or ""),
+    parameters=[
+        ToolParam("model", "string", "", False),
+        ToolParam("dataset", "string", "", False),
+        ToolParam("limit", "integer", "", False),
+    ],
+    execute=get_training_trends,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_STATUS = ToolSpec(
+    name="training.monitor.status",
+    description=inspect.cleandoc(training_monitor_status.__doc__ or ""),
+    parameters=[],
+    execute=training_monitor_status,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_ALERTS = ToolSpec(
+    name="training.monitor.alerts",
+    description=inspect.cleandoc(training_monitor_alerts.__doc__ or ""),
+    parameters=[
+        ToolParam("severity", "string", "", False),
+        ToolParam("limit", "integer", "", False),
+    ],
+    execute=training_monitor_alerts,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_METRICS = ToolSpec(
+    name="training.monitor.metrics",
+    description=inspect.cleandoc(training_monitor_metrics.__doc__ or ""),
+    parameters=[ToolParam("limit", "integer", "", False)],
+    execute=training_monitor_metrics,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_RESET = ToolSpec(
+    name="training.monitor.reset",
+    description=inspect.cleandoc(training_monitor_reset.__doc__ or ""),
+    parameters=[],
+    execute=training_monitor_reset,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_MONITOR_RESOURCES = ToolSpec(
+    name="training.monitor.resources",
+    description=inspect.cleandoc(training_monitor_resources.__doc__ or ""),
+    parameters=[],
+    execute=training_monitor_resources,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_FINETUNED_LIST,
+        RouteSpec(
+            path="/training/finetuned-models", envelope=False, summary="List Finetuned Models"
+        ),
+        list_finetuned_models,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FINETUNED_LOAD,
+        RouteSpec(
+            path="/training/finetuned-models/{name}/load",
+            envelope=False,
+            summary="Load Finetuned Model",
+        ),
+        load_finetuned_model,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FINETUNED_DELETE,
+        RouteSpec(
+            path="/training/finetuned-models/{name}",
+            method="DELETE",
+            envelope=False,
+            summary="Delete Finetuned Model",
+        ),
+        delete_finetuned_model,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_CHECK,
+        RouteSpec(path="/recovery/check", envelope=False, summary="Check Crashed Jobs"),
+        check_crashed_jobs,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_RECOVERABLE,
+        RouteSpec(path="/recovery/recoverable", envelope=False, summary="Get Recoverable Jobs"),
+        get_recoverable_jobs,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_EVENTS,
+        RouteSpec(path="/recovery/events", envelope=False, summary="Get Recovery Events"),
+        get_recovery_events,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_RECOVER,
+        RouteSpec(path="/recovery/recover/{job_id}", envelope=False, summary="Recover Job"),
+        recover_job,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_ABANDON,
+        RouteSpec(
+            path="/recovery/abandon/{job_id}",
+            method="DELETE",
+            envelope=False,
+            summary="Abandon Recovery",
+        ),
+        abandon_recovery,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_STATS,
+        RouteSpec(path="/recovery/stats", envelope=False, summary="Get Recovery Stats"),
+        get_recovery_stats,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_LOG_GET,
+        RouteSpec(path="/training/log", envelope=True, summary="Training Log"),
+        training_log,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STOP_ALL,
+        RouteSpec(path="/training/stop", envelope=True, summary="Training Stop"),
+        training_stop,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_LIST,
+        RouteSpec(path="/training/checkpoints", envelope=True, summary="Training List Checkpoints"),
+        training_list_checkpoints,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_DELETE,
+        RouteSpec(
+            path="/training/checkpoints/{name}",
+            method="DELETE",
+            envelope=True,
+            summary="Training Delete Checkpoint",
+        ),
+        training_delete_checkpoint,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_LOAD,
+        RouteSpec(
+            path="/training/checkpoints/{name}/load",
+            envelope=False,
+            summary="Training Load Checkpoint",
+        ),
+        training_load_checkpoint,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_DOWNLOAD,
+        RouteSpec(
+            path="/training/checkpoints/{name}/download",
+            envelope=False,
+            summary="Training Download Checkpoint",
+        ),
+        training_download_checkpoint,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_INFO,
+        RouteSpec(
+            path="/training/checkpoints/{name}/info",
+            envelope=True,
+            summary="Training Checkpoint Info",
+        ),
+        training_checkpoint_info,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_METRICS_EXPORT,
+        RouteSpec(
+            path="/training/metrics/export", envelope=False, summary="Training Metrics Export"
+        ),
+        training_metrics_export,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FROM_SESSIONS_CANCEL,
+        RouteSpec(
+            path="/training/from-sessions/cancel",
+            envelope=True,
+            summary="Training Cancel From Sessions",
+        ),
+        training_cancel_from_sessions,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STREAM_LIVE,
+        RouteSpec(path="/training/stream", envelope=False, summary="Training Stream"),
+        training_stream,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STREAM_FROM_SESSIONS,
+        RouteSpec(
+            path="/training/from-sessions-stream",
+            envelope=False,
+            summary="Training From Sessions Stream",
+        ),
+        training_from_sessions_stream,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOMMEND_GET,
+        RouteSpec(path="/training/recommend", envelope=True, summary="Get Training Recommendation"),
+        get_training_recommendation,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_TRENDS_GET,
+        RouteSpec(path="/training/trends", envelope=True, summary="Get Training Trends"),
+        get_training_trends,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_STATUS,
+        RouteSpec(path="/monitor", envelope=True, summary="Training Monitor Status"),
+        training_monitor_status,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_ALERTS,
+        RouteSpec(path="/monitor/alerts", envelope=True, summary="Training Monitor Alerts"),
+        training_monitor_alerts,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_METRICS,
+        RouteSpec(path="/monitor/metrics", envelope=True, summary="Training Monitor Metrics"),
+        training_monitor_metrics,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_RESET,
+        RouteSpec(path="/monitor/reset", envelope=True, summary="Training Monitor Reset"),
+        training_monitor_reset,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_RESOURCES,
+        RouteSpec(path="/monitor/resources", envelope=True, summary="Training Monitor Resources"),
+        training_monitor_resources,
+    )
+)

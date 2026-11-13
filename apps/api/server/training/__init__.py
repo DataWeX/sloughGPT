@@ -2,13 +2,31 @@
 
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
-from .router import router
+
+try:
+    from .router import router
+except ImportError:
+    import logging
+
+    logging.getLogger("slo.training").warning("Training router failed to import", exc_info=True)
+    from fastapi import APIRouter
+
+    router = APIRouter()
+
 from .schemas import (
+    DistillStartRequest,
+    ExportTextRequest,
+    FromSessionsRequest,
+    LoadAdapterRequest,
+    LoraFinetuneRequest,
+    TestWebhookRequest,
     TrainDatasetRef,
     TrainDataSourceBody,
     TrainingRequest,
     TrainRequest,
     TrainResolveRequest,
+    TurboStartRequest,
+    VisualTrainRequest,
 )
 
 __all__ = [
@@ -20,4 +38,12 @@ __all__ = [
     "TrainRequest",
     "TrainResolveRequest",
     "TrainingRequest",
+    "DistillStartRequest",
+    "LoraFinetuneRequest",
+    "VisualTrainRequest",
+    "LoadAdapterRequest",
+    "FromSessionsRequest",
+    "TurboStartRequest",
+    "ExportTextRequest",
+    "TestWebhookRequest",
 ]

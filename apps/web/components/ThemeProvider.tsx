@@ -1,50 +1,97 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode } from 'react'
-
+import type { ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useLayoutEffect } from 'react'
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
+import { trackEvent } from '@/lib/dev-log'
 import {
   isStoredThemeId,
+  isStoredPaletteId,
   MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  PALETTE_STORAGE_KEY,
   type StoredThemeId,
   type ThemeMode,
+  type StoredPaletteId,
 } from '@/lib/theme-storage'
 
 interface ThemeContextType {
   theme: StoredThemeId
   mode: ThemeMode
+  palette: StoredPaletteId
+  /** True once the client has mounted; guards SSR/client state divergence (theme hydration). */
+  mounted: boolean
   setTheme: (theme: StoredThemeId) => void
   setMode: (mode: ThemeMode) => void
+  setPalette: (palette: StoredPaletteId) => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+function getInitialTheme(): StoredThemeId {
+  if (typeof window === 'undefined') return 'purple'
+  const v = localStorage.getItem(THEME_STORAGE_KEY)
+  return isStoredThemeId(v) ? v : 'purple'
+}
+
+function getInitialMode(): ThemeMode {
+  if (typeof window === 'undefined') return 'dark'
+  const v = localStorage.getItem(MODE_STORAGE_KEY)
+  if (v === 'light' || v === 'dark') return v
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
+function getInitialPalette(): StoredPaletteId {
+  if (typeof window === 'undefined') return 'noir-violet'
+  const v = localStorage.getItem(PALETTE_STORAGE_KEY)
+  return isStoredPaletteId(v) ? v : 'noir-violet'
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<StoredThemeId>('purple')
-  const [mode, setMode] = useState<ThemeMode>('dark')
+  const [theme, _setTheme] = useState<StoredThemeId>(getInitialTheme)
+  const [mode, _setMode] = useState<ThemeMode>(getInitialMode)
+  const [palette, _setPalette] = useState<StoredPaletteId>(getInitialPalette)
   const [mounted, setMounted] = useState(false)
 
+  const setTheme = (next: StoredThemeId) => {
+    trackEvent('theme_changed', { from: theme, to: next })
+    _setTheme(next)
+  }
+
+  const setMode = (next: ThemeMode) => {
+    trackEvent('mode_changed', { from: mode, to: next })
+    _setMode(next)
+  }
+
+  const setPalette = (next: StoredPaletteId) => {
+    trackEvent('palette_changed', { from: palette, to: next })
+    _setPalette(next)
+  }
+
   useLayoutEffect(() => {
-    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
-    const savedMode = localStorage.getItem(MODE_STORAGE_KEY) as ThemeMode
-    const t = isStoredThemeId(savedTheme) ? savedTheme : 'purple'
-    const m = savedMode === 'light' || savedMode === 'dark' ? savedMode : 'dark'
-    setTheme(t)
-    setMode(m)
-    syncHtmlTheme(m, t)
+    // Theme is already loaded from localStorage synchronously.
+    // Sync to HTML element and mark as mounted.
+    syncHtmlTheme(mode, theme, palette)
     setMounted(true)
   }, [])
 
   useEffect(() => {
     if (!mounted) return
-    syncHtmlTheme(mode, theme)
+    syncHtmlTheme(mode, theme, palette)
     localStorage.setItem(THEME_STORAGE_KEY, theme)
     localStorage.setItem(MODE_STORAGE_KEY, mode)
-  }, [theme, mode, mounted])
+    localStorage.setItem(PALETTE_STORAGE_KEY, palette)
+  }, [theme, mode, palette, mounted])
+
+  // Listen for Ctrl+Shift+D dark mode toggle
+  useEffect(() => {
+    const handler = () => setMode(mode === 'dark' ? 'light' : 'dark')
+    window.addEventListener('toggle-dark-mode', handler)
+    return () => window.removeEventListener('toggle-dark-mode', handler)
+  }, [mode, setMode])
 
   return (
-    <ThemeContext.Provider value={{ theme, mode, setTheme, setMode }}>
+    <ThemeContext.Provider value={{ theme, mode, palette, mounted, setTheme, setMode, setPalette }}>
       {children}
     </ThemeContext.Provider>
   )
@@ -59,23 +106,12 @@ export function useTheme() {
 }
 
 /** Accent presets — ids kept for localStorage; hues match ``globals.css`` theme-* */
-export const THEMES: { id: StoredThemeId; name: string; color: string }[] = [
-  { id: 'blue', name: 'Periwinkle', color: '#8b7bc4' },
-  { id: 'purple', name: 'Lilac', color: '#a67fd4' },
-  { id: 'pink', name: 'Rose', color: '#d894b4' },
-  { id: 'red', name: 'Coral', color: '#e88890' },
-  { id: 'orange', name: 'Peach', color: '#e8a86c' },
-  { id: 'green', name: 'Mint', color: '#6bb89a' },
-  { id: 'teal', name: 'Dew', color: '#6cabcc' },
+export const THEMES: { id: StoredThemeId; name: string; color: string; aura: string }[] = [
+  { id: 'blue', name: 'Periwinkle', color: '#5a82dc', aura: 'Calm ocean, trustworthy' },
+  { id: 'purple', name: 'Lilac', color: '#9b6cd6', aura: 'Ethereal lilac, mystical' },
+  { id: 'pink', name: 'Rose', color: '#da82aa', aura: 'Soft rose, delicate' },
+  { id: 'red', name: 'Coral', color: '#e67882', aura: 'Warm coral, energetic' },
+  { id: 'orange', name: 'Peach', color: '#ec9b5a', aura: 'Peachy bread crust, warm bakery' },
+  { id: 'green', name: 'Mint', color: '#48b282', aura: 'Fresh mint, natural' },
+  { id: 'teal', name: 'Dew', color: '#48a6c8', aura: 'Cool dew, refreshing' },
 ]
-
-/** Maps theme ID to CSS variable value for --primary */
-export const THEME_PRIMARY: Record<StoredThemeId, string> = {
-  blue: '139 123 196',
-  purple: '166 127 212',
-  pink: '216 148 180',
-  red: '232 136 144',
-  orange: '232 168 108',
-  green: '107 184 154',
-  teal: '108 171 204',
-}

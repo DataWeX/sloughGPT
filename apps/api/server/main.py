@@ -22,36 +22,47 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
+import time
+import traceback
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional
 
-try:
-    import torch
-except ImportError:
-    torch = None
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # ── Path bootstrapping (must happen before any domain imports) ────────
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_SERVER_ROOT = Path(__file__).resolve().parent
-_CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
+# Script-mode entry (`python apps/api/server/main.py` — how slough-api.service
+# starts) puts only this file's directory on sys.path, so the repo root is not
+# importable yet and `domain` cannot be resolved. Put the root on sys.path with
+# a minimal marker walk FIRST, then `find_repo_root` becomes importable and
+# stays the single source of truth for `_REPO_ROOT`. Importing it before this
+# point is what crash-looped slough-api for ~12h with
+# `ModuleNotFoundError: No module named 'domain'` (the editable install only
+# maps `apps` and `domains`, and the plural tree was deleted in 8e1a0c75c).
+_HERE = Path(__file__).resolve()
+for _ancestor in (_HERE, *_HERE.parents):
+    if (_ancestor / "domain" / "__init__.py").is_file() and (_ancestor / "apps").is_dir():
+        if str(_ancestor) not in sys.path:
+            sys.path.insert(0, str(_ancestor))
+        break
+
+from domain.shared import find_repo_root  # noqa: E402  (resolvable now)
+
+_REPO_ROOT = find_repo_root(_HERE)
+_SERVER_ROOT = _HERE.parent
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
+_CHARGECTL_ROOT = _REPO_ROOT / "packages" / "chargectl" / "src"
 
 _HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
 
-for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _REPO_ROOT):
+for _p in (_SERVER_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)
-
-from domains.torch_runtime import apply_api_process_torch_env
-
-apply_api_process_torch_env()
 
 import state as server_state  # noqa: E402
 
@@ -60,86 +71,287 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
 warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
 warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
-# ── Structured logging ───────────────────────────────────────────────
-from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel  # noqa: E402
+# ── Structured logging (centralized) ─────────────────────────────────
+from domain.logging._internal.config import setup_logging  # noqa: E402
 
-_log_level_name = os.environ.get("MAN_LOG_LEVEL", "INFO").upper()
-_log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
-
-_console_logger = ConsoleLogger("man", level=_log_level)
-set_global(_console_logger)
-
-_bridge = BridgeHandler(_console_logger)
-_bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
-logging.root.addHandler(_bridge)
-logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
-
-# Log bridge → output buffer (for SSE streaming via /system/stream)
-try:
-    from domains.infrastructure.output_buffer import install_log_bridge
-    install_log_bridge()
-except Exception:
-    pass
-
-logger = logging.getLogger("man")
+_log_setup = setup_logging()
+logger = logging.getLogger("slo")
+logger.info(
+    "Logging: level=%s log_dir=%s",
+    _log_setup["level"],
+    _log_setup["log_dir"],
+    extra={"tag": "START"},
+)
 
 
 # ── Config ──────────────────────────────────────────────────────────
-from config import GenerationConfig, ServerConfig  # noqa: E402
-
-gen_config = GenerationConfig.from_env()
-server_state.gen_config = gen_config
+from config import ServerConfig  # noqa: E402
 
 cfg = ServerConfig.from_env()
 
-# Wire new typed config system alongside existing config for migration
-try:
-    from domains.infrastructure.config import get_config, AppConfig
-    _new_cfg: AppConfig = get_config()
-    logger.info(
-        "Config: %s @ %s:%d (features=%s)",
-        _new_cfg.model.name,
-        _new_cfg.server.host,
-        _new_cfg.server.port,
-        {k: v for k, v in _new_cfg.features.model_dump().items() if not k.startswith("_")},
-    )
-except Exception as exc:
-    logger.warning("New config system unavailable: %s", exc)
-
 
 # ── Lifespan ────────────────────────────────────────────────────────
+_pgq_engine = None  # PGQ core infra engine instance
+
+
 @asynccontextmanager
 async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
+    global _pgq_engine
+    _install_stack_dump_timer()
+
+    # Hydrate feature flags from config/feature_flags.json BEFORE any startup
+    # phase reads a flag (orchestration phases and provider setup call
+    # is_enabled). Without this the registry keeps code defaults and the config
+    # file is dead — card 60917072. Non-fatal: a malformed/missing config logs
+    # a warning and boot proceeds on defaults.
     try:
-        import os
+        from domain.shared._internal.feature_flags import FeatureFlags
+
+        FeatureFlags.load_config()
+    except Exception as exc:  # pragma: no cover — defensive, never block boot
+        logger.warning("Feature flag config load failed (non-fatal): %s", exc)
+
+    try:
         from infrastructure.startup import StartupOrchestrator
 
-        profile = os.environ.get("MAN_STARTUP_PROFILE", "full")
+        profile = os.environ.get("SLO_STARTUP_PROFILE", "full")
         orch = StartupOrchestrator(app_inst, cfg, profile=profile)
         await orch.run()
 
-        # Start auto-trainer if MAN_AUTO_TRAIN=1
+        # Wire new typed config system (deferred from module level)
         try:
-            from domains.training.auto_trainer import start_auto_trainer_if_enabled
+            from domain.infrastructure._internal.config import get_config
+
+            _new_cfg = get_config()
+            logger.info(
+                "Config: %s @ %s:%d",
+                _new_cfg.model.name,
+                _new_cfg.server.host,
+                _new_cfg.server.port,
+                extra={"tag": "START"},
+            )
+        except Exception as exc:
+            logger.warning("New config system unavailable: %s", exc, extra={"tag": "START"})
+
+        # Start PGQ core infra engine (background thread)
+        try:
+            from domain.infrastructure.pugqeep import PGQ
+
+            _pgq_engine = PGQ("sloughgpt")
+            logger.info("PGQ core engine created", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("PGQ engine creation failed (non-fatal): %s", e, extra={"tag": "START"})
+
+        # Start auto-trainer if SLO_AUTO_TRAIN=1
+        try:
+            from domain.training._internal.auto_trainer import start_auto_trainer_if_enabled
+
             start_auto_trainer_if_enabled()
         except Exception as e:
-            logger.warning("AutoTrainer startup failed (non-fatal): %s", e)
+            logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
+        # Auto-ingest repo docs into production RAG (if empty)
+        # Moved off the critical path: importing rag_service chains through
+        # rag.py → HybridRetriever and blocks the lifespan.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        def _rag_init_and_ingest():
+            try:
+                from domain.cognition import get_rag_service
+
+                _rag = get_rag_service()
+                if _rag.stats().get("total_chunks", 0) == 0:
+                    try:
+                        _rag.auto_ingest_directory(
+                            str(find_repo_root(Path(__file__).resolve())), max_files=150
+                        )
+                    except Exception as e:
+                        logger.debug("RAG auto-ingest failed: %s", e)
+            except Exception as e:
+                logger.debug("RAG init skipped: %s", e)
+
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): engine spawn is never dropped, unlike a bounded
+        # FAF submit — RAG init must run.
+        get_engine().spawn(_rag_init_and_ingest, name="rag-init")
+
+        # Warm the soul index off the critical path. SloManager no longer scans
+        # in __init__ (a trained .soul embeds ~41 MB of Adam optimizer state as
+        # JSON — ~2.2 s per file, 11 s observed on the 2026-11-03 cold start).
+        try:
+            from domain.inference._internal.slo_manager import warm_soul_index_async
+
+            warm_soul_index_async()
+        except Exception as e:
+            logger.debug("Soul index warm skipped: %s", e, extra={"tag": "START"})
+
+        # Start background daemons (moved from pre-uvicorn to post-startup).
+        # The feedback workflow parses/aggregates adapters before returning
+        # (observed ~9 s of the 40 s cold start), so it runs on the shared
+        # engine like rag-init above — background work must not gate readiness.
+        get_engine().spawn(_start_feedback_workflow, name="feedback-workflow")
+        _start_health_monitor()
+        _start_watchdog()
+
+        # Start idle manager if configured
+        if cfg.idle_timeout_seconds > 0:
+            try:
+                from domain.infrastructure.model_server import get_idle_manager
+
+                idle_mgr = get_idle_manager()
+                idle_mgr._idle_timeout_s = cfg.idle_timeout_seconds
+                logger.info(
+                    "Idle manager active: timeout=%ss",
+                    cfg.idle_timeout_seconds,
+                    extra={"tag": "IDLE"},
+                )
+            except Exception as e:
+                logger.warning("Idle manager startup failed (non-fatal): %s", e)
+
+        # Yield to uvicorn — server is running
+        Path("/tmp/slo-yield-marker").write_text(f"pre-yield {time.time()}\n")
         yield
+        Path("/tmp/slo-yield-marker").write_text(f"post-yield {time.time()}\n")
+
+        # Stop idle manager
+        try:
+            from domain.infrastructure.model_server import get_idle_manager
+
+            get_idle_manager().shutdown()
+        except Exception as e:
+            logger.warning("Idle manager shutdown failed: %s", e)
 
         # Stop auto-trainer
         try:
-            from domains.training.auto_trainer import stop_auto_trainer
+            from domain.training._internal.auto_trainer import stop_auto_trainer
+
             stop_auto_trainer()
-        except Exception:
-            pass
+        except (ImportError, AttributeError) as e:
+            logger.debug("Auto-trainer shutdown skipped: %s", e)
+
+        # Stop PGQ engine
+        if _pgq_engine is not None:
+            try:
+                _pgq_engine.stop()
+                logger.info("PGQ engine stopped", extra={"tag": "START"})
+            except Exception as e:
+                logger.debug("PGQ engine shutdown skipped: %s", e)
 
         await orch.shutdown()
     except Exception as exc:
         logger.critical("Startup failed: %s", exc, exc_info=True)
         yield
         raise
+    finally:
+        _cancel_stack_dump_timer()
+
+
+# fd the periodic dump writes to — a named seam so tests can capture it.
+_STACK_DUMP_FD = 2
+# The single dumper thread and its stop signal; install/cancel own them.
+_STACK_DUMP_STOP: threading.Event | None = None
+_STACK_DUMP_THREAD: threading.Thread | None = None
+
+
+def _dump_thread_stacks(fd: int = _STACK_DUMP_FD) -> None:
+    """Write every thread's Python stack to *fd* as one buffered write.
+
+    ``sys._current_frames()`` runs under the GIL, and frame teardown also
+    requires the GIL, so the snapshot can never observe a freed frame: the
+    returned frame objects pin themselves, and each frame holds a strong
+    ref to its parent (``f_back``), keeping the whole chain alive while we
+    format it. The GIL is the invariant the old implementation broke.
+
+    Replaced ``faulthandler.dump_traceback_later(interval, repeat=True)``,
+    whose C-level walk of raw ``_PyInterpreterFrame`` pointers runs from a
+    timer/signal context WITHOUT the GIL and races normal frame teardown.
+    That race was not theoretical: slough-api SIGSEGV'd 23 times over
+    2026-10-31..11-02 (every 4-14 min under load, and during idle
+    startup), and all 3 retained cores died at the identical instruction —
+    ``dump_frame``, ``Python/traceback.c:1259`` (``code->co_filename`` off
+    a stale frame), frames #0 offset ``python3.12 + 0x1a3c7b`` each.
+
+    Side effects:
+        - one ``os.write`` to *fd* (stderr by default → journald)
+    """
+    frames = sys._current_frames()
+    parts: list[str] = []
+    for tid, frame in frames.items():
+        if frame is None:
+            continue
+        parts.append(f"Thread 0x{tid:015x} (most recent call first):\n")
+        parts.extend(traceback.format_stack(frame))
+    os.write(fd, "".join(parts).encode("utf-8", "replace"))
+
+
+def _stack_dump_loop(interval: float, stop: threading.Event) -> None:
+    """Dump every *interval* seconds until *stop* is set; never raise."""
+    while not stop.wait(interval):
+        try:
+            _dump_thread_stacks()
+        except Exception as exc:
+            logger.warning("periodic stack dump failed: %s", exc, extra={"tag": "START"})
+
+
+def _install_stack_dump_timer() -> None:
+    """Periodically dump all thread stacks to stderr when ``SLO_DUMP_STACKS=1``.
+
+    Hang diagnosis aid: when a request stalls, the periodic dump shows which
+    thread and source line is blocked (e.g. a sync call hogging the event
+    loop). Off by default; interval configurable via ``SLO_DUMP_STACKS_INTERVAL``
+    seconds (default 30).
+
+    Runs as a Python thread instead of faulthandler's repeating timer —
+    see ``_dump_thread_stacks`` for the crash this swap replaces. The
+    install is idempotent: a second call stops the previous dumper first.
+
+    Side effects:
+        - starts one daemon thread writing stack dumps to stderr
+    """
+    global _STACK_DUMP_STOP, _STACK_DUMP_THREAD
+    if os.environ.get("SLO_DUMP_STACKS", "0").lower() not in ("1", "true", "yes"):
+        return
+    try:
+        interval = float(os.environ.get("SLO_DUMP_STACKS_INTERVAL", "30"))
+        _cancel_stack_dump_timer()
+        stop = threading.Event()
+        thread = threading.Thread(
+            target=_stack_dump_loop,
+            args=(interval, stop),
+            name="stack-dump",
+            daemon=True,
+        )
+        thread.start()
+        _STACK_DUMP_STOP, _STACK_DUMP_THREAD = stop, thread
+        logger.info(
+            "stack dump active every %ss (SLO_DUMP_STACKS=1, gil-safe)",
+            interval,
+            extra={"tag": "START"},
+        )
+    except Exception as exc:
+        logger.warning("stack dump thread not installed: %s", exc, extra={"tag": "START"})
+
+
+def _cancel_stack_dump_timer() -> None:
+    """Stop the dumper thread installed by ``_install_stack_dump_timer``.
+
+    Idempotent — safe to call when nothing is installed (lifespan's
+    ``finally`` runs unconditionally). Joins briefly so a test or a fast
+    restart never races a half-written dump.
+    """
+    global _STACK_DUMP_STOP, _STACK_DUMP_THREAD
+    stop, thread = _STACK_DUMP_STOP, _STACK_DUMP_THREAD
+    _STACK_DUMP_STOP, _STACK_DUMP_THREAD = None, None
+    if stop is None or thread is None:
+        return
+    try:
+        stop.set()
+        thread.join(timeout=5.0)
+        if thread.is_alive():
+            logger.warning("stack dump thread still draining after 5s")
+    except Exception as e:
+        logger.warning("Stack dump cancel failed: %s", e)
 
 
 # ── FastAPI application ─────────────────────────────────────────────
@@ -151,28 +363,91 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.get("/openapi.json", include_in_schema=False)
+async def export_openapi_spec():
+    """Export the OpenAPI spec as JSON."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(content=app.openapi())
+
+
+# Selective GZip compression — skips SSE streaming (text/event-stream) and
+# small responses (<500 bytes). Large JSON payloads (/datasets/export,
+# /training/export-text, /training/metrics) get compressed for bandwidth savings.
+from infrastructure.compression import SelectiveGZipMiddleware  # noqa: E402
+
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
+
+# Register structured middleware from the infrastructure package.
+# NOTE: CORSMiddleware is registered LAST (after all other middleware) so it is
+# outermost in the middleware stack. In Starlette, the last add_middleware() call
+# wraps everything added before it. CORSMiddleware must be outermost because:
+#   1. It must intercept OPTIONS preflight before any other middleware can
+#      return a non-CORS response (e.g. 429 from rate limiter).
+#   2. It must add Access-Control-* headers to ALL responses, including error
+#      responses from inner middleware (429, 504, etc.).
+# Without this, the browser sees responses without CORS headers and fires
+# TypeError: NetworkError when attempting to fetch resource.
+from infrastructure.middleware import register_all_middleware  # noqa: E402
+
+register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
+
+# Auth middleware — enforces JWT at middleware level (before CORS)
+try:
+    from infrastructure.auth_middleware import AuthMiddleware
+
+    app.add_middleware(AuthMiddleware)
+    logger.info("AuthMiddleware registered", extra={"op": "infra.startup"})
+except Exception as exc:
+    logger.warning("AuthMiddleware skipped: %s", exc, extra={"op": "infra.startup"})
+
+# CORS must be outermost — added after all other middleware so it wraps them.
+# Two rules: an explicit origin list (LAN IPs, deployed domains) plus a
+# PROGRAMMATIC loopback rule — any localhost/127.0.0.1/[::1] origin on ANY
+# port. The list used to be ports-only (3000, 5173, 5175, 8000), so a fresh
+# dev port (5174) silently failed every fetch and SSE with
+# "No Access-Control-Allow-Origin" — the browser then reported a running
+# backend as dead. One regex, no per-port maintenance.
+# Set SLO_CORS_LOCAL_ORIGIN_REGEX= (empty) to disable the loopback rule.
+_CORS_LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.environ.get(
+        "SLO_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:5173,http://localhost:5175,"
+        "http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5175,"
+        "http://localhost:8000",
+    ).split(","),
+    allow_origin_regex=os.environ.get("SLO_CORS_LOCAL_ORIGIN_REGEX", _CORS_LOCAL_ORIGIN_REGEX),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Explicit so the preflight-amortization contract is documented, not
+    # inherited: one OPTIONS per (origin, path, method) per 10 minutes (the
+    # measured first-load preflight cost is ~22 round trips per origin and
+    # zero on every load inside the window — card 342d729f).
+    max_age=600,
 )
-
-# Register structured middleware from the infrastructure package.
-from infrastructure.middleware import register_all_middleware  # noqa: E402
-register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 
 # Register health/status routes IMMEDIATELY — before lifespan runs.
 # During the 25-40s model loading phase, the frontend must still get
 # real responses from /health, /health/startup-progress, /health/summary
 # instead of connection errors.  These lightweight routers have zero
-# heavy imports (no torch, no transformers).
+# heavy imports.
+from routers.bootstrap import router as _bootstrap_router
+from routers.consciousness import router as _consciousness_router
+from routers.dashboard import router as _dashboard_router
 from routers.health import router as _health_router
 from routers.status import router as _status_router
+
 app.include_router(_health_router)
+app.include_router(_consciousness_router)
 app.include_router(_status_router)
-# Health/status routes are now registered pre-lifespan.
+app.include_router(_dashboard_router)
+app.include_router(_bootstrap_router)
+# Health/status/dashboard/bootstrap routes are now registered pre-lifespan.
 # _phase6_routers() skips them by checking existing route prefixes.
 
 # Feature routers are registered by StartupOrchestrator._phase6_routers()
@@ -181,99 +456,8 @@ app.include_router(_status_router)
 
 # Register exception handlers.
 from infrastructure.exception_handlers import register_all_handlers  # noqa: E402
+
 register_all_handlers(app)
-
-
-# ── Legacy helpers (preserved for existing callers) ─────────────────
-def _first_trainable_device(module: Any) -> torch.device:
-    """Device for placing tokenized inputs beside a loaded HF ``model``."""
-    try:
-        return next(module.parameters()).device
-    except (StopIteration, AttributeError, TypeError):
-        return torch.device("cpu")
-
-
-def _inputs_to_model_device(inputs: Any, model: Any) -> Any:
-    """Move tokenizer outputs (``BatchEncoding`` or ``dict``) to the module device."""
-    dev = _first_trainable_device(model)
-    if dev.type == "meta":
-        return inputs
-    if hasattr(inputs, "to"):
-        return inputs.to(dev)
-    if isinstance(inputs, dict):
-        return {k: v.to(dev) for k, v in inputs.items()}
-    return inputs
-
-
-def _inference_engine_device_str(module: Any) -> str:
-    """String device for ``InferenceEngine`` — match where ``module`` parameters live."""
-    if module is None:
-        return "cpu"
-    try:
-        dev = _first_trainable_device(module)
-    except Exception:
-        return "cpu"
-    if dev.type == "meta":
-        return "cpu"
-    return str(dev.type)
-
-
-def load_model(model_path: Optional[str] = None):
-    """Load the actual sloughgpt model. If model_path provided, load that specific checkpoint."""
-    try:
-        import torch
-
-        if model_path:
-            if not Path(model_path).is_absolute():
-                model_path = str((_REPO_ROOT / model_path).resolve())
-        else:
-            default_paths = [
-                "models/sloughgpt_finetuned.pt",
-                "models/sloughgpt_lora.pt",
-                "models/sloughgpt_variant.pt",
-            ]
-            model_path = None
-            for path in default_paths:
-                if (_REPO_ROOT / path).exists():
-                    model_path = str((_REPO_ROOT / path).resolve())
-                    break
-
-        if model_path is None or not Path(model_path).exists():
-            server_state.model = None
-            server_state.model_type = "demo"
-            logger.info("No model found, demo mode active")
-            return
-
-        logger.info("Loading model", extra={"context": {"model_path": model_path}})
-        ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
-
-        if isinstance(ckpt, dict):
-            server_state.model = ckpt
-            server_state.model_type = "sloughgpt_finetuned"
-            if "chars" in ckpt and "stoi" in ckpt and "itos" in ckpt:
-                server_state.tokenizer = {
-                    "chars": ckpt["chars"],
-                    "stoi": ckpt["stoi"],
-                    "itos": ckpt["itos"],
-                    "vocab_size": len(ckpt["chars"]),
-                }
-                logger.info("Tokenizer loaded", extra={"context": {"char_count": len(ckpt['chars'])}})
-            else:
-                server_state.tokenizer = None
-            logger.info("Model loaded", extra={"context": {"param_count": len(ckpt.get('model', {}))}})
-        else:
-            server_state.model = ckpt
-            server_state.model_type = "sloughgpt_finetuned"
-            server_state.tokenizer = None
-            logger.info("Model loaded successfully", extra={"context": {"model_path": model_path}})
-
-    except Exception as e:
-        logger.warning("Failed to load model", extra={"context": {"error": str(e)}})
-        import traceback
-        traceback.print_exc()
-        server_state.model = None
-        server_state.tokenizer = None
-        server_state.model_type = "demo"
 
 
 # ── Meta-weight manager ─────────────────────────────────────────────
@@ -285,7 +469,8 @@ def get_meta_weight_manager():
     global _meta_weight_manager
     if _meta_weight_manager is None:
         try:
-            from domains.feedback import get_meta_weight_manager as _get_manager
+            from domain.feedback import get_meta_weight_manager as _get_manager
+
             _meta_weight_manager = _get_manager()
         except ImportError:
             return None
@@ -297,201 +482,96 @@ def get_meta_weight_manager():
 # These symbols used to be defined inline but now live in the ``server/infrastructure/``
 # package.  The re-exports below ensure zero-changes for existing callers.
 
-from config import gen_config as gen_config_reexport  # noqa: E402, F401
-gen_config = gen_config_reexport
-server_state.gen_config = gen_config
+from config import gen_config as gen_config_reexport  # noqa: E402
 
-from infrastructure.auth import JWTAuth, AuditLogger, get_jwt_auth, get_audit_logger  # noqa: E402
+server_state.gen_config = gen_config_reexport
+
+from infrastructure.auth import get_audit_logger, get_jwt_auth  # noqa: E402
+
 jwt_auth = get_jwt_auth()
 audit_logger = get_audit_logger()
 
 # Security settings (kept as module-level globals for legacy imports)
 from settings import get_security_settings  # noqa: E402
+
 _sec = get_security_settings()
 JWT_SECRET = _sec.jwt_secret
 JWT_ALGORITHM = _sec.jwt_algorithm
 JWT_EXPIRATION_HOURS = _sec.jwt_expiration_hours
 VALID_API_KEYS = _sec.valid_api_keys
 
-from pydantic import BaseModel  # noqa: E402
-
-
-class LoadModelRequest(BaseModel):
-    """Request schema for ``POST /models/load`` — kept here for import compatibility."""
-
-    model_id: str
-    mode: Optional[str] = "local"
-    device: Optional[str] = "auto"
-
-
-def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> Dict[str, Any]:
-    """
-    Load HuggingFace model via ModelsController (extracted into
-    ``routers/models.py`` endpoint).  Preserved here for startup import.
-    """
-    try:
-        from controllers.models import get_models_controller
-
-        ctrl = get_models_controller()
-        result = ctrl.load_model(request.model_id, request.device or "auto", use_slonet=use_slonet)
-
-        if result.get("status") == "error":
-            logger.warning("Failed to load model %s: %s", request.model_id, result.get("error"))
-            return result
-
-        if use_slonet:
-            server_state.model_type = request.model_id
-            return result
-
-        model = getattr(ctrl, "_hf_model", None)
-        tokenizer = getattr(ctrl, "_tokenizer", None)
-
-        if model is None or tokenizer is None:
-            return {"status": "error", "error": "Model loaded but model/tokenizer not available"}
-
-        server_state.model = model
-        server_state.tokenizer = tokenizer
-        server_state.model_type = request.model_id
-
-        # Auto-load knowledge adapter
-        try:
-            from domains.infrastructure.knowledge_weight_integrator import load_knowledge_adapter, get_adapter_status
-
-            status = get_adapter_status()
-            if status.get("adapter_exists"):
-                model = load_knowledge_adapter(model, device="cpu", merge=True)
-                server_state.model = model
-                logger.info("Knowledge adapter merged (%d facts)", status.get("fact_count", 0))
-        except Exception as e:
-            logger.warning("Knowledge adapter load skipped: %s", e)
-
-        # Optionally wrap in ProcessGuard for crash isolation
-        process_guard = None
-        if os.environ.get("MAN_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"):
-            try:
-                from domains.infrastructure.process_guard import create_model_guard
-                process_guard = create_model_guard(
-                    model_id=request.model_id,
-                    device=request.device or "cpu",
-                    max_restarts=3,
-                    restart_delay=2.0,
-                    memory_limit_mb=4096,
-                )
-                logger.info("_load_hf_model_core: ProcessGuard started for %s", request.model_id)
-            except Exception as e:
-                logger.warning("_load_hf_model_core: ProcessGuard init failed (without): %s", e)
-
-        # Register with ModelRegistry
-        try:
-            from domains.infrastructure.model_registry import get_model_registry
-
-            registry = get_model_registry()
-            registry.register(
-                model_id=request.model_id,
-                model=model,
-                tokenizer=tokenizer,
-                make_default=True,
-                max_concurrent=1,
-                generate_timeout=120.0,
-                process_guard=process_guard,
-            )
-            from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor
-
-            model_server = registry.get(request.model_id)
-            provider = HFModelProvider(
-                model, tokenizer,
-                model_id_str=request.model_id,
-                model_server=model_server,
-            )
-            register_provider("hf-default", provider)
-            logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id)
-
-            # Wire default provider router — but don't override SloNet if already active.
-            # SloNet is registered by auto_train as "default"; replacing it would
-            # cause chat to silently fall back to HF and produce empty responses.
-            from domains.models.provider import get_provider as _gp
-            existing = _gp("default")
-            _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
-            if not _is_slonet:
-                router = ProviderRouter()
-                router.add_processor(VisionProcessor("multimodal"))
-                router.set_text_provider("hf-default")
-                register_provider("default", router)
-                logger.info("Default provider router registered with VisionProcessor")
-            else:
-                logger.info("SloNet provider active — keeping as default (skipping HF override)")
-        except Exception as e:
-            logger.warning("Failed to register with ModelRegistry: %s", e)
-
-        effective = _inference_engine_device_str(model)
-        return {
-            "status": "loaded",
-            "model": request.model_id,
-            "mode": request.mode or "local",
-            "device": result.get("device", request.device),
-            "effective_device": effective,
-            "model_type": server_state.model_type or request.model_id,
-        }
-    except Exception as e:
-        logger.error("_load_hf_model_core failed: %s", e, exc_info=True)
-        return {"status": "error", "error": str(e)}
-
-
-def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:
-    """Find an available port starting from start_port (DEPRECATED - use domains.shared.find_available_port)."""
-    from domains.shared import find_available_port as _find_available_port
-    return _find_available_port(host="", start_port=start_port, max_attempts=max_attempts)
-
 
 # ── Background daemons (callable from __main__) ─────────────────────
 def _start_feedback_workflow() -> None:
     """Start the automated feedback workflow at server startup."""
     try:
-        from domains.feedback import get_feedback_workflow
+        from domain.feedback import get_feedback_workflow
 
-        auto_start = os.environ.get("MAN_AUTO_WORKFLOW", "true").lower() == "true"
+        auto_start = os.environ.get("SLO_AUTO_WORKFLOW", "true").lower() == "true"
         if not auto_start:
-            logger.info("MAN_AUTO_WORKFLOW is false; skipping workflow startup")
+            logger.info(
+                "SLO_AUTO_WORKFLOW is false; skipping workflow startup", extra={"tag": "START"}
+            )
             return
 
         workflow = get_feedback_workflow()
         if not workflow._running:
             workflow.start()
-            logger.info("Feedback workflow started automatically")
+            logger.info("Feedback workflow started automatically", extra={"tag": "START"})
+
+        # Wire the active server model so background training has a model to
+        # incrementally fine-tune on feedback (falls back to auto-train student
+        # if present). No-op if no model is loaded yet.
+        try:
+            import state as server_state
+
+            model = getattr(server_state, "model", None)
+            tokenizer = getattr(server_state, "tokenizer", None)
+            if model is not None and tokenizer is not None:
+                workflow.set_model(model, tokenizer)
+        except Exception as e:
+            logger.debug("Feedback workflow model wiring skipped: %s", e)
     except Exception as e:
-        logger.warning("Failed to start feedback workflow", extra={"context": {"error": str(e)}})
+        logger.warning(
+            "Failed to start feedback workflow",
+            extra={"context": {"error": str(e)}, "tag": "START"},
+        )
 
 
 def _start_health_monitor() -> None:
     """Start the model health monitor background thread at server startup."""
     try:
-        from domains.feedback.model_health import get_health_monitor
+        from domain.feedback._internal.model_health import get_health_monitor
 
-        enabled = os.environ.get("MAN_HEALTH_MONITOR", "true").lower() == "true"
+        enabled = os.environ.get("SLO_HEALTH_MONITOR", "true").lower() == "true"
         if not enabled:
-            logger.info("MAN_HEALTH_MONITOR is false; skipping health monitor startup")
+            logger.info(
+                "SLO_HEALTH_MONITOR is false; skipping health monitor startup",
+                extra={"tag": "START"},
+            )
             return
 
-        interval = int(os.environ.get("MAN_HEALTH_INTERVAL", "300"))
+        interval = int(os.environ.get("SLO_HEALTH_INTERVAL", "300"))
         monitor = get_health_monitor()
-        thread = monitor.start_auto_monitoring(interval_seconds=interval)
-        thread.name = "health-monitor"
+        monitor.start_auto_monitoring(interval_seconds=interval)
         logger.info(
             "Model health monitor started",
-            extra={"context": {"interval_seconds": interval}},
+            extra={"context": {"interval_seconds": interval}, "tag": "START"},
         )
     except Exception as e:
-        logger.warning("Failed to start health monitor", extra={"context": {"error": str(e)}})
+        logger.warning(
+            "Failed to start health monitor", extra={"context": {"error": str(e)}, "tag": "START"}
+        )
 
 
 def _start_watchdog() -> None:
     """Start the health watchdog that auto-recovers from server crashes."""
     try:
-        from domains.infrastructure.watchdog import get_watchdog
+        from domain.infrastructure.watchdog import get_watchdog
 
-        enabled = os.environ.get("MAN_WATCHDOG", "true").lower() == "true"
+        enabled = os.environ.get("SLO_WATCHDOG", "true").lower() == "true"
         if not enabled:
-            logger.info("MAN_WATCHDOG is false; skipping watchdog startup")
+            logger.info("SLO_WATCHDOG is false; skipping watchdog startup", extra={"tag": "START"})
             return
 
         import time
@@ -502,25 +582,29 @@ def _start_watchdog() -> None:
         watchdog = get_watchdog()
 
         def _check_health() -> bool:
-            """Quick health check — model loaded and providers registered."""
+            """Quick health check — model loaded, provider registered, circuit breaker healthy."""
             try:
                 if time.time() - _startup_time < _WATCHDOG_GRACE_SECS:
                     return True
                 if server_state.training_active:
                     return True
-                if server_state.model is None:
-                    from domains.models.provider import get_provider
-
-                    default = get_provider("default")
-                    if default is not None:
-                        return True
-                    if os.environ.get("MAN_AUTOLOAD_MODEL", ""):
-                        return False
-                    return True
-                from domains.models.provider import get_provider
+                from domain.models._internal.provider import get_provider
 
                 router = get_provider("default")
-                return router is not None
+                if router is None:
+                    if os.environ.get("SLO_AUTOLOAD_MODEL", ""):
+                        return False
+                    return True
+                # Check if the underlying ModelServer's circuit breaker is open
+                server = getattr(router, "_server", None)
+                if server is not None:
+                    cb = getattr(server, "_circuit_breaker", None)
+                    if cb is not None and cb.state.value == "open":
+                        return False
+                    status = getattr(server, "_status", None)
+                    if status is not None and status.value == "error":
+                        return False
+                return True
             except Exception:
                 return False
 
@@ -533,23 +617,27 @@ def _start_watchdog() -> None:
                 "Watchdog detected %d consecutive health failures. "
                 "Manual recovery required — model inference may be degraded.",
                 watchdog._consecutive_failures,
+                extra={"tag": "START"},
             )
             return False
 
         watchdog.set_health_check_fn(_check_health)
         watchdog.set_recovery_fn(_recover)
         watchdog.start(poll_interval=15, max_failures=3)
-        logger.info("Health watchdog started (poll=15s, max_failures=3, recovery=log-only)")
+        logger.info(
+            "Health watchdog started (poll=15s, max_failures=3, recovery=log-only)",
+            extra={"tag": "START"},
+        )
     except Exception as e:
-        logger.warning("Failed to start watchdog: %s", e)
+        logger.warning("Failed to start watchdog: %s", e, extra={"tag": "START"})
 
 
 # ── Entry point ─────────────────────────────────────────────────────
 if __name__ == "__main__":
     import argparse
-    import atexit
     import signal
     import subprocess
+
     import uvicorn
 
     # Ignore SIGHUP so server survives shell session close
@@ -559,7 +647,9 @@ if __name__ == "__main__":
         if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
-        logger.critical("Unhandled exception: %s", exc_value, exc_info=(exc_type, exc_value, exc_tb))
+        logger.critical(
+            "Unhandled exception: %s", exc_value, exc_info=(exc_type, exc_value, exc_tb)
+        )
 
     sys.excepthook = _handle_uncaught_exception
 
@@ -580,7 +670,8 @@ if __name__ == "__main__":
         "--web",
         action="store_true",
         default=cfg.enable_web,
-        help="Serve web frontend alongside API",
+        help="(deprecated) the site is served statically by the gateway — "
+        "this flag no longer spawns a Node server",
     )
     parser.add_argument(
         "--daemon",
@@ -588,14 +679,23 @@ if __name__ == "__main__":
         default=False,
         help="Run as daemon (detach from terminal)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Kill existing process on port and start fresh (default: connect to existing)",
+    )
     args = parser.parse_args()
 
     # Daemonize if requested — use subprocess to avoid fork() issues
     if args.daemon:
         import subprocess as sp
+
         cmd = [sys.executable, __file__]
         if args.port:
             cmd += ["--port", str(args.port)]
+        if args.force:
+            cmd += ["--force"]
         proc = sp.Popen(
             cmd,
             stdin=sp.DEVNULL,
@@ -603,78 +703,150 @@ if __name__ == "__main__":
             stderr=sp.DEVNULL,
             start_new_session=True,
         )
-        print(f"Server started as daemon (PID {proc.pid})")
+        logger.info("Server started as daemon (PID %s)", proc.pid)
         sys.exit(0)
 
-    # Kill orphan processes on target port to avoid port conflicts
     bind_port = args.port or cfg.port
+
+    # ── Singleton gate ────────────────────────────────────────────────
+    # Detect whether the port is in use.  If it is, determine whether
+    # the occupant is a healthy SloughGPT server or something else.
+    # Without --force: healthy server -> exit 0 (reuse); non-server -> exit 1.
+    # With --force: kill everything on the port and proceed.
+    import socket as _sock
+
+    _port_open = True
     try:
-        orphans = subprocess.check_output(["lsof", "-ti", f":{bind_port}"], timeout=5).decode().strip().split()
-        for pid in orphans:
-            if pid and pid != str(os.getpid()):
-                os.kill(int(pid), 9)
-                logger.warning("Killed orphan process %s on port %d", pid, bind_port)
-    except Exception:
-        pass
+        with _sock.create_connection(("127.0.0.1", bind_port), timeout=1.0):
+            _port_open = False
+    except (ConnectionRefusedError, OSError, TimeoutError):
+        pass  # Expected: port is free when connection is refused
 
-    _start_feedback_workflow()
-    _start_health_monitor()
-    _start_watchdog()
-    logger.info("Starting SloughGPT server", extra={"context": {"port": bind_port, "reload": args.reload}})
+    if not _port_open:
+        # Something is listening -- is it a SloughGPT server?
+        import urllib.request as _urllib_request
 
-    # Optional web frontend
-    web_proc = None
-    if args.web:
-        web_root = _REPO_ROOT / "apps" / "web"
-        standalone_dir = web_root / ".next" / "standalone"
-        web_port = find_available_port(3000)
-        web_env = {**os.environ, "PORT": str(web_port)}
+        _is_server = False
+        try:
+            req = _urllib_request.Request(f"http://127.0.0.1:{bind_port}/health", method="GET")
+            with _urllib_request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    _is_server = True
+        except Exception as e:
+            logger.debug("Health check on port %d failed: %s", bind_port, e)
 
-        if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():
-            web_proc = subprocess.Popen(
-                ["node", "server.js"],
-                cwd=str(standalone_dir),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+        if _is_server and not args.force:
+            logger.info(
+                "Server already running on port %d -- exiting (use --force to replace)",
+                bind_port,
+                extra={"tag": "START"},
             )
-        else:
-            web_proc = subprocess.Popen(
-                ["npm", "run", "dev"],
-                cwd=str(web_root),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
+            sys.exit(0)
 
-    if web_proc:
-        atexit.register(lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None)
+        if args.force:
+            try:
+                pids = (
+                    subprocess.check_output(
+                        ["lsof", "-ti", f":{bind_port}"],
+                        timeout=5,
+                    )
+                    .decode()
+                    .strip()
+                    .split()
+                )
+                for pid in pids:
+                    if pid and pid != str(os.getpid()):
+                        os.kill(int(pid), 9)
+                        logger.warning(
+                            "Killed process %s on port %d (--force)",
+                            pid,
+                            bind_port,
+                            extra={"tag": "START"},
+                        )
+            except Exception as e:
+                logger.warning("Failed to force-kill processes on port %d: %s", bind_port, e)
+        elif not _is_server:
+            # Port occupied by a non-server process
+            try:
+                pids = (
+                    subprocess.check_output(
+                        ["lsof", "-ti", f":{bind_port}"],
+                        timeout=5,
+                    )
+                    .decode()
+                    .strip()
+                    .split()
+                )
+                pids = [p for p in pids if p and p != str(os.getpid())]
+                if pids:
+                    logger.error(
+                        "Port %d occupied by process %s (not a SloughGPT server). "
+                        "Use --force to kill it.",
+                        bind_port,
+                        ",".join(pids),
+                        extra={"tag": "START"},
+                    )
+                    sys.exit(1)
+            except Exception as e:
+                logger.warning("Failed to detect processes on port %d: %s", bind_port, e)
 
-    uvicorn_kw: dict = dict(
-        app=app,
-        host=cfg.host,
-        port=bind_port,
-        log_level=cfg.log_level.lower(),
+    # Background daemons start AFTER uvicorn binds (moved from pre-uvicorn)
+    # They are now started in the lifespan context below.
+    logger.info(
+        "Starting SloughGPT server",
+        extra={"context": {"port": bind_port, "reload": args.reload}, "tag": "START"},
     )
+
+    # Web frontend — retired from this process. The site is now a static
+    # build (`npm run build:vite` → apps/web/dist-vite) served by the gateway
+    # as its document root (MAN_STATIC_DIR), so the API no longer spawns Node
+    # at all. Dev still runs `vite dev` (slough-web.service).
+    if args.web:
+        logger.warning(
+            "--web is retired: build the site with 'npm run build:vite' in "
+            "apps/web and let the gateway serve it (no Node spawned)",
+            extra={"context": {"port": bind_port}, "tag": "START"},
+        )
+
+    uvicorn_kw: dict = {
+        "app": app,
+        "host": cfg.host,
+        "port": bind_port,
+        "log_level": cfg.log_level.lower(),
+    }
     if args.reload:
         uvicorn_kw["reload"] = True
         uvicorn_kw["app"] = "main:app"
         uvicorn_kw["reload_includes"] = [
             "apps/api/server/**/*.py",
-            "packages/core-py/domains/**/*.py",
+            "domain/**/*.py",
         ]
         uvicorn_kw["reload_excludes"] = [
-            ".*/**", "node_modules/**", "__pycache__/**", "*.pyc",
-            ".git/**", ".venv/**", "venv/**", "env/**",
-            "build/**", "dist/**", ".next/**", "data/**", "datasets/**", "models/**",
-            "tests/**", "logs/**", "checkpoints/**",
-            "apps/web/**", "apps/cli/**",
+            ".*/**",
+            "node_modules/**",
+            "__pycache__/**",
+            "*.pyc",
+            ".git/**",
+            ".venv/**",
+            "venv/**",
+            "env/**",
+            "build/**",
+            "dist/**",
+            ".next/**",
+            "data/**",
+            "datasets/**",
+            "models/**",
+            "tests/**",
+            "logs/**",
+            "checkpoints/**",
+            "apps/web/**",
+            "apps/cli/**",
         ]
 
     try:
         uvicorn.run(**uvicorn_kw)
     except KeyboardInterrupt:
-        logger.info("Interrupted by user")
+        logger.info("Interrupted by user", extra={"tag": "START"})
     except Exception as e:
         logger.critical("Server crashed: %s", e, exc_info=True)
         sys.exit(1)

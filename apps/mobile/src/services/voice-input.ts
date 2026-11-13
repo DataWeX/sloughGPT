@@ -3,12 +3,18 @@
  * Records audio via expo-av and transcribes via backend.
  */
 
+import {Alert, Linking} from 'react-native';
+import {getApiUrl, getAuthHeaders} from './api-client';
+
 let Audio: any;
 try {
   Audio = require('expo-av');
 } catch {
   Audio = null;
 }
+
+const MIN_RECORDING_DURATION_MS = 2000;
+const TRANSCRIBE_TIMEOUT_MS = 30000;
 
 export interface VoiceRecording {
   uri: string;
@@ -20,11 +26,23 @@ export interface VoiceRecording {
  */
 export async function startRecording(): Promise<{stop: () => Promise<VoiceRecording | null>}> {
   if (!Audio) {
-    throw new Error('Audio recording not available. Install expo-av.');
+    Alert.alert('Audio unavailable', 'expo-av is not installed on this device.');
+    throw new Error('Audio recording not available.');
   }
 
   const permission = await Audio.Recording.requestPermissionsAsync();
   if (!permission.granted) {
+    Alert.alert(
+      'Microphone permission required',
+      'Please enable microphone access in your device settings to record voice.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Open Settings',
+          onPress: () => Linking.openSettings().catch(() => {}),
+        },
+      ],
+    );
     throw new Error('Microphone permission required');
   }
 
@@ -40,8 +58,14 @@ export async function startRecording(): Promise<{stop: () => Promise<VoiceRecord
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
         const duration = Math.round((Date.now() - startTime) / 1000);
-        return uri ? {uri, duration} : null;
-      } catch {
+        if (!uri) return null;
+        if (duration * 1000 < MIN_RECORDING_DURATION_MS) {
+          Alert.alert('Recording too short', 'Please record for at least 2 seconds.');
+          return null;
+        }
+        return {uri, duration};
+      } catch (e) {
+        if (__DEV__) console.warn('[voice-input] stop recording failed:', e);
         return null;
       }
     },
@@ -50,31 +74,40 @@ export async function startRecording(): Promise<{stop: () => Promise<VoiceRecord
 
 /**
  * Transcribe a voice recording via the backend.
+ * Throws on network/server errors; returns '' when no speech detected.
  */
 export async function transcribeAudio(uri: string): Promise<string> {
-  try {
-    const {getApiUrl} = require('./api-client');
-    const baseUrl = await getApiUrl();
-    const formData = new FormData();
-    formData.append('audio', {
-      uri,
-      type: 'audio/m4a',
-      name: 'recording.m4a',
-    } as any);
+  const baseUrl = await getApiUrl();
+  const formData = new FormData();
+  formData.append('audio', {
+    uri,
+    type: 'audio/m4a',
+    name: 'recording.m4a',
+  } as any);
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS);
+
+  try {
     const res = await fetch(`${baseUrl}/multimodal/transcribe`, {
       method: 'POST',
       body: formData,
-      headers: {'Content-Type': 'multipart/form-data'},
+      headers: {'Content-Type': 'multipart/form-data', ...(await getAuthHeaders())},
+      signal: controller.signal,
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      return data.text || '';
+    if (!res.ok) {
+      throw new Error(`Transcription failed (${res.status})`);
     }
-  } catch {
-    // backend unavailable
-  }
 
-  return '';
+    const data = await res.json();
+    return data.text || '';
+  } catch (e: any) {
+    if (e.name === 'AbortError') {
+      throw new Error('Transcription timed out');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

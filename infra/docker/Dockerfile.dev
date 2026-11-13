@@ -3,8 +3,8 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    MAN_ENV="development" \
-    MAN_LOG_LEVEL="DEBUG"
+    SLO_ENV="development" \
+    SLO_LOG_LEVEL="DEBUG"
 
 WORKDIR /app
 
@@ -26,7 +26,6 @@ RUN pip install --no-cache-dir \
     transformers accelerate scipy pytest pytest-asyncio pytest-cov ruff black ipython psutil
 
 COPY apps/api/server /app/apps/api/server
-COPY packages/core-py /app/packages/core-py
 COPY packages/sdk-py /app/packages/sdk-py
 COPY pyproject.toml README.md LICENSE /app/
 

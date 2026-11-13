@@ -9,17 +9,22 @@ import {
   Share,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text, useTheme} from 'tamagui';
+import {YStack, XStack, Text} from 'tamagui';
+import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
+import {triggerHaptic} from '../services/haptics';
+import {toast} from '../services/toast';
+import {pickDocument} from '../services/file-upload';
 import type {KnowledgeItem} from '../types';
 
 export function KnowledgeScreen() {
-  const theme = useTheme();
+  const colors = useColors();
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [editItem, setEditItem] = useState<KnowledgeItem | null>(null);
@@ -48,6 +53,8 @@ export function KnowledgeScreen() {
       setItems(data);
     } catch {
       setItems([]);
+    } finally {
+      setLoading(false);
     }
   }, [search, selectedTopic]);
 
@@ -55,7 +62,9 @@ export function KnowledgeScreen() {
     try {
       const result = await api.get<{topics: string[]}>('/knowledge/topics');
       setTopics(result.topics || []);
-    } catch {}
+    } catch {
+      // Topics load is non-critical — silently ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -73,14 +82,16 @@ export function KnowledgeScreen() {
   };
 
   const debouncedSearch = (text: string) => {
-    setSearch(text);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => {}, 300);
+    searchTimeout.current = setTimeout(() => {
+      setSearch(text);
+    }, 300);
   };
 
   const handleAdd = async () => {
     if (!formContent.trim()) return;
     try {
+      triggerHaptic('success');
       await api.post('/knowledge', {
         content: formContent.trim(),
         topic: formTopic.trim() || undefined,
@@ -90,7 +101,9 @@ export function KnowledgeScreen() {
       setFormTopic('');
       await fetchItems();
       await fetchTopics();
-    } catch {}
+    } catch {
+      toast.error('Failed to add knowledge');
+    }
   };
 
   const handleEdit = async () => {
@@ -104,25 +117,33 @@ export function KnowledgeScreen() {
       setFormContent('');
       setFormTopic('');
       await fetchItems();
-    } catch {}
+    } catch {
+      toast.error('Failed to update knowledge');
+    }
   };
 
   const handleDelete = async (id: string) => {
     try {
+      triggerHaptic('light');
       await api.delete(`/knowledge/${id}`);
       await fetchItems();
-    } catch {}
+    } catch {
+      toast.error('Failed to delete item');
+    }
   };
 
   const handleBatchDelete = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     try {
+      triggerHaptic('medium');
       await Promise.all(ids.map(id => api.delete(`/knowledge/${id}`)));
       setSelectedIds(new Set());
       setSelectMode(false);
       await fetchItems();
-    } catch {}
+    } catch {
+      toast.error('Failed to delete selected items');
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -136,6 +157,7 @@ export function KnowledgeScreen() {
 
   const handleExport = async () => {
     try {
+      triggerHaptic('light');
       const data = items.map(item => ({
         content: item.content,
         topic: item.topic,
@@ -143,7 +165,9 @@ export function KnowledgeScreen() {
       }));
       const json = JSON.stringify(data, null, 2);
       await Share.share({title: 'Knowledge Export', message: json});
-    } catch {}
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to export knowledge');
+    }
   };
 
   const openEdit = (item: KnowledgeItem) => {
@@ -160,6 +184,7 @@ export function KnowledgeScreen() {
     if (!importText.trim()) return;
     setImporting(true);
     try {
+      triggerHaptic('success');
       const lines = importText.split('\n').filter(l => l.trim().length > 2);
       await Promise.all(
         lines.map(line =>
@@ -171,12 +196,41 @@ export function KnowledgeScreen() {
       setFormTopic('');
       await fetchItems();
       await fetchTopics();
-    } catch {}
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to import knowledge');
+    }
     setImporting(false);
   };
 
-  const accent = theme.color9?.val || '#7C52C4';
-  const bgMuted = `rgba(124, 82, 196, 0.06)`;
+  const handleImportFile = async () => {
+    try {
+      const file = await pickDocument();
+      if (!file) return;
+      setImporting(true);
+      const RNFS = require('react-native-fs');
+      const content = await RNFS.readFile(decodeURIComponent(file.uri.replace('file://', '')));
+      const data = JSON.parse(content);
+      const entries = Array.isArray(data) ? data : [data];
+      await Promise.all(
+        entries.map((entry: any) => {
+          const text = typeof entry === 'string' ? entry : entry.content || entry.text || entry.knowledge || '';
+          const topic = typeof entry === 'object' ? (entry.topic || entry.category || formTopic.trim() || undefined) : (formTopic.trim() || undefined);
+          return text.trim() ? api.post('/knowledge', {content: text.trim(), topic}) : Promise.resolve();
+        }),
+      );
+      setImportModalVisible(false);
+      setImportText('');
+      setFormTopic('');
+      await fetchItems();
+      await fetchTopics();
+    } catch (e: any) {
+      // JSON parse or file read error — silently handled
+    }
+    setImporting(false);
+  };
+
+  const accent = colors.primary;
+  const bgMuted = colors.primaryAlpha(0.06);
 
   const renderItem = ({item}: {item: KnowledgeItem}) => {
     const isSelected = selectedIds.has(item.id);
@@ -186,7 +240,7 @@ export function KnowledgeScreen() {
         borderRadius={12}
         padding={14}
         borderWidth={isSelected ? 1 : 0.5}
-        borderColor={isSelected ? accent : '$borderColor'}
+        borderColor={isSelected ? accent : colors.border}
         onLongPress={() => { setSelectMode(true); setSelectedIds(new Set([item.id])); }}
         onPress={() => {
           if (selectMode) toggleSelect(item.id);
@@ -197,7 +251,7 @@ export function KnowledgeScreen() {
           {selectMode && (
             <YStack
               width={22} height={22} borderRadius={6} borderWidth={2}
-              borderColor={isSelected ? accent : '$borderColor'}
+              borderColor={isSelected ? accent : colors.border}
               backgroundColor={isSelected ? accent : 'transparent'}
               alignItems="center" justifyContent="center" marginTop={1}>
               {isSelected && (
@@ -205,7 +259,7 @@ export function KnowledgeScreen() {
               )}
             </YStack>
           )}
-          <Text fontSize={14} color="$color" flex={1} numberOfLines={3}>
+          <Text fontSize={14} color={colors.text} flex={1} numberOfLines={3}>
             {item.content}
           </Text>
         </XStack>
@@ -213,7 +267,7 @@ export function KnowledgeScreen() {
           <XStack alignItems="center" gap={8} flex={1}>
             {item.topic && (
               <YStack backgroundColor={bgMuted} paddingHorizontal={8} paddingVertical={2} borderRadius={6}>
-                <Text fontSize={10} fontWeight="500" color="$color9">{item.topic}</Text>
+                <Text fontSize={10} fontWeight="500" color={colors.primary}>{item.topic}</Text>
               </YStack>
             )}
             <XStack gap={3}>
@@ -221,21 +275,21 @@ export function KnowledgeScreen() {
                 <YStack
                   key={i}
                   width={6} height={6} borderRadius={3}
-                  backgroundColor={i < item.importance ? accent : '$borderColor'}
+                  backgroundColor={i < item.importance ? accent : colors.border}
                 />
               ))}
             </XStack>
           </XStack>
           {!selectMode && (
             <XStack gap={6}>
-              <Pressable onPress={() => openEdit(item)}>
+              <Pressable onPress={() => openEdit(item)} accessibilityLabel="Edit knowledge item">
                 <YStack width={28} height={28} borderRadius={8} backgroundColor={bgMuted} alignItems="center" justifyContent="center">
-                  <Icon name="edit-3" size={12} color={accent} />
+                  <Icon name="edit" size={12} color={accent} />
                 </YStack>
               </Pressable>
-              <Pressable onPress={() => handleDelete(item.id)}>
-                <YStack width={28} height={28} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)" alignItems="center" justifyContent="center">
-                  <Icon name="trash-2" size={12} color="#EF4444" />
+              <Pressable onPress={() => handleDelete(item.id)} accessibilityLabel="Delete knowledge item">
+                <YStack width={28} height={28} borderRadius={8} backgroundColor={colors.errorAlpha(0.08)} alignItems="center" justifyContent="center">
+                  <Icon name="trash-2" size={12} color={colors.error} />
                 </YStack>
               </Pressable>
             </XStack>
@@ -255,16 +309,16 @@ export function KnowledgeScreen() {
       <YStack flex={1} justifyContent="flex-end">
         <Pressable style={{flex: 1}} onPress={onClose} />
         <YStack
-          backgroundColor="$background"
+          backgroundColor={colors.background}
           borderTopLeftRadius={24}
           borderTopRightRadius={24}
           padding={20}
           gap={14}>
           <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
-            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">{title}</Text>
-            <Pressable onPress={onClose}>
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color={colors.text}>{title}</Text>
+            <Pressable onPress={onClose} accessibilityLabel="Close">
               <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
-                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                <Icon name="x" size={14} color={colors.textSecondary} />
               </YStack>
             </Pressable>
           </XStack>
@@ -281,31 +335,31 @@ export function KnowledgeScreen() {
           {selectMode ? (
             <XStack alignItems="center" justifyContent="space-between" flex={1}>
               <Pressable onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
-                <Text fontSize={13} fontWeight="600" color="$color9">Cancel</Text>
+                <Text fontSize={13} fontWeight="600" color={colors.primary}>Cancel</Text>
               </Pressable>
-              <Text fontSize={14} fontWeight="600" color="$color">{selectedIds.size} selected</Text>
+              <Text fontSize={14} fontWeight="600" color={colors.text}>{selectedIds.size} selected</Text>
               <Pressable onPress={handleBatchDelete} style={{opacity: selectedIds.size === 0 ? 0.4 : 1}}>
-                <Text fontSize={13} fontWeight="600" color="#EF4444">
+                <Text fontSize={13} fontWeight="600" color={colors.error}>
                   Delete ({selectedIds.size})
                 </Text>
               </Pressable>
             </XStack>
           ) : (
             <>
-              <Text fontSize={20} fontWeight="600" letterSpacing={-0.2} color="$color">
+              <Text fontSize={20} fontWeight="600" letterSpacing={-0.2} color={colors.text}>
                 What AI Knows About Me
               </Text>
               <XStack gap={8}>
                 {items.length > 0 && (
                   <Pressable onPress={handleExport}>
                     <YStack backgroundColor={bgMuted} borderRadius={8} paddingHorizontal={12} paddingVertical={8}>
-                      <Text fontSize={12} fontWeight="600" color="$color9">Export</Text>
+                      <Text fontSize={12} fontWeight="600" color={colors.primary}>Export</Text>
                     </YStack>
                   </Pressable>
                 )}
                 <Pressable onPress={() => { setImportText(''); setImportModalVisible(true); }}>
                   <YStack backgroundColor={bgMuted} borderRadius={8} paddingHorizontal={12} paddingVertical={8}>
-                    <Text fontSize={12} fontWeight="600" color="$color9">Import</Text>
+                    <Text fontSize={12} fontWeight="600" color={colors.primary}>Import</Text>
                   </YStack>
                 </Pressable>
                 <Pressable onPress={() => { setFormContent(''); setFormTopic(''); setAddModalVisible(true); }}>
@@ -322,18 +376,18 @@ export function KnowledgeScreen() {
           <YStack paddingHorizontal={16} marginBottom={8}>
             <RNTextInput
               style={{
-                flex: 1, fontSize: 14, color: '#1A1625',
-                backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                flex: 1, fontSize: 14, color: colors.text,
+                backgroundColor: colors.primaryAlpha(0.04),
                 borderRadius: 10,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
                 borderWidth: 0.5,
-                borderColor: 'rgba(124, 82, 196, 0.12)',
+                borderColor: colors.primaryAlpha(0.12),
               }}
               value={search}
               onChangeText={debouncedSearch}
               placeholder="Search knowledge..."
-              placeholderTextColor="#9B95A8"
+              placeholderTextColor={colors.textMuted}
               returnKeyType="search"
               onSubmitEditing={() => Keyboard.dismiss()}
             />
@@ -349,9 +403,9 @@ export function KnowledgeScreen() {
                 paddingHorizontal={12} paddingVertical={5} borderRadius={999}
                 backgroundColor={selectedTopic === topic ? accent : 'transparent'}
                 borderWidth={0.5}
-                borderColor={selectedTopic === topic ? accent : '$borderColor'}
+                borderColor={selectedTopic === topic ? accent : colors.border}
                 onPress={() => setSelectedTopic(topic)}>
-                <Text fontSize={11} fontWeight="500" color={selectedTopic === topic ? 'white' : '$color11'}>
+                <Text fontSize={11} fontWeight="500" color={selectedTopic === topic ? 'white' : colors.textMuted}>
                   {topic || 'All'}
                 </Text>
               </YStack>
@@ -368,6 +422,9 @@ export function KnowledgeScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={{padding: 16, gap: 8}}
           keyboardDismissMode="on-drag"
+          removeClippedSubviews
+          maxToRenderPerBatch={10}
+          windowSize={11}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -377,8 +434,8 @@ export function KnowledgeScreen() {
           }
           ListEmptyComponent={
             <YStack alignItems="center" paddingVertical={64}>
-              <Icon name="book-open" size={48} color={(theme.color10?.val || '#9B95A8')} />
-              <Text fontSize={14} color="$color10">No knowledge items yet</Text>
+              <Icon name="book-open" size={48} color={colors.textMuted} />
+              <Text fontSize={14} color={colors.textSecondary}>No knowledge items yet</Text>
             </YStack>
           }
         />
@@ -388,43 +445,43 @@ export function KnowledgeScreen() {
         <>
           <RNTextInput
             style={{
-              fontSize: 14, color: '#1A1625',
-              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              fontSize: 14, color: colors.text,
+              backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
               paddingVertical: 12,
               minHeight: 100,
               textAlignVertical: 'top',
               borderWidth: 0.5,
-              borderColor: 'rgba(124, 82, 196, 0.12)',
+              borderColor: colors.primaryAlpha(0.12),
             }}
             value={formContent}
             onChangeText={setFormContent}
             placeholder="Content..."
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor={colors.textMuted}
             multiline
             autoFocus
           />
           <RNTextInput
             style={{
-              fontSize: 14, color: '#1A1625',
-              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              fontSize: 14, color: colors.text,
+              backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
               paddingVertical: 12,
               borderWidth: 0.5,
-              borderColor: 'rgba(124, 82, 196, 0.12)',
+              borderColor: colors.primaryAlpha(0.12),
             }}
             value={formTopic}
             onChangeText={setFormTopic}
             placeholder="Topic (optional)"
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor={colors.textMuted}
             returnKeyType="done"
           />
           <XStack gap={8} justifyContent="flex-end">
             <Pressable onPress={() => setAddModalVisible(false)}>
               <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
-                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+                <Text fontSize={13} fontWeight="600" color={colors.textMuted}>Cancel</Text>
               </YStack>
             </Pressable>
             <Pressable onPress={handleAdd} disabled={!formContent.trim()}>
@@ -444,42 +501,42 @@ export function KnowledgeScreen() {
         <>
           <RNTextInput
             style={{
-              fontSize: 14, color: '#1A1625',
-              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              fontSize: 14, color: colors.text,
+              backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
               paddingVertical: 12,
               minHeight: 100,
               textAlignVertical: 'top',
               borderWidth: 0.5,
-              borderColor: 'rgba(124, 82, 196, 0.12)',
+              borderColor: colors.primaryAlpha(0.12),
             }}
             value={formContent}
             onChangeText={setFormContent}
             placeholder="Content..."
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor={colors.textMuted}
             multiline
           />
           <RNTextInput
             style={{
-              fontSize: 14, color: '#1A1625',
-              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              fontSize: 14, color: colors.text,
+              backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
               paddingVertical: 12,
               borderWidth: 0.5,
-              borderColor: 'rgba(124, 82, 196, 0.12)',
+              borderColor: colors.primaryAlpha(0.12),
             }}
             value={formTopic}
             onChangeText={setFormTopic}
             placeholder="Topic (optional)"
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor={colors.textMuted}
             returnKeyType="done"
           />
           <XStack gap={8} justifyContent="flex-end">
             <Pressable onPress={() => setEditItem(null)}>
               <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
-                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+                <Text fontSize={13} fontWeight="600" color={colors.textMuted}>Cancel</Text>
               </YStack>
             </Pressable>
             <Pressable onPress={handleEdit} disabled={!formContent.trim()}>
@@ -497,48 +554,61 @@ export function KnowledgeScreen() {
 
       {renderBottomSheet(importModalVisible, () => setImportModalVisible(false), 'Import Knowledge', (
         <>
-          <Text fontSize={13} color="$color10" marginBottom={4}>
+          <Text fontSize={13} color={colors.textSecondary} marginBottom={4}>
             Paste one item per line. Each line becomes a knowledge entry.
           </Text>
           <RNTextInput
             style={{
-              fontSize: 14, color: '#1A1625',
-              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              fontSize: 14, color: colors.text,
+              backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
               paddingVertical: 12,
               minHeight: 100,
               textAlignVertical: 'top',
               borderWidth: 0.5,
-              borderColor: 'rgba(124, 82, 196, 0.12)',
+              borderColor: colors.primaryAlpha(0.12),
             }}
             value={importText}
             onChangeText={setImportText}
             placeholder="Line 1\nLine 2\nLine 3..."
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor={colors.textMuted}
             multiline
             autoFocus
           />
           <RNTextInput
             style={{
-              fontSize: 14, color: '#1A1625',
-              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              fontSize: 14, color: colors.text,
+              backgroundColor: colors.primaryAlpha(0.04),
               borderRadius: 10,
               paddingHorizontal: 14,
               paddingVertical: 12,
               borderWidth: 0.5,
-              borderColor: 'rgba(124, 82, 196, 0.12)',
+              borderColor: colors.primaryAlpha(0.12),
             }}
             value={formTopic}
             onChangeText={setFormTopic}
             placeholder="Topic for all (optional)"
-            placeholderTextColor="#9B95A8"
+            placeholderTextColor={colors.textMuted}
             returnKeyType="done"
           />
+          <Pressable onPress={handleImportFile} disabled={importing}>
+            <XStack
+              alignItems="center" gap={8}
+              paddingHorizontal={14} paddingVertical={12}
+              borderRadius={10}
+              backgroundColor={colors.primaryAlpha(0.06)}
+              borderWidth={0.5} borderColor={colors.primaryAlpha(0.12)}>
+              <Icon name="upload" size={16} color={accent} />
+              <Text fontSize={13} fontWeight="500" color={colors.textMuted}>
+                Pick JSON file instead
+              </Text>
+            </XStack>
+          </Pressable>
           <XStack gap={8} justifyContent="flex-end">
             <Pressable onPress={() => setImportModalVisible(false)}>
               <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
-                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+                <Text fontSize={13} fontWeight="600" color={colors.textMuted}>Cancel</Text>
               </YStack>
             </Pressable>
             <Pressable onPress={handleImport} disabled={!importText.trim() || importing}>

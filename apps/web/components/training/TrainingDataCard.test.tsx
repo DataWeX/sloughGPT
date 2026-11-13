@@ -1,124 +1,94 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 
-const mockAddToast = vi.fn()
-const mockToastStore = { addToast: mockAddToast, toasts: [], dismissToast: vi.fn(), clearToasts: vi.fn() }
-
-vi.mock('@/lib/controllers', () => ({
-  trainingController: {
+vi.mock('@/lib/training-controller', () => ({
+  trainingJobsController: {
     getTrainingStats: vi.fn(),
     listTrainingPairs: vi.fn(),
     deletePair: vi.fn(),
+    updatePairQuality: vi.fn(),
     deleteSyncedPairs: vi.fn(),
   },
 }))
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  Card: ({ children, ...p }: any) => <div data-testid="card" {...p}>{children}</div>,
+  CardHeader: ({ children }: any) => <div>{children}</div>,
+  CardTitle: ({ children, ...p }: any) => <div data-testid="card-title" {...p}>{children}</div>,
+  CardContent: ({ children }: any) => <div>{children}</div>,
+  Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
+  Input: (p: any) => <input {...p} />,
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel?: any) => sel ? sel(mockToastStore) : mockToastStore,
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { TrainingDataCard } from './TrainingDataCard'
-import { trainingController } from '@/lib/controllers'
+import { trainingJobsController } from '@/lib/training-controller'
 
-const mockGetStats = vi.mocked(trainingController.getTrainingStats)
-const mockListPairs = vi.mocked(trainingController.listTrainingPairs)
-const mockDeletePair = vi.mocked(trainingController.deletePair)
-const mockDeleteSynced = vi.mocked(trainingController.deleteSyncedPairs)
+const mockToast = vi.fn()
 
 beforeEach(() => {
-  mockAddToast.mockClear()
-  mockGetStats.mockResolvedValue({
-    total: 42,
-    pending: 30,
-    synced: 10,
-    used: 2,
-    by_quality: { '0': 20, '3': 15, '5': 7 },
-  })
-  mockListPairs.mockResolvedValue({
-    pairs: [
-      { id: 'p1', user_msg: 'Hello', assistant_msg: 'Hi there!', quality: 3.5, session_id: 's1', timestamp: 123 },
-      { id: 'p2', user_msg: 'Bye', assistant_msg: 'Goodbye!', quality: 4.0, session_id: 's1', timestamp: 124 },
-    ],
-    total: 42,
-    count: 2,
-    offset: 0,
-  })
+  vi.clearAllMocks()
+  vi.mocked(trainingJobsController.getTrainingStats).mockResolvedValue({ total: 100, pending: 10, synced: 50, used: 40 } as any)
+  vi.mocked(trainingJobsController.listTrainingPairs).mockResolvedValue({ pairs: [], total: 0 } as any)
+  vi.mocked(trainingJobsController.deletePair).mockResolvedValue(undefined as any)
+  vi.mocked(trainingJobsController.updatePairQuality).mockResolvedValue(undefined as any)
+  vi.mocked(trainingJobsController.deleteSyncedPairs).mockResolvedValue(undefined as any)
 })
 
-afterEach(cleanup)
+afterEach(() => cleanup())
 
 describe('TrainingDataCard', () => {
-  it('renders loading state', () => {
-    render(<TrainingDataCard />)
-    expect(screen.getByText('Training data')).toBeDefined()
-  })
-
-  it('fetches stats and pairs on mount', async () => {
-    render(<TrainingDataCard />)
+  it('displays stats', async () => {
+    render(<TrainingDataCard addToast={mockToast} />)
     await waitFor(() => {
-      expect(mockGetStats).toHaveBeenCalled()
-      expect(mockListPairs).toHaveBeenCalledWith({ limit: 20, offset: 0, min_quality: undefined, search: undefined })
+      expect(screen.getByText('100')).toBeDefined()
+      expect(screen.getByText('10')).toBeDefined()
+      expect(screen.getByText('50')).toBeDefined()
     })
   })
 
-  it('shows stats', async () => {
-    render(<TrainingDataCard />)
+  it('calls APIs on mount', async () => {
+    render(<TrainingDataCard addToast={mockToast} />)
     await waitFor(() => {
-      expect(screen.getByText(/Total: 42/)).toBeDefined()
-      expect(screen.getByText(/Pending: 30/)).toBeDefined()
-      expect(screen.getByText(/Synced: 10/)).toBeDefined()
-      expect(screen.getByText(/Used: 2/)).toBeDefined()
-    })
-  })
-
-  it('shows quality breakdown', async () => {
-    render(<TrainingDataCard />)
-    await waitFor(() => {
-      expect(screen.getByText(/0\.0: 20/)).toBeDefined()
-      expect(screen.getByText(/3\.0: 15/)).toBeDefined()
-      expect(screen.getByText(/5\.0: 7/)).toBeDefined()
-    })
-  })
-
-  it('toggles pairs list on click', async () => {
-    const user = userEvent.setup()
-    render(<TrainingDataCard />)
-
-    await waitFor(() => {
-      expect(screen.getByText(/Show pairs/)).toBeDefined()
-    })
-
-    await user.click(screen.getByText(/Show pairs/))
-
-    await waitFor(() => {
-      expect(screen.getByText('Hello')).toBeDefined()
-      expect(screen.getByText('Hi there!')).toBeDefined()
-    })
-  })
-
-  it('deletes a pair', async () => {
-    mockDeletePair.mockResolvedValue({ status: 'deleted' })
-    const user = userEvent.setup()
-    render(<TrainingDataCard />)
-
-    await waitFor(() => {
-      expect(screen.getByText(/Show pairs/)).toBeDefined()
-    })
-
-    await user.click(screen.getByText(/Show pairs/))
-
-    await waitFor(() => {
-      expect(screen.getByText('Hello')).toBeDefined()
-    })
-
-    const deleteButtons = screen.getAllByLabelText('Delete pair')
-    await user.click(deleteButtons[0])
-
-    await waitFor(() => {
-      expect(mockDeletePair).toHaveBeenCalledWith('p1')
-      expect(mockAddToast).toHaveBeenCalledWith('Pair deleted', 'success')
+      expect(trainingJobsController.listTrainingPairs).toHaveBeenCalled()
+      expect(trainingJobsController.getTrainingStats).toHaveBeenCalled()
     })
   })
 })

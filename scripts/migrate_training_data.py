@@ -25,7 +25,7 @@ def migrate():
     # Add mogdb src to path
     sys.path.insert(0, str(REPO_ROOT / "packages" / "mogdb" / "src"))
 
-    from domains.training.mobile_training_store import MobileTrainingStore
+    from domain.training.mobile_training_store import MobileTrainingStore
 
     store_path = str(REPO_ROOT / "packages" / "data" / "mobile_training")
     store = MobileTrainingStore(store_path)
@@ -43,11 +43,12 @@ def migrate():
         ts_str = p.get("timestamp", "")
         try:
             # "2026-04-16T17:03:53.175478" → epoch
-            from datetime import datetime, timezone
+            from datetime import datetime
+
             dt = datetime.fromisoformat(ts_str)
-            timestamp = dt.timestamp()
+            dt.timestamp()
         except Exception:
-            timestamp = time.time()
+            time.time()
 
         store.add_pair(
             user_msg=user_msg,

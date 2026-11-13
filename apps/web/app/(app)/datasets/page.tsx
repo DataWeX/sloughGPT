@@ -1,128 +1,388 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { PageContainer } from '@/components/PageContainer'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@sloughgpt/strui'
+import { Card, CardContent, EmptyCard, cn, Spinner } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
-import { IconRefresh, IconPlus, IconTrash } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
-import { datasetController, type Dataset } from '@/lib/dataset-controller'
+import { DatasetListSkeleton } from '@/components/ui/PageSkeletons'
+import { IconRefresh, IconPlus, IconTrash, IconDownload, IconPlay } from '@sloughgpt/strui'
+import {
+  datasetController,
+  type Dataset,
+  type DatasetPreview as PreviewData,
+} from '@/lib/dataset-controller'
 import { formatBytes } from '@/lib/format-bytes'
 import { formatDate } from '@/lib/conversations-utils'
+import { DatasetImportDialog } from '@/components/DatasetImportDialog'
+import { DatasetDropZone } from '@/components/DatasetDropZone'
+import { useDatasetList, useDeleteDataset } from '@/lib/cache'
+import { isTrainingCorpus } from '@/lib/dataset-controller'
 
 export default function DatasetsPage() {
   const router = useRouter()
-  const addToast = useToastStore(s => s.addToast)
-  const [datasets, setDatasets] = useState<Dataset[]>([])
-  const [loading, setLoading] = useState(true)
+  const addToast = notify.toast
+  const { data: allDatasets = [], isLoading: loading, refetch: refetchDatasets } = useDatasetList()
+  const deleteDataset = useDeleteDataset()
   const [search, setSearch] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<Dataset | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [fetchError, setFetchError] = useState(false)
 
   const fetchDatasets = useCallback(async () => {
-    setLoading(true)
+    setFetchError(false)
     try {
-      const list = await datasetController.list()
-      setDatasets(list)
+      await refetchDatasets()
     } catch {
-      addToast('Failed to load datasets', 'error')
-    } finally {
-      setLoading(false)
+      setFetchError(true)
+      addToast('Could not load files', 'error')
     }
-  }, [addToast])
+  }, [refetchDatasets, addToast])
 
-  useEffect(() => {
-    fetchDatasets()
-  }, [fetchDatasets])
+  const searchMatch = (ds: Dataset) =>
+    !search ||
+    ds.name.toLowerCase().includes(search.toLowerCase()) ||
+    ds.id.toLowerCase().includes(search.toLowerCase())
 
-  const handleDelete = async (ds: Dataset) => {
-    if (!confirm(`Delete dataset "${ds.name}"?`)) return
+  // Structured listing (card 20261104_060023): the file list shows training
+  // corpora; system/adapter/media entries are segregated behind an explicit
+  // labeled group instead of being presented as files.
+  const searched = allDatasets.filter(searchMatch)
+  const filtered = searched.filter(isTrainingCorpus)
+  const groupedOut = searched.filter((ds) => !isTrainingCorpus(ds))
+  const [showGrouped, setShowGrouped] = useState(false)
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return
+    const deleted = pendingDelete
+    setPendingDelete(null)
     try {
-      await datasetController.delete(ds.id)
-      setDatasets(prev => prev.filter(d => d.id !== ds.id))
-      addToast(`Deleted "${ds.name}"`, 'info')
+      await deleteDataset.mutateAsync(deleted.id)
+      addToast(`Deleted "${deleted.name}"`, 'info')
     } catch {
-      addToast('Delete failed', 'error')
+      addToast('Could not delete', 'error')
     }
   }
 
-  const filtered = datasets.filter(ds =>
-    !search || ds.name.toLowerCase().includes(search.toLowerCase()) || ds.id.toLowerCase().includes(search.toLowerCase())
-  )
+  const handlePreview = async (ds: Dataset) => {
+    if (expandedId === ds.id) {
+      setExpandedId(null)
+      setPreviewData(null)
+      return
+    }
+    setExpandedId(ds.id)
+    setPreviewLoading(true)
+    try {
+      const preview = await datasetController.preview(ds.id, 3)
+      setPreviewData(preview)
+    } catch {
+      addToast('Could not load preview', 'error')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const handleExport = async (ds: Dataset, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const blob = await datasetController.export(ds.id, 'jsonl')
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${ds.name || ds.id}.jsonl`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast(`Exported "${ds.name}"`, 'success')
+    } catch {
+      addToast('Could not export', 'error')
+    }
+  }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Datasets" />}
-        right={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={fetchDatasets} disabled={loading}>
-              <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
-              Refresh
-            </Button>
-            <Button size="sm" className="h-7 text-xs" onClick={() => router.push('/training')}>
-              <IconPlus className="h-3 w-3 mr-1" />
-              Import
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="space-y-4">
-        {datasets.length > 0 && (
+    <PageContainer
+      title="My Files"
+      subtitle="Drop a file to chat with it — PDF, Word, text"
+      headerRight={
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={fetchDatasets}
+            disabled={loading}
+          >
+            <Spinner className="h-3 w-3 mr-1" />
+            Refresh
+          </Button>
+          <Button size="sm" className="h-7 text-xs" onClick={() => setImportOpen(true)}>
+            <IconPlus className="h-3.5 w-3.5 mr-1" />
+            Add file
+          </Button>
+        </div>
+      }
+      toolbar={
+        filtered.length > 0 ? (
           <Input
-            placeholder="Search datasets..."
+            placeholder="Search files..."
             value={search}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-            className="h-8 text-sm max-w-xs"
+            className="h-7 text-xs max-w-xs"
           />
-        )}
+        ) : undefined
+      }
+    >
+      <DatasetDropZone onUploadComplete={fetchDatasets} className="mb-4" />
 
-        {loading ? (
-          <div className="grid gap-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 rounded-lg" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center">
-              <p className="text-sm text-muted-foreground mb-1">{datasets.length === 0 ? 'No datasets yet.' : 'No datasets match your search.'}</p>
-              <p className="text-xs text-muted-foreground mb-3">Import a dataset to get started with training.</p>
-              <Button size="sm" onClick={() => router.push('/training')}>Import Dataset</Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-2">
-            {filtered.map(ds => (
-              <Card key={ds.id} className="cursor-pointer hover:bg-accent/40 transition-colors" onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}>
-                <CardContent className="flex items-center justify-between py-3 px-4">
+      {loading ? (
+        <DatasetListSkeleton />
+      ) : fetchError && filtered.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-6">
+            <p className="text-sm text-destructive mb-3">Could not load files</p>
+            <Button size="sm" variant="outline" onClick={fetchDatasets}>
+              <IconRefresh className="h-3.5 w-3.5 mr-1" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
+        <EmptyCard
+          message={
+            allDatasets.filter(isTrainingCorpus).length === 0
+              ? 'No files yet'
+              : 'No files match your search'
+          }
+          description={
+            allDatasets.filter(isTrainingCorpus).length === 0
+              ? 'Drop a PDF or text file above to start chatting with it.'
+              : 'Try a different search term.'
+          }
+          icon={<IconPlus className="h-5 w-5" />}
+          action={
+            <Button size="sm" className="h-7 text-xs" onClick={() => setImportOpen(true)}>
+              Add file
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-2 max-h-[60vh] overflow-y-auto overscroll-contain">
+          {filtered.map((ds) => (
+            <div key={ds.id}>
+              <Card
+                className={cn(
+                  'group transition-colors hover:bg-accent/40',
+                  expandedId === ds.id && 'border-primary/40 bg-primary/[0.06]',
+                )}
+                onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
+              >
+                <CardContent className="flex items-center justify-between py-2.5 px-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{ds.name}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                      <span>{ds.source || 'local'}</span>
-                      <span>{formatBytes(ds.size)}</span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                      {ds.has_corpus === false ? (
+                        <span className="text-warning">no corpus</span>
+                      ) : (
+                        <span>{formatBytes(ds.size)}</span>
+                      )}
                       {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
                       {ds.created_at && <span>{formatDate(ds.created_at)}</span>}
                     </div>
+                    {ds.tags && ds.tags.length > 0 && (
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {ds.tags.slice(0, 3).map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 ml-2 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); handleDelete(ds) }}
-                    aria-label={`Delete ${ds.name}`}
+                  <div
+                    className="flex items-center gap-1 ml-2 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <IconTrash className="h-3.5 w-3.5" />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6"
+                      onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
+                      aria-label={`Train with ${ds.name}`}
+                    >
+                      <IconPlay className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6"
+                      onClick={(e) => handleExport(ds, e)}
+                      aria-label={`Export ${ds.name}`}
+                    >
+                      <IconDownload className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 text-muted-foreground hover:text-primary"
+                      onClick={() => handlePreview(ds)}
+                      aria-label={expandedId === ds.id ? `Hide preview` : `Preview ${ds.name}`}
+                    >
+                      {expandedId === ds.id ? '−' : '+'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => setPendingDelete(ds)}
+                      aria-label={`Delete ${ds.name}`}
+                    >
+                      <IconTrash className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+              {expandedId === ds.id && (
+                <div className="mt-1 rounded-lg border border-border/40 bg-muted/20 px-3 py-3 text-sm">
+                  {previewLoading ? (
+                    <Skeleton className="h-12 bg-muted/20 rounded" />
+                  ) : previewData && previewData.samples.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="flex gap-3 text-xs text-muted-foreground">
+                        <span>{previewData.total_samples.toLocaleString()} samples</span>
+                        <span>{previewData.total_chars.toLocaleString()} chars</span>
+                      </div>
+                      {previewData.samples.slice(0, 3).map((s, i) => (
+                        <pre
+                          key={i}
+                          className="text-xs bg-card rounded p-2 overflow-x-auto max-h-20 overflow-y-auto font-mono whitespace-pre-wrap"
+                        >
+                          {s.content.slice(0, 300)}
+                          {s.content.length > 300 ? '…' : ''}
+                        </pre>
+                      ))}
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() =>
+                            router.push(`/knowledge?file=${encodeURIComponent(ds.id)}`)
+                          }
+                        >
+                          Chat about this file
+                        </Button>
+                        <span className="text-xs text-muted-foreground self-center">
+                          Try: Summarize · What are key points? · Explain in simple terms
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      No preview — try opening the file.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Segregated system/adapter/media entries — reachable, never
+          presented as files (card 20261104_060023). */}
+      {groupedOut.length > 0 && !loading && !fetchError && (
+        <div className="mt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => setShowGrouped((v) => !v)}
+            aria-expanded={showGrouped}
+          >
+            {showGrouped ? '▾' : '▸'} System entries ({groupedOut.length})
+          </Button>
+          {showGrouped && (
+            <div className="grid gap-2 mt-1">
+              {groupedOut.map((ds) => (
+                <Card key={ds.id} className="bg-muted/20 border-border/40">
+                  <CardContent className="flex items-center justify-between py-2 px-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate text-muted-foreground">
+                        {ds.name}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                        <span>{ds.kind}</span>
+                        {ds.has_corpus === false ? (
+                          <span>no corpus</span>
+                        ) : (
+                          <span>{formatBytes(ds.size)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
+                      aria-label={`Open ${ds.name}`}
+                    >
+                      →
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete file</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete “{pendingDelete?.name}”? Cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <DatasetImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImportComplete={fetchDatasets}
+      />
+    </PageContainer>
   )
 }

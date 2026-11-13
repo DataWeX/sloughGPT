@@ -1,56 +1,104 @@
 /**
- * IndexedDB cache for SoulNet .sou weight files.
+ * IndexedDB-backed weight cache for .sou checkpoints.
  *
- * Caches downloaded model blobs so they don't need re-fetching
- * across page reloads. Keys are URL strings, values are ArrayBuffers.
+ * Avoids re-fetching and re-parsing large weight files across page reloads.
+ * Keys by URL; gracefully degrades when IndexedDB is unavailable.
  */
 
-const DB_NAME = 'soulnet-cache'
-const STORE_NAME = 'models'
+const DB_NAME = 'soulnet-weights'
+const STORE = 'checkpoints'
 const DB_VERSION = 1
 
-function openDB(): Promise<IDBDatabase> {
+function idbRequest<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE_NAME)
-    }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
   })
 }
 
-export async function getCached(url: string): Promise<ArrayBuffer | null> {
-  const db = await openDB()
+function idbTxComplete(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly')
-    const req = tx.objectStore(STORE_NAME).get(url)
-    req.onsuccess = () => resolve(req.result ?? null)
-    req.onerror = () => reject(req.error)
-  })
-}
-
-export async function setCached(url: string, data: ArrayBuffer): Promise<void> {
-  const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite')
-    tx.objectStore(STORE_NAME).put(data, url)
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
   })
 }
 
-export async function hasCached(url: string): Promise<boolean> {
-  const data = await getCached(url)
-  return data !== null
-}
+export class WeightCache {
+  private dbPromise: Promise<IDBDatabase> | null = null
+  private openAttempted = false
 
-export async function clearCache(): Promise<void> {
-  const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite')
-    tx.objectStore(STORE_NAME).clear()
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
+  private getDB(): Promise<IDBDatabase> | null {
+    if (typeof indexedDB === 'undefined') return null
+    if (!this.dbPromise) {
+      this.dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION)
+        req.onupgradeneeded = () => {
+          req.result.createObjectStore(STORE)
+        }
+        req.onsuccess = () => {
+          this.openAttempted = false
+          resolve(req.result)
+        }
+        req.onerror = () => {
+          this.openAttempted = true
+          this.dbPromise = null
+          reject(req.error)
+        }
+      })
+    }
+    return this.dbPromise
+  }
+
+  async get(url: string): Promise<ArrayBuffer | null> {
+    try {
+      const db = await this.getDB()
+      if (!db) return null
+      const tx = db.transaction(STORE, 'readonly')
+      const store = tx.objectStore(STORE)
+      const result = await idbRequest<ArrayBuffer | undefined>(store.get(url))
+      return result ?? null
+    } catch {
+      return null
+    }
+  }
+
+  async put(url: string, buffer: ArrayBuffer): Promise<void> {
+    try {
+      const db = await this.getDB()
+      if (!db) return
+      const tx = db.transaction(STORE, 'readwrite')
+      const store = tx.objectStore(STORE)
+      store.put(buffer, url)
+      await idbTxComplete(tx)
+    } catch {
+      // silently ignore write failures
+    }
+  }
+
+  async delete(url: string): Promise<void> {
+    try {
+      const db = await this.getDB()
+      if (!db) return
+      const tx = db.transaction(STORE, 'readwrite')
+      const store = tx.objectStore(STORE)
+      store.delete(url)
+      await idbTxComplete(tx)
+    } catch {
+      // silently ignore delete failures
+    }
+  }
+
+  async clear(): Promise<void> {
+    try {
+      const db = await this.getDB()
+      if (!db) return
+      const tx = db.transaction(STORE, 'readwrite')
+      const store = tx.objectStore(STORE)
+      store.clear()
+      await idbTxComplete(tx)
+    } catch {
+      // silently ignore clear failures
+    }
+  }
 }

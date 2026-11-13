@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 240px; font-family: system-ui; font-size: 13px; background: #1a1a2e; color: #e0e0e0; padding: 12px; }
+    h1 { font-size: 14px; color: #a78bfa; margin-bottom: 8px; }
+    .status { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
+    .dot.on { background: #22c55e; }
+    #log { max-height: 150px; overflow-y: auto; font-size: 11px; color: #888; }
+    .url { word-break: break-all; color: #a78bfa; }
+  </style>
+</head>
+<body>
+  <h1>Downcraft Capture</h1>
+  <div class="status"><div class="dot" id="dot"></div><span id="st">Checking...</span></div>
+  <div id="log"></div>
+  <script>
+    const dot = document.getElementById("dot");
+    const st = document.getElementById("st");
+    const log = document.getElementById("log");
+    let entries = [];
+
+    async function check() {
+      try {
+        const r = await fetch("http://localhost:6400/health", { signal: AbortSignal.timeout(2000) });
+        if (r.ok) { dot.classList.add("on"); st.textContent = "Connected"; return; }
+      } catch {}
+      dot.classList.remove("on"); st.textContent = "Server offline";
+    }
+
+    function render() {
+      log.innerHTML = entries.slice(-10).reverse().map(e =>
+        `<div class="url">${e.url.split("/").pop().split("?")[0]}</div>`
+      ).join("");
+    }
+
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.type === "captured") { entries.push(msg); render(); }
+    });
+
+    check();
+    setInterval(check, 5000);
+  </script>
+</body>
+</html>

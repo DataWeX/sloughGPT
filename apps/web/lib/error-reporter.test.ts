@@ -1,9 +1,11 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ErrorReporter } from './error-reporter'
 
-const FETCH_URL = 'http://localhost:8000/errors/log'
+const { mockFetch } = vi.hoisted(() => ({
+  mockFetch: vi.fn().mockResolvedValue({ ok: true }),
+}))
 
-const mockFetch = vi.fn().mockResolvedValue({ ok: true })
 vi.stubGlobal('fetch', mockFetch)
 
 vi.stubGlobal('window', {
@@ -12,22 +14,25 @@ vi.stubGlobal('window', {
   localStorage: { getItem: vi.fn(() => '[]'), setItem: vi.fn(), clear: vi.fn() },
 })
 
-import { reportError } from './error-reporter'
+vi.mock('@/lib/db', () => ({ chatDB: { addError: vi.fn() } }))
 
 beforeEach(() => {
   vi.useFakeTimers()
   mockFetch.mockClear()
-  // Reset module-level batch state by advancing timers so any pending flushes happen
-  vi.advanceTimersByTime(6000)
 })
 
 afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('reportError', () => {
-  it('flushes at MAX_BATCH_SIZE (10) — also tests batching', () => {
-    for (let i = 0; i < 10; i++) reportError(`error ${i}`)
+function makeReporter() {
+  return new ErrorReporter({ apiUrl: 'http://localhost:8000', persist: vi.fn() })
+}
+
+describe('reportError — batching', () => {
+  it('flushes at MAX_BATCH_SIZE (10)', () => {
+    const reporter = makeReporter()
+    for (let i = 0; i < 10; i++) reporter.report(`error ${i}`)
     expect(mockFetch).toHaveBeenCalledTimes(1)
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.errors).toHaveLength(10)
@@ -36,7 +41,8 @@ describe('reportError', () => {
   })
 
   it('delays flush for partial batch', () => {
-    reportError('single')
+    const reporter = makeReporter()
+    reporter.report('single')
     expect(mockFetch).not.toHaveBeenCalled()
     vi.advanceTimersByTime(5000)
     expect(mockFetch).toHaveBeenCalledTimes(1)
@@ -45,7 +51,8 @@ describe('reportError', () => {
   })
 
   it('includes stack and extra metadata', () => {
-    reportError('warn', 'test', { stack: 'line 1', metadata: { key: 'val' } })
+    const reporter = makeReporter()
+    reporter.report('warn', 'test', { stack: 'line 1', metadata: { key: 'val' } })
     vi.advanceTimersByTime(5000)
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.errors[0].message).toBe('warn')
@@ -55,10 +62,74 @@ describe('reportError', () => {
   })
 
   it('reuses pending timer', () => {
+    const reporter = makeReporter()
     const spy = vi.spyOn(globalThis, 'setTimeout')
-    reportError('first')
-    reportError('second')
+    reporter.report('first')
+    reporter.report('second')
     expect(spy).toHaveBeenCalledTimes(1)
     spy.mockRestore()
+  })
+
+  it('handles fetch failure gracefully', () => {
+    const reporter = makeReporter()
+    mockFetch.mockRejectedValueOnce(new Error('network'))
+    reporter.report('fail')
+    vi.advanceTimersByTime(5000)
+    expect(true).toBe(true)
+  })
+
+  it('batch array resets after flush', () => {
+    const reporter = makeReporter()
+    for (let i = 0; i < 10; i++) reporter.report(`e${i}`)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    reporter.report('after-flush')
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(5000)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('reportError — dedup', () => {
+  it('deduplicates same message within 5s window', () => {
+    const reporter = makeReporter()
+    reporter.report('duplicate')
+    reporter.report('duplicate')
+    reporter.report('duplicate')
+    vi.advanceTimersByTime(5000)
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    const dupes = body.errors.filter((e: { message: string }) => e.message === 'duplicate')
+    expect(dupes).toHaveLength(1)
+  })
+
+  it('allows same message after 5s window', () => {
+    const reporter = makeReporter()
+    reporter.report('repeated')
+    vi.advanceTimersByTime(5000)
+    reporter.report('repeated')
+    vi.advanceTimersByTime(5000)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    const body1 = JSON.parse(mockFetch.mock.calls[0][1].body)
+    const body2 = JSON.parse(mockFetch.mock.calls[1][1].body)
+    expect(body1.errors[0].message).toBe('repeated')
+    expect(body2.errors[0].message).toBe('repeated')
+  })
+
+  it('allows different messages within window', () => {
+    const reporter = makeReporter()
+    reporter.report('msg-a')
+    reporter.report('msg-b')
+    reporter.report('msg-c')
+    vi.advanceTimersByTime(5000)
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body.errors).toHaveLength(3)
+  })
+
+  it('does not share dedup state across instances', () => {
+    const a = makeReporter()
+    a.report('same')
+    const b = makeReporter()
+    b.report('same')
+    vi.advanceTimersByTime(5000)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,459 +1,361 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Button, Input } from '@sloughgpt/strui'
-import { Spinner } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
-import { Tabs } from '@sloughgpt/strui'
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
-import { tokenizerController, type TokenizerStats } from '@/lib/tokenizer-controller'
-import { TokenBadge, SegBar, SampleTable } from '@/components/tokenizer/TokenizerComponents'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  Textarea,
+  StatCard,
+  KpiGrid,
+  cn,
+  FoldSection,
+} from '@sloughgpt/strui'
+import { IconRefresh } from '@sloughgpt/strui'
+import { PageContainer } from '@/components/PageContainer'
+import {
+  tokenizerController,
+  type TokenizerStats,
+  type SampleWord,
+} from '@/lib/tokenizer-controller'
+import { TokenizerEfficiencyCard } from '@/components/tokenizer/TokenizerEfficiencyCard'
+import { clampNumber } from '@/lib/sanitize'
+import { TokenTreeQueryCard } from '@/components/tokenizer/TokenTreeQueryCard'
+import { TokenTreeMergesCard } from '@/components/tokenizer/TokenTreeMergesCard'
+import { TokenTreeVocabCard } from '@/components/tokenizer/TokenTreeVocabCard'
+import { TokenTreeTrainCard } from '@/components/tokenizer/TokenTreeTrainCard'
+import { TokenTreePersistenceCard } from '@/components/tokenizer/TokenTreePersistenceCard'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+
+type Tab = 'play' | 'vocab' | 'train'
 
 export default function TokenizerPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const router = useRouter()
   const [stats, setStats] = useState<TokenizerStats | null>(null)
-  const [tab, setTab] = useState<'playground' | 'samples' | 'merges' | 'vocab' | 'decompose' | 'analyze'>('playground')
+  const [tab, setTab] = useState<Tab>('play')
   const [loading, setLoading] = useState(true)
-
-  // Playground
-  const [input, setInput] = useState('')
-  const [tokResult, setTokResult] = useState<{ tokens: string[]; ids: number[] } | null>(null)
-  const [preResult, setPreResult] = useState<{ pretokens: string[]; segments: { text: string; char_count: number; pct: number }[] } | null>(null)
-  const [tokLoading, setTokLoading] = useState(false)
-
-  // Merges
-  const [merges, setMerges] = useState<{ index: number; left: string; right: string; token: string }[]>([])
-  const [mergeTotal, setMergeTotal] = useState(0)
-  const [mergeSearch, setMergeSearch] = useState('')
-
-  // Vocab
-  const [vocabEntries, setVocabEntries] = useState<{ id: number; token: string; is_special: boolean }[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [inputText, setInputText] = useState('')
+  const [tokenResult, setTokenResult] = useState<{ tokens: string[]; ids: number[] } | null>(null)
+  const [tokenizing, setTokenizing] = useState(false)
+  const [vocabEntries, setVocabEntries] = useState<
+    { id: number; token: string; is_special: boolean }[]
+  >([])
   const [vocabTotal, setVocabTotal] = useState(0)
   const [vocabOffset, setVocabOffset] = useState(0)
-  const [vocabSearch, setVocabSearch] = useState('')
-
-  // Decompose
-  const [decompToken, setDecompToken] = useState('')
-  const [decompResult, setDecompResult] = useState<{
-    token: string; id: number; merge_path: { left: string; right: string; into: string }[]; base_chars: string[]
-  } | null>(null)
-  const [decompLoading, setDecompLoading] = useState(false)
-
-  // Analysis
-  const [analysisText, setAnalysisText] = useState('')
-  const [analysisResult, setAnalysisResult] = useState<{
-    compression_ratio: number; vocab_utilization: number; top_tokens: { token: string; count: number; pct: number }[]
-  } | null>(null)
-
-  // Training
+  const [samples, setSamples] = useState<SampleWord[]>([])
+  const [trainVocab, setTrainVocab] = useState(512)
   const [training, setTraining] = useState(false)
+  const [trainResult, setTrainResult] = useState<string | null>(null)
+  const [treeVersion, setTreeVersion] = useState(0)
+  const addToast = notify.toast
+  const loadStats = useCallback(() => {
+    setLoading(true)
+    setLoadError(null)
+    tokenizerController
+      .getStats()
+      .then((s) => {
+        setStats(s)
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoadError('Could not load tokenizer data. Please try again.')
+        setLoading(false)
+      })
+  }, [])
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const s = await tokenizerController.getStats()
-      setStats(s)
-    } catch { addToast('Failed to load stats', 'error') }
-  }, [addToast])
-
-  const fetchMerges = useCallback(async (limit = 100) => {
-    try {
-      const res = await tokenizerController.getMerges(limit)
-      setMerges(res.merges)
-      setMergeTotal(res.total)
-    } catch { addToast('Failed to load merge rules', 'error') }
-  }, [addToast])
-
-  const fetchVocab = useCallback(async (limit = 50, offset = 0) => {
-    try {
-      const res = await tokenizerController.getVocab(limit, offset)
-      setVocabEntries(res.entries)
-      setVocabTotal(res.total)
-      setVocabOffset(res.offset)
-    } catch { addToast('Failed to load vocabulary', 'error') }
-  }, [addToast])
+  // 'r' refreshes the page's own data — not the whole document.
+  useRefreshShortcut(loadStats)
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchMerges(), fetchVocab()]).finally(() => setLoading(false))
-  }, [fetchStats, fetchMerges, fetchVocab])
+    loadStats()
+  }, [loadStats])
 
   const handleTokenize = async () => {
-    if (!input.trim()) return
-    setTokLoading(true)
+    if (!inputText.trim()) return
+    setTokenizing(true)
     try {
-      const [tok, pre] = await Promise.all([
-        tokenizerController.tokenize(input),
-        tokenizerController.pretokenize(input),
-      ])
-      setTokResult(tok)
-      setPreResult(pre)
-    } catch (e: any) {
-      setTokResult({ tokens: [`Error: ${e.message}`], ids: [] })
-      setPreResult(null)
-    }
-    setTokLoading(false)
-  }
-
-  const handleDecompose = async () => {
-    if (!decompToken.trim()) return
-    setDecompLoading(true)
-    try {
-      const res = await tokenizerController.decomposeToken(decompToken)
-      setDecompResult(res)
-    } catch (e: any) {
-      addToast('Something went wrong decomposing token', 'error')
-      setDecompResult(null)
-    }
-    setDecompLoading(false)
-  }
-
-  const handleAnalyze = async () => {
-    if (!analysisText.trim()) return
-    try {
-      const texts = analysisText.split('\n').filter(Boolean)
-      const res = await tokenizerController.analyzeCorpus(texts)
-      setAnalysisResult(res)
-    } catch (e: any) {
-      addToast('Something went wrong analyzing text', 'error')
+      const res = await tokenizerController.tokenize(inputText)
+      setTokenResult(res)
+    } catch {
+      addToast('Could not tokenize', 'error')
+    } finally {
+      setTokenizing(false)
     }
   }
+  const handleLoadVocab = async (offset = 0) => {
+    try {
+      const res = await tokenizerController.getVocab(50, offset)
+      setVocabEntries(res.entries)
+      setVocabTotal(res.total)
+      setVocabOffset(offset)
+    } catch {
+      addToast('Could not load vocabulary', 'error')
+    }
+  }
+  const handleLoadSamples = async () => {
+    try {
+      const res = await tokenizerController.getSamples()
+      setSamples(res.samples)
+    } catch {
+      addToast('Could not load samples', 'error')
+    }
+  }
+  const handleTrain = async () => {
+    setTraining(true)
+    setTrainResult(null)
+    try {
+      const res = await tokenizerController.train({ vocab_size: trainVocab })
+      setTrainResult(`Trained on ${res.corpus_size} lines. Vocab: ${res.stats.vocab_size}`)
+      setStats(res.stats)
+    } catch (err) {
+      setTrainResult(err instanceof Error ? err.message : 'Training failed')
+    } finally {
+      setTraining(false)
+    }
+  }
 
-  const filteredMerges = mergeSearch
-    ? merges.filter(m => m.token.includes(mergeSearch) || m.left.includes(mergeSearch) || m.right.includes(mergeSearch))
-    : merges
+  const onTabChange = (t: Tab) => {
+    setTab(t)
+    if (t === 'vocab') {
+      handleLoadVocab()
+      handleLoadSamples()
+    }
+  }
 
-  const filteredVocab = vocabSearch
-    ? vocabEntries.filter(e => e.token.includes(vocabSearch))
-    : vocabEntries
+  const toolbar = (
+    <div className="flex gap-1 border-b border-border/30 pb-0">
+      {(['play', 'vocab', 'train'] as Tab[]).map((t) => (
+        <button
+          key={t}
+          onClick={() => onTabChange(t)}
+          className={cn(
+            'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
+            tab === t
+              ? 'bg-primary/10 text-primary border-b-2 border-primary'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {t === 'play' ? 'Play' : t === 'vocab' ? 'Vocabulary' : 'Train'}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Tokenizer" />}
-        right={
-          <Button variant="outline" size="sm" onClick={() => { fetchStats(); fetchMerges(); fetchVocab() }}>
-            Refresh
-          </Button>
-        }
-      />
-      <div className="space-y-4">
+    <PageContainer
+      title="Tokenizer"
+      subtitle={
+        stats
+          ? `Vocab: ${stats.vocab_size} · Merges: ${stats.total_merges}`
+          : 'BPE tokenizer — try it, peek under hood, train your own'
+      }
+      loading={loading}
+      error={loadError}
+      onRetry={loadStats}
+      toolbar={toolbar}
+    >
+      {stats && (
+        <KpiGrid>
+          <StatCard label="Vocab Size" value={String(stats.vocab_size)} />
+          <StatCard label="Base Chars" value={String(stats.base_chars)} />
+          <StatCard label="Merges" value={String(stats.total_merges)} />
+          <StatCard label="Special Tokens" value={String(stats.special_tokens)} />
+        </KpiGrid>
+      )}
+      {!loading && !loadError && !stats && (
+        <div className="text-center py-8 text-xs text-muted-foreground">
+          No tokenizer data. Train below or go to Training.
+          <div className="mt-2">
+            <Button size="sm" variant="outline" onClick={() => router.push('/training')}>
+              Go to Training
+            </Button>
+          </div>
+        </div>
+      )}
 
-        {/* Stats */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Vocabulary</CardTitle></CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[1,2,3,4].map(i => (
-                  <div key={i} className="h-16 animate-pulse bg-muted rounded" />
-                ))}
-              </div>
-            ) : (
-              <KpiGrid columns={4}>
-                <StatCard label="Vocabulary size" value={stats?.vocab_size ?? '—'} />
-                <StatCard label="Base chars" value={stats?.base_chars ?? '—'} />
-                <StatCard label="Word pieces" value={stats?.merged_subwords ?? '—'} />
-                <StatCard label="Merges" value={stats?.total_merges ?? '—'} />
-              </KpiGrid>
-            )}
-            {stats && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {stats.special_tokens} special tokens
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Playground */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Playground</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-                placeholder="Type text to tokenize..."
-                className="text-sm"
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleTokenize()}
-                aria-label="Text to tokenize"
+      {tab === 'play' && (
+        <div className="space-y-4">
+          <TokenizerEfficiencyCard stats={stats} samples={samples} />
+          <Card>
+            <CardContent className="px-3 pb-3 pt-4 space-y-3">
+              <Textarea
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Enter text to tokenize..."
+                rows={3}
               />
-              <Button size="sm" onClick={handleTokenize} disabled={tokLoading}>
-                {tokLoading ? '...' : 'Tokenize'}
+              <Button size="sm" onClick={handleTokenize} disabled={tokenizing || !inputText.trim()}>
+                {tokenizing ? 'Tokenizing...' : 'Tokenize'}
               </Button>
-            </div>
-
-            {preResult && preResult.segments.length > 1 && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-medium text-muted-foreground">Pre-tokenization ({preResult.pretokens.length} segments)</p>
-                <div className="flex flex-wrap gap-1">
-                  {preResult.pretokens.map((p, i) => (
-                    <span key={i} className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted border border-border/40">
-                      {p === ' ' ? <span className="text-warning">␣</span> : p}
-                    </span>
-                  ))}
-                </div>
-                <Collapsible className="text-[10px] text-muted-foreground">
-                  <CollapsibleTrigger className="cursor-pointer hover:text-foreground">Segment size distribution</CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="mt-1 space-y-0.5">
-                      {preResult.segments.map((seg, i) => (
-                        <SegBar key={i} pct={seg.pct} label={seg.text} />
+              {tokenResult && (
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">
+                      Tokens ({tokenResult.tokens.length})
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {tokenResult.tokens.map((t, i) => (
+                        <span
+                          key={i}
+                          className="text-xs font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded"
+                        >
+                          {t}
+                        </span>
                       ))}
                     </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-
-            {tokResult && (
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground">Tokenized ({tokResult.tokens.length} tokens)</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {tokResult.tokens.map((t, i) => (
-                    <TokenBadge key={i} token={t} isSpecial={t.startsWith('<')} />
-                  ))}
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">IDs</div>
+                    <div className="text-xs font-mono text-muted-foreground">
+                      [{tokenResult.ids.join(', ')}]
+                    </div>
+                  </div>
                 </div>
-                <Collapsible className="text-xs text-muted-foreground">
-                  <CollapsibleTrigger className="cursor-pointer hover:text-foreground">IDs</CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <p className="mt-1 font-mono text-[10px]">[{tokResult.ids.join(', ')}]</p>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Tab navigation */}
-        <Tabs
-          value={tab}
-          onChange={setTab as any}
-          tabs={[
-            { value: 'playground', label: 'Playground' },
-            { value: 'samples', label: 'Samples' },
-            { value: 'merges', label: `Merge rules (${mergeTotal})` },
-            { value: 'vocab', label: `Vocabulary (${vocabTotal})` },
-            { value: 'decompose', label: 'Decompose' },
-            { value: 'analyze', label: 'Analyze' },
-          ]}
-        />
-
-        {/* Samples tab */}
-        {tab === 'samples' && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Word Samples</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground mb-3">Common words and their tokenization breakdown.</p>
-              <SampleTable />
+              )}
             </CardContent>
           </Card>
-        )}
+          <FoldSection heading="Similar tokens">
+            <TokenTreeQueryCard key={treeVersion} />
+          </FoldSection>
+        </div>
+      )}
 
-        {/* Merges tab */}
-        {tab === 'merges' && (
+      {tab === 'vocab' && (
+        <div className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Merge Rules ({mergeTotal})</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-xs font-medium">Vocabulary ({vocabTotal})</CardTitle>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-xs"
+                onClick={() => handleLoadVocab(vocabOffset)}
+              >
+                <IconRefresh className="h-4 w-4" />
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Input
-                value={mergeSearch}
-                onChange={e => setMergeSearch(e.target.value)}
-                placeholder="Search merges..."
-                className="text-sm"
-                aria-label="Search merge rules"
-              />
-              <div className="max-h-80 overflow-y-auto space-y-0.5">
-                {filteredMerges.map(m => (
-                  <div key={m.index} className="flex items-center gap-2 text-xs font-mono py-1 px-2 rounded hover:bg-muted/40">
-                    <span className="text-muted-foreground w-8 text-right">#{m.index}</span>
-                    <span className="text-foreground">{m.left}</span>
-                    <span className="text-muted-foreground">+</span>
-                    <span className="text-foreground">{m.right}</span>
-                    <span className="text-muted-foreground">→</span>
-                    <span className="text-primary font-semibold">{m.token}</span>
+            <CardContent className="px-2.5 pb-2.5">
+              <div className="space-y-1 max-h-72 overflow-y-auto font-mono text-xs">
+                {vocabEntries.map((e) => (
+                  <div key={e.id} className="flex gap-1.5 py-0.5 border-b border-border/20">
+                    <span className="w-12 text-right text-muted-foreground">{e.id}</span>
+                    <span className={e.is_special ? 'text-primary font-medium' : ''}>
+                      {e.token}
+                    </span>
                   </div>
                 ))}
-                {filteredMerges.length === 0 && (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No merges match &ldquo;{mergeSearch}&rdquo;</p>
-                )}
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Vocab tab */}
-        {tab === 'vocab' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Vocabulary ({vocabTotal} tokens)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Input
-                value={vocabSearch}
-                onChange={e => setVocabSearch(e.target.value)}
-                placeholder="Search tokens..."
-                className="text-sm"
-                aria-label="Search vocabulary tokens"
-              />
-              <div className="max-h-80 overflow-y-auto space-y-0.5">
-                {filteredVocab.map(e => (
-                  <div key={e.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-muted/40">
-                    <span className="text-muted-foreground w-10 text-right tabular-nums">#{e.id}</span>
-                    <TokenBadge token={e.token} isSpecial={e.is_special} />
-                    {e.is_special && <span className="text-[10px] text-primary ml-1">special</span>}
-                  </div>
-                ))}
-                {filteredVocab.length === 0 && (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No tokens match &ldquo;{vocabSearch}&rdquo;</p>
-                )}
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-border/20">
+              <div className="flex gap-2 mt-3">
                 <Button
-                  variant="outline" size="sm"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleLoadVocab(Math.max(0, vocabOffset - 50))}
                   disabled={vocabOffset === 0}
-                  onClick={() => fetchVocab(50, Math.max(0, vocabOffset - 50))}
                 >
-                  Previous
+                  Prev
                 </Button>
-                <span className="text-xs text-muted-foreground">
-                  {vocabOffset + 1}–{Math.min(vocabOffset + 50, vocabTotal)} of {vocabTotal}
-                </span>
                 <Button
-                  variant="outline" size="sm"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleLoadVocab(vocabOffset + 50)}
                   disabled={vocabOffset + 50 >= vocabTotal}
-                  onClick={() => fetchVocab(50, vocabOffset + 50)}
                 >
                   Next
                 </Button>
               </div>
             </CardContent>
           </Card>
-        )}
-
-        {/* Decompose tab */}
-        {tab === 'decompose' && (
           <Card>
-            <CardHeader><CardTitle className="text-base">Token Decomposition</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">Explore how a token is built from its merge tree.</p>
-              <div className="flex gap-2">
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-xs font-medium">Samples</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2.5 pb-2.5">
+              {samples.length === 0 ? (
+                <Button size="sm" onClick={handleLoadSamples}>
+                  Load Samples
+                </Button>
+              ) : (
+                <div className="space-y-1">
+                  {samples.map((s) => (
+                    <div
+                      key={s.word}
+                      className="flex gap-1.5 text-xs py-1 border-b border-border/20"
+                    >
+                      <span className="font-medium w-24 truncate">{s.word}</span>
+                      <div className="flex gap-1">
+                        {s.tokens.map((t, i) => (
+                          <span key={i} className="font-mono bg-muted/20 rounded px-1 py-0.5">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                      <span className="text-muted-foreground ml-auto">{s.count} tokens</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <FoldSection heading="Merge rules">
+            <TokenTreeMergesCard refreshKey={treeVersion} />
+          </FoldSection>
+          <FoldSection heading="Tree vocabulary">
+            <TokenTreeVocabCard refreshKey={treeVersion} />
+          </FoldSection>
+        </div>
+      )}
+
+      {tab === 'train' && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-xs font-medium">Train Tokenizer</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2.5 pb-2.5 space-y-3">
+              {trainResult && (
+                <div className="rounded bg-primary/10 border border-primary/20 px-3 py-2 text-xs text-primary">
+                  {trainResult}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">Vocab size:</label>
                 <Input
-                  value={decompToken}
-                  onChange={e => setDecompToken(e.target.value)}
-                  placeholder="Enter a token (e.g. 'hello')..."
-                  className="text-sm font-mono"
-                  onKeyDown={e => e.key === 'Enter' && handleDecompose()}
-                  aria-label="Token to decompose"
+                  type="number"
+                  aria-label="Vocab size"
+                  value={trainVocab}
+                  onChange={(e) =>
+                    setTrainVocab(clampNumber(parseInt(e.target.value) || 512, 2, 50_000))
+                  }
+                  className="w-24"
+                  min={32}
+                  max={100000}
                 />
-                <Button size="sm" onClick={handleDecompose} disabled={decompLoading}>
-                  {decompLoading ? '...' : 'Trace'}
+                <Button size="sm" onClick={handleTrain} disabled={training}>
+                  {training ? 'Training...' : 'Train on Shakespeare'}
                 </Button>
               </div>
-              {decompResult && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Token:</span>
-                    <TokenBadge token={decompResult.token} />
-                    <span className="text-muted-foreground">ID: #{decompResult.id}</span>
-                  </div>
-                  {decompResult.merge_path.length > 0 && (
-                    <div className="space-y-0.5 pl-2 border-l-2 border-primary/20">
-                      {decompResult.merge_path.map((step, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs font-mono py-0.5">
-                          <span className="text-muted-foreground w-4">{i + 1}.</span>
-                          <span>{step.left}</span>
-                          <span className="text-muted-foreground">+</span>
-                          <span>{step.right}</span>
-                          <span className="text-muted-foreground">→</span>
-                          <span className="text-primary font-semibold">{step.into}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {decompResult.base_chars.length > 0 && (
-                    <div className="text-xs text-muted-foreground">
-                      Base chars: {decompResult.base_chars.map(c => c === ' ' ? '␣' : c).join(' ')}
-                    </div>
-                  )}
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Downloads Shakespeare dataset and trains a BPE tokenizer.
+              </p>
             </CardContent>
           </Card>
-        )}
-
-        {/* Analyze tab */}
-        {tab === 'analyze' && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Text Analysis</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">Paste text to see how it gets split into tokens.</p>
-              <textarea
-                value={analysisText}
-                onChange={e => setAnalysisText(e.target.value)}
-                placeholder={`the quick brown fox jumps over the lazy dog\nhello world\nmachine learning transformers`}
-                className="w-full h-24 text-xs font-mono p-2 rounded border border-border/60 bg-background resize-none"
-                aria-label="Corpus text for analysis"
-              />
-              <Button size="sm" onClick={handleAnalyze} disabled={!analysisText.trim()}>Analyze</Button>
-              {analysisResult && (
-                <div className="space-y-3">
-                  <KpiGrid columns={3}>
-                    <StatCard label="Compression" value={analysisResult.compression_ratio.toFixed(2)} />
-                    <StatCard label="Vocabulary usage" value={`${(analysisResult.vocab_utilization * 100).toFixed(1)}%`} />
-                    <StatCard label="Top tokens shown" value={analysisResult.top_tokens.length} />
-                  </KpiGrid>
-                  <div>
-                    <p className="text-[11px] font-medium text-muted-foreground mb-1">Most frequent tokens</p>
-                    <div className="space-y-0.5">
-                      {analysisResult.top_tokens.map((t, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                          <span className="text-muted-foreground w-6 text-right">{i + 1}.</span>
-                          <TokenBadge token={t.token} />
-                          <span className="text-muted-foreground">×{t.count}</span>
-                          <span className="text-[10px] text-muted-foreground">({(t.pct * 100).toFixed(1)}%)</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Train */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Train</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Train a new tokenizer on the Tiny Shakespeare dataset (~2K lines).
-            </p>
-            <Button
-              size="sm"
-              onClick={async () => {
-                setTraining(true)
-                try {
-                  await tokenizerController.trainTokenizer()
-                  addToast('Tokenizer trained on Shakespeare', 'success')
-                  await Promise.all([fetchStats(), fetchMerges(), fetchVocab()])
-                } catch (e: any) {
-                  addToast('Something went wrong training the tokenizer', 'error')
-                }
-                setTraining(false)
-              }}
-              disabled={training}
-            >
-              {training ? <><Spinner className="w-3 h-3 mr-1" /> Training...</> : 'Train on Shakespeare'}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <FoldSection heading="Train from custom corpus">
+            <TokenTreeTrainCard onTrained={() => setTreeVersion((v) => v + 1)} />
+          </FoldSection>
+          <FoldSection heading="Save & load trees">
+            <TokenTreePersistenceCard
+              refreshKey={treeVersion}
+              onLoaded={() => setTreeVersion((v) => v + 1)}
+            />
+          </FoldSection>
+        </div>
+      )}
+    </PageContainer>
   )
 }

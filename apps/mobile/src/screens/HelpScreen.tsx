@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {YStack, XStack, Text} from 'tamagui';
 import {ScreenShell} from '../components/ScreenShell';
 import {Icon} from '../components/Icon';
+import {useColors} from '../theme/colors';
 
 const FAQ = [
   {
@@ -64,6 +65,7 @@ function FAQItem({item}: {item: {q: string; a: string}}) {
 }
 
 export function HelpScreen() {
+  const colors = useColors();
   return (
     <ScreenShell title="Help">
       <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
@@ -98,7 +100,7 @@ export function HelpScreen() {
         ))}
         <XStack alignItems="center" gap={12} paddingVertical={4}>
           <XStack minWidth={80} gap={4} alignItems="center">
-            <Icon name="mic" size={14} color="#7C52C4" />
+            <Icon name="mic" size={14} color={colors.primary} />
             <Text fontSize={13} fontWeight="600" color="$color9">
               {' '}Button
             </Text>

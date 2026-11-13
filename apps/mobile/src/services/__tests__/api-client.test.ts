@@ -1,5 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {api, ApiError, getApiUrl, setApiUrl} from '../api-client';
+import {
+  api,
+  ApiError,
+  getApiUrl,
+  setApiUrl,
+  getAuthHeaders,
+  AUTH_TOKEN_KEY,
+} from '../api-client';
 
 let mockFetch: jest.Mock;
 
@@ -253,5 +260,58 @@ describe('syncStatus', () => {
     mockFetch.mockResolvedValue(mockResponse({connected: true}));
     const result = await api.syncStatus();
     expect(result).toEqual({connected: true});
+  });
+});
+
+describe('Authorization header', () => {
+  it('getAuthHeaders returns the stored Bearer token', async () => {
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'jwt-abc');
+    expect(await getAuthHeaders()).toEqual({Authorization: 'Bearer jwt-abc'});
+  });
+
+  it('getAuthHeaders returns {} when no token is stored', async () => {
+    expect(await getAuthHeaders()).toEqual({});
+  });
+
+  it('getAuthHeaders returns {} when noAuth is set', async () => {
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'jwt-abc');
+    expect(await getAuthHeaders({noAuth: true})).toEqual({});
+  });
+
+  it('attaches Authorization to a request when a token is stored', async () => {
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'jwt-abc');
+    mockFetch.mockResolvedValue(mockResponse({ok: true}));
+    await api.get('/auth-header/present');
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8000/auth-header/present',
+      expect.objectContaining({
+        headers: expect.objectContaining({Authorization: 'Bearer jwt-abc'}),
+      }),
+    );
+  });
+
+  it('omits Authorization when no token is stored', async () => {
+    mockFetch.mockResolvedValue(mockResponse({ok: true}));
+    await api.get('/auth-header/absent');
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.headers.Authorization).toBeUndefined();
+    expect(init.headers['Content-Type']).toBe('application/json');
+  });
+
+  it('omits Authorization when noAuth is passed', async () => {
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'jwt-abc');
+    mockFetch.mockResolvedValue(mockResponse({ok: true}));
+    await api.post('/auth-header/noauth', {a: 1}, {noAuth: true});
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.headers.Authorization).toBeUndefined();
+    expect(init.headers['Content-Type']).toBe('application/json');
+  });
+
+  it('attaches Authorization on upload requests too', async () => {
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'jwt-abc');
+    mockFetch.mockResolvedValue(mockResponse({ok: true}));
+    await api.upload('/multimodal/upload', {} as FormData);
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.headers.Authorization).toBe('Bearer jwt-abc');
   });
 });

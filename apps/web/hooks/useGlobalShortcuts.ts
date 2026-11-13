@@ -1,15 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-
-const NAV_SHORTCUTS: Record<string, string> = {
-  '1': '/chat',
-  '2': '/models',
-  '3': '/knowledge',
-  '4': '/training',
-  '5': '/datasets',
-}
+import { useRouter } from '@/vite/next-compat/navigation'
+import { SHORTCUT_TO_PATH } from '@/lib/navigation'
 
 export function useGlobalShortcuts() {
   const router = useRouter()
@@ -17,7 +10,8 @@ export function useGlobalShortcuts() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      const isInput =
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
       const ctrl = e.ctrlKey || e.metaKey
 
       // If shortcuts dialog is open, close it before a non-? shortcut action
@@ -27,10 +21,11 @@ export function useGlobalShortcuts() {
       }
 
       if (ctrl && !e.shiftKey && !e.altKey) {
-        if (NAV_SHORTCUTS[e.key]) {
+        const navPath = SHORTCUT_TO_PATH[e.key]
+        if (navPath) {
           e.preventDefault()
           closeIfOpen()
-          router.push(NAV_SHORTCUTS[e.key])
+          router.push(navPath)
           return
         }
         if (e.key === 'n') {
@@ -44,7 +39,7 @@ export function useGlobalShortcuts() {
       if (ctrl && e.shiftKey && e.key === 'A') {
         e.preventDefault()
         closeIfOpen()
-        router.push('/monitoring')
+        router.push('/settings')
         return
       }
 
@@ -55,6 +50,13 @@ export function useGlobalShortcuts() {
         return
       }
 
+      if (ctrl && e.shiftKey && e.key === 'N') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('new-chat'))
+        return
+      }
+
       // Copy last assistant response
       if (ctrl && e.shiftKey && e.key === 'C') {
         e.preventDefault()
@@ -62,10 +64,34 @@ export function useGlobalShortcuts() {
         return
       }
 
+      // Toggle nav sidebar collapse: Ctrl+\
+      if (ctrl && !e.shiftKey && e.key === '\\') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('toggle-nav-sidebar'))
+        return
+      }
+
+      // Toggle conversation sidebar collapse: Ctrl+Shift+\
+      if (ctrl && e.shiftKey && e.key === '\\') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('toggle-conv-sidebar'))
+        return
+      }
+
       if (!isInput && e.key === '?' && !ctrl) {
         e.preventDefault()
         // `?` toggles the dialog itself — no closeIfOpen needed, toggle-shortcuts handles it
         window.dispatchEvent(new CustomEvent('toggle-shortcuts'))
+      }
+
+      // Toggle dark mode: Ctrl+Shift+M
+      if (ctrl && e.shiftKey && e.key === 'M') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('toggle-dark-mode'))
+        return
       }
     }
 

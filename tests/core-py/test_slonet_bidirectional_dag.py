@@ -1,0 +1,346 @@
+"""Tests for bidirectional DAG: forward-mode AD alongside backward-mode AD."""
+
+import numpy as np
+
+from domain.training._internal.slonet import (
+    Tensor,
+    _layernorm,
+    _rmsnorm,
+    _softmax,
+    _transpose,
+    cross_entropy,
+    relu,
+    sigmoid,
+    tanh,
+)
+
+
+class TestForwardGradBasic:
+    """Forward-mode AD on primitive ops."""
+
+    def test_add(self):
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([3.0, 4.0], requires_grad=True)
+        y = a + b
+        t = y.forward_grad({a.id: np.array([1.0, 1.0])})
+        assert t.get(y.id) is not None
+        assert np.allclose(t[y.id], [1.0, 1.0])
+
+    def test_add_both_tangents(self):
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([3.0, 4.0], requires_grad=True)
+        y = a + b
+        t = y.forward_grad({a.id: np.array([1.0, 0.0]), b.id: np.array([0.0, 1.0])})
+        assert np.allclose(t[y.id], [1.0, 1.0])
+
+    def test_mul(self):
+        a = Tensor([2.0, 3.0], requires_grad=True)
+        b = Tensor([4.0, 5.0], requires_grad=True)
+        y = a * b
+        t = y.forward_grad({a.id: np.array([1.0, 0.0])})
+        assert np.allclose(t[y.id], [4.0, 0.0])
+        t = y.forward_grad({b.id: np.array([0.0, 1.0])})
+        assert np.allclose(t[y.id], [0.0, 3.0])
+
+    def test_neg(self):
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        y = -a
+        t = y.forward_grad({a.id: np.array([1.0, 1.0])})
+        assert np.allclose(t[y.id], [-1.0, -1.0])
+
+    def test_pow(self):
+        a = Tensor([2.0, 3.0], requires_grad=True)
+        y = a**2
+        t = y.forward_grad({a.id: np.array([1.0, 1.0])})
+        # dy/da = 2*a, JVP = 2*a*t_a
+        assert np.allclose(t[y.id], [4.0, 6.0])
+
+    def test_matmul_2d(self):
+        A = Tensor(np.array([[1.0, 2.0], [3.0, 4.0]]), requires_grad=True)
+        x = Tensor(np.array([1.0, 1.0]), requires_grad=True)
+        y = A @ x
+        t = y.forward_grad({x.id: np.array([1.0, 0.0])})
+        assert np.allclose(t[y.id], [1.0, 3.0])
+
+    def test_matmul_1d_grad(self):
+        A = Tensor(np.random.randn(3, 4).astype(np.float32), requires_grad=True)
+        x = Tensor(np.random.randn(4).astype(np.float32), requires_grad=True)
+        y = A @ x
+        t = y.forward_grad({A.id: np.ones((3, 4), dtype=np.float32)})
+        assert t[y.id] is not None
+        assert t[y.id].shape == (3,)
+
+    def test_transpose(self):
+        a = Tensor(np.array([[1.0, 2.0], [3.0, 4.0]]), requires_grad=True)
+        y = _transpose(a)
+        t = y.forward_grad({a.id: np.array([[1.0, 0.0], [0.0, 0.0]])})
+        assert np.allclose(t[y.id], [[1.0, 0.0], [0.0, 0.0]])
+
+    def test_reshape(self):
+        a = Tensor(np.array([[1.0, 2.0], [3.0, 4.0]]), requires_grad=True)
+        y = a.reshape(4)
+        t = y.forward_grad({a.id: np.ones((2, 2))})
+        assert np.allclose(t[y.id], [1.0, 1.0, 1.0, 1.0])
+
+    def test_sum(self):
+        a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
+        y = a.sum()
+        t = y.forward_grad({a.id: np.array([1.0, 1.0, 1.0])})
+        assert np.allclose(t[y.id], 3.0)
+
+    def test_mean(self):
+        a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
+        y = a.mean()
+        t = y.forward_grad({a.id: np.array([1.0, 1.0, 1.0])})
+        assert np.allclose(t[y.id], 1.0)
+
+    def test_max(self):
+        a = Tensor([1.0, 5.0, 3.0], requires_grad=True)
+        y = a.max()
+        t = y.forward_grad({a.id: np.array([0.0, 1.0, 0.0])})
+        assert np.allclose(t[y.id], 1.0)
+
+
+class TestForwardGradActivations:
+    """Forward-mode AD on activation functions."""
+
+    def test_sigmoid(self):
+        x = Tensor(np.array([0.0, 1.0]), requires_grad=True)
+        y = sigmoid(x)
+        t = y.forward_grad({x.id: np.array([1.0, 1.0])})
+        s = 1.0 / (1.0 + np.exp(-np.array([0.0, 1.0])))
+        assert np.allclose(t[y.id], s * (1 - s) * 1.0)
+
+    def test_tanh(self):
+        x = Tensor(np.array([0.0, 1.0]), requires_grad=True)
+        y = tanh(x)
+        t = y.forward_grad({x.id: np.array([1.0, 1.0])})
+        assert np.allclose(t[y.id], (1 - np.tanh(x.data) ** 2) * 1.0)
+
+    def test_relu(self):
+        x = Tensor(np.array([-1.0, 0.0, 1.0]), requires_grad=True)
+        y = relu(x)
+        t = y.forward_grad({x.id: np.array([1.0, 1.0, 1.0])})
+        expected = np.where(x.data > 0, 1.0, 0.0)
+        assert np.allclose(t[y.id], expected)
+
+
+class TestForwardGradNormalization:
+    """Forward-mode AD on normalization layers."""
+
+    def test_layernorm(self):
+        x = Tensor(np.random.randn(2, 4).astype(np.float32), requires_grad=True)
+        w = Tensor(np.ones(4, dtype=np.float32), requires_grad=True)
+        b = Tensor(np.zeros(4, dtype=np.float32), requires_grad=True)
+        y = _layernorm(x, w, b)
+        v = np.random.randn(2, 4).astype(np.float32)
+        t = y.forward_grad({x.id: v})
+        assert t[y.id] is not None
+        assert t[y.id].shape == y.shape
+
+    def test_rmsnorm(self):
+        x = Tensor(np.random.randn(2, 4).astype(np.float32), requires_grad=True)
+        w = Tensor(np.ones(4, dtype=np.float32), requires_grad=True)
+        y = _rmsnorm(x, w)
+        v = np.random.randn(2, 4).astype(np.float32)
+        t = y.forward_grad({x.id: v})
+        assert t[y.id] is not None
+        assert t[y.id].shape == y.shape
+
+
+class TestForwardGradSoftmax:
+    """Forward-mode AD on softmax."""
+
+    def test_softmax(self):
+        x = Tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
+        y = _softmax(x)
+        s = y.data
+        v = np.array([1.0, 0.0, 0.0])
+        t = y.forward_grad({x.id: v})
+        analytic = s * (v - (s * v).sum())
+        assert np.allclose(t[y.id], analytic)
+
+
+class TestForwardGradCrossEntropy:
+    """Forward-mode AD on cross-entropy loss."""
+
+    def test_cross_entropy(self):
+        logits = Tensor(np.array([[1.0, 2.0, 3.0]]), requires_grad=True)
+        targets = Tensor(np.array([2]))
+        probs = _softmax(logits)
+        loss = cross_entropy(probs, targets)
+        v = np.random.randn(1, 3).astype(np.float32)
+        t = loss.forward_grad({logits.id: v})
+        assert t[loss.id] is not None
+        assert t[loss.id].shape == ()
+
+
+class TestDotProductConsistency:
+    """Fundamental check: forward_grad(v)·w == v·backward(w) for all ops."""
+
+    def _check(self, y, inputs, tangents):
+        """Verify dot-product identity for given computation."""
+        # Forward-mode
+        fwd = y.forward_grad(tangents)
+        jvp = fwd.get(y.id)
+
+        # Backward-mode (all inputs share same seed w=1)
+        y.grad = None
+        y.backward()
+        vjp = sum((inp.grad.data * tangents[inp.id]).sum() for inp in inputs if inp.id in tangents)
+        assert np.allclose(jvp.sum(), vjp, atol=1e-5), f"JVP={jvp.sum():.6f} VJP={vjp:.6f}"
+
+    def test_add_dot(self):
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([3.0, 4.0], requires_grad=True)
+        y = a + b
+        self._check(y, [a, b], {a.id: np.array([1.0, 0.0])})
+
+    def test_mul_dot(self):
+        a = Tensor([2.0, 3.0], requires_grad=True)
+        b = Tensor([4.0, 5.0], requires_grad=True)
+        y = a * b
+        self._check(y, [a, b], {a.id: np.array([1.0, 0.0])})
+
+    def test_matmul_dot(self):
+        A = Tensor(np.random.randn(3, 4).astype(np.float32), requires_grad=True)
+        x = Tensor(np.random.randn(4).astype(np.float32), requires_grad=True)
+        y = A @ x
+        self._check(y, [A, x], {A.id: np.random.randn(3, 4).astype(np.float32)})
+
+    def test_layernorm_dot(self):
+        x = Tensor(np.random.randn(2, 4).astype(np.float32), requires_grad=True)
+        w = Tensor(np.ones(4, dtype=np.float32), requires_grad=True)
+        b = Tensor(np.zeros(4, dtype=np.float32), requires_grad=True)
+        y = _layernorm(x, w, b)
+        self._check(y, [x, w, b], {x.id: np.random.randn(2, 4).astype(np.float32)})
+
+    def test_rmsnorm_dot(self):
+        x = Tensor(np.random.randn(2, 4).astype(np.float32), requires_grad=True)
+        w = Tensor(np.ones(4, dtype=np.float32), requires_grad=True)
+        y = _rmsnorm(x, w)
+        self._check(y, [x, w], {x.id: np.random.randn(2, 4).astype(np.float32)})
+
+    def test_softmax_ce_dot(self):
+        logits = Tensor(np.array([[1.0, 2.0, 3.0]]), requires_grad=True)
+        targets = Tensor(np.array([2]))
+        probs = _softmax(logits)
+        loss = cross_entropy(probs, targets)
+        self._check(
+            y=loss, inputs=[logits], tangents={logits.id: np.random.randn(1, 3).astype(np.float32)}
+        )
+
+    def test_chain_dot(self):
+        A = Tensor(np.random.randn(4, 4).astype(np.float32), requires_grad=True)
+        x = Tensor(np.random.randn(4).astype(np.float32), requires_grad=True)
+        y = sigmoid(relu(A @ x)).sum()
+        self._check(y, [A, x], {x.id: np.random.randn(4).astype(np.float32)})
+
+
+class TestBackwardThenForwardGrad:
+    """backward() must not break a later forward-mode pass: forward_grad
+    reads _children/_forward_fn only, never forward-edge bookkeeping."""
+
+    def test_backward_then_forward_grad_still_works(self):
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([3.0, 4.0], requires_grad=True)
+        s = a * b
+        y = s.sum()
+        y.backward()
+        t = y.forward_grad({a.id: np.array([1.0, 1.0])})
+        assert np.allclose(t[s.id], np.array([3.0, 4.0]))
+        assert np.allclose(t[y.id], np.array(7.0))
+
+
+class TestBackwardRegression:
+    """Ensure backward-mode still works correctly."""
+
+    def test_backward_still_works(self):
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([3.0, 4.0], requires_grad=True)
+        y = (a * b).sum()
+        y.backward()
+        assert np.allclose(a.grad.data, [3.0, 4.0])
+        assert np.allclose(b.grad.data, [1.0, 2.0])
+
+    def test_backward_chain(self):
+        a = Tensor([1.0], requires_grad=True)
+        b = Tensor([2.0], requires_grad=True)
+        c = Tensor([3.0], requires_grad=True)
+        y = (a + b) * c
+        y.backward()
+        assert np.allclose(a.grad.data, [3.0])
+        assert np.allclose(b.grad.data, [3.0])
+        assert np.allclose(c.grad.data, [3.0])
+
+
+class TestAcyclicGraph:
+    """The Tensor graph must be a pure DAG (out -> parents): reachable nodes
+    are freed by refcounting alone the moment the loss tensor drops, without
+    any cyclic-GC pass. With ``_gc_parked`` disabling the collector during
+    training, a cyclic graph leaks one whole step's float64 intermediates
+    (~0.77GB/step in the medium benchmark config) until an explicit collect.
+
+    Two independent cycle sources are locked down here:
+    - bidirectional ``_consumers`` back-edges (input -> output) — caught by the
+      eval/no-backward test, where no ``backward()`` runs to clear them;
+    - ``fwd`` forward-mode closures capturing the ``out`` Tensor itself
+      (relu/gelu/silu/slice/flatten do ``np.zeros_like(out.data)``) — caught by
+      the post-backward test, since ``backward()`` clears consumers but a
+      self-cyclic node still pins its whole ancestral chain.
+    """
+
+    def test_dropped_graph_frees_without_gc_after_backward(self):
+        import gc
+        import weakref
+
+        gc.collect()  # purge unrelated garbage first
+        gc.disable()
+        try:
+            a = Tensor([1.0, 2.0], requires_grad=True)
+            b = Tensor([3.0, 4.0], requires_grad=True)
+            prod = a * b
+            mid = relu(prod)  # fwd closure self-captures `out` pre-fix
+            loss = mid.sum()
+            loss.backward()  # clears _consumers pre-fix; self-cycle must still die
+            wr_mid = weakref.ref(mid)
+            wr_prod = weakref.ref(prod)
+            del loss, mid, prod, a, b
+            assert wr_mid() is None, (
+                "relu node survived without gc.collect(): its fwd closure "
+                "still holds a reference to the node itself"
+            )
+            assert wr_prod() is None, (
+                "upstream node pinned by a self-cyclic consumer: the graph "
+                "must be refcount-freed after backward()"
+            )
+        finally:
+            gc.enable()
+
+    def test_dropped_eval_graph_frees_without_gc(self):
+        import gc
+        import weakref
+
+        gc.collect()
+        gc.disable()
+        try:
+            a = Tensor([1.0, 2.0], requires_grad=True)
+            b = Tensor([3.0, 4.0], requires_grad=True)
+            prod = a * b
+            loss = prod.sum()
+            wr_prod = weakref.ref(prod)
+            # eval-style: forward only, no backward() to clear any back-edges
+            del loss, prod, a, b
+            assert wr_prod() is None, (
+                "forward-only graph survived without gc: _consumers made "
+                "input/output edges bidirectional (cycle a <-> prod)"
+            )
+        finally:
+            gc.enable()
+
+    def test_no_consumers_attribute(self):
+        a = Tensor([1.0], requires_grad=True)
+        b = Tensor([2.0], requires_grad=True)
+        y = a + b
+        assert not hasattr(a, "_consumers")
+        assert not hasattr(y, "_consumers")

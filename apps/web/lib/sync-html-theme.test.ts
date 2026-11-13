@@ -43,3 +43,36 @@ describe('syncHtmlTheme', () => {
     globalThis.document = orig
   })
 })
+
+describe('syncHtmlTheme — palette', () => {
+  beforeEach(() => {
+    document.documentElement.className = ''
+  })
+
+  it('adds palette class when palette is neural-precision', () => {
+    syncHtmlTheme('dark', 'purple', 'neural-precision')
+    expect(document.documentElement.classList.contains('palette-neural-precision')).toBe(true)
+  })
+
+  it('does not add palette class when palette is noir-violet', () => {
+    syncHtmlTheme('dark', 'purple', 'noir-violet')
+    expect(document.documentElement.classList.contains('palette-noir-violet')).toBe(false)
+  })
+
+  it('does not add palette class when palette is undefined', () => {
+    syncHtmlTheme('dark', 'purple')
+    expect(document.documentElement.className).not.toContain('palette-')
+  })
+
+  it('removes old palette classes when switching', () => {
+    document.documentElement.classList.add('palette-neural-precision')
+    syncHtmlTheme('dark', 'purple', 'noir-violet')
+    expect(document.documentElement.classList.contains('palette-neural-precision')).toBe(false)
+  })
+
+  it('removes all palette classes even without palette param', () => {
+    document.documentElement.classList.add('palette-neural-precision')
+    syncHtmlTheme('dark', 'purple')
+    expect(document.documentElement.classList.contains('palette-neural-precision')).toBe(false)
+  })
+})

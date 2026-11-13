@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sloughgpt.fullname" . }}-web
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "sloughgpt.labels" . | nindent 4 }}
+    {{- include "sloughgpt.web.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sloughgpt.web.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sloughgpt.web.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: web
+        image: "{{ .Values.imageWeb.registry }}/{{ .Values.imageWeb.repository }}:{{ .Values.imageWeb.tag }}"
+        imagePullPolicy: {{ .Values.imageWeb.pullPolicy }}
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: NEXT_PUBLIC_API_URL
+          value: {{ .Values.web.publicUrl | quote }}
+        resources:
+          {{- toYaml .Values.web.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5

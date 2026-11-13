@@ -2,7 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/chat' }))
+vi.mock('@/vite/next-compat/navigation', () => ({
+  usePathname: () => '/chat',
+  useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }),
+}))
 
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: (k: string) => k }),
@@ -11,9 +14,13 @@ vi.mock('@/hooks/useLocale', () => ({
 
 vi.mock('./ThemeSwitcher', () => ({ ThemeSwitcher: () => <div data-testid="theme-switcher" /> }))
 
-vi.mock('./CustomDropdown', () => ({ CustomDropdown: ({ trigger }: any) => <div data-testid="custom-dropdown">{trigger}</div> }))
+vi.mock('./consciousness/ConsciousnessSidebarWidget', () => ({
+  ConsciousnessSidebarWidget: () => null,
+}))
 
-vi.mock('@/lib/route-match', () => ({ routeMatchesPath: (p: string, path: string) => p.startsWith(path) }))
+vi.mock('@/lib/route-match', () => ({
+  routeMatchesPath: (p: string, path: string) => p.startsWith(path),
+}))
 
 import { Sidebar } from './Sidebar'
 
@@ -26,26 +33,23 @@ describe('Sidebar', () => {
     expect(screen.getByTestId('theme-switcher')).toBeDefined()
   })
 
-  it('renders workspace nav items', () => {
+  it('renders all nav items', () => {
     render(<Sidebar />)
     expect(screen.getByText('nav.chat')).toBeDefined()
     expect(screen.getByText('nav.training')).toBeDefined()
-    expect(screen.getByText('nav.knowledge')).toBeDefined()
-  })
-
-  it('renders tools nav items', () => {
-    render(<Sidebar />)
     expect(screen.getByText('nav.datasets')).toBeDefined()
-    expect(screen.getByText('nav.export')).toBeDefined()
-    expect(screen.getByText('nav.compare')).toBeDefined()
-    expect(screen.getByText('nav.monitoring')).toBeDefined()
+    expect(screen.getByText('nav.knowledge')).toBeDefined()
+    expect(screen.getByText('nav.souls')).toBeDefined()
+    expect(screen.getByText('nav.agents')).toBeDefined()
+    expect(screen.getByText('nav.settings')).toBeDefined()
   })
 
-  it('renders system nav items', () => {
+  it('renders section labels', () => {
     render(<Sidebar />)
-    expect(screen.getByText('nav.models')).toBeDefined()
-    expect(screen.getByText('nav.errors')).toBeDefined()
-    expect(screen.getByText('nav.settings')).toBeDefined()
+    expect(screen.getByText('nav.section.core')).toBeDefined()
+    expect(screen.getByText('nav.section.ai')).toBeDefined()
+    expect(screen.getByText('nav.section.system')).toBeDefined()
+    expect(screen.getByText('nav.section.tools')).toBeDefined()
   })
 
   it('highlights active route', () => {
@@ -60,14 +64,32 @@ describe('Sidebar', () => {
     expect(screen.getByLabelText('sidebar.close')).toBeDefined()
   })
 
-  it('renders account dropdown', () => {
-    render(<Sidebar />)
-    expect(screen.getByText('sidebar.account')).toBeDefined()
-  })
-
   it('renders app name and console subtitle for desktop', () => {
     render(<Sidebar />)
     expect(screen.getByText('app.name')).toBeDefined()
     expect(screen.getByText('app.console')).toBeDefined()
+  })
+
+  it('renders the Man brand mark', () => {
+    render(<Sidebar />)
+    expect(screen.getByTestId('man-mark')).toHaveTextContent('M')
+  })
+
+  it('hides nav labels and section labels when collapsed', () => {
+    render(<Sidebar collapsed />)
+    expect(screen.queryByText('nav.chat')).toBeNull()
+    expect(screen.queryByText('nav.section.core')).toBeNull()
+  })
+
+  it('sets data-collapsed attribute when collapsed', () => {
+    const { container } = render(<Sidebar collapsed />)
+    const aside = container.querySelector('aside')
+    expect(aside?.getAttribute('data-collapsed')).toBe('true')
+  })
+
+  it('ignores collapsed when variant is drawer', () => {
+    render(<Sidebar variant="drawer" collapsed />)
+    expect(screen.getByText('nav.chat')).toBeDefined()
+    expect(screen.getByText('nav.section.core')).toBeDefined()
   })
 })

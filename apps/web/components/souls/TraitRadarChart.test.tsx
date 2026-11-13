@@ -41,4 +41,40 @@ describe('TraitRadarChart', () => {
     render(<TraitRadarChart data={{ warmth: 0.75 }} label="Test" color="#f00" />)
     expect(screen.getByText('75')).toBeDefined()
   })
+
+  it('renders polar grid and axes', () => {
+    render(<TraitRadarChart data={{ warmth: 0.8 }} label="Test" color="#f00" />)
+    expect(screen.getByTestId('polar-grid')).toBeDefined()
+    expect(screen.getByTestId('polar-angle-axis')).toBeDefined()
+    expect(screen.getByTestId('polar-radius-axis')).toBeDefined()
+  })
+
+  it('passes color prop to Radar', () => {
+    render(<TraitRadarChart data={{ warmth: 0.8 }} label="Test" color="#123456" />)
+    const radar = screen.getByTestId('radar')
+    expect(radar).toBeDefined()
+  })
+
+  it('maps unknown trait keys to space-separated labels', () => {
+    const { container } = render(<TraitRadarChart data={{ some_custom_trait: 0.5 }} label="Test" color="#f00" />)
+    const legendText = container.querySelector('.flex.flex-wrap')?.textContent || ''
+    expect(legendText).toContain('some custom trait')
+  })
+
+  it('renders trait legend below chart', () => {
+    render(<TraitRadarChart data={{ warmth: 0.8, humor: 0.3 }} label="Test" color="#f00" />)
+    expect(screen.getByText(/Warmth/)).toBeDefined()
+    expect(screen.getByText(/Humor/)).toBeDefined()
+  })
+
+  it('rounds values to integers', () => {
+    render(<TraitRadarChart data={{ warmth: 0.123, humor: 0.987 }} label="Test" color="#f00" />)
+    expect(screen.getByText('12')).toBeDefined()
+    expect(screen.getByText('99')).toBeDefined()
+  })
+
+  it('wraps chart in ResponsiveContainer', () => {
+    render(<TraitRadarChart data={{ warmth: 0.8 }} label="Test" color="#f00" />)
+    expect(screen.getByTestId('responsive-container')).toBeDefined()
+  })
 })

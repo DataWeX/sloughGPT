@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "downcraft"
-version = "0.2.0"
-description = "HTTP/HTTPS downloader with cross-session resume, integrity verification, and HuggingFace support"
+version = "0.3.0"
+description = "HTTP/HTTPS downloader with cross-session resume, integrity verification, and ad-page link resolver"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-keywords = ["download", "resume", "http", "range", "huggingface", "models"]
+keywords = ["download", "resume", "http", "range", "scrape", "resolve", "link"]
 authors = [
     {name = "downcraft"},
 ]
@@ -26,11 +26,13 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.28",
+    "zstandard>=0.22",
 ]
 
 [project.optional-dependencies]
-hf = ["huggingface-hub>=0.16"]
 dev = ["pytest", "pytest-cov"]
+compress = ["lz4>=4.0", "zstandard>=0.22"]
+browser = ["playwright>=1.40"]
 
 [project.urls]
 Homepage = "https://github.com/anomalyco/sloughGPT"

@@ -201,13 +201,23 @@ and hybrid retrieval (BM25 + embedding). External vector DB support is planned.
 │  │           └───────────┬────────────┘                            │   │
 │  │                       ▼                                          │   │
 │  │              ┌─────────────────┐                                │   │
-│  │              │ RRF / Reciprocal│                                │   │
-│  │              │ Rank Fusion    │                                │   │
-│  │              │                │                                │   │
-│  │              │ Score =        │                                │   │
-│  │              │ 1/(k+rank_d)  │                                │   │
-│  │              │ + 1/(k+rank_s)│                                │   │
+│  │              │ Weighted fusion │                                │   │
+│  │              │ (normalized)    │                                │   │
+│  │              │                 │                                │   │
+│  │              │ Score =         │                                │   │
+│  │              │ (w_d·s_d +      │                                │   │
+│  │              │  w_s·s_s)       │                                │   │
+│  │              │ /(w_d + w_s)    │                                │   │
 │  │              └─────────────────┘                                │   │
+│  │                                                                     │   │
+│  │  NOTE: this sketch originally specified RRF (reciprocal rank fusion,│   │
+│  │  Score = 1/(k+rank_d) + 1/(k+rank_s)); the implementation instead   │   │
+│  │  does normalized weighted fusion (HybridRetriever,                  │   │
+│  │  cognition/_internal/rag.py) with dense_weight=0.7 /                │   │
+│  │  sparse_weight=0.3 defaults, use_dense=False (BM25-only), and the   │   │
+│  │  weights are NOT reachable through the public get_rag_service()     │   │
+│  │  entry — adopting RRF or plumbing the weights through RAGService is │   │
+│  │  an open decision (card 9b06b243).                                  │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
@@ -247,7 +257,7 @@ and hybrid retrieval (BM25 + embedding). External vector DB support is planned.
 """
 # Complete production RAG pipeline:
 
-from domains.cognitive.rag import ProductionRAG
+from domain.cognition._internal.rag import ProductionRAG
 
 # 1. Initialize
 rag = ProductionRAG(config={

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Configuration loader for SloughGPT."""
 
-import os
-import yaml
-from pathlib import Path
-from typing import Any, Dict, Optional
+import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
 
 
 @dataclass
 class ModelConfig:
     name: str = "sloughgpt"
     #: Optional Soul / job display name; defaults to ``name`` for trainer exports and ``train --api``.
-    soul_name: Optional[str] = None
-    vocab_size: Optional[int] = None
+    soul_name: str | None = None
+    vocab_size: int | None = None
     n_embed: int = 256
     n_layer: int = 6
     n_head: int = 8
@@ -24,7 +24,7 @@ class ModelConfig:
 @dataclass
 class DataConfig:
     dataset: str = "shakespeare"
-    data_path: str = "datasets/shakespeare/input.txt"
+    data_path: str = "data/shakespeare/input.txt"
     val_split: float = 0.1
 
 
@@ -44,10 +44,24 @@ class TrainingConfig:
     #: Steps between eval passes.
     eval_interval: int = 100
     #: Optional step cap from CLI merge; ``None`` means use epochs only.
-    max_steps: Optional[int] = None
-    use_mixed_precision: bool = True
-    #: ``fp16`` or ``bf16`` (``SloughGPTTrainer``).
+    max_steps: int | None = None
+    #: DEPRECATED — ignored by the pure-NumPy ``SloughGPTTrainer``, which
+    #: always trains in fp32. Kept only so existing YAML configs still load;
+    #: setting it to True emits a ``DeprecationWarning``.
+    use_mixed_precision: bool = False
+    #: DEPRECATED — see ``use_mixed_precision``; accepted for YAML compat only.
     mixed_precision_dtype: str = "bf16"
+
+    def __post_init__(self) -> None:
+        """Warn when a non-default (True) ``use_mixed_precision`` is set."""
+        if self.use_mixed_precision:
+            warnings.warn(
+                "training.use_mixed_precision is deprecated and ignored — "
+                "the pure-NumPy SloughGPTTrainer always trains in fp32 "
+                f"(got {self.use_mixed_precision!r})",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
 
 @dataclass
@@ -71,15 +85,26 @@ class CheckpointConfig:
     keep_last: int = 3
     save_dir: str = "models"
     #: Set by CLI ``--resume`` merge when present; not required in YAML.
-    resume: Optional[str] = None
-    #: ``SloughGPTTrainer`` periodic ``step_*.pt`` directory (``--checkpoint-dir``).
+    resume: str | None = None
+    #: ``SloughGPTTrainer`` periodic ``step_*.soul`` directory (``--checkpoint-dir``).
     trainer_dir: str = "checkpoints"
     #: Steps between full trainer checkpoints (``--checkpoint-interval``).
     trainer_interval: int = 1000
     save_best_only: bool = False
     max_checkpoints: int = 5
-    #: Post-training artifact format for ``cli.py train`` (``--save-format``).
-    export_format: str = "sou"
+    #: DEPRECATED — ignored by ``sloughgpt train``; ``SloughGPTTrainer.save()``
+    #: always writes a ``.soul`` file, so there is no format to select.
+    export_format: str = "soul"
+
+    def __post_init__(self) -> None:
+        """Warn when a non-default (non-``soul``) ``export_format`` is set."""
+        if self.export_format not in ("", "soul"):
+            warnings.warn(
+                f"checkpoint.export_format is deprecated and ignored — "
+                f"SloughGPTTrainer.save() always writes .soul (got {self.export_format!r})",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
 
 @dataclass
@@ -87,7 +112,7 @@ class TrackingConfig:
     enabled: bool = False
     backend: str = "wandb"  # wandb, mlflow, none
     project: str = "sloughgpt"
-    entity: Optional[str] = None
+    entity: str | None = None
     log_every: int = 10
 
 
@@ -115,51 +140,45 @@ def load_config(config_path: str = "config.yaml") -> Config:
     if not path.exists():
         return Config()
 
-    with open(path, 'r') as f:
+    with open(path) as f:
         data = yaml.safe_load(f)
 
     if data is None:
         return Config()
 
     return Config(
-        model=ModelConfig(**data.get('model', {})),
-        data=DataConfig(**data.get('data', {})),
-        training=TrainingConfig(**data.get('training', {})),
-        lora=LoRAConfig(**data.get('lora', {})),
-        quantization=QuantizationConfig(**data.get('quantization', {})),
-        checkpoint=CheckpointConfig(**data.get('checkpoint', {})),
-        tracking=TrackingConfig(**data.get('tracking', {})),
-        device=DeviceConfig(**data.get('device', {})),
+        model=ModelConfig(**data.get("model", {})),
+        data=DataConfig(**data.get("data", {})),
+        training=TrainingConfig(**data.get("training", {})),
+        lora=LoRAConfig(**data.get("lora", {})),
+        quantization=QuantizationConfig(**data.get("quantization", {})),
+        checkpoint=CheckpointConfig(**data.get("checkpoint", {})),
+        tracking=TrackingConfig(**data.get("tracking", {})),
+        device=DeviceConfig(**data.get("device", {})),
     )
 
 
 def get_device(config: DeviceConfig) -> str:
-    """Get device string based on config."""
+    """Get device string based on config (SloNet runs on numpy; auto = cpu)."""
     if config.type == "auto":
-        if torch.cuda.is_available():
-            return "cuda"
-        elif torch.backends.mps.is_available():
-            return "mps"
-        else:
-            return "cpu"
+        return "cpu"
     return config.type
 
 
 def merge_args_with_config(config: Config, args) -> Config:
     """Merge CLI args with config."""
-    import argparse
 
-    if hasattr(args, 'dataset') and args.dataset:
+    if hasattr(args, "dataset") and args.dataset:
         config.data.dataset = args.dataset
-        config.data.data_path = f"datasets/{args.dataset}/input.txt"
+        config.data.data_path = f"data/{args.dataset}/input.txt"
 
-    if hasattr(args, 'epochs') and args.epochs:
+    if hasattr(args, "epochs") and args.epochs:
         config.training.epochs = args.epochs
 
-    if hasattr(args, 'batch_size') and args.batch_size:
+    if hasattr(args, "batch_size") and args.batch_size:
         config.training.batch_size = args.batch_size
 
-    if hasattr(args, 'lr') and args.lr:
+    if hasattr(args, "lr") and args.lr:
         config.training.learning_rate = args.lr
 
     if hasattr(args, "dropout") and getattr(args, "dropout", None) is not None:
@@ -174,7 +193,7 @@ def merge_args_with_config(config: Config, args) -> Config:
     if hasattr(args, "weight_decay") and getattr(args, "weight_decay", None) is not None:
         config.training.weight_decay = float(args.weight_decay)
 
-    if hasattr(args, 'use_lora') and args.use_lora:
+    if hasattr(args, "use_lora") and args.use_lora:
         config.lora.enabled = True
 
     if hasattr(args, "lora_rank") and getattr(args, "lora_rank", None) is not None:
@@ -183,13 +202,16 @@ def merge_args_with_config(config: Config, args) -> Config:
     if hasattr(args, "lora_alpha") and getattr(args, "lora_alpha", None) is not None:
         config.lora.alpha = int(args.lora_alpha)
 
-    if hasattr(args, 'resume') and args.resume:
+    if hasattr(args, "resume") and args.resume:
         config.checkpoint.resume = args.resume
 
     if hasattr(args, "checkpoint_dir") and getattr(args, "checkpoint_dir", None):
         config.checkpoint.trainer_dir = str(args.checkpoint_dir)
 
-    if hasattr(args, "checkpoint_interval") and getattr(args, "checkpoint_interval", None) is not None:
+    if (
+        hasattr(args, "checkpoint_interval")
+        and getattr(args, "checkpoint_interval", None) is not None
+    ):
         config.checkpoint.trainer_interval = int(args.checkpoint_interval)
 
     if hasattr(args, "save_best_only") and getattr(args, "save_best_only", False):
@@ -218,24 +240,16 @@ def merge_args_with_config(config: Config, args) -> Config:
     ):
         config.training.gradient_accumulation_steps = int(args.gradient_accumulation_steps)
 
-    if hasattr(args, "use_mixed_precision"):
-        config.training.use_mixed_precision = bool(args.use_mixed_precision)
-
-    if hasattr(args, "precision") and getattr(args, "precision", None):
-        config.training.mixed_precision_dtype = str(args.precision)
-
     if hasattr(args, "soul_name") and getattr(args, "soul_name", None):
         _sn = str(args.soul_name).strip()
         if _sn:
             config.model.soul_name = _sn
 
-    if hasattr(args, "save_format") and getattr(args, "save_format", None):
-        config.checkpoint.export_format = str(args.save_format)
+    # NOTE: --save-format is intentionally NOT merged. SloughGPTTrainer.save()
+    # always writes .soul, so the option is accepted for backward compatibility
+    # but has no effect on the checkpoint format.
 
     if hasattr(args, "train_device") and getattr(args, "train_device", None):
         config.device.type = str(args.train_device)
 
     return config
-
-
-import torch

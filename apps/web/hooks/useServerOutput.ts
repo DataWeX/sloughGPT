@@ -40,13 +40,13 @@ export function useServerOutput(opts: UseServerOutputOptions = {}): UseServerOut
 
   useEffect(() => {
     mountedRef.current = true
-    let cancelled = false
+    const ac = new AbortController()
 
     const start = async () => {
       setStreaming(true)
       try {
-        for await (const line of systemController.streamOutput(tail)) {
-          if (cancelled || !mountedRef.current) break
+        for await (const line of systemController.streamOutput(tail, ac.signal)) {
+          if (ac.signal.aborted || !mountedRef.current) break
           if (!pausedRef.current) {
             setLines(prev => {
               const next = [...prev, line]
@@ -54,13 +54,13 @@ export function useServerOutput(opts: UseServerOutputOptions = {}): UseServerOut
             })
           }
         }
-      } catch {}
+      } catch { /* stream ended or server offline — non-fatal */ }
       if (mountedRef.current) setStreaming(false)
     }
 
     start()
     return () => {
-      cancelled = true
+      ac.abort()
       mountedRef.current = false
     }
   }, [tail, maxLines])
@@ -80,8 +80,9 @@ export function useServerOutput(opts: UseServerOutputOptions = {}): UseServerOut
       content = JSON.stringify(lines, null, 2)
     } else {
       content = lines.map(l => {
-        const ts = new Date(l.ts * 1000).toISOString()
-        return `${ts} [${l.level}] [${l.source}] ${l.text}`
+        const tag = l.tag ? ` [${l.tag}]` : ''
+        const src = l.source ? ` ${l.source}` : ''
+        return `${l.level}${tag}${src}  ${l.text}`
       }).join('\n')
     }
     const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain' })

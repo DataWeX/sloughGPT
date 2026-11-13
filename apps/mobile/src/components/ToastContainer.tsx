@@ -4,45 +4,53 @@
  * Import and render once at app root level.
  */
 
-import React, {useEffect, useState} from 'react';
-import {Pressable, Animated} from 'react-native';
-import {YStack, Text} from 'tamagui';
-import {toast, type Toast, type ToastType} from '../services/toast';
-import {Icon, type IconName} from './Icon';
+import React, { useEffect, useState } from 'react'
+import { Pressable, Animated } from 'react-native'
+import { YStack, Text } from 'tamagui'
+import { toast, type Toast, type ToastType } from '../services/toast'
+import { Icon, type IconName } from './Icon'
+import { useColors } from '../theme/colors'
 
-const TYPE_COLORS: Record<ToastType, {bg: string; border: string; text: string}> = {
-  success: {bg: '#f0fdf4', border: '#16a34a', text: '#15803d'},
-  error: {bg: '#fef2f2', border: '#dc2626', text: '#b91c1c'},
-  info: {bg: '#eff6ff', border: '#2563eb', text: '#1d4ed8'},
-  warn: {bg: '#fffbeb', border: '#d97706', text: '#b45309'},
-};
+function getTypeStyle(type: ToastType, c: ReturnType<typeof useColors>) {
+  switch (type) {
+    case 'success':
+      return { bg: c.successLight, border: c.success, text: c.successDark }
+    case 'error':
+      return { bg: c.errorLight, border: c.error, text: c.errorDark }
+    case 'info':
+      return { bg: c.infoLight, border: c.info, text: c.infoDark }
+    case 'warn':
+      return { bg: c.warningLight, border: c.warning, text: c.warningDark }
+  }
+}
 
 const ICON_NAMES: Record<ToastType, IconName> = {
   success: 'check',
   error: 'x',
   info: 'info',
   warn: 'triangle-alert',
-};
+}
 
-function ToastItem({item}: {item: Toast}) {
-  const [opacity] = useState(new Animated.Value(0));
-  const colors = TYPE_COLORS[item.type];
+function ToastItem({ item }: { item: Toast }) {
+  const [opacity] = useState(new Animated.Value(0))
+  const c = useColors()
+  const colors = getTypeStyle(item.type, c)
 
   useEffect(() => {
     Animated.timing(opacity, {
       toValue: 1,
       duration: 200,
       useNativeDriver: true,
-    }).start();
+    }).start()
 
     return () => {
       Animated.timing(opacity, {
         toValue: 0,
         duration: 150,
         useNativeDriver: true,
-      }).start();
-    };
-  }, []);
+      }).start()
+    }
+  }, [])
 
   return (
     <Animated.View
@@ -58,35 +66,57 @@ function ToastItem({item}: {item: Toast}) {
           borderLeftColor: colors.border,
           opacity,
         },
-      ]}>
-      <YStack width={20} height={20} borderRadius={10} backgroundColor={colors.border} alignItems="center" justifyContent="center" marginRight={8}>
-        <Icon name={ICON_NAMES[item.type]} size={11} color="#fff" />
+      ]}
+    >
+      <YStack
+        width={20}
+        height={20}
+        borderRadius={10}
+        backgroundColor={colors.border}
+        alignItems="center"
+        justifyContent="center"
+        marginRight={8}
+      >
+        <Icon name={ICON_NAMES[item.type]} size={11} color={c.white} />
       </YStack>
       <Text fontSize={13} lineHeight={18} color={colors.text} flex={1} numberOfLines={2}>
         {item.message}
       </Text>
-      <Pressable onPress={() => toast.dismiss(item.id)} style={{padding: 4, marginLeft: 8}}>
+      <Pressable
+        onPress={() => toast.dismiss(item.id)}
+        style={{ padding: 4, marginLeft: 8 }}
+        accessibilityLabel="Dismiss notification"
+        accessibilityRole="button"
+      >
         <Icon name="x" size={16} color={colors.text} />
       </Pressable>
     </Animated.View>
-  );
+  )
 }
 
 export function ToastContainer() {
-  const [items, setItems] = useState<Toast[]>([]);
+  const [items, setItems] = useState<Toast[]>([])
 
   useEffect(() => {
-    setItems(toast.getToasts());
-    return toast.subscribe(setItems);
-  }, []);
+    setItems(toast.getToasts())
+    return toast.subscribe(setItems)
+  }, [])
 
-  if (items.length === 0) return null;
+  if (items.length === 0) return null
 
   return (
-    <YStack position="absolute" top={44} left={12} right={12} zIndex={99999} gap={6} pointerEvents="box-none">
-      {items.map(item => (
+    <YStack
+      position="absolute"
+      top={44}
+      left={12}
+      right={12}
+      zIndex={99999}
+      gap={6}
+      pointerEvents="box-none"
+    >
+      {items.map((item) => (
         <ToastItem key={item.id} item={item} />
       ))}
     </YStack>
-  );
+  )
 }

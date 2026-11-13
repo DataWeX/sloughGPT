@@ -2,19 +2,31 @@
 Standard API response models.
 
 Every endpoint returns responses wrapped in StandardResponse for consistency.
-Frontend unwraps `data` to get the actual payload.
+Frontend unwraps ``data`` to get the actual payload.
+
+Error responses use the unified shape from ``error_response()``::
+
+    {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
+
+``correlation_id`` is resolved automatically from request context when not
+passed explicitly — callers never need to thread it manually.
 """
 
 from __future__ import annotations
 
-from typing import Any, Generic, Optional, TypeVar
+import logging
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
+
+from domain.infrastructure.correlation import get_correlation_id
+
+_audit_logger = logging.getLogger("audit")
 
 T = TypeVar("T")
 
 
-class StandardResponse(BaseModel, Generic[T]):
+class StandardResponse[T](BaseModel):
     """Unified response envelope for all API endpoints.
 
     Attributes:
@@ -26,8 +38,8 @@ class StandardResponse(BaseModel, Generic[T]):
 
     status: str = "success"
     data: T = Field(default_factory=dict)
-    message: Optional[str] = None
-    meta: Optional[dict[str, Any]] = None
+    message: str | None = None
+    meta: dict[str, Any] | None = None
 
 
 def success_response(
@@ -55,21 +67,225 @@ def success_response(
 
 def error_response(
     message: str,
-    data: Any = None,
-    meta: dict[str, Any] | None = None,
-    status_code: int = 500,
+    code: str = "E_DOMAIN",
+    details: dict[str, Any] | None = None,
+    correlation_id: str | None = None,
 ) -> dict:
-    """Build an error StandardResponse as a plain dict.
+    """Build a structured error response body.
+
+    This is the single source of truth for error response shape.
+    Exception handlers in ``infrastructure.exception_handlers`` import
+    and use this function directly.
+
+    ``correlation_id`` is resolved automatically from request context
+    (set by ``CorrelationIdMiddleware``) when not passed explicitly.
+
+    Shape::
+
+        {"error": "...", "code": "...", "details": {...}, "correlation_id": "..."}
 
     Args:
-        message: Error description.
-        data: Optional error details.
-        meta: Optional metadata.
+        message: Human-readable error description.
+        code: Machine-readable error code (e.g. ``E_NOT_FOUND``).
+        details: Optional extra context (validation errors, etc.).
+        correlation_id: Request correlation ID.  Falls back to the
+            value set by ``CorrelationIdMiddleware`` when omitted.
 
     Returns:
-        dict matching StandardResponse shape.
+        dict with unified error response shape.
     """
-    resp: dict[str, Any] = {"status": "error", "message": message, "data": data}
-    if meta:
-        resp["meta"] = meta
-    return resp
+    cid = correlation_id or get_correlation_id()
+    body: dict[str, Any] = {"error": message, "code": code}
+    if details:
+        body["details"] = details
+    if cid:
+        body["correlation_id"] = cid
+    return body
+
+
+def wrap_controller_result(
+    result: dict,
+    error_code: str = "E_DOMAIN",
+) -> dict:
+    """Wrap a controller result dict into the correct response shape.
+
+    Controllers return ``{"status": "error", "error": "..."}`` on failure
+    and ``{"status": "loaded", ...}`` on success.  This helper detects the
+    error case and returns an ``error_response()`` instead of wrapping it
+    in ``success_response()``.
+
+    Args:
+        result: Dict returned by a controller method.
+        error_code: Error code to use when the result is an error.
+
+    Returns:
+        ``error_response()`` if result has ``status == "error"``,
+        otherwise ``success_response(data=result)``.
+    """
+    if isinstance(result, dict) and result.get("status") == "error":
+        msg = result.get("error") or result.get("message") or "Operation failed"
+        return error_response(msg, error_code, details=result)
+    return success_response(data=result)
+
+
+def raise_error(
+    message: str,
+    code: str = "E_DOMAIN",
+    *,
+    status_code: int | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    """Raise an AppError that the global exception handler converts to JSON.
+
+    Uses the unified ERROR_REGISTRY from domain.infrastructure._internal.errors to
+    resolve the correct AppError subclass and HTTP status for each code.
+
+    Args:
+        message: Human-readable error description.
+        code: Machine-readable error code (e.g. ``E_NOT_FOUND``).
+        status_code: Override HTTP status (optional — derived from code if omitted).
+        details: Optional extra context.
+
+    Raises:
+        AppError (or subclass) — never returns.
+    """
+    from domain.infrastructure._internal.errors import (
+        ERROR_REGISTRY,
+        AppError,
+        ErrorCode,
+    )
+
+    # Look up in the unified registry
+    try:
+        ec = ErrorCode(code)
+        class_name, default_status, _recoverable, _user_msg = ERROR_REGISTRY[ec]
+    except (ValueError, KeyError):
+        # Unknown code — fall back to generic AppError
+        class_name = "AppError"
+        default_status = status_code or 400
+
+    # Import the correct class dynamically
+    import domain.infrastructure._internal.errors as _err_mod
+
+    exc_cls = getattr(_err_mod, class_name, AppError)
+
+    http_status = status_code or default_status
+
+    raise exc_cls(
+        message=message,
+        code=code,
+        user_message=message,
+        http_status=http_status,
+        details=details or {},
+    )
+
+
+def safe_audit_log(
+    action: str,
+    resource: str = "",
+    detail: str = "",
+    user: str = "anonymous",
+    extra: dict | None = None,
+    workspace_id: str = "",
+    **kwargs: Any,
+) -> None:
+    """Log an audit event without crashing on failure.
+
+    Falls back to standard ``logging`` if the audit logger is unavailable,
+    so audit events are never silently lost.
+
+    Args:
+        action: The action being logged (e.g. 'knowledge.add').
+        resource: The resource being acted upon.
+        detail: Human-readable detail string.
+        user: User identifier (default: "anonymous").
+        extra: Optional extra dict to forward to the audit logger.
+        workspace_id: Workspace scope for the event.
+        **kwargs: Additional fields merged into ``extra``.
+    """
+    try:
+        from infrastructure.auth import get_audit_logger
+
+        merged = {**(extra or {}), **kwargs} if kwargs else extra
+        get_audit_logger().log(
+            action,
+            user=user,
+            resource=resource,
+            detail=detail,
+            extra=merged,
+            workspace_id=workspace_id,
+        )
+    except Exception:
+        _audit_logger.info(
+            "audit:%s resource=%s detail=%s ws=%s %s",
+            action,
+            resource,
+            detail,
+            workspace_id or "global",
+            " ".join(f"{k}={v}" for k, v in (extra or kwargs).items()) if (extra or kwargs) else "",
+        )
+
+
+def classify_and_raise(e: Exception, source: str = "router") -> None:
+    """Classify an exception and raise the corresponding AppError.
+
+    This is the canonical error handling pattern for router endpoints:
+
+        try:
+            ...
+        except Exception as e:
+            classify_and_raise(e, source="router.chat")
+
+    The exception handler (NOT this function) emits the EventBus event.
+    This avoids double emission.
+
+    Args:
+        e: The caught exception.
+        source: Identifier for the error source.
+
+    Raises:
+        AppError (or subclass) — never returns.
+    """
+    from domain.infrastructure._internal.errors import AppError as _AppError
+    from domain.infrastructure._internal.errors import classify_exception
+
+    try:
+        err = classify_exception(e)
+        # Set source for EventBus emission in the exception handler
+        err.source = source
+        if isinstance(err, _AppError):
+            raise err
+        raise_error(err.user_message, err.code, status_code=err.http_status, details=err.details)
+    except _AppError:
+        raise
+    except Exception:
+        _audit_logger.warning(
+            "classify_and_raise fallback: source=%s error=%s",
+            source,
+            e,
+            exc_info=True,
+        )
+        raise_error(str(e), "E_DOMAIN", status_code=500)
+
+
+def endpoint(source: str):
+    """Decorator that wraps a router method with try/except + classify_and_raise.
+
+    Usage:
+        @endpoint("learner.search")
+        def learn_search(self, req: ...):
+            ...
+    """
+    import functools
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                classify_and_raise(e, source=source)
+
+        return wrapper
+
+    return decorator

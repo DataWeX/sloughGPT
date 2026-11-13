@@ -1,7 +1,8 @@
 """Tests for knowledge_augmenter — chat enrichment with vector-retrieved facts."""
-import pytest
-from unittest.mock import patch, MagicMock
-from domains.learner.knowledge_augmenter import (
+
+from unittest.mock import MagicMock
+
+from domain.learner._internal.knowledge_augmenter import (
     _needs_web_search,
     enrich_with_knowledge,
 )
@@ -31,14 +32,14 @@ class TestEnrichWithKnowledge:
     def test_returns_facts_from_memory(self, monkeypatch):
         mock_memory = MagicMock()
         mock_memory.search.return_value = [
-            {"content": "Python is a programming language created in 1991."},
+            {"content": "Python is a programming language created in 1991.", "score": 0.9},
         ]
 
         def mock_get_memory():
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -55,7 +56,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -71,7 +72,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -81,15 +82,18 @@ class TestEnrichWithKnowledge:
     def test_memory_filters_short_content(self, monkeypatch):
         mock_memory = MagicMock()
         mock_memory.search.return_value = [
-            {"content": "short"},
-            {"content": "This is a sufficiently long fact about something interesting."},
+            {"content": "short", "score": 0.9},
+            {
+                "content": "This is a sufficiently long test fact about something interesting.",
+                "score": 0.9,
+            },
         ]
 
         def mock_get_memory():
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 

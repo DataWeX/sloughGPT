@@ -2,14 +2,13 @@
 SloughGPT Security Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
-import time
 import hashlib
-import secrets
+import time
 
 
 class TestRateLimiter:
@@ -17,6 +16,7 @@ class TestRateLimiter:
 
     def test_rate_limiter_init(self):
         """Test rate limiter initialization."""
+
         class MockRateLimiter:
             def __init__(self, requests_per_minute=60, burst_size=10):
                 self.requests_per_minute = requests_per_minute
@@ -35,6 +35,7 @@ class TestRateLimiter:
 
     def test_rate_limiter_allows_requests(self):
         """Test rate limiter allows requests within limit."""
+
         class MockRateLimiter:
             def __init__(self):
                 self.clients = {}
@@ -57,8 +58,8 @@ class TestJWTAuth:
     def test_jwt_token_creation(self):
         """Test JWT token creation."""
         import base64
-        import json
         import hmac
+        import json
 
         secret = "test_secret"
         subject = "test_user"
@@ -73,7 +74,9 @@ class TestJWTAuth:
         }
         payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
 
-        signature = hmac.new(secret.encode(), f"{header_b64}.{payload_b64}".encode(), hashlib.sha256)
+        signature = hmac.new(
+            secret.encode(), f"{header_b64}.{payload_b64}".encode(), hashlib.sha256
+        )
         signature_b64 = base64.urlsafe_b64encode(signature.digest()).decode()
 
         token = f"{header_b64}.{payload_b64}.{signature_b64}"
@@ -100,6 +103,7 @@ class TestInputValidation:
 
     def test_sanitize_string(self):
         """Test string sanitization."""
+
         def sanitize_string(value, max_length=10000):
             if not isinstance(value, str):
                 return ""
@@ -114,6 +118,7 @@ class TestInputValidation:
 
     def test_validate_temperature(self):
         """Test temperature validation."""
+
         def validate_temperature(temp):
             return max(0.0, min(2.0, temp))
 
@@ -124,6 +129,7 @@ class TestInputValidation:
 
     def test_validate_max_tokens(self):
         """Test max tokens validation."""
+
         def validate_max_tokens(tokens):
             return max(1, min(4096, tokens))
 
@@ -134,6 +140,7 @@ class TestInputValidation:
 
     def test_validate_prompt(self):
         """Test prompt validation."""
+
         def validate_prompt(prompt):
             if not isinstance(prompt, str):
                 return ""
@@ -154,6 +161,7 @@ class TestAPICache:
 
     def test_cache_init(self):
         """Test cache initialization."""
+
         class MockCache:
             def __init__(self, max_size=1000, default_ttl=300):
                 self.cache = {}
@@ -169,6 +177,7 @@ class TestAPICache:
 
     def test_cache_set_get(self):
         """Test cache set and get."""
+
         class MockCache:
             def __init__(self):
                 self.cache = {}

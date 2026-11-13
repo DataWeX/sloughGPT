@@ -54,4 +54,34 @@ describe('TrainingCard', () => {
     const { container } = render(<TrainingCard report={{ ...base.report, accuracy_history: [0.5], caption_history: [] }} />)
     expect(container.querySelector('[data-testid="line-chart"]')).toBeNull()
   })
+
+  it('skips chart when accuracy_history is empty', () => {
+    const { container } = render(<TrainingCard report={{ ...base.report, accuracy_history: [], caption_history: [] }} />)
+    expect(container.querySelector('[data-testid="line-chart"]')).toBeNull()
+  })
+
+  it('renders without trainStatus', () => {
+    const { container } = render(<TrainingCard {...base} trainStatus={null} />)
+    expect(screen.getByText('10')).toBeDefined()
+    expect(container.querySelector('[class*="progress"]')).toBeNull()
+  })
+
+  it('hides progress bar when total is 0', () => {
+    const status = { running: true, job_id: 'j1', total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '', started_at: null, finished_at: null }
+    const { container } = render(<TrainingCard {...base} trainStatus={status} />)
+    expect(container.querySelector('[role="progressbar"]')).toBeNull()
+  })
+
+  it('slices caption_history to last 6 in reverse order', () => {
+    const captions = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8']
+    render(<TrainingCard report={{ ...base.report, caption_history: captions }} />)
+    expect(screen.getByText('c8')).toBeDefined()
+    expect(screen.getByText('c3')).toBeDefined()
+    expect(screen.queryByText('c1')).toBeNull()
+  })
+
+  it('renders diversity as percentage', () => {
+    render(<TrainingCard {...base} />)
+    expect(screen.getByText('75%')).toBeDefined()
+  })
 })
