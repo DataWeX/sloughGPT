@@ -97,6 +97,7 @@ class ErrorCode(StrEnum):
     # Config / environment
     E_CONFIG = "E_CONFIG"
     E_ENV_MISSING = "E_ENV_MISSING"
+    E_CONFIG_DRIFT = "E_CONFIG_DRIFT"
 
     # Network
     E_NETWORK = "E_NETWORK"
@@ -473,6 +474,13 @@ ERROR_REGISTRY[ErrorCode.E_STATE_IDLE] = (
     "No active training session.",
 )
 ERROR_REGISTRY[ErrorCode.E_CONFIG] = ("ConfigError", 500, False, "Server configuration error.")
+ERROR_REGISTRY[ErrorCode.E_CONFIG_DRIFT] = (
+    "ConflictError",
+    412,
+    True,
+    "This page and the server disagree about the active configuration, "
+    "so nothing was sent. Reload the page to continue.",
+)
 ERROR_REGISTRY[ErrorCode.E_NETWORK] = ("RecoverableError", 503, True, "Network connection failed.")
 ERROR_REGISTRY[ErrorCode.E_SHELL_SECURITY] = (
     "AuthError",
