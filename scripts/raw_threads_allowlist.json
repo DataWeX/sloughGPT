@@ -7,13 +7,13 @@
       "deferred": "charter ruling: migrate when the site is next touched",
       "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
     },
-    "site_count": 239
+    "site_count": 242
   },
   "entries": {
     "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
-      "reason": "producer thread feeding a result queue, joined under a deadline — pump bound to a live handle",
+      "reason": "producer thread feeding a result queue, joined under a deadline — pump bound to a live handle; +1 site is the off-loop to_thread(thread.join, 5) deadline escape (PR #254 lane — sync-core/async-host seam, the join must not stall the event loop)",
       "kind": "grandfathered",
-      "count": 1
+      "count": 2
     },
     "apps/api/server/infrastructure/startup.py::_start_engine_watcher": {
       "reason": "watcher loop bound to the engine child process handle",
@@ -395,6 +395,11 @@
       "kind": "grandfathered",
       "count": 1
     },
+    "apps/api/server/routers/datasets_crawl.py::import_crawl_pages": {
+      "reason": "stage-4 async escape: crawl-page ingest runs on the to_thread worker seam behind the import lock (async-host rule — AGENTS.md execution philosophy); site landed with the PR #254 lane without an entry, recorded here as its merge landed",
+      "kind": "grandfathered",
+      "count": 1
+    },
     "apps/api/server/routers/files.py::FilesRouter.download_url": {
       "reason": "stage-4 async escape: import-from-URL fetch runs on the to_thread worker seam (async-host rule — AGENTS.md execution philosophy); site landed with d4c0ed398 (card 20261108_094501) without an entry, recorded here as a drive-by by the route-map /knowledge lane",
       "kind": "grandfathered",
@@ -567,6 +572,11 @@
     },
     "apps/api/server/routers/models.py::ModelsRouter.get_engine_status": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/models.py::ModelsRouter.list_external_models": {
+      "reason": "stage-4 async escape: upstream model-list fetch runs on the to_thread worker seam (async-host rule — a slow/hung upstream must not stall the event loop for every other route); site landed with the PR #254 lane without an entry, recorded here as its merge landed",
       "kind": "grandfathered",
       "count": 1
     },
