@@ -414,7 +414,26 @@ class TestStreamTurnResponseSequence:
         "memory",
         "memory",
     ]
+    # True default: ``use_consciousness`` is OFF (card 20261114_092948), so
+    # the reflection stage is absent — every other stage still runs.
     DEFAULT_SEQUENCE = [
+        "model_status",
+        "memory_pressure",
+        "scope",
+        "resolve_context_core",  # frame-builder argument (stream_turn)
+        "context_frame",
+        "enrich",
+        "rag",
+        "generate",
+        "resolve_context_core",  # post-gen argument (stream_turn)
+        "post_gen",
+        "memory",
+        "memory",
+    ]
+    # Explicit ``use_consciousness: true`` inserts ``reflect`` between the
+    # RAG stage and generate — same position it occupied when the flag
+    # defaulted on.
+    OPT_IN_SEQUENCE = [
         "model_status",
         "memory_pressure",
         "scope",
@@ -534,9 +553,7 @@ class TestStreamTurnResponseSequence:
                 )
             )
             stack.enter_context(
-                patch(
-                    "apps.api.server.routers.inference._build_context_frame", new=_frame
-                )
+                patch("apps.api.server.routers.inference._build_context_frame", new=_frame)
             )
             stack.enter_context(
                 patch("apps.api.server.routers.inference._enrich_knowledge", new=_enrich)
@@ -550,9 +567,7 @@ class TestStreamTurnResponseSequence:
             stack.enter_context(
                 patch("apps.api.server.routers.inference.get_rag_service", new=_rag_service)
             )
-            stack.enter_context(
-                patch("domain.cognition.is_rag_service_ready", new=_rag_ready)
-            )
+            stack.enter_context(patch("domain.cognition.is_rag_service_ready", new=_rag_ready))
             stack.enter_context(
                 patch("apps.api.server.routers.inference.get_memory_service", new=_memory_service)
             )
@@ -560,16 +575,10 @@ class TestStreamTurnResponseSequence:
                 patch("apps.api.server.routers.inference.get_provider", new=_get_provider)
             )
             stack.enter_context(
-                patch(
-                    "apps.api.server.routers.inference._run_post_gen_tasks", new=_post_gen
-                )
+                patch("apps.api.server.routers.inference._run_post_gen_tasks", new=_post_gen)
             )
-            stack.enter_context(
-                patch.object(_inference_router, "_resolve_turn_scope", new=_scope)
-            )
-            stack.enter_context(
-                patch.object(_inference_router, "_get_context_core", new=_ctx_core)
-            )
+            stack.enter_context(patch.object(_inference_router, "_resolve_turn_scope", new=_scope))
+            stack.enter_context(patch.object(_inference_router, "_get_context_core", new=_ctx_core))
             resp = client.post("/chat", json=payload)
         return order, ctx_core_args, resp
 
@@ -590,12 +599,10 @@ class TestStreamTurnResponseSequence:
             f"bare probe ran stages outside the pinned contract: {order}"
         )
         assert "resolve_context_core" not in order, (
-            "a bare probe resolved ContextCore — the flag gate on "
-            "_get_context_core() was dropped"
+            "a bare probe resolved ContextCore — the flag gate on _get_context_core() was dropped"
         )
         assert ctx_core_args == [None], (
-            "post-gen must receive the explicit ctx_core=None hand-off "
-            f"(got {ctx_core_args!r})"
+            f"post-gen must receive the explicit ctx_core=None hand-off (got {ctx_core_args!r})"
         )
         # User-visible outcome: tokens, the closing frame, no sidebands.
         assert '"token": "ok"' in resp.text, "the probe's answer never streamed"
@@ -603,12 +610,15 @@ class TestStreamTurnResponseSequence:
         assert '"phase": "CONSCIOUSNESS"' not in resp.text, (
             "bare probe surfaced a consciousness sideband"
         )
-        assert '"phase": "MEMORY"' not in resp.text, (
-            "bare probe surfaced a memory sideband"
-        )
+        assert '"phase": "MEMORY"' not in resp.text, "bare probe surfaced a memory sideband"
 
     def test_default_sequence_runs_full_pipeline_in_pinned_order(self, client):
-        """Defaults (all flags True) run the full chain, in this order."""
+        """Defaults run the full chain minus reflection, in this order.
+
+        ``use_consciousness`` defaults OFF (card 20261114_092948) — an
+        omitted flag must NOT schedule the reflect stage, while every other
+        default-on stage (context core, enrich, RAG) still runs.
+        """
         order, ctx_core_args, resp = self._post_sequenced(
             client,
             {
@@ -617,15 +627,42 @@ class TestStreamTurnResponseSequence:
             },
         )
         assert resp.status_code == 200
-        assert order == self.DEFAULT_SEQUENCE, (
-            f"default pipeline ran out of pinned order: {order}"
+        assert order == self.DEFAULT_SEQUENCE, f"default pipeline ran out of pinned order: {order}"
+        assert "reflect" not in order, (
+            "omitted use_consciousness scheduled the reflection stage — "
+            "the default-OFF gate on _apply_consciousness_reflection was dropped"
         )
         # ContextCore resolves twice — frame builder first, post-gen second —
         # and the resolved core is what post-gen receives.
         assert order.count("resolve_context_core") == 2
         assert len(ctx_core_args) == 1
-        assert ctx_core_args[0] is not None, (
-            "opted-in turn passed ctx_core=None to post-gen"
+        assert ctx_core_args[0] is not None, "opted-in turn passed ctx_core=None to post-gen"
+        assert '"token": "ok"' in resp.text
+        assert self.DONE_FRAME in resp.text, "TurnResult never closed the stream"
+
+    def test_consciousness_opt_in_inserts_reflect_before_generate(self, client):
+        """Explicit ``use_consciousness: true`` runs reflect at its pinned slot.
+
+        The opt-in contract survives the default flip: the stage sits
+        between RAG and generate, exactly where it ran when the flag
+        defaulted on. Distinct session/message — the session-keyed
+        ``turn_hash`` replay cache would otherwise short-circuit this turn.
+        """
+        order, ctx_core_args, resp = self._post_sequenced(
+            client,
+            {
+                "messages": [{"role": "user", "content": "Hello there"}],
+                "session_id": "seq-optin-consciousness",
+                "use_consciousness": True,
+            },
+        )
+        assert resp.status_code == 200
+        assert order == self.OPT_IN_SEQUENCE, f"opt-in turn ran out of pinned order: {order}"
+        assert order.count("reflect") == 1, (
+            "use_consciousness=true must schedule exactly one reflect stage"
+        )
+        assert order.index("reflect") < order.index("generate"), (
+            "reflect must precede generate (tail context is assembled before the prompt is built)"
         )
         assert '"token": "ok"' in resp.text
         assert self.DONE_FRAME in resp.text, "TurnResult never closed the stream"

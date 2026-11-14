@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "a385bc5f7471ca7bd122cbd2dfb620cd740da7e8",
+    "recorded_commit": "6d69bf023c1b65ca40be502192b429a2e01b5bbc",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "9a4bbc52092924ff88a3142c09cd30e56c5bfd37"
+      "tree_hash": "39a98496c0a02115c48b0e8a3f801f0a9fa89e75"
     },
     "knowledge": {
       "class": "core-capability",
@@ -239,7 +239,7 @@
       "consumers": ["tests/", "apps/api/"],
       "note": "operator/health surface — overlap with api/infrastructure under review",
       "debt": "overlap with api/infrastructure — client/core boundary review pending",
-      "tree_hash": "e309c45b2559b3bd26b8a17df1318daa05600248"
+      "tree_hash": "37c61baa5098cc7a607ae0b2cc87a73adc5ec48c"
     },
     "plugins": {
       "class": "core-capability",
