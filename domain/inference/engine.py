@@ -57,11 +57,17 @@ class TurnRequest:
     agent_id: str | None = None
     use_context_core: bool = True
     use_rag: bool = True
-    use_consciousness: bool = True
+    use_consciousness: bool = False
     """Run the consciousness reflection pipeline for this turn.
 
-    Quick probes (QuickActions "Test model") set it false so the bare
-    "Hello!" never receives the reflection narrative as context.
+    OFF by default (card 20261114_092948): the narrative was prepended as a
+    SYSTEM message ahead of the persona, and the 0.5B model answered the
+    narrative ("Self-Reflection Context: you have processed N experiences…")
+    instead of the user's message — probe-proven live 2026-11-14. Quick
+    probes (QuickActions "Test model") keep setting it false explicitly;
+    chat clients opt in per turn until the narrative moves to the volatile
+    tail (after the user's message, framed as context) where it cannot
+    outrank the question.
     """
     cancel_event: threading.Event | None = None
     """Cooperative cancellation for this turn.

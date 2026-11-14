@@ -359,11 +359,11 @@ class TestStreamTurnBareProbeGates:
         assert not mock_frame.called, (
             "use_context_core=false but the ContextCore frame was still built"
         )
-        assert not mock_enrich.called, (
-            "use_context_core=false but knowledge enrichment still ran"
-        )
+        assert not mock_enrich.called, "use_context_core=false but knowledge enrichment still ran"
 
-        # Defaults (True) keep the production pipeline wired in.
+        # Omitted flags: use_consciousness now defaults OFF (card
+        # 20261114_092948 — narrative-in-system-head hijacked chat replies),
+        # context/RAG keep defaulting ON.
         mock_frame.reset_mock()
         mock_reflect.reset_mock()
         mock_enrich.reset_mock()
@@ -372,9 +372,22 @@ class TestStreamTurnBareProbeGates:
             json={"messages": [{"role": "user", "content": "Hi"}], "session_id": "probe-default"},
         )
         assert resp.status_code == 200
-        mock_reflect.assert_called_once()
+        assert not mock_reflect.called, "omitted use_consciousness must default to OFF"
         mock_frame.assert_called_once()
         mock_enrich.assert_called_once()
+
+        # Explicit opt-in keeps the reflection pipeline reachable.
+        mock_reflect.reset_mock()
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hi again"}],
+                "session_id": "probe-optin",
+                "use_consciousness": True,
+            },
+        )
+        assert resp.status_code == 200
+        mock_reflect.assert_called_once()
 
 
 class TestStreamTurnResponseSequence:
