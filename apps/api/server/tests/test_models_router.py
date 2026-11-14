@@ -773,6 +773,8 @@ class TestExternalModelsLoopResponsiveness:
         # off-loop (asyncio.to_thread) and the sleep completes in ~0.1s while
         # the fetch is still in flight.
         assert loop_stayed_free_for < 1.0
+
+
 class TestModelsFacadeAbsorbsInferRegistry:
     """The models router serves the merged /infer + /registry routes (card 20261101_154054).
 

@@ -4,6 +4,13 @@ vi.hoisted(() => {
   ;(process.env as Record<string, string>).NODE_ENV = 'development'
 })
 
+// Host-wiring isolation (card 20261108_222308): the http-client facade also
+// installs the config-drift guard, whose config fetch must not run inside
+// this logger suite (it has its own suite in runtime-config.test.ts).
+vi.mock('./runtime-config', () => ({
+  installRuntimeConfigGuards: vi.fn(),
+}))
+
 import { LogTransport, WebLogger, trackEvent, devDebug, logger } from './dev-log'
 
 beforeEach(() => {
