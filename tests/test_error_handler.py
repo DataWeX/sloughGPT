@@ -36,9 +36,37 @@ from domain.infrastructure._internal.errors import (
 
 
 class TestErrorCodeRegistry:
+    def test_no_duplicate_enum_values(self):
+        """No value-alias members — they silently share one enum object.
+
+        Python binds ``FOO = <same value as BAR>`` to ``BAR`` itself, so a later
+        ``ERROR_REGISTRY[ErrorCode.FOO] = …`` write CLOBBERS ``BAR``'s entry
+        (aliases are also invisible to ``for code in ErrorCode`` iteration, so
+        ``test_all_codes_have_entries`` cannot see the collision). That bug hid
+        "Resource creation failed." under E_BAD_REQUEST until 2026-11-13
+        (card 20261113_153000). One declaration per code, always.
+        """
+        seen: dict[str, str] = {}
+        for name, member in ErrorCode.__members__.items():
+            assert name not in seen or seen[name] == name
+            # A true alias: __members__ key differs from the canonical name.
+            assert name == member.name, (
+                f"alias member {name!r} resolves to {member.name!r} — value collisions clobber ERROR_REGISTRY"
+            )
+            seen.setdefault(member.value, name)
+        # Belt and braces: values themselves unique across canonical members.
+        values = [m.value for m in ErrorCode]
+        assert len(values) == len(set(values)), f"duplicate enum values: {values}"
+
     def test_all_codes_have_entries(self):
         for code in ErrorCode:
             assert code in ERROR_REGISTRY, f"Missing registry entry for {code}"
+
+    def test_e_bad_request_message_is_not_clobbered(self):
+        """E_BAD_REQUEST's registry message stays its own (post-alias fix)."""
+        info = get_error_info("E_BAD_REQUEST")
+        assert info is not None
+        assert info[3] == "Invalid request."
 
     def test_registry_entry_shape(self):
         for code, entry in ERROR_REGISTRY.items():
