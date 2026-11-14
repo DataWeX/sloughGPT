@@ -97,6 +97,7 @@ class ErrorCode(StrEnum):
     # Config / environment
     E_CONFIG = "E_CONFIG"
     E_ENV_MISSING = "E_ENV_MISSING"
+    E_CONFIG_DRIFT = "E_CONFIG_DRIFT"
 
     # Network
     E_NETWORK = "E_NETWORK"
@@ -107,8 +108,12 @@ class ErrorCode(StrEnum):
     # Docstore
     E_UNKNOWN_COLLECTION = "E_UNKNOWN_COLLECTION"
 
-    # Legacy aliases (mapped to canonical codes)
-    E_CREATE_FAILED = "E_BAD_REQUEST"
+    # NOTE: no value-alias members here (e.g. a "legacy" FOO = "BAR"): Python
+    # binds an equal-valued member to the SAME enum object, so a later
+    # ERROR_REGISTRY[ErrorCode.FOO] write silently CLOBBERS BAR's entry — that
+    # exact bug hid "Resource creation failed." under E_BAD_REQUEST until
+    # 2026-11-13 (card 20261113_153000); guarded by
+    # tests/test_error_handler.py::test_no_duplicate_enum_values.
 
 
 # ── Error Registry ──
@@ -473,6 +478,13 @@ ERROR_REGISTRY[ErrorCode.E_STATE_IDLE] = (
     "No active training session.",
 )
 ERROR_REGISTRY[ErrorCode.E_CONFIG] = ("ConfigError", 500, False, "Server configuration error.")
+ERROR_REGISTRY[ErrorCode.E_CONFIG_DRIFT] = (
+    "ConflictError",
+    412,
+    True,
+    "This page and the server disagree about the active configuration, "
+    "so nothing was sent. Reload the page to continue.",
+)
 ERROR_REGISTRY[ErrorCode.E_NETWORK] = ("RecoverableError", 503, True, "Network connection failed.")
 ERROR_REGISTRY[ErrorCode.E_SHELL_SECURITY] = (
     "AuthError",
@@ -497,12 +509,6 @@ ERROR_REGISTRY[ErrorCode.E_UNKNOWN_COLLECTION] = (
     404,
     False,
     "Unknown collection or store.",
-)
-ERROR_REGISTRY[ErrorCode.E_CREATE_FAILED] = (
-    "ValidationError",
-    400,
-    False,
-    "Resource creation failed.",
 )
 
 

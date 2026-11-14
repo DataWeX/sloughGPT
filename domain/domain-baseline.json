@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "7fb9fdbfa79ff9a402bd026bef9c3b86f560b59d",
+    "recorded_commit": "235a415d0473367b51e342d6f071bd1b134ae6a2",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -223,7 +223,7 @@
       ],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "3a62a81f489cdd5d520ee702b6f0c94979294575"
+      "tree_hash": "80602571cae4138bc1f7f4bdc3970b0cc7c5012e"
     },
     "gates": {
       "class": "core-capability",
@@ -280,7 +280,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "4af56d3afa75e61e0649b385e36979e26f68fe77"
+      "tree_hash": "9a4bbc52092924ff88a3142c09cd30e56c5bfd37"
     },
     "knowledge": {
       "class": "core-capability",
@@ -478,7 +478,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "80b571776823a6c8e8dd5b119bc8d1f1d096333f"
+      "tree_hash": "fc7b329865bbcce69d08da6a11d4384668df2014"
     },
     "slolib": {
       "class": "core-capability",
