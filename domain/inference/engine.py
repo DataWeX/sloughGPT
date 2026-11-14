@@ -57,6 +57,12 @@ class TurnRequest:
     agent_id: str | None = None
     use_context_core: bool = True
     use_rag: bool = True
+    use_consciousness: bool = True
+    """Run the consciousness reflection pipeline for this turn.
+
+    Quick probes (QuickActions "Test model") set it false so the bare
+    "Hello!" never receives the reflection narrative as context.
+    """
     cancel_event: threading.Event | None = None
     """Cooperative cancellation for this turn.
 
@@ -84,6 +90,10 @@ class TurnResult:
     elapsed_ms: float | None = None
     finish_reason: str | None = None
     tokens: list[str] = field(default_factory=list)
+    consciousness: dict | None = None
+    """Reflection result to surface as a CONSCIOUSNESS SSE event, if any."""
+    memory: dict | None = None
+    """Auto-memory outcome (stored/fact/facts) to surface as MEMORY, if any."""
 
 
 @runtime_checkable

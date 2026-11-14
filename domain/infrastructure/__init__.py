@@ -7,6 +7,8 @@ Public API:
     AppError, ErrorCode
 """
 
+from __future__ import annotations
+
 from domain.infrastructure._internal import artifact_registry
 from domain.infrastructure._internal.config import (
     AppConfig,
@@ -43,6 +45,23 @@ _LAZY_IMPORTS = {
     "DatasetRepository": ("._internal.entity_repositories", "DatasetRepository"),
     "KnowledgeRepository": ("._internal.entity_repositories", "KnowledgeRepository"),
     "artifact_registry": ("._internal.artifact_registry", None),
+    # Lazy: hf_hub imports `requests` + `downcraft` at module scope, so it is
+    # kept off the cold-start path (peer manifest serving is a rare call).
+    "build_model_manifest": ("._internal.hf_hub", "build_model_manifest"),
+    "resolve_cached_path": ("._internal.hf_hub", "resolve_cached_path"),
+    # Route-surface reads (card 20261101_140447) — mapped to the _internal
+    # modules because that is what reads them today: tests/test_training_distill
+    # patches domain.infrastructure._internal.{model_registry,server_state}
+    # and consumed through this facade, so the facade binds there (facade
+    # binding rule: map to the module the tests actually patch). Consumers
+    # that import domain.infrastructure.server_state directly (lora.py,
+    # routers/souls.py, …) bypass this entry; AppError is already eager here.
+    "get_model_registry": ("._internal.model_registry", "get_model_registry"),
+    "get_server_state": ("._internal.server_state", "get_server_state"),
+    # Route-surface facade (layer conformance): soul→slnc compile used by the
+    # training execution/legacy routes; lazy so tests patching
+    # domain.infrastructure._internal.soul_to_slnc stay visible at call time.
+    "soul_to_slnc": ("._internal.soul_to_slnc", "soul_to_slnc"),
 }
 
 
@@ -72,7 +91,9 @@ __all__ = [
     "AppError",
     "ErrorCode",
     "artifact_registry",
+    "build_model_manifest",
     "classify_exception",
+    "resolve_cached_path",
     "emit_error_event",
     "get_event_buffer",
     "get_server_buffer",
@@ -80,4 +101,8 @@ __all__ = [
     "SLNCCompiler",
     "DatasetRepository",
     "KnowledgeRepository",
+    # Route-surface reads (card 20261101_140447)
+    "get_model_registry",
+    "get_server_state",
+    "soul_to_slnc",
 ]

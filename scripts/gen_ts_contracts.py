@@ -137,6 +137,133 @@ def build_source() -> str:
         " as const satisfies Record<string, ContractDescriptor>\n"
         "\n"
         "export type ContractName = keyof typeof CONTRACTS\n"
+        f"{event_types_source()}"
+        f"{session_types_source()}"
+    )
+
+
+def event_types_source() -> str:
+    """Project the process-event schema into TS declarations.
+
+    The envelope's second projection (``training/process_events.py``
+    EVENT_SCHEMA / ACTION_SCHEMA / vocabularies): ONE Python declaration,
+    byte-identical interfaces in every consumer artifact — rendered on
+    the same freshness gate as CONTRACTS, so a schema change that isn't
+    regenerated fails ``--check`` exactly like a descriptor change.
+    """
+    from training import process_events as pe  # noqa: PLC0415 — after sys.path bootstrap
+
+    def resolve(raw: str) -> str:
+        # PROJECTOR_KIND is a token meaning "the kind literal"; every
+        # other type name is an alias this block itself emits.
+        if raw == "PROJECTOR_KIND":
+            return json.dumps(pe.PROJECTOR_KIND)
+        return raw
+
+    def fields(schema: dict[str, tuple[str, bool]]) -> str:
+        return "\n".join(
+            f"  {name}{'' if required else '?'}: {resolve(raw)}"
+            for name, (raw, required) in schema.items()
+        )
+
+    def union(values: tuple[str, ...]) -> str:
+        return " | ".join(json.dumps(v) for v in values)
+
+    return (
+        "\n"
+        "// ── Process-event contract — projection of training/process_events.py\n"
+        "// (EVENT_SCHEMA / ACTION_SCHEMA / vocabularies). One declaration, two\n"
+        "// halves: edit the Python schema, then regenerate — never edit here.\n"
+        "\n"
+        "/** Intents a projected action may carry (`ACTION_INTENTS`). */\n"
+        f"export type ProcessActionIntent = {union(pe.ACTION_INTENTS)}\n"
+        "\n"
+        "/** One entry of an event's action surface (`ACTION_SCHEMA`). */\n"
+        "export interface ProcessAction {\n"
+        f"{fields(pe.ACTION_SCHEMA)}\n"
+        "}\n"
+        "\n"
+        "/** Values the `state` field carries (`STATES`). */\n"
+        f"export type ProcessState = {union(pe.STATES)}\n"
+        "\n"
+        "/** Values the `event` field carries (`EVENTS`). */\n"
+        f"export type ProcessEventName = {union(pe.EVENTS)}\n"
+        "\n"
+        "/** A projected process event — exactly `EVENT_SCHEMA`, nothing else. */\n"
+        "export interface ProcessEvent {\n"
+        f"{fields(pe.EVENT_SCHEMA)}\n"
+        "}\n"
+    )
+
+
+_JSON_TO_TS = {
+    "string": "string",
+    "integer": "number",
+    "number": "number",
+    "boolean": "boolean",
+    "array": "unknown[]",
+    "object": "Record<string, unknown>",
+}
+
+
+def session_types_source() -> str:
+    """Project the session-metadata wire model into TS interfaces.
+
+    ``routers.inference.SessionModel`` is the single Python declaration of
+    ``GET /chat/sessions``' row shape; this renders it as ``SessionMeta`` in
+    every consumer artifact on the same freshness gate as ``CONTRACTS`` — the
+    frontend derives ``Conversation`` from this instead of hand-writing a
+    duplicate interface. One declaration, three byte-identical projections.
+
+    ``$defs`` entries (nested models such as ``AppScopeDelta``) render as
+    their own interfaces first, referenced by name — the ``ts-rs`` precedent
+    applied to a nested model.
+    """
+    from routers.inference import SessionModel  # noqa: PLC0415 — after sys.path bootstrap
+
+    schema = SessionModel.model_json_schema()
+
+    def ts_type(prop: dict) -> str:
+        """Render one JSON Schema property: $ref / anyOf / plain type."""
+        if "$ref" in prop:
+            return prop["$ref"].rsplit("/", 1)[-1]
+        variants = prop.get("anyOf")
+        if isinstance(variants, list):
+            parts = [ts_type(v) for v in variants if v.get("type") != "null"]
+            rendered = " | ".join(dict.fromkeys(parts))
+            if any(v.get("type") == "null" for v in variants):
+                rendered = f"{rendered} | null" if rendered else "null"
+            return rendered
+        if prop.get("type") == "array":
+            return f"{ts_type(prop.get('items', {}))}[]"
+        return _JSON_TO_TS.get(prop.get("type", ""), "unknown")
+
+    def fields(model: dict) -> str:
+        required = set(model.get("required", []))
+        return "\n".join(
+            f"  {name}{'' if name in required else '?'}: {ts_type(prop)}"
+            for name, prop in model.get("properties", {}).items()
+        )
+
+    defs = schema.get("$defs", {})
+    def_blocks = []
+    for def_name, def_schema in sorted(defs.items()):
+        def_blocks.append(
+            f"\n/** Per-conversation config delta (`{def_name}` — see SessionMeta.scope). */\n"
+            f"export interface {def_name} {{\n{fields(def_schema)}\n}}\n"
+        )
+
+    return (
+        "\n"
+        "// ── Session-metadata contract — projection of\n"
+        "// routers/inference.py SessionModel. One declaration, one interface:\n"
+        "// edit the Pydantic model, then regenerate — never edit here.\n"
+        "\n"
+        "/** One row of GET /chat/sessions — exactly the `SessionModel` wire shape. */\n"
+        "export interface SessionMeta {\n"
+        f"{fields(schema)}\n"
+        "}\n"
+        f"{''.join(def_blocks)}"
     )
 
 

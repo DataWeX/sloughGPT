@@ -2,6 +2,7 @@
 Tests for the inference router — chat, generate, sessions.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -294,6 +295,84 @@ class TestChatStreamCancel:
             "cancel would report success while generation continues"
         )
         assert isinstance(seen["cancel_event"], threading.Event)
+
+
+class TestStreamTurnBareProbeGates:
+    """Quick-probe flags must gate the context/consciousness pipeline.
+
+    QuickActions "Test model" posts ``use_consciousness=false,
+    use_context_core=false, use_rag=false, session_id='quick-test'``
+    (card 20261112_140010). Before the fix ``stream_turn`` ignored the
+    first two: the consciousness reflection narrative was prepended
+    unconditionally and the 0.5B model answered the narrative instead of
+    the probe; the ContextCore frame also ignored the wire flag that the
+    non-streaming ``chat()`` honored.
+    """
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch(
+        "apps.api.server.routers.inference._apply_consciousness_reflection",
+        new_callable=AsyncMock,
+    )
+    @patch("apps.api.server.routers.inference._build_context_frame", new_callable=AsyncMock)
+    def test_bare_probe_flags_skip_context_and_consciousness(
+        self, mock_frame, mock_reflect, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        mock_frame.return_value = (None, {})
+
+        async def _reflect(messages, corr_id):
+            return messages
+
+        mock_reflect.side_effect = _reflect
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        async def _stream(messages, **kw):
+            yield "ok"
+
+        mock_prov = MagicMock()
+        mock_prov.chat_stream = _stream
+        mock_get_provider.return_value = mock_prov
+
+        # Bare probe: neither pipeline stage may run.
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello!"}],
+                "session_id": "quick-test",
+                "use_consciousness": False,
+                "use_context_core": False,
+                "use_rag": False,
+            },
+        )
+        assert resp.status_code == 200
+        assert not mock_reflect.called, (
+            "use_consciousness=false but _apply_consciousness_reflection still ran"
+        )
+        assert not mock_frame.called, (
+            "use_context_core=false but the ContextCore frame was still built"
+        )
+        assert not mock_enrich.called, (
+            "use_context_core=false but knowledge enrichment still ran"
+        )
+
+        # Defaults (True) keep the production pipeline wired in.
+        mock_frame.reset_mock()
+        mock_reflect.reset_mock()
+        mock_enrich.reset_mock()
+        resp = client.post(
+            "/chat",
+            json={"messages": [{"role": "user", "content": "Hi"}], "session_id": "probe-default"},
+        )
+        assert resp.status_code == 200
+        mock_reflect.assert_called_once()
+        mock_frame.assert_called_once()
+        mock_enrich.assert_called_once()
 
 
 class TestChat:
@@ -625,6 +704,80 @@ class TestProviders:
         data = resp.json()
         assert "data" in data
 
+    @staticmethod
+    def _register_both_shapes():
+        """Register one provider of each metadata shape.
+
+        The Provider protocol declares ``metadata`` a ``@property``, but
+        ct_provider / slonet_provider / slonet_server implement it as a plain
+        method while api_provider / router / slo_transformer / multimodal use
+        ``@property``. The route read it property-style, so a method-shaped
+        provider put a bound method in the payload and 500'd with
+        E_SERIALIZATION — the live bug behind card 2460373b. Every other test
+        here registers no provider at all, which is why they passed while
+        production failed.
+        """
+        from domain.models._internal.provider import registry as _reg
+
+        class _Caps:
+            chat = streaming = embedding = vision = True
+
+        class MethodShaped:
+            model_id = "probe-method"
+
+            @property
+            def capabilities(self):
+                return _Caps()
+
+            def metadata(self):  # plain method, like slonet_provider
+                return {"n_layer": 4, "shaped": "method"}
+
+        class PropertyShaped:
+            model_id = "probe-property"
+
+            @property
+            def capabilities(self):
+                return _Caps()
+
+            @property
+            def metadata(self):  # @property, like api_provider
+                return {"n_layer": 8, "shaped": "property"}
+
+        saved = {n: _reg.get_provider(n) for n in _reg.list_providers()}
+        _reg.register_provider("probe-method", MethodShaped())
+        _reg.register_provider("probe-property", PropertyShaped())
+        return _reg, saved
+
+    @staticmethod
+    def _restore(_reg, saved):
+        _reg.clear_providers()
+        for name, provider in saved.items():
+            _reg.register_provider(name, provider)
+
+    def test_method_shaped_metadata_serialises(self, client):
+        """A plain-method `metadata` must come back as a dict, not 500."""
+        _reg, saved = self._register_both_shapes()
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, resp.text
+            meta = resp.json()["data"]["probe-method"]["metadata"]
+            assert meta == {"n_layer": 4, "shaped": "method"}
+            assert not callable(meta)
+        finally:
+            self._restore(_reg, saved)
+
+    def test_property_shaped_metadata_still_works(self, client):
+        """The @property half must not regress — both shapes are accepted."""
+        _reg, saved = self._register_both_shapes()
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, resp.text
+            payload = resp.json()["data"]
+            assert payload["probe-property"]["metadata"] == {"n_layer": 8, "shaped": "property"}
+            assert payload["probe-method"]["capabilities"]["chat"] is True
+        finally:
+            self._restore(_reg, saved)
+
 
 class TestCurrentSession:
     """GET /chat/sessions/current"""
@@ -743,3 +896,466 @@ class TestCachedReplayChunking:
                 if tok:
                     tokens.append(tok)
         assert "".join(tokens) == cached
+
+
+class TestChatPostGenTasks:
+    """POST /chat must run the post-generation task set on every turn.
+
+    Audit gap G2 (card db19c373): ``_run_post_gen_tasks`` was launched from
+    exactly one site, so half of all chat recorded no substrate episode —
+    consciousness, entity extraction, the continual learner and response
+    tracking all silently skipped. Stream-first (POST /chat is the one path;
+    it frames the engine's token stream) runs the task set in
+    ``stream_turn``; these tests pin that contract on the SSE path.
+    """
+
+    def _fake_provider(self) -> MagicMock:
+        mock_provider = MagicMock()
+
+        async def _chat_stream(messages, **kwargs):
+            for tok in ["Hello", " back"]:
+                yield tok
+
+        mock_provider.chat_stream = _chat_stream
+        return mock_provider
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_chat_runs_post_gen_tasks(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """The gap itself: this call must fire on the SSE turn path."""
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        assert resp.status_code == 200
+        assert "Hello" in resp.text
+        mock_post_gen.assert_called_once()
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_post_gen_receives_the_turn_it_belongs_to(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """Post-gen work must be attributed to the response that produced it."""
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        client.post(
+            "/chat",
+            json={
+                "session_id": "sess-1",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        )
+
+        args = mock_post_gen.call_args.args
+        assert args[0] == "Hello back", "full_response must be the generated text"
+        assert args[1] == "Hello", "user_msg must be the prompt"
+        assert args[2] == "sess-1", "session_id must follow the response"
+        assert args[3] is not None, "start_time drives the duration metric"
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch("apps.api.server.routers.inference.capture")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_no_inline_capture_alongside_post_gen(
+        self, mock_post_gen, mock_capture, mock_get_provider, client
+    ):
+        """No double-run: post-gen already captures, so the turn must not too.
+
+        Post-gen is spied out here, so any capture reached directly by the
+        turn path would still fire — asserting it does not is the
+        anti-double-count guarantee.
+        """
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+
+        client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        mock_capture.assert_not_called()
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch(
+        "apps.api.server.routers.inference._run_post_gen_tasks",
+        side_effect=RuntimeError("post-gen exploded"),
+    )
+    def test_post_gen_failure_does_not_fail_the_turn(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """These tasks are best-effort: the reply must still reach the user."""
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        assert resp.status_code == 200
+        assert "Hello" in resp.text
+        assert " back" in resp.text
+
+
+class TestModelStateReadiness:
+    """_get_model_status — a terminal autoload failure must name its cause.
+
+    Before MODEL_LOAD_STATE existed the function had three answers
+    (E_NO_MODEL / E_STARTING / E_MODEL_LOADING), so a load that had already
+    failed kept getting "Model still loading — please wait." forever.
+    """
+
+    @pytest.fixture
+    def no_materialized_model(self, monkeypatch):
+        import state as server_state
+        from startup_progress import MODEL_LOAD_STATE, STARTUP_PHASE
+
+        from domain.infrastructure.server_state import get_server_state
+
+        monkeypatch.setenv("SLO_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
+
+        saved_state = dict(MODEL_LOAD_STATE)
+        saved_phase = STARTUP_PHASE["phase"]
+        saved_model = getattr(server_state, "model", None)
+        saved_provider = getattr(server_state, "provider", None)
+        core = get_server_state()
+        saved_core_model = core.model.get()
+
+        server_state.model = None
+        server_state.provider = None
+        core.model.set(None)
+        STARTUP_PHASE["phase"] = "ready"
+        MODEL_LOAD_STATE.update(status="pending", error=None)
+        try:
+            yield MODEL_LOAD_STATE
+        finally:
+            MODEL_LOAD_STATE.clear()
+            MODEL_LOAD_STATE.update(saved_state)
+            STARTUP_PHASE["phase"] = saved_phase
+            server_state.model = saved_model
+            server_state.provider = saved_provider
+            core.model.set(saved_core_model)
+
+    def test_failed_autoload_reports_the_real_cause(self, no_materialized_model):
+        from apps.api.server.routers.inference import _get_model_status
+
+        no_materialized_model.update(
+            status="failed",
+            error=(
+                "No local weights for Qwen/Qwen2.5-0.5B-Instruct (no .slnc/.soul/safetensors) "
+                "and SLO_BOOTSTRAP_HF is off — set SLO_BOOTSTRAP_HF=1 to download them, or "
+                "point SLO_AUTOLOAD_MODEL at a model you already have."
+            ),
+        )
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOAD_FAILED"
+        assert ms["status"] == 503
+        assert "SLO_BOOTSTRAP_HF" in ms["reason"]
+
+    def test_in_flight_load_still_reports_still_loading(self, no_materialized_model):
+        from apps.api.server.routers.inference import _get_model_status
+
+        no_materialized_model.update(status="loading", error=None)
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOADING"
+        assert ms["status"] == 503
+
+    def test_ready_phase_with_no_failure_keeps_the_waiting_answer(self, no_materialized_model):
+        """Pending (no load started) + phase ready stays E_MODEL_LOADING."""
+        from apps.api.server.routers.inference import _get_model_status
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOADING"
+
+
+class TestMemoryPressureMessage:
+    """The block message must quote the reading that triggered it.
+
+    Regression (card 20261101_110410, journal 2026-11-01): classification
+    fired at 10:49:10 on 96.1% RSS (19074 MB), then the message served at
+    10:50:19 said "System memory at 56%" because inference.py re-read
+    psutil instead of asking the monitor. A user reading 56% is told the
+    machine has plenty of memory while the request is refused — the
+    message actively contradicts the refusal.
+    """
+
+    def test_message_quotes_the_classifying_reading(self):
+        from apps.api.server.routers import inference as inf
+        from domain.infrastructure._internal.memory_pressure import PressureLevel
+
+        monitor = MagicMock()
+        monitor.check.return_value = PressureLevel.EMERGENCY
+        monitor.last_reading = {"percent": 96.1, "level": "emergency"}
+
+        # A later, unrelated reading — this is what the old code printed.
+        later = MagicMock()
+        later.percent = 56.0
+
+        with (
+            patch.object(inf, "_memory_pressure_cache", None),
+            patch.object(inf, "_memory_pressure_cache_ts", 0.0),
+            patch(
+                "domain.infrastructure.memory_pressure.get_memory_pressure_monitor",
+                return_value=monitor,
+            ),
+            patch("psutil.virtual_memory", return_value=later) as fresh_read,
+        ):
+            message = inf._check_memory_pressure()
+
+        assert message is not None
+        assert "96%" in message
+        assert "56%" not in message
+        # The fix is the removal of the second, contradicting read.
+        fresh_read.assert_not_called()
+
+
+class TestAppendVolatileContext:
+    """Per-turn context rides the LAST user turn, never the system prefix.
+
+    KV reuse matches on prefix tokens: ``_resolve_kv_state`` and PrefixCache
+    both compare head tokens. Folding knowledge/frame/RAG into the system
+    prompt changed the prefix on every request, so each turn re-prefilled the
+    whole prompt (measured 43.0s cold vs 1.26s warm on a 482-token prompt).
+    Retrieval results are per-turn by nature, so they belong at the tail.
+    """
+
+    @staticmethod
+    def _fn():
+        from apps.api.server.routers import inference as inf
+
+        return inf._append_volatile_context
+
+    def test_block_is_appended_to_the_last_user_turn(self):
+        append = self._fn()
+        messages = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "answer"},
+            {"role": "user", "content": "second"},
+        ]
+
+        out = append(messages, "CONTEXT")
+
+        assert out[-1]["content"] == "second\n\nCONTEXT"
+        # Earlier turns are untouched — only the tail grows.
+        assert out[0]["content"] == "first"
+        assert out[1]["content"] == "answer"
+
+    def test_head_is_identical_across_turns_with_different_context(self):
+        """The actual regression: prefix stability, not string plumbing."""
+        append = self._fn()
+        head = {"role": "system", "content": "You are sloughGPT."}
+
+        turn_one = append([head, {"role": "user", "content": "q1"}], "fact A")
+        turn_two = append([head, {"role": "user", "content": "q2"}], "fact B")
+
+        assert turn_one[0] == turn_two[0], "system prefix drifted between turns"
+        assert "fact A" not in turn_one[0]["content"]
+        assert "fact B" not in turn_two[0]["content"]
+
+    @pytest.mark.parametrize("block", ["", None])
+    def test_empty_block_is_a_noop(self, block):
+        append = self._fn()
+        messages = [{"role": "user", "content": "hi"}]
+
+        assert append(messages, block) == [{"role": "user", "content": "hi"}]
+
+    def test_multipart_content_gets_an_extra_text_part(self):
+        append = self._fn()
+        messages = [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": "what is this?"}],
+            }
+        ]
+
+        out = append(messages, "CONTEXT")
+
+        assert isinstance(out[-1]["content"], list)
+        assert out[-1]["content"][-1] == {"type": "text", "text": "CONTEXT"}
+        assert out[-1]["content"][0]["text"] == "what is this?"
+
+    def test_no_user_message_is_a_noop(self):
+        append = self._fn()
+        messages = [{"role": "assistant", "content": "unprompted"}]
+
+        assert append(messages, "CONTEXT") == [{"role": "assistant", "content": "unprompted"}]
+
+    def test_trim_budget_counts_the_volatile_block(self):
+        """Attach before trimming, or the trimmer spends budget it cannot see."""
+        from apps.api.server.routers import inference as inf
+
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "u" * 40},
+        ]
+        block = "C" * 4000
+        inf._append_volatile_context(messages, block)
+
+        # Budget that fits the system prompt but not the volatile tail: the
+        # trimmer must see the tail and drop it rather than silently overflow.
+        trimmed = inf._trim_messages_to_budget(messages, max_context=100, max_new_tokens=10)
+
+        assert all("C" * 4000 not in str(m.get("content")) for m in trimmed)
+
+
+class TestTraitSteeringReachesThePrompt:
+    """feedback -> TraitWeightsConfig -> managers -> ContextFrame -> prompt.
+
+    Wiring the managers was only half the path: ``stream_turn`` used to read
+    the frame's retrieval *layers* and discard ``frame.system_prompt``, and
+    ``_build_context_frame`` skipped the build entirely while the knowledge
+    store held zero facts. Both left the seam decorative on a fresh install.
+    """
+
+    STEERING = "\n[PERSONALITY INSTRUCTIONS]\n- Be direct and warm."
+
+    @staticmethod
+    def _frame():
+        from domain.infrastructure._internal.context_core import ContextFrame
+
+        return ContextFrame(
+            id="f1",
+            system_prompt="base" + TestTraitSteeringReachesThePrompt.STEERING,
+            layers=[],
+            total_tokens=10,
+            max_tokens=2048,
+            created_at="2026-11-03T00:00:00",
+            system_extra=TestTraitSteeringReachesThePrompt.STEERING,
+        )
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_steering_rides_the_system_turn_not_the_user_turn(self, mock_get_provider, client):
+        captured: dict = {}
+
+        async def _chat_stream(messages, **kwargs):
+            captured["messages"] = messages
+            yield "ok"
+
+        provider = MagicMock()
+        provider.chat_stream = _chat_stream
+        mock_get_provider.return_value = provider
+
+        with patch(
+            "apps.api.server.routers.inference._build_context_frame",
+            AsyncMock(return_value=(self._frame(), {})),
+        ):
+            client.post(
+                "/chat",
+                json={"messages": [{"role": "user", "content": "hi"}], "use_context_core": True},
+            )
+
+        messages = captured["messages"]
+        system = next(m for m in messages if m["role"] == "system")
+        user = next(m for m in messages if m["role"] == "user")
+        assert "PERSONALITY INSTRUCTIONS" in system["content"]
+        assert "PERSONALITY INSTRUCTIONS" not in user["content"]
+        # Head placement is the point: trait steering is stable per feedback
+        # profile, so it must stay out of the per-turn volatile tail.
+        assert messages[0]["role"] == "system"
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_steering_creates_a_system_turn_when_the_caller_sent_none(
+        self, mock_get_provider, client
+    ):
+        captured: dict = {}
+
+        async def _chat_stream(messages, **kwargs):
+            captured["messages"] = messages
+            yield "ok"
+
+        provider = MagicMock()
+        provider.chat_stream = _chat_stream
+        mock_get_provider.return_value = provider
+
+        with patch(
+            "apps.api.server.routers.inference._build_context_frame",
+            AsyncMock(return_value=(self._frame(), {})),
+        ):
+            client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+
+        system = next(m for m in captured["messages"] if m["role"] == "system")
+        assert system["content"].strip() == TestTraitSteeringReachesThePrompt.STEERING.strip()
+
+
+class TestFrameBuildsWithoutFacts:
+    """Empty knowledge store must not disable trait steering."""
+
+    def test_empty_memory_still_builds_the_frame_with_layers_off(self):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        from apps.api.server.routers import inference as inf
+
+        core = MagicMock()
+        core.build_context_frame = _AsyncMock(return_value=MagicMock(layers=[], system_extra="x"))
+
+        memory_service = MagicMock()
+        memory_service.stats.return_value = {"total_facts": 0}
+
+        with patch.object(inf, "get_memory_service", return_value=memory_service):
+            frame, info = asyncio.run(
+                inf._build_context_frame(core, "sess", "hello", corr_id="test")
+            )
+
+        assert frame is not None
+        kwargs = core.build_context_frame.call_args.kwargs
+        assert kwargs["include_rag"] is False
+        assert kwargs["include_memory"] is False
+        assert info["system_extra_chars"] == 1
+        # No facts means no session message bookkeeping either.
+        core.add_message.assert_not_called()
+
+    def test_facts_keep_both_layers_on(self):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        from apps.api.server.routers import inference as inf
+
+        core = MagicMock()
+        core.build_context_frame = _AsyncMock(return_value=MagicMock(layers=[], system_extra=""))
+
+        memory_service = MagicMock()
+        memory_service.stats.return_value = {"total_facts": 3}
+
+        with patch.object(inf, "get_memory_service", return_value=memory_service):
+            asyncio.run(inf._build_context_frame(core, "sess", "hello", corr_id="test"))
+
+        kwargs = core.build_context_frame.call_args.kwargs
+        assert kwargs["include_rag"] is True
+        assert kwargs["include_memory"] is True
+        core.add_message.assert_called_once()

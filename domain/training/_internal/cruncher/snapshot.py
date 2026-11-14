@@ -40,6 +40,48 @@ MANIFEST_SCHEMA_VERSION = "1.0"
 DEFAULT_DOMAIN = "general"
 DEFAULT_PII_POLICY = "scrub-typed-tokens"
 
+#: Legacy provenance-string prefixes → Standard v1 source ``type`` enum.
+_SOURCE_TYPE_BY_PREFIX: tuple[tuple[str, str], ...] = (
+    ("github:", "github"),
+    ("hf:", "huggingface"),
+    ("huggingface:", "huggingface"),
+    ("url:", "https"),
+    ("s3:", "s3"),
+)
+
+
+def normalize_source(source: str | dict[str, Any]) -> dict[str, Any]:
+    """One provenance entry → SloughGPT Standard v1 source object.
+
+    Accepts either an already-shaped object (``{type, uri, ...}`` — passed
+    through, required keys checked) or a legacy provenance string.  String
+    mapping: full ``http(s)://`` URLs → ``https``; known prefixes
+    (``github:``, ``hf:``/``huggingface:``, ``url:``, ``s3:``) → their enum
+    type with the prefix stripped from the uri; anything else →
+    ``local_path`` (opaque local label, e.g. ``"unit-test"``).
+
+    The manifest schema requires source *objects*; normalizing at the producer
+    means every sealed snapshot is schema-valid by construction instead of
+    needing a post-seal rewrite.
+    """
+    if isinstance(source, dict):
+        missing = [k for k in ("type", "uri") if k not in source]
+        if missing:
+            raise SnapshotError(f"source object missing {missing}: {source!r}")
+        return dict(source)
+    s = str(source)
+    if s.startswith(("http://", "https://")):
+        return {"type": "https", "uri": s}
+    for prefix, type_ in _SOURCE_TYPE_BY_PREFIX:
+        if s.startswith(prefix):
+            return {"type": type_, "uri": s[len(prefix) :]}
+    return {"type": "local_path", "uri": s}
+
+
+def normalize_sources(sources: list[str | dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize a source list (see :func:`normalize_source`)."""
+    return [normalize_source(s) for s in sources]
+
 
 def _default_root() -> Path:
     return find_repo_root(Path(__file__).resolve()) / "data" / "crunched"
@@ -108,7 +150,7 @@ class SnapshotStore:
         dataset_id: str,
         records: Iterable[str],
         *,
-        sources: list[str],
+        sources: list[str] | list[dict[str, Any]],
         mix: dict[str, float] | None = None,
         domain: str = DEFAULT_DOMAIN,
         pii_policy: str = DEFAULT_PII_POLICY,
@@ -123,7 +165,9 @@ class SnapshotStore:
         Args:
             dataset_id: dataset identity (directory name).
             records: cleaned training-text records, one per line in train.txt.
-            sources: provenance strings (e.g. ``"kaggle:owner/name"``).
+            sources: provenance entries — legacy strings (``"github:o/r"``) or
+                Standard v1 source objects; normalized via
+                :func:`normalize_source` before they reach the manifest.
             mix: reserved pack-mix weights (consumed when multi-pack lands).
             domain: dataset domain (general unless a knowledge-pack says so).
             pii_policy: recorded PII handling policy.
@@ -162,7 +206,7 @@ class SnapshotStore:
                 "version": version,
                 "domain": domain,
                 "pii_policy": pii_policy,
-                "sources": sources,
+                "sources": normalize_sources(sources),
                 "splits": {"train": "train.txt"},
                 # Reserved: pack-mix weights, consumed when multi-pack training lands.
                 "mix": mix or {},

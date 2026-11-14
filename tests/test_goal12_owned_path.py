@@ -117,32 +117,44 @@ class TestSoulToSlncRoundtrip:
 
 
 class TestPriorityFlip:
-    def test_model_loader_prefers_soul_over_slnc(self, tiny_soul: Path, tmp_path: Path) -> None:
-        """With both .soul (native dir) and a .slnc present, soul wins."""
+    def test_model_loader_prefers_soul_over_slnc(
+        self, tiny_soul: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With a .soul naming the request and a .slnc present, the soul wins.
+
+        The loader resolves native checkpoints by *name* (card
+        ``20261104_053224``), so the checkpoint is placed under a temp
+        ``models/slonet-native`` and requested by its stem — the old version of
+        this test relied on the newest-mtime wildcard and had to write into the
+        repository's real ``models/slonet-native``.
+        """
         from domain.infrastructure._internal.model_loader import ModelLoader
 
-        # Place a native soul where _try_load_soul searches
-        native_dir = Path(__file__).resolve().parents[1] / "models" / "slonet-native"
-        native_dir.mkdir(parents=True, exist_ok=True)
-        placed = native_dir / "goal12_priority_probe.soul"
-        placed.write_bytes(tiny_soul.read_bytes())
-        try:
-            # Also drop a decoy slnc that would fail to load as a different arch
-            # (priority is decided before slnc is opened when soul exists)
-            loader = ModelLoader()
-            result = loader.load("goal12-nonexistent-hf-id", verify=False)
-            # Either soul loaded, or no soul matched — must NOT attempt HF download
-            # in ModelLoader itself (it never downloads; only startup does).
-            assert result.model_type in ("slonet-native", "slonet") or not result.success
-            if result.success:
-                assert result.metrics.get("source") == "native-trained" or (
-                    result.model_type == "slonet-native"
-                )
-        finally:
-            if placed.exists():
-                placed.unlink()
+        native_dir = tmp_path / "models" / "slonet-native"
+        native_dir.mkdir(parents=True)
+        requested = "goal12_priority_probe"
+        (native_dir / f"{requested}.soul").write_bytes(tiny_soul.read_bytes())
 
-    def test_soul_to_slnc_does_not_import_huggingface(self, tiny_soul: Path, tmp_path: Path) -> None:
+        # A decoy slnc that would fail to load as a different arch — priority is
+        # decided before the slnc is opened when the named soul exists.
+        cache = tmp_path / "hf-cache"
+        cache.mkdir()
+        (cache / "model.slnc").write_bytes(b"SLNC")
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
+            lambda model_id: cache,
+        )
+
+        result = ModelLoader(models_dir=tmp_path / "models").load(requested, verify=False)
+
+        assert result.success, result.error
+        assert result.model_type == "slonet-native"
+        assert result.metrics["source"] == "native-trained"
+        assert result.metrics["matched_by"] == "name"
+
+    def test_soul_to_slnc_does_not_import_huggingface(
+        self, tiny_soul: Path, tmp_path: Path
+    ) -> None:
         """Bridge is pure — no transformers/huggingface_hub import required."""
         import sys
 
@@ -184,9 +196,7 @@ class TestBootstrapGate:
         with (
             patch.dict("sys.modules", {"state": server_state}),
             patch("domain.infrastructure.model_loader.ModelLoader") as mock_loader,
-            patch(
-                "domain.infrastructure.hf_hub.download_hf_model"
-            ) as mock_dl,
+            patch("domain.infrastructure.hf_hub.download_hf_model") as mock_dl,
         ):
             mock_loader.return_value.load.return_value = fail_result
             server_state.model = None
@@ -199,7 +209,9 @@ class TestBootstrapGate:
 
         mock_dl.assert_not_called()
 
-    def test_autoload_downloads_when_bootstrap_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_autoload_downloads_when_bootstrap_enabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """SLO_BOOTSTRAP_HF=1 restores the HF download fallback."""
         monkeypatch.setenv("SLO_BOOTSTRAP_HF", "1")
 
@@ -243,7 +255,12 @@ class TestBootstrapGate:
                 return_value=Path("/tmp/goal12-hf-cache"),
             ),
         ):
-            mock_loader.return_value.load.side_effect = [fail_result, fail_result, fail_result, ok_result]
+            mock_loader.return_value.load.side_effect = [
+                fail_result,
+                fail_result,
+                fail_result,
+                ok_result,
+            ]
             server_state.model = None
             server_state.model_type = None
             server_state.provider = None

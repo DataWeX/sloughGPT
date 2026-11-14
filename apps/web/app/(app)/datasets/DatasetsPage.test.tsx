@@ -132,20 +132,37 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'test' }),
 }))
 
-vi.mock('@/lib/dataset-controller', () => ({
-  datasetController: {
-    list: mockList,
-    delete: mockDelete,
-    preview: vi.fn(),
-    search: mockSearch,
-    listVersions: mockListVersions,
-    export: mockExport,
-  },
-}))
+vi.mock('@/lib/dataset-controller', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/dataset-controller')>()
+  return {
+    ...actual,
+    datasetController: {
+      list: mockList,
+      delete: mockDelete,
+      preview: vi.fn(),
+      search: mockSearch,
+      listVersions: mockListVersions,
+      export: mockExport,
+    },
+  }
+})
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) =>
+      sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/components/DatasetImportDialog', () => ({
   DatasetImportDialog: ({ open, onOpenChange }: any) =>

@@ -23,31 +23,39 @@ vi.mock('@/lib/app-shell', () => ({
   writeTraining: (...args: unknown[]) => mockWriteTraining(...args),
 }))
 
-vi.mock('@/lib/config', () => ({
-  PUBLIC_API_URL: 'http://localhost:8000',
-}))
-
 vi.mock('@/lib/dev-log', () => ({
   logger: { child: () => ({ error: vi.fn() }) },
 }))
 
-// Mock EventSource globally
-class MockEventSource {
-  static CLOSED = 2
+// The hook now subscribes through createSSEStream (transport-managed: base URL,
+// bearer token, reconnect backoff all live in fetchSSE), so the seam to drive
+// in tests is that stream's callbacks rather than a global EventSource stub.
+interface StreamOptions {
   url: string
-  onmessage: ((e: MessageEvent) => void) | null = null
-  onerror: (() => void) | null = null
-  readyState = 1
-  close = vi.fn()
-  constructor(url: string) {
-    this.url = url
-    ;(globalThis as Record<string, unknown>).__lastES = this
-  }
+  onEvent: (envelope: unknown) => void
+  onOpen?: () => void
+  onClose?: () => void
+  onError?: (error: Error) => void
+  maxReconnects?: number
 }
-;(globalThis as Record<string, unknown>).EventSource = MockEventSource
+
+const mockStreams: StreamOptions[] = []
+const mockStart = vi.fn()
+const mockStop = vi.fn()
+
+vi.mock('@/lib/sse-client', () => ({
+  createSSEStream: (options: StreamOptions) => {
+    mockStreams.push(options)
+    return { start: mockStart, stop: mockStop, connected: true }
+  },
+}))
+
+/** Options handed to the most recent createSSEStream call. */
+const lastStream = (): StreamOptions => mockStreams[mockStreams.length - 1]
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockStreams.length = 0
   mockReadTraining.mockReturnValue({
     phase: 'idle',
     jobId: null,
@@ -87,7 +95,7 @@ describe('useTrainingStream', () => {
     expect(typeof result.current.closeStream).toBe('function')
   })
 
-  it('calls startAutoTrain and creates EventSource', async () => {
+  it('calls startAutoTrain and creates the stream', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingStream())
     const addToast = vi.fn()
@@ -102,7 +110,7 @@ describe('useTrainingStream', () => {
     )
   })
 
-  it('sets up EventSource with correct URL', async () => {
+  it("subscribes with a relative path (base URL is the transport's job)", async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingStream())
 
@@ -110,8 +118,10 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, vi.fn())
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
-    expect(es.url).toBe('http://localhost:8000/training/stream')
+    expect(lastStream().url).toBe('/training/stream')
+    // Three strikes, same policy the EventSource hand-rolled before.
+    expect(lastStream().maxReconnects).toBe(3)
+    expect(mockStart).toHaveBeenCalled()
   })
 
   it('parses progress events and writes training state', async () => {
@@ -122,16 +132,13 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, vi.fn())
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
     await act(() => {
-      es.onmessage?.({
-        data: JSON.stringify({
-          stream: 'auto-train',
-          phase: 'TRAINING',
-          data: { progress: 50, global_step: 100, loss: 0.3 },
-          meta: { epoch: 2, total_epochs: 10 },
-        }),
-      } as MessageEvent)
+      lastStream().onEvent({
+        stream: 'auto-train',
+        phase: 'TRAINING',
+        data: { progress: 50, global_step: 100, loss: 0.3 },
+        meta: { epoch: 2, total_epochs: 10 },
+      })
     })
 
     expect(mockWriteTraining).toHaveBeenCalledWith(
@@ -149,15 +156,12 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, addToast, onCheckpoint)
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
     await act(() => {
-      es.onmessage?.({
-        data: JSON.stringify({
-          stream: 'auto-train',
-          status: 'complete',
-          data: { checkpoint: 'cp1', final_loss: 0.1 },
-        }),
-      } as MessageEvent)
+      lastStream().onEvent({
+        stream: 'auto-train',
+        status: 'complete',
+        data: { checkpoint: 'cp1', final_loss: 0.1 },
+      })
     })
 
     expect(mockWriteTraining).toHaveBeenCalledWith(
@@ -165,7 +169,7 @@ describe('useTrainingStream', () => {
     )
     expect(addToast).toHaveBeenCalledWith('Training complete', 'success')
     expect(onCheckpoint).toHaveBeenCalled()
-    expect(es.close).toHaveBeenCalled()
+    expect(mockStop).toHaveBeenCalled()
   })
 
   it('handles error event', async () => {
@@ -177,14 +181,8 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, addToast)
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
     await act(() => {
-      es.onmessage?.({
-        data: JSON.stringify({
-          stream: 'auto-train',
-          status: 'error',
-        }),
-      } as MessageEvent)
+      lastStream().onEvent({ stream: 'auto-train', status: 'error' })
     })
 
     expect(mockWriteTraining).toHaveBeenCalledWith(expect.objectContaining({ phase: 'error' }))
@@ -199,18 +197,15 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, vi.fn())
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
     const callsBefore = mockWriteTraining.mock.calls.length
     await act(() => {
-      es.onmessage?.({
-        data: JSON.stringify({ stream: 'training', phase: 'progress' }),
-      } as MessageEvent)
+      lastStream().onEvent({ stream: 'training', phase: 'progress' })
     })
 
     expect(mockWriteTraining.mock.calls.length).toBe(callsBefore)
   })
 
-  it('handles SSE errors with retry', async () => {
+  it('leaves reconnecting streams alone on error', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingStream())
 
@@ -218,16 +213,15 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, vi.fn())
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
-    es.readyState = 1 // CONNECTING
+    // The transport owns retry/backoff; an error while it retries must not
+    // tear the subscription down from our side.
     await act(() => {
-      es.onerror?.()
+      lastStream().onError?.(new Error('transient'))
     })
-    // Should not close on first error if readyState is not CLOSED
-    expect(es.close).not.toHaveBeenCalled()
+    expect(mockStop).not.toHaveBeenCalled()
   })
 
-  it('handles SSE close after max retries', async () => {
+  it('reports connection loss once reconnects are exhausted', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingStream())
     const addToast = vi.fn()
@@ -236,15 +230,36 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, addToast)
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
-    es.readyState = MockEventSource.CLOSED
     await act(() => {
-      es.onerror?.()
+      lastStream().onClose?.()
     })
 
     expect(mockWriteTraining).toHaveBeenCalledWith(
       expect.objectContaining({ phase: 'error', error: 'Connection lost' }),
     )
+    expect(addToast).toHaveBeenCalledWith('Connection lost during training', 'error')
+  })
+
+  it('stays quiet when the close was intentional', async () => {
+    mockStartAutoTrain.mockResolvedValue(undefined)
+    const { result } = renderHook(() => useTrainingStream())
+    const addToast = vi.fn()
+
+    await act(async () => {
+      result.current.startSSETraining({}, addToast)
+    })
+
+    await act(() => {
+      result.current.closeStream()
+    })
+    await act(() => {
+      lastStream().onClose?.()
+    })
+
+    expect(mockWriteTraining).not.toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'Connection lost' }),
+    )
+    expect(addToast).not.toHaveBeenCalledWith('Connection lost during training', 'error')
   })
 
   it('accumulates loss history', async () => {
@@ -279,14 +294,8 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, vi.fn())
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
     await act(() => {
-      es.onmessage?.({
-        data: JSON.stringify({
-          stream: 'auto-train',
-          data: { loss: 0.3 },
-        }),
-      } as MessageEvent)
+      lastStream().onEvent({ stream: 'auto-train', data: { loss: 0.3 } })
     })
 
     expect(mockWriteTraining).toHaveBeenCalledWith(
@@ -311,7 +320,7 @@ describe('useTrainingStream', () => {
     expect(addToast).toHaveBeenCalledWith('Could not start training: fail', 'error')
   })
 
-  it('cleans up EventSource on unmount', async () => {
+  it('stops the stream on unmount', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result, unmount } = renderHook(() => useTrainingStream())
 
@@ -319,8 +328,7 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, vi.fn())
     })
 
-    const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
     unmount()
-    expect(es.close).toHaveBeenCalled()
+    expect(mockStop).toHaveBeenCalled()
   })
 })

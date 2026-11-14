@@ -27,6 +27,14 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
+    # JIT kernels for the inference hot path (domain/training/_internal/slonet_kernels.py).
+    # Declared rather than assumed: a numba that is installed but invisible to the
+    # running interpreter is exactly how the 2026-11-01 API-server OOM happened --
+    # the kernels silently dropped to their numpy fallback, whose unchunked prefill
+    # allocated ~16 GB and was OOM-killed by the kernel. llvmlite is pinned alongside
+    # because the two are version-locked; it is otherwise numba's own dependency.
+    "numba>=0.67.0",
+    "llvmlite>=0.49.0",
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
     "starlette>=0.27.0",
@@ -52,6 +60,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
+    "pytest-testmon>=2.1.0",
     "ruff>=0.1.0",
 ]
 notebook = [
@@ -118,17 +127,20 @@ ignore = ["E501", "N802", "N803", "N806", "N812", "N814", "N818", "N999", "E402"
 # 11 I001s that pass locally (card ca647de2).
 [tool.ruff.lint.isort]
 known-first-party = ["domain"]
+# `datasets` is the HuggingFace package, but a gitignored local `datasets/`
+# data directory exists in some working copies. Ruff classifies by probing the
+# filesystem, so without this the import sorted as first-party locally and
+# third-party in CI — the same environment-dependent divergence as card
+# ca647de2. Naming it third-party makes local == CI everywhere.
+known-third-party = ["datasets"]
 
 [tool.ruff.lint.flake8-bugbear]
 
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401", "F811"]
 "domain/training/*.py" = ["B006", "C408"]
-"packages/core-py/tests/*.py" = ["N801", "F811", "B017"]
 "**/tests/*.py" = ["F811", "B017"]
 "tests/fixtures/__init__.py" = ["F403", "F405"]
-"domain/cognitive/_internal/metacognition/__init__.py" = ["F403", "F405"]
-"packages/core-py/scripts/*.py" = ["B018"]
 "scripts/examples/*.py" = ["F821"]
 
 [tool.mypy]
@@ -144,7 +156,7 @@ python_functions = ["test_*"]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["packages/core-py", "domain"]
+source = ["domain"]
 omit = ["*/tests/*", "*/test_*"]
 
 [tool.coverage.report]

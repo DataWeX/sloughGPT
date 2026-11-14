@@ -371,7 +371,7 @@ const KIND_STYLES: Record<string, string> = {
   chat: 'bg-info/15 text-info border-info/30',
   training: 'bg-success/15 text-success border-success/30',
   model: 'bg-primary/15 text-primary border-primary/30',
-  system: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+  system: 'bg-secondary/15 text-muted-foreground border-border/30',
   ui: 'bg-muted text-muted-foreground',
 }
 

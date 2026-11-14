@@ -211,6 +211,9 @@ class DashboardRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/dashboard", tags=["dashboard"])
         self.SNAPSHOT_INTERVAL = 2.0
+        # Same contract as health's HEALTH_SNAPSHOT_STALL_S: a build that has
+        # not returned by 3x the cadence is reported, not waited on forever.
+        self.DASHBOARD_SNAPSHOT_STALL_S = self.SNAPSHOT_INTERVAL * 3
         self._register_routes()
 
     def _register_routes(self):
@@ -261,27 +264,89 @@ class DashboardRouter:
         """SSE endpoint pushing dashboard snapshots every 2 seconds."""
 
         async def generate() -> AsyncGenerator[str, None]:
+            # Same shape as health.health_stream, whose comment carries the full
+            # derivation. In short: `_build_snapshot` is synchronous and
+            # unbounded, so awaiting it inline lets one wedged build silence
+            # this stream with no signal at all — and on a dashboard, silence
+            # reads as "idle", never as "broken". Building in ONE long-lived
+            # task polled through `shield` means a timed-out wait cannot
+            # accumulate pool threads, and the `task.done()` check below stops a
+            # build that lands during a timed-out cycle from being discarded
+            # (that combination stalls the stream forever while re-spawning a
+            # thread on every completed build).
+            task: asyncio.Task | None = None
+
+            def _frame(payload: dict) -> str:
+                return "data: " + json.dumps(payload, default=str) + "\n\n"
+
+            def _stall_frame() -> str:
+                waited = self.DASHBOARD_SNAPSHOT_STALL_S
+                return _frame(
+                    {
+                        "stream": "dashboard",
+                        "phase": "STALL",
+                        # "working", not "error": the stream is alive and the
+                        # snapshot may yet return. Clients keying on `status`
+                        # are unaffected; readers of `phase` get the signal.
+                        "status": "working",
+                        "data": {
+                            "stalled": True,
+                            "waited_seconds": round(waited, 1),
+                            "interval_seconds": self.SNAPSHOT_INTERVAL,
+                        },
+                        "message": (
+                            f"dashboard snapshot has not returned in {waited:.0f}s; "
+                            "a subsystem is likely blocked"
+                        ),
+                    }
+                )
+
+            def _error_frame(exc: Exception) -> str:
+                return _frame(
+                    {
+                        "stream": "dashboard",
+                        "phase": "ERROR",
+                        "status": "error",
+                        "data": {"error": str(exc)},
+                        "message": str(exc),
+                    }
+                )
+
             while True:
                 if await request.is_disconnected():
                     break
+
+                if task is None:
+                    task = asyncio.create_task(asyncio.to_thread(_build_snapshot))
+
                 try:
-                    snapshot = await asyncio.to_thread(_build_snapshot)
-                    yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
-                except Exception as e:
-                    logger.warning("Dashboard snapshot failed: %s", e)
-                    yield (
-                        "data: "
-                        + json.dumps(
-                            {
-                                "stream": "dashboard",
-                                "phase": "ERROR",
-                                "status": "error",
-                                "data": {"error": str(e)},
-                                "message": str(e),
-                            }
-                        )
-                        + "\n\n"
+                    snapshot = await asyncio.wait_for(
+                        asyncio.shield(task), timeout=self.DASHBOARD_SNAPSHOT_STALL_S
                     )
+                    frame = _frame(snapshot)
+                    task = None  # consumed — the next cycle starts a new build
+                except TimeoutError:
+                    if not task.done():
+                        logger.warning(
+                            "Dashboard snapshot stalled after %.1fs",
+                            self.DASHBOARD_SNAPSHOT_STALL_S,
+                        )
+                        frame = _stall_frame()
+                    else:
+                        # Finished during this cycle's wait: take the result
+                        # rather than throwing it away and building again.
+                        try:
+                            frame = _frame(await task)
+                        except Exception as exc:
+                            logger.warning("Dashboard snapshot failed: %s", exc)
+                            frame = _error_frame(exc)
+                        task = None
+                except Exception as exc:
+                    logger.warning("Dashboard snapshot failed: %s", exc)
+                    frame = _error_frame(exc)
+                    task = None
+
+                yield frame
                 await asyncio.sleep(self.SNAPSHOT_INTERVAL)
 
         return StreamingResponse(

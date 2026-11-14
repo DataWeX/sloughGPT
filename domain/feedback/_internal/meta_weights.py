@@ -33,6 +33,32 @@ class MetaWeights:
     confidence_boost: float = 0.0  # increase for more confident responses
 
 
+# THE single authority for generation-safe meta-weight bounds (card
+# 20261101_182428). Every layer that lets feedback move a sampling param
+# clamps against THIS dict — ``get_adjustment()`` at the producer AND the
+# transport's ``_apply_meta_weights()`` at the use seam — so the invariant
+# survives cache hits, mocks and refactors that bypass the producer.
+# Exported via the ``domain.feedback`` facade; routers must never reach
+# into ``_internal`` for it.
+#
+# Tight operating window (lo, hi) each feedback-adjusted param may reach.
+# These sit well inside the param's hard range so accumulated history can
+# bias a value but never pin it to a hard-range corner. The repetition
+# floor is 1.0: below that the model is *rewarded* for repeating tokens,
+# which is how a saturated boost drove /chat into an infinite loop.
+SAFE_BAND: dict[str, tuple[float, float]] = {
+    "temperature": (0.3, 1.1),
+    "repetition_penalty": (1.0, 1.25),
+    "top_p": (0.6, 1.0),
+    "top_k": (10.0, 120.0),
+}
+
+
+def _band(value: float, lo: float, hi: float) -> float:
+    """Clamp `value` into the tight [lo, hi] operating band."""
+    return max(lo, min(hi, value))
+
+
 class MetaWeightManager:
     """
     Manages meta-weights based on user feedback.
@@ -116,14 +142,30 @@ class MetaWeightManager:
             return self._simple_embed(text)
 
     def _simple_embed(self, text: str) -> np.ndarray:
-        """
-        Simple embedding using word hash (fallback when no sentence-transformers).
-        """
-        words = text.lower().split()
-        vector = np.zeros(self.embedding_dim)
+        """Deterministic bag-of-words fallback (signed feature hashing).
 
-        for i, word in enumerate(words[: self.embedding_dim]):
-            vector[i] = hash(word) % 100 / 100.0
+        Used when sentence-transformers is unavailable. Two properties matter:
+        the same text must always produce the same vector, and similar text
+        must land close together.
+
+        Python's builtin ``hash()`` is salted per process, so the previous
+        implementation produced a different embedding for the same text after
+        every restart — stored feedback rows and live queries then lived in
+        different spaces and the similarity search silently returned arbitrary
+        patterns. It was also position-indexed (``vector[i] = hash(word_i)``),
+        which makes word order dominate and equal words at different positions
+        look unrelated. Feature hashing into a fixed width with a signed
+        accumulator is order-insensitive and stable across processes.
+        """
+        import hashlib
+
+        vector = np.zeros(self.embedding_dim)
+        for word in text.lower().split():
+            digest = hashlib.blake2b(word.encode("utf-8"), digest_size=8).digest()
+            value = int.from_bytes(digest, "big")
+            index = value % self.embedding_dim
+            sign = 1.0 if (value >> 63) & 1 else -1.0
+            vector[index] += sign
 
         # Normalize
         norm = np.linalg.norm(vector)
@@ -241,11 +283,30 @@ class MetaWeightManager:
             weights.style_bias += adjustments.get("style_bias", 0)
             weights.confidence_boost += adjustments.get("confidence_boost", 0)
 
-            # Clamp to safe ranges
+            # Clamp to safe ranges. Two-stage: the SAFE_BAND is a *tight*
+            # operating window around the neutral default; the hard ranges
+            # below are only a backstop. Clamping straight to the hard range
+            # is what let a saturated history (hundreds of same-direction
+            # votes) pin every param to a corner — temperature 1.5, top_k 5,
+            # repetition_penalty 0.80 — which drives generation into a
+            # degenerate repetition loop. `repetition_penalty` never goes
+            # below 1.0: a value < 1 REWARDS tokens the model already
+            # emitted, which is exactly how a completed answer turns into a
+            # verbatim replay loop that never emits its turn-end token
+            # (card 20261102_001621). Feedback may bias a param within the
+            # band; it can never drive it to the corner of its range.
+            weights.temperature = _band(weights.temperature, *SAFE_BAND["temperature"])
+            weights.repetition_penalty = _band(
+                weights.repetition_penalty, *SAFE_BAND["repetition_penalty"]
+            )
+            weights.top_p = _band(weights.top_p, *SAFE_BAND["top_p"])
+            weights.top_k = int(_band(weights.top_k, *SAFE_BAND["top_k"]))
+
+            # Hard backstop (normally unreachable once the band is applied).
             weights.temperature = max(0.1, min(1.5, weights.temperature))
-            weights.repetition_penalty = max(0.8, min(1.3, weights.repetition_penalty))
+            weights.repetition_penalty = max(1.0, min(1.3, weights.repetition_penalty))
             weights.top_p = max(0.1, min(1.0, weights.top_p))
-            weights.top_k = max(5, min(200, weights.top_k))
+            weights.top_k = max(10, min(200, weights.top_k))
             weights.style_bias = max(-1.0, min(1.0, weights.style_bias))
             weights.confidence_boost = max(-1.0, min(1.0, weights.confidence_boost))
 

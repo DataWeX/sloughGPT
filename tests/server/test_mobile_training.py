@@ -258,8 +258,7 @@ class TestTrainFromSessions:
             ) as mock_l,
             patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
             patch("domain.training._internal.mobile_training_store.get_training_store"),
-            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
-            patch("apps.api.server.routers.mobile._venv_python", return_value=Path(sys.executable)),
+            patch("apps.api.server.routers.mobile.subprocess.Popen", return_value=mock_proc),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
@@ -295,8 +294,16 @@ class TestTrainFromSessions:
             ),
             patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
             patch("domain.training._internal.mobile_training_store.get_training_store"),
-            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
-            patch("apps.api.server.routers.mobile._venv_python", return_value=Path(sys.executable)),
+            patch("apps.api.server.routers.mobile.subprocess.Popen", return_value=mock_proc),
+            # This test asserts the COMPLETE event, i.e. it reaches the
+            # subprocess. The venv check runs before Popen and is a real
+            # filesystem probe of a *gitignored* path, so without this the test
+            # passed only on machines that happened to have a local .venv and
+            # failed with E_ENV_MISSING everywhere else.
+            patch(
+                "apps.api.server.routers.mobile._training_python",
+                return_value=Path(sys.executable),
+            ),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
@@ -318,8 +325,7 @@ class TestTrainFromSessions:
             ),
             patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
             patch("domain.training._internal.mobile_training_store.get_training_store"),
-            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
-            patch("apps.api.server.routers.mobile._venv_python", return_value=Path(sys.executable)),
+            patch("apps.api.server.routers.mobile.subprocess.Popen", return_value=mock_proc),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions")
@@ -487,3 +493,76 @@ class TestParamValidation:
 
     def test_export_wrong_method_is_405(self):
         assert client.post("/mobile/train/export").status_code == 405
+
+
+class TestTrainingPython:
+    """The training interpreter resolves to the project conda env, not .venv.
+
+    Training needs torch/transformers and the pinned dep set, so it must run in
+    the conda ``sloughgpt`` env AGENTS.md pins as the project interpreter.
+    ``.venv`` is gitignored and absent on a fresh clone — hard-coding it is what
+    made these endpoints 500 with E_ENV_MISSING.
+    """
+
+    def test_override_wins(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.setenv("SLO_TRAINING_PYTHON", "/opt/custom/bin/python")
+        assert _training_python(tmp_path) == Path("/opt/custom/bin/python")
+
+    def test_active_conda_env_is_preferred(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+        env_python = tmp_path / "envs" / "sloughgpt" / "bin" / "python"
+        env_python.parent.mkdir(parents=True)
+        env_python.touch()
+        monkeypatch.setenv("CONDA_PREFIX", str(tmp_path / "envs" / "sloughgpt"))
+
+        assert _training_python(tmp_path) == env_python
+
+    def test_base_conda_prefix_derives_env_path(self, monkeypatch, tmp_path):
+        # CONDA_PREFIX pointing at *base* conda: envs live underneath it.
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+        env_python = tmp_path / "envs" / "sloughgpt" / "bin" / "python"
+        env_python.parent.mkdir(parents=True)
+        env_python.touch()
+        monkeypatch.setenv("CONDA_PREFIX", str(tmp_path))
+
+        assert _training_python(tmp_path) == env_python
+
+    def test_conda_exe_derives_env_path(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
+        env_python = tmp_path / "envs" / "sloughgpt" / "bin" / "python"
+        env_python.parent.mkdir(parents=True)
+        env_python.touch()
+        monkeypatch.setenv("CONDA_EXE", str(tmp_path / "bin" / "conda"))
+
+        assert _training_python(tmp_path) == env_python
+
+    def test_falls_back_to_venv_when_no_conda(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+
+        assert _training_python(tmp_path) == tmp_path / ".venv" / "bin" / "python3"
+
+    def test_candidates_are_deduped(self, monkeypatch, tmp_path):
+        # CONDA_PREFIX and CONDA_EXE can derive the same path; the list must
+        # not present the same interpreter twice.
+        from apps.api.server.routers.mobile import _conda_python_candidates
+
+        monkeypatch.setenv("CONDA_PREFIX", str(tmp_path))
+        monkeypatch.setenv("CONDA_EXE", str(tmp_path / "bin" / "conda"))
+        candidates = _conda_python_candidates()
+
+        assert len(candidates) == len(set(candidates))

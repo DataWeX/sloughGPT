@@ -1,13 +1,22 @@
 import { apiBase } from '../support/api-base'
+
+// /vm was folded into /developer as its VM tab (route-map card 6/7,
+// 20261101_154057): visit the survivor page, open the tab, and re-open it
+// after every reload — tab selection is component state and resets with
+// the page.
+const openVmTab = () => cy.get('[role="tab"]').contains('VM').click()
+
 describe('VM console', () => {
   beforeEach(() => {
     cy.mockAll()
     cy.mockVm()
-    cy.visit('/vm')
+    cy.visit('/developer')
+    openVmTab()
   })
 
-  it('renders the console header and default role', () => {
-    cy.contains('h1', 'VM Console').should('be.visible')
+  it('renders the console inside the /developer VM tab with default role', () => {
+    cy.contains('h1', 'Developer').should('be.visible')
+    cy.contains('button', 'Assembly Sandbox').should('be.visible')
     cy.get('select[aria-label="VM role"]').should('have.value', 'user')
   })
 
@@ -96,10 +105,7 @@ describe('VM console', () => {
     cy.contains('button', 'Run').click()
     // Scope to the success-styled pre: the sample source in the editor also
     // mentions 'Training result', which would otherwise match first.
-    cy.get('pre.text-success')
-      .scrollIntoView()
-      .should('be.visible')
-      .should('contain', 'final_loss')
+    cy.get('pre.text-success').scrollIntoView().should('be.visible').should('contain', 'final_loss')
   })
 
   it('stops a running training job from the Training card', () => {
@@ -140,6 +146,7 @@ describe('VM console', () => {
     // completes); give the write time to land before tearing the page down.
     cy.wait(500)
     cy.reload()
+    openVmTab()
     cy.get('select[aria-label="VM role"]').should('have.value', 'admin')
     cy.get('#vm-steps').should('have.value', '750')
   })
@@ -186,6 +193,7 @@ describe('VM console', () => {
       },
     }).as('datasetsList')
     cy.reload()
+    openVmTab()
     cy.wait('@datasetsList')
     cy.get('select[aria-label="Training dataset"]').should('have.value', 'shakespeare')
 
@@ -267,6 +275,7 @@ describe('VM console', () => {
       },
     }).as('datasetsFull')
     cy.reload()
+    openVmTab()
     cy.wait('@datasetsFull')
 
     cy.get('select[aria-label="Training dataset"]').select('__custom__')

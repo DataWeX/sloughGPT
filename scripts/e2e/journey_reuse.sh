@@ -56,7 +56,6 @@ ok "ports $API_P + $WEB_P free"
 
 # ── Phase 1: startup SIGINT (pre-ready) must stop the CLI ──
 LOG1="$LOG_DIR/journey_reuse.phase1.log"
-rm -rf apps/web/.next
 rm -f "$LOG1" "$FAKE_NPM_LOG"
 # Headless `setsid -w`: pty teardown would SIGHUP the group and mask an
 # orphaned child before the leftover check; -w gives the exit code
@@ -111,7 +110,7 @@ else
 fi
 kill -TERM "$P1" 2>/dev/null
 sleep 1
-for PAT in "cli.py .*--web-port $WEB_P" "uvicorn apps.api.server.main:app.*--port $API_P" "node server.js"; do
+for PAT in "cli.py .*--web-port $WEB_P" "uvicorn apps.api.server.main:app.*--port $API_P" "http.server $WEB_P"; do
   LEFT=$(pgrep -f "$PAT" || true)
   if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "phase1 leftover: $PAT"; fi
 done
@@ -151,8 +150,6 @@ done
 if [ -n "$FUP" ]; then ok "foreign api healthy on :$API_P"
 else bad "foreign api never came up"; kill -9 "$FOREIGN" 2>/dev/null; exit 1; fi
 
-# Fresh build path every run (stale .next would skip the npx build step)
-rm -rf apps/web/.next
 rm -f "$LOG" "$FAKE_NPM_LOG"
 
 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
@@ -160,7 +157,7 @@ NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
   > "$LOG" 2>&1 < /dev/null &
 SPID=$!
 
-# 1) web answers (build + node start; API wait is skipped — api reused)
+# 1) web answers (vite argv via the npm shim; API wait skipped — api reused)
 WEB_T=""
 for i in $(seq 1 45); do
   if [ "$(web_state)" = "200" ]; then WEB_T=$i; break; fi
@@ -236,7 +233,7 @@ else ok "no traceback"; fi
 # ── Reap: our processes only, foreign last ──
 kill -TERM "$SPID" 2>/dev/null
 sleep 1
-for PAT in "cli.py .*--web-port $WEB_P" "node server.js"; do
+for PAT in "cli.py .*--web-port $WEB_P" "http.server $WEB_P"; do
   LEFT=$(pgrep -f "$PAT" || true)
   if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "leftover killed: $PAT"; fi
 done

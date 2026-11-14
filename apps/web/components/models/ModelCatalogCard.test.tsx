@@ -56,12 +56,24 @@ vi.mock('@sloughgpt/strui', async () => {
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
-vi.mock('@/lib/query/api-hooks', () => ({
+// ModelCatalogCard imports useLoadModel from lib/cache/api-hooks — pointing the
+// mock at the old (dead) lib/query/api-hooks copy made this a real network call.
+vi.mock('@/lib/cache/api-hooks', () => ({
   useLoadModel: () => ({ mutateAsync: vi.fn().mockResolvedValue({ model_id: 'test-model' }) }),
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: () => vi.fn(),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const state = { addToast: vi.fn(), dismissToast: vi.fn(), clearToasts: vi.fn(), toasts: [] }
+  const mod = {
+    useToastStore: () => state.addToast,
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => state
+  }
+  return mod
+})
 vi.mock('@/lib/generate-controller', () => ({
   generateController: { generate: vi.fn().mockResolvedValue({}) },
 }))

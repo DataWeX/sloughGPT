@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { Button } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
-import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { useBootstrap } from '@/contexts/BootstrapContext'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -12,7 +12,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 export function ConsciousnessQuickActions() {
   const router = useRouter()
   const { t } = useLocale()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [result, setResult] = useState<{ action: string; data: any } | null>(null)
@@ -103,7 +103,7 @@ export function ConsciousnessQuickActions() {
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-[9999] h-12 w-12 rounded-full bg-violet-600 text-white shadow-lg transition-all hover:bg-violet-700 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
+        className="fixed bottom-6 right-6 z-[9999] h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
         aria-label={t('consciousness_quick_actions.toggle')}
       >
         <svg
@@ -212,7 +212,7 @@ function QuickAction({
       className="w-full px-3 py-2 text-left text-sm text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition-colors flex items-center gap-2"
     >
       {loading ? (
-        <span className="h-3 w-3 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+        <span className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       ) : null}
       <span>{label}</span>
     </button>

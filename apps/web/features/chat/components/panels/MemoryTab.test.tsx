@@ -158,7 +158,9 @@ describe('MemoryTab', () => {
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByLabelText('Delete memory item'))
     await waitFor(() => expect(hoisted.memoryController.delete).toHaveBeenCalledWith('m1'))
-    expect(screen.queryByText(/prefers espresso over drip coffee/)).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByText(/prefers espresso over drip coffee/)).toBeNull()
+    })
   })
 
   it('refetches when a delete fails', async () => {
@@ -186,7 +188,9 @@ describe('MemoryTab', () => {
     await screen.findByText(/Clear all stored memory/)
     fireEvent.click(screen.getByText('Cancel'))
     await waitFor(() => expect(hoisted.memoryController.clear).not.toHaveBeenCalled())
-    expect(screen.queryByText(/Clear all stored memory/)).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByText(/Clear all stored memory/)).toBeNull()
+    })
   })
 
   it('disables the clear button when there is nothing to clear', async () => {
@@ -270,8 +274,12 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByTitle('Copy to clipboard'))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'))
-    expect(screen.getAllByText('Copied').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'),
+    )
+    await waitFor(() => {
+      expect(screen.getAllByText('Copied').length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('copies a fact when activated via the keyboard', async () => {
@@ -307,7 +315,9 @@ describe('MemoryTab', () => {
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByTitle('Copy to clipboard'))
     await waitFor(() => expect(hoisted.logger.debug).toHaveBeenCalled())
-    expect(screen.queryByText('Copied')).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByText('Copied')).toBeNull()
+    })
   })
 
   it('stores a manual fact and highlights it in the list', async () => {
@@ -626,7 +636,9 @@ describe('MemoryTab', () => {
     await waitFor(() => {
       expect(hoisted.memoryController.list).toHaveBeenCalledTimes(2)
     })
-    expect(screen.queryByLabelText('Edit memory fact text')).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Edit memory fact text')).toBeNull()
+    })
   })
 
   it('shows an inline error when the edit produces a duplicate', async () => {

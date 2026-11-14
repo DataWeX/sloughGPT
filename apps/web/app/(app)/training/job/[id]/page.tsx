@@ -18,6 +18,7 @@ import { useTrainingJob } from '@/hooks/useTrainingJob'
 import { JobStatusCard } from '@/components/training/JobStatusCard'
 import { JobLossCard } from '@/components/training/JobLossCard'
 import { JobDetailsCard } from '@/components/training/JobDetailsCard'
+import { ProbeStandingsCard } from '@/components/training/ProbeStandingsCard'
 
 export default function TrainingJobDetailPage() {
   const {
@@ -150,6 +151,9 @@ export default function TrainingJobDetailPage() {
           />
 
           <JobLossCard job={job} />
+          {job.probe_standings && job.probe_standings.length > 0 && (
+            <ProbeStandingsCard standings={job.probe_standings} trainedOn={job.trained_on} />
+          )}
 
           <JobDetailsCard job={job} />
         </>

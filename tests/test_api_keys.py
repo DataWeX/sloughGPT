@@ -17,7 +17,7 @@ if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 from fastapi.testclient import TestClient
-from routers.api_keys import ApiKeyManager, ApiKeysRouter
+from routers.settings import ApiKeyManager, ApiKeysRouter
 
 from tests.conftest import build_test_app
 

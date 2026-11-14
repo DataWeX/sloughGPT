@@ -78,6 +78,10 @@ def _progress(label: str, downloaded: int, total: int, speed: float):
 # ---------------------------------------------------------------------------
 
 
+def _fmt_mb(n: int) -> str:
+    return f"{n / (1024 * 1024):.1f} MB"
+
+
 def cmd_url(args: argparse.Namespace):
     """Download any URL with resume."""
     url = args.url
@@ -101,9 +105,30 @@ def cmd_url(args: argparse.Namespace):
         elapsed = time.time() - t0
         mb = (result.get("total_bytes", 0) or 0) / (1024 * 1024)
         print(f"\n✓ Done — {mb:.0f} MB in {elapsed:.0f}s")
+        _print_wire_savings(result)
     except Exception as e:
         print(f"\n✗ Error: {e}")
         sys.exit(1)
+
+
+def _print_wire_savings(result: dict) -> None:
+    """Print the bandwidth line: wire bytes, savings %, content coding."""
+    if result.get("status") != "complete":
+        return
+    wire = result.get("wire_bytes", 0)
+    saved = result.get("saved_bytes")
+    enc = result.get("content_encoding", "identity")
+    if saved is None:
+        # Encoded response without Content-Length: wire size unrecoverable.
+        print(f"  ↳ wire unknown ({enc} — server sent no Content-Length)")
+    elif saved > 0:
+        pct = result.get("saved_pct")
+        pct_s = f"{pct:.0f}%" if pct is not None else "?%"
+        print(f"  ↳ wire {_fmt_mb(wire)} · saved {pct_s} ({_fmt_mb(saved)} less) · {enc}")
+    elif enc and enc != "identity":
+        print(f"  ↳ wire {_fmt_mb(wire)} · {enc} (no measurable savings)")
+    else:
+        print(f"  ↳ wire {_fmt_mb(wire)} (no compression)")
 
 
 # ---------------------------------------------------------------------------

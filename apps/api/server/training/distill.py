@@ -1,6 +1,10 @@
 """Knowledge distillation route — distill.
 
 Extracted from execution.py to keep each module focused.
+Descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{status, job_id, message}`` is served unwrapped
+(``envelope=False``), byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
@@ -12,10 +16,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, notify_push
@@ -30,7 +36,6 @@ router = APIRouter(tags=["training-distill"])
 _MAX_DATA_READ_BYTES = 200_000  # 200 KB max for distillation data
 
 
-@router.post("/training/distill")
 async def start_distillation(
     request: DistillStartRequest,
     auth_user: dict = Depends(require_auth_if_enabled),
@@ -94,7 +99,7 @@ async def start_distillation(
                 details=quality,
             )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.infrastructure import AppError
 
         if isinstance(e, AppError):
             raise
@@ -145,7 +150,7 @@ async def start_distillation(
             _random.seed(42)
             np.random.seed(42)
 
-            from domain.infrastructure._internal.model_registry import (
+            from domain.infrastructure import (
                 get_model_registry as _get_model_registry,
             )
 
@@ -159,7 +164,7 @@ async def start_distillation(
                 teacher_model = server._model_ref
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
             else:
-                from domain.infrastructure._internal.server_state import (
+                from domain.infrastructure import (
                     get_server_state as _get_server_state,
                 )
 
@@ -262,7 +267,7 @@ async def start_distillation(
                 teacher_model, teacher_tokenizer, slonet=slonet_provider is not None
             )
 
-            from domain.training._internal.distillation import (
+            from domain.training import (
                 DistillationConfig,
                 DistillationTrainer,
             )
@@ -412,3 +417,32 @@ async def start_distillation(
         "job_id": job_id,
         "message": f"Distillation started: teacher={request.teacher_model} epochs={request.epochs}",
     }
+
+
+# ── Descriptor projection (card 20261104_151036) ───────────────────────
+
+SPEC_DISTILL = ToolSpec(
+    name="training.distill.start",
+    description="Knowledge distillation: teach a compact SloNet LSTM student from a teacher HF model.",
+    parameters=params_from_model(DistillStartRequest),
+    execute=start_distillation,
+    auth_scope="authenticated",
+    idempotent=False,
+    result={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "job_id": {"type": "string"},
+            "message": {"type": "string"},
+        },
+    },
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_DISTILL,
+        RouteSpec(path="/training/distill", envelope=False),
+        start_distillation,
+    )
+)

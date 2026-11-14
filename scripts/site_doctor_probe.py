@@ -5,7 +5,7 @@ consumer** and emit a severity-ranked worklist. It orders tests; it does not
 operate. Every request here is a GET with no body, so a probe can never change
 what it is measuring.
 
-Five things are checked, in the order they matter:
+Six things are checked, in the order they matter:
 
 1. **Self-consistency of the health surface.** `/health` and `/health/detailed`
    are two views of one process. If they disagree about whether the site is
@@ -29,11 +29,17 @@ Five things are checked, in the order they matter:
    `tests/contract/test_site_doctor_probe.py`.
 
 5. **Journeys and inference.** Phase 3 reads the UX journey report that
-   `domain/journeys` writes (it never launches a browser sweep — no browser
+   `journeys` writes (it never launches a browser sweep — no browser
    stack is imported, so the probe stays a consumer), and triages the
    inference engine from `/health/detailed`'s service status and residency
    counters. A missing journey report is `info`, not a defect, so `--strict`
    still only trips on real problems.
+6. **Static repo gates.** The three invariant gates (command parity, domain
+   baseline, router manifest) run as pure functions over the checkout — no
+   network, no writes — so this phase can order repo work alongside site
+   work. New drift reads `high`; debt the baseline already tolerates reads
+   `info` for the same reason a missing journey report does: known and
+   tracked is context, not a defect.
 
 Findings are ranked critical > high > medium > low, and the run exits non-zero
 only under `--strict`, so it can gate CI once the baseline is clean.
@@ -558,7 +564,7 @@ def check_edge(gateway: str, api: str, web: str) -> list[dict[str, Any]]:
 def check_journeys(report_path: str | None = None) -> list[dict[str, Any]]:
     """Read the UX journey report — the probe never launches a browser sweep.
 
-    `domain/journeys` writes the report after every flow; this reads it the
+    `journeys` writes the report after every flow; this reads it the
     same way `mole/probes/journey.py` does. A missing report is information
     (no sweep has run yet), not a defect, so it carries `severity=info` and
     never trips `--strict`. The probe stays read-only: it imports no browser
@@ -580,7 +586,7 @@ def check_journeys(report_path: str | None = None) -> list[dict[str, Any]]:
                 "check": "journeys",
                 "message": (
                     f"no journey report at {report_path} — run "
-                    "`python -m domain.journeys` to sweep the UX flows"
+                    "`python -m journeys` to sweep the UX flows"
                 ),
             }
         ]
@@ -698,6 +704,102 @@ def check_inference(api: str) -> list[dict[str, Any]]:
                 ),
             }
         )
+    # Trend gate over the always-record series — ADDITIVE to the pairwise
+    # checks above (those catch a step change prev-vs-current; this catches
+    # drift across the window — two failure modes, one module owns the
+    # math). The "did not answer" early return above skips it: no health
+    # surface, no triage at all.
+    findings.extend(_trend_findings())
+    return findings
+
+
+def _trend_findings() -> list[dict[str, Any]]:
+    """One compact finding from the recorded benchmark series (read-only).
+
+    ``scripts/benchmark_results.py`` owns the store, ``is_regression`` and
+    ``HIGHER_IS_BETTER`` — this borrows all three through a lazy import
+    (the doctor runs as a script with ``scripts/`` on ``sys.path``; the
+    contract test inserts that path itself) and never re-declares a
+    direction or threshold. Headline metric only (``decode_tok_s``),
+    same-source band: ci and local hardware/load differ, so mixing them
+    guarantees false alarms. Fewer than 3 same-source history values is
+    ``insufficient`` — reported ok, so a fresh store never trips
+    ``--strict``. If the store module is unavailable there is no series to
+    read and no finding; the health-surface findings above still stand.
+    """
+    try:
+        import benchmark_results as br
+    except ImportError:
+        return []
+
+    history = br.load_series("inference")
+    if not history:
+        return [
+            {
+                "severity": "ok",
+                "check": "inference-trend",
+                "message": (
+                    "decode trend: insufficient history (n=0, need >=3) — no benchmark records yet"
+                ),
+            }
+        ]
+    newest = history[-1]
+    # br._dig is benchmark_results' own accessor (root -> score/metrics ->
+    # dotted walk); one accessor, no second metric-path spelling to drift
+    current = br._dig(newest, "decode_tok_s")
+    if not isinstance(current, (int, float)) or isinstance(current, bool):
+        return []  # headline metric absent from the newest record — nothing to judge
+    source = br.record_source(newest)
+    # leave-one-out (history excludes the current run) + same-source band
+    prior = [r for r in history[:-1] if br.record_source(r) == source]
+    trend = br.trend_status("decode_tok_s", prior, float(current))
+    severity = "medium" if trend["status"] == "regressed" else "ok"
+    return [
+        {
+            "severity": severity,
+            "check": "inference-trend",
+            "message": f"decode trend [{source}]: {trend['message']}",
+        }
+    ]
+
+
+def check_gates() -> list[dict[str, Any]]:
+    """Run the three static repo gates — pure functions, no network, no writes.
+
+    Command parity, domain baseline and router manifest are this repo's own
+    invariants; running them here lets one command order repo work beside
+    site work. New drift reads ``high`` (a defect the baseline does not
+    tolerate), baselined debt reads ``info`` — known and tracked is context,
+    the same rule a missing journey report follows, so ``--strict`` trips
+    only on real problems. The repo root is put on ``sys.path`` first so the
+    entry also works when the probe is run as a bare script; if ``domain``
+    still cannot be imported the skip is ``info``, because a probe pointed at
+    a partial checkout must report, not crash.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    try:
+        from domain.gates import run_gates  # noqa: PLC0415 — call-time bind for patching
+
+        gates = run_gates()
+    except (Exception, SystemExit) as exc:
+        return [
+            {
+                "severity": "info",
+                "check": "gates",
+                "message": f"static gates unavailable ({type(exc).__name__}) — skipped",
+            }
+        ]
+    findings: list[dict[str, Any]] = []
+    for gate in gates:
+        name = f"gate-{gate.name}"
+        for finding in gate.findings:
+            findings.append({"severity": "high", "check": name, "message": finding})
+        for known in gate.known:
+            findings.append({"severity": "info", "check": name, "message": f"known: {known}"})
+        if gate.ok and not gate.known:
+            findings.append({"severity": "ok", "check": name, "message": "no drift"})
     return findings
 
 
@@ -741,6 +843,9 @@ def main() -> int:
     # a sweep) and triage the inference engine off the health surface.
     findings += check_journeys()
     findings += check_inference(args.api)
+    # Static repo gates — no network, no writes; runs last so an unavailable
+    # domain/ (partial checkout) never displaces the site findings above.
+    findings += check_gates()
 
     problems = report(findings)
     if args.strict and problems:

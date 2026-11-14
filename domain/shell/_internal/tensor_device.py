@@ -7,12 +7,134 @@ No inheritance. No decorators. Just a device.
 
 from __future__ import annotations
 
+import ctypes
+import logging
+import os
 from typing import Any
 
 import numpy as np
 
 from .ioctl import IoctlCommand
 from .kernel_syscall import SyscallResult
+
+logger = logging.getLogger("slo.tensor.native")
+
+# ── native engine — ONE C source, two engines (card d74e2cef phase 2) ──────
+#
+# tensor_kernels.c is compiled by domain/slolib/_internal/native.py
+# (gcc+OpenMP ctypes / NVRTC RawKernel) and routed through the ioctl
+# handlers below behind SLO_TENSOR_NATIVE (default on; =0 forces the
+# numpy oracle, read dynamically — same contract as SLO_CYCLES_NATIVE).
+# Everything the kernel does not take (float32, 0-d, 3-D softmax,
+# strided shapes the guards reject) keeps the numpy path byte-identical.
+# matmul is deliberately NOT routed: BLAS owns it (the benchmark keeps
+# it as the control).
+
+_NATIVE_ENTRIES: dict[str, tuple[str, str]] = {
+    "SOFTMAX": ("tens_softmax_cpu", "tens_softmax_gpu"),
+    "LAYER_NORM": ("tens_layernorm_cpu", "tens_layernorm_gpu"),
+    "RMS_NORM": ("tens_rmsnorm_cpu", "tens_rmsnorm_gpu"),
+    "GELU": ("tens_gelu_cpu", "tens_gelu_gpu"),
+    "RELU": ("tens_relu_cpu", "tens_relu_gpu"),
+}
+# Benchmark-gated routing set (scripts/benchmark_tensor_kernels.py,
+# threads=1, recorded on card d74e2cef): softmax 2.7x, layernorm 3.6x,
+# rmsnorm 1.5x, gelu 1.5x — all ship. RELU stays in _NATIVE_ENTRIES
+# (the C kernel ships and is parity-tested on both engines) but is NOT
+# routed: np.maximum(0, x) is already a single-pass SIMD ufunc, 0.97x
+# measured = no headroom, so the branch does not ship. matmul never
+# enters the entries at all — BLAS owns it (the benchmark's control).
+_ROUTED_OPS = frozenset({"GELU", "LAYER_NORM", "RMS_NORM", "SOFTMAX"})
+_NATIVE_SRC: str | None = None
+_NATIVE_ENGINES: dict[str, Any] = {}
+
+
+def _native_disabled() -> bool:
+    """SLO_TENSOR_NATIVE=0 forces the numpy oracle path.
+
+    Read dynamically (not at import) so tests/CLIs can toggle at
+    runtime without a module reload.
+    """
+    return os.environ.get("SLO_TENSOR_NATIVE", "1") == "0"
+
+
+def _build_engines(cmd: str):
+    """Compiled engines for this op's entries, or None. Capability
+    probe (no env check) — caches successes AND failures; one source
+    means a successful CPU compile carries every entry."""
+    global _NATIVE_SRC
+    if cmd in _NATIVE_ENGINES:
+        return _NATIVE_ENGINES[cmd]
+    eng = None
+    try:
+        from pathlib import Path
+
+        from domain.slolib._internal.native import NativeEngines
+
+        if _NATIVE_SRC is None:
+            _NATIVE_SRC = (Path(__file__).parent / "tensor_kernels.c").read_text()
+        cpu_entry, gpu_entry = _NATIVE_ENTRIES[cmd]
+        cand = NativeEngines(_NATIVE_SRC, cpu_entry, gpu_entry)
+        eng = cand if cand.any else None
+    except Exception as exc:  # noqa: BLE001 — any loader failure = numpy oracle
+        logger.info("native tensor unavailable (%s); numpy oracle path", exc)
+        eng = None
+    _NATIVE_ENGINES[cmd] = eng
+    return eng
+
+
+def _engines(cmd: str):
+    """Runtime gate for the handlers: disabled → None WITHOUT caching,
+    so re-enabling works immediately."""
+    if _native_disabled():
+        return None
+    return _build_engines(cmd)
+
+
+def _ptr(a: np.ndarray):
+    return a.ctypes.data_as(ctypes.c_void_p)
+
+
+def _run(fn, argtypes: list, *args) -> None:
+    fn.argtypes = argtypes
+    fn.restype = None
+    fn(*args)
+
+
+def _row_op(cmd: str, x: Any):
+    """(contig_x, out, rows, cols, cpu_fn) for a routable float64
+    array of ndim 1-2, else None (caller keeps the numpy path)."""
+    if not isinstance(x, np.ndarray) or x.dtype != np.float64:
+        return None
+    if x.ndim < 1 or x.ndim > 2 or x.size == 0:
+        return None
+    eng = _engines(cmd)
+    if eng is None or eng.cpu is None:
+        return None
+    fn = getattr(eng.cpu, _NATIVE_ENTRIES[cmd][0], None)  # symbol, not the CDLL
+    if fn is None:
+        return None
+    xc = np.ascontiguousarray(x)
+    out = np.empty(x.shape, dtype=np.float64)
+    rows = int(x.shape[0]) if x.ndim == 2 else 1
+    cols = int(x.shape[-1])
+    return xc, out, rows, cols, fn
+
+
+def _flat_op(cmd: str, x: Any):
+    """(contig_flat_x, out_flat, n, cpu_fn) for a routable float64
+    array, else None."""
+    if not isinstance(x, np.ndarray) or x.dtype != np.float64 or x.size == 0:
+        return None
+    eng = _engines(cmd)
+    if eng is None or eng.cpu is None:
+        return None
+    fn = getattr(eng.cpu, _NATIVE_ENTRIES[cmd][0], None)  # symbol, not the CDLL
+    if fn is None:
+        return None
+    xc = np.ascontiguousarray(x).reshape(-1)
+    out = np.empty(x.size, dtype=np.float64)
+    return xc, out, int(x.size), fn
 
 
 class TensorDevice:
@@ -25,6 +147,8 @@ class TensorDevice:
     def __init__(self, name: str = "tensor"):
         self._name = name
         self._ops = {
+            # Contract
+            IoctlCommand.CAPS: self._caps,
             # Linear algebra
             IoctlCommand.MATMUL: self._matmul,
             IoctlCommand.DOT: self._dot,
@@ -148,6 +272,43 @@ class TensorDevice:
         """List all available commands."""
         return sorted([cmd.value for cmd in self._ops.keys()])
 
+    def caps(self) -> dict:
+        """Capability matrix — the device's machine-readable contract.
+
+        ONE device, three faces (the CPU's tensor backend via
+        ``vm._default_tensor``, the kernel NPUDevice's ``_compute``, the
+        runtime DeviceManager's registered ``"tensor"``) — each reaches
+        this through the same ``ioctl()``/``call()`` path, so the matrix
+        is declared once here and never per-face.
+
+        backend/parity report reality, never intent: the probe compiles
+        tensor_kernels.c (cached on disk by the loader) and the fields
+        fill only if it actually compiled. The kill-switch is a runtime
+        concern and does not change what the machine CAN do, so this
+        capability view ignores it.
+        """
+        native = _build_engines("SOFTMAX") is not None  # one source — any entry proves it
+        native_ops = sorted(_ROUTED_OPS) if native else []
+        return {
+            "name": self._name,
+            "type": "tensor",
+            "ops": self.list_commands(),
+            # _to_arr coerces scalar/list inputs to float64; ndarray inputs
+            # pass through opaquely, so float64 is the one guaranteed
+            # computation dtype.
+            "dtypes": ["float64"],
+            "backend": {
+                "engine": "native-cpu" if native_ops else "numpy",
+                "native_available": bool(native_ops),
+                "native_ops": native_ops,
+            },
+            "parity": list(native_ops),
+        }
+
+    def _caps(self, *args) -> dict:
+        """Ioctl handler — extra args ignored (DEV_CALL may pass junk)."""
+        return self.caps()
+
     # ── Function calls (direct use) ───────────────────────────────────────
 
     def matmul(self, a, b):
@@ -155,12 +316,45 @@ class TensorDevice:
         return self._to_arr(a) @ self._to_arr(b)
 
     def relu(self, a):
-        """ReLU activation."""
+        """ReLU activation — deliberately NOT routed (benchmark: 0.97x,
+        np.maximum is already single-pass; see _ROUTED_OPS)."""
         return np.maximum(0, self._to_arr(a))
 
     def softmax(self, a, axis=-1):
-        """Softmax activation."""
+        """Softmax activation.
+
+        Native rows (axis=-1, <=2-D) and the global form (axis=None,
+        the VM SOFTMAX opcode — one flattened row) route through
+        tensor_kernels.c; anything else (3-D attention scores, non-
+        float64, odd axes) keeps the numpy path.
+        """
         x = self._to_arr(a)
+        if axis == -1:
+            got = _row_op("SOFTMAX", x)
+            if got is not None:
+                xc, out, rows, cols, fn = got
+                _run(
+                    fn,
+                    [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_long],
+                    _ptr(xc),
+                    _ptr(out),
+                    rows,
+                    cols,
+                )
+                return out
+        elif axis is None and isinstance(x, np.ndarray):
+            got = _row_op("SOFTMAX", np.ravel(x))
+            if got is not None:
+                xc, out, rows, cols, fn = got
+                _run(
+                    fn,
+                    [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_long],
+                    _ptr(xc),
+                    _ptr(out),
+                    rows,
+                    cols,
+                )
+                return out.reshape(x.shape)
         shifted = x - np.max(x, axis=axis, keepdims=True)
         exp_x = np.exp(shifted)
         return exp_x / np.sum(exp_x, axis=axis, keepdims=True)
@@ -278,6 +472,11 @@ class TensorDevice:
 
     def _gelu(self, *args):
         x = self._to_arr(args[0])
+        got = _flat_op("GELU", x)
+        if got is not None:
+            xc, out, n, fn = got
+            _run(fn, [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long], _ptr(xc), _ptr(out), n)
+            return out.reshape(x.shape)
         return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * x**3)))
 
     def _silu(self, *args):
@@ -525,6 +724,29 @@ class TensorDevice:
         x = self._to_arr(input)
         w = self._to_arr(weight)
         b = self._to_arr(bias)
+        routed = self._affine_row("LAYER_NORM", x, w, b)
+        if routed is not None:
+            xc, wc, bc, out, rows, cols, fn = routed
+            _run(
+                fn,
+                [
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    ctypes.c_long,
+                    ctypes.c_long,
+                    ctypes.c_double,
+                ],
+                _ptr(xc),
+                _ptr(wc),
+                _ptr(bc),
+                _ptr(out),
+                rows,
+                cols,
+                float(eps),
+            )
+            return out
         mean = np.mean(x, axis=-1, keepdims=True)
         var = np.var(x, axis=-1, keepdims=True)
         x_hat = (x - mean) / np.sqrt(var + eps)
@@ -535,8 +757,143 @@ class TensorDevice:
         eps = args[2] if len(args) > 2 else 1e-6
         x = self._to_arr(input)
         w = self._to_arr(weight)
+        routed = self._affine_row("RMS_NORM", x, w, None)
+        if routed is not None:
+            xc, wc, _bc, out, rows, cols, fn = routed
+            _run(
+                fn,
+                [
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    ctypes.c_long,
+                    ctypes.c_long,
+                    ctypes.c_double,
+                ],
+                _ptr(xc),
+                _ptr(wc),
+                _ptr(out),
+                rows,
+                cols,
+                float(eps),
+            )
+            return out
         rms = np.sqrt(np.mean(x**2, axis=-1, keepdims=True) + eps)
         return x / rms * w
+
+    @staticmethod
+    def _affine_row(cmd: str, x: Any, w: Any, b: Any):
+        """Row-op prep + weight/bias shape gate; None = numpy path.
+
+        w must be float64 of shape (cols,) — anything else (None,
+        lists, broadcastable (1, cols) rows) stays on numpy, which
+        accepts what the C kernel does not.
+        """
+        base = _row_op(cmd, x)
+        if base is None:
+            return None
+        xc, out, rows, cols, fn = base
+        if not isinstance(w, np.ndarray) or w.dtype != np.float64 or w.shape != (cols,):
+            return None
+        if b is not None and (
+            not isinstance(b, np.ndarray) or b.dtype != np.float64 or b.shape != (cols,)
+        ):
+            return None
+        return xc, np.ascontiguousarray(w), b, out, rows, cols, fn
+
+    # ── VM-instruction tensor ops (the board CPU delegates these here) ──────
+    # Explicit signatures because the CPU calls them directly with fixed arity.
+    # Operands arrive already parsed by the CPU, so they are consumed as-is —
+    # this mirrors the expressions that used to live inline in the CPU shims.
+
+    def _norm(self, x):
+        """L2 norm (VM NORM)."""
+        return np.linalg.norm(x)
+
+    def _shape(self, x):
+        """Tensor shape as a list (VM SHAPE)."""
+        return list(x.shape)
+
+    def _size(self, x):
+        """Element count (VM SIZE)."""
+        return int(x.size)
+
+    def _layernorm_global(self, x):
+        """Plain weightless layernorm, global reduction (VM LAYERNORM).
+
+        Distinct from ``_layer_norm`` (affine: weight/bias, axis=-1) — this is
+        the statistical, axis-free normalization the VM opcode specifies.
+        """
+        if isinstance(x, np.ndarray):
+            got = _row_op("LAYER_NORM", np.ravel(x))
+            if got is not None:
+                xc, out, rows, cols, fn = got
+                _run(
+                    fn,
+                    [
+                        ctypes.c_void_p,
+                        ctypes.c_void_p,
+                        ctypes.c_void_p,
+                        ctypes.c_void_p,
+                        ctypes.c_long,
+                        ctypes.c_long,
+                        ctypes.c_double,
+                    ],
+                    _ptr(xc),
+                    None,  # NULL w/b = the weightless form in the C kernel
+                    None,
+                    _ptr(out),
+                    rows,
+                    cols,
+                    1e-5,
+                )
+                return out.reshape(x.shape)
+        return (x - np.mean(x)) / np.sqrt(np.var(x) + 1e-5)
+
+    def _rmsnorm_global(self, x):
+        """Plain weightless rmsnorm, global reduction (VM RMSNORM).
+
+        Distinct from ``_rms_norm`` (affine: weight, axis=-1).
+        """
+        if isinstance(x, np.ndarray):
+            got = _row_op("RMS_NORM", np.ravel(x))
+            if got is not None:
+                xc, out, rows, cols, fn = got
+                _run(
+                    fn,
+                    [
+                        ctypes.c_void_p,
+                        ctypes.c_void_p,
+                        ctypes.c_void_p,
+                        ctypes.c_long,
+                        ctypes.c_long,
+                        ctypes.c_double,
+                    ],
+                    _ptr(xc),
+                    None,  # NULL w = the weightless form in the C kernel
+                    _ptr(out),
+                    rows,
+                    cols,
+                    1e-5,
+                )
+                return out.reshape(x.shape)
+        return x / np.sqrt(np.mean(x**2) + 1e-5)
+
+    def _randn(self, rows, cols):
+        """Standard-normal tensor (VM RANDN)."""
+        return np.random.randn(rows, cols)
+
+    def _randunif(self, rows, cols, lo, hi):
+        """Uniform tensor (VM RANDUNIF)."""
+        return np.random.uniform(lo, hi, (rows, cols))
+
+    def _safe_div(self, a, b):
+        """Division with inf/nan -> 0 (VM DIV: the guard is part of the contract)."""
+        with np.errstate(divide="ignore", invalid="ignore"):
+            result = self._div(a, b)
+            result = np.where(np.isinf(result), 0.0, result)
+            result = np.where(np.isnan(result), 0.0, result)
+        return result
 
     def _attention(self, *args):
         query, key, value = args[0], args[1], args[2]

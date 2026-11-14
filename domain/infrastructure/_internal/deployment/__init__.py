@@ -37,7 +37,7 @@ class DeploymentStatus(Enum):
     """Deployment status"""
 
     PENDING = "pending"
-    IN_PROGRESS = "in_progress"
+    LIVE = "live"
     COMPLETED = "completed"
     FAILED = "failed"
     ROLLED_BACK = "rolled_back"
@@ -276,7 +276,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         """Execute deployment process"""
         try:
             # Update status
-            deployment.status = DeploymentStatus.IN_PROGRESS
+            deployment.status = DeploymentStatus.LIVE
             deployment.started_at = time.time()
 
             env_config = self.environment_configs[deployment.environment]

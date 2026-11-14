@@ -134,7 +134,7 @@ start_web() {
   log_api "Starting web (port $WEB_PORT)..."
   (cd "$ROOT/apps/web" && exec npm run dev 2>&1) &
   WEB_PID=$!
-  # Give Next.js a moment to bind
+  # Give the Vite dev server a moment to bind
   sleep 3
   if kill -0 "$WEB_PID" 2>/dev/null; then
     log_ok "Web dev server on :$WEB_PORT"

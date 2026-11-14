@@ -9,7 +9,9 @@ vi.mock('@sloughgpt/strui', () => {
   return {
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
     Button: ({ children, onClick, ...rest }: any) => (
-      <button onClick={onClick} {...rest}>{children}</button>
+      <button onClick={onClick} {...rest}>
+        {children}
+      </button>
     ),
     IconX: () => <span data-testid="icon-x">x</span>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
@@ -19,27 +21,53 @@ vi.mock('@sloughgpt/strui', () => {
     Slider: ({ value, onValueChange, min, max, step, label }: any) => (
       <div>
         {label && <label>{label}</label>}
-        <input type="range" value={value?.[0]} onChange={(e) => onValueChange?.([Number(e.target.value)])} min={min} max={max} step={step} data-testid="slider" />
+        <input
+          type="range"
+          value={value?.[0]}
+          onChange={(e) => onValueChange?.([Number(e.target.value)])}
+          min={min}
+          max={max}
+          step={step}
+          data-testid="slider"
+        />
       </div>
     ),
     Select: ({ children }: any) => <div data-testid="select">{children}</div>,
     SelectTrigger,
     SelectValue: ({ placeholder }: any) => <span data-testid="select-value">{placeholder}</span>,
     SelectContent: ({ children }: any) => <div data-testid="select-content">{children}</div>,
-    SelectItem: ({ children, value }: any) => <button data-testid="select-item" data-value={value}>{children}</button>,
-    Switch: ({ checked, onCheckedChange, disabled, 'aria-label': label, ...rest }: any) => (
-      <button role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onCheckedChange?.(!checked)} {...rest} />
+    SelectItem: ({ children, value }: any) => (
+      <button data-testid="select-item" data-value={value}>
+        {children}
+      </button>
     ),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Switch: ({ checked, onCheckedChange, disabled, 'aria-label': label, ...rest }: any) => (
+      <button
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onCheckedChange?.(!checked)}
+        {...rest}
+      />
+    ),
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -66,33 +94,57 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 import { VoiceChatMode } from './VoiceChatMode'
 
 function makeMockRecognition() {
   const handlers: Record<string, ((...args: any[]) => void) | null> = {
-    start: null, end: null, error: null, result: null,
+    start: null,
+    end: null,
+    error: null,
+    result: null,
   }
   const instance = {
-    continuous: false, interimResults: false, lang: '',
+    continuous: false,
+    interimResults: false,
+    lang: '',
     start: vi.fn(() => setTimeout(() => handlers.start?.())),
     stop: vi.fn(() => setTimeout(() => handlers.end?.())),
     abort: vi.fn(),
-    get onstart() { return handlers.start },
-    set onstart(fn) { handlers.start = fn },
-    get onend() { return handlers.end },
-    set onend(fn) { handlers.end = fn },
-    get onerror() { return handlers.error },
-    set onerror(fn) { handlers.error = fn },
-    get onresult() { return handlers.result },
-    set onresult(fn) { handlers.result = fn },
+    get onstart() {
+      return handlers.start
+    },
+    set onstart(fn) {
+      handlers.start = fn
+    },
+    get onend() {
+      return handlers.end
+    },
+    set onend(fn) {
+      handlers.end = fn
+    },
+    get onerror() {
+      return handlers.error
+    },
+    set onerror(fn) {
+      handlers.error = fn
+    },
+    get onresult() {
+      return handlers.result
+    },
+    set onresult(fn) {
+      handlers.result = fn
+    },
   }
   return { instance, handlers }
 }
 
-function makeResultEvent(resultIndex = 0, results: Array<{ transcript: string; isFinal: boolean }>) {
+function makeResultEvent(
+  resultIndex = 0,
+  results: Array<{ transcript: string; isFinal: boolean }>,
+) {
   return {
     resultIndex,
     results: results.map((r, i) => ({
@@ -127,16 +179,24 @@ describe('VoiceChatMode', () => {
         getTracks: () => [{ stop: vi.fn() }],
       }),
     }
-    // Mock AudioContext for waveform
+    // Mock AudioContext for waveform + server-mode capture fallback
     const mockDisconnect = vi.fn()
-    ;(window as any).AudioContext = vi.fn(() => ({
+    ;(window as any).AudioContext = vi.fn((opts?: { sampleRate?: number }) => ({
+      sampleRate: opts?.sampleRate ?? 48000,
       createAnalyser: () => ({
-        fftSize: 256, smoothingTimeConstant: 0.4,
+        fftSize: 256,
+        smoothingTimeConstant: 0.4,
         frequencyBinCount: 128,
         getByteFrequencyData: vi.fn(),
         connect: vi.fn(),
       }),
       createMediaStreamSource: () => ({ connect: vi.fn(), disconnect: mockDisconnect }),
+      createScriptProcessor: () => ({
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        onaudioprocess: null,
+      }),
+      createGain: () => ({ gain: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() }),
       close: vi.fn(),
     }))
   })
@@ -150,10 +210,17 @@ describe('VoiceChatMode', () => {
     delete (window as any).AudioContext
   })
 
-  it('shows error when SpeechRecognition not available', async () => {
+  it('falls back to server transcription when SpeechRecognition not available', async () => {
+    // No setupSpeechRecognition() — Electron pane / Android WebView world.
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
-    expect(screen.getByText(/Speech recognition not supported/)).toBeDefined()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+    // Server mode engaged via the mic: listening, no dead-end error banner.
+    expect((navigator as any).mediaDevices.getUserMedia).toHaveBeenCalled()
+    expect(screen.getByText('Listening')).toBeDefined()
+    expect(screen.queryByText(/Speech recognition not supported/)).toBeNull()
+    expect(screen.queryByText('Microphone access denied')).toBeNull()
   })
 
   it('renders close button', () => {
@@ -182,12 +249,14 @@ describe('VoiceChatMode', () => {
   it('shows interim text during recognition', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
 
     act(() => {
-      mockRecognition.handlers.result?.(makeResultEvent(0, [
-        { transcript: 'hello ', isFinal: false },
-      ]))
+      mockRecognition.handlers.result?.(
+        makeResultEvent(0, [{ transcript: 'hello ', isFinal: false }]),
+      )
     })
 
     expect(screen.getByText('hello')).toBeDefined()
@@ -196,12 +265,14 @@ describe('VoiceChatMode', () => {
   it('accumulates final text', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
 
     act(() => {
-      mockRecognition.handlers.result?.(makeResultEvent(0, [
-        { transcript: 'hello world', isFinal: true },
-      ]))
+      mockRecognition.handlers.result?.(
+        makeResultEvent(0, [{ transcript: 'hello world', isFinal: true }]),
+      )
     })
 
     expect(screen.getByText('hello world')).toBeDefined()
@@ -210,21 +281,51 @@ describe('VoiceChatMode', () => {
   it('stops listening when toggle button clicked while listening', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
 
     fireEvent.click(screen.getByLabelText('Tap to stop listening'))
-    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
 
     expect(mockRecognition.instance.stop).toHaveBeenCalled()
   })
 
-  it('shows error for not-allowed', async () => {
+  it("fails over to server mode on 'not-allowed' (webviews grant getUserMedia separately)", async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
 
     act(() => {
       mockRecognition.handlers.error?.({ error: 'not-allowed' } as any)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+
+    // Mic is still grantable via getUserMedia here — voice chat keeps
+    // working on the server pipeline instead of dying with an error.
+    expect(screen.queryByText('Microphone access denied')).toBeNull()
+    expect(screen.getByText('Listening')).toBeDefined()
+  })
+
+  it("shows 'Microphone access denied' when 'not-allowed' AND the mic itself is denied", async () => {
+    setupSpeechRecognition()
+    ;(navigator as any).mediaDevices.getUserMedia = vi.fn().mockRejectedValue(new Error('denied'))
+    render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+
+    act(() => {
+      mockRecognition.handlers.error?.({ error: 'not-allowed' } as any)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
     })
 
     expect(screen.getByText('Microphone access denied')).toBeDefined()
@@ -233,7 +334,9 @@ describe('VoiceChatMode', () => {
   it('shows error for speech recognition errors', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
 
     act(() => {
       mockRecognition.handlers.error?.({ error: 'no-speech' } as any)
@@ -245,7 +348,9 @@ describe('VoiceChatMode', () => {
   it('shows instructions text when listening', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
     expect(screen.getByText(/Speak naturally/)).toBeDefined()
   })
 
@@ -258,7 +363,9 @@ describe('VoiceChatMode', () => {
   it('opens settings panel when settings button clicked', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
     fireEvent.click(screen.getByLabelText('Voice settings'))
     expect(screen.getByText('Speech Rate')).toBeDefined()
     expect(screen.getByText('Interrupt Sensitivity')).toBeDefined()
@@ -268,7 +375,9 @@ describe('VoiceChatMode', () => {
   it('toggles transcript visibility', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
     const toggleBtn = screen.getByText('Show transcript')
     fireEvent.click(toggleBtn)
     expect(screen.getByText('Hide transcript')).toBeDefined()
@@ -277,7 +386,9 @@ describe('VoiceChatMode', () => {
   it('shows exchange count in footer', async () => {
     setupSpeechRecognition()
     render(<VoiceChatMode onMessage={onMessage} onClose={onClose} />)
-    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
     expect(screen.getByText(/No conversation yet/)).toBeDefined()
   })
 })

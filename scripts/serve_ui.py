@@ -113,6 +113,9 @@ def _run_supervised(cmd: list[str], cwd: str, log_path: str) -> int:
                 # PGQ("sloughgpt") engine installs _handle_signal during
                 # lifespan, AFTER uvicorn's capture_signals, and never sets
                 # should_exit. Escalate to SIGKILL so stop() can't lie.
+                # (Fixed in card 20261104_070434 — constructor no longer
+                # installs, and the handler chains to handle_exit — so this
+                # escalation is now a fallback for any other hang.)
                 try:
                     os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 except (ProcessLookupError, PermissionError, OSError):
@@ -271,10 +274,12 @@ def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
         )
     )
     tree = engine.tree("serve", guarded=True)
-    if _under_ipython():
-        # Engine.__init__ installs SIGINT/SIGTERM handlers; in a notebook the
-        # kernel owns SIGINT — hand it straight back.
-        engine.restore_signal_handlers()
+    if not _under_ipython():
+        # Engine's constructor no longer installs process signal handlers
+        # (a library must not own host signals — card 20261104_070434);
+        # this standalone runner claims SIGTERM/SIGINT itself, chaining back
+        # to any handler already in place. Under IPython the kernel owns them.
+        engine.install_signal_handlers()
     _ENGINE = engine
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)

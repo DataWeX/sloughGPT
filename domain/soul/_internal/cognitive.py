@@ -373,7 +373,9 @@ class SessionMemory:
         self.session_start = datetime.now().isoformat()
 
     def _generate_session_id(self) -> str:
-        return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}"
+        # Microseconds + random suffix: second-granularity timestamps made
+        # create+clear-in-the-same-second collide with p≈1/9000 (CI flake).
+        return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{random.randint(1000, 9999)}"
 
     def add(self, role: str, content: str) -> dict:
         """Add a message to the session."""
@@ -402,7 +404,10 @@ class SessionMemory:
     def clear(self) -> None:
         """Clear session for new conversation."""
         self.conversation = []
+        old_id = self.session_id
         self.session_id = self._generate_session_id()
+        while self.session_id == old_id:  # never reuse the rotated-from id
+            self.session_id = self._generate_session_id()
         self.session_start = datetime.now().isoformat()
 
     def get_summary(self) -> dict:

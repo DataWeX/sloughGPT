@@ -147,24 +147,36 @@ async def status_endpoint():
     return status()
 ```
 
+### 5. Every `domain/` file carries the PEP 563 import
+
+```python
+from __future__ import annotations
+```
+
+Mandatory first import in every file under `domain/`: annotations stay lazy,
+forward references cost nothing, and the tree keeps one style. Enforced by
+`tests/test_code_hygiene.py::test_domain_files_carry_future_annotations` —
+a new domain file without it fails the gate.
+
 ---
 
 ## What Changes
 
-| Current | New |
-|---------|-----|
-| 20 functions per feature | 3 functions per feature |
-| Import from `_internal/` | Import from `__init__.py` |
-| Need to understand internals | Just call the function |
-| Write training code | `model = train("data.txt")` |
-| Write inference code | `response = generate(model, "Hello")` |
-| Write chat code | `reply = chat(model, "Hi")` |
+| Current                      | New                                   |
+| ---------------------------- | ------------------------------------- |
+| 20 functions per feature     | 3 functions per feature               |
+| Import from `_internal/`     | Import from `__init__.py`             |
+| Need to understand internals | Just call the function                |
+| Write training code          | `model = train("data.txt")`           |
+| Write inference code         | `response = generate(model, "Hello")` |
+| Write chat code              | `reply = chat(model, "Hi")`           |
 
 ---
 
 ## Checklist
 
 For each feature, ask:
+
 - [ ] Can a user do everything with just the exported functions?
 - [ ] Are there ≤5 exported functions?
 - [ ] Does it work without a running server?
@@ -174,4 +186,4 @@ If any answer is no, simplify.
 
 ---
 
-*This doc overrides any conflicting patterns. When in doubt, fewer APIs, simpler usage.*
+_This doc overrides any conflicting patterns. When in doubt, fewer APIs, simpler usage._

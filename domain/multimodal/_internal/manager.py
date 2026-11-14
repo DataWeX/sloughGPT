@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
+
 logger = logging.getLogger("slo.multimodal.manager")
 
 from .audio_filter import (
@@ -61,7 +63,7 @@ class MultimodalManager:
     - Image captioning (learned from scratch)
     """
 
-    _pretrain_thread: threading.Thread | None = None
+    _pretrain_thread: ThreadHandle | None = None
     _pretrain_cancel: threading.Event | None = None
 
     def __init__(self):
@@ -146,17 +148,14 @@ class MultimodalManager:
                 logger.debug("Pretrain already running — skipping duplicate spawn")
             else:
                 cls._pretrain_cancel = threading.Event()
-                thread = threading.Thread(
-                    target=self._pretrain_engine,
-                    daemon=True,
-                    kwargs={
-                        "epochs": 10,
-                        "samples": 216,
-                        "cancel": cls._pretrain_cancel,
-                    },
+                cls._pretrain_thread = spawn_loop(
+                    self._pretrain_engine,
+                    name="mm-pretrain",
+                    stop=cls._pretrain_cancel,
+                    epochs=10,
+                    samples=216,
+                    cancel=cls._pretrain_cancel,
                 )
-                cls._pretrain_thread = thread
-                thread.start()
 
         self._initialized = True
         logger.info("Multimodal initialized", extra={"tag": "MODEL"})
@@ -575,7 +574,6 @@ class MultimodalManager:
 
             # Async auto-save every 5 images (non-blocking)
             if self._learning_count % 5 == 0:
-                import threading
 
                 def _async_save():
                     try:
@@ -588,7 +586,12 @@ class MultimodalManager:
                     except Exception as save_err:
                         logger.warning("Auto-save failed: %s", save_err, extra={"tag": "MODEL"})
 
-                threading.Thread(target=_async_save, daemon=True).start()
+                # Process kind (routing table in docs/plans/2026-09-20-
+                # execution-consolidation.md): dropping an autosave would
+                # silently lose learned weights — the engine never drops.
+                from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+                get_engine().spawn(_async_save, name="mm-autosave")
 
             confidence = min(float(np.mean(np.abs(embed.data))) * 2.0, 1.0)
 

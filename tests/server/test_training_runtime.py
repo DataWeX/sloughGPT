@@ -51,6 +51,23 @@ class TestRegisterAndSync:
         assert row["name"] == "distill"
         assert row["status"] in ("pending", "running")
 
+    def test_register_backfills_config_on_existing_row(self, runtime, store):
+        """job_1438982c: a row persisted without config (the in-memory job dict
+        has no config key) must still receive register()'s request snapshot —
+        recovery reads the config column to rebuild trainer kwargs, and an
+        empty column silently falls back to defaults."""
+        store.create("j1", "distill", {}, "data/input.txt")
+        snapshot = {"block_size": 512, "batch_size": 8, "epochs": 3}
+        runtime.register("j1", _job("j1"), threading.Event(), snapshot)
+        assert store.get("j1")["config"] == snapshot
+
+    def test_register_does_not_clobber_non_empty_config(self, runtime, store):
+        """First registration wins: a later register() with a different
+        snapshot must not overwrite config the row already carries."""
+        runtime.register("j1", _job("j1"), threading.Event(), {"epochs": 10})
+        runtime.register("j1", _job("j1"), threading.Event(), {"epochs": 99})
+        assert store.get("j1")["config"] == {"epochs": 10}
+
     def test_sync_flushes_progress(self, runtime, store):
         runtime.register("j1", _job("j1"), threading.Event())
         job = runtime.get("j1")

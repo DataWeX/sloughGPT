@@ -5,6 +5,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
+import { apiGet } from '@/lib/http-client'
 
 interface CalendarEvent {
   id: string
@@ -94,8 +95,12 @@ export default function CalendarPage() {
     setLoading(true)
     try {
       const dateStr = formatDate(currentDate)
-      const res = await fetch(`/api/calendar/events?date=${dateStr}`)
-      const data = await res.json()
+      // Through the http-client facade (single source of truth): _resolveUrl
+      // already whitelists /api/calendar as same-origin, so this stays on the
+      // web origin — no raw fetch() bypass (card 20261113_153000).
+      const data = await apiGet<{ events: CalendarEvent[] }>('/api/calendar/events', {
+        date: dateStr,
+      })
       setEvents(data.events || [])
     } catch (err) {
       addGlobalError(err, 'Calendar')
@@ -261,7 +266,7 @@ export default function CalendarPage() {
       {events.length === 0 && !loading && (
         <Card className="mt-4">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="text-4xl mb-3 opacity-50">📅</div>
+            <div className="text-base mb-3 opacity-50">📅</div>
             <h3 className="text-sm font-medium text-foreground">No events scheduled</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               This day is clear. Use the API to add events.

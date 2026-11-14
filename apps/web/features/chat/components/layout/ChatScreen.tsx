@@ -16,7 +16,15 @@ import { MS_PER_DAY } from '@/lib/format-bytes'
 function formatDateLabel(date: Date): string {
   const now = new Date()
   const input = new Date(date)
-  const diffDays = Math.floor((now.getTime() - input.getTime()) / MS_PER_DAY)
+  // Calendar-day difference, NOT a rolling 24h window. The divider decision
+  // below (isDifferentDay) compares Y/M/D, so the label must use the same
+  // basis: flooring elapsed time labelled a message from yesterday evening
+  // "Today" whenever it was read within 24h, producing two identical TODAY
+  // dividers in a row. Round (not floor) so a 23h/25h DST day still counts
+  // as one day.
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfInput = new Date(input.getFullYear(), input.getMonth(), input.getDate()).getTime()
+  const diffDays = Math.round((startOfToday - startOfInput) / MS_PER_DAY)
   if (diffDays === 0) return 'Today'
   if (diffDays === 1) return 'Yesterday'
   if (diffDays < 7) return input.toLocaleDateString(undefined, { weekday: 'long' })
@@ -206,7 +214,7 @@ export const ChatScreen = memo(function ChatScreen({
 
         {sessionLoading && (
           <div
-            className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-4 space-y-2"
+            className="w-full px-4 sm:px-6 py-4 space-y-2"
             role="status"
             aria-busy="true"
             aria-label="Loading messages"
@@ -247,13 +255,13 @@ export const ChatScreen = memo(function ChatScreen({
         )}
 
         {toolEvents && toolEvents.length > 0 && (
-          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 pb-1">
+          <div className="w-full px-4 sm:px-6 pb-1">
             <ToolCallPanel events={toolEvents} />
           </div>
         )}
 
         {ragVerification && (
-          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 pb-1">
+          <div className="w-full px-4 sm:px-6 pb-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5">
               <span
                 className={cn(
@@ -346,7 +354,7 @@ export const ChatScreen = memo(function ChatScreen({
       const showDateDivider = !prevMsg || isDifferentDay(prevMsg.timestamp, message.timestamp)
 
       return (
-        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-1.5">
+        <div className="mx-auto w-full px-4 sm:px-6 py-1.5">
           {showDateDivider && (
             <div
               className="relative flex items-center py-2"
@@ -368,7 +376,6 @@ export const ChatScreen = memo(function ChatScreen({
             showTimestamp={true}
             model={model}
             images={message.images}
-            turnNumber={index + 1}
             metrics={message.metrics}
             onCopy={onCopy}
             onThumbsUp={onThumbsUp}

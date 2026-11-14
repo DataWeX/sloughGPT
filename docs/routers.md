@@ -36,6 +36,8 @@ Registered pre-lifespan in `main.py`.
 
 ## System Router (`/system`)
 
+> Also serves the `/errors` and `/session` surfaces since card `20261101_154058` — `errors.py` and `session.py` were merged into this module as an aggregate router facade (paths and wire shapes unchanged).
+
 | Method | Path                               | Description                                                     |
 | ------ | ---------------------------------- | --------------------------------------------------------------- |
 | `GET`  | `/system/metrics`                  | Real-time CPU, memory, disk, GPU usage.                         |
@@ -76,6 +78,8 @@ Registered pre-lifespan in `main.py`.
 
 ## Infer Router (`/infer`)
 
+> Served by `routers/models.py` since card `20261101_154054` — `infer.py` was merged into the `/models` facade (paths and wire shapes unchanged).
+
 Separate inference endpoint backed by the direct model server.
 
 | Method | Path                | Description                  |
@@ -89,6 +93,8 @@ Separate inference endpoint backed by the direct model server.
 | `GET`  | `/infer/info`       | Loaded model information.    |
 
 ## Models Router (`/models`)
+
+> Also serves the `/infer` and `/registry` surfaces since card `20261101_154054` — `infer.py` and `registry.py` were merged into this module as an aggregate router facade (paths and wire shapes unchanged).
 
 | Method | Path                           | Description                       |
 | ------ | ------------------------------ | --------------------------------- |
@@ -152,6 +158,8 @@ Separate inference endpoint backed by the direct model server.
 
 ## Session Router (`/session`)
 
+> Served by `routers/system.py` since card `20261101_154058` — `session.py` was merged into the system facade (paths and wire shapes unchanged).
+
 | Method | Path                               | Description                  |
 | ------ | ---------------------------------- | ---------------------------- |
 | `POST` | `/session/{session_id}/context`    | Build context for a session. |
@@ -214,24 +222,33 @@ Separate inference endpoint backed by the direct model server.
 
 ## Memory Router (`/memory`)
 
-| Method   | Path                    | Description                                                         |
-| -------- | ----------------------- | ------------------------------------------------------------------- |
-| `GET`    | `/memory/stats`         | Memory service stats (enabled, total facts, topic buckets).         |
-| `GET`    | `/memory/list`          | List stored facts (limit 1..1000, default 100).                     |
-| `GET`    | `/memory/search`        | Search facts by relevance (requires `q`).                           |
-| `POST`   | `/memory/store`         | Store a fact directly. Body: `{content, source?}`.                  |
-| `POST`   | `/memory/remember`      | Extract and store facts from a message. Body: `{message, source?}`. |
-| `POST`   | `/memory/update`        | Update a fact.                                                      |
-| `DELETE` | `/memory/delete`        | Delete a fact.                                                      |
-| `POST`   | `/memory/set-config`    | Update runtime memory settings.                                     |
-| `GET`    | `/memory/get-config`    | Get current memory settings.                                        |
-| `POST`   | `/memory/clear`         | Clear all stored facts.                                             |
-| `POST`   | `/memory/consolidate`   | Trigger memory consolidation.                                       |
-| `POST`   | `/memory/archive`       | Archive old facts.                                                  |
-| `GET`    | `/memory/archive/stats` | Archive statistics.                                                 |
-| `POST`   | `/memory/archive/prune` | Prune archived facts.                                               |
+| Method   | Path                    | Description                                                          |
+| -------- | ----------------------- | -------------------------------------------------------------------- |
+| `GET`    | `/memory/stats`         | Memory service stats (enabled, total facts, topic buckets).          |
+| `GET`    | `/memory/list`          | List stored facts (limit 1..1000, default 100).                      |
+| `GET`    | `/memory/search`        | Search facts by relevance (requires `q`).                            |
+| `POST`   | `/memory/store`         | Store a fact directly. Body: `{content, source?}`.                   |
+| `POST`   | `/memory/remember`      | Extract and store facts from a message. Body: `{message, source?}`.  |
+| `POST`   | `/memory/update`        | Update a fact.                                                       |
+| `DELETE` | `/memory/delete`        | Delete a fact.                                                       |
+| `POST`   | `/memory/set-config`    | Update runtime memory settings.                                      |
+| `GET`    | `/memory/get-config`    | Get current memory settings.                                         |
+| `POST`   | `/memory/clear`         | Clear all stored facts.                                              |
+| `POST`   | `/memory/consolidate`   | Trigger memory consolidation.                                        |
+| `POST`   | `/memory/archive`       | Archive old facts.                                                   |
+| `GET`    | `/memory/archive/stats` | Archive statistics.                                                  |
+| `POST`   | `/memory/archive/prune` | Prune archived facts.                                                |
+| `GET`    | `/memory/cards`         | List saved memory cards (newest first; `valid` = checksum verified). |
+| `POST`   | `/memory/cards/save`    | Save memory to a portable card. Body: `{name?, overwrite?}`.         |
+| `POST`   | `/memory/cards/load`    | Load a card. Body: `{name, mode?}` — `replace` (default, autosaves   |
+|          |                         | current memory first) or `merge` (idempotent, content-hash dedup).   |
+| `DELETE` | `/memory/cards/{name}`  | Delete a saved card.                                                 |
 
-Fail-closed when `SLO_MEMORY_ENABLED=false`.
+Fail-closed when `SLO_MEMORY_ENABLED=false`. Cards live in
+`data/memory_cards/` (override: `SLO_MEMORY_CARDS_DIR`); setting
+`SLO_MEMORY_ACTIVE_CARD=<name>` merge-loads that card automatically after a
+successful model load (`.card.json` files are checksummed — corrupt cards are
+rejected before any store mutation).
 
 ## Datasets Router (`/datasets`)
 
@@ -284,6 +301,9 @@ Routes are split across focused sub-modules:
 | `training/helpers.py`         | ~111  | Shared `_finish_job`, `_sloughgpt_trainer_kwds`, `_run_async`            |
 | `training/turbo_endpoints.py` | ~122  | Turbo start + from-sessions start + turbo status                         |
 | `training/sse_stream.py`      | ~282  | Shared SSE stream helper, stop_all_training, cancel_from_sessions        |
+| `training/self_train.py`      | ~243  | `/self-train` start/stop/status (folded in from `routers/`, card `20261101_154058`) |
+| `training/lora_eval.py`       | ~352  | `/lora-eval` run/history/aggregate (folded in from `routers/`, card `20261101_154058`) |
+| `training/cloud_training.py`  | ~190  | `/cloud-training` jobs/submit/status/cancel (folded in from `routers/`, card `20261101_154058`) |
 
 ### Execution Routes (`execution.py`, `legacy.py`)
 
@@ -363,9 +383,11 @@ Routes are split across focused sub-modules:
 | `POST`   | `/training/finetuned-models/{name}/load` | Load a fine-tuned model.   |
 | `DELETE` | `/training/finetuned-models/{name}`      | Delete a fine-tuned model. |
 
-> **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domain.training._internal.service` (core layer).
+> **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domain.training._internal.service` (core layer — read through the `domain.training` facade since card `20261101_140447`).
 
 ## Self-Train Router (`/self-train`)
+
+> Served by `training/self_train.py`, included by the `/training` aggregate since card `20261101_154058` — `routers/self_train.py` was folded into the training router as a descriptor projection (paths and wire shapes unchanged).
 
 | Method | Path                 | Description           |
 | ------ | -------------------- | --------------------- |
@@ -374,6 +396,8 @@ Routes are split across focused sub-modules:
 | `GET`  | `/self-train/status` | Self-training status. |
 
 ## Learner Router (`/learn`)
+
+> Served by `routers/kb.py` since card `20261101_154056` — `learner.py` was merged into the `/knowledge` facade as its `/learn` sub-router (paths and wire shapes unchanged).
 
 | Method | Path                | Description              |
 | ------ | ------------------- | ------------------------ |
@@ -480,6 +504,11 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## Companion Router (`/companion`)
 
+> **Provenance (route-map card 4/7):** the `CompanionRouter` class now
+> lives in `routers/souls.py` (merged verbatim, card `20261101_154055`); the
+> module `routers/companion.py` is gone. Every `/companion/*` path below is
+> unchanged — the sub-router prefix bakes at add-time.
+
 | Method   | Path                     | Description                   |
 | -------- | ------------------------ | ----------------------------- |
 | `GET`    | `/companion/`            | Get current companion.        |
@@ -518,6 +547,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST`   | `/docstore/{collection}/bulk`     | Bulk upsert documents.          |
 
 ## Errors Router (`/errors`)
+
+> Served by `routers/system.py` since card `20261101_154058` — `errors.py` was merged into the system facade (paths and wire shapes unchanged).
 
 | Method   | Path                  | Description             |
 | -------- | --------------------- | ----------------------- |
@@ -571,6 +602,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## LoRA Eval Router (`/lora-eval`)
 
+> Served by `training/lora_eval.py`, included by the `/training` aggregate since card `20261101_154058` — `routers/lora_eval.py` was folded into the training router as a descriptor projection (paths and wire shapes unchanged).
+
 | Method | Path                   | Description                   |
 | ------ | ---------------------- | ----------------------------- |
 | `GET`  | `/lora-eval/run`       | Run LoRA evaluation.          |
@@ -578,6 +611,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/lora-eval/aggregate` | Aggregate evaluation results. |
 
 ## Registry Router (`/registry`)
+
+> Served by `routers/models.py` since card `20261101_154054` — `registry.py` was merged into the `/models` facade (paths and wire shapes unchanged).
 
 | Method | Path                   | Description                |
 | ------ | ---------------------- | -------------------------- |
@@ -595,6 +630,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `GET`  | `/meta-weights/stats` | Meta-weights statistics. |
 
 ## VM Router (`/vm`)
+
+> Served by `routers/shell.py` since card `20261101_154057` — `vm.py` was merged into the `/shell` facade as its `/vm` sub-router (paths and wire shapes unchanged).
 
 | Method | Path                              | Description                       |
 | ------ | --------------------------------- | --------------------------------- |
@@ -622,6 +659,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## Images Router (`/images`)
 
+> Served by `routers/files.py` since card `20261101_154058` — `images.py` was merged into the `/files` facade (paths and wire shapes unchanged).
+
 | Method | Path              | Description            |
 | ------ | ----------------- | ---------------------- |
 | `GET`  | `/images/gallery` | List generated images. |
@@ -643,6 +682,13 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/files`           | Upload a file. |
 
 ## Security Router (`/security`)
+
+> **Provenance (route-map card 5/7):** the `SecurityRouter` class (and the
+> `ApiKeyManager`/`ApiKeysRouter` it shares with the old `api_keys.py`) now
+> live in `routers/settings.py` (merged verbatim, card `20261101_154056`);
+> the modules `routers/security.py` and `routers/api_keys.py` are gone.
+> Every `/security/*` path below is unchanged — the sub-router prefix bakes
+> at add-time, and `ApiKeysRouter` remains deliberately unmounted.
 
 | Method | Path                   | Description     |
 | ------ | ---------------------- | --------------- |

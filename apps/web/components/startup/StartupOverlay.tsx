@@ -1,9 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useEffect, useState } from 'react'
 import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
 import { ManMark } from '@/components/brand/ManMark'
-import { useBannerStore } from '@/lib/banner-store'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 import { logStateEvent } from '@/lib/state-events'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +57,13 @@ export function StartupOverlay() {
   // stall clock. Mere health updates do NOT count — a wedged backend that keeps
   // answering with a stuck stage must still trip the watchdog.
   const progressKey = `${startupStage}:${startupModelProgress}`
+  // Model-load progress is a sub-step, not a stage: the loader pins it to 1.0
+  // ("Model loaded successfully") while the stage machine can still be sitting
+  // on `ready`/`background`. Headline, bar and detail row must agree, so once
+  // the weights are in memory the headline reads "Ready" instead of claiming
+  // the model is still loading — or that we are "Almost ready" at 100%.
+  const modelLoaded = startupModelProgress >= 1
+  const stageLabel = modelLoaded ? 'Ready' : STAGE_LABELS[startupStage] || 'Starting up'
 
   useEffect(() => {
     logStateEvent('overlay_shown', {
@@ -98,12 +106,17 @@ export function StartupOverlay() {
         message: `overlay_timeout no progress for ${STALL_TIMEOUT_MS}ms key=${progressKey}`,
         data: { progress_key: progressKey, timeout_ms: STALL_TIMEOUT_MS },
       })
-      useBannerStore.getState().showBanner({
+      notify.banner({
         key: 'backend-connection',
         tone: 'warning',
         title: 'Backend not responding',
         message: 'The server did not respond in time — the app is running in degraded mode.',
-        action: { label: 'Retry', onAction: () => window.location.reload() },
+        action: {
+          label: 'Retry',
+          onAction: () => {
+            void probeBackendAndRevalidate()
+          },
+        },
       })
       // Deliberately not tied to effect cleanup: once we give up, the
       // dismissal completes even if progress arrives during the fade.
@@ -164,7 +177,7 @@ export function StartupOverlay() {
     return (
       <div className={overlayClassName}>
         <div className="mb-6">
-          <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
+          <ManMark className="h-12 w-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20" />
         </div>
 
         <h2 className="text-[14px] font-medium text-term-text mb-3">Still connecting</h2>
@@ -181,10 +194,13 @@ export function StartupOverlay() {
             onClick={() => {
               logStateEvent('overlay_retry', {
                 kind: 'overlay',
-                message: 'overlay_retry reload requested',
+                message: 'overlay_retry probe requested',
                 data: { stage: startupStage },
               })
-              window.location.reload()
+              // Probe first, never reload: a reload under a down backend
+              // looped (reload → fail → overlay → Retry → reload) and threw
+              // away client state when it succeeded.
+              void probeBackendAndRevalidate()
             }}
             className="pointer-events-auto px-4 py-1.5 rounded-full bg-term-blue text-white text-[12px] font-medium transition-all duration-200 hover:bg-term-blue/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-blue focus-visible:ring-offset-2 focus-visible:ring-offset-term-surface"
           >
@@ -203,13 +219,11 @@ export function StartupOverlay() {
     <div className={overlayClassName}>
       {/* Logo */}
       <div className="mb-8">
-        <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
+        <ManMark className="h-12 w-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20" />
       </div>
 
       {/* Stage label */}
-      <h2 className="text-[14px] font-medium text-term-text mb-6">
-        {STAGE_LABELS[startupStage] || 'Starting up'}
-      </h2>
+      <h2 className="text-[14px] font-medium text-term-text mb-6">{stageLabel}</h2>
 
       {/* Progress bar */}
       <div
@@ -231,7 +245,10 @@ export function StartupOverlay() {
       </div>
 
       {/* Progress details */}
-      <div className="flex items-center gap-2 text-[11px] text-term-text-dim mb-4" aria-live="polite">
+      <div
+        className="flex items-center gap-2 text-[11px] text-term-text-dim mb-4"
+        aria-live="polite"
+      >
         {!isIndeterminate && startupModelProgress > 0 && (
           <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
         )}
@@ -271,7 +288,9 @@ export function StartupOverlay() {
         <div className="w-48 space-y-1 mb-4">
           {completedHooks.map((hook: HookStatus) => (
             <div key={hook.name} className="flex items-center justify-between text-[9px]">
-              <span className="text-term-text-muted truncate">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              <span className="text-term-text-muted truncate">
+                {HOOK_LABELS[hook.name] ?? hook.name}
+              </span>
               <span className="text-term-text-dim font-mono ml-2">{hook.duration_seconds}s</span>
             </div>
           ))}
@@ -315,9 +334,11 @@ export function StartupOverlay() {
         })}
       </div>
       <span className="sr-only" role="status">
-        {stageIndex < 0
-          ? 'Connecting'
-          : `Stage ${stageIndex + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[startupStage]}`}
+        {modelLoaded
+          ? 'Ready'
+          : stageIndex < 0
+            ? 'Connecting'
+            : `Stage ${stageIndex + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[startupStage]}`}
       </span>
     </div>
   )

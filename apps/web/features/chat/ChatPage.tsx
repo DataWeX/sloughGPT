@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 
@@ -47,7 +48,7 @@ export default function ChatPage() {
     (message: string, type: 'success' | 'error' | 'info' = 'success') => {
       const store = useToastStore.getState()
       const exists = store.toasts.some((t) => t.message === message && t.type === type)
-      if (!exists) store.addToast(message, type)
+      if (!exists) notify.toast(message, type)
     },
     [],
   )

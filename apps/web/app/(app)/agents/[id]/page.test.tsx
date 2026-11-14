@@ -104,9 +104,21 @@ vi.mock('@/lib/agents-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 import Page from './page'
 
@@ -343,7 +355,9 @@ describe('AgentDetailPage', () => {
     await waitFor(() => {
       expect(mockExecute).toHaveBeenCalledWith('agent-1', 'What is 2+2?')
     })
-    expect(screen.getByText('Execution result')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Execution result')).toBeTruthy()
+    })
   })
 
   it('handles execution error', async () => {

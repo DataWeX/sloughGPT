@@ -119,6 +119,11 @@ class WorkspaceRepository:
     def list_by_tenant(self, tenant_id: str) -> list[Workspace]:
         return [Workspace.from_dict(d) for d in self._col.find({"tenant_id": tenant_id})]
 
+    def list_all(self) -> list[Workspace]:
+        """Every workspace — used in auth-disabled (anonymous) mode where
+        there is no identity to filter memberships by."""
+        return [Workspace.from_dict(d) for d in self._col.find()]
+
     def create(self, workspace: Workspace) -> Workspace:
         self._col.insert_one(workspace.to_dict())
         return workspace

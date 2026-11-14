@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Chip } from '@sloughgpt/strui'
 import { IconSearch } from '@sloughgpt/strui'
 import { tokenTreeController, type PathResult } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 const displayToken = (token: string) => token.replace('</w>', '').trim() || token
 
@@ -12,7 +12,7 @@ export function TokenTreePathCard() {
   const [text, setText] = useState('the quick brown fox')
   const [result, setResult] = useState<PathResult | null>(null)
   const [tracing, setTracing] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const handleTrace = async () => {
     const term = text.trim()
@@ -41,8 +41,8 @@ export function TokenTreePathCard() {
             </label>
             <Input
               value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => {
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') handleTrace()
               }}
               placeholder="Text to walk through the trie"
@@ -71,10 +71,17 @@ export function TokenTreePathCard() {
 
             <div className="rounded-md border border-border/60 divide-y divide-border/30">
               {result.steps.map((step, i) => (
-                <div key={i} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs"
+                >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-muted-foreground tabular-nums w-6 shrink-0">#{i + 1}</span>
-                    <span className="font-mono truncate text-muted-foreground">{step.remaining}</span>
+                    <span className="text-muted-foreground tabular-nums w-6 shrink-0">
+                      #{i + 1}
+                    </span>
+                    <span className="font-mono truncate text-muted-foreground">
+                      {step.remaining}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="font-mono text-primary">→ {displayToken(step.token)}</span>
@@ -92,9 +99,9 @@ export function TokenTreePathCard() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Shows the greedy longest-prefix walk: each step consumes the longest token that matches the start of the
-          remaining suffix. The token list is identical to the Codec card&apos;s encode — this card reveals how it gets
-          there.
+          Shows the greedy longest-prefix walk: each step consumes the longest token that matches
+          the start of the remaining suffix. The token list is identical to the Codec card&apos;s
+          encode — this card reveals how it gets there.
         </p>
       </CardContent>
     </Card>

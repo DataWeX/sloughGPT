@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from collections.abc import AsyncIterator, Collection
@@ -24,22 +25,26 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_error, sse_token
-from pydantic import BaseModel, Field
+from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
+from infrastructure.contract import REGISTRY, RouteEntry
+from infrastructure.sse_fallback import sse_error, sse_event, sse_token
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents import get_agent_system, get_tool_registry
-from domain.core import get_rag_service
-from domain.feedback import get_response_tracker
+from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
+from domain.cognition import get_rag_service
+from domain.feedback import SAFE_BAND, get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
-from domain.models import get_provider
+from domain.memory import get_memory_service
+from domain.models import ConsciousnessProcessor, apply_processors, get_provider
+from domain.settings import get_settings
 
 logger = logging.getLogger("slo.inference")
 
@@ -95,7 +100,7 @@ def _get_model_status() -> dict:
     if _model_ready():
         return {"ready": True}
 
-    from startup_progress import STARTUP_PHASE
+    from startup_progress import MODEL_LOAD_STATE, STARTUP_PHASE
 
     from config import ServerConfig
 
@@ -110,6 +115,16 @@ def _get_model_status() -> dict:
             "ready": False,
             "reason": f"No model loaded. Autoload is disabled. Set SLO_AUTOLOAD_MODEL={model_name} to enable.",
             "code": "E_NO_MODEL",
+            "status": 503,
+        }
+
+    # Terminal: the load already ended in failure. Report the real cause —
+    # "still loading" would be a lie for a load that stopped long ago.
+    if MODEL_LOAD_STATE.get("status") == "failed":
+        return {
+            "ready": False,
+            "reason": MODEL_LOAD_STATE.get("error") or "Model load failed — no model is available.",
+            "code": "E_MODEL_LOAD_FAILED",
             "status": 503,
         }
 
@@ -138,16 +153,45 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-def _chunk_replay(text: str, size: int = 40) -> list[str]:
-    """Split cached text into SSE replay chunks without altering whitespace.
+# Budget for the injected RAG block (card cad8ccf0). Measured 2026-10-24:
+# query(prompt, 5) returned 15,228 chars (~4k tokens) from 3-4KB chunks; an
+# uncut dump makes prefill alone exceed the 120s generation timeout (0 tokens
+# streamed). ~2000 chars ≈ 500 tokens keeps first-token ~20s worst-case
+# (8.7s measured @196 tok; prefill attention scales ~quadratically).
+_RAG_CONTEXT_MAX_CHARS = 2000
 
-    Replay must concatenate back to the exact cached text — newlines and
-    multi-space runs included — so reconnects render identically to the
-    original stream.
+
+def _build_rag_block(
+    rag_result: dict[str, Any], max_chars: int = _RAG_CONTEXT_MAX_CHARS
+) -> str | None:
+    """Build the RAG system block, capped to the prompt budget.
+
+    Returns None when there is nothing to inject (zero results).
     """
-    if not text:
-        return []
-    return [text[i : i + size] for i in range(0, len(text), size)]
+    if rag_result.get("num_results", 0) <= 0:
+        return None
+    results = rag_result.get("results") or []
+    if results:
+        # Budget is split evenly across passages: ragsvc chunks are ~3KB, so a
+        # single global slice would keep only the first passage and starve the
+        # rest. Splitting preserves retrieval diversity (all ranks visible).
+        per = max(120, max_chars // len(results))
+        parts: list[str] = []
+        for r in results:
+            c = (r.get("content") or "").strip()
+            if not c:
+                continue
+            if len(c) > per:
+                c = c[:per].rstrip() + " [...]"
+            parts.append(c)
+        ctx = "\n\n".join(parts)
+    else:
+        ctx = rag_result.get("context", "") or ""
+        if len(ctx) > max_chars:
+            ctx = ctx[:max_chars].rstrip() + "\n[...]"
+    if not ctx:
+        return None
+    return f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{ctx}"
 
 
 def _trim_messages_to_budget(
@@ -181,6 +225,38 @@ def _trim_messages_to_budget(
     return system_msgs + kept
 
 
+def _append_volatile_context(messages: list[dict[str, Any]], block: str) -> list[dict[str, Any]]:
+    """Attach per-turn context to the LAST user turn instead of the prefix.
+
+    Context used to be folded into the system prompt and inserted at index 0,
+    which means the token prefix changed on every request. That silently
+    defeats cross-turn KV reuse — ``_resolve_kv_state`` and ``PrefixCache``
+    both match on prefix tokens, so a changing head re-prefills the whole
+    prompt (measured: 43.0 s cold vs 1.26 s warm on a 482-token prompt).
+
+    Retrieval results, learned facts and RAG blocks are all per-turn by
+    nature, so they belong at the tail: the head stays byte-identical per
+    session and the facts still reach the model in the same request.
+
+    Mutates and returns ``messages``. Handles both string content and the
+    multi-part list content used for image requests.
+    """
+    if not block:
+        return messages
+
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") != "user":
+            continue
+        content = messages[i].get("content")
+        if isinstance(content, list):
+            content.append({"type": "text", "text": block})
+        else:
+            base = content if isinstance(content, str) else str(content or "")
+            messages[i]["content"] = f"{base}\n\n{block}" if base.strip() else block
+        return messages
+    return messages
+
+
 _memory_pressure_cache: str | None = None
 _memory_pressure_cache_ts: float = 0.0
 _memory_pressure_lock = threading.Lock()
@@ -207,10 +283,21 @@ def _check_memory_pressure() -> str | None:
         monitor = get_memory_pressure_monitor()
         level = monitor.check()
         if level == PressureLevel.EMERGENCY:
-            import psutil
+            # Report the sample that TRIGGERED the classification, never a
+            # fresh one. Re-reading psutil here printed "System memory at 56%"
+            # at 10:50:19 for a refusal classified on a 96.1% sample at
+            # 10:49:10 — a message that contradicted the very block it
+            # explained (journal, 2026-11-01).
+            reading = monitor.last_reading or {}
+            percent = reading.get("percent")
+            if percent is None:
+                import psutil
 
-            mem = psutil.virtual_memory()
-            result = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+                percent = psutil.virtual_memory().percent
+            result = (
+                f"System memory at {percent:.0f}% — too low for safe inference. "
+                "Free some memory and retry."
+            )
             with _memory_pressure_lock:
                 _memory_pressure_cache = result
                 _memory_pressure_cache_ts = now
@@ -233,6 +320,31 @@ class CreateSessionRequest(BaseModel):
     model: str | None = None
 
 
+class AppScopeDelta(BaseModel):
+    """Per-conversation configuration delta — the mini-app's own settings.
+
+    Pydantic twin of ``domain.inference.app_scope.AppScope`` (the frozen
+    domain value object; ``tests/test_app_scope.py`` pins field parity
+    between the two). Persisted wholesale on the session record under
+    ``scope`` via ``PUT /chat/sessions/{id}``; ``None`` on any field means
+    "unset — inherit the layer below" (presence-based, never value-based).
+    Bounds mirror ``ChatRequest`` so a delta can never hold a value the wire
+    would reject.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_k: int | None = Field(default=None, ge=0, le=500)
+    repetition_penalty: float | None = Field(default=None, ge=0.5, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=2048)
+    system_prompt: str | None = Field(default=None, max_length=100000)
+    knowledge: list[str] | None = Field(default=None, max_length=100)
+    use_context_core: bool | None = None
+    use_rag: bool | None = None
+
+
 class UpsertSessionRequest(BaseModel):
     """Schema for updating session metadata."""
 
@@ -240,6 +352,42 @@ class UpsertSessionRequest(BaseModel):
     archived: bool | None = None
     starred: bool | None = None
     pinned: bool | None = None
+    scope: AppScopeDelta | None = None
+    """Conversation AppScope delta — replaces the stored delta wholesale."""
+
+
+class BranchSessionRequest(BaseModel):
+    """Schema for branching a session at a message index.
+
+    Server-side messages carry no ids (`MessageData` is role+content), so the
+    branch point is the position in the ordered list.
+    """
+
+    from_index: int
+    name: str | None = Field(None, max_length=200)
+
+
+class SessionModel(BaseModel):
+    """One row of GET /chat/sessions — the session-metadata index contract.
+
+    Single source of truth for the wire shape of a session row: the
+    ``chat.sessions.list`` descriptor's ``result`` schema and the generated TS
+    ``SessionMeta`` interface both derive from this model
+    (``scripts/gen_ts_contracts.py``). Mirrors
+    ``InferenceRouter._build_session_metadata_index`` output — exactly these
+    keys, always present. ``extra="allow"`` so indexed rows may grow
+    without breaking consumers.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+    message_count: int
+    scope: AppScopeDelta | None = None
+    """This conversation's AppScope delta (``None`` = inherits global only)."""
 
 
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
@@ -252,6 +400,10 @@ from schemas.chat import (  # noqa: E402
     Message,
 )
 
+from domain.inference.app_scope import (  # noqa: E402
+    apply_scope,
+    resolve_scope,
+)
 from domain.inference.engine import (  # noqa: E402
     TurnRequest,
     TurnResult,
@@ -263,6 +415,43 @@ from domain.inference.engine import (  # noqa: E402
 _chat_control_store: dict[str, dict] = {}
 _chat_control_lock = threading.Lock()
 _CHAT_CONTROL_TTL = 300  # 5 minutes
+
+
+async def _apply_consciousness_reflection(messages: list, corr_id: str) -> list:
+    """CONSCIOUSNESS_PROC — prepend the reflection narrative (build order #6).
+
+    Pulls ``engine.reflect(apply=False)`` (propose-only: never commits belief
+    deltas) and prepends its narrative as a system message via
+    ConsciousnessProcessor. Advisory by design: a disabled engine, an empty
+    narrative, or ANY failure skips injection and returns messages unchanged
+    (try/except skip — chat never errors on reflection).
+    """
+    try:
+        from domain.core import get_consciousness
+
+        ce = get_consciousness()
+        if not ce.config.is_enabled():
+            return messages
+        narrative = ce.reflect(apply=False).narrative
+        if not (narrative or "").strip():
+            return messages
+        return await apply_processors(messages, [ConsciousnessProcessor(narrative=narrative)])
+    except Exception as e:
+        logger.debug(
+            "CHAT_PIPELINE corr=%s step=CONSCIOUSNESS_PROC skip error=%s",
+            corr_id,
+            e,
+            extra={
+                "tag": "CHAT",
+                "context": {
+                    "corr": corr_id,
+                    "step": "CONSCIOUSNESS_PROC",
+                    "result": "SKIP",
+                    "error": str(e),
+                },
+            },
+        )
+        return messages
 
 
 def get_chat_control(session_id: str) -> dict | None:
@@ -291,49 +480,6 @@ def set_chat_control(session_id: str, control: dict) -> None:
             ]
             for k in expired:
                 del _chat_control_store[k]
-
-
-# Cache for partial chat responses (for Last-Event-ID reconnection)
-_chat_response_cache: dict[str, dict] = {}
-_chat_cache_lock = threading.Lock()
-_CHAT_CACHE_MAX_SESSIONS = 100
-_CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
-
-
-def get_chat_response_cache(session_id: str) -> dict | None:
-    """Get cached response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        entry = _chat_response_cache.get(session_id)
-        if entry and time.time() - entry.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S:
-            _chat_response_cache.pop(session_id, None)
-            return None
-        return entry
-
-
-def set_chat_response_cache(session_id: str, response: dict) -> None:
-    """Cache a partial response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        # Purge old entries if cache is full
-        if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
-            now = time.time()
-            expired = [
-                k
-                for k, v in _chat_response_cache.items()
-                if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S
-            ]
-            for k in expired[:10]:  # Remove up to 10 expired entries
-                _chat_response_cache.pop(k, None)
-        _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
-
-
-def clear_chat_response_cache(session_id: str) -> None:
-    """Clear cached response for a session."""
-    with _chat_cache_lock:
-        _chat_response_cache.pop(session_id, None)
 
 
 class ContextInspectorResponse(BaseModel):
@@ -397,6 +543,47 @@ _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
 
+# SCHEMA bounds only — what the wire accepts (GenerateRequest Field
+# constraints: :temperature ge=0 le=2, :top_p ge=0 le=1, :top_k ge=0 le=500,
+# :repetition_penalty ge=0.5 le=2). Nudged values are clamped here so a
+# feedback-derived adjustment can never push a defaulted param outside the
+# schema the request itself is validated against (drift-gated by
+# tests/test_meta_weights_clamp.py).
+#
+# This is NOT the generation-safety bound (card 20261101_182428): schema
+# validity and generation safety are different facts written twice at one
+# seam. rep 0.5 is schema-valid and actively REWARDS repetition — safety
+# lives in ONE place, ``domain.feedback.SAFE_BAND``, applied to every
+# feedback-moved value in the merge loop below (cache hit or not).
+_SCHEMA_BOUNDS: dict[str, tuple[float, float]] = {
+    "temperature": (0.0, 2.0),
+    "top_p": (0.0, 1.0),
+    "top_k": (0.0, 500.0),
+    "repetition_penalty": (0.5, 2.0),
+}
+
+
+# Feedback must steer *context*, not sampling. `domain/context` owns that:
+# TraitWeightsConfig is clamped to [0,1] by construction and its managers
+# render prompt text, which is readable and reversible per request. This
+# sampler-side nudge duplicates that responsibility one layer down, where an
+# unbounded integrator turned 473 thumbs-up into `repetition_penalty 0.8` —
+# a value that REWARDS already-emitted tokens, so a finished answer replayed
+# until `max_tokens` (card 20261102_001621). Off by default; set
+# SLO_META_WEIGHT_NUDGE=1 to restore the old behaviour while the context path
+# is measured.
+_META_WEIGHT_NUDGE_ENV = "SLO_META_WEIGHT_NUDGE"
+_META_WEIGHT_NUDGE_DEFAULT = "0"
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def _meta_weight_nudge_enabled() -> bool:
+    """Whether feedback may still move sampling parameters."""
+    return (
+        os.environ.get(_META_WEIGHT_NUDGE_ENV, _META_WEIGHT_NUDGE_DEFAULT).strip().lower()
+        in _TRUTHY
+    )
+
 
 def _apply_meta_weights(
     temperature: float,
@@ -420,7 +607,18 @@ def _apply_meta_weights(
     default, because an explicitly-set value is user intent and outranks a
     derived one.
 
-    Returns a dict of parameters to pass to the provider.
+    Returns a dict of parameters to pass to the provider. Non-explicit
+    params that feedback moved are clamped into ``domain.feedback.SAFE_BAND``
+    (the one generation-safe bounds authority, card 20261101_182428) before
+    the schema clamp — so a cache-hit or unbanded nudge can never restore
+    the repetition-loop hazard the band exists to prevent.
+
+    Disabled by default: ``SLO_META_WEIGHT_NUDGE=0`` returns the caller's
+    parameters untouched. Feedback steering belongs to the context stack
+    (``domain/context`` trait weights -> ``ContextCore`` -> prompt), where the
+    space is bounded [0,1] and the effect is readable text rather than a
+    sampler corner every request inherits. Set the env var to ``1`` to restore
+    the sampler-side nudge for A/B measurement.
     """
     import time
 
@@ -430,6 +628,9 @@ def _apply_meta_weights(
         "top_k": top_k,
         "repetition_penalty": repetition_penalty,
     }
+
+    if not _meta_weight_nudge_enabled():
+        return dict(requested)
     cache_key = f"{user_id}:{hash(user_message)}"
     now = time.monotonic()
 
@@ -492,10 +693,34 @@ def _apply_meta_weights(
             logger.debug("Meta-weight adjustment failed: %s", e)
             nudge = {}  # no signal -- the request's own values stand
 
-    return {
-        param: value if param in explicit else value + nudge.get(param, 0)
-        for param, value in requested.items()
-    }
+    merged: dict[str, float] = {}
+    for param, value in requested.items():
+        if param in explicit:
+            # Explicit user intent: pydantic already validated it against the
+            # request schema — pass through verbatim.
+            merged[param] = value
+            continue
+        n = nudge.get(param, 0)
+        nudged = value + n
+        if n:
+            # Generation safety at the USE seam (card 20261101_182428): the
+            # band must hold for every path a nudge can arrive on — a cache
+            # hit, a mock, an unbanded producer — not just inside
+            # get_adjustment(). Two rules:
+            #   base inside the band  -> the merged value is clamped into it;
+            #   base outside the band -> the caller (scope/global config)
+            #     chose a value feedback may not touch: feedback ABSTAINS
+            #     rather than dragging a user-configured value around.
+            # n == 0 (no feedback signal) never bands: a silent feedback
+            # layer must not clamp user configuration at all.
+            lo_b, hi_b = SAFE_BAND[param]
+            nudged = min(max(nudged, lo_b), hi_b) if lo_b <= value <= hi_b else value
+        lo, hi = _SCHEMA_BOUNDS[param]
+        nudged = min(max(nudged, lo), hi)
+        if param == "top_k":
+            nudged = int(round(nudged))
+        merged[param] = nudged
+    return merged
 
 
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
@@ -511,137 +736,68 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         return {"facts": [], "source": "error", "topics": [], "error": str(e)}
 
 
+async def _build_context_frame(
+    ctx_core: Any,
+    session_id: str,
+    user_msg: str,
+    corr_id: str,
+) -> tuple[Any, dict]:
+    """Build context frame from ContextCore. Returns (frame, context_info)."""
+    context_info: dict = {}
+    frame = None
+
+    # Retrieval *layers* need facts; the frame itself does not. Trait-weight
+    # steering rides the same frame (``ContextFrame.system_extra``), so
+    # skipping the build whenever the knowledge store was empty is exactly how
+    # feedback -> prompt stayed decorative: on a fresh install the store has
+    # zero facts, so ``_apply_managers`` never ran. Build the frame every turn
+    # and switch only the expensive layers off.
+    has_facts = True
+    try:
+        has_facts = get_memory_service().stats().get("total_facts", 0) > 0
+    except Exception as e:
+        logger.debug("Knowledge memory check failed: %s", e)
+
+    ctx_core.set_session_id(session_id)
+    if has_facts:
+        ctx_core.add_message("user", user_msg)
+    try:
+        frame = await asyncio.wait_for(
+            ctx_core.build_context_frame(
+                include_rag=has_facts,
+                include_memory=has_facts,
+                query=user_msg,
+            ),
+            timeout=5.0,
+        )
+    except TimeoutError:
+        logger.warning(
+            "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
+            corr_id,
+        )
+        frame = None
+
+    if frame is not None:
+        context_info = {
+            "layers": [l.layer_type for l in frame.layers],
+            "total_tokens": frame.total_tokens,
+            "max_tokens": frame.max_tokens,
+            "system_extra_chars": len(frame.system_extra),
+        }
+
+    return frame, context_info
+
+
 # ── In-memory session search index ──────────────────────────────────────────
 
 
-class SessionSearchIndex:
-    """Caches session file contents in memory for fast search.
+# SessionSearchIndex was extracted to domain/search/session_index.py so
+# the system-wide search SessionsAdapter shares this same index — one
+# cache over the session corpus, not two. Legacy contract unchanged:
+# _search_sessions_sync below still backs GET /chat/sessions/search.
+from domain.search.session_index import get_session_index  # noqa: E402
 
-    Only re-reads files whose mtime has changed since last index build.
-    Thread-safe for concurrent reads; rebuilds are serialized.
-    """
-
-    def __init__(self, max_age_seconds: float = 5.0) -> None:
-        self._max_age = max_age_seconds
-        self._lock = threading.Lock()
-        self._last_build: float = 0.0
-        # sid → {name, messages, created_at, updated_at, file_path}
-        self._entries: dict[str, dict[str, Any]] = {}
-
-    def search(self, q: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Search cached sessions. Rebuilds index if stale."""
-        now = time.monotonic()
-        if now - self._last_build > self._max_age:
-            self._rebuild()
-        return self._query(q.lower().strip(), limit)
-
-    def _rebuild(self) -> None:
-        with self._lock:
-            # Double-check after acquiring lock
-            if time.monotonic() - self._last_build <= self._max_age:
-                return
-            self._scan_files()
-            self._last_build = time.monotonic()
-
-    def _scan_files(self) -> None:
-        base = Path(__file__).parent.parent.parent.parent / "data"
-        search_dirs = [base / "chat_sessions", base / "conversations"]
-
-        # Collect all current file mtimes
-        current_files: dict[str, Path] = {}
-        for sdir in search_dirs:
-            if not sdir.is_dir():
-                continue
-            for f in sdir.glob("*.json"):
-                sid = f.stem
-                if sid not in current_files:
-                    current_files[sid] = f
-
-        # Remove entries for deleted files
-        stale = set(self._entries.keys()) - set(current_files.keys())
-        for sid in stale:
-            del self._entries[sid]
-
-        # Add or update entries
-        for sid, fpath in current_files.items():
-            try:
-                mtime = fpath.stat().st_mtime
-            except OSError:
-                continue
-            existing = self._entries.get(sid)
-            if existing and existing.get("_mtime") == mtime:
-                continue  # unchanged
-            try:
-                data = json.loads(fpath.read_text())
-                self._entries[sid] = {
-                    "id": data.get("id") or data.get("session_id") or sid,
-                    "name": data.get("name", "") or "",
-                    "created_at": data.get("created_at", ""),
-                    "updated_at": data.get("updated_at", ""),
-                    "messages": data.get("messages", []),
-                    "_mtime": mtime,
-                }
-            except (json.JSONDecodeError, OSError):
-                continue
-
-    def _query(self, q_lower: str, limit: int) -> list[dict[str, Any]]:
-        if not q_lower:
-            return []
-        results: list[dict[str, Any]] = []
-        max_matches_per_session = 3
-
-        # Sort by updated_at descending for most-recent-first
-        sorted_entries = sorted(
-            self._entries.values(),
-            key=lambda e: e.get("updated_at", ""),
-            reverse=True,
-        )
-
-        for entry in sorted_entries:
-            if len(results) >= limit:
-                break
-            name = entry["name"]
-            messages = entry["messages"]
-            matches: list[dict[str, str]] = []
-
-            if q_lower in name.lower():
-                matches.append(
-                    {
-                        "role": "session",
-                        "content": name,
-                        "timestamp": entry.get("updated_at", ""),
-                    }
-                )
-
-            for msg in messages:
-                if len(matches) >= max_matches_per_session:
-                    break
-                content = msg.get("content", "")
-                if q_lower in content.lower():
-                    matches.append(
-                        {
-                            "role": msg.get("role", "unknown"),
-                            "content": content,
-                            "timestamp": msg.get("timestamp", ""),
-                        }
-                    )
-
-            if matches:
-                results.append(
-                    {
-                        "id": entry["id"],
-                        "name": name or entry["id"],
-                        "created_at": entry.get("created_at", ""),
-                        "updated_at": entry.get("updated_at", ""),
-                        "match_count": len(matches),
-                        "matches": matches[:3],
-                    }
-                )
-
-        return results
-
-
-_session_search_index = SessionSearchIndex()
+_session_search_index = get_session_index()
 
 
 def _search_sessions_sync(q: str, limit: int) -> list:
@@ -704,7 +860,7 @@ def _run_post_gen_tasks(
     user_msg: str,
     session_id: str,
     start_time: datetime.datetime,
-    req: ChatRequest,
+    req: TurnRequest,
     ctx_core: Any,
     bg_tasks_lock: Any,
     bg_tasks: Any,
@@ -718,7 +874,7 @@ def _run_post_gen_tasks(
     """
     import state as _pgs_state
 
-    from domain.core import get_rag_service as _pgs_rag
+    from domain.cognition import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -826,7 +982,11 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("Entity extraction failed: %s", e)
 
-    # Consciousness post-processing (narrative surfaced by the caller)
+    # Consciousness post-processing (narrative surfaced by the caller).
+    # Same use_consciousness gate as the pre-gen narrative: a bare probe must
+    # not ingest its exchange into the episode store nor surface a reflection.
+    if not req.use_consciousness:
+        return {"narrative": "", "level": 0}
     return _consciousness_post_process(user_msg, full_response)
 
 
@@ -911,6 +1071,24 @@ class InferenceRouter:
                 self._context_core = get_context_core()
             except ImportError:
                 return None
+            # Connect the trait-weight steering path (feedback -> trait
+            # weights -> managers -> ContextCore). It was designed and never
+            # wired: set_managers() had only test callers, so the frame
+            # carried no steering while a duplicate sampler-side integrator
+            # did run (card 20261103_071231). Fail-open — context steering is
+            # an enhancement, never a precondition for inference.
+            try:
+                from domain.context import ensure_managers
+
+                attached = ensure_managers(self._context_core)
+                if attached:
+                    logger.info(
+                        "ContextCore managers attached: %s",
+                        ",".join(sorted(attached)),
+                        extra={"tag": "INF"},
+                    )
+            except Exception as e:
+                logger.warning("Context manager wiring failed: %s", e)
         if (
             self._context_core
             and self._vector_store_ref
@@ -950,6 +1128,9 @@ class InferenceRouter:
 
     def _save_session(self, session_id: str, data: dict) -> None:
         self._session_cache = None
+        # New/updated sessions must show up in /chat/sessions immediately;
+        # the metadata index reads files, so invalidate it with the cache.
+        self._session_metadata_cache = None
         data["updated_at"] = datetime.datetime.now().isoformat()
         self._session_cache_put(session_id, data)
         self._session_dirty.add(session_id)
@@ -1003,6 +1184,21 @@ class InferenceRouter:
         except RuntimeError as e:
             logger.warning("Failed to start background session flush: %s", e, extra={"tag": "REQ"})
 
+    @staticmethod
+    def _derive_session_name(messages: list, fallback: str) -> str:
+        """Derive a session title from the first message line.
+
+        One deliberate rule for every listing surface: the FIRST message's
+        first line (the user-authored topic), truncated to 60 chars — not the
+        conversation tail. The frontend sanitizes whatever arrives; direct
+        API consumers (mobile) read this shape as-is.
+        """
+        if messages:
+            first = str(messages[0].get("content") or "").split("\n")[0][:60].strip()
+            if first:
+                return first
+        return fallback
+
     def _build_session_metadata_index(self) -> list:
         """Build a lightweight metadata index without loading full message content.
 
@@ -1027,24 +1223,33 @@ class InferenceRouter:
                         raw = fh.read(4096)
                     if not raw.strip():
                         continue
-                    # Try to parse the partial JSON for header fields
-                    data = json.loads(raw)
-                    sid = data.get("id") or data.get("session_id") or f.stem
-                    name = data.get("name", "") or ""
+                    # Partial-header fast path; >4KB sessions truncate the
+                    # prefix, so fall back to a full read (the docstring's
+                    # promised fallback) instead of silently dropping the
+                    # session from the listing.
+                    try:
+                        data = json.loads(raw)
+                    except json.JSONDecodeError:
+                        with open(f) as fh:
+                            raw = fh.read()
+                        if not raw.strip():
+                            continue
+                        data = json.loads(raw)
+                    # session_id first: _SessionDictSerializer injects a random
+                    # "id" when absent, which would diverge from the filename
+                    # (the canonical repo key _build_session_cache exposes).
+                    sid = data.get("session_id") or f.stem
                     messages = data.get("messages", [])
-                    # If messages array is truncated, count from file size heuristic
+                    name = data.get("name") or self._derive_session_name(messages, sid)
                     msg_count = len(messages)
-                    if not name and messages:
-                        name = messages[0].get("content", "").split("\n")[0][:60]
-                    if not name:
-                        name = sid
                     metadata.append(
                         {
                             "id": sid,
                             "name": name,
-                            "created_at": data.get("created_at", ""),
+                            "created_at": data.get("created_at") or "",
                             "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
                             "message_count": msg_count,
+                            "scope": data.get("scope"),
                         }
                     )
                 except (json.JSONDecodeError, OSError):
@@ -1070,12 +1275,7 @@ class InferenceRouter:
             data["id"] = sid
             data.pop("session_id", None)
             if not data.get("name"):
-                msgs = data.get("messages", [])
-                if msgs:
-                    first = msgs[0].get("content", "").split("\n")[0]
-                    data["name"] = first[:60]
-                else:
-                    data["name"] = sid
+                data["name"] = self._derive_session_name(data.get("messages", []), sid)
             if not data.get("updated_at"):
                 data["updated_at"] = data.get("created_at") or datetime.datetime.now().isoformat()
             sessions.append(data)
@@ -1509,7 +1709,7 @@ class InferenceRouter:
                 await websocket.close()
                 return
         else:
-            from routers.security import ApiKeyManager
+            from routers.settings import ApiKeyManager
 
             try:
                 _key_mgr = ApiKeyManager()
@@ -1852,6 +2052,47 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
 
+    def _resolve_turn_scope(self, session_id: str, req: TurnRequest) -> frozenset[str]:
+        """Resolve this conversation's AppScope over global settings; apply to ``req``.
+
+        The turn seam: the below-turn layers are loaded here (conversation
+        delta from the session record, global defaults from
+        ``domain.settings``), while resolution itself stays the pure
+        ``resolve_scope``. Applied in place on ``req`` — transport fields only
+        where the wire left them unset (``apply_scope``), plus the additive
+        ``system_prompt``/``knowledge`` composition.
+
+        Returns the conversation-won field names: the caller passes them to
+        ``_apply_meta_weights`` alongside ``model_fields_set`` so a
+        server-side heuristic may not move a value the user deliberately
+        scoped to this conversation.
+        """
+        session = self._get_session(session_id)
+        raw = session.get("scope")
+        delta: dict[str, Any] | None = None
+        if isinstance(raw, dict):
+            try:
+                # Re-validate on read: the session file is a trust boundary
+                # (hand-edited / foreign-version data). Corrupt or out-of-
+                # bounds deltas fail safe — inherit the layers below.
+                delta = AppScopeDelta.model_validate(raw).model_dump(exclude_none=True)
+            except ValidationError:
+                logger.debug("Dropping invalid scope delta on session %s", session_id)
+        scope = resolve_scope(
+            conversation=delta,
+            global_settings=get_settings().settings.generation,
+        )
+        applied = apply_scope(req, scope, conversation=delta)
+        if scope.system_prompt:
+            req.system_prompt = (
+                f"{req.system_prompt}\n\n{scope.system_prompt}"
+                if req.system_prompt
+                else scope.system_prompt
+            )
+        if scope.knowledge:
+            req.knowledge = [*scope.knowledge, *(req.knowledge or [])]
+        return applied
+
     async def stream_turn(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]:
         """The single inference method: yield raw tokens, then the final ``TurnResult``.
 
@@ -1866,6 +2107,7 @@ class InferenceRouter:
             finish_reason, and the full token list).
         """
         _chat_t0 = time.monotonic()
+        _chat_start_dt = datetime.datetime.now()
         import state as _chat_state
 
         # GATES — reject fast before any provider call.
@@ -1903,6 +2145,11 @@ class InferenceRouter:
         if not user_msg:
             raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
+        # Instance seam: resolve this conversation's AppScope (delta over
+        # global defaults) once, before anything reads the transport fields.
+        session_id = req.session_id or "default"
+        scope_applied = self._resolve_turn_scope(session_id, req)
+
         system_prompt = req.system_prompt or ""
 
         if req.images:
@@ -1929,34 +2176,66 @@ class InferenceRouter:
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
 
-        if req.knowledge:
-            knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
+        # Context frame — memory/rag layers via ContextCore, gated on the wire
+        # flag first (use_context_core was previously honored only by the
+        # non-streaming chat(); stream_turn ignored it — card 20261112_140010),
+        # then on the memory service holding at least one fact (the gate travels
+        # with the frame builder: empty memory means skip the frame entirely).
+        frame = None
+        if req.use_context_core:
+            try:
+                frame, _context_info = await _build_context_frame(
+                    self._get_context_core(), session_id, user_msg, corr_id="stream"
+                )
+            except Exception as e:
+                logger.debug("Context frame build failed: %s", e)
+
+        frame_context = []
+        if frame:
+            for layer in frame.layers:
+                if layer.layer_type in ("memory", "rag") and layer.content:
+                    frame_context.append(layer.content)
+
+        # Trait-weight steering goes in the STABLE HEAD, not the volatile tail.
+        # It is derived from the user's feedback profile, so it changes only
+        # when feedback changes — which keeps the token prefix reusable while
+        # still letting feedback reach the prompt (the one authority: trait
+        # weights -> managers -> frame -> here).
+        if frame and frame.system_extra:
             system_prompt = (
-                f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}"
-                if system_prompt
-                else f"Use the following context to answer:\n{knowledge_str}"
+                f"{system_prompt}\n{frame.system_extra}" if system_prompt else frame.system_extra
             )
 
-        # Knowledge enrichment — retrieve user facts and inject context.
-        try:
-            enrichment = await asyncio.wait_for(
-                asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
-            )
-            if enrichment.get("facts"):
-                k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
-                system_prompt = (
-                    f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
-                    if system_prompt
-                    else f"Use the following context to answer:\n{k_text}"
+        # Knowledge enrichment — only when the frame carried no memory/rag
+        # layer content; facts learned live feed the prompt otherwise. Shares
+        # the use_context_core gate: with context off there is no frame to
+        # fall back from, and a bare probe must not pull learned facts either.
+        knowledge_retrieved = []
+        if req.use_context_core and not frame_context:
+            try:
+                enrichment = await asyncio.wait_for(
+                    asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
                 )
-        except Exception as e:
-            logger.debug("Knowledge enrichment failed: %s", e)
+                if enrichment.get("facts"):
+                    knowledge_retrieved = enrichment["facts"]
+            except Exception as e:
+                logger.debug("Knowledge enrichment failed: %s", e)
+
+        # Per-turn context accumulates here and rides the LAST user turn (see
+        # _append_volatile_context) — never the system prompt, which is the
+        # token prefix every cross-turn KV reuse matches on.
+        volatile_blocks: list[str] = []
+
+        all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
+        if all_knowledge:
+            k_text = "\n".join(f"- {k}" for k in all_knowledge)
+            volatile_blocks.append(f"Use the following context to answer:\n{k_text}")
 
         # Production RAG — retrieve relevant context from ingested documents
-        # and inject it as a leading system block (gated on req.use_rag).
+        # and attach it to the volatile tail (gated on req.use_rag).
         if req.use_rag:
             try:
-                from domain.core import is_rag_service_ready
+                from domain.cognition import is_rag_service_ready
 
                 if is_rag_service_ready():
                     rag_svc = await asyncio.wait_for(
@@ -1966,14 +2245,25 @@ class InferenceRouter:
                         rag_result = await asyncio.wait_for(
                             asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0
                         )
-                        if rag_result.get("num_results", 0) > 0:
-                            rag_block = (
-                                f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} "
-                                f"relevant passages]\n\n{rag_result['context']}"
+                        rag_block = _build_rag_block(rag_result)
+                        if rag_block is not None:
+                            logger.info(
+                                "RAG context injected: %d chars (budget %d)",
+                                len(rag_block),
+                                _RAG_CONTEXT_MAX_CHARS,
                             )
-                            messages.insert(0, {"role": "system", "content": rag_block})
+                            volatile_blocks.append(rag_block)
             except Exception as e:
                 logger.debug("RAG query skipped: %s", e)
+
+        # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
+        # main's chat-pipeline wiring onto the stream_turn restructure).
+        # Gated on the wire flag: a bare probe (QuickActions "Test model",
+        # use_consciousness=false) must not receive the reflection system
+        # message — the 0.5B model answered the narrative instead of the
+        # probe (card 20261112_140010).
+        if req.use_consciousness:
+            messages = await _apply_consciousness_reflection(messages, "-")
 
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
@@ -1982,8 +2272,12 @@ class InferenceRouter:
             repetition_penalty=req.repetition_penalty,
             user_message=user_msg,
             user_id=req.user_id or "default",
-            explicit=req.model_fields_set,
+            explicit=req.model_fields_set | scope_applied,
         )
+        # Attach per-turn context to the last user turn BEFORE the budget trim,
+        # so the trimmer counts those tokens instead of the block arriving
+        # after the budget was already spent.
+        messages = _append_volatile_context(messages, "\n\n".join(volatile_blocks))
         messages = _trim_messages_to_budget(
             messages, _gen_config.max_context_length, req.max_tokens
         )
@@ -1996,7 +2290,6 @@ class InferenceRouter:
             raise_error("Model not loaded", "E_INFRA_REGISTRY", status_code=503)
 
         model = _chat_state.model_type or req.model
-        session_id = req.session_id or "default"
 
         collected: list[str] = []
         try:
@@ -2020,23 +2313,94 @@ class InferenceRouter:
 
         text = "".join(collected)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
-        tokens = 0
         try:
             tokens = _count_tokens(text, _chat_state)
-            get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed, model=model)
         except Exception as e:
-            logger.warning("Failed to record inference metrics: %s", e)
+            logger.debug("Token count failed: %s", e)
+
+        # One task set, one call site: _run_post_gen_tasks performs the
+        # metrics record and the conversation capture that used to live
+        # inline here, alongside RAG verification, response tracking,
+        # continual-learning ingest, entity extraction, and consciousness
+        # post-processing. Retaining the inline copies would double-count
+        # every turn (audit gap G2's rule, applied to the single path the
+        # stream-first architecture left).
+        _post_gen: dict[str, Any] = {}
         try:
-            capture(
-                user_msg or "",
+            _post_gen = _run_post_gen_tasks(
                 text,
-                model=model,
-                tokens_generated=_count_tokens(text, _chat_state),
-                temperature=gen_params["temperature"],
-                meta={"session_id": session_id},
+                user_msg or "",
+                session_id,
+                _chat_start_dt,
+                req,
+                # Resolve only when the turn opted into the context stack:
+                # first resolution wires ContextCore (incl. its consciousness
+                # engine) — a bare probe must not drag that in (quick-test
+                # card). None changes nothing downstream: add_response is
+                # gated on req.use_context_core anyway.
+                self._get_context_core() if req.use_context_core else None,
+                self._bg_tasks_lock,
+                self._BG_TASKS,
+                self._bg_tasks_lock_discard,
+                corr_id="stream",
             )
         except Exception as e:
-            logger.warning("Failed to capture conversation: %s", e)
+            logger.warning("Post-gen tasks failed: %s", e)
+        if _post_gen.get("narrative"):
+            logger.info(
+                "Chat reflection recorded (level=%s)",
+                _post_gen["level"],
+                extra={"tag": "INF"},
+            )
+
+        _memory: dict | None = None
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            if _memory_facts:
+                _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
+
+        # Sideband frames the chat edge forwards verbatim before close:
+        # the consciousness reflection surfaced by post-gen, then the
+        # auto-memory store step (main's chat_stream wiring, re-seamed
+        # onto TurnResult — stream_turn yields tokens, not SSE frames).
+        _sideband_events: list[str] = []
+        if _post_gen.get("narrative"):
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "CONSCIOUSNESS",
+                    "complete",
+                    data={
+                        "level": _post_gen["level"],
+                        "self_insight": _post_gen["narrative"],
+                    },
+                    message="Reflection updated",
+                )
+            )
+
+        _memory_stored = False
+        _memory_fact = None
+        _memory_facts: list[str] = []
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            _memory_stored = len(_memory_facts) > 0
+            if _memory_stored:
+                _memory_fact = _memory_facts[0]
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
+
+        if _memory_stored:
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "MEMORY",
+                    "success",
+                    data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
+                    message="New fact remembered",
+                )
+            )
 
         yield TurnResult(
             text=text,
@@ -2047,6 +2411,15 @@ class InferenceRouter:
             elapsed_ms=elapsed,
             finish_reason="stop",
             tokens=collected,
+            consciousness=(
+                {
+                    "level": _post_gen.get("level", 0),
+                    "self_insight": _post_gen.get("narrative", ""),
+                }
+                if _post_gen.get("narrative")
+                else None
+            ),
+            memory=_memory,
         )
 
     async def chat(
@@ -2259,6 +2632,8 @@ class InferenceRouter:
                     raise_error("Session not found", "E_NOT_FOUND", status_code=404)
             if self._session_repo.delete(session_id):
                 self._session_memory_cache.pop(session_id, None)
+                self._session_cache = None
+                self._session_metadata_cache = None
                 self._session_dirty.discard(session_id)
                 self._session_deleted.add(session_id)
                 if len(self._session_deleted) > 1000:
@@ -2270,6 +2645,114 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.delete_session")
+
+    async def branch_session(
+        self,
+        session_id: str,
+        req: BranchSessionRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Create a new session from messages[:from_index + 1] of a source.
+
+        The prefix lands in both projections the source session uses: the
+        drawer file (name/lineage/message preview) and the context store that
+        `GET /session/{id}/messages` (mobile loadSession) reads.
+        """
+        try:
+            source_file = self._session_repo.get(session_id)
+            if source_file is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and source_file.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            from domain.infrastructure.session_core import SessionCore
+
+            history = SessionCore.get_messages(session_id) or source_file.get("messages") or []
+            if not history:
+                raise_error("No messages to branch from", "E_BAD_REQUEST", status_code=400)
+            if req.from_index < 0 or req.from_index >= len(history):
+                raise_error(
+                    f"from_index {req.from_index} out of range (0..{len(history) - 1})",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+
+            prefix = history[: req.from_index + 1]
+            new_id = str(uuid.uuid4())
+            new_data = {
+                "id": new_id,
+                "session_id": new_id,
+                "name": req.name or f"{source_file.get('name') or session_id} (Branch)",
+                "parent_session_id": session_id,
+                "branch_from_index": req.from_index,
+                "messages": json.loads(json.dumps(prefix)),
+                "created_at": datetime.datetime.now().isoformat(),
+            }
+            if auth_user:
+                new_data["user_id"] = auth_user.get("sub", "")
+
+            self._save_session(new_id, new_data)
+            SessionCore.store_context(new_id, prefix)
+            await self._flush_session_to_disk(new_id)
+            safe_audit_log("inference.session_branch", resource=new_id)
+            return success_response(
+                data={
+                    "session_id": new_id,
+                    "branched_from": session_id,
+                    "from_index": req.from_index,
+                },
+                message="branched",
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.branch_session")
+
+    async def get_session_lineage(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Walk the parent chain of a session (nearest parent first)."""
+        try:
+            data = self._session_repo.get(session_id)
+            if data is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            ancestors: list[dict] = []
+            parent = data.get("parent_session_id")
+            seen = {session_id}
+            depth = 0
+            while parent and parent not in seen and depth < 50:
+                seen.add(parent)
+                pdata = self._session_repo.get(parent)
+                if pdata is None:
+                    break
+                ancestors.append(
+                    {
+                        "session_id": parent,
+                        "parent_session_id": pdata.get("parent_session_id"),
+                        "branch_from_index": pdata.get("branch_from_index"),
+                        "name": pdata.get("name") or parent,
+                    }
+                )
+                parent = pdata.get("parent_session_id")
+                depth += 1
+
+            return success_response(
+                data={
+                    "session_id": session_id,
+                    "parent_session_id": data.get("parent_session_id"),
+                    "branch_from_index": data.get("branch_from_index"),
+                    "ancestors": ancestors,
+                }
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_session_lineage")
 
     def _clear_session_kv(self, session_id: str):
         """Drop cross-turn KV state for a deleted session.
@@ -2317,16 +2800,49 @@ class InferenceRouter:
                 if provider is not None:
                     try:
                         caps = provider.capabilities
-                        result[name] = {
-                            "model_id": provider.model_id,
-                            "capabilities": {
-                                "chat": caps.chat,
-                                "streaming": caps.streaming,
-                                "embedding": caps.embedding,
-                                "vision": caps.vision,
-                            },
-                            "metadata": provider.metadata,
-                        }
+                        # A provider is a plugin, and this handler already
+                        # isolates one that misbehaves: the guard below
+                        # degrades it to {"error": ...} rather than failing
+                        # the whole listing. That isolation never reached this
+                        # value. A metadata field holding a datetime, an engine
+                        # handle, or any other non-JSON type is perfectly
+                        # well-formed here, and only fails later, in the
+                        # response encoder, outside the guard — which is why
+                        # `GET /providers` answered 500 E_SERIALIZATION while
+                        # this method raised nothing, and why the default log
+                        # level recorded no cause at all. Coercing with
+                        # `default=str` is what the SSE routers already do.
+                        #
+                        # `metadata` is declared a @property on the Provider
+                        # protocol, but ct_provider / slonet_provider /
+                        # slonet_server implement it as a plain METHOD while
+                        # api_provider / router / slo_transformer use @property.
+                        # Reading it property-style on a plain-method provider
+                        # puts a bound method in the payload; `default=str` then
+                        # coerces it to the useless
+                        # "<bound method ... at 0x...>" repr. Normalise the read
+                        # first so the real dict is what gets serialised, then
+                        # let `default=str` catch genuinely non-JSON values
+                        # inside it. Callers are split the same way, so accept
+                        # both forms here rather than churning every call site.
+                        meta = provider.metadata
+                        if callable(meta):
+                            meta = meta()
+                        result[name] = json.loads(
+                            json.dumps(
+                                {
+                                    "model_id": provider.model_id,
+                                    "capabilities": {
+                                        "chat": caps.chat,
+                                        "streaming": caps.streaming,
+                                        "embedding": caps.embedding,
+                                        "vision": caps.vision,
+                                    },
+                                    "metadata": meta,
+                                },
+                                default=str,
+                            )
+                        )
                     except Exception as exc:
                         logger.warning(
                             "Provider '%s' capability query failed: %s",
@@ -2534,6 +3050,12 @@ class InferenceRouter:
         r.add_api_route("/chat/sessions", self.create_session, methods=["POST"])
         r.add_api_route("/chat/sessions/{session_id}", self.get_session, methods=["GET"])
         r.add_api_route("/chat/sessions/{session_id}", self.delete_session, methods=["DELETE"])
+        r.add_api_route("/chat/sessions/{session_id}/branch", self.branch_session, methods=["POST"])
+        r.add_api_route(
+            "/chat/sessions/{session_id}/lineage",
+            self.get_session_lineage,
+            methods=["GET"],
+        )
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
         r.add_api_route("/operations", self.list_operations, methods=["GET"])
@@ -2545,6 +3067,114 @@ class InferenceRouter:
 
 _instance = InferenceRouter()
 router = _instance.router
+
+
+# ── Descriptor for GET /chat/sessions ───────────────────────────────────────
+# The route above is grandfathered (hand-built, counted in the hand-built
+# baseline); this descriptor is its contract declaration — the single source of
+# truth for the session-metadata index wire shape. The frontend derives its
+# ``Conversation``/``SessionMeta`` types from the generated artifact of this
+# descriptor (scripts/gen_ts_contracts.py), not from hand-written interfaces.
+
+SESSIONS_SPEC = ToolSpec(
+    name="chat.sessions.list",
+    description=(
+        "Session-metadata index for the chat sidebar: one row per session with "
+        "id/name/timestamps/message_count (SessionModel wire shape)."
+    ),
+    parameters=[
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Include archived sessions (default excludes them)",
+        ),
+    ],
+    execute=_instance.list_sessions,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={"type": "array", "items": SessionModel.model_json_schema()},
+    version="1",
+)
+
+
+def _register_sessions_spec(spec: ToolSpec, method: str, path: str) -> None:
+    operation_id = REGISTRY.claim_operation_id(f"{spec.name}.{method.lower()}", method, path)
+    REGISTRY.register(
+        RouteEntry(
+            name=spec.name,
+            version=spec.version,
+            auth_scope=spec.auth_scope,
+            idempotent=spec.idempotent,
+            description=spec.description,
+            method=method,
+            path=path,
+            operation_id=operation_id,
+            module=__name__,
+            params=spec.params,
+            result=spec.result,
+        )
+    )
+
+
+_register_sessions_spec(SESSIONS_SPEC, "GET", "/chat/sessions")
+
+
+# ── Descriptor for PUT /chat/sessions/{session_id} ──────────────────────────
+# Same grandfathering as above: the route is hand-built (baseline untouched);
+# this descriptor declares its contract, including the ``scope`` field that
+# persists a conversation's AppScope delta — the mini-app instance config
+# resolved at the turn seam (``InferenceRouter._resolve_turn_scope``).
+
+SESSIONS_UPDATE_SPEC = ToolSpec(
+    name="chat.sessions.update",
+    description=(
+        "Update session metadata (name/archived/starred/pinned) and/or replace "
+        "the conversation's AppScope delta (scope: model settings, system "
+        "prompt, knowledge, context toggles) — the per-conversation config "
+        "resolved over global defaults on each turn."
+    ),
+    parameters=[
+        ToolParam(
+            name="name",
+            type="string",
+            description="New session name",
+        ),
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Archive/unarchive the session",
+        ),
+        ToolParam(
+            name="starred",
+            type="boolean",
+            description="Star/unstar the session",
+        ),
+        ToolParam(
+            name="pinned",
+            type="boolean",
+            description="Pin/unpin the session",
+        ),
+        ToolParam(
+            name="scope",
+            type="object",
+            description=(
+                "AppScope delta for this conversation — replaces the stored "
+                "delta wholesale (omit to leave it unchanged)"
+            ),
+        ),
+    ],
+    execute=_instance.upsert_session,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": ["session_id"],
+    },
+    version="1",
+)
+
+_register_sessions_spec(SESSIONS_UPDATE_SPEC, "PUT", "/chat/sessions/{session_id}")
 
 
 class _GenerationEngine:

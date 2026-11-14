@@ -92,6 +92,14 @@ class ServerConfig:
     watchdog_max_failures: int = 3
     watchdog_grace_seconds: int = 120
 
+    # Boot-time auto-resume of interrupted training jobs (decision
+    # 20261102_001425): default OFF — an infra reboot must never surprise
+    # whoever restarted the server with GPU burn. When on, the policy in
+    # training/auto_resume.py still caps at one concurrent resume and
+    # skips jobs without a loadable checkpoint, and every decision emits
+    # a process notification (legible automation).
+    auto_resume: bool = False
+
     enable_workflow: bool = True
     enable_health_monitor: bool = True
     health_monitor_interval: int = 300
@@ -145,6 +153,7 @@ class ServerConfig:
                 os.getenv("SLO_REGISTER_GENERATE_TIMEOUT", "120.0")
             ),
             enable_watchdog=os.getenv("SLO_WATCHDOG", "true").lower() == "true",
+            auto_resume=os.getenv("SLO_AUTO_RESUME", "false").lower() in ("1", "true", "yes"),
             native_soul_path=os.getenv("SLO_NATIVE_SOUL_PATH", "").strip(),
             enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower()
             in ("1", "true", "yes"),

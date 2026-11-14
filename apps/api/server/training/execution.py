@@ -1,7 +1,11 @@
 """Training execution routes — start, distill, lora, visual, from-feedback, builds.
 
 Each route group is extracted into its own module; this file includes them via
-``router.include_router()`` and defines the core ``start_training`` endpoint.
+``router.include_router()`` and defines the core ``start_training`` endpoint,
+which is descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{status, job_id, ...}`` is served unwrapped (``envelope=False``),
+byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
@@ -13,9 +17,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
-from domain.training._internal.executor import get_training_executor
+from domain.agents import ToolSpec
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds, notify_push
@@ -38,7 +44,7 @@ def _feed_spec(request: TrainingRequest) -> tuple[str, str, None, str] | None:
     reads the feed at run time. ``out_stem`` is derived from the feed source/URL
     so checkpoints get a stable name.
     """
-    from domain.training._internal.training_feed import is_feed_source
+    from domain.training import is_feed_source
 
     dataset_str = (request.dataset or "").strip()
     is_feed = (
@@ -99,7 +105,6 @@ from .builds import router as builds_router
 router.include_router(builds_router)
 
 
-@router.post("/training/start")
 async def start_training(
     request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)
 ):
@@ -108,11 +113,30 @@ async def start_training(
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    feed_spec = _feed_spec(request)
-    if feed_spec is not None:
+    manifests = [str(m).strip() for m in (request.manifests or []) if str(m).strip()]
+    is_seq = bool(manifests)
+    feed_spec = _feed_spec(request) if not is_seq else None
+    if is_seq:
+        from pathlib import Path as _SP
+
+        _missing = [m for m in manifests if not _SP(m).is_file()]
+        if _missing:
+            raise_error(
+                f"Sequential manifest not found: {_missing[0]}",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+        data_path_str = manifests[0]
+        _seq_label = (request.name or "sequential").strip().lower()
+        out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in _seq_label)[:60] or (
+            "sequential"
+        )
+        manifest_meta = None
+        source_kind = "sequential"
+    elif feed_spec is not None:
         data_path_str, out_stem, manifest_meta, source_kind = feed_spec
     else:
-        from domain.training._internal.dataset_manifest import ManifestError
+        from domain.training import ManifestError
 
         try:
             data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
@@ -129,7 +153,7 @@ async def start_training(
     _data_path = _P(data_path_str)
     if feed_spec is None and not _data_path.exists():
         raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
-    if _data_path.is_file():
+    if _data_path.is_file() and not is_seq:
         _size = _data_path.stat().st_size
         if _size == 0:
             raise_error("Dataset file is empty (0 bytes)", "E_BAD_REQUEST", status_code=400)
@@ -183,7 +207,9 @@ async def start_training(
         else:
             _raw = ""
 
-        if _raw:
+        # Sequential manifests are sealed artifacts — the gate already ran at
+        # seal time (build_corpus), and raw JSON would fail it spuriously.
+        if _raw and not is_seq:
             from domain.training.engine import get_training_engine as _eng
 
             _quality = await _aio.to_thread(_eng().compute_data_quality, _raw)
@@ -207,7 +233,7 @@ async def start_training(
                     details=_quality,
                 )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.infrastructure import AppError
 
         if isinstance(e, AppError):
             raise
@@ -259,7 +285,7 @@ async def start_training(
                         status_code=400,
                     )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.infrastructure import AppError
 
         if isinstance(e, AppError):
             raise
@@ -288,20 +314,25 @@ async def start_training(
     }
     if manifest_meta is not None:
         job["manifest"] = manifest_meta
+    if is_seq:
+        job["mode"] = "sequential"
+        job["manifests"] = manifests
+        job["probe_standings"] = []
+        job["trained_on"] = []
     training_jobs[job_id] = job
 
     # Update global training controller
     controller = get_training_controller()
     controller.start(job_id, request.name or "training")
 
-    # Audit trail — training job start (char-level fine-tune)
+    # Audit trail — training job start (algo: bpe = tokenized, else char)
     try:
         from infrastructure.auth import get_audit_logger
 
         get_audit_logger().log(
             "training.start",
             resource=request.dataset.strip() if request.dataset else out_stem,
-            detail="char",
+            detail=str(request.algo or "char"),
             extra={
                 "job_id": job_id,
                 "model": request.model,
@@ -358,8 +389,7 @@ async def start_training(
         logger.warning("CancelManager registration failed for %s: %s", job_id, e)
 
     def run_training(job_id_: str = jid) -> None:
-        from domain.training import SloughGPTTrainer
-        from domain.training._internal.wandb_helpers import create_training_tracker_for_api_job
+        from domain.training import SloughGPTTrainer, create_training_tracker_for_api_job
 
         tracker = None
         try:
@@ -400,16 +430,49 @@ async def start_training(
                     )
                 get_training_runtime().sync(jid)
 
-            trainer = SloughGPTTrainer(
-                data_path=data_path_for_thread,
-                **_sloughgpt_trainer_kwds(req_snapshot),
-                experiment_tracker=tracker,
-            )
-            result = trainer.train(
-                on_progress=on_progress,
-                cancel_event=cancel_event,
-                pause_event=pause_event,
-            )
+            seq_manifests = [
+                str(m).strip() for m in (req_snapshot.get("manifests") or []) if str(m).strip()
+            ]
+            if seq_manifests:
+                from domain.training import run_sequential_stages
+
+                def on_standings(standings, chain):
+                    rec = training_jobs.get(jid)
+                    if not rec:
+                        return
+                    rec["probe_standings"] = standings
+                    rec["trained_on"] = chain
+                    get_training_runtime().sync(jid)
+
+                seq_kwargs = _sloughgpt_trainer_kwds(req_snapshot, data_path=data_path_for_thread)
+                # Per-job continuity dir: stage N resumes what stage N-1 saved.
+                seq_kwargs["checkpoint_dir"] = f"checkpoints/sequential_{jid}"
+                seq_result = run_sequential_stages(
+                    seq_manifests,
+                    trainer_kwargs={**seq_kwargs, "experiment_tracker": tracker},
+                    on_progress=on_progress,
+                    on_standings=on_standings,
+                    cancel_event=cancel_event,
+                    pause_event=pause_event,
+                )
+                trainer = seq_result["last_trainer"]
+                if trainer is None:  # cancelled before stage 0
+                    _finish_job(jid, "cancelled")
+                    get_training_runtime().sync(jid)
+                    get_training_controller().reset()
+                    return
+                result = {"best_eval_loss": None}
+            else:
+                trainer = SloughGPTTrainer(
+                    data_path=data_path_for_thread,
+                    **_sloughgpt_trainer_kwds(req_snapshot, data_path=data_path_for_thread),
+                    experiment_tracker=tracker,
+                )
+                result = trainer.train(
+                    on_progress=on_progress,
+                    cancel_event=cancel_event,
+                    pause_event=pause_event,
+                )
             safe_stem = "".join(
                 c if c.isalnum() or c in "-_" else "_" for c in out_stem_for_thread
             )[:120]
@@ -423,14 +486,14 @@ async def start_training(
             trainer.save(soul_path)
             slnc_path = None
             try:
-                from domain.infrastructure._internal.soul_to_slnc import soul_to_slnc
+                from domain.infrastructure import soul_to_slnc
 
                 slnc_path = soul_to_slnc(soul_path, soul_path.replace(".soul", ".slnc"))
             except Exception as e:
                 logger.debug("Auto-compile soul->slnc failed: %s", e, extra={"tag": "TRAIN"})
             try:
-                from domain.inference._internal.slonet_provider import SloNetChatProvider
-                from domain.models._internal.provider import register_provider, setup_providers
+                from domain.inference import SloNetChatProvider
+                from domain.models import register_provider, setup_providers
 
                 prov = SloNetChatProvider.from_soul(soul_path, model_id=safe_stem)
                 register_provider("slonet-native", prov)
@@ -439,7 +502,9 @@ async def start_training(
                     setup_providers(force_default=True)
                 except Exception:
                     pass
-                logger.info("Activated trained soul as default: %s", soul_path, extra={"tag": "TRAIN"})
+                logger.info(
+                    "Activated trained soul as default: %s", soul_path, extra={"tag": "TRAIN"}
+                )
             except Exception as e:
                 logger.debug("Auto-activate trained soul failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(jid, "completed")
@@ -527,6 +592,38 @@ async def start_training(
         "dataset": request.dataset,
         "epochs": request.epochs,
     }
+
+
+# ── Descriptor projection (card 20261104_151036) ───────────────────────
+
+SPEC_START = ToolSpec(
+    name="training.start",
+    description="Start a tracked training job (web UI).",
+    parameters=params_from_model(TrainingRequest),
+    execute=start_training,
+    auth_scope="authenticated",
+    idempotent=False,
+    result={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "job_id": {"type": "string"},
+            "name": {"type": "string"},
+            "model": {"type": "string"},
+            "dataset": {"type": "string"},
+            "epochs": {"type": "integer"},
+        },
+    },
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_START,
+        RouteSpec(path="/training/start", envelope=False),
+        start_training,
+    )
+)
 
 
 # ── Visual Training (delegated to visual.py) ────────────────────

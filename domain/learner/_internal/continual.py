@@ -27,6 +27,7 @@ import threading
 import time
 from pathlib import Path
 
+from domain.infrastructure._internal.pugqeep.singleton import spawn_loop
 from domain.shared import find_repo_root
 from domain.training._internal.slonet import (
     SloAdam,
@@ -141,9 +142,14 @@ class ContinualLearner:
         # Start background RSS polling (every 10 min)
         self.ingestor.start_background_polling(interval=600)
 
-        # Background trainer thread
-        self._thread = threading.Thread(target=self._background_loop, daemon=True)
-        self._thread.start()
+        # Background trainer — spawn_loop's stop (a callable flag, since this
+        # class polls ``_running`` instead of an Event) is the daemon-equivalent
+        # release: engine stop / interpreter exit flips it so the loop exits.
+        self._thread = spawn_loop(
+            self._background_loop,
+            name="continual-trainer",
+            stop=lambda: setattr(self, "_running", False),
+        )
 
     def _load_or_create(self) -> SloTransformer:
         """Load existing checkpoint or create a fresh SloTransformer."""

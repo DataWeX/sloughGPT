@@ -1,7 +1,8 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useRouter } from '@/vite/next-compat/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
   CardHeader,
@@ -28,7 +29,6 @@ import { BenchmarkChartCard } from '@/components/benchmark/BenchmarkChartCard'
 import { BenchmarkCompareCard } from '@/components/benchmark/BenchmarkCompareCard'
 import { BenchmarkHistoryCard } from '@/components/benchmark/BenchmarkHistoryCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity' | 'compare'
@@ -62,44 +62,50 @@ export default function BenchmarkPage() {
   const [compareResults, setCompareResults] = useState<[string, BenchmarkResult][]>([])
   const [compareLoading, setCompareLoading] = useState(false)
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
+
+  // Shared by the initial mount, the 'r' refresh shortcut and PageContainer's
+  // retry — all three re-run this page's own loader instead of reloading the
+  // whole document (which threw away every open panel and input draft).
+  const loadBenchmark = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    let model = 'gpt2'
+    try {
+      const h = await modelController.getHealth()
+      model = h?.model_type ?? 'gpt2'
+      setCurrentModel(model)
+    } catch {
+      /* use default */
+    }
+
+    try {
+      const models = await modelController.list()
+      setAvailableModels(models.map((m) => ({ id: m.id, name: m.name ?? m.id })))
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      const [m, q, s] = await Promise.all([
+        benchmarkController.metrics(model).catch(() => null),
+        benchmarkController.quality().catch(() => null),
+        benchmarkController.stats().catch(() => null),
+      ])
+      setMetrics(m)
+      setQuality(q)
+      setStats(s)
+      if (!m && !q && !s) setLoadError('Could not load benchmark data. Please try again.')
+    } catch {
+      setLoadError('Could not load benchmark data. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    const loadBenchmark = async () => {
-      let model = 'gpt2'
-      try {
-        const h = await modelController.getHealth()
-        model = h?.model_type ?? 'gpt2'
-        setCurrentModel(model)
-      } catch {
-        /* use default */
-      }
-
-      try {
-        const models = await modelController.list()
-        setAvailableModels(models.map((m) => ({ id: m.id, name: m.name ?? m.id })))
-      } catch {
-        /* ignore */
-      }
-
-      try {
-        const [m, q, s] = await Promise.all([
-          benchmarkController.metrics(model).catch(() => null),
-          benchmarkController.quality().catch(() => null),
-          benchmarkController.stats().catch(() => null),
-        ])
-        setMetrics(m)
-        setQuality(q)
-        setStats(s)
-        if (!m && !q && !s) setLoadError('Could not load benchmark data. Please try again.')
-      } catch {
-        setLoadError('Could not load benchmark data. Please try again.')
-      } finally {
-        setLoading(false)
-      }
-    }
     loadBenchmark()
-  }, [])
+  }, [loadBenchmark])
 
   const handleRefreshMetrics = async () => {
     setRunning(true)
@@ -191,7 +197,7 @@ export default function BenchmarkPage() {
       subtitle="Model evaluation metrics"
       loading={loading}
       error={loadError}
-      onRetry={() => window.location.reload()}
+      onRetry={loadBenchmark}
     >
       <div className="flex gap-1 border-b border-border/30 pb-0">
         {(['metrics', 'quality', 'responses', 'perplexity', 'compare'] as Tab[]).map((t) => (

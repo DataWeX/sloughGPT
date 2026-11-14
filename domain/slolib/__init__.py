@@ -6,6 +6,8 @@ Public API:
     benchmark_accelerators
 """
 
+from __future__ import annotations
+
 from domain.slolib._internal.gpu import (
     benchmark_accelerators,
     from_gpu,

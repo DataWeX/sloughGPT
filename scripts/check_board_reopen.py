@@ -19,10 +19,10 @@ in one of the commits in <base_sha>..<local_sha>.
 Fail-open on parse errors: this is a tripwire, CI and humans stay the
 source of truth.
 """
+
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 
@@ -66,8 +66,7 @@ def main(argv: list[str]) -> int:
         lost = [
             (cid, title, col_before)
             for cid, (col_before, title) in before.items()
-            if col_before == "done"
-            and after.get(cid, ("<gone>", ""))[0] != "done"
+            if col_before == "done" and after.get(cid, ("<gone>", ""))[0] != "done"
         ]
         if not lost:
             return 0
@@ -79,8 +78,7 @@ def main(argv: list[str]) -> int:
         unjustified = [
             (cid, title, after.get(cid, ("<gone>", "?"))[0])
             for cid, title, _ in lost
-            if f"board-reopen: {cid[:8]}" not in msgs
-            and f"board-reopen: {cid[:14]}" not in msgs
+            if f"board-reopen: {cid[:8]}" not in msgs and f"board-reopen: {cid[:14]}" not in msgs
         ]
         if not unjustified:
             return 0
@@ -92,9 +90,13 @@ def main(argv: list[str]) -> int:
         for cid, title, col_now in unjustified:
             print(f"  {cid[:14]}  done -> {col_now}  | {title[:60]}", file=sys.stderr)
         print(file=sys.stderr)
-        print("  If this is a LEGITIMATE reopen, add to one of the pushed commits:", file=sys.stderr)
+        print(
+            "  If this is a LEGITIMATE reopen, add to one of the pushed commits:", file=sys.stderr
+        )
         print("      board-reopen: <id-prefix>   (then amend/re-commit)", file=sys.stderr)
-        print("  If a lane's stale-base board merge clobbered these rows, rebase the", file=sys.stderr)
+        print(
+            "  If a lane's stale-base board merge clobbered these rows, rebase the", file=sys.stderr
+        )
         print("  board file onto origin/main instead of overwriting it.", file=sys.stderr)
         print("  bypass: git push --no-verify", file=sys.stderr)
         return 1

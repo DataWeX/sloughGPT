@@ -29,6 +29,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -823,41 +826,89 @@ class Quantine:
             extra={"tag": "INFRA"},
         )
 
+    #: Cap on DEFLATE inflation threads (override: SLO_QUANT_LOAD_WORKERS).
+    _DEFAULT_LOAD_WORKERS = min(8, os.cpu_count() or 4)
+
+    @classmethod
+    def _load_worker_count(cls, n_arrays: int) -> int:
+        """Threads to use for parallel npz inflation (never more than entries)."""
+        try:
+            cap = int(os.environ.get("SLO_QUANT_LOAD_WORKERS", ""))
+        except ValueError:
+            cap = 0
+        if cap <= 0:
+            cap = cls._DEFAULT_LOAD_WORKERS
+        return max(1, min(cap, n_arrays))
+
     def load_weights(self, path: str) -> dict[str, TensorInfo]:
         """Load quantized weight arrays from .npz archive.
+
+        The 338-entry Qwen2.5-0.5B archive is DEFLATE-compressed (505 MB raw /
+        421 MB stored, ratio only 1.15× — int8 weights are high entropy). One
+        zlib stream inflates at ~82 MB/s, so a serial loop costs ~8 s per boot.
+        zlib releases the GIL, so the entries are inflated concurrently, each
+        worker on its own ``NpzFile`` (a shared handle serialises reads through
+        ``zipfile``'s internal lock and buys nothing).
 
         Returns:
             dict of ``{tensor_name: TensorInfo}`` — ready for set_quantized_weight()
         """
-        data = np.load(path, allow_pickle=True)
-        result = {}
-        # Collect all unique tensor names (those without _meta_ prefix)
-        names = set()
-        for key in data:
-            if key.startswith("_meta_"):
-                names.add(key[len("_meta_") :])
-            else:
-                names.add(key)
-        for name in sorted(names):
-            meta_key = f"_meta_{name}"
-            if meta_key not in data:
+        t0 = time.monotonic()
+        with np.load(path, allow_pickle=True) as inventory:
+            keys = list(inventory.files)
+        names = sorted({k[len("_meta_") :] if k.startswith("_meta_") else k for k in keys})
+        meta_keys = set(keys)
+
+        workers = self._load_worker_count(len(names))
+        # Interleave rather than chunk: the handful of large tensors (lm_head
+        # alone is 136 MB) then spread across workers instead of serialising.
+        chunks = [names[i::workers] for i in range(workers)] if names else []
+
+        def _load_chunk(chunk: list[str]) -> dict[str, tuple[np.ndarray, QuantMeta]]:
+            loaded: dict[str, tuple[np.ndarray, QuantMeta]] = {}
+            with np.load(path, allow_pickle=True) as zf:
+                for name in chunk:
+                    meta_key = f"_meta_{name}"
+                    if meta_key not in meta_keys:
+                        continue
+                    meta = QuantMeta.from_dict(json.loads(str(zf[meta_key].item())))
+                    arr = np.asarray(zf[name])
+                    # np.load already hands back C-contiguous writable arrays;
+                    # the old unconditional .copy(order="C") was a redundant
+                    # 505 MB memcpy and a matching transient peak in RSS.
+                    if not arr.flags.c_contiguous:
+                        arr = np.ascontiguousarray(arr)
+                    loaded[name] = (arr, meta)
+            return loaded
+
+        if workers <= 1:
+            parts = [_load_chunk(names)]
+        else:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="quant-load") as pool:
+                parts = list(pool.map(_load_chunk, chunks))
+
+        flat: dict[str, tuple[np.ndarray, QuantMeta]] = {}
+        for part in parts:
+            flat.update(part)
+
+        result: dict[str, TensorInfo] = {}
+        for name in names:
+            if name not in flat:
                 logger.warning(
                     "Quantine: missing metadata for %s, skipping", name, extra={"tag": "INFRA"}
                 )
                 continue
-            meta_dict = json.loads(str(data[meta_key].item()))
-            meta = QuantMeta.from_dict(meta_dict)
-            arr = data[name]
-            # Ensure array is contiguous (npz may return read-only views)
-            arr = np.asarray(arr).copy(order="C")
+            arr, meta = flat[name]
             result[name] = TensorInfo(name=name, array=arr, meta=meta)
             # Track error metrics so summary() reflects the loaded weights
             self._error_report[name] = meta
-        data.close()
+
         logger.info(
-            "Quantine: loaded %d quantized weight arrays from %s",
+            "Quantine: loaded %d quantized weight arrays from %s in %.2fs (%d workers)",
             len(result),
             path,
+            time.monotonic() - t0,
+            workers,
             extra={"tag": "INFRA"},
         )
         return result
@@ -1175,6 +1226,76 @@ def quantize_activation(
         return np.clip(np.round(x / scale) + zero_point, -128, 127).astype(np.int8)
 
 
+# ── KV-cache quantize/dequantize fast path ─────────────────────────────────
+#
+# In decode these run 48×/token on tiny slices ((1,1,2,64) ints in, full
+# cache out) where numpy's ufunc-chain + axis-reduction dispatch costs ~16µs
+# and ~8µs respectively — ~1ms/token of interpreter overhead. A compiled
+# kernel does the identical arithmetic elementwise (same f32 divisions,
+# round-half-to-even, clip bounds → bit-identical output) in ~2-3µs.
+# Built lazily; any shape/dtype/contiguity outside the fast-path contract
+# falls back to the numpy implementation below.
+
+_nb_kv_kernels = None
+_nb_kv_built = False
+
+
+def _get_nb_kv_kernels():
+    """Return (quantize_fn, dequantize_fn) or (None, None) when numba is
+    unavailable. Failures degrade to the numpy path, never raise."""
+    global _nb_kv_kernels, _nb_kv_built
+    if _nb_kv_built:
+        return _nb_kv_kernels
+    _nb_kv_built = True
+    try:
+        from numba import njit
+
+        @njit(cache=True)
+        def _qk(x):
+            B, T, KH, E = x.shape
+            out = np.empty(x.shape, dtype=np.int8)
+            scale = np.empty((B, T, KH, 1), dtype=np.float32)
+            for b in range(B):
+                for t in range(T):
+                    for kh in range(KH):
+                        m = np.float32(0.0)
+                        for e in range(E):
+                            v = x[b, t, kh, e]
+                            a = v if v >= np.float32(0.0) else -v
+                            if a > m:
+                                m = a
+                        if m > np.float32(0.0):
+                            s = m / np.float32(127.0)
+                        else:
+                            s = np.float32(1.0) / np.float32(127.0)
+                        scale[b, t, kh, 0] = s
+                        for e in range(E):
+                            q = np.rint(x[b, t, kh, e] / s)
+                            if q < np.float32(-128.0):
+                                q = np.float32(-128.0)
+                            elif q > np.float32(127.0):
+                                q = np.float32(127.0)
+                            out[b, t, kh, e] = np.int8(q)
+            return out, scale
+
+        @njit(cache=True)
+        def _dq(x, scale):
+            B, T, KH, E = x.shape
+            out = np.empty(x.shape, dtype=np.float32)
+            for b in range(B):
+                for t in range(T):
+                    for kh in range(KH):
+                        s = scale[b, t, kh, 0]
+                        for e in range(E):
+                            out[b, t, kh, e] = x[b, t, kh, e] * s
+            return out
+
+        _nb_kv_kernels = (_qk, _dq)
+    except Exception:  # numba missing/broken → numpy path
+        _nb_kv_kernels = (None, None)
+    return _nb_kv_kernels
+
+
 def quantize_kv_tensor(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Per-token, per-head symmetric int8 quantization for KV cache entries.
 
@@ -1192,6 +1313,10 @@ def quantize_kv_tensor(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         Zero vectors use a guard scale of ``1/127`` so no division by zero
         occurs and the row quantizes to zero (dequantizing returns zero).
     """
+    if x.ndim == 4 and x.dtype == np.float32 and x.flags.c_contiguous and x.size <= 262144:
+        qk, _ = _get_nb_kv_kernels()
+        if qk is not None:
+            return qk(x)
     max_abs = np.max(np.abs(x), axis=-1, keepdims=True)
     safe_max = np.where(max_abs > 0.0, max_abs, np.float32(1.0))
     scale = (safe_max / np.float32(127.0)).astype(np.float32)
@@ -1210,6 +1335,18 @@ def dequantize_kv_tensor(x_int8: np.ndarray, scale: np.ndarray) -> np.ndarray:
     Returns:
         float32 array of shape ``(B, T, K_H, E)``.
     """
+    if (
+        x_int8.ndim == 4
+        and x_int8.dtype == np.int8
+        and x_int8.flags.c_contiguous
+        and isinstance(scale, np.ndarray)
+        and scale.dtype == np.float32
+        and scale.flags.c_contiguous
+        and x_int8.size <= 262144
+    ):
+        _, dq = _get_nb_kv_kernels()
+        if dq is not None:
+            return dq(x_int8, scale)
     return x_int8.astype(np.float32) * scale
 
 
@@ -1461,22 +1598,16 @@ def int4_quantized_linear(
 
 
 class QuantizedLinear:
-    """Drop-in replacement for nn.Linear that uses quantized int8/int4 weights.
+    """Quantized linear layer with pure-numpy forward — no torch dependency.
 
-    Stores the quantized weight data and dequantizes on the fly during forward().
-    Weight memory drops from float32 (4 bytes/elem) to int8 (1 byte/elem).
-
-    Uses the industry-standard forward monkey-patching pattern (same as
-    bitsandbytes, GPTQ, AWQ): the original ``nn.Linear.forward`` is replaced
-    with a closure that dequantizes and calls ``forward_numpy``.
+    Stores the quantized weight data and dequantizes on the fly during
+    forward(). Weight memory drops from float32 (4 bytes/elem) to int8
+    (1 byte/elem).
 
     Usage::
 
         ql = QuantizedLinear.from_linear(original_linear, tensor_info)
-        # Wire into model via forward monkey-patching:
-        module._orig_forward = module.forward
-        module._ql = ql
-        module.forward = ql.make_torch_forward()
+        out = ql(x)  # numpy in, numpy out (delegates to forward_numpy)
     """
 
     def __init__(

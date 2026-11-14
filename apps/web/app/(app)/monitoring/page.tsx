@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
@@ -27,7 +28,6 @@ import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from '@/vite/next-compat/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
-import { useToastStore } from '@/lib/toast-store'
 import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { SystemStatusCard } from '@/components/monitoring/SystemStatusCard'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
@@ -35,6 +35,10 @@ import { TrafficCard } from '@/components/monitoring/TrafficCard'
 import { ModelMetricsCard } from '@/components/monitoring/ModelMetricsCard'
 import { PathLatenciesCard } from '@/components/monitoring/PathLatenciesCard'
 import { ServerErrorsCard } from '@/components/monitoring/ServerErrorsCard'
+import { SessionLoadCard } from '@/components/session/SessionLoadCard'
+import { SessionInspectorGrid } from '@/components/session/SessionInspectorGrid'
+import { SessionMessages } from '@/components/session/SessionMessages'
+import { sessionController, type SessionInspector } from '@/lib/session-controller'
 import { ModelEventsCard } from '@/components/monitoring/ModelEventsCard'
 import { RateViolationsCard } from '@/components/monitoring/RateViolationsCard'
 import { ResourceCard } from '@/components/monitoring/ResourceCard'
@@ -56,6 +60,7 @@ import {
   BatteryCard,
 } from '@/components/monitoring/SystemInfoCards'
 import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
+import { TestRunsCard } from '@/components/monitoring/TestRunsCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
@@ -148,6 +153,52 @@ export default function SystemHealthPage() {
   const alertsRef = useRef<Array<{ time: string; type: string; value: number }>>([])
   const prevCpuOverRef = useRef(false)
   const prevMemOverRef = useRef(false)
+  // Session inspector compose (card 20261101_154058) — explicit loading boolean,
+  // fetch only on the operator's Inspect action, never on mount.
+  const [sessionId, setSessionId] = useState('')
+  const [sessionInspector, setSessionInspector] = useState<SessionInspector | null>(null)
+  const [sessionMessages, setSessionMessages] = useState<Array<{ role: string; content: string }>>(
+    [],
+  )
+  const [sessionLoading, setSessionLoading] = useState(false)
+  const [sessionError, setSessionError] = useState<string | null>(null)
+  const [sessionRegenerating, setSessionRegenerating] = useState(false)
+
+  const handleSessionInspect = useCallback(async () => {
+    const id = sessionId.trim()
+    if (!id) return
+    setSessionLoading(true)
+    setSessionError(null)
+    try {
+      const [inspector, messages] = await Promise.all([
+        sessionController.getInspector(id),
+        sessionController.fetchMessages(id),
+      ])
+      setSessionInspector(inspector)
+      setSessionMessages(messages)
+    } catch (e) {
+      setSessionInspector(null)
+      setSessionMessages([])
+      setSessionError(extractErrorMessage(e, 'Failed to load session'))
+    } finally {
+      setSessionLoading(false)
+    }
+  }, [sessionId])
+
+  const handleSessionRegenerate = useCallback(async () => {
+    const id = sessionId.trim()
+    if (!id) return
+    setSessionRegenerating(true)
+    setSessionError(null)
+    try {
+      await sessionController.regenerate(id)
+      addToast('Session response regeneration requested', 'success')
+    } catch (e) {
+      setSessionError(extractErrorMessage(e, 'Could not regenerate session response'))
+    } finally {
+      setSessionRegenerating(false)
+    }
+  }, [sessionId])
 
   useEffect(() => {
     let cancelled = false
@@ -168,7 +219,7 @@ export default function SystemHealthPage() {
     )
   }, [cpuThreshold, memThreshold])
 
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const handleBatteryLimit = useCallback(
     async (percent: number) => {
@@ -544,6 +595,44 @@ export default function SystemHealthPage() {
 
       {/* Row 2: Server errors — always visible */}
       {loaded && <ServerErrorsCard liveHealth={liveHealth} />}
+
+      {/* Test-run summaries from the stored artifacts (card 20261111_110106) */}
+      {loaded && <TestRunsCard />}
+
+      {/* Session inspector (folded from the old /session page, card 20261101_154058) */}
+      {loaded && (
+        <FoldSection heading="Session Inspector">
+          <div className="space-y-3">
+            <SessionLoadCard
+              sessionId={sessionId}
+              loading={sessionLoading}
+              regenerating={sessionRegenerating}
+              onSessionIdChange={setSessionId}
+              onInspect={() => void handleSessionInspect()}
+              onRegenerate={() => void handleSessionRegenerate()}
+            />
+            {sessionError && <span className="block text-xs text-destructive">{sessionError}</span>}
+            {sessionInspector && (
+              <SessionInspectorGrid
+                stats={{
+                  messages: sessionInspector.session.message_count,
+                  knowledgeFacts: sessionInspector.knowledge.total_facts,
+                  feedback: sessionInspector.feedback.total,
+                  elapsedMs: sessionInspector.elapsed_ms,
+                  episodicCount: sessionInspector.workspace.episodic_count,
+                  sensoryBufferSize: sessionInspector.workspace.sensory_buffer_size,
+                  workingMemory: sessionInspector.workspace.working_memory,
+                  semanticKeys: sessionInspector.workspace.semantic_keys,
+                  systemPrompt: sessionInspector.workspace.system_prompt,
+                }}
+                modes={sessionInspector.modes}
+                traits={sessionInspector.traits}
+              />
+            )}
+            {sessionInspector && <SessionMessages messages={sessionMessages} />}
+          </div>
+        </FoldSection>
+      )}
 
       {/* Row 3: Health & memory trend — always visible */}
       {loaded && (

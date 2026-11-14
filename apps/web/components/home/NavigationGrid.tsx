@@ -34,7 +34,7 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
         </div>
       </Link>
       <Link
-        href="/personality"
+        href="/souls"
         className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
       >
         <div className="flex items-center gap-2 sm:gap-3">

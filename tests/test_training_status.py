@@ -37,7 +37,7 @@ class TestTrainingStatusTracker:
             rlhf_epochs=4,
         )
 
-        assert tracker.report.completion_status == CompletionStatus.IN_PROGRESS
+        assert tracker.report.completion_status == CompletionStatus.LIVE
         assert tracker.report.pretraining is not None
         assert tracker.report.federated is not None
         assert tracker.report.rlhf is not None
@@ -96,7 +96,7 @@ class TestTrainingStatusTracker:
 
         assert not tracker.report.can_resume()
 
-        tracker.report.completion_status = CompletionStatus.IN_PROGRESS
+        tracker.report.completion_status = CompletionStatus.LIVE
         tracker.report.checkpoint_path = "checkpoint.soul"
 
         assert tracker.report.can_resume()

@@ -226,4 +226,65 @@ describe('Markdown', () => {
     expect(link.tagName).toBe('A')
     expect(link).toHaveAttribute('href', 'https://example.com')
   })
+
+  // ── Images ────────────────────────────────────────────────────────────
+  it('renders image', () => {
+    render(<Markdown content="![a cat](https://example.com/cat.png)" />)
+    const img = screen.getByAltText('a cat')
+    expect(img.tagName).toBe('IMG')
+    expect(img).toHaveAttribute('src', 'https://example.com/cat.png')
+  })
+
+  it('renders image inline with surrounding text', () => {
+    render(<Markdown content="look ![pic](https://example.com/p.png) here" />)
+    expect(screen.getByAltText('pic')).toBeInTheDocument()
+    expect(screen.getByText(/look/)).toBeInTheDocument()
+    expect(screen.getByText(/here/)).toBeInTheDocument()
+  })
+
+  it('renders image with empty alt text', () => {
+    // alt="" makes the img role="presentation", so query the DOM directly
+    // instead of getByRole('img').
+    const { container } = render(<Markdown content="![](https://example.com/x.png)" />)
+    const img = container.querySelector('img')
+    expect(img).not.toBeNull()
+    expect(img).toHaveAttribute('src', 'https://example.com/x.png')
+    expect(img).toHaveAttribute('alt', '')
+  })
+
+  it('renders relative image src', () => {
+    render(<Markdown content="![rel](/static/logo.png)" />)
+    expect(screen.getByAltText('rel')).toHaveAttribute('src', '/static/logo.png')
+  })
+
+  it('does not render image as a link', () => {
+    // Regression: the link regex \[(.+?)\]\((.+?)\) matches INSIDE
+    // ![alt](url), so before image support this rendered a literal "!"
+    // followed by an <a> whose text was the alt.
+    render(<Markdown content="![cat](https://example.com/c.png)" />)
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.getByAltText('cat')).toBeInTheDocument()
+  })
+
+  it('renders literal text for unsafe image url', () => {
+    // javascript: and data:text/html must never become an img src.
+    render(<Markdown content="![bad](javascript:alert(1))" />)
+    expect(screen.queryByAltText('bad')).toBeNull()
+  })
+
+  it('refuses scriptable data url but allows raster data url', () => {
+    const { rerender } = render(
+      <Markdown content="![svg](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)" />,
+    )
+    expect(screen.queryByAltText('svg')).toBeNull()
+
+    rerender(<Markdown content="![png](data:image/png;base64,iVBORw0KGgo=)" />)
+    expect(screen.getByAltText('png')).toBeInTheDocument()
+  })
+
+  it('does not treat a link as an image', () => {
+    render(<Markdown content="[not an image](https://example.com)" />)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByText('not an image')).toBeInTheDocument()
+  })
 })

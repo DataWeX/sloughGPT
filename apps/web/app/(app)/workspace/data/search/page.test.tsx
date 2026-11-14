@@ -3,10 +3,11 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockApiGet = vi.fn()
+const mockSearchParams = new URLSearchParams()
 
 vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
   usePathname: () => '/workspace/data/search',
 }))
 
@@ -32,7 +33,10 @@ vi.mock('@/components/icons/NavIcons', () => ({
 
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title }: any) => (
-    <div data-testid="page-container" data-title={title}><h1>{title}</h1>{children}</div>
+    <div data-testid="page-container" data-title={title}>
+      <h1>{title}</h1>
+      {children}
+    </div>
   ),
 }))
 
@@ -45,21 +49,36 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
-    Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
-    Input: ({ value, onChange, placeholder, ...props }: any) => <input value={value} onChange={onChange} placeholder={placeholder} {...props} />,
+    Button: ({ children, onClick, ...props }: any) => (
+      <button onClick={onClick} {...props}>
+        {children}
+      </button>
+    ),
+    Input: ({ value, onChange, placeholder, ...props }: any) => (
+      <input value={value} onChange={onChange} placeholder={placeholder} {...props} />
+    ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -86,10 +105,11 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('lucide-react', () => ({
+  Search: () => <span data-testid="icon-search" />,
   Users: () => <span data-testid="icon-users" />,
   Brain: () => <span data-testid="icon-brain" />,
   Database: () => <span data-testid="icon-database" />,
@@ -101,21 +121,35 @@ import WorkspaceSearchPage from './page'
 
 describe('WorkspaceSearchPage', () => {
   const mockSearchResults = {
-    data: {
-      results: {
-        members: [
-          { id: 'u1', type: 'member', title: 'alice', detail: 'alice@test.com' },
-        ],
-        training_jobs: [
-          { id: 't1', type: 'training', title: 'Fine-tune LLaMA', detail: 'completed' },
-        ],
-        datasets: [
-          { id: 'd1', type: 'dataset', title: 'training-data', detail: '1000 rows' },
-        ],
-        knowledge: [],
+    hits: [
+      {
+        id: 'u1',
+        store: 'members',
+        title: 'alice',
+        detail: 'Role: admin',
+        score: 1.0,
+        locator: 'route:/workspace/members',
       },
-      total: 3,
-    },
+      {
+        id: 't1',
+        store: 'training_jobs',
+        title: 'Fine-tune LLaMA',
+        detail: 'Status: completed',
+        score: 1.0,
+        locator: 'route:/training/queue',
+      },
+      {
+        id: 'd1',
+        store: 'datasets',
+        title: 'training-data',
+        detail: '1000 rows',
+        score: 0.6,
+        locator: 'route:/datasets',
+      },
+    ],
+    partial: [],
+    skipped: [],
+    query: 'a',
   }
 
   beforeEach(() => {
@@ -156,12 +190,40 @@ describe('WorkspaceSearchPage', () => {
 
     await screen.findByText(/result/i)
     expect(mockApiGet).toHaveBeenCalled()
+    expect(mockApiGet.mock.calls[0][0]).toContain('/search?q=alice&workspace_id=ws-1')
+  })
+
+  it('renders server results as-is — no client-side filtering', async () => {
+    // Server already filtered; this item does NOT contain the typed query,
+    // and the UI must still render what the server returned.
+    mockApiGet.mockResolvedValue({
+      hits: [
+        {
+          id: 'u1',
+          store: 'members',
+          title: 'alice',
+          detail: 'Role: admin',
+          score: 1.0,
+          locator: 'route:/workspace/members',
+        },
+      ],
+      partial: ['datasets'],
+      skipped: [],
+      query: 'alice',
+    })
+    const user = userEvent.setup()
+    render(<WorkspaceSearchPage />)
+    await screen.findAllByText('Workspace Search')
+
+    await user.type(screen.getByPlaceholderText(/search/i), 'alice')
+
+    await screen.findByText(/1 result/i)
+    expect(screen.getByText('alice')).toBeTruthy()
+    expect(screen.getByText(/partial results/i)).toBeTruthy()
   })
 
   it('shows empty state when no results', async () => {
-    mockApiGet.mockResolvedValue({
-      data: { results: { members: [], training_jobs: [], datasets: [], knowledge: [] }, total: 0 },
-    })
+    mockApiGet.mockResolvedValue({ hits: [], partial: [], skipped: [], query: 'zzznonexistent' })
     const user = userEvent.setup()
     render(<WorkspaceSearchPage />)
     await screen.findAllByText('Workspace Search')
@@ -170,5 +232,31 @@ describe('WorkspaceSearchPage', () => {
     await user.type(searchInput, 'zzznonexistent')
 
     await screen.findByText(/no results/i)
+  })
+
+  it('seeds the query from ?q= (deep link from the palette)', async () => {
+    mockSearchParams.set('q', 'alice')
+    try {
+      mockApiGet.mockResolvedValue({
+        hits: [
+          {
+            id: 'u1',
+            store: 'members',
+            title: 'alice',
+            detail: 'Role: admin',
+            score: 1.0,
+            locator: 'route:/workspace/members',
+          },
+        ],
+        partial: [],
+        skipped: [],
+        query: 'alice',
+      })
+      render(<WorkspaceSearchPage />)
+      await screen.findByText(/1 result/i)
+      expect(mockApiGet.mock.calls[0][0]).toContain('/search?q=alice&workspace_id=ws-1')
+    } finally {
+      mockSearchParams.delete('q')
+    }
   })
 })

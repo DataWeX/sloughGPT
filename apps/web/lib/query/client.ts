@@ -10,6 +10,7 @@
 'use client'
 
 import { create } from 'zustand'
+import { serverNow } from '../../../lib/clock'
 import { serializeKey, type QueryKey, type QueryState, type QueryStatus } from './types'
 
 const DEFAULT_STALE_TIME = 0
@@ -125,7 +126,7 @@ export async function fetchQuery<T>(
   // Return cached fresh data
   if (entry && entry.status === 'success' && entry.data !== undefined) {
     const staleTime = options.staleTime ?? entry._staleTime ?? DEFAULT_STALE_TIME
-    if (Date.now() - entry.updatedAt < staleTime) {
+    if (serverNow() - entry.updatedAt < staleTime) {
       return entry.data as T
     }
   }
@@ -155,7 +156,7 @@ export async function fetchQuery<T>(
         status: 'success',
         isFetching: false,
         error: null,
-        updatedAt: Date.now(),
+        updatedAt: serverNow(),
         _promise: undefined,
       })
       useQueryStore.setState(state => {
@@ -222,5 +223,5 @@ export function isStale(key: QueryKey): boolean {
   const sk = serializeKey(key)
   const entry = getEntry(sk)
   if (!entry) return true
-  return Date.now() - entry.updatedAt >= (entry._staleTime ?? DEFAULT_STALE_TIME)
+  return serverNow() - entry.updatedAt >= (entry._staleTime ?? DEFAULT_STALE_TIME)
 }

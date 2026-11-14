@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .http import DownloadError, download_file
+from .http import DownloadError, WireStats, download_file
 from .state import get_state
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,10 @@ class PartResult:
     bytes_downloaded: int = 0
     elapsed: float = 0.0
     error: str = ""
+    wire_bytes: int = 0
+    decoded_bytes: int = 0
+    saved_bytes: int | None = 0
+    wire_known: bool = True
 
 
 @dataclass
@@ -55,6 +59,10 @@ class GroupResult:
     parts: list[PartResult] = field(default_factory=list)
     total_bytes: int = 0
     elapsed: float = 0.0
+    wire_bytes: int = 0
+    decoded_bytes: int = 0
+    saved_bytes: int = 0
+    wire_known: bool = True
 
     @property
     def completed_count(self) -> int:
@@ -67,6 +75,17 @@ class GroupResult:
     @property
     def total_count(self) -> int:
         return len(self.parts)
+
+    @property
+    def saved_pct(self) -> float | None:
+        """Wire savings vs decoded bytes fetched THIS call (resume-aware).
+
+        ``None`` when any part's wire size could not be measured.
+        """
+        if not self.wire_known or self.decoded_bytes <= 0:
+            return None
+        saved = 100.0 * (self.decoded_bytes - self.wire_bytes) / self.decoded_bytes
+        return max(0.0, saved)  # failed parts can spend more wire than they deliver
 
 
 def download_parts(
@@ -142,6 +161,7 @@ def download_parts(
         )
 
         pt0 = time.time()
+        part_stats = WireStats()
         try:
 
             def _chunk_cb(
@@ -167,6 +187,7 @@ def download_parts(
                 on_chunk=_chunk_cb,
                 skip_if_exists=skip_if_exists,
                 compressed=compressed,
+                stats=part_stats,
             )
 
             elapsed = time.time() - pt0
@@ -176,6 +197,10 @@ def download_parts(
                 status="complete",
                 bytes_downloaded=dest.stat().st_size,
                 elapsed=elapsed,
+                wire_bytes=part_stats.wire_bytes,
+                decoded_bytes=part_stats.decoded_bytes,
+                saved_bytes=part_stats.saved_bytes,
+                wire_known=part_stats.wire_known,
             )
             parts.append(result)
 
@@ -200,6 +225,10 @@ def download_parts(
                 status="failed",
                 elapsed=elapsed,
                 error=str(exc),
+                wire_bytes=part_stats.wire_bytes,
+                decoded_bytes=part_stats.decoded_bytes,
+                saved_bytes=part_stats.saved_bytes,
+                wire_known=part_stats.wire_known,
             )
             parts.append(result)
             logger.warning("Part %d failed: %s — %s", idx + 1, fname, exc)
@@ -222,6 +251,10 @@ def download_parts(
         parts=parts,
         total_bytes=total_bytes,
         elapsed=elapsed,
+        wire_bytes=sum(p.wire_bytes for p in parts),
+        decoded_bytes=sum(p.decoded_bytes for p in parts),
+        saved_bytes=sum(p.saved_bytes or 0 for p in parts),
+        wire_known=all(p.wire_known for p in parts),
     )
 
 

@@ -96,6 +96,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Change-scoped test selection DB (scripts/run_affected.sh — local state)
+# * covers the SQLite sidecars (-shm/-wal) the open DB keeps alongside it
+.testmondata*
+
 # TypeScript (tsc --incremental)
 *.tsbuildinfo
 
@@ -246,6 +250,10 @@ t.png
 *.so
 *.so.buildflags
 
+# Native engine source-hash cache (domain/slolib/_internal/native.py)
+# holds compiled .so + hashed .c copies — regenerated per source hash.
+.native_cache/
+
 # Build output
 **/target/
 
@@ -272,9 +280,19 @@ y
 
 # Dev notes — derived from journal, not source of truth
 .dev-notes/*.md
+# app-planner transient lock files
+.dev-notes/.commit.lock
+.kanban/.commit.lock
 # Hoplite platform metadata (per-thread sandbox artifacts)
 .hoplite/
 
 # avion journey-engine test artifacts
 arken_output/
 .resilient-state/
+
+# Feature-flag change log — appended at runtime by FeatureFlags
+# (domain/shared/_internal/feature_flags.py); tests redirect it to tmp
+config/flag_history.jsonl
+# API-local config — defaults.yaml.example is generated on first boot by
+# AppConfig._write_example_config; defaults.yaml is the operator's copy
+apps/api/config/

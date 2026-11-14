@@ -5,6 +5,8 @@ Public API:
     ConsciousnessManager, get_trait_config, reset_trait_config
 """
 
+from __future__ import annotations
+
 from domain.context._internal.managers import (
     ConsciousnessManager,
     MemoryManager,
@@ -12,6 +14,7 @@ from domain.context._internal.managers import (
     StyleManager,
     TaskManager,
     TraitWeightsConfig,
+    ensure_managers,
     get_trait_config,
     reset_trait_config,
 )
@@ -23,6 +26,7 @@ __all__ = [
     "StyleManager",
     "TaskManager",
     "ConsciousnessManager",
+    "ensure_managers",
     "get_trait_config",
     "reset_trait_config",
 ]

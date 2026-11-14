@@ -24,9 +24,9 @@ def test_onnx_export():
     print("=" * 50)
 
     import torch
-    from domain.training._internal.onnx_export import export_sloughgpt_to_onnx
 
     from domain.models._internal import SloughGPTModel
+    from domain.training._internal.onnx_export import export_sloughgpt_to_onnx
 
     model = SloughGPTModel(vocab_size=256, n_embed=128, n_layer=4, n_head=8)
     model.eval()
@@ -143,9 +143,9 @@ def test_onnx_model_conversion():
     print("=" * 50)
 
     import torch
-    from domain.training._internal.onnx_export import SloughGPTONNXExport
 
     from domain.models._internal import SloughGPTModel
+    from domain.training._internal.onnx_export import SloughGPTONNXExport
 
     model = SloughGPTModel(vocab_size=256, n_embed=128, n_layer=4, n_head=8)
     model.eval()

@@ -16,10 +16,22 @@ vi.mock('@/lib/settings-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel?: (s: { addToast: typeof mockAddToast }) => unknown) =>
-    sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel?: (s: { addToast: typeof mockAddToast }) => unknown) =>
+      sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: (err: unknown, fallback = 'error') =>
@@ -37,18 +49,30 @@ vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Input: (props: any) => <input {...props} />,
   Switch: ({ checked, onCheckedChange, ...props }: any) => (
-    <input type="checkbox" checked={checked} onChange={(e) => onCheckedChange?.(e.target.checked)} {...props} />
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onCheckedChange?.(e.target.checked)}
+      {...props}
+    />
   ),
   Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
   Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
   Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-  ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
   Tabs: ({ children }: any) => <div>{children}</div>,
   TabsList: ({ children }: any) => <div>{children}</div>,
   TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   TabsContent: ({ children }: any) => <div>{children}</div>,
-  Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
   Separator: () => <hr />,
   Tooltip: ({ children }: any) => <>{children}</>,
   TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -91,7 +115,13 @@ const defaults = {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetProviderApi.mockResolvedValue({ ...defaults })
-  mockUpdateProviderApi.mockResolvedValue({ ...defaults, enabled: true, api_url: 'https://openrouter.ai/api/v1', api_key_set: true, registered: true })
+  mockUpdateProviderApi.mockResolvedValue({
+    ...defaults,
+    enabled: true,
+    api_url: 'https://openrouter.ai/api/v1',
+    api_key_set: true,
+    registered: true,
+  })
 })
 
 afterEach(() => cleanup())
@@ -116,7 +146,9 @@ describe('SettingsExternalProviderCard', () => {
     })
     render(<SettingsExternalProviderCard />)
     await waitFor(() => expect(mockGetProviderApi).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(screen.getByLabelText('Endpoint URL')).toHaveValue('https://api.openai.com/v1'))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Endpoint URL')).toHaveValue('https://api.openai.com/v1'),
+    )
     expect(screen.getByLabelText('Model id')).toHaveValue('gpt-4o')
     expect(screen.getByLabelText('Use external provider')).toBeChecked()
     expect(screen.getByPlaceholderText('•••••••• (saved)')).toBeTruthy()
@@ -152,7 +184,9 @@ describe('SettingsExternalProviderCard', () => {
   it('includes api_key when user types a new key', async () => {
     render(<SettingsExternalProviderCard />)
     await waitFor(() => expect(screen.getByLabelText('Endpoint URL')).toBeTruthy())
-    fireEvent.change(screen.getByLabelText('Endpoint URL'), { target: { value: 'https://openrouter.ai/api/v1' } })
+    fireEvent.change(screen.getByLabelText('Endpoint URL'), {
+      target: { value: 'https://openrouter.ai/api/v1' },
+    })
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-or-test' } })
     fireEvent.click(screen.getByLabelText('Use external provider'))
     fireEvent.click(screen.getByText('Save provider'))
@@ -163,11 +197,16 @@ describe('SettingsExternalProviderCard', () => {
   it('blocks enable without a key when none is saved', async () => {
     render(<SettingsExternalProviderCard />)
     await waitFor(() => expect(screen.getByLabelText('Endpoint URL')).toBeTruthy())
-    fireEvent.change(screen.getByLabelText('Endpoint URL'), { target: { value: 'https://openrouter.ai/api/v1' } })
+    fireEvent.change(screen.getByLabelText('Endpoint URL'), {
+      target: { value: 'https://openrouter.ai/api/v1' },
+    })
     fireEvent.click(screen.getByLabelText('Use external provider'))
     fireEvent.click(screen.getByText('Save provider'))
     expect(mockUpdateProviderApi).not.toHaveBeenCalled()
-    expect(mockAddToast).toHaveBeenCalledWith('API key required before enabling the external provider', 'error')
+    expect(mockAddToast).toHaveBeenCalledWith(
+      'API key required before enabling the external provider',
+      'error',
+    )
   })
 
   it('rejects non-http endpoint URL when enabling', async () => {
@@ -181,8 +220,18 @@ describe('SettingsExternalProviderCard', () => {
   })
 
   it('clears API key via dedicated action', async () => {
-    mockGetProviderApi.mockResolvedValue({ ...defaults, api_key_set: true, enabled: true, api_url: 'https://openrouter.ai/api/v1' })
-    mockUpdateProviderApi.mockResolvedValue({ ...defaults, api_key_set: false, enabled: true, api_url: 'https://openrouter.ai/api/v1' })
+    mockGetProviderApi.mockResolvedValue({
+      ...defaults,
+      api_key_set: true,
+      enabled: true,
+      api_url: 'https://openrouter.ai/api/v1',
+    })
+    mockUpdateProviderApi.mockResolvedValue({
+      ...defaults,
+      api_key_set: false,
+      enabled: true,
+      api_url: 'https://openrouter.ai/api/v1',
+    })
     render(<SettingsExternalProviderCard />)
     await waitFor(() => expect(screen.getByText('Clear key')).toBeTruthy())
     fireEvent.click(screen.getByText('Clear key'))

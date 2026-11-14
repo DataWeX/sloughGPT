@@ -155,7 +155,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Folder name..."
             aria-label="Folder name"
-            className="flex-1 text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="flex-1 text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
           <Button
@@ -192,7 +192,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                   <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 group">
                     <button
                       type="button"
-                      className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left flex items-center gap-2"
+                      className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left flex items-center gap-2 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                       onClick={() => toggleFolder(folder.id)}
                     >
                       <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>

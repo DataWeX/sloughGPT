@@ -17,10 +17,17 @@ from domain.shared import utc_now_iso
 
 @dataclass
 class MessageData:
-    """Lightweight message with role and content – no Pydantic dependency."""
+    """Lightweight message with role and content – no Pydantic dependency.
+
+    ``id`` is optional client-assigned identity (mobile/web fabricate it at
+    send time and persist it through ``store_context`` so reloads keep
+    id-keyed consumers — notes, pins, delete, regenerate — working). ``None``
+    for legacy role/content-only writes.
+    """
 
     role: str
     content: str
+    id: str | None = None
 
 
 class MessageFeedback:
