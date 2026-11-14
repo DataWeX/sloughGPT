@@ -3,6 +3,7 @@ Tests for the inference router — chat, generate, sessions.
 """
 
 import asyncio
+from contextlib import ExitStack
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
+from apps.api.server.routers import inference as _inf
 from apps.api.server.routers.chat import router as _chat_router
 from apps.api.server.routers.inference import _instance as _inference_router
 
@@ -373,6 +375,247 @@ class TestStreamTurnBareProbeGates:
         mock_reflect.assert_called_once()
         mock_frame.assert_called_once()
         mock_enrich.assert_called_once()
+
+
+class TestStreamTurnResponseSequence:
+    """Pin the whole turn sequence: flags → stage order → closing frames.
+
+    ``TestStreamTurnBareProbeGates`` asserts each stage ran or was skipped,
+    one stage at a time. This class pins WHERE each stage sits in the chain
+    and which arguments travel with it, so a refactor cannot silently
+    reorder stages, re-enable one behind a flag, or drop the
+    ``ctx_core=None`` hand-off and still pass the per-stage assertions
+    (card 20261112_140010).
+    """
+
+    # The exact stage order ``stream_turn`` executes, per request shape.
+    # ``memory`` appears twice because ``remember_facts_async`` has two call
+    # sites in ``stream_turn`` (pre-existing) — consolidating them means
+    # editing this expectation deliberately, not by accident.
+    BARE_SEQUENCE = [
+        "model_status",
+        "memory_pressure",
+        "scope",
+        "generate",
+        "post_gen",
+        "memory",
+        "memory",
+    ]
+    DEFAULT_SEQUENCE = [
+        "model_status",
+        "memory_pressure",
+        "scope",
+        "resolve_context_core",  # frame-builder argument (stream_turn)
+        "context_frame",
+        "enrich",
+        "rag",
+        "reflect",
+        "generate",
+        "resolve_context_core",  # post-gen argument (stream_turn)
+        "post_gen",
+        "memory",
+        "memory",
+    ]
+
+    # The closing TurnResult frame POST /chat emits (see test_chat_state_seam).
+    DONE_FRAME = '"phase": "STREAMING", "status": "complete"'
+
+    @staticmethod
+    def _post_sequenced(client, payload):
+        """POST ``payload`` with every ``stream_turn`` stage instrumented.
+
+        Returns ``(order, ctx_core_args, resp)``: the order the stages ran
+        in, the ``ctx_core`` argument each ``_run_post_gen_tasks`` call
+        received, and the SSE response. Behaviour-bearing seams (gates,
+        scope resolution, ContextCore resolution, the post-gen task set) are
+        WRAPPED — the real thing runs — so only their position in the chain
+        is recorded, never their outcome.
+        """
+        order: list[str] = []
+        ctx_core_args: list = []
+
+        real_status = _inf._get_model_status
+        real_pressure = _inf._check_memory_pressure
+        real_post_gen = _inf._run_post_gen_tasks
+        real_scope = _inference_router._resolve_turn_scope
+        real_ctx_core = _inference_router._get_context_core
+
+        def _status():
+            order.append("model_status")
+            return real_status()
+
+        def _pressure():
+            order.append("memory_pressure")
+            return real_pressure()
+
+        def _scope(session_id, req):
+            order.append("scope")
+            return real_scope(session_id, req)
+
+        def _ctx_core():
+            order.append("resolve_context_core")
+            return real_ctx_core()
+
+        async def _frame(*args, **kw):
+            order.append("context_frame")
+            return (None, {})
+
+        def _enrich(*args, **kw):
+            order.append("enrich")
+            return {"facts": []}
+
+        def _rag_ready():
+            order.append("rag")
+            return True
+
+        def _rag_service():
+            svc = MagicMock()
+            svc.stats.return_value = {"total_chunks": 0}
+            return svc
+
+        async def _reflect(messages, corr_id):
+            order.append("reflect")
+            return messages
+
+        async def _chat_stream(messages, **kw):
+            order.append("generate")
+            yield "ok"
+
+        async def _remember(*args, **kw):
+            order.append("memory")
+            return []
+
+        def _memory_service():
+            svc = MagicMock()
+            svc.remember_facts_async = _remember
+            return svc
+
+        def _post_gen(*args, **kw):
+            order.append("post_gen")
+            ctx_core_args.append(args[5])  # positional ctx_core parameter
+            return real_post_gen(*args, **kw)
+
+        provider = MagicMock()
+        provider.chat_stream = _chat_stream
+
+        def _get_provider(*args, **kw):
+            return provider
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch.dict(
+                    "sys.modules",
+                    {
+                        "state": MOCK_STATE,
+                        "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP),
+                    },
+                )
+            )
+            stack.enter_context(
+                patch("apps.api.server.routers.inference._get_model_status", new=_status)
+            )
+            stack.enter_context(
+                patch(
+                    "apps.api.server.routers.inference._check_memory_pressure",
+                    new=_pressure,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "apps.api.server.routers.inference._build_context_frame", new=_frame
+                )
+            )
+            stack.enter_context(
+                patch("apps.api.server.routers.inference._enrich_knowledge", new=_enrich)
+            )
+            stack.enter_context(
+                patch(
+                    "apps.api.server.routers.inference._apply_consciousness_reflection",
+                    new=_reflect,
+                )
+            )
+            stack.enter_context(
+                patch("apps.api.server.routers.inference.get_rag_service", new=_rag_service)
+            )
+            stack.enter_context(
+                patch("domain.cognition.is_rag_service_ready", new=_rag_ready)
+            )
+            stack.enter_context(
+                patch("apps.api.server.routers.inference.get_memory_service", new=_memory_service)
+            )
+            stack.enter_context(
+                patch("apps.api.server.routers.inference.get_provider", new=_get_provider)
+            )
+            stack.enter_context(
+                patch(
+                    "apps.api.server.routers.inference._run_post_gen_tasks", new=_post_gen
+                )
+            )
+            stack.enter_context(
+                patch.object(_inference_router, "_resolve_turn_scope", new=_scope)
+            )
+            stack.enter_context(
+                patch.object(_inference_router, "_get_context_core", new=_ctx_core)
+            )
+            resp = client.post("/chat", json=payload)
+        return order, ctx_core_args, resp
+
+    def test_bare_probe_sequence_is_gates_then_generate_then_close(self, client):
+        """The quick-test probe runs the minimal chain and nothing else."""
+        order, ctx_core_args, resp = self._post_sequenced(
+            client,
+            {
+                "messages": [{"role": "user", "content": "Hello!"}],
+                "session_id": "seq-bare-probe",
+                "use_consciousness": False,
+                "use_context_core": False,
+                "use_rag": False,
+            },
+        )
+        assert resp.status_code == 200
+        assert order == self.BARE_SEQUENCE, (
+            f"bare probe ran stages outside the pinned contract: {order}"
+        )
+        assert "resolve_context_core" not in order, (
+            "a bare probe resolved ContextCore — the flag gate on "
+            "_get_context_core() was dropped"
+        )
+        assert ctx_core_args == [None], (
+            "post-gen must receive the explicit ctx_core=None hand-off "
+            f"(got {ctx_core_args!r})"
+        )
+        # User-visible outcome: tokens, the closing frame, no sidebands.
+        assert '"token": "ok"' in resp.text, "the probe's answer never streamed"
+        assert self.DONE_FRAME in resp.text, "TurnResult never closed the stream"
+        assert '"phase": "CONSCIOUSNESS"' not in resp.text, (
+            "bare probe surfaced a consciousness sideband"
+        )
+        assert '"phase": "MEMORY"' not in resp.text, (
+            "bare probe surfaced a memory sideband"
+        )
+
+    def test_default_sequence_runs_full_pipeline_in_pinned_order(self, client):
+        """Defaults (all flags True) run the full chain, in this order."""
+        order, ctx_core_args, resp = self._post_sequenced(
+            client,
+            {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "session_id": "seq-default-pipeline",
+            },
+        )
+        assert resp.status_code == 200
+        assert order == self.DEFAULT_SEQUENCE, (
+            f"default pipeline ran out of pinned order: {order}"
+        )
+        # ContextCore resolves twice — frame builder first, post-gen second —
+        # and the resolved core is what post-gen receives.
+        assert order.count("resolve_context_core") == 2
+        assert len(ctx_core_args) == 1
+        assert ctx_core_args[0] is not None, (
+            "opted-in turn passed ctx_core=None to post-gen"
+        )
+        assert '"token": "ok"' in resp.text
+        assert self.DONE_FRAME in resp.text, "TurnResult never closed the stream"
 
 
 class TestChat:
