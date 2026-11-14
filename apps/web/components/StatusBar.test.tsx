@@ -243,6 +243,40 @@ describe('StatusBar', () => {
     expect(screen.getByText('Healthy')).toBeDefined()
   })
 
+  it('renders amber dot + live badge when throughput is slow (verdict beats connection)', () => {
+    // Healthy connection (connected, score 85) with a slow THROUGHPUT
+    // verdict — green next to "Slow" was the contradiction.
+    mockHealthState.mockReturnValue({
+      model_loaded: true,
+      model_type: 'gpt2',
+      inference_count: 42,
+      health_score: 85,
+      health_status: 'healthy',
+      health_summary: 'Slow — 12 tok/s.',
+      tokens_per_sec: 12,
+      is_inferencing: false,
+      cpu_percent: 30,
+      memory_percent: 40,
+      uptime_seconds: 100,
+      request_count: 50,
+      error_count: 0,
+      soul: 'friendly',
+    })
+    render(<StatusBar />)
+    expect(screen.getByText('Slow — 12 tok/s.')).toBeDefined()
+
+    const dot = document.querySelector('.sl-status-bar-dot')
+    expect(dot?.className).toContain('bg-warning')
+    expect(dot?.className).not.toContain('bg-success')
+
+    const live = screen.getByText('live')
+    expect(live.className).toContain('sl-badge-warning')
+    expect(live.className).not.toContain('sl-badge-success')
+
+    // The tok/s pulse follows the same verdict — no green pulse beside "Slow".
+    expect(document.querySelector('.sl-status-bar-metric .bg-warning')).not.toBeNull()
+  })
+
   it('renders archetype badge when soul and weights available', async () => {
     render(<StatusBar />)
     const badge = await screen.findAllByText('The Optimist')

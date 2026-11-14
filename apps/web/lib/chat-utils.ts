@@ -92,6 +92,31 @@ export async function getOrCreateUserId(): Promise<string> {
   return id
 }
 
+/**
+ * Session display title derived from a conversation's first user message.
+ *
+ * This is the ONE derivation for "stored name is blank" (`name: ''` writers
+ * exist in chat-store) — `saveSessionToStorage` persists it and the sidebar
+ * card + chat header both fall back to it, so the header can never show
+ * 'Untitled' while the card shows the derived title (split-source defect
+ * 2026-11-14). Returns '' when there is nothing to derive from; callers pick
+ * their surface's final fallback ('New Chat' on save, 'Untitled' in lists).
+ */
+export function deriveSessionTitle(
+  messages: readonly { role: string; content: string }[] | null | undefined,
+): string {
+  const first = messages?.find((m) => m.role === 'user')?.content || ''
+  if (!first) return ''
+  const cleaned = first.replace(/^(hey|hi|hello|yo|sup)[\s,!.]*/i, '').trim()
+  const sentence =
+    cleaned
+      .split(/[.!?\n]/)
+      .find(Boolean)
+      ?.trim() || cleaned
+  const maxLen = 42
+  return sentence.length > maxLen ? sentence.slice(0, maxLen).trimEnd() + '…' : sentence
+}
+
 export function generateSessionId(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
   let hash = ''
@@ -140,10 +165,13 @@ export async function copyConversationAsMarkdown(messages: ChatMessage[]): Promi
   }
 }
 
-export function computeSearchMatches(messages: ChatMessage[], query: string): { matchIds: string[]; matchCount: number } {
+export function computeSearchMatches(
+  messages: ChatMessage[],
+  query: string,
+): { matchIds: string[]; matchCount: number } {
   if (!query) return { matchIds: [], matchCount: 0 }
   const q = query.toLowerCase()
-  const matchIds = messages.filter(m => m.content.toLowerCase().includes(q)).map(m => m.id)
+  const matchIds = messages.filter((m) => m.content.toLowerCase().includes(q)).map((m) => m.id)
   return { matchIds, matchCount: matchIds.length }
 }
 

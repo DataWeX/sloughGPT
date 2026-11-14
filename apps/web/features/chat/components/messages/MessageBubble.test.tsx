@@ -458,6 +458,22 @@ describe('MessageBubble', () => {
       expect(container.textContent).toContain('07')
     })
 
+    it('keeps the gutter column off the message text (sm column gap)', () => {
+      const { container } = render(
+        <MessageBubble
+          content="Hello!"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          turnNumber={24}
+        />,
+      )
+      const grid = container.querySelector('[role="article"]')
+      // Was zero-gap: "24Hello!" rendered jammed together.
+      expect(grid?.className).toContain('sm:gap-x-3')
+      expect(grid?.className).toContain('sm:grid-cols-[2.5rem_minmax(0,1fr)_auto]')
+    })
+
     it('hides the gutter when no turnNumber is given', () => {
       const { container } = render(
         <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,

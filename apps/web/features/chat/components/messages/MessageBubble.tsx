@@ -157,10 +157,12 @@ export const MessageBubble = memo(function MessageBubble({
         className={cn(
           'group grid transition-all duration-300 ease-out',
           'grid-cols-[minmax(0,1fr)] sm:grid-cols-[2.5rem_minmax(0,1fr)_auto]',
-          'items-start',
+          'sm:gap-x-3 items-start',
         )}
       >
-        {/* Gutter — stable turn number, like a transcript or lab log */}
+        {/* Gutter — stable turn number, like a transcript or lab log.
+            sm:gap-x-3 keeps the right-aligned number off the first
+            character of the message text (was flush: "24Hello!"). */}
         <span
           className="hidden sm:block pt-1 text-right font-mono text-[10px] leading-5 text-muted-foreground/50 select-none"
           aria-hidden="true"

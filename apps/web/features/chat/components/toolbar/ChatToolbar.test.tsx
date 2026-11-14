@@ -193,6 +193,20 @@ describe('ChatToolbar', () => {
     expect(screen.getByTestId('chat-more-menu')).toBeDefined()
   })
 
+  it('renders the shared activeName — the exact string the sidebar card shows', () => {
+    const base = createContextValue()
+    const ctx = createContextValue({
+      conversations: { ...base.conversations, activeName: 'How do caches stay coherent' },
+    })
+    renderToolbar(ctx)
+    expect(screen.getByText('How do caches stay coherent')).toBeDefined()
+  })
+
+  it('shows New chat only when there is no active conversation row', () => {
+    renderToolbar()
+    expect(screen.getByText('New chat')).toBeDefined()
+  })
+
   it('shows sidebar toggle button on mobile', () => {
     renderToolbar()
     expect(screen.getByLabelText('Toggle conversations')).toBeDefined()

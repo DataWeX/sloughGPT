@@ -22,9 +22,10 @@ export const ChatToolbar = memo(function ChatToolbar({
 }: ChatToolbarProps) {
   const ctx = useChatToolbarContext()
 
-  const currentName = ctx.conversations.conversations.find(
-    (c) => c.session_id === ctx.conversations.sessionIdRef.current,
-  )?.name
+  // Name comes pre-resolved from the single active-row lookup in
+  // useChatToolbarValue (same object the sidebar card renders) — the old
+  // find() here re-derived it and could split from the card.
+  const currentName = ctx.conversations.activeName
 
   return (
     <div

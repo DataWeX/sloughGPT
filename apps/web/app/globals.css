@@ -618,6 +618,15 @@ html {
 .sl-badge-destructive:hover {
   background-color: color-mix(in srgb, rgb(var(--destructive)) 20%, transparent);
 }
+/* Degraded-but-connected verdicts (health_flow 'Slow/Very slow'): amber
+   between success green and destructive red. */
+.sl-badge-warning {
+  background-color: color-mix(in srgb, rgb(var(--warning)) 12%, transparent);
+  color: rgb(var(--warning));
+}
+.sl-badge-warning:hover {
+  background-color: color-mix(in srgb, rgb(var(--warning)) 20%, transparent);
+}
 .sl-badge-primary {
   background-color: color-mix(in srgb, rgb(var(--primary)) 10%, transparent);
   color: rgb(var(--primary));
