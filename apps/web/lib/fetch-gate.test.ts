@@ -30,7 +30,6 @@ const ALLOWED: Record<string, string> = {
     'api-explorer interactive console (grandfathered surface)',
   'app/(app)/consciousness/docs/docs-endpoint-list.tsx':
     'fetch( appears inside a documentation code-sample string',
-  'app/(app)/calendar/page.tsx': 'same-origin GET, grandfathered',
   'features/chat/hooks/useChatLocalEngine.ts': 'local-model asset fetch (no API envelope)',
   'features/chat/components/panels/useVisionStudio.ts':
     'data:/blob vision asset fetch — no network destination',
