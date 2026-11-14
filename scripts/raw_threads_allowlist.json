@@ -7,7 +7,7 @@
       "deferred": "charter ruling: migrate when the site is next touched",
       "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
     },
-    "site_count": 239
+    "site_count": 240
   },
   "entries": {
     "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
@@ -759,6 +759,11 @@
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 3
+    },
+    "apps/api/server/routers/voice.py::VoiceRouter.speech_to_text": {
+      "reason": "stage-4 grandfathered async escape: server-side recognizer micro-compute stays per the duration rule (charter stage 4), mirrors VoiceRouter.text_to_speech",
+      "kind": "grandfathered",
+      "count": 1
     },
     "apps/api/server/routers/voice.py::VoiceRouter.text_to_speech": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",

@@ -1,6 +1,6 @@
 {
  "note": "Grandfathered hand-built route declarations for scripts/check_contract.py \u2014 the endpoint rule's ratchet: counts may only shrink, as a reviewed edit. Regenerate with --write-declaration-baseline.",
- "total": 615,
+ "total": 616,
  "files": {
   "main.py": 1,
   "routers/agents.py": 11,
@@ -45,7 +45,7 @@
   "routers/user_adapters.py": 9,
   "routers/users.py": 8,
   "routers/vector.py": 5,
-  "routers/voice.py": 2,
+  "routers/voice.py": 3,
   "routers/workflow.py": 4,
   "routers/workspaces.py": 29,
   "routers/world_render.py": 5,

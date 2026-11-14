@@ -15,7 +15,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from routers.models import ModelsRouter
-from routers.models import _instance as _models_instance
 from routers.models import router as models_router
 
 app = FastAPI()
@@ -75,7 +74,8 @@ def mock_controller():
     }
 
     with patch("routers.models.get_models_controller", return_value=ctrl):
-        _models_instance._cache.clear()
+        # No QueryCache anymore (PR #91): GET /models is a live view, so
+        # there is no per-test cache to clear.
         yield ctrl
 
 
