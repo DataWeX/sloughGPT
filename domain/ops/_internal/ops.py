@@ -17,6 +17,8 @@ import math
 
 import numpy as np
 
+from domain.infrastructure._internal.quant_core.numeric import encode_scale_mul
+
 # =============================================================================
 # LAYER NORM
 # =============================================================================
@@ -337,9 +339,11 @@ class OptimizedEmbedding:
         w = self.weight
         scale = np.abs(w).max(axis=1, keepdims=True) + 1e-8
         if dtype == "uint8":
-            self._quantized = np.clip(np.round(w / scale * 127) + 128, 0, 255).astype(np.uint8)
+            self._quantized = encode_scale_mul(w, scale, 127, 0, 255, zero_point=128).astype(
+                np.uint8
+            )
         else:
-            self._quantized = np.clip(np.round(w / scale * 127), -128, 127).astype(np.int8)
+            self._quantized = encode_scale_mul(w, scale, 127, -128, 127).astype(np.int8)
         self._scale = scale
 
     def forward(self, x: np.ndarray) -> np.ndarray:
