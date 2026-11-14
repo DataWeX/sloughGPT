@@ -418,11 +418,14 @@ _CHAT_CONTROL_TTL = 300  # 5 minutes
 
 
 async def _apply_consciousness_reflection(messages: list, corr_id: str) -> list:
-    """CONSCIOUSNESS_PROC — prepend the reflection narrative (build order #6).
+    """CONSCIOUSNESS_PROC — attach the reflection narrative as tail context.
 
     Pulls ``engine.reflect(apply=False)`` (propose-only: never commits belief
-    deltas) and prepends its narrative as a system message via
-    ConsciousnessProcessor. Advisory by design: a disabled engine, an empty
+    deltas) and hands the narrative to ConsciousnessProcessor, which attaches
+    it to the LAST user turn — after the question, framed as context. It used
+    to prepend as a system message, where it outranked the question and the
+    0.5B model answered the narrative instead of the user (card
+    20261114_092948). Advisory by design: a disabled engine, an empty
     narrative, or ANY failure skips injection and returns messages unchanged
     (try/except skip — chat never errors on reflection).
     """
@@ -2259,9 +2262,12 @@ class InferenceRouter:
         # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
         # main's chat-pipeline wiring onto the stream_turn restructure).
         # Gated on the wire flag: a bare probe (QuickActions "Test model",
-        # use_consciousness=false) must not receive the reflection system
-        # message — the 0.5B model answered the narrative instead of the
-        # probe (card 20261112_140010).
+        # use_consciousness=false) must not receive the reflection narrative
+        # at all (card 20261112_140010). When ON it rides the volatile tail —
+        # ConsciousnessProcessor attaches it to the last user turn, framed as
+        # context, the same placement class as the RAG/knowledge blocks below
+        # — never the system head, where the 0.5B model answered it instead
+        # of the user (card 20261114_092948).
         if req.use_consciousness:
             messages = await _apply_consciousness_reflection(messages, "-")
 

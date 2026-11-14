@@ -50,11 +50,11 @@ class ChatRequest(BaseModel):
         default=False,
         description=(
             "Run the consciousness reflection pipeline for this turn. OFF by "
-            "default: the reflection narrative was prepended as a SYSTEM "
-            "message, and the 0.5B model answered the narrative instead of "
-            "the user (probed live 2026-11-14, card 20261114_092948). "
-            "Clients opt in per turn until the narrative rides the volatile "
-            "tail instead of the system head."
+            "default (card 20261114_092948): when ON, the reflection "
+            "narrative rides the volatile tail — attached to the last user "
+            "turn, framed as context — while it previously prepended as a "
+            "SYSTEM message and the model answered the narrative instead of "
+            "the user (probed live 2026-11-14). Clients opt in per turn."
         ),
     )
     agent_id: str | None = Field(default=None, description="Agent ID for role-play instructions")

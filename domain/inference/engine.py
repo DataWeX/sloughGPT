@@ -60,14 +60,19 @@ class TurnRequest:
     use_consciousness: bool = False
     """Run the consciousness reflection pipeline for this turn.
 
-    OFF by default (card 20261114_092948): the narrative was prepended as a
-    SYSTEM message ahead of the persona, and the 0.5B model answered the
-    narrative ("Self-Reflection Context: you have processed N experiences…")
-    instead of the user's message — probe-proven live 2026-11-14. Quick
-    probes (QuickActions "Test model") keep setting it false explicitly;
-    chat clients opt in per turn until the narrative moves to the volatile
-    tail (after the user's message, framed as context) where it cannot
-    outrank the question.
+    OFF by default (card 20261114_092948). When ON, the narrative rides the
+    volatile tail — attached to the last user turn, framed as advisory
+    context — instead of prepending as a SYSTEM message ahead of the
+    persona, where the 0.5B model answered it ("Self-Reflection Context:
+    you have processed N experiences…") instead of the user's message
+    (probe-proven live 2026-11-14). Tail placement keeps the prompt head
+    byte-identical (cross-turn KV reuse) and stops the head-of-prompt
+    hijack — strong questions ("What is 2+2?") answer cleanly with the
+    narrative present. Residual (8-variant probe, same day): open questions
+    on a tiny model can still latch in-context narrative regardless of
+    position/framing, so default-OFF is the safety boundary, not the
+    placement. Quick probes (QuickActions "Test model") keep setting it
+    false explicitly.
     """
     cancel_event: threading.Event | None = None
     """Cooperative cancellation for this turn.

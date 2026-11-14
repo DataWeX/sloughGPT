@@ -1,8 +1,10 @@
 """CONSCIOUSNESS_PROC pipeline step (card 243016c3) — reflection injection path.
 
 The chat pipeline pulls the consciousness engine's propose-only reflection
-narrative (reflect(apply=False) — never mutates beliefs) and prepends it as a
-system message. Reflection is ADVISORY: a disabled engine, an empty narrative,
+narrative (reflect(apply=False) — never mutates beliefs) and attaches it to
+the last user turn as tail context (card 20261114_092948: it used to prepend
+as a system message, and the 0.5B model answered the narrative instead of
+the user). Reflection is ADVISORY: a disabled engine, an empty narrative,
 or any failure skips injection and the chat proceeds with unchanged messages
 (try/except skip pattern, unlike KNOWLEDGE_PROC which errors the stream).
 """
@@ -50,12 +52,16 @@ def _patch_engine(monkeypatch, engine) -> None:
 
 
 class TestConsciousnessInjection:
-    async def test_injects_reflection_narrative(self, monkeypatch):
+    async def test_attaches_reflection_narrative_on_last_user_turn(self, monkeypatch):
         _patch_engine(monkeypatch, _FakeEngine())
         out = await _apply_consciousness_reflection(list(_MSGS), "corr")
-        assert out[0]["role"] == "system"
+        # Tail context on the user turn — NOT a leading system message
+        # (card 20261114_092948: system-head placement hijacked replies).
+        assert len(out) == len(_MSGS)
+        assert out[0]["role"] == "user"
+        assert out[0]["content"].startswith("hi")
         assert "curious about compilers" in out[0]["content"]
-        assert out[1:] == _MSGS
+        assert _MSGS[0]["content"] == "hi"  # input untouched (non-mutating)
 
     async def test_disabled_engine_is_noop(self, monkeypatch):
         _patch_engine(monkeypatch, _FakeEngine(enabled=False))
@@ -90,7 +96,7 @@ class TestStreamTurnConsciousnessGate:
 
     The home page's Quick test POSTs "Hello!" as a health check: with the flag
     off, ``stream_turn`` must not touch the consciousness engine at all (no
-    reflection narrative prepended, no episode ingest in post-gen). The
+    reflection narrative injected, no episode ingest in post-gen). The
     DEFAULT is now OFF (card 20261114_092948 — the narrative-in-system-head
     hijacked ordinary chat replies, probe-proven live 2026-11-14): omitting
     the flag must SKIP reflection, and clients opt in explicitly per turn.
