@@ -1,8 +1,10 @@
 """CONSCIOUSNESS_PROC pipeline step (card 243016c3) — reflection injection path.
 
 The chat pipeline pulls the consciousness engine's propose-only reflection
-narrative (reflect(apply=False) — never mutates beliefs) and prepends it as a
-system message. Reflection is ADVISORY: a disabled engine, an empty narrative,
+narrative (reflect(apply=False) — never mutates beliefs) and attaches it to
+the last user turn as tail context (card 20261114_092948: it used to prepend
+as a system message, and the 0.5B model answered the narrative instead of
+the user). Reflection is ADVISORY: a disabled engine, an empty narrative,
 or any failure skips injection and the chat proceeds with unchanged messages
 (try/except skip pattern, unlike KNOWLEDGE_PROC which errors the stream).
 """
@@ -13,7 +15,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from routers.inference import _apply_consciousness_reflection
 
 # Readiness-gate stand-ins for stream_turn's GATES block: _model_ready reads
@@ -51,12 +52,16 @@ def _patch_engine(monkeypatch, engine) -> None:
 
 
 class TestConsciousnessInjection:
-    async def test_injects_reflection_narrative(self, monkeypatch):
+    async def test_attaches_reflection_narrative_on_last_user_turn(self, monkeypatch):
         _patch_engine(monkeypatch, _FakeEngine())
         out = await _apply_consciousness_reflection(list(_MSGS), "corr")
-        assert out[0]["role"] == "system"
+        # Tail context on the user turn — NOT a leading system message
+        # (card 20261114_092948: system-head placement hijacked replies).
+        assert len(out) == len(_MSGS)
+        assert out[0]["role"] == "user"
+        assert out[0]["content"].startswith("hi")
         assert "curious about compilers" in out[0]["content"]
-        assert out[1:] == _MSGS
+        assert _MSGS[0]["content"] == "hi"  # input untouched (non-mutating)
 
     async def test_disabled_engine_is_noop(self, monkeypatch):
         _patch_engine(monkeypatch, _FakeEngine(enabled=False))
@@ -91,9 +96,10 @@ class TestStreamTurnConsciousnessGate:
 
     The home page's Quick test POSTs "Hello!" as a health check: with the flag
     off, ``stream_turn`` must not touch the consciousness engine at all (no
-    reflection narrative prepended, no episode ingest in post-gen). The
-    DEFAULT stays ON — omitting the flag must still run the reflection, so
-    every other chat path keeps today's behaviour.
+    reflection narrative injected, no episode ingest in post-gen). The
+    DEFAULT is now OFF (card 20261114_092948 — the narrative-in-system-head
+    hijacked ordinary chat replies, probe-proven live 2026-11-14): omitting
+    the flag must SKIP reflection, and clients opt in explicitly per turn.
 
     The probe is ``domain.cognition.get_consciousness`` rather than a router
     attribute: the router module exists under two import aliases
@@ -107,10 +113,10 @@ class TestStreamTurnConsciousnessGate:
     def chat_client(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+        from infrastructure.exception_handlers import register_all_handlers
 
         from apps.api.server.routers.chat import router as chat_router
         from apps.api.server.routers.inference import _instance as inference_router
-        from infrastructure.exception_handlers import register_all_handlers
 
         app = FastAPI()
         register_all_handlers(app)
@@ -124,12 +130,10 @@ class TestStreamTurnConsciousnessGate:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    def test_flag_off_never_touches_consciousness_default_still_reflects(
-        self, chat_client, monkeypatch
-    ):
-        import domain.cognition as cognition
+    def test_flag_off_never_touches_consciousness_default_now_skips(self, chat_client, monkeypatch):
         import routers.inference as inf_top
 
+        import domain.cognition as cognition
         from apps.api.server.routers import inference as inf_apps
 
         # Both router aliases patched: either may be the registered engine.
@@ -172,7 +176,8 @@ class TestStreamTurnConsciousnessGate:
         assert resp.status_code == 200
         assert touches == [], "use_consciousness=False must skip reflection AND ingest"
 
-        # Same request without the flag → reflection still runs (default ON).
+        # Same request without the flag → reflection is SKIPPED (default OFF
+        # since card 20261114_092948: narrative-in-system-head hijacked chat).
         resp = chat_client.post(
             "/chat",
             json={
@@ -182,4 +187,19 @@ class TestStreamTurnConsciousnessGate:
             },
         )
         assert resp.status_code == 200
-        assert touches, "omitting use_consciousness must keep the default ON"
+        assert touches == [], "omitting use_consciousness must default to OFF"
+
+        # Explicit opt-in still runs the reflection. Distinct message: the
+        # session-keyed replay cache (chat.py turn_hash) would otherwise
+        # replay request 2's completed response and never reach stream_turn.
+        resp = chat_client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "reflect on this"}],
+                "use_context_core": False,
+                "use_rag": False,
+                "use_consciousness": True,
+            },
+        )
+        assert resp.status_code == 200
+        assert touches, "use_consciousness=True must still run reflection"
