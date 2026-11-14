@@ -32,6 +32,7 @@
 import { configureTransport } from '../../lib/ports'
 import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
+import { installRuntimeConfigGuards } from './runtime-config'
 
 // Host → transport wiring. Every read in apps/lib is at call time, and this
 // module body runs before anything can make a request, so the ports are
@@ -46,5 +47,12 @@ configureTransport({
   getBaseUrl: () => PUBLIC_API_URL,
   getToken: () => useAuthStore.getState().token,
 })
+
+// Config-drift guards (card 20261108_222308): every unsafe request presents
+// the held config_version; a stale/unknown claim is refused 412 server-side
+// and surfaced here as the one global "Reload the page" banner. Registered at
+// this seam deliberately — the facade's import precedes any request by
+// construction, and registration is idempotent (HMR-safe).
+installRuntimeConfigGuards()
 
 export * from '../../lib/index'
