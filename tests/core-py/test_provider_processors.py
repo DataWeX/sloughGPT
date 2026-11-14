@@ -737,6 +737,35 @@ class TestConsciousnessProcessor:
         msgs = [{"role": "system", "content": "persona"}]
         assert await proc.process(msgs) == msgs
 
+    def test_sanitizer_strips_belief_number_dump(self):
+        # The verbatim parrot material from live probes (card 20261114_092948).
+        narrative = (
+            "I have processed 104 experiences. My current beliefs: competence=1.00, "
+            "helpfulness=1.00, creativity=0.50, accuracy=0.79, empathy=0.56. "
+            "Average growth rate: +0.036. I feel relatively static — no strong growth signal."
+        )
+        out = ConsciousnessProcessor._sanitize(narrative)
+        # Identity sentence + qualitative trajectory survive.
+        assert "I have processed 104 experiences." in out
+        assert "relatively static" in out
+        # Numbers and the belief/growth segments are gone.
+        assert "competence" not in out
+        assert "1.00" not in out
+        assert "0.036" not in out
+        assert "Average growth rate" not in out
+
+    def test_sanitizer_caps_overlong_narrative(self):
+        narrative = "This is a sentence about my inner life. " * 40
+        out = ConsciousnessProcessor._sanitize(narrative)
+        assert len(out) <= ConsciousnessProcessor._MAX_NARRATIVE_CHARS + 10  # + " [...]"
+        assert out.endswith("[...]")
+
+    async def test_pure_belief_dump_skips_injection(self):
+        # Nothing safe left after sanitization -> injection is skipped.
+        proc = ConsciousnessProcessor(narrative="My current beliefs: competence=1.00.")
+        msgs = [{"role": "user", "content": "hi"}]
+        assert await proc.process(msgs) == msgs
+
     def test_set_narrative(self):
         proc = ConsciousnessProcessor(narrative="old")
         proc.set_narrative("new")
