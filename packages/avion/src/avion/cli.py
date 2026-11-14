@@ -205,21 +205,45 @@ async def _cmd_snapshot(b) -> int:
     return 0
 
 
+async def _fail_missing(b, value: str, by: str) -> int:
+    """Not-found path: the failure line, then the near-miss report.
+
+    Best-effort by construction: a backend without ``near_miss`` (or a
+    page that errors while probing) degrades to the plain line — the
+    report must never turn a clean miss into a crash.
+    """
+    code = _fail(f"element not found ({by}): {value}")
+    near = getattr(b, "near_miss", None)
+    if near is None:
+        return code
+    try:
+        lines = await near(_locator(value, by))
+    except Exception:
+        return code
+    if lines:
+        print("near-miss:", file=sys.stderr)
+        for line in lines:
+            print(f"  {line}", file=sys.stderr)
+    return code
+
+
 async def _cmd_click(b, value: str, by: str) -> int:
     element = await b.find_element(_locator(value, by))
     if element is None:
-        return _fail(f"element not found ({by}): {value}")
+        return await _fail_missing(b, value, by)
     await b.click(element)
-    print(f"clicked {by}: {value}")
+    # Provenance from the resolution site: which element was actually hit
+    # (tag/id/class, content, rect, match ordinal) — not an echo of input.
+    print(f"clicked {by}: {value} → {element.provenance()}")
     return 0
 
 
 async def _cmd_fill(b, value: str, text: str, by: str) -> int:
     element = await b.find_element(_locator(value, by))
     if element is None:
-        return _fail(f"element not found ({by}): {value}")
+        return await _fail_missing(b, value, by)
     await b.fill(element, text)
-    print(f"filled {by}: {value}")
+    print(f"filled {by}: {value} → {element.provenance()}")
     return 0
 
 

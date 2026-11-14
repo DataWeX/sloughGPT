@@ -24,6 +24,11 @@ class FakeElement:
     def __init__(self, box: dict) -> None:
         self.bounding_box = box
 
+    def provenance(self) -> str:
+        """Element-interface double: identity from the box the backend set."""
+        b = self.bounding_box or {}
+        return f"fake @{b.get('x', 0)},{b.get('y', 0)} {b.get('width', 0)}x{b.get('height', 0)}"
+
 
 class FakeBackend:
     """Minimal driving backend for _dispatch: find/click/fill with a box."""

@@ -201,7 +201,7 @@ class Arken:
             data={"text": element.text, "tag": element.tag},
             duration_ms=(time.perf_counter() - start) * 1000,
         )
-        self._logger.element("clicked", element.locator.describe())
+        self._logger.element("clicked", f"{element.locator.describe()} → {element.provenance()}")
 
     async def click_text(self, text: str) -> None:
         """Find element by text and click it."""
@@ -213,12 +213,14 @@ class Arken:
         el = await self.find(locator)
         await self._backend.fill(el, value, force=force)
         self._recorder.record(EventType.FILL, name=locator.describe(), data={"value": value})
+        self._logger.element("filled", f"{locator.describe()} → {el.provenance()}")
 
     async def select(self, locator: ElementLocator, value: str) -> None:
         """Select a value from a dropdown."""
         el = await self.find(locator)
         await self._backend.select_option(el, value)
         self._recorder.record(EventType.SELECT, name=locator.describe(), data={"value": value})
+        self._logger.element("selected", f"{locator.describe()} → {el.provenance()}")
 
     async def press(self, key: str) -> None:
         """Press a key (e.g. "Enter", "Control+a")."""
