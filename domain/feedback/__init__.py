@@ -3,6 +3,7 @@
 Public API:
     FeedbackDB, get_feedback_db, Message, Feedback, SimilarPattern
     MetaWeightManager, MetaWeights, get_meta_weight_manager
+    SAFE_BAND — the one generation-safe bounds authority (card 20261101_182428)
     ResponseTracker, get_response_tracker
     WorkflowConfig, get_feedback_workflow
     get_per_user_lora, create_training_pipeline
@@ -20,6 +21,7 @@ from domain.feedback._internal.database import (
 )
 from domain.feedback._internal.message_feedback import get_message_feedback
 from domain.feedback._internal.meta_weights import (
+    SAFE_BAND,
     MetaWeightManager,
     MetaWeights,
     get_meta_weight_manager,
@@ -54,6 +56,7 @@ __all__ = [
     "MetaWeightManager",
     "MetaWeights",
     "get_meta_weight_manager",
+    "SAFE_BAND",
     "ResponseTracker",
     "get_response_tracker",
     "WorkflowConfig",

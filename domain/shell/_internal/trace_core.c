@@ -37,6 +37,12 @@
  * (so every shared function becomes __device__); gcc defines neither
  * (so it expands to nothing). Everything else in this file is the same
  * instruction stream on both engines. */
+/* gcc declares the math builtins (runner gcc on ubuntu-26.04+ errors on
+ * implicit declarations); NVRTC predefines __CUDACC__ and keeps its own. */
+#ifndef __CUDACC__
+#include <math.h>
+#endif
+
 #ifdef __CUDACC__
 #define SLO_Q __device__
 #else

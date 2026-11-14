@@ -98,6 +98,20 @@ bookkeeping: `update-index`, `diff-files`, `ls-files`, `write-tree`).
 4. The card's original options ("disable restart-GC" / "auto-stash before GC")
    are moot: there is no restart-GC (evidence above) and therefore no GC hook
    to attach a stash to. The glob-sweep rule replaces both.
+5. **The mechanism for point 2 is `scripts/prune-worktrees.sh`** (landed
+   `9eda5288f`, 2026-11-13) — use it instead of hand-running
+   `git worktree remove` across a set. It never takes a name pattern: targets
+   come from `git worktree list` (or explicit `--path`), and a worktree is
+   prunable only when three independent gates all pass —
+   **git's own cleanliness gate** (removal runs *without* `--force`, so git
+   itself refuses modified/untracked trees), **liveness** (`/proc/*/cwd`, so a
+   session parked at a prompt is not read as idle), and **recency**
+   (`--max-age` minutes, default 60). It **dry-runs by default**; `--apply`
+   performs removals. Removing a worktree never touches its branch or any
+   commit — only uncommitted changes are at risk, which is what the gates
+   protect. Measured the day it landed: 115 → 33 worktrees, 98% → 78% disk
+   (~21 GB back), 0 failures, 1,019 branches intact.
+
 
 ## Recovery runbook
 
