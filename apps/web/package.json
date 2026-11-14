@@ -39,7 +39,7 @@
     "ci:e2e": "npm run build && npm run e2e:vite"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.7.1",
+    "@hookform/resolvers": "^7.0.5",
     "@react-three/fiber": "^9.8.2",
     "@sloughgpt/strui": "file:../../packages/strui",
     "@vitejs/plugin-react": "^6.1.1",
