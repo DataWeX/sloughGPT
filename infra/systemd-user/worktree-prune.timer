@@ -1,0 +1,19 @@
+# Timer half of the worktree prune reporter (see worktree-prune.service).
+#
+# Weekly, not hourly: the artifact it reports on accumulates over days, and a
+# frequent reaper-shaped timer is exactly the pattern the incident notes warn
+# about — even though this one only reports.
+#
+# Persistent=true catches up after laptop sleep, so the digest is not silently
+# skipped on a machine that was off at the scheduled moment.
+[Unit]
+Description=Report on idle git worktrees weekly (dry run, never removes)
+
+[Timer]
+OnBootSec=15min
+OnUnitInactiveSec=7d
+AccuracySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
