@@ -13,7 +13,7 @@ import time as _time
 import wave
 
 import numpy as np
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import (
@@ -63,6 +63,7 @@ class VoiceRouter:
             "/tts", self.text_to_speech, methods=["POST"], response_model=TTSResponse
         )
         self.router.add_api_route("/status", self.voice_status, methods=["GET"])
+        self.router.add_api_route("/stt", self.speech_to_text, methods=["POST"])
 
     @endpoint("voice.tts")
     async def text_to_speech(
@@ -133,12 +134,57 @@ class VoiceRouter:
             return success_response(
                 data={
                     "server_tts": True,
+                    "server_stt": self._stt_available(),
                     "capabilities": status.get("capabilities", []),
                     "loaded": status,
                 }
             )
         except Exception as e:
             classify_and_raise(e, source="voice.status")
+
+    @staticmethod
+    def _stt_available() -> bool:
+        """Best-effort check that a server-side speech recognizer can be used."""
+        try:
+            from domain.voice import get_speech_recognizer
+
+            recognizer = get_speech_recognizer(use_server=True)
+            return recognizer is not None
+        except Exception:
+            return False
+
+    @endpoint("voice.stt")
+    async def speech_to_text(
+        self,
+        audio: UploadFile = File(...),
+        language: str = Form("en"),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Convert uploaded audio to text using a server-side recognizer."""
+        try:
+            data = await audio.read()
+            if not data or len(data) < 100:
+                raise_error("Audio too short or empty", "E_BAD_REQUEST", status_code=400)
+
+            from domain.voice import get_speech_recognizer
+
+            recognizer = get_speech_recognizer(use_server=True)
+            result = await asyncio.to_thread(recognizer.recognize, data, language)
+            safe_audit_log(
+                "voice.stt",
+                resource=result.text[:80] or "no-transcript",
+                detail=f"confidence={result.confidence:.2f} valid={result.is_valid}",
+            )
+            return success_response(
+                data={
+                    "text": result.text,
+                    "confidence": result.confidence,
+                    "is_valid": result.is_valid,
+                    "language": result.language,
+                }
+            )
+        except Exception as e:
+            classify_and_raise(e, source="voice.speech_to_text")
 
 
 router = VoiceRouter().router

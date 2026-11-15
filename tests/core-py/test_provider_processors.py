@@ -695,7 +695,11 @@ class TestUpdatePersonalityTraits:
 
 
 class TestConsciousnessProcessor:
-    """Reflection narrative -> system message (card 243016c3, CONSCIOUSNESS_PROC)."""
+    """Reflection narrative -> tail context on the last user turn (card 20261114_092948).
+
+    Was "prepend as leading system message" (card 243016c3); the system-head
+    placement let the 0.5B model answer the narrative instead of the user.
+    """
 
     async def test_empty_narrative_noop(self):
         proc = ConsciousnessProcessor()
@@ -704,13 +708,63 @@ class TestConsciousnessProcessor:
         proc_ws = ConsciousnessProcessor(narrative="   \n")
         assert await proc_ws.process(msgs) == msgs
 
-    async def test_injects_narrative_as_leading_system_message(self):
+    async def test_attaches_narrative_as_tail_context(self):
         proc = ConsciousnessProcessor(narrative="Curious about compilers.")
-        msgs = [{"role": "user", "content": "hi"}]
+        msgs = [
+            {"role": "system", "content": "persona"},
+            {"role": "user", "content": "first question"},
+            {"role": "assistant", "content": "answer"},
+            {"role": "user", "content": "hi"},
+        ]
         result = await proc.process(msgs)
-        assert result[0]["role"] == "system"
-        assert "Curious about compilers." in result[0]["content"]
-        assert result[1:] == msgs
+        # No new message at the head — same length, same role sequence.
+        assert len(result) == len(msgs)
+        assert [m["role"] for m in result] == [m["role"] for m in msgs]
+        # Narrative rides AFTER the question on the last user turn, framed
+        # as advisory context (not a question to answer).
+        assert result[-1]["content"].startswith("hi")
+        assert "Curious about compilers." in result[-1]["content"]
+        assert "[SELF-REFLECTION" in result[-1]["content"]
+        # The prompt head stays byte-identical — cross-turn KV reuse.
+        assert result[0] == msgs[0]
+        # Non-mutating: the input list/dict is untouched.
+        assert msgs[-1]["content"] == "hi"
+
+    async def test_no_user_turn_leaves_messages_unchanged(self):
+        # Advisory: with no user turn to attach to, the narrative is skipped,
+        # never re-promoted to the head (the placement this card removed).
+        proc = ConsciousnessProcessor(narrative="Curious about compilers.")
+        msgs = [{"role": "system", "content": "persona"}]
+        assert await proc.process(msgs) == msgs
+
+    def test_sanitizer_strips_belief_number_dump(self):
+        # The verbatim parrot material from live probes (card 20261114_092948).
+        narrative = (
+            "I have processed 104 experiences. My current beliefs: competence=1.00, "
+            "helpfulness=1.00, creativity=0.50, accuracy=0.79, empathy=0.56. "
+            "Average growth rate: +0.036. I feel relatively static — no strong growth signal."
+        )
+        out = ConsciousnessProcessor._sanitize(narrative)
+        # Identity sentence + qualitative trajectory survive.
+        assert "I have processed 104 experiences." in out
+        assert "relatively static" in out
+        # Numbers and the belief/growth segments are gone.
+        assert "competence" not in out
+        assert "1.00" not in out
+        assert "0.036" not in out
+        assert "Average growth rate" not in out
+
+    def test_sanitizer_caps_overlong_narrative(self):
+        narrative = "This is a sentence about my inner life. " * 40
+        out = ConsciousnessProcessor._sanitize(narrative)
+        assert len(out) <= ConsciousnessProcessor._MAX_NARRATIVE_CHARS + 10  # + " [...]"
+        assert out.endswith("[...]")
+
+    async def test_pure_belief_dump_skips_injection(self):
+        # Nothing safe left after sanitization -> injection is skipped.
+        proc = ConsciousnessProcessor(narrative="My current beliefs: competence=1.00.")
+        msgs = [{"role": "user", "content": "hi"}]
+        assert await proc.process(msgs) == msgs
 
     def test_set_narrative(self):
         proc = ConsciousnessProcessor(narrative="old")

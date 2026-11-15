@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Add API server to path
-api_server = Path(__file__).resolve().parent.parent.parent.parent / "apps" / "api" / "server"
+api_server = Path(__file__).resolve().parent.parent.parent / "apps" / "api" / "server"
 if str(api_server) not in sys.path:
     sys.path.insert(0, str(api_server))
 
