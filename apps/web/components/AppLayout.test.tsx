@@ -44,6 +44,9 @@ vi.mock('@/components/BottomNav', () => ({
 }))
 
 vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="status-bar" /> }))
+vi.mock('@/components/WorkspaceSwitcher', () => ({
+  WorkspaceSwitcher: () => <div data-testid="workspace-switcher" />,
+}))
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...classes: any[]) => classes.filter(Boolean).join(' '),
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,

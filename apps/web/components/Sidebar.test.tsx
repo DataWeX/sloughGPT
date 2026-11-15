@@ -14,6 +14,20 @@ vi.mock('@/hooks/useLocale', () => ({
 
 vi.mock('./ThemeSwitcher', () => ({ ThemeSwitcher: () => <div data-testid="theme-switcher" /> }))
 
+vi.mock('@/lib/auth', () => ({
+  useAuthStore: (selector?: (s: any) => any) => {
+    const state = {
+      workspaces: [
+        { id: 'ws-1', name: 'Alpha', description: '' },
+        { id: 'ws-2', name: 'Beta', description: '' },
+      ],
+      currentWorkspace: { id: 'ws-1', name: 'Alpha', description: '' },
+      switchWorkspace: vi.fn(),
+    }
+    return selector ? selector(state) : state
+  },
+}))
+
 vi.mock('./consciousness/ConsciousnessSidebarWidget', () => ({
   ConsciousnessSidebarWidget: () => null,
 }))
@@ -93,5 +107,25 @@ describe('Sidebar', () => {
     render(<Sidebar variant="drawer" collapsed />)
     expect(screen.getByText('nav.chat')).toBeDefined()
     expect(screen.getByText('nav.section.core')).toBeDefined()
+  })
+
+  it('renders the workspace switcher in the sidebar header area', () => {
+    render(<Sidebar />)
+    // multi-workspace session → trigger shows the current workspace name
+    // (the hidden dropdown repeats the name, so isolate the trigger itself)
+    const trigger = screen
+      .getAllByRole('button', { name: /Alpha/ })
+      .find((b) => b.parentElement?.classList.contains('group'))
+    expect(trigger).toBeDefined()
+    expect(trigger).toHaveTextContent('Alpha')
+  })
+
+  it('renders the switcher icon-only when collapsed, with expand affordance', () => {
+    const onToggleCollapse = vi.fn()
+    render(<Sidebar collapsed onToggleCollapse={onToggleCollapse} />)
+    const trigger = screen.getByRole('button', { name: /switch workspace/i })
+    expect(trigger).toBeDefined()
+    expect(screen.queryByText('Alpha')).toBeNull()
+    expect(screen.queryByTestId('icon-chevron')).toBeNull()
   })
 })

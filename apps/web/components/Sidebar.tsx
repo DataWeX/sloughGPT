@@ -5,6 +5,7 @@ import { usePathname } from '@/vite/next-compat/navigation'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconClose } from '@/components/icons/NavIcons'
 import { ManMark } from '@/components/brand/ManMark'
+import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { TrainingIndicator } from './TrainingIndicator'
@@ -27,7 +28,7 @@ export type SidebarProps = {
 export function Sidebar({
   variant = 'desktop',
   collapsed = false,
-  onToggleCollapse: _onToggleCollapse,
+  onToggleCollapse,
   onNavigate,
   onClose,
 }: SidebarProps) {
@@ -88,6 +89,20 @@ export function Sidebar({
               </div>
             )}
           </Link>
+        </div>
+
+        {/* Workspace switcher — the inline switcher What's New advertises.
+            Desktop sidebar + mobile drawer both route through here; the
+            mobile header keeps its own instance for small screens. Collapsed
+            rail is only 3rem wide and overflow-hidden, so it renders
+            icon-only and expands the nav on click. */}
+        <div
+          className={cn(
+            'shrink-0 border-b border-border/30 dark:border-border/50 py-2',
+            isCollapsed ? 'flex w-fit justify-center px-2' : 'px-3',
+          )}
+        >
+          <WorkspaceSwitcher collapsed={isCollapsed} onExpand={onToggleCollapse} />
         </div>
 
         <nav
