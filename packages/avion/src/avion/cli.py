@@ -10,6 +10,7 @@ Usage::
     avion snapshot
     avion click "#send"            # --by css|text|testid|label|role|xpath [--nth N]
                                    # multi-match: identify the set, click every rendered match
+    avion --widget click "#send"   # same, with the live-state panel in the page
     avion fill "input[name=q]" "hello"
     avion wait "Start Training" --timeout 15
     avion shot page.png
@@ -36,6 +37,9 @@ Environment: AVION_CDP_URL overrides the debug endpoint
 user namespaces add ``--no-sandbox --password-store=basic`` so
 navigation cannot stall — and ``pip install websockets``.
 AVION_STATE_DIR relocates the capture store (default: $TMPDIR/avion).
+AVION_WIDGET=1 (or the global ``--widget`` flag) shows the live-state
+overlay panel in the page — match set, hidden/clicked flags, recording
+badge; it never appears in ``shot`` captures.
 """
 
 from __future__ import annotations
@@ -48,6 +52,7 @@ import os
 import shlex
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -176,11 +181,18 @@ def _locator(value: str, by: str):
 # ── commands ────────────────────────────────────────────────────────────
 
 
-async def _cmd_open(b, url: str) -> int:
+async def _cmd_open(b, url: str, widget=None) -> int:
     await b.navigate(url)
     await b.wait_for_timeout(400)
     title = await b.get_title()
-    print(f"{await b.get_url()}  ({title})")
+    final_url = await b.get_url()
+    print(f"{final_url}  ({title})")
+    # Push AFTER the navigation: this is the self-healing re-injection —
+    # the new page gets the panel with its first frame, no listener needed.
+    await _push(
+        widget,
+        {"action": "open", "url": final_url, "title": title, "ts": _now(), "code": 0},
+    )
     return 0
 
 
@@ -242,6 +254,42 @@ async def _fail_missing(b, value: str, by: str) -> int:
     return code
 
 
+def _widget_enabled(args: argparse.Namespace) -> bool:
+    """Whether the live-state widget overlay is on for this invocation."""
+    return bool(getattr(args, "widget", False)) or os.environ.get("AVION_WIDGET") == "1"
+
+
+def _widget_bridge(b, enabled: bool):
+    """A WidgetBridge over ``b`` when the widget is on, else None.
+
+    Backends without ``evaluate`` (pre-overlay fakes) simply get no
+    widget — the overlay is debug sugar, never a capability requirement.
+    """
+    if not enabled or not hasattr(b, "evaluate"):
+        return None
+    from avion.interact.widget import WidgetBridge
+
+    return WidgetBridge(b)
+
+
+async def _push(widget, frame: dict[str, Any]) -> None:
+    """Push one state frame; a None widget (off) is the common case."""
+    if widget is not None:
+        await widget.push(frame)
+
+
+def _now() -> str:
+    return time.strftime("%H:%M:%S")
+
+
+async def _quiet_eval(b, expr: str) -> None:
+    """Evaluate best-effort: capture hygiene must never fail a verb."""
+    try:
+        await b.evaluate(expr)
+    except Exception:
+        pass
+
+
 async def _resolve_matches(b, loc) -> list:
     """Every match for ``loc`` — the identify-first input of ``click``.
 
@@ -270,7 +318,14 @@ def _rendered(el) -> bool:
     return getattr(el, "is_visible", True) is not False
 
 
-async def _cmd_click(b, value: str, by: str, nth: int | None = None) -> tuple[int, list]:
+async def _cmd_click(
+    b,
+    value: str,
+    by: str,
+    nth: int | None = None,
+    widget=None,
+    recording: bool = False,
+) -> tuple[int, list]:
     """Click the resolved match set — identify first, then act.
 
     Every match is resolved and reported BEFORE the first click (the
@@ -292,12 +347,52 @@ async def _cmd_click(b, value: str, by: str, nth: int | None = None) -> tuple[in
     Returns ``(exit code, elements actually clicked)`` — the hit list
     feeds per-hit recording in ``_dispatch``; empty on failure. A unique
     match keeps the pre-multi output byte for byte.
+
+    With ``widget``, one frame is pushed at the exit mirroring the
+    identify block exactly (same ``provenance()`` strings, same ordinals,
+    ``clicked``/``hidden`` flags) — the on-screen twin of stdout. The
+    frame is built only when the overlay is on: zero cost when off.
     """
     loc = _locator(value, by)
     elements = await _resolve_matches(b, loc)
     if not elements:
-        return await _fail_missing(b, value, by), []
+        code = await _fail_missing(b, value, by)
+        await _push(
+            widget,
+            {
+                "action": "click",
+                "by": by,
+                "value": value,
+                "ts": _now(),
+                "recording": recording,
+                "code": code,
+                "error": "no match",
+                "matches": [],
+            },
+        )
+        return code, []
     total = len(elements)
+
+    frame: dict[str, Any] | None = None
+    if widget is not None:
+        frame = {
+            "action": "click",
+            "by": by,
+            "value": value,
+            "nth": nth,
+            "ts": _now(),
+            "recording": recording,
+            "code": 0,
+            "matches": [
+                {
+                    "n": i + 1,
+                    "desc": el.provenance(),
+                    "hidden": not _rendered(el),
+                    "clicked": False,
+                }
+                for i, el in enumerate(elements)
+            ],
+        }
 
     if total > 1:
         # Identify the whole set BEFORE touching the page.
@@ -307,16 +402,27 @@ async def _cmd_click(b, value: str, by: str, nth: int | None = None) -> tuple[in
 
     if nth is not None:
         if not 1 <= nth <= total:
-            return _fail(f"--nth {nth} out of range: {value!r} matched {total}"), []
+            code = _fail(f"--nth {nth} out of range: {value!r} matched {total}")
+            if frame is not None:
+                frame["code"] = code
+                frame["error"] = f"--nth {nth} out of range"
+                await _push(widget, frame)
+            return code, []
         picked = [elements[nth - 1]]
         await b.click(picked[0])
         print(f"clicked {by}: {value} → {picked[0].provenance()}")
+        if frame is not None:
+            frame["matches"][nth - 1]["clicked"] = True
+            await _push(widget, frame)
         return 0, picked
 
     if total == 1:
         # Unique match: pre-multi behaviour, byte for byte.
         await b.click(elements[0])
         print(f"clicked {by}: {value} → {elements[0].provenance()}")
+        if frame is not None:
+            frame["matches"][0]["clicked"] = True
+            await _push(widget, frame)
         return 0, elements
 
     rendered = [i for i, el in enumerate(elements) if _rendered(el)]
@@ -327,6 +433,10 @@ async def _cmd_click(b, value: str, by: str, nth: int | None = None) -> tuple[in
         )
         await b.click(elements[0])
         print(f"clicked {by}: {value} → {elements[0].provenance()}")
+        if frame is not None:
+            frame["matches"][0]["clicked"] = True
+            frame["note"] = f"all {total} hidden \u2014 clicked first match anyway"
+            await _push(widget, frame)
         return 0, [elements[0]]
 
     rendered_set = set(rendered)
@@ -340,27 +450,78 @@ async def _cmd_click(b, value: str, by: str, nth: int | None = None) -> tuple[in
         await b.click(el)
         hits.append(el)
         print(f"clicked {by}: {value} → {el.provenance()}")
+    if frame is not None:
+        # Identity, not index: hits are the same objects, in execution order.
+        hit_ids = {id(el) for el in hits}
+        for row, el in zip(frame["matches"], elements):
+            row["clicked"] = id(el) in hit_ids
+        await _push(widget, frame)
     return 0, hits
 
 
-async def _cmd_fill(b, value: str, text: str, by: str) -> int:
+async def _cmd_fill(b, value: str, text: str, by: str, widget=None) -> int:
     element = await b.find_element(_locator(value, by))
     if element is None:
-        return await _fail_missing(b, value, by)
+        code = await _fail_missing(b, value, by)
+        await _push(
+            widget,
+            {
+                "action": "fill",
+                "by": by,
+                "value": value,
+                "ts": _now(),
+                "code": code,
+                "error": "no match",
+            },
+        )
+        return code
     await b.fill(element, text)
     print(f"filled {by}: {value} → {element.provenance()}")
+    # The filled text goes to the panel (this screen, this run) but never
+    # into recordings — flow events carry value LENGTH only, as before.
+    await _push(
+        widget,
+        {"action": "fill", "by": by, "value": value, "text": text, "ts": _now(), "code": 0},
+    )
     return 0
 
 
-async def _cmd_wait(b, text: str, timeout: float) -> int:
+async def _cmd_wait(b, text: str, timeout: float, widget=None) -> int:
     if await b.wait_for_text(text, timeout=timeout):
         print(f"found: {text}")
+        await _push(widget, {"action": "wait", "value": text, "ts": _now(), "code": 0})
         return 0
-    return _fail(f"timeout after {timeout}s: {text!r} not on page")
+    code = _fail(f"timeout after {timeout}s: {text!r} not on page")
+    await _push(
+        widget,
+        {"action": "wait", "value": text, "ts": _now(), "code": code, "error": "timeout"},
+    )
+    return code
 
 
-async def _cmd_shot(b, path: str) -> int:
-    data = await b.screenshot()
+async def _cmd_shot(b, path: str, widget=None) -> int:
+    """Screenshot with capture hygiene — the panel never lands in a capture.
+
+    Hide/restore run unconditionally when the backend can evaluate: a
+    plain ``shot`` after ``--widget open`` must not capture the panel
+    either. Both expressions are no-ops on a page without the panel, and
+    failures are swallowed — a capture must never fail over the overlay.
+    The ``widget`` bridge is used when given (it self-disables on
+    failure); otherwise the expressions are evaluated quietly.
+    """
+    from avion.interact.widget import _HIDE_EXPR, _RESTORE_EXPR
+
+    if widget is not None:
+        await widget.hide()
+    elif hasattr(b, "evaluate"):
+        await _quiet_eval(b, _HIDE_EXPR)
+    try:
+        data = await b.screenshot()
+    finally:
+        if widget is not None:
+            await widget.restore()
+        elif hasattr(b, "evaluate"):
+            await _quiet_eval(b, _RESTORE_EXPR)
     with open(path, "wb") as fh:
         fh.write(data)
     print(f"wrote {path} ({len(data)} bytes)")
@@ -398,12 +559,14 @@ async def _cmd_network(b, as_json: bool, history: list[dict[str, Any]] | None = 
     return 0
 
 
-async def _repl_loop(backend, recorder=None, session=None) -> None:
+async def _repl_loop(backend, recorder=None, session=None, widget=None) -> None:
     """Read verb-args lines until quit — shared by ``repl`` and ``record``.
 
     Teardown belongs to the caller (each command finalizes its own artifacts);
     this only drives dispatch, so recording gets the exact same verb
-    semantics as a plain REPL session.
+    semantics as a plain REPL session. The widget is created by the CALLER
+    and passed in: ``repl`` enables it, ``record`` never does (its frame
+    captures must stay widget-free).
     """
     while True:
         try:
@@ -421,7 +584,12 @@ async def _repl_loop(backend, recorder=None, session=None) -> None:
             break
         try:
             code = await _dispatch(
-                backend, shlex.split(line), in_session=True, recorder=recorder, session=session
+                backend,
+                shlex.split(line),
+                in_session=True,
+                recorder=recorder,
+                session=session,
+                widget=widget,
             )
         except SystemExit as e:
             code = int(e.code or 1)
@@ -429,7 +597,7 @@ async def _repl_loop(backend, recorder=None, session=None) -> None:
             print(f"(exit {code})")
 
 
-async def _cmd_repl(cdp_url: str, record_path: str | None = None) -> int:
+async def _cmd_repl(cdp_url: str, record_path: str | None = None, widget_enabled: bool = False) -> int:
     """Persistent session: read verb-args lines until quit."""
     from avion.backends.cdp import CdpBackend
 
@@ -448,8 +616,15 @@ async def _cmd_repl(cdp_url: str, record_path: str | None = None) -> int:
         print(f"avion repl — connected to {cdp_url} (quit to exit) — RECORDING -> {record_path}")
     else:
         print(f"avion repl — connected to {cdp_url} (quit to exit)")
+    # The overlay appears immediately (not after the first verb) and every
+    # subsequent push re-injects it if the page navigated away.
+    widget = _widget_bridge(backend, widget_enabled)
+    await _push(
+        widget,
+        {"action": "connected", "ts": _now(), "recording": recorder is not None},
+    )
     try:
-        await _repl_loop(backend, recorder=recorder)
+        await _repl_loop(backend, recorder=recorder, widget=widget)
     finally:
         await backend.stop()
         _persist_events(cdp_url, backend)
@@ -499,17 +674,19 @@ def _hit_rect(session, el) -> dict[str, Any] | None:
 
 
 async def _dispatch(
-    backend, argv: list[str], in_session: bool = False, recorder=None, session=None
+    backend, argv: list[str], in_session: bool = False, recorder=None, session=None, widget=None
 ) -> int:
     """Run one command against an existing backend (repl/record path).
 
     ``session`` is a RecordingSession: when present, replayable events are
     stamped with the shared clock (``_t_ns``) and click/fill resolve their
-    element rect so box derivation has per-event geometry.
+    element rect so box derivation has per-event geometry. ``widget`` (when
+    the caller enabled the live-state overlay) receives one frame per verb;
+    ``recording`` tells the frame whether an EventRecorder is running.
     """
     verb, rest = argv[0], argv[1:]
     if verb == "open" and len(rest) >= 1:
-        code = await _cmd_open(backend, rest[0])
+        code = await _cmd_open(backend, rest[0], widget=widget)
         rec = _replayable(recorder, code)
         if rec is not None:
             rec.record(EventType.NAVIGATE, name=rest[0], data=_stamp(session))
@@ -519,7 +696,9 @@ async def _dispatch(
     if verb == "click" and len(rest) >= 1:
         by, rest = _pop_by(rest)
         nth, rest = _pop_nth(rest)
-        code, hits = await _cmd_click(backend, rest[0], by, nth)
+        code, hits = await _cmd_click(
+            backend, rest[0], by, nth, widget=widget, recording=recorder is not None
+        )
         rec = _replayable(recorder, code)
         if rec is not None:
             loc = _locator(rest[0], by)
@@ -547,7 +726,7 @@ async def _dispatch(
         return code
     if verb == "fill" and len(rest) >= 2:
         by, rest = _pop_by(rest)
-        code = await _cmd_fill(backend, rest[0], rest[1], by)
+        code = await _cmd_fill(backend, rest[0], rest[1], by, widget=widget)
         rec = _replayable(recorder, code)
         if rec is not None:
             loc = _locator(rest[0], by)
@@ -564,7 +743,7 @@ async def _dispatch(
             i = rest.index("--timeout")
             timeout = float(rest[i + 1])
             rest = rest[:i] + rest[i + 2 :]
-        code = await _cmd_wait(backend, rest[0], timeout)
+        code = await _cmd_wait(backend, rest[0], timeout, widget=widget)
         rec = _replayable(recorder, code)
         if rec is not None:
             from avion.core.element import ElementLocator
@@ -580,7 +759,7 @@ async def _dispatch(
             )
         return code
     if verb == "shot" and len(rest) >= 1:
-        return await _cmd_shot(backend, rest[0])
+        return await _cmd_shot(backend, rest[0], widget=widget)
     if verb == "console":
         return await _cmd_console(backend, "--errors" in rest, "--json" in rest)
     if verb == "network":
@@ -1051,6 +1230,13 @@ async def _cmd_record(args: argparse.Namespace) -> int:
         return 2
 
     recorder = EventRecorder(session_name=f"record:{session.recording_id}")
+    # Capture mode: the frame loop screenshots via the session, not via
+    # _cmd_shot — hide any panel a previous --widget run left on the page.
+    # It stays hidden (record verbs carry no widget), and the next
+    # --widget push's render() unhides it.
+    from avion.interact.widget import _HIDE_EXPR
+
+    await _quiet_eval(backend, _HIDE_EXPR)
     summary: dict[str, Any] = {"ok": False, "error": "recording never began"}
     fatal: str = ""
     try:
@@ -1091,6 +1277,15 @@ async def _cmd_record(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="avion", description="Drive a debuggable Chromium over CDP.")
     p.add_argument("--cdp", default=_DEFAULT_CDP, help="CDP websocket endpoint")
+    p.add_argument(
+        "--widget",
+        action="store_true",
+        help=(
+            "show the live-state widget overlay in the page: match set with "
+            "ordinals, hidden/clicked flags, recording badge (also AVION_WIDGET=1; "
+            "never appears in shot captures)"
+        ),
+    )
     sub = p.add_subparsers(dest="cmd")
 
     sp = sub.add_parser("open", help="navigate to a URL")
@@ -1340,7 +1535,9 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 0
     if args.cmd == "repl":
-        return asyncio.run(_cmd_repl(args.cdp, record_path=args.record))
+        return asyncio.run(
+            _cmd_repl(args.cdp, record_path=args.record, widget_enabled=_widget_enabled(args))
+        )
     if args.cmd == "record":
         return asyncio.run(_cmd_record(args))
     if args.cmd == "stop":
@@ -1359,19 +1556,23 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_cmd_cockpit(args))
 
     async def run(b) -> int:
+        # One-shot commands share the overlay when enabled: the bridge is
+        # created here (per session), pushes happen inside the _cmd_* verbs
+        # so the one-shot and repl paths cannot drift apart.
+        w = _widget_bridge(b, _widget_enabled(args))
         if args.cmd == "open":
-            return await _cmd_open(b, args.url)
+            return await _cmd_open(b, args.url, widget=w)
         if args.cmd == "snapshot":
             return await _cmd_snapshot(b)
         if args.cmd == "click":
-            code, _hits = await _cmd_click(b, args.selector, args.by, nth=args.nth)
+            code, _hits = await _cmd_click(b, args.selector, args.by, nth=args.nth, widget=w)
             return code
         if args.cmd == "fill":
-            return await _cmd_fill(b, args.selector, args.text, args.by)
+            return await _cmd_fill(b, args.selector, args.text, args.by, widget=w)
         if args.cmd == "wait":
-            return await _cmd_wait(b, args.text, args.timeout)
+            return await _cmd_wait(b, args.text, args.timeout, widget=w)
         if args.cmd == "shot":
-            return await _cmd_shot(b, args.path)
+            return await _cmd_shot(b, args.path, widget=w)
         if args.cmd == "console":
             history = _load_events(args.cdp)["console"]
             return await _cmd_console(b, args.errors, args.json, history=history)
