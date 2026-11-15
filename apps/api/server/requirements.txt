@@ -13,6 +13,6 @@ Pillow>=13.0.0
 kaggle>=2.2.5
 
 # Model Export
-onnx>=1.15.0
+onnx>=1.23.2
 gguf>=0.10.0
 safetensors>=0.4.0
