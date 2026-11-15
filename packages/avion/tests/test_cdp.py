@@ -347,6 +347,77 @@ def test_cli_click_state_persists_across_invocations(chromium_ws, http_url, caps
     assert asyncio.run(check()) is True
 
 
+def test_cli_click_logs_resolved_element(chromium_ws, http_url, capsys):
+    """click reports the element the resolution site hit — tag#id, content, rect."""
+    from avion.cli import main
+
+    assert main(["--cdp", chromium_ws, "open", http_url]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "click", "#go"]) == 0
+    out = capsys.readouterr().out
+    assert "clicked css: #go → button#go 'Go' @" in out
+    assert " (match" not in out  # unique css match: no ordinal noise
+
+
+def test_cli_fill_logs_resolved_element(chromium_ws, http_url, capsys):
+    from avion.cli import main
+
+    assert main(["--cdp", chromium_ws, "open", http_url]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "fill", "input[name=q]", "hello"]) == 0
+    out = capsys.readouterr().out
+    assert "filled css: input[name=q] → input @" in out
+
+
+def test_cli_text_click_logs_match_ordinal(chromium_ws, tmp_path, capsys):
+    """Two elements match the text: the log says WHICH one was hit (1 of 2)."""
+    from avion.cli import main
+
+    page = tmp_path / "ambig.html"
+    page.write_text(
+        "<!doctype html><title>Ambig</title><body>"
+        "<button id='a'>Go</button><button id='b'>Go</button></body>"
+    )
+    assert main(["--cdp", chromium_ws, "open", page.as_uri()]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "click", "--by", "text", "Go"]) == 0
+    out = capsys.readouterr().out
+    assert "clicked text: Go → button#a 'Go' @" in out
+    assert "(match 1/2)" in out
+
+
+def test_cli_miss_prints_near_miss_report(chromium_ws, tmp_path, capsys):
+    """Not-found explains WHY: candidates containing the text + rejection reasons."""
+    from avion.cli import main
+
+    page = tmp_path / "near.html"
+    page.write_text(
+        "<!doctype html><title>Near</title><body>"
+        "<div id='a'>Dismiss <div id='b'>Dismiss b <div id='c'>c</div></div></div>"
+        "<div id='d'>Dismiss here <span id='e'>e</span></div></body>"
+    )
+    assert main(["--cdp", chromium_ws, "open", page.as_uri()]) == 0
+    assert main(["--cdp", chromium_ws, "click", "--by", "text", "Dismiss"]) == 1
+    err = capsys.readouterr().err
+    assert "element not found (text): Dismiss" in err
+    assert "near-miss:" in err
+    # every element containing the needle is a non-leaf — all three listed
+    assert "3 candidate(s), none matched" in err
+    assert "<div#a>" in err and "<div#b>" in err and "<div#d>" in err
+    assert "has child elements (not a leaf)" in err
+
+
+def test_cli_role_strategy_reports_unsupported(chromium_ws, http_url, capsys):
+    """A strategy the backend cannot resolve says so instead of a bare miss."""
+    from avion.cli import main
+
+    assert main(["--cdp", chromium_ws, "open", http_url]) == 0
+    assert main(["--cdp", chromium_ws, "click", "--by", "role", "button"]) == 1
+    err = capsys.readouterr().err
+    assert "element not found (role): button" in err
+    assert "unsupported by this backend" in err
+
+
 def test_cli_module_invocation():
     """python -m avion --help works as a subprocess (packaging check)."""
     src = str(Path(__file__).resolve().parents[1] / "src")

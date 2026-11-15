@@ -28,6 +28,12 @@
 /* SLO_Q is the single target-specific token: NVRTC defines __CUDACC__,
  * so helpers compile as __device__ there and as plain static inline
  * under gcc. The entry points diverge once, at the bottom. */
+/* gcc declares the math builtins (runner gcc on ubuntu-26.04+ errors on
+ * implicit declarations); NVRTC predefines __CUDACC__ and keeps its own. */
+#ifndef __CUDACC__
+#include <math.h>
+#endif
+
 #ifdef __CUDACC__
 #define SLO_Q __device__
 #else
