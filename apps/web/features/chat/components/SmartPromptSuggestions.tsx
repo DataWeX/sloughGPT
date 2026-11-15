@@ -201,14 +201,14 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Template name..."
-            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           />
           <textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
             placeholder="Prompt text..."
             aria-label="Prompt text"
-            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset resize-none"
             rows={3}
           />
           <div className="flex gap-1">

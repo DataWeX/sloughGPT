@@ -15,7 +15,7 @@ if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 from infrastructure.auth import require_auth_if_enabled
-from routers.api_keys import ApiKeyManager, ApiKeysRouter
+from routers.settings import ApiKeyManager, ApiKeysRouter
 
 
 @pytest.fixture

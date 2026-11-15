@@ -14,19 +14,10 @@ number the VM does not itself define.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-from domain.shared import find_repo_root
-
-_CORE_DIR = str(find_repo_root(Path(__file__).resolve()) / "packages" / "core-py")
-if _CORE_DIR not in sys.path:
-    sys.path.insert(0, _CORE_DIR)
-
 from domain.shell._internal.vm import (  # noqa: E402
     X86SyscallHandler,
 )
-from domain.shell._internal.vm_programs import CAVE_GAME_ASM  # noqa: E402
+from domain.shell._internal.vm_programs import CAVE_GAME_ASM, LIFE_ASM  # noqa: E402
 
 
 def _syscall_num(name: str) -> int:
@@ -1829,6 +1820,11 @@ BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "factorial": {"description": "Compute 6! = 720, display the result", "program": _factorial},
     "guess": {"description": "Number guessing game (keyboard input)", "program": _guess},
     "rainbow": {"description": "Rainbow colored 'HELLO VM!' text (VGA)", "program": _rainbow},
+    "life": {
+        "description": "Conway's Game of Life — 60x20 board, validated lives prompt "
+        "(needs --steps=1000000 for a full batch run)",
+        "program": lambda: LIFE_ASM,
+    },
     "train": {
         "description": "Launch a training job via SYS_TRAIN_START (requires ADMIN role)",
         "program": _train,

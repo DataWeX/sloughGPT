@@ -1,4 +1,4 @@
-"""Tests for the companion API router (routers/companion.py).
+"""Tests for the companion API router (routers/souls.py — merged from companion.py, card 20261101_154055).
 
 Covers: CompanionRouter get/set/patch/reset preset/prompt/chat/presets.
 All domain calls are mocked; only HTTP-level behavior is tested.
@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.companion import router  # noqa: E402
+from routers.souls import router  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,8 +38,8 @@ _TRAIT_KEYS = ("name", "warmth", "curiosity", "creativity", "confidence", "humor
 def _make_companion(**overrides):
     """Build a fake matching the real CompanionSystem surface.
 
-    The router reads `companion.traits.<field>` (routers/companion.py:214,239)
-    and calls `companion.respond(...)` (:265). The real class exposes both —
+    The router reads `companion.traits.<field>` and calls `companion.respond(...)`
+    (CompanionRouter in routers/souls.py). The real class exposes both —
     a public `traits` attribute (domain/companion/_internal/companion.py:90)
     and `def respond` (:180) — so the fake must too.
     """
@@ -163,7 +163,7 @@ class TestResetCompanion:
 
 
 class TestUsePreset:
-    @patch("routers.companion._get_db")
+    @patch("routers.souls._get_db")
     @patch(PATCH_CREATE)
     @patch(PATCH_GET)
     def test_apply_preset(self, mock_get, mock_create, mock_db):
@@ -194,9 +194,25 @@ class TestGetPrompt:
 
 
 class TestListPresets:
+    @patch("routers.souls._get_db")
     @patch(PATCH_GET)
-    def test_returns_preset_list(self, mock_get):
+    def test_returns_preset_list(self, mock_get, mock_db):
         mock_get.return_value = _make_companion()
+        # Hermetic on purpose: the handler seeds the collection only when it is
+        # empty, then returns whatever is in it. Reading the live collection
+        # made this an exact count of a mutable store -- it drifted 4 -> 5 as
+        # soon as anything else wrote a preset. Stub the four documented
+        # defaults so the assertion means what it says.
+        preset_docs = [
+            {"id": "warm", "name": "Warm Friend"},
+            {"id": "curious", "name": "Curious Friend"},
+            {"id": "playful", "name": "Playful Friend"},
+            {"id": "balanced", "name": "Balanced Friend"},
+        ]
+        mock_col = MagicMock()
+        mock_col.count.return_value = len(preset_docs)
+        mock_col.find.return_value = preset_docs
+        mock_db.return_value.collection.return_value = mock_col
         client = TestClient(_app())
         resp = client.get("/companion/presets")
         assert resp.status_code == 200

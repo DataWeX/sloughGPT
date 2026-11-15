@@ -15,6 +15,7 @@ class IoctlCommand(Enum):
     # Common
     INFO = "INFO"
     LIST_COMMANDS = "LIST_COMMANDS"
+    CAPS = "CAPS"
 
     # TensorDevice
     MATMUL = "MATMUL"

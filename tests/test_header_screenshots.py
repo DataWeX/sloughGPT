@@ -39,8 +39,8 @@ if _AVION_SRC.is_dir() and str(_AVION_SRC) not in sys.path:
 pytest.importorskip("avion")
 pytest.importorskip("playwright")
 
-# Shared pure gate helpers (fast-lane pinned by tests/test_skip_gate_identity.py).
-from tests.skip_gate_identity import WEB_TREE_HEADER, web_tree_id
+# Shared gate helpers (fast-lane pinned by tests/test_skip_gate_identity.py).
+from tests.skip_gate_identity import served_tree_status
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "apps" / "web" / "scripts" / "screenshot_headers.py"
@@ -66,30 +66,19 @@ MIN_UNIQUE_COLORS = 30
 def _web_is_ready() -> tuple[bool, str]:
     """Whether WEB_URL serves THIS checkout's web tree — identity, not port-open.
 
-    The vite dev server announces its checkout via the ``X-Slo-Web-Tree``
-    header (set in apps/web/vite.config.ts from realpath(apps/web), same
-    recipe as ``web_tree_id()``). A server without the header (foreign
-    checkout's vite, a pre-fix server, a static preview) or with a
-    different value is NOT this tree → the module skips instead of
-    capturing a foreign checkout's UI (card 20261029_041801).
+    Delegates to ``served_tree_status`` (card 20261104_085623 extracted the
+    check this module used to carry inline): the vite dev server announces
+    its checkout via the ``X-Slo-Web-Tree`` header (set in
+    apps/web/vite.config.ts from realpath(apps/web), same recipe as
+    ``web_tree_id()``). A server without the header (foreign checkout's
+    vite, a pre-fix server, a static preview) or with a different value is
+    NOT this tree → the module skips instead of capturing a foreign
+    checkout's UI (card 20261029_041801).
     """
-    expected = web_tree_id()
-    try:
-        req = urllib.request.Request(WEB_URL)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            if not (200 <= resp.status < 400):
-                return False, f"{WEB_URL} answered HTTP {resp.status}"
-            served = resp.headers.get(WEB_TREE_HEADER)
-    except Exception as exc:  # noqa: BLE001 — any transport failure = not ready
-        return False, f"no web server on {WEB_URL} ({type(exc).__name__})"
-    if served == expected:
+    status, detail = served_tree_status(WEB_URL)
+    if status == "ok":
         return True, ""
-    return False, (
-        f"{WEB_URL} does not serve this tree (header {WEB_TREE_HEADER}="
-        f"{served!r}, expected {expected!r}) — foreign or pre-fix dev "
-        "server; start this tree's stack (scripts/dev-stack.sh) or set "
-        "SLO_WEB_URL"
-    )
+    return False, detail
 
 
 _WEB_READY, _WEB_SKIP_REASON = _web_is_ready()

@@ -171,7 +171,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
             )}
 
             <textarea
-              className="w-full min-h-[120px] text-sm p-2 rounded-md border border-border bg-background resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full min-h-[120px] text-sm p-2 rounded-md border border-border bg-background resize-y focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               placeholder="Enter instructions for the AI..."
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

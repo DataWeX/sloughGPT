@@ -23,6 +23,7 @@ Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import math
 import os
@@ -44,7 +45,9 @@ try:
     from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
-from domain.slolib._internal.gpu import dispatch_stats
+from domain.infrastructure._internal.pugqeep.singleton import spawn_loop
+from domain.shared._internal.feature_flags import is_enabled
+from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
     is_experience_source,
@@ -207,21 +210,22 @@ def validate_conversation_data(path: str, max_errors: int = 10) -> dict:
     }
 
 
-def prepare_data(data_path, block_size=128, tokenizer=None):
-    """Prepare training data from a text file, feed, or multiple datasets with ratios.
+def load_corpus_text(data_path, block_size=128) -> str:
+    """Resolve a training source to its raw corpus text.
+
+    The single corpus-resolution path: ``prepare_data`` and the API-side
+    tokenizer seam both load through here, so a tokenizer always trains on
+    exactly the text the trainer will see.
 
     Args:
         data_path: path to a text file, a dataset name (resolved against
             ``datasets/<name>/input.txt``), a list of dataset names, a list of
             ``(name, ratio)`` tuples, or a training feed specification
             (``feed:<source>`` / ``http(s)://...`` — see training_feed).
-        block_size: context window (used for logging only).
-        tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
-            TokenTree). When provided, the corpus is tokenized with it and the
-            returned vocabulary is the tokenizer's, not the raw char set.
+        block_size: context window (used by experience loading only).
 
     Returns:
-        (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
+        The corpus text.
     """
     if isinstance(data_path, str) and is_experience_source(data_path):
         corpus = None
@@ -305,7 +309,53 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                     f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
                 )
         with open(path, encoding="utf-8") as f:
-            text = f.read()
+            if path.suffix == ".jsonl":
+                # Canonical text corpora (e.g. tinyshakespeare's 32,777
+                # cached records) carry the corpus in each record's `text`
+                # field — extract it, never the JSON syntax around it.
+                # Only `text` is extracted: other record shapes (pair
+                # datasets like user/assistant …) keep their pre-existing
+                # raw-read behaviour. Malformed lines and records without
+                # `text` are skipped; join with newlines. When no record
+                # has a text field, fall back to the raw read.
+                raw = f.read()
+                texts = []
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict):
+                        t = rec.get("text")
+                        if isinstance(t, str) and t:
+                            texts.append(t)
+                text = "\n".join(texts) if texts else raw
+            else:
+                text = f.read()
+
+    return text
+
+
+def prepare_data(data_path, block_size=128, tokenizer=None):
+    """Prepare training data from a text file, feed, or multiple datasets with ratios.
+
+    Args:
+        data_path: path to a text file, a dataset name (resolved against
+            ``datasets/<name>/input.txt``), a list of dataset names, a list of
+            ``(name, ratio)`` tuples, or a training feed specification
+            (``feed:<source>`` / ``http(s)://...`` — see training_feed).
+        block_size: context window (used for logging only).
+        tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
+            TokenTree). When provided, the corpus is tokenized with it and the
+            returned vocabulary is the tokenizer's, not the raw char set.
+
+    Returns:
+        (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
+    """
+    text = load_corpus_text(data_path, block_size=block_size)
 
     if tokenizer is not None:
         data = np.asarray(tokenizer.encode(text), dtype=np.int64)
@@ -423,12 +473,26 @@ class TrainerConfig:
     owned_tool_weight: float = 0.3
     owned_memory_weight: float = 0.2
 
-    # Device — SloNet training is pure numpy and always runs on the CPU.
+    # Device — resolved by ``SloughGPTTrainer._setup_device`` (see there).
+    # ``"cpu"`` (default) pins the NumPy backend for the run; ``"auto"`` is the
+    # opt-in to whatever the accelerator probe found; ``"cuda"``/``"metal"``/
+    # ``"opencl"`` are declarations that either resolve or refuse loudly.
+    # The accepted vocabulary comes from ``gpu.known_backends()`` — one
+    # declaration, so this field cannot drift from the seam behind it.
     device: str = "cpu"
 
     def __post_init__(self):
-        if self.device == "auto":
-            self.device = "cpu"
+        # ``None``/blank come from API payloads that did not set device.
+        self.device = str(self.device).strip().lower() if self.device else "cpu"
+        # ``torch`` was removed (SloNet's NumPy engine is the only training
+        # backend); say so instead of listing it as a typo.
+        removed = removed_backend_reason(self.device)
+        if removed is not None:
+            raise ValueError(f"device={self.device!r} is not supported: {removed}")
+        if self.device != "auto" and self.device not in known_backends():
+            raise ValueError(
+                f"device must be 'auto' or one of {sorted(known_backends())}, got {self.device!r}"
+            )
 
         # Validate hyperparameters
         if self.learning_rate <= 0:
@@ -505,6 +569,56 @@ def _make_json_safe(obj):
     if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
         return None
     return obj
+
+
+def _remove_checkpoint_artifacts(stale: Path) -> None:
+    """Unlink a stale ``.soul`` and every sibling that shares its name.
+
+    A checkpoint is a file family: the ``.soul`` weights, its ``.meta.json`` /
+    ``.points.json`` sidecars, and the externalized optimizer state
+    (``.optimizer.dat`` / legacy ``.optimizer.json.gz`` — full-name and
+    stem-name conventions both occur). Unlinking only the ``.soul`` leaves
+    orphaned multi-MB moment blobs behind (observed after a pruned periodic
+    checkpoint in the tinyshakespeare run dir).
+
+    Both prune sites — ``_prune_stale_checkpoints`` (window) and
+    ``_enforce_disk_limit`` (byte budget) — call this so the cleanup can
+    never drift between them. All unlinks are ``OSError``-tolerant: a sibling
+    that vanished mid-scan is already handled by whoever removed it.
+    """
+    from domain.inference._internal.soul_meta_slim import STATE_SUFFIX, STATE_SUFFIX_BIN
+
+    candidates = [
+        stale,
+        Path(str(stale) + ".meta.json"),
+        stale.parent / (stale.stem + ".meta.json"),
+        stale.parent / (stale.stem + ".points.json"),
+    ]
+    for state_suffix in (STATE_SUFFIX, STATE_SUFFIX_BIN):
+        candidates.append(Path(str(stale) + state_suffix))
+        candidates.append(stale.parent / (stale.stem + state_suffix))
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                candidate.unlink()
+        except OSError:
+            pass
+
+
+def _state_dict_as_arrays(optimizer, params):
+    """``state_dict`` with moment buffers as numpy snapshots (as_arrays=True).
+
+    Slo optimizers take the kwarg so the checkpoint path gets bytes
+    end-to-end — no ``tolist()`` of millions of floats per save. Custom or
+    legacy optimizers without the kwarg fall back to their list form; the
+    manifest encoder handles both. A TypeError raised *inside* ``state_dict``
+    re-raises on the plain call, so it still surfaces as the logged
+    serialization failure instead of being swallowed here.
+    """
+    try:
+        return optimizer.state_dict(params=params, as_arrays=True)
+    except TypeError:
+        return optimizer.state_dict(params=params)
 
 
 def _load_soul_checkpoint(path: str) -> dict[str, Any] | None:
@@ -584,7 +698,7 @@ def _build_training_state_metadata(
     if optimizer is not None:
         try:
             opt_state = (
-                optimizer.state_dict(params=params)
+                _state_dict_as_arrays(optimizer, params)
                 if params is not None
                 else optimizer.state_dict()
             )
@@ -599,6 +713,14 @@ def _build_training_state_metadata(
                 hyper = opt_state.get("hyperparameters")
                 if isinstance(hyper, dict):
                     hyper["lr"] = initial_lr
+            # Moments become base64 manifests here: bytes end-to-end from the
+            # optimizer buffers to the sidecar, never Python float lists (the
+            # old _make_json_safe walk over millions of floats cost ~10 s per
+            # periodic save — training-throughput card 20261107).
+            if isinstance(opt_state, dict) and isinstance(opt_state.get("state"), dict):
+                from domain.inference._internal.soul_meta_slim import to_state_manifest
+
+                opt_state["state"] = to_state_manifest(opt_state["state"])
             state["optimizer"] = _make_json_safe(opt_state)
         except Exception as e:
             logger.warning(
@@ -625,11 +747,17 @@ def _build_training_state_metadata(
     return state
 
 
-def _parse_training_state_metadata(metadata: dict) -> dict:
+def _parse_training_state_metadata(metadata: dict, base_dir=None) -> dict:
     """Extract training state from .soul metadata (inverse of _build_...).
 
     Converts nested lists back to numpy arrays where appropriate so that
     optimizer.load_state_dict() can consume them.
+
+    ``base_dir`` (str | Path) is the directory holding the meta's gzip sibling:
+    when ``optimizer.state`` was externalized as a ``state_ref`` (slim sidecar),
+    it is resolved hash-pinned from there. Without ``base_dir`` a ref degrades
+    to an empty ``state`` — the same fresh-momentum resume semantics as
+    ``include_optimizer_state=False`` — never an error.
 
     Returns:
         Dict with keys: step, epoch, completed_epochs (optional),
@@ -653,12 +781,37 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
     if isinstance(opt_raw, dict):
         opt = dict(opt_raw)
         opt.get("hyperparameters", {})
-        state = opt.get("state", {})
-        # Convert nested lists in state back to numpy arrays
+        state = opt.get("state")
+        ref = opt.get("state_ref")
+        if (
+            (not isinstance(state, dict) or not state)
+            and isinstance(ref, dict)
+            and base_dir is not None
+        ):
+            from domain.inference._internal.soul_meta_slim import load_state_file
+
+            loaded = load_state_file(ref, base_dir)
+            if loaded is not None:
+                state = loaded
+        # Header-embedded manifests → ndarray (legacy lists pass through to
+        # _to_numpy below; a corrupt manifest degrades like a missing ref).
+        if isinstance(state, dict) and state:
+            from domain.inference._internal.soul_meta_slim import from_state_manifest
+
+            decoded = from_state_manifest(state)
+            state = decoded if isinstance(decoded, dict) else {}
+        if not isinstance(state, dict):
+            state = {}
+        # Convert nested lists in state back to numpy arrays. Flat buffers
+        # (SGD-style {name: buffer}) carry no per-moment dict — keep them flat.
         converted_state = {}
         for name, buffers in state.items():
-            converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
+            if isinstance(buffers, dict):
+                converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
+            else:
+                converted_state[name] = _to_numpy(buffers)
         opt["state"] = converted_state
+        opt.pop("state_ref", None)
         result["optimizer"] = opt
     sched_raw = raw.get("scheduler")
     if isinstance(sched_raw, dict):
@@ -916,6 +1069,30 @@ def _gc_parked_step(fn):
             if collect:
                 gc.collect()
                 state["rss"] = _rss_bytes()
+
+    return wrapper
+
+
+def _device_scoped(fn):
+    """Pin this trainer's resolved accelerator for the duration of the call.
+
+    ``slonet._get_accelerator()`` consults a thread-local pin before global
+    detection. Training runs in a worker thread, so the pin is scoped to that
+    run: ``device="cpu"`` silences the GPU for this job only and leaves
+    inference (or a second job) in the same process untouched. Reading
+    ``self._accelerator`` at call time keeps the decorator harmless for objects
+    that never ran ``_setup_device`` (``__new__`` test doubles).
+    """
+
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        from domain.slolib._internal.gpu import pop_accelerator, push_accelerator
+
+        previous = push_accelerator(getattr(self, "_accelerator", None))
+        try:
+            return fn(self, *args, **kwargs)
+        finally:
+            pop_accelerator(previous)
 
     return wrapper
 
@@ -1178,8 +1355,33 @@ class SloughGPTTrainer:
         )
 
     def _setup_device(self) -> str:
-        """SloNet training is pure numpy and always runs on the CPU."""
-        return "cpu"
+        """Resolve ``TrainerConfig.device`` to a real backend and record it.
+
+        The autograd engine is NumPy, so a device is *a compute backend*, not a
+        second model: ``"cpu"`` pins NumPy for this run (a GPU host must not
+        silently take over — that is what ``"cpu"`` already claimed and, before
+        this, did not do), ``"auto"`` takes the accelerator probe's choice, and
+        ``"cuda"``/``"metal"``/``"opencl"`` are declarations that either resolve
+        or raise. ``train/evaluate/generate`` push the resolved backend as a
+        thread-local pin, so two jobs in one process cannot fight over it.
+        """
+        from domain.slolib._internal.gpu import accelerator_for
+
+        try:
+            accelerator = accelerator_for(self.config.device)
+        except (RuntimeError, ValueError) as e:
+            raise RuntimeError(
+                f"device={self.config.device!r} cannot be used on this host: {e}"
+            ) from e
+        self._accelerator = accelerator
+        logger.info(
+            "Device: requested=%s resolved=%s (%s)",
+            self.config.device,
+            accelerator.name,
+            accelerator.device_type,
+            extra={"tag": "TRAIN"},
+        )
+        return accelerator.name
 
     def _create_model(self):
         """Create and setup the model (optionally wrapped with LoRA)."""
@@ -1699,6 +1901,7 @@ class SloughGPTTrainer:
                 return trace
         return None
 
+    @_device_scoped
     def evaluate(self, num_batches: int = 10) -> dict[str, float]:
         """Evaluate the model on the validation split.
 
@@ -1866,6 +2069,7 @@ class SloughGPTTrainer:
         return f"{s}s"
 
     @_gc_parked
+    @_device_scoped
     def train(
         self,
         resume: bool = False,
@@ -1981,6 +2185,17 @@ class SloughGPTTrainer:
             sps = self._steps_per_sec()
             eta = None if sps <= 0 else max(0, int((denom - self.global_step) / sps))
             last_trace = self.get_step_trace()
+            # step_trace flag gates only the trace-derived residency keys —
+            # absent (not lying zeros) when off; "device" is unconditional.
+            residency = (
+                {
+                    "gpu_matmuls": last_trace.gpu_matmuls if last_trace else 0,
+                    "cpu_matmuls": last_trace.cpu_matmuls if last_trace else 0,
+                    "fallbacks": last_trace.fallbacks if last_trace else 0,
+                }
+                if is_enabled("step_trace")
+                else {}
+            )
             try:
                 on_progress(
                     {
@@ -2002,9 +2217,7 @@ class SloughGPTTrainer:
                         # StepTrace residency tripwires (additive): which path
                         # did this step's eligible matmuls actually take?
                         "device": str(self.device),
-                        "gpu_matmuls": last_trace.gpu_matmuls if last_trace else 0,
-                        "cpu_matmuls": last_trace.cpu_matmuls if last_trace else 0,
-                        "fallbacks": last_trace.fallbacks if last_trace else 0,
+                        **residency,
                     }
                 )
             except Exception:
@@ -2100,16 +2313,21 @@ class SloughGPTTrainer:
                         self._is_training = False
                         break
 
-                dispatch_before = dispatch_stats()
+                # Emission seam for the step_trace flag: the dispatch counters
+                # in slolib.gpu accumulate unconditionally — only assembling the
+                # receipt into the ring is gated (tripwire stays live when off).
+                trace_on = is_enabled("step_trace")
+                dispatch_before = dispatch_stats() if trace_on else {}
                 metrics = self.train_step()
                 train_loss += metrics["loss"]
                 self.global_step += 1
                 # Per-step reduction-set receipt: counters delta across exactly
                 # this step's compute (eval/selfgen/log work lands outside the
                 # snapshot window), plus control signals and replay anchors.
-                self._step_traces.append(
-                    self._assemble_step_trace(metrics, dispatch_before, dispatch_stats())
-                )
+                if trace_on:
+                    self._step_traces.append(
+                        self._assemble_step_trace(metrics, dispatch_before, dispatch_stats())
+                    )
 
                 # Self-gen flywheel: generate gated continuations with the
                 # live model on schedule; failures never stop the run.
@@ -2449,6 +2667,11 @@ class SloughGPTTrainer:
         """Delete oldest checkpoints if total disk usage exceeds MAX_CHECKPOINT_DISK_MB."""
         from .state import MAX_CHECKPOINT_DISK_MB
 
+        # Every stat pass tolerates a vanished file: concurrent savers share
+        # this directory, and _prune_stale_checkpoints unlinks stale .soul
+        # files between our glob and our stat (FileNotFoundError escaped here
+        # and failed test_thread_safety — card 20261105_160000). A file that
+        # disappeared mid-scan is already accounted for by whoever removed it.
         try:
             files = sorted(
                 checkpoint_dir.glob("*.soul"),
@@ -2456,18 +2679,21 @@ class SloughGPTTrainer:
             )
         except OSError:
             return
-        total_bytes = sum(f.stat().st_size for f in files)
+        try:
+            total_bytes = sum(f.stat().st_size for f in files)
+        except OSError:
+            return
         limit_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
         while total_bytes > limit_bytes and len(files) > 1:
             oldest = files.pop(0)
-            total_bytes -= oldest.stat().st_size
             try:
-                oldest.unlink()
-                logger.info(
-                    "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
-                )
+                total_bytes -= oldest.stat().st_size
             except OSError:
-                pass
+                continue
+            _remove_checkpoint_artifacts(oldest)
+            logger.info(
+                "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
+            )
 
     def _prune_stale_checkpoints(self, keep_final: bool = False) -> None:
         """Delete stale ``.soul`` checkpoints so the directory never accumulates files.
@@ -2483,6 +2709,8 @@ class SloughGPTTrainer:
 
         Side effects:
             - unlinks stale ``.soul`` files under ``config.checkpoint_dir``
+              together with their ``.meta.json``/``.points.json`` sidecars and
+              externalized optimizer state (``.optimizer.dat``/``.optimizer.json.gz``)
             - rewires ``_best_model_path`` so it never points at a deleted file
               (on final saves it points at the final checkpoint; otherwise it is
               reset to None when the best checkpoint was pruned by the window)
@@ -2505,26 +2733,9 @@ class SloughGPTTrainer:
         keep_count = 1 if keep_final else max(1, int(getattr(self.config, "max_checkpoints", 5)))
         keep = {str(p) for p in files[:keep_count]}
         for stale in files[keep_count:]:
-            try:
-                stale.unlink()
-            except OSError:
-                pass
-            meta = Path(str(stale) + ".meta.json")
-            try:
-                if meta.exists():
-                    meta.unlink()
-            except OSError:
-                pass
-            # Sidecars use the stem name (<name>.points.json, <name>.meta.json),
-            # not the full .soul name — remove them so pruned checkpoints
-            # leave no orphaned artifacts behind.
-            for suffix in (".points.json", ".meta.json"):
-                sidecar = stale.parent / (stale.stem + suffix)
-                try:
-                    if sidecar.exists():
-                        sidecar.unlink()
-                except OSError:
-                    pass
+            # Full file family: .soul + meta/points sidecars + optimizer state
+            # (.optimizer.dat / legacy .optimizer.json.gz) — never orphan them.
+            _remove_checkpoint_artifacts(stale)
 
         if keep_final and self._last_checkpoint_path:
             # The just-written final checkpoint is the newest file (kept above);
@@ -2549,7 +2760,9 @@ class SloughGPTTrainer:
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
         Args:
-            path: Output path without the extension; ``.soul`` is appended.
+            path: Output path, with or without the ``.soul`` extension —
+                the extension is appended exactly once (callers pass both
+                bare stems and full ``..._trained.soul`` paths).
             format: DEPRECATED and ignored. Retained for backward compatibility;
                 ``SloughGPTTrainer.save()`` always writes ``.soul`` regardless of
                 this value. Passing a non-None value emits a
@@ -2684,7 +2897,12 @@ class SloughGPTTrainer:
             initial_lr=self.config.learning_rate,
         )
 
-        output_path = path + ".soul"
+        # Callers hand over both bare stems ("auto", "<ds>_<ts>") and full
+        # paths already carrying the extension ("<stem>_trained.soul" from
+        # local_api/legacy/execution/from_feedback). save() owns the
+        # extension, so append exactly once — a blind append produced
+        # ``qt_trained.soul.soul`` (+ .soul.soul.meta.json), job_cbc6162a.
+        output_path = path if path.endswith(".soul") else path + ".soul"
         save_soul(self.model, output_path, soul_profile=soul)
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})
@@ -2733,9 +2951,8 @@ class SloughGPTTrainer:
             except Exception as exc:
                 logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
 
-        thread = threading.Thread(target=_work, name="pugqeep-compress", daemon=True)
+        thread = spawn_loop(_work, name="pugqeep-compress")
         self._compress_thread = thread
-        thread.start()
 
     def wait_for_compression(self, timeout: float | None = None) -> bool:
         """Block until background checkpoint compression finishes.
@@ -2750,6 +2967,7 @@ class SloughGPTTrainer:
         thread.join(timeout=timeout)
         return not thread.is_alive()
 
+    @_device_scoped
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()

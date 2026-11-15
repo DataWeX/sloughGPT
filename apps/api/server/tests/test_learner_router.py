@@ -299,3 +299,66 @@ class TestLearnerLifecycle:
         # Evaluate
         resp = self.client.post("/learn/evaluate")
         assert resp.status_code == 200
+
+
+class TestKbFacadeAbsorbsLearner:
+    """The kb router serves the merged /learn routes (route-map card 7/7, 20261101_154056).
+
+    learner.py is folded into kb.py: one module-level aggregate router
+    exposes /knowledge/* and /learn/* paths byte-identical, LearnerRouter
+    and its schemas live on routers.kb, and routers.learner no longer
+    exists. Assertions walk a facade app's OpenAPI (FastAPI 0.141.1 stores
+    lazy _IncludedRouter placeholders — the card-5 settings pattern).
+    """
+
+    def test_kb_facade_serves_learn_paths(self):
+        from fastapi import FastAPI
+        from routers.kb import router as kb_router
+
+        facade = FastAPI()
+        facade.include_router(kb_router)
+        learn_paths = sorted(p for p in facade.openapi()["paths"] if p.startswith("/learn"))
+        assert learn_paths == [
+            "/learn/deploy",
+            "/learn/evaluate",
+            "/learn/feed",
+            "/learn/ingest",
+            "/learn/ingest-url",
+            "/learn/knowledge",
+            "/learn/search",
+            "/learn/status",
+            "/learn/train",
+        ]
+
+    def test_kb_facade_keeps_knowledge_paths(self):
+        """The /knowledge half of the aggregate is untouched by the merge."""
+        from fastapi import FastAPI
+        from routers.kb import router as kb_router
+
+        facade = FastAPI()
+        facade.include_router(kb_router)
+        paths = set(facade.openapi()["paths"])
+        assert {
+            "/knowledge",
+            "/knowledge/search",
+            "/knowledge/stats",
+            "/knowledge/topics",
+            "/knowledge/{item_id}",
+            "/knowledge/{item_id}/related",
+            "/knowledge/context",
+            "/knowledge/ingest-file",
+        } <= paths
+
+    def test_learner_router_lives_on_kb_module(self):
+        """The absorbed class and its request schema moved, not re-implemented."""
+        from routers.kb import LearnerRouter, LearnSearchRequest
+
+        assert LearnerRouter.__name__ == "LearnerRouter"
+        assert LearnSearchRequest.model_fields["query"].is_required()
+
+    def test_routers_learner_module_gone(self):
+        """routers.learner no longer exists — the facade is the only import path."""
+        import importlib
+
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("routers.learner")

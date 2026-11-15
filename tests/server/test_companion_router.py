@@ -8,14 +8,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
-from apps.api.server.routers.companion import router
+from apps.api.server.routers.souls import router
 
 app = FastAPI()
 register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
-COMPANION_TARGET = "apps.api.server.routers.companion._companion_router._get_companion"
+COMPANION_TARGET = "apps.api.server.routers.souls._companion_router._get_companion"
 CREATE_COMPANION_TARGET = "domain.companion.create_companion"
 
 
@@ -324,7 +324,7 @@ class TestListPresets:
         # companion_mogdb persists across runs (db_pool resolves repo root one
         # level above the checkout, so every worktree shares the same db).
         # Reset to just the 4 defaults so the exact-count assertion is stable.
-        from apps.api.server.routers.companion import _get_db, _seed_default_presets
+        from apps.api.server.routers.souls import _get_db, _seed_default_presets
 
         col = _get_db().collection("presets")
         for p in col.find():

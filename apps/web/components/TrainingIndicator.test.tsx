@@ -22,7 +22,7 @@ vi.mock('@/vite/next-compat/navigation', () => ({
 }))
 
 vi.mock('@/lib/notify', () => ({
-  notify: { toast: vi.fn(), banner: vi.fn() },
+  notify: { toast: vi.fn(), banner: vi.fn(), dismissBanner: vi.fn() },
   useBannerStore: {
     getState: () => ({ banners: [], dismissBanner: vi.fn(), clearBanners: vi.fn() }),
   },

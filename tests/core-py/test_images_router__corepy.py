@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.images import ImagesRouter  # noqa: E402
+from routers.files import ImagesRouter  # noqa: E402
 
 
 def _app(ir: ImagesRouter) -> FastAPI:

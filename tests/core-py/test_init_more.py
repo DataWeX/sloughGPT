@@ -48,9 +48,22 @@ class ThreadStub:
         pass
 
 
+class _EngineStub:
+    """Stands in for the shared engine (spawn seam: spawn_command)."""
+
+    def __init__(self, proc=None, error=None):
+        self._proc = proc
+        self._error = error
+
+    def spawn_command(self, *args, **kwargs):
+        if self._error is not None:
+            raise self._error
+        return self._proc
+
+
 def _patch_proc(monkeypatch, proc=None):
     ThreadStub.created = []
-    monkeypatch.setattr(init_mod.subprocess, "Popen", lambda *a, **k: proc or FakeProc())
+    monkeypatch.setattr(init_mod, "get_engine", lambda: _EngineStub(proc or FakeProc()))
     monkeypatch.setattr(init_mod.threading, "Thread", ThreadStub)
 
 
@@ -69,10 +82,11 @@ class TestServiceManagerStart:
         assert ThreadStub.created[0].daemon is True
 
     def test_start_process_exception(self, monkeypatch):
-        def boom(*a, **k):
-            raise OSError("spawn failed")
-
-        monkeypatch.setattr(init_mod.subprocess, "Popen", boom)
+        monkeypatch.setattr(
+            init_mod,
+            "get_engine",
+            lambda: _EngineStub(error=OSError("spawn failed")),
+        )
         m = ServiceManager(ServiceDef(name="worker", command="sleep 100", builtin=False))
         assert m.start() is False
         assert m.instance.state == "failed"

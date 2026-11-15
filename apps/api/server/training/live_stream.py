@@ -9,11 +9,22 @@ lets operators *watch* it grow while training runs against it.
 The client envelope matches the standard SSE shape (``stream``/``phase``/
 ``status``/``data``); ``data.changed`` is True when anything moved since the
 previous frame so UIs can filter the event log to real arrivals.
+
+Descriptor-projected (card 20261104_151036): one ``ToolSpec`` contract →
+``create_router`` projection. Raw wire (``envelope=False``) — the
+``StreamingResponse`` passes through untouched, exactly as the hand-built
+route served it; ``auth_scope="authenticated"`` reproduces the hand-built
+``Depends(require_auth_if_enabled)`` chain (edge 3), so the OpenAPI security
+requirement stays. The description derives from the handler docstring with
+``inspect.cleandoc`` — the expression FastAPI itself used; the summary is
+pinned (FastAPI derives summaries from ``route.name``, which on a projected
+route would be the generated endpoint's name).
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 from datetime import UTC, datetime
@@ -21,7 +32,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router
 from starlette.responses import StreamingResponse
+
+from domain.agents import ToolSpec
 
 from .feeds import list_feed_sources
 from .jobs import training_jobs
@@ -123,7 +137,6 @@ def _envelope(snapshot: dict[str, Any], changed: bool) -> dict[str, Any]:
     }
 
 
-@router.get("/training/live-stream")
 async def training_live_stream(
     request: Request,
     auth_user: dict | None = Depends(require_auth_if_enabled),
@@ -171,3 +184,28 @@ async def training_live_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Descriptor projection: one contract for the stream (card 20261104_151036) ──
+
+SPEC_LIVE_STREAM = ToolSpec(
+    name="training.live_stream",
+    description=inspect.cleandoc(training_live_stream.__doc__ or ""),
+    parameters=[],
+    execute=training_live_stream,
+    auth_scope="authenticated",
+    idempotent=True,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_LIVE_STREAM,
+        RouteSpec(
+            path="/training/live-stream",
+            envelope=False,
+            summary="Training Live Stream",
+        ),
+        training_live_stream,
+    )
+)

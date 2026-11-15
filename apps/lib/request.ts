@@ -1,5 +1,6 @@
 import { _getToken, _log } from './ports'
 import { ApiError } from './errors'
+import { sampleServerTime } from './clock'
 import type { RequestConfig, ResponseEnvelope, RequestOptions } from './types'
 import { _corrId, _trackCorrId } from './corr-id'
 import { _resolveUrl, _isDocstoreUrl } from './url'
@@ -103,6 +104,7 @@ export async function request<T>(
           headers: finalConfig.headers,
           body: fetchBody,
           signal,
+          keepalive: opts?.keepalive,
         })
         if (!originalRes.ok || !originalRes.body) {
           res = originalRes
@@ -145,6 +147,7 @@ export async function request<T>(
           headers: finalConfig.headers,
           body: fetchBody,
           signal,
+          keepalive: opts?.keepalive,
         })
       }
 
@@ -158,6 +161,9 @@ export async function request<T>(
       })
 
       // Build response envelope
+      // Single clock seam: every response (both fetch paths, every retry)
+      // re-anchors the server-clock offset from the `Date` header.
+      sampleServerTime(res.headers)
       const resText = await res.text()
       const envelope: ResponseEnvelope = {
         ok: res.ok,

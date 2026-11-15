@@ -24,20 +24,68 @@ import {
   trainingJobsController,
   type TrainingRecommendationResponse,
 } from '@/lib/training-controller'
+import {
+  TRAINING_LIMITS,
+  clampTrainingField,
+  parseTrainingField,
+  validateTrainingField,
+} from '@/lib/sanitize'
 import type { StepProps } from './DataStep'
 
 export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: StepProps) {
   const [recommendation, setRecommendation] = useState<TrainingRecommendationResponse | null>(null)
   const [loadingRec, setLoadingRec] = useState(false)
 
-  const hpErrors = useMemo(() => {
-    const errors: string[] = []
-    if (form.trainingEpochs < 1 || form.trainingEpochs > 500) errors.push('Epochs must be 1–500')
-    if (form.trainingBatchSize < 1 || form.trainingBatchSize > 256)
-      errors.push('Batch size must be 1–256')
-    if (form.trainingLR <= 0 || form.trainingLR > 1) errors.push('Learning rate must be 0–1')
-    return errors
-  }, [form.trainingEpochs, form.trainingBatchSize, form.trainingLR])
+  // Validation derives from TRAINING_LIMITS (single source of truth).
+  // NaN is explicitly invalid: every old-style `< min || > max` comparison
+  // against NaN is false, so a cleared field used to pass validation.
+  const hp = useMemo(
+    () => ({
+      epochs: validateTrainingField('epochs', form.trainingEpochs, 'Epochs'),
+      batch: validateTrainingField('batch_size', form.trainingBatchSize, 'Batch size'),
+      lr: validateTrainingField('learning_rate', form.trainingLR, 'Learning rate'),
+    }),
+    [form.trainingEpochs, form.trainingBatchSize, form.trainingLR],
+  )
+  const hpErrors = useMemo(
+    () => [hp.epochs, hp.batch, hp.lr].filter((e): e is string => e !== null),
+    [hp],
+  )
+
+  // The hyperparameter inputs hold a local draft string so typing never
+  // fights the controlled value — `0.001` stays typeable — and the parsed,
+  // clamped commit happens exactly once, on blur (reported bug: the old
+  // `Number(x) || 1e-3` onChange snapped the field on every keystroke).
+  const [epochsDraft, setEpochsDraft] = useState(String(form.trainingEpochs))
+  const [batchDraft, setBatchDraft] = useState(String(form.trainingBatchSize))
+  const [lrDraft, setLrDraft] = useState(String(form.trainingLR))
+
+  useEffect(() => {
+    setEpochsDraft(String(form.trainingEpochs))
+  }, [form.trainingEpochs])
+  useEffect(() => {
+    setBatchDraft(String(form.trainingBatchSize))
+  }, [form.trainingBatchSize])
+  useEffect(() => {
+    setLrDraft(String(form.trainingLR))
+  }, [form.trainingLR])
+
+  const commitField = (
+    key: 'epochs' | 'batch_size' | 'learning_rate',
+    raw: string,
+    current: number,
+    setDraft: (s: string) => void,
+    set: (n: number) => void,
+  ) => {
+    const next = parseTrainingField(key, raw)
+    if (Number.isFinite(next)) {
+      setDraft(String(next))
+      if (next !== current) set(next)
+    } else {
+      // Empty or unparseable — revert the draft to the last valid value.
+      setDraft(String(current))
+    }
+  }
 
   const canAdvance = form.canStart && hpErrors.length === 0
 
@@ -56,9 +104,11 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
   const applyRecommendation = () => {
     if (!recommendation) return
     const rec = recommendation.recommendation
-    form.setTrainingLR(rec.learning_rate)
-    form.setTrainingBatchSize(rec.batch_size)
-    form.setTrainingEpochs(rec.epochs)
+    // Clamp: backend recommendations must not smuggle out-of-range values
+    // into the form (single source of truth = TRAINING_LIMITS).
+    form.setTrainingLR(clampTrainingField('learning_rate', rec.learning_rate))
+    form.setTrainingBatchSize(clampTrainingField('batch_size', rec.batch_size))
+    form.setTrainingEpochs(clampTrainingField('epochs', rec.epochs))
   }
 
   return (
@@ -282,12 +332,21 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     <Input
                       id="train-epochs"
                       type="number"
-                      min={1}
-                      max={500}
-                      value={form.trainingEpochs}
-                      onChange={(e) => form.setTrainingEpochs(Number(e.target.value))}
-                      error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
-                      aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                      min={TRAINING_LIMITS.epochs.min}
+                      max={TRAINING_LIMITS.epochs.max}
+                      value={epochsDraft}
+                      onChange={(e) => setEpochsDraft(e.target.value)}
+                      onBlur={() =>
+                        commitField(
+                          'epochs',
+                          epochsDraft,
+                          form.trainingEpochs,
+                          setEpochsDraft,
+                          form.setTrainingEpochs,
+                        )
+                      }
+                      error={hp.epochs !== null}
+                      aria-invalid={hp.epochs !== null}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
@@ -299,12 +358,21 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     <Input
                       id="train-batch"
                       type="number"
-                      min={1}
-                      max={256}
-                      value={form.trainingBatchSize}
-                      onChange={(e) => form.setTrainingBatchSize(Number(e.target.value))}
-                      error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
-                      aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                      min={TRAINING_LIMITS.batch_size.min}
+                      max={TRAINING_LIMITS.batch_size.max}
+                      value={batchDraft}
+                      onChange={(e) => setBatchDraft(e.target.value)}
+                      onBlur={() =>
+                        commitField(
+                          'batch_size',
+                          batchDraft,
+                          form.trainingBatchSize,
+                          setBatchDraft,
+                          form.setTrainingBatchSize,
+                        )
+                      }
+                      error={hp.batch !== null}
+                      aria-invalid={hp.batch !== null}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
@@ -317,10 +385,19 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                       id="train-lr"
                       type="text"
                       inputMode="decimal"
-                      value={form.trainingLR}
-                      onChange={(e) => form.setTrainingLR(Number(e.target.value) || 1e-3)}
-                      error={form.trainingLR <= 0 || form.trainingLR > 1}
-                      aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
+                      value={lrDraft}
+                      onChange={(e) => setLrDraft(e.target.value)}
+                      onBlur={() =>
+                        commitField(
+                          'learning_rate',
+                          lrDraft,
+                          form.trainingLR,
+                          setLrDraft,
+                          form.setTrainingLR,
+                        )
+                      }
+                      error={hp.lr !== null}
+                      aria-invalid={hp.lr !== null}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />

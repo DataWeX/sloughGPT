@@ -51,15 +51,18 @@ class RenderNeuralDevice(Device):
         self._classify_w = rng.randn(32, num_classes).astype(np.float32) * np.sqrt(2.0 / 32)
         self._classify_b = np.zeros(num_classes, dtype=np.float32)
 
-        self._ops = OpTable("RenderNeuralDevice", {
-            "process": self._process,
-            "embed": self._embed,
-            "classify": self._classify,
-            "descriptor": self._descriptor,
-            "info": self.info,
-            "set_source": self._set_source,
-            "forward": self._forward_raw,
-        })
+        self._ops = OpTable(
+            "RenderNeuralDevice",
+            {
+                "process": self._process,
+                "embed": self._embed,
+                "classify": self._classify,
+                "descriptor": self._descriptor,
+                "info": self.info,
+                "set_source": self._set_source,
+                "forward": self._forward_raw,
+            },
+        )
 
     def info(self):
         return {

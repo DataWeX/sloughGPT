@@ -499,8 +499,12 @@ class TestModuleLevelFunctions:
 
     def test_set_accelerator_precision_fp16(self):
         reset_accelerator()
+        acc = get_accelerator()
         result = set_accelerator_precision("fp16")
-        assert result == "fp32"
+        # fp16 is granted only by a backend that advertises it (CUDA does, the
+        # numpy CPU backend does not). This used to hard-code the CPU host, so
+        # the suite failed on any machine with a working GPU.
+        assert result == ("fp16" if acc._fp16_available else "fp32")
 
     def test_set_accelerator_precision_unknown(self):
         reset_accelerator()

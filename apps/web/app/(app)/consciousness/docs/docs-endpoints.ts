@@ -532,5 +532,5 @@ export const METHOD_COLORS: Record<HttpMethod, string> = {
   POST: 'bg-info/15 text-info border-info/30',
   PATCH: 'bg-warning/15 text-warning border-warning/30',
   DELETE: 'bg-destructive/15 text-destructive border-destructive/30',
-  PUT: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  PUT: 'bg-primary/15 text-primary border-primary/30',
 }

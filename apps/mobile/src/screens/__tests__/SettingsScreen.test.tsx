@@ -170,7 +170,6 @@ describe('SettingsScreen', () => {
       expect(view.getByText('test')).toBeTruthy()
     })
   })
-
   it('saves server URL on Save press', async () => {
     const { setApiUrl } = require('../../services/api-client')
     const view = await render(<SettingsScreen />)

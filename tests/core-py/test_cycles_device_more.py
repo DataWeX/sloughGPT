@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from domain.shell._internal.cycles_device import CyclesDevice
+from domain.shell._internal.tensor_arena import resolve
 from domain.shell._internal.vm import DeviceFault
 
 # ── Initialization ───────────────────────────────────────────────────────────
@@ -77,6 +78,8 @@ class TestInfo:
         info = d.call("info")
         expected_ops = {
             "render",
+            "encode_png",
+            "free_slot",
             "state_tensors",
             "add_sphere",
             "add_cube",
@@ -145,24 +148,24 @@ class TestRender:
     def test_render_shape(self):
         d = CyclesDevice(width=8, height=6, samples=1)
         d.call("add_light")
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (6, 8, 3)
 
     def test_render_dtype(self):
         d = CyclesDevice(width=4, height=4, samples=1)
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.dtype == np.float32
 
     def test_render_pixel_range(self):
         d = CyclesDevice(width=4, height=4, samples=1)
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.min() >= 0.0
         assert img.max() <= 1.0
 
     def test_render_updates_last_image(self):
         d = CyclesDevice(width=4, height=4, samples=1)
         d.call("add_light")
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert d._last_image is img
 
     def test_render_updates_info_last_render_shape(self):
@@ -181,12 +184,12 @@ class TestRender:
     def test_render_with_light(self):
         d = CyclesDevice(width=4, height=4, samples=1)
         d.call("add_light")
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (4, 4, 3)
 
     def test_render_empty_scene(self):
         d = CyclesDevice(width=4, height=4, samples=1)
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (4, 4, 3)
 
 
@@ -606,7 +609,7 @@ class TestClear:
         d.call("render")
         d.call("clear")
         d.call("add_light")
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (4, 4, 3)
 
 
@@ -669,7 +672,7 @@ class TestSetResolution:
         d = CyclesDevice(samples=1)
         d.call("add_light")
         d.call("set_resolution", 10, 8)
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (8, 10, 3)
 
 
@@ -754,7 +757,7 @@ class TestSceneComposition:
         d.call("set_camera", 0, 1.5, 4, 0, 0, 0, 50)
         d.call("set_background", 0.1, 0.1, 0.2)
         d.call("set_material", 0, 0.8, 0.2, 0.2)
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (6, 8, 3)
 
     def test_multiple_meshes_render(self):
@@ -763,7 +766,7 @@ class TestSceneComposition:
         d.call("add_cube")
         d.call("add_plane")
         d.call("add_light")
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (4, 4, 3)
 
     def test_render_after_clear_and_rebuild(self):
@@ -772,7 +775,7 @@ class TestSceneComposition:
         d.call("render")
         d.call("clear")
         d.call("add_light")
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (4, 4, 3)
 
 
@@ -836,7 +839,7 @@ class TestEdgeCases:
     def test_set_resolution_1x1(self):
         d = CyclesDevice(samples=1)
         d.call("set_resolution", 1, 1)
-        img = d.call("render")
+        img = resolve(d.call("render"), d.arena)
         assert img.shape == (1, 1, 3)
 
     def test_state_tensors_after_render(self):
@@ -903,7 +906,7 @@ class TestEdgeCases:
     def test_ops_list_complete(self):
         d = CyclesDevice()
         info = d.call("info")
-        assert len(info["ops"]) == 13
+        assert len(info["ops"]) == 15
 
     def test_add_sphere_default_material(self):
         d = CyclesDevice()

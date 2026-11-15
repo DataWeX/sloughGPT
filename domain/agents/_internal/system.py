@@ -88,6 +88,39 @@ def _default_inference_fn(prompt: str, max_tokens: int = 200) -> dict[str, Any]:
         return {"error": str(e)}
 
 
+def _fast_tier_fn(base_fn: Any) -> Any:
+    """Wrap an inference fn with a cache-first fast path.
+
+    A repeated prompt is served from the shared :class:`ResponseCache`
+    without calling the model at all; a miss calls through and stores the
+    answer. Keys are built the same way the rest of the cache builds them,
+    so a model generation bump invalidates these entries too.
+    """
+    from domain.inference._internal.response_cache import ResponseCache, get_response_cache
+
+    cache = get_response_cache()
+
+    def fast_inference(prompt: str, max_tokens: int = 200) -> dict[str, Any]:
+        key = ResponseCache.build_key(
+            [{"role": "user", "content": str(prompt)}],
+            model="agent-fast-tier",
+            temperature=0.0,
+            max_tokens=int(max_tokens),
+            system_prompt="",
+        )
+        hit = cache.get(key)
+        if hit is not None:
+            return {"text": hit, "cached": True}
+        response = base_fn(prompt, max_tokens)
+        if isinstance(response, dict):
+            text = str(response.get("text", "") or "")
+            if text:
+                cache.put(key, text, model="agent-fast-tier", prompt_for_semantic=str(prompt))
+        return response
+
+    return fast_inference
+
+
 class AgentSystem:
     """
     Manages agent definitions with file-based persistence.
@@ -138,6 +171,7 @@ class AgentSystem:
         instructions: str = "",
         tools: builtins.list[str] | None = None,
         avatar: str = "",
+        inference_tier: str = "main",
     ) -> dict:
         data = {
             "name": name,
@@ -145,6 +179,7 @@ class AgentSystem:
             "instructions": instructions or f"You are a {name} assistant.",
             "tools": tools or ["memory"],
             "avatar": avatar or name[0] if name else "A",
+            "inference_tier": inference_tier if inference_tier in ("fast", "main") else "main",
         }
         _agent_repo.save(agent_id, data)
         logger.info("Created agent: %s", agent_id, extra={"tag": "MODEL"})
@@ -161,7 +196,10 @@ class AgentSystem:
                 "instructions",
                 "tools",
                 "avatar",
+                "inference_tier",
             ):
+                if key == "inference_tier" and value not in ("fast", "main"):
+                    continue
                 data[key] = value
         _agent_repo.save(agent_id, data)
         logger.info("Updated agent: %s", agent_id, extra={"tag": "MODEL"})
@@ -177,11 +215,21 @@ class AgentSystem:
             return None
         tool_names = agent_data.get("tools", [])
         tools = [ToolCapability(t) for t in tool_names if t in [c.value for c in ToolCapability]]
+        tier = agent_data.get("inference_tier", "main")
+        if tier not in ("fast", "main"):
+            tier = "main"
         config = AgentConfig(
             tools=tools,
             instructions=agent_data.get("instructions", ""),
+            inference_tier=tier,
         )
-        return Agent(config=config, inference_fn=self._agent._inference_fn)
+        inference_fn = self._agent._inference_fn
+        # Tier is resolved HERE, once per construction: the run loop never
+        # branches on it. Fast agents get a cache-first wrapper so repeated
+        # prompts are served without touching the slow model.
+        if tier == "fast" and inference_fn is not None:
+            inference_fn = _fast_tier_fn(inference_fn)
+        return Agent(config=config, inference_fn=inference_fn)
 
     async def execute(
         self, agent_id: str, request: str, session_id: str = "", user_id: str = "default"

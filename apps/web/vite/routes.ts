@@ -9,7 +9,7 @@ export type PageGlob = { default: ComponentType<Record<string, unknown>> }
 const pageModules = import.meta.glob('../app/**/page.tsx') as Record<string, () => Promise<unknown>>
 
 export function globToRoutePath(globPath: string): string {
-  // '../app/(app)/settings/page.tsx' | '../app/(app)/page.tsx' | '../app/(app)/model/[id]/page.tsx'
+  // '../app/(app)/settings/page.tsx' | '../app/(app)/page.tsx' | '../app/(app)/training/job/[id]/page.tsx'
   let p = globPath.replace(/^\.\.\/app\//, '')
   // Strip App Router route groups: (app)/, (marketing)/, …
   p = p.replace(/\([^)]+\)\//g, '')

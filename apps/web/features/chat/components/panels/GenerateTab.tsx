@@ -15,12 +15,14 @@ export const GenerateTab = memo(function GenerateTab({ vs }: GenerateTabProps) {
     <div className="space-y-4">
       <div className="flex gap-2">
         <input
-          className="flex-1 px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="flex-1 px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           placeholder="Describe an image to generate..."
           value={vs.genPrompt}
           onChange={(e) => vs.setGenPrompt(e.target.value)}
           aria-label="Image generation prompt"
-          onKeyDown={(e) => { if (e.key === 'Enter') vs.handleGenerateImage() }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') vs.handleGenerateImage()
+          }}
           disabled={vs.genLoading}
         />
         <Button onClick={vs.handleGenerateImage} disabled={vs.genLoading || !vs.genPrompt.trim()}>
@@ -28,9 +30,7 @@ export const GenerateTab = memo(function GenerateTab({ vs }: GenerateTabProps) {
         </Button>
       </div>
 
-      {vs.genError && (
-        <StatusBanner variant="error" message={vs.genError} dismissible={false} />
-      )}
+      {vs.genError && <StatusBanner variant="error" message={vs.genError} dismissible={false} />}
 
       {vs.genResult && (
         <div className="space-y-2">

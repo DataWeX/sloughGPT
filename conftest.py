@@ -7,12 +7,11 @@ repo_root = os.path.abspath(os.path.join(__file__, ".."))
 # append: an env-installed copy of a repo package (e.g. conda's `downcraft`)
 # must never shadow the source tree we are actually testing.
 for _p in (
-    "packages/core-py",
     "apps/api/server",
     "packages/downcraft",
-    # Sibling planner packages (src layout) — app_planner's GUI transition
+    # Sibling planner packages (src layout) — grib's GUI transition
     # handler imports planner.engine, and both suites run under testpaths.
-    "packages/app-planner/src",
+    "packages/grib/src",
     "packages/planner/src",
 ):
     _full = os.path.join(repo_root, _p)

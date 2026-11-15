@@ -10,7 +10,6 @@
 const EXPERIMENTAL_FEATURES: ReadonlySet<string> = new Set([
   'consciousness',
   'voice',
-  'phoneme',
   'tokenizer',
 ])
 

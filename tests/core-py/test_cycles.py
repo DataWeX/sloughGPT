@@ -247,7 +247,7 @@ class TestCyclesDevice:
         dev = CyclesDevice(width=16, height=12, samples=1)
         dev.call("add_sphere", 0.5, 0.0, -0.5, 0.0, 0, 6)
         dev.call("add_light", 1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 5.0)
-        img = dev.call("render")
+        img = dev.arena.get(dev.call("render"))
         assert img.shape == (12, 16, 3)
 
     def test_device_state_tensors(self):
@@ -289,7 +289,7 @@ class TestCyclesDevice:
         dev.call("add_sphere", 0.3, 0.0, 0.0, 0.0, 1, 6)
         dev.call("add_cube", 0.2, 1.0, 0.0, 0.0, 1)
         dev.call("add_light", 0.0, 3.0, 0.0, 1.0, 1.0, 1.0, 6.0)
-        img = dev.call("render")
+        img = dev.arena.get(dev.call("render"))
         assert img.shape == (12, 16, 3)
         info = dev.call("info")
         assert info["meshes"] == 3

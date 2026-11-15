@@ -415,3 +415,58 @@ class TestBatchTTSEngineAPI:
             waveform = engine.text_to_waveform(text)
             results.append({"text": text, "waveform": waveform})
         assert len(results) == 0
+
+
+class TestPhonemeEngineWavPayload:
+    """The engine must hand back a JSON-ready payload, not an ndarray.
+
+    Retargeted verbatim from ``tests/core-py/test_phoneme_router.py`` when the
+    dead ``/phoneme/*`` router was deleted (card ``20261108_152007``, 2026-11-08
+    — one capability, one HTTP surface). The bugs these guard are live-path
+    bugs: the voice engine hands back a raw ``np.ndarray`` waveform, and
+    returning it untouched made a route 500 with ``E_SERIALIZATION`` (the
+    FastAPI response model cannot encode an ndarray). The old router tests
+    hid it behind a mock that already returned a dict; these drive the real
+    ndarray shape and assert the result serialises — the same class the live
+    ``POST /multimodal/synthesize-speech`` serves through VoiceEngine.
+    """
+
+    def test_wav_data_uri_encodes_a_playable_wav(self):
+        import base64
+        import io
+        import wave
+
+        import numpy as np
+
+        from domain.voice._internal.phoneme import _SAMPLE_RATE, _wav_data_uri
+
+        waveform = np.zeros(_SAMPLE_RATE, dtype=np.float32)  # 1s of silence
+        uri = _wav_data_uri(waveform)
+        assert uri.startswith("data:audio/wav;base64,"), uri
+        raw = base64.b64decode(uri.split(",", 1)[1])
+        with wave.open(io.BytesIO(raw), "rb") as wf:
+            assert wf.getframerate() == _SAMPLE_RATE
+            assert wf.getnchannels() == 1
+            assert wf.getnframes() == _SAMPLE_RATE
+
+    def test_synthesize_returns_json_ready_payload(self):
+        import json
+        from unittest.mock import MagicMock
+
+        import numpy as np
+
+        from domain.voice._internal.phoneme import _SAMPLE_RATE, PhonemeEngine
+
+        engine = PhonemeEngine()
+        waveform = np.linspace(-0.5, 0.5, _SAMPLE_RATE // 2, dtype=np.float32)
+        fake_voice = MagicMock()
+        fake_voice.synthesize.return_value = MagicMock(data=waveform)
+        engine._voice = fake_voice  # _get_voice returns the cached _voice
+
+        result = engine.synthesize("hello world")
+        assert result.success, result.error
+        # The exact failure this guards: the payload must survive JSON encoding.
+        json.dumps(result.data)  # would raise TypeError on a raw ndarray
+        assert result.data["audio"].startswith("data:audio/wav;base64,")
+        assert result.data["text"] == "hello world"
+        assert abs(result.data["duration_sec"] - 0.5) < 1e-6

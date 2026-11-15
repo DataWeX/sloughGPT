@@ -21,9 +21,9 @@ Usage::
 Exit 0 — board intact (or missing: nothing to guard).
 Exit 1 — corruption found; diagnostics on stderr.
 
-Env failures (app_planner unimportable) fail OPEN with a warning — the git
+Env failures (grib unimportable) fail OPEN with a warning — the git
 hook philosophy is "a wedged env must not wedge pushes"; CI is the hard gate
-and its checkout always carries packages/app-planner/src next to this script.
+and its checkout always carries packages/grib/src next to this script.
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "packages" / "app-planner" / "src"))
+sys.path.insert(0, str(REPO_ROOT / "packages" / "grib" / "src"))
 
 try:
-    from app_planner.store import PlannerStore
+    from grib.store import PlannerStore
 except Exception as exc:  # noqa: BLE001 — fail-open on env, never wedge a push
-    print(f"check_board_chain: SKIPPED (app_planner unimportable: {exc!r})", file=sys.stderr)
+    print(f"check_board_chain: SKIPPED (grib unimportable: {exc!r})", file=sys.stderr)
     raise SystemExit(0) from exc
 
 SCHEMA_NAME = "planner/1"

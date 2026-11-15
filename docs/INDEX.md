@@ -42,6 +42,7 @@ Single source of truth for navigation. Read this first.
 | **vm-devices-spec.md**      | VM device spec                                             |
 | **WORLD_REALM.md**          | World rendering                                            |
 | **CACHING.md**              | LLM response cache: keys + invalidation                    |
+| **LLM_RESPONSE_CACHE.md**   | LLM response cache: keys + invalidation                    |
 
 ## Design
 
@@ -64,6 +65,7 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | **DEPLOYMENT.md**           | Deployment guide                                            |
 | **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks                                           |
 | **WORKTREE_RECOVERY.md**    | Worktree wipe prevention + prune/recreate recovery runbook  |
+| **WORKTREE_AUDIT.md**       | 2026-11-13 audit — 115→33 worktrees, hold-list, sloughGPT-separate verdict |
 | **scripts/systemd/**        | systemd --user unit for the shared API (:8000) + install.sh |
 
 ## Integration

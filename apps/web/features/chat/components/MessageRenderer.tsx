@@ -8,8 +8,8 @@
  */
 
 import { memo, useMemo } from 'react'
-import { cn } from '@sloughgpt/strui'
 import { Markdown } from './messages/Markdown'
+import { MessageFrame } from './messages/MessageFrame'
 import { ToolCallPanel } from './messages/ToolCallPanel'
 import { StreamingIndicator } from './StreamingIndicator'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
@@ -136,44 +136,49 @@ export const MessageRenderer = memo(function MessageRenderer({
   }, [content, role, isStreaming, searchQuery])
 
   return (
-    <div className={cn('space-y-1', className)}>
-      {/* Images */}
-      <ImageGrid images={images || []} />
+    <MessageFrame
+      role={role}
+      className={className}
+      footer={
+        metadata ? (
+          <>
+            {metadata.model && <span>{metadata.model}</span>}
+            {metadata.tokens != null && <span> · {metadata.tokens} tokens</span>}
+            {metadata.latencyMs != null && <span> · {metadata.latencyMs}ms</span>}
+          </>
+        ) : undefined
+      }
+    >
+      <div className="space-y-1">
+        {/* Images */}
+        <ImageGrid images={images || []} />
 
-      {/* Tool calls */}
-      {toolCalls && toolCalls.length > 0 && <ToolCalls events={toolCalls} />}
+        {/* Tool calls */}
+        {toolCalls && toolCalls.length > 0 && <ToolCalls events={toolCalls} />}
 
-      {/* Reasoning (thinking) */}
-      {reasoning && (
-        <details className="text-xs text-muted-foreground border border-border/30 rounded-lg p-2">
-          <summary className="cursor-pointer hover:text-foreground transition-colors">
-            Reasoning
-          </summary>
-          <div className="mt-1.5 font-mono text-[11px] whitespace-pre-wrap opacity-70">
-            {reasoning}
+        {/* Reasoning (thinking) */}
+        {reasoning && (
+          <details className="text-xs text-muted-foreground border border-border/30 rounded-lg p-2">
+            <summary className="cursor-pointer hover:text-foreground transition-colors">
+              Reasoning
+            </summary>
+            <div className="mt-1.5 font-mono text-[11px] whitespace-pre-wrap opacity-70">
+              {reasoning}
+            </div>
+          </details>
+        )}
+
+        {/* Main content */}
+        {renderedContent}
+
+        {/* Error indicator */}
+        {isError && (
+          <div className="text-xs text-destructive mt-1 flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+            Response interrupted
           </div>
-        </details>
-      )}
-
-      {/* Main content */}
-      {renderedContent}
-
-      {/* Error indicator */}
-      {isError && (
-        <div className="text-xs text-destructive mt-1 flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
-          Response interrupted
-        </div>
-      )}
-
-      {/* Metadata (subtle) */}
-      {metadata && (
-        <div className="text-[9px] text-muted-foreground/40 font-mono mt-0.5">
-          {metadata.model && <span>{metadata.model}</span>}
-          {metadata.tokens != null && <span> · {metadata.tokens} tokens</span>}
-          {metadata.latencyMs != null && <span> · {metadata.latencyMs}ms</span>}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </MessageFrame>
   )
 })

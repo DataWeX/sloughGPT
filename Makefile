@@ -99,7 +99,6 @@ buildroot-status:
 # ── Install ──────────────────────────────────────────────
 install: build setup-git
 	cd apps/web && npm ci
-	$(PY) -m pip install -e packages/core-py/
 	$(PY) -m pip install -e packages/chargectl/
 
 # Install the chargectl enforcement daemon. Both targets rewrite ExecStart to this
@@ -206,4 +205,4 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 test-planner:
-	PYTHONPATH=packages/app-planner/src:packages/mogdb/src $(PY) -m pytest packages/app-planner/tests/ -x -q $(ARGS)
+	PYTHONPATH=packages/grib/src:packages/mogdb/src $(PY) -m pytest packages/grib/tests/ -x -q $(ARGS)

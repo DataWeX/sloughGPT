@@ -84,6 +84,7 @@ PRINT_ALLOWLIST = {
     "domain/shell/_internal/input_device.py": "terminal echo in readline()",
     "domain/shell/_internal/vm.py": "guest console: _sys_write sends VM stdout/stderr to the process console (the capsys syscall contract)",
     "domain/shell/_internal/realm_live.py": "argparse CLI run summary",
+    "domain/shell/_internal/world_stream.py": "argparse CLI run summary in main() — python -m entry, stdout is its report",
     "domain/training/_internal/lm_eval_char.py": "--json machine-readable stdout mode",
     "journeys/runner.py": "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
     "domain/shell/_internal/cmds/dashboard.py": "dashboard watch-loop renderer — terminal frames ARE its output",

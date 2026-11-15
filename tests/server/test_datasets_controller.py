@@ -356,3 +356,67 @@ class TestSingleton:
         a = get_datasets_controller()
         b = get_datasets_controller()
         assert a is b
+
+
+class TestStructuredListing:
+    """Structured listing (card 20261104_060023): honest counts + kind groups."""
+
+    def test_large_corpus_counts_samples(self, tmp_path, monkeypatch):
+        """A corpus over 1 MB must still report its record count.
+
+        The old gate (`size < 1_000_000`) reported samples=0 for
+        tinyshakespeare (32,777 records) and imported_dataset (18 MB).
+        """
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        ds_dir = tmp_path / "data" / "bigcorpus"
+        ds_dir.mkdir(parents=True)
+        # >1 MB (5 records x ~300 KB), 5 records
+        (ds_dir / "corpus.jsonl").write_text(
+            "\n".join(json.dumps({"text": "x" * 300_000}) for _ in range(5)) + "\n"
+        )
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert by_id["bigcorpus"]["size"] > 1_000_000
+        assert by_id["bigcorpus"]["num_samples"] == 5
+
+    def test_corpusless_entry_is_flagged_not_just_empty(self, tmp_path, monkeypatch):
+        """An entry with no corpus at all carries has_corpus=False.
+
+        nbaallelo_csv (only an empty versions/) and test_ds (nothing)
+        were listed as kind=dataset/type=text with no signal that there
+        is no training data inside.
+        """
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        cache_ext = tmp_path / "cache" / "external"
+        (cache_ext / "hollow").mkdir(parents=True)
+        (cache_ext / "hollow" / ".manifest.json").write_text(
+            json.dumps({"kind": "dataset", "tags": ["dataset"]})
+        )
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert by_id["hollow"]["has_corpus"] is False
+        # and a real one stays True
+        ds_dir = tmp_path / "data" / "real"
+        ds_dir.mkdir(parents=True)
+        (ds_dir / "corpus.jsonl").write_text('{"text":"a"}\n')
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert by_id["real"]["has_corpus"] is True
+
+    def test_kind_groups_are_separable(self, repo_with_datasets, tmp_path):
+        """system/adapter/media entries must be separable from datasets.
+
+        24 system dirs (auth_mogdb, errors_json, ...) polluted the
+        37-row 'My Files' list. The listing carries `kind` on every row
+        so the UI can group — asserted here so the contract can't drop.
+        """
+        sysdir = tmp_path / "data" / "auth_mogdb"
+        sysdir.mkdir(parents=True)
+        result = repo_with_datasets.list_datasets()
+        by_id = {d["id"]: d for d in result}
+        assert by_id["auth_mogdb"]["kind"] == "system"
+        datasets = [d for d in result if d["kind"] == "dataset"]
+        others = [d for d in result if d["kind"] != "dataset"]
+        assert any(d["id"] == "shakespeare" for d in datasets)
+        assert any(d["id"] == "auth_mogdb" for d in others)
+        # a system dir must never be typed as a training corpus
+        assert by_id["auth_mogdb"]["type"] != "corpus"

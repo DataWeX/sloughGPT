@@ -348,7 +348,11 @@ def test_generate_long_sequence():
 def test_generate_sampling_does_not_collapse_to_single_token():
     """Greedy argmax on a fresh LSTM collapses to one repeated token; sampled
     decoding with temperature/top-k must stay diverse."""
-    np.random.default_rng(0)
+    # Seed the global RNG the model actually uses. This line used to be
+    # ``np.random.default_rng(0)`` with the result discarded — a no-op, so the
+    # assertion depended on whatever the previous test left in the global state
+    # (measured: seed 0/2/3 → 2 distinct tokens, seed 1 → 1, unseeded → 1 to 8).
+    np.random.seed(0)
     text = "the quick brown fox jumps over the lazy dog and then runs away home"
     vocab = sorted(set(text))
     stoi = {c: i for i, c in enumerate(vocab)}

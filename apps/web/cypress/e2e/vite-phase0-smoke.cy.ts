@@ -8,7 +8,6 @@ const NAV_PATHS = [
   '/collections', // Phase 4: legacy → /datasets
   '/datasets',
   '/knowledge',
-  '/personality',
   '/agents',
   '/souls',
   '/monitoring',

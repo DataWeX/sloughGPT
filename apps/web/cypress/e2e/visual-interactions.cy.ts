@@ -61,7 +61,7 @@ describe('Visual interactions — Chat page', () => {
 describe('Visual interactions — Models catalog', () => {
   beforeEach(() => {
     cy.mockAll()
-    cy.visit('/developer')
+    cy.visit('/models')
   })
 
   it('captures models grid', () => {
@@ -112,7 +112,7 @@ describe('Visual interactions — Navigation', () => {
     cy.screenshotSequence('navigation-flow', [
       { label: '01-home', action: () => {} },
       { label: '02-chat', action: () => cy.visit('/chat') },
-      { label: '03-personality', action: () => cy.visit('/personality') },
+      { label: '03-personality', action: () => cy.visit('/souls') },
       { label: '04-training', action: () => cy.visit('/training') },
       { label: '05-datasets', action: () => cy.visit('/datasets') },
       { label: '06-settings', action: () => cy.visit('/settings') },

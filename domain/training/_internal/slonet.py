@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.inference._internal.soul_meta_slim import externalize_optimizer_state
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.infrastructure._internal.kv_cache.prefix_cache import PrefixCache
@@ -260,8 +261,21 @@ def _broadcast_forward(t: np.ndarray, target_shape: tuple) -> np.ndarray:
 
 
 def _get_accelerator():
-    """Get GPU accelerator, lazy-loaded. Tries slolib/gpu first, then old accelerator."""
+    """Get GPU accelerator, lazy-loaded. Tries slolib/gpu first, then old accelerator.
+
+    A thread-local pin (``domain.slolib._internal.gpu.push_accelerator``) wins
+    over both caches. That is how one training run honours ``device="cpu"`` on
+    a GPU host without switching the accelerator off for every other thread.
+    """
     global _ACCELERATOR
+    try:
+        from domain.slolib._internal.gpu import override_accelerator
+
+        pinned = override_accelerator()
+        if pinned is not None:
+            return None if pinned.name == "cpu" else pinned
+    except Exception as e:  # pragma: no cover - pin layer must never break math
+        logger.debug("Accelerator pin unavailable: %s", e)
     if _ACCELERATOR is not None:
         return _ACCELERATOR if _ACCELERATOR != "none" else None
     try:
@@ -1853,7 +1867,6 @@ class SloLinear(SloLayer):
             self.bias = zeros((out_f,), requires_grad=True)
         self.out_features = out_f
         self.in_features = in_f
-        self._weight_T = None
         self._weight_T_contig = None  # cached contiguous (K, N) transpose for numpy GEMM
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
         self._quant_info = None  # TensorInfo for quantized weight
@@ -1870,19 +1883,31 @@ class SloLinear(SloLayer):
         return new
 
     def _get_weight_T(self) -> Tensor:
-        if self._weight_T is None:
-            self._weight_T = self.weight.T()
-        return self._weight_T
+        """Return a fresh ``(K, N)`` transpose node for *this* forward pass.
+
+        This used to be cached on the layer as a graph node. A cached node is a
+        node of *every* graph that reuses it: it is not in ``parameters()``, so
+        ``zero_grads`` never cleared it, and each ``backward()`` added the new
+        gradient on top of the previous step's (``_matmul`` allocates
+        ``ga`` and the transpose backward does ``a.grad.data += tg``). The real
+        weight's gradient then grew linearly with the step count — 1x, 2x, 3x —
+        invisible at step 1, slowly poisoning every training run.
+
+        Building the node per forward pass costs one object allocation; the
+        transpose itself is a strided view, never a copy. The cached transpose
+        *data* used by the inference paths is ``_get_weight_T_contig``.
+        """
+        return self.weight.T()
 
     def _get_weight_T_contig(self) -> np.ndarray:
         """Return a cached contiguous transposed weight matrix.
 
-        Unlike _get_weight_T (a strided view), this returns a contiguous
-        (K, N) copy so numpy `x @ W_T` uses the optimized GEMM kernel.
+        Unlike _get_weight_T (a strided view, rebuilt per forward pass), this
+        returns a contiguous (K, N) copy so numpy `x @ W_T` uses the optimized
+        GEMM kernel.
         The cache is built once per layer and reused across generate calls;
         it is invalidated when the weight is replaced (set_quantized_weight,
-        set_point_weight). In-place updates to weight.data are NOT reflected
-        (same staleness semantics as _get_weight_T).
+        set_point_weight). In-place updates to weight.data are NOT reflected.
 
         Returns:
             np.ndarray: (K, N) contiguous float32 array of weight.data.T
@@ -1954,7 +1979,6 @@ class SloLinear(SloLayer):
             return True
         self._freed_shape = tuple(self.weight.data.shape)
         self.weight.data = np.zeros((1,), dtype=np.float32)
-        self._weight_T = None
         self._weight_T_contig = None
         return True
 
@@ -4639,6 +4663,24 @@ def clip_grad_norm_(
     return total_norm
 
 
+def _optimizer_buffer(buf, as_arrays: bool):
+    """Snapshot one optimizer moment buffer.
+
+    ``as_arrays=True`` → C-contiguous numpy copy (checkpoint hot path: bytes
+    end-to-end, no ``tolist()`` → JSON float-text round-trip per save).
+    Default → nested Python lists, the pre-existing JSON-serializable
+    contract that chat_trainer and legacy consumers rely on.
+    """
+    if isinstance(buf, np.ndarray):
+        return buf.copy() if as_arrays else buf.tolist()
+    if hasattr(buf, "detach"):  # torch tensor
+        arr = buf.detach().cpu().numpy()
+        return arr.copy() if as_arrays else arr.tolist()
+    if as_arrays:
+        return np.asarray(buf)
+    return buf
+
+
 class SloSGD:
     """Stochastic gradient descent with optional momentum.
 
@@ -4685,12 +4727,17 @@ class SloSGD:
             p.data -= self.lr * g
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists — the checkpoint hot path's bytes end-to-end
+                mode (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters' and 'state' (name-keyed buffers).
@@ -4710,13 +4757,7 @@ class SloSGD:
             pid = id(p)
             if pid in self._v:
                 buf = self._v[pid]
-                state["state"][name] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                state["state"][name] = _optimizer_buffer(buf, as_arrays)
         return state
 
     def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
@@ -4870,12 +4911,16 @@ class SloAdam:
             p.data -= self._reduce_to_param_shape(upd, p)
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters and timestep (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters', 't', and 'state' (name-keyed buffers).
@@ -4900,22 +4945,10 @@ class SloAdam:
             entry = {}
             if pid in self._m:
                 buf = self._m[pid]
-                entry["m"] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                entry["m"] = _optimizer_buffer(buf, as_arrays)
             if pid in self._v:
                 buf = self._v[pid]
-                entry["v"] = (
-                    buf.tolist()
-                    if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist()
-                    if hasattr(buf, "detach")
-                    else buf
-                )
+                entry["v"] = _optimizer_buffer(buf, as_arrays)
             if entry:
                 state["state"][name] = entry
         return state
@@ -5051,19 +5084,23 @@ class SloAdamW(SloAdam):
                 p.data -= lr * wd * p.data
             p.grad = None
 
-    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
+    def state_dict(
+        self, params: Sequence[Tensor] | None = None, *, as_arrays: bool = False
+    ) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
             params: List of parameters to include. If None, returns only
                 hyperparameters and timestep (no per-param state).
+            as_arrays: Return moment buffers as numpy snapshot copies instead
+                of nested lists (see ``_optimizer_buffer``).
 
         Returns:
             Dict with 'hyperparameters', 't', and 'state' (name-keyed
             buffers). When ``amsgrad`` is active, each entry also carries
             the 'maxv' running maximum.
         """
-        state = super().state_dict(params)
+        state = super().state_dict(params, as_arrays=as_arrays)
         state["hyperparameters"]["amsgrad"] = self.amsgrad
         state["hyperparameters"]["maximize"] = self.maximize
         if params is None:
@@ -5073,13 +5110,7 @@ class SloAdamW(SloAdam):
             pid = id(p)
             if pid in self._vmax:
                 buf_v = self._vmax[pid]
-                state["state"].setdefault(name, {})["maxv"] = (
-                    buf_v.tolist()
-                    if isinstance(buf_v, np.ndarray)
-                    else buf_v.detach().cpu().tolist()
-                    if hasattr(buf_v, "detach")
-                    else buf_v
-                )
+                state["state"].setdefault(name, {})["maxv"] = _optimizer_buffer(buf_v, as_arrays)
         return state
 
     def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
@@ -5172,10 +5203,20 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
         )
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
+    # A round-tripped net can carry training_state moments in net.metadata;
+    # externalize them so a re-export never re-fattens the sidecar.
+    sidecar_path = path + ".meta.json"
+    sidecar_doc, _externalized = externalize_optimizer_state(_sanitize(metadata), sidecar_path)
     atomic_write(
-        path + ".meta.json",
-        json.dumps(_sanitize(metadata), indent=2),
+        sidecar_path,
+        json.dumps(sidecar_doc, indent=2),
     )
+
+    # Provenance sidecar — records which dataset/model produced this file so
+    # lineage() can walk it. Best-effort: a stamp failure never breaks a save.
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    stamp_export(path, "model", metadata)
 
     return path
 

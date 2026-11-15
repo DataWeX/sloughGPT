@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.errors import ErrorsRouter  # noqa: E402
+from routers.system import ErrorsRouter  # noqa: E402
 
 
 def _app(er: ErrorsRouter) -> FastAPI:

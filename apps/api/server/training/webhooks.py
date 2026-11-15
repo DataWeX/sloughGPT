@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from infrastructure.ssrf import validate_url_not_private
 from mogdb import MogDB
 
 from domain.shared import find_repo_root
@@ -131,6 +132,12 @@ class WebhookStore:
         """Register a new webhook."""
         if not self.is_available:
             raise RuntimeError("Webhook store unavailable (MogDB failed to initialise)")
+
+        # SSRF: webhook URLs are caller-chosen destinations fetched server-side.
+        # Registration is the single seam where they enter the system
+        # (card 20261108_142919); delivery-time re-resolution (TOCTOU/DNS
+        # rebinding) is explicitly out of scope for this card.
+        validate_url_not_private(url)
 
         webhook_id = hashlib.sha256(f"{url}{time.time()}".encode()).hexdigest()[:16]
 

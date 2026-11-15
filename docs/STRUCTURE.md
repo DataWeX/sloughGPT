@@ -5,7 +5,6 @@
 Lightweight layout:
 
 - `apps/` — runnable apps (see **[apps/README.md](../apps/README.md)**): API (`apps/api/server/`), CLI (`apps/cli/`), web (`apps/web/`)
-- `packages/core-py/` — shared Python core (`utils/`); domain code lives at repo-root `domain/`; see **[packages/core-py/README.md](../packages/core-py/README.md)**
 - `packages/sdk-py/sloughgpt_sdk/` — Python API client SDK (**[README.md](../packages/sdk-py/sloughgpt_sdk/README.md)**)
 - `packages/sdk-ts/typescript-sdk/` — TypeScript SDK (npm root; **[README.md](../packages/sdk-ts/typescript-sdk/README.md)**)
 - `packages/standards/` — standards docs and JSON schemas; see **[packages/standards/README.md](../packages/standards/README.md)**
@@ -32,7 +31,6 @@ never a new module beside it. Descriptions below are each package's own
 | `domain/benchmark`      | benchmark — Benchmark domain for performance testing.                         |
 | `domain/chat`           | chat — Chat domain for message handling.                                      |
 | `domain/cognition`      | cognition — Reasoning, thinking, creativity, RAG, and consciousness.          |
-| `domain/cognitive`      | cognitive — Cognitive architecture domain.                                    |
 | `domain/collections`    | collections — Data collection pipeline: sources, stores, filters, collectors. |
 | `domain/companion`      | companion — AI companion system for natural conversation.                     |
 | `domain/context`        | context — Context managers for model behavior steering.                       |

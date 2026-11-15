@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
 from domain.shared import find_repo_root, repair_iso
 
 logger = logging.getLogger("slo.soul_manager")
@@ -591,8 +592,8 @@ def get_slo_manager() -> SloManager:
     return _slo_manager
 
 
-def warm_soul_index_async() -> threading.Thread | None:
-    """Warm the soul index on a daemon thread (startup hook; never blocks boot).
+def warm_soul_index_async() -> ThreadHandle | None:
+    """Warm the soul index in the background (startup hook; never blocks boot).
 
     Readiness must not be gated on soul inventory: a trained ``.soul`` embeds
     its Adam optimizer state as JSON (~41 MB), and parsing one costs ~2.2 s.
@@ -619,9 +620,8 @@ def warm_soul_index_async() -> threading.Thread | None:
         except Exception as e:  # pragma: no cover — never break boot
             logger.warning("Soul index warm failed: %s", e, extra={"tag": "SOUL"})
 
-    thread = threading.Thread(target=_warm, daemon=True, name="soul-index-warm")
-    thread.start()
-    return thread
+    handle = spawn_loop(_warm, name="soul-index-warm")
+    return handle
 
 
 def switch_soul(name: str) -> dict[str, Any]:

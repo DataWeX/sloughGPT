@@ -58,7 +58,11 @@ make_tar() {
     trap 'rm -rf "$stage"' RETURN
 
     cp -a "$JOURNAL" "$stage/journal"
-    cp -a "$API_STD/.kanban/board.jsonl" "$stage/board-api-std.jsonl"
+    if [[ -f "$API_STD/.kanban/board.jsonl" ]]; then
+        cp -a "$API_STD/.kanban/board.jsonl" "$stage/board-api-std.jsonl"
+    else
+        warn "api-std board missing ($API_STD) — skipping board-api-std snapshot"
+    fi
     if [[ -f "$CODE_ROOT/.kanban/board.jsonl" ]]; then
         cp -a "$CODE_ROOT/.kanban/board.jsonl" "$stage/board-worktree.jsonl"
     fi
@@ -93,7 +97,11 @@ push_code() {
 push_journal() {
     local rc=0 snap="$JOURNAL/snapshots"
     mkdir -p "$snap"
-    cp -a "$API_STD/.kanban/board.jsonl" "$snap/board-api-std.jsonl"
+    if [[ -f "$API_STD/.kanban/board.jsonl" ]]; then
+        cp -a "$API_STD/.kanban/board.jsonl" "$snap/board-api-std.jsonl"
+    else
+        warn "api-std board missing ($API_STD) — skipping board-api-std snapshot"
+    fi
     if [[ -f "$CODE_ROOT/.kanban/board.jsonl" ]]; then
         cp -a "$CODE_ROOT/.kanban/board.jsonl" "$snap/board-worktree.jsonl"
     fi

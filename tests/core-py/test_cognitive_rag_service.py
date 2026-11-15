@@ -364,6 +364,22 @@ class TestRAGServiceListDocuments:
         for d in docs:
             assert d["num_chunks"] >= 1
 
+    def test_limit_caps_page(self, populated_svc):
+        assert len(populated_svc.list_documents(limit=1)) == 1
+
+    def test_offset_skips_entries(self, populated_svc):
+        everything = populated_svc.list_documents()
+        assert populated_svc.list_documents(limit=1, offset=1) == [everything[1]]
+
+    def test_offset_beyond_end_is_empty(self, populated_svc):
+        assert populated_svc.list_documents(offset=99) == []
+
+    def test_zero_limit_is_empty(self, populated_svc):
+        assert populated_svc.list_documents(limit=0) == []
+
+    def test_negative_offset_clamped_to_start(self, populated_svc):
+        assert populated_svc.list_documents(offset=-5) == populated_svc.list_documents()
+
 
 # ---------------------------------------------------------------------------
 # RAGService — clear

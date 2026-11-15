@@ -64,6 +64,8 @@ export function useKnowledgeWorkbench() {
   const [editErrors, setEditErrors] = useState<{ content?: string; topic?: string }>({})
   const [ragStats, setRagStats] = useState<RAGStats | null>(null)
   const [ragDocs, setRagDocs] = useState<RAGDocument[]>([])
+  const [ragDocsTotal, setRagDocsTotal] = useState(0)
+  const [ragLoadingMore, setRagLoadingMore] = useState(false)
   const [ragClearing, setRagClearing] = useState(false)
   const [ragSyncing, setRagSyncing] = useState(false)
   const [showRagDocs, setShowRagDocs] = useState(false)
@@ -118,6 +120,7 @@ export function useKnowledgeWorkbench() {
       const [s, docs] = await Promise.all([getRAGStats(), listRAGDocuments()])
       setRagStats(s)
       setRagDocs(docs.documents || [])
+      setRagDocsTotal(docs.total ?? docs.stats?.total_documents ?? 0)
     } catch {
       notify.toast('Could not load deep memory data', { type: 'error' })
     }
@@ -140,6 +143,20 @@ export function useKnowledgeWorkbench() {
       setRagClearing(false)
     }
   }, [])
+
+  const handleRAGLoadMoreDocs = useCallback(async () => {
+    setRagLoadingMore(true)
+    try {
+      const next = await listRAGDocuments(undefined, ragDocs.length)
+      const more = next.documents || []
+      setRagDocs((prev) => [...prev, ...more])
+      setRagDocsTotal(next.total ?? 0)
+    } catch {
+      addToast('Could not load more sources', 'error')
+    } finally {
+      setRagLoadingMore(false)
+    }
+  }, [ragDocs.length, addToast])
 
   const handleRAGSync = useCallback(async () => {
     setRagSyncing(true)
@@ -557,6 +574,7 @@ export function useKnowledgeWorkbench() {
     handleExportSelected,
     handleImportFile,
     handleRAGClear,
+    handleRAGLoadMoreDocs,
     handleRAGSync,
     handleSaveEdit,
     handleSaveImportance,
@@ -573,6 +591,8 @@ export function useKnowledgeWorkbench() {
     pendingDelete,
     ragClearing,
     ragDocs,
+    ragDocsTotal,
+    ragLoadingMore,
     ragStats,
     ragSyncing,
     router,

@@ -2,9 +2,12 @@
 GPU/Accelerator Layer for SloLib
 
 Three backends:
-- **Metal**: Apple Silicon awareness with numpy compute (platform detection, no torch)
+- **Metal**: Apple Silicon awareness with numpy compute (platform detection)
 - **CUDA**: NVIDIA GPU via CuPy (pip install cupy-cuda12x)
 - **CPU**: Pure NumPy (always works, no dependencies)
+
+Torch is not a backend here — see ``_REMOVED_BACKENDS``. SloNet's NumPy engine
+is the only training engine; the backends above are kernel providers for it.
 
 Usage:
     acc = get_accelerator()
@@ -169,7 +172,13 @@ def _ensure_probe() -> None:
             return
         _PROBE_STARTED = True
         gen = _PROBE_GEN
-        threading.Thread(target=_run_probe, args=(gen,), name="accel-probe", daemon=True).start()
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): _PROBE_STARTED is already set, so a dropped
+        # fire-and-forget submit would leave detection dead for this epoch —
+        # the engine never drops.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        get_engine().spawn(_run_probe, gen, name="accel-probe")
 
 
 def _run_probe(gen: int) -> None:
@@ -238,7 +247,164 @@ def set_accelerator_precision(mode: str = "auto") -> str:
     return acc.set_precision(mode)
 
 
+# =============================================================================
+# EXPLICIT SELECTION + PER-THREAD PIN
+# =============================================================================
+#
+# ``SLO_ACCEL_BACKEND`` is a declaration, not a hint. Unset/``auto`` keeps the
+# historical priority order (CUDA > Metal > OpenCL > CPU) byte-identical; any
+# other value either resolves or fails. Silent degradation is the class the
+# dispatch counters were added for — a run that *thought* it was on the GPU and
+# quietly was not is worse than a run that refuses at boot.
+
+_BACKEND_ALIASES = {
+    "cupy": "cuda",
+    "gpu": "cuda",
+    "nvidia": "cuda",
+    "mps": "metal",
+    "apple": "metal",
+    "numpy": "cpu",
+}
+
+#: Backends that shipped once and were deliberately removed. A declaration for
+#: one of these must explain *why* it is gone — "unknown backend" would send the
+#: next reader looking for a typo instead of the ruling.
+_REMOVED_BACKENDS = {
+    "torch": (
+        "torch was removed — SloNet's NumPy engine is the only training backend; "
+        "use cpu|auto, or cuda/metal/opencl for the in-repo GPU kernels"
+    ),
+    "pytorch": (
+        "torch was removed — SloNet's NumPy engine is the only training backend; "
+        "use cpu|auto, or cuda/metal/opencl for the in-repo GPU kernels"
+    ),
+}
+
+
+def _backend_classes() -> dict[str, type[_Accelerator]]:
+    """The one declaration of which backends exist (canonical names only)."""
+    return {
+        "cpu": _CPUBackend,
+        "cuda": _CUDABackend,
+        "metal": _MetalBackend,
+        "opencl": _OpenCLBackend,
+    }
+
+
+def known_backends() -> frozenset[str]:
+    """Every name ``select_backend`` resolves: canonical names plus aliases.
+
+    ``TrainerConfig`` validates against this instead of keeping its own list —
+    one declaration, so the config vocabulary cannot drift from the seam.
+    """
+    return frozenset(_backend_classes()) | frozenset(_BACKEND_ALIASES)
+
+
+def removed_backend_reason(name: str) -> str | None:
+    """Why ``name`` is no longer a backend, or ``None`` if it never was one.
+
+    Shared by ``select_backend`` (refuses at resolution) and ``TrainerConfig``
+    (refuses at validation) so both say the same sentence.
+    """
+    key = str(name or "").strip().lower()
+    return _REMOVED_BACKENDS.get(_BACKEND_ALIASES.get(key, key))
+
+
+def requested_backend() -> str:
+    """Backend named by ``SLO_ACCEL_BACKEND`` (lower-case, ``auto`` when unset)."""
+    return os.environ.get("SLO_ACCEL_BACKEND", "auto").strip().lower() or "auto"
+
+
+def _backend_factory(name: str):
+    return _backend_classes().get(name)
+
+
+def select_backend(name: str) -> _Accelerator:
+    """Build the named backend or raise — never fall back silently.
+
+    Raises:
+        ValueError: unknown backend name — or a backend that was removed
+            (``torch``), with the reason attached.
+        RuntimeError: known backend, unavailable on this host (no CUDA driver,
+            no Metal platform, no pyopencl, ...).
+    """
+    key = str(name or "").strip().lower()
+    key = _BACKEND_ALIASES.get(key, key)
+    removed = removed_backend_reason(key)
+    if removed is not None:
+        raise ValueError(f"accelerator backend {key!r} is not supported: {removed}")
+    factory = _backend_factory(key)
+    if factory is None:
+        raise ValueError(
+            f"unknown accelerator backend {name!r}; known: auto, "
+            f"{', '.join(sorted(known_backends()))} (removed: "
+            f"{', '.join(sorted(_REMOVED_BACKENDS))})"
+        )
+    acc = factory()
+    if not acc.is_available():
+        raise RuntimeError(f"accelerator backend {key!r} is not available on this host")
+    return acc
+
+
+def accelerator_for(device: str = "auto") -> _Accelerator:
+    """Resolve a declared device string to a backend instance.
+
+    ``"auto"`` asks the detector (bounded probe, CPU fallback). Everything else
+    is a declaration: it resolves or raises (see :func:`select_backend`).
+    """
+    key = str(device or "auto").strip().lower()
+    if key in ("", "auto"):
+        return get_accelerator()
+    return select_backend(key)
+
+
+#: Per-thread backend pin. Training runs in worker threads, so the pin is
+#: thread-scoped: a ``device="cpu"`` run cannot silence the GPU for inference
+#: or for a second job in the same process.
+_TLS = threading.local()
+
+
+def override_accelerator() -> _Accelerator | None:
+    """The backend pinned to *this* thread, or ``None`` (global detection)."""
+    return getattr(_TLS, "accelerator", None)
+
+
+def push_accelerator(acc: _Accelerator | None) -> _Accelerator | None:
+    """Pin *acc* for this thread; returns the previous pin (pass it to pop)."""
+    previous = override_accelerator()
+    _TLS.accelerator = acc
+    return previous
+
+
+def pop_accelerator(previous: _Accelerator | None) -> None:
+    """Restore the pin returned by :func:`push_accelerator`."""
+    _TLS.accelerator = previous
+
+
 def _detect_best_backend() -> _Accelerator:
+    # A declared backend wins over detection. When it is unavailable the probe
+    # (a daemon thread at boot) logs an error and serves CPU; the loud failure
+    # for training is ``accelerator_for``, which raises instead.
+    requested = requested_backend()
+    if requested not in ("", "auto"):
+        try:
+            selected = select_backend(requested)
+            logger.info(
+                "Accelerator: SLO_ACCEL_BACKEND=%s selected %s",
+                requested,
+                selected.name,
+                extra={"tag": "GPU"},
+            )
+            return selected
+        except Exception as e:
+            logger.error(
+                "SLO_ACCEL_BACKEND=%s unavailable (%s) — serving the CPU backend",
+                requested,
+                e,
+                extra={"tag": "GPU"},
+            )
+            return _cpu_fallback()
+
     candidates: list[tuple[str, _Accelerator, int]] = []
 
     # --- Metal (macOS) ---
@@ -362,6 +528,17 @@ class _Accelerator:
             logger.debug("Precision benchmark failed: %s", e)
             self._fp16_mode = False
             return "fp32"
+
+    def array_module(self):
+        """The numpy-compatible array module this backend computes with.
+
+        Base/Metal/OpenCL compute with numpy. The CUDA backend returns
+        cupy, so callers can keep data device-resident across whole
+        operations — the high-level ops above return numpy per call,
+        which is right for NN layers but unusable for a per-bounce
+        tracer loop (every call would cross PCIe).
+        """
+        return np
 
     def is_available(self) -> bool:
         return True
@@ -1084,6 +1261,16 @@ class _CUDABackend(_Accelerator):
         except Exception as e:
             logger.debug("CUDA availability check failed: %s", e)
             return False
+
+    def array_module(self):
+        """cupy when the package imported AND a device is usable, else numpy.
+
+        ``is_available`` only proves the package imports (it may be
+        installed on a GPU-less machine) — callers that will launch
+        kernels must still probe, but this never hands back a module
+        that cannot even allocate.
+        """
+        return self._cp if self._cp is not None else np
 
     def sync(self) -> None:
         if self._cp:

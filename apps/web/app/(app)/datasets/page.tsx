@@ -31,6 +31,8 @@ import { formatDate } from '@/lib/conversations-utils'
 import { DatasetImportDialog } from '@/components/DatasetImportDialog'
 import { DatasetDropZone } from '@/components/DatasetDropZone'
 import { useDatasetList, useDeleteDataset } from '@/lib/cache'
+import { isTrainingCorpus } from '@/lib/dataset-controller'
+
 // Module scope: `addToast` must keep a stable identity — it sits in
 // useCallback/useEffect dependency arrays, and a per-render arrow would
 // re-fire those effects on every render.
@@ -59,12 +61,18 @@ export default function DatasetsPage() {
     }
   }, [refetchDatasets])
 
-  const filtered = allDatasets.filter(
-    (ds) =>
-      !search ||
-      ds.name.toLowerCase().includes(search.toLowerCase()) ||
-      ds.id.toLowerCase().includes(search.toLowerCase()),
-  )
+  const searchMatch = (ds: Dataset) =>
+    !search ||
+    ds.name.toLowerCase().includes(search.toLowerCase()) ||
+    ds.id.toLowerCase().includes(search.toLowerCase())
+
+  // Structured listing (card 20261104_060023): the file list shows training
+  // corpora; system/adapter/media entries are segregated behind an explicit
+  // labeled group instead of being presented as files.
+  const searched = allDatasets.filter(searchMatch)
+  const filtered = searched.filter(isTrainingCorpus)
+  const groupedOut = searched.filter((ds) => !isTrainingCorpus(ds))
+  const [showGrouped, setShowGrouped] = useState(false)
 
   const handleDelete = async () => {
     if (!pendingDelete) return
@@ -161,9 +169,13 @@ export default function DatasetsPage() {
         </Card>
       ) : filtered.length === 0 ? (
         <EmptyCard
-          message={allDatasets.length === 0 ? 'No files yet' : 'No files match your search'}
+          message={
+            allDatasets.filter(isTrainingCorpus).length === 0
+              ? 'No files yet'
+              : 'No files match your search'
+          }
           description={
-            allDatasets.length === 0
+            allDatasets.filter(isTrainingCorpus).length === 0
               ? 'Drop a PDF or text file above to start chatting with it.'
               : 'Try a different search term.'
           }
@@ -189,7 +201,11 @@ export default function DatasetsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{ds.name}</p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                      <span>{formatBytes(ds.size)}</span>
+                      {ds.has_corpus === false ? (
+                        <span className="text-warning">no corpus</span>
+                      ) : (
+                        <span>{formatBytes(ds.size)}</span>
+                      )}
                       {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
                       {ds.created_at && <span>{formatDate(ds.created_at)}</span>}
                     </div>
@@ -292,6 +308,54 @@ export default function DatasetsPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Segregated system/adapter/media entries — reachable, never
+          presented as files (card 20261104_060023). */}
+      {groupedOut.length > 0 && !loading && !fetchError && (
+        <div className="mt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => setShowGrouped((v) => !v)}
+            aria-expanded={showGrouped}
+          >
+            {showGrouped ? '▾' : '▸'} System entries ({groupedOut.length})
+          </Button>
+          {showGrouped && (
+            <div className="grid gap-2 mt-1">
+              {groupedOut.map((ds) => (
+                <Card key={ds.id} className="bg-muted/20 border-border/40">
+                  <CardContent className="flex items-center justify-between py-2 px-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate text-muted-foreground">
+                        {ds.name}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                        <span>{ds.kind}</span>
+                        {ds.has_corpus === false ? (
+                          <span>no corpus</span>
+                        ) : (
+                          <span>{formatBytes(ds.size)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
+                      aria-label={`Open ${ds.name}`}
+                    >
+                      →
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -13,7 +13,7 @@ _AUTH_USER = {"sub": "user1", "tenant_id": "t1"}
 
 
 def _build_app(auth_user_dict=_AUTH_USER):
-    from routers.infer import InferRouter
+    from routers.models import InferRouter
 
     router_obj = InferRouter()
     _app = FastAPI()

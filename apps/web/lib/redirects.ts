@@ -5,6 +5,7 @@ export const IGNORE_PATHS = ['/_next', '/favicon', '/sw.js', '/workbox']
 
 export const REDIRECTS: Record<string, string> = {
   '/companion': '/souls',
+  '/personality': '/souls',
   '/evaluate': '/benchmark',
   '/compare': '/benchmark',
   '/lora-eval': '/benchmark',
@@ -45,6 +46,7 @@ export const REDIRECTS: Record<string, string> = {
   '/explain': '/chat?mode=explain',
   '/wellness': '/chat?mode=wellness',
   '/shell': '/developer',
+  '/vm': '/developer',
   '/workflow': '/feedback',
   '/tools': '/chat',
   '/workspace-dashboard': '/workspace',

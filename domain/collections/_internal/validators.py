@@ -226,24 +226,19 @@ class CollectorRunner:
         return results
 
     def run_threaded(self) -> dict[str, int]:
-        results = {}
-        threads = []
-        lock = threading.Lock()
+        """Run every collector in parallel: {name: count}.
 
-        def run_one(name):
-            count = self.run(name)
-            with lock:
-                results[name] = count
+        Routed to the compute-batch kind (drain result → ParallelExecutor,
+        per the routing table in docs/plans/2026-09-20-execution-
+        consolidation.md): bounded workers instead of one raw thread per
+        collector, results identical to run_all().
+        """
+        from domain.infrastructure._internal.pugqeep.executor import ParallelExecutor
 
-        for name in self._collectors:
-            t = threading.Thread(target=run_one, args=(name,))
-            threads.append(t)
-            t.start()
-
-        for t in threads:
-            t.join()
-
-        return results
+        names = list(self._collectors)
+        return ParallelExecutor().map(
+            [(n, n) for n in names], lambda n: self.run(n), name="validate"
+        )
 
     def stats(self) -> dict:
         return dict(self._stats)

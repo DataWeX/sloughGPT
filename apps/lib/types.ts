@@ -78,6 +78,12 @@ export interface RequestOptions {
   onProgress?: (pct: number) => void
   headers?: Record<string, string>
   silent?: boolean
+  /**
+   * Keep the request alive during page unload (fetch keepalive; request
+   * bodies are capped at 64KB by the browser). Used by the dev-log flush,
+   * which must still POST when the tab is closing.
+   */
+  keepalive?: boolean
   /** Cache this GET request. boolean or CacheOptions. */
   cache?: boolean | CacheOptions
   /** Custom cache key override. */

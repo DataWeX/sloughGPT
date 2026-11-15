@@ -21,43 +21,51 @@ vi.mock('@sloughgpt/strui', () => ({
   IconPlay: (props: any) => <span data-testid="icon-play" {...props} />,
   IconMapPin: (props: any) => <span data-testid="icon-map-pin" {...props} />,
   IconCheckCircle: (props: any) => <span data-testid="icon-check-circle" {...props} />,
+  IconSmile: (props: any) => <span data-testid="icon-smile" {...props} />,
 
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { MessageActions } from './MessageActions'
@@ -213,7 +221,9 @@ describe('MessageActions', () => {
   it('does not render any buttons with no handlers', () => {
     const { container } = render(<MessageActions content="text" messageId="m1" />)
     const btns = container.querySelectorAll('button')
-    const nonReactionBtns = Array.from(btns).filter(b => b.getAttribute('aria-label') !== 'Add reaction')
+    const nonReactionBtns = Array.from(btns).filter(
+      (b) => b.getAttribute('aria-label') !== 'Add reaction',
+    )
     expect(nonReactionBtns).toHaveLength(0)
   })
 
@@ -229,13 +239,15 @@ describe('MessageActions', () => {
         onThumbsDown={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
-      />
+      />,
     )
     expect(container.querySelector('button[aria-label="Copy message"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Regenerate response"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Mark as helpful"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Mark as unhelpful"]')).toBeInTheDocument()
-    expect(container.querySelector('button[aria-label="Edit and resend message"]')).toBeInTheDocument()
+    expect(
+      container.querySelector('button[aria-label="Edit and resend message"]'),
+    ).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Delete message"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Read aloud"]')).toBeInTheDocument()
   })

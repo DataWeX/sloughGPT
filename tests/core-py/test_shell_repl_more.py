@@ -7363,10 +7363,11 @@ class TestCmdRenderSubs:
                     "samples": 4,
                 }
             if method == "render":
-                return _np.zeros((60, 80, 3))
+                return 0
             return [0]
 
         dev.call.side_effect = _call
+        dev.arena.get.return_value = _np.zeros((60, 80, 3))
         repl._render_device = dev
         repl._render_neural = MagicMock()
         return dev
@@ -7742,10 +7743,11 @@ class TestCmdRenderGo:
                     "samples": 4,
                 }
             if method == "render":
-                return _np.zeros((60, 80, 3))
+                return 0
             return [0]
 
         dev.call.side_effect = _call
+        dev.arena.get.return_value = _np.zeros((60, 80, 3))
         repl._render_device = dev
 
         neural = MagicMock()
@@ -7885,10 +7887,11 @@ class TestCmdRenderExtra:
                     "samples": 4,
                 }
             if method == "render":
-                return _np.zeros((60, 80, 3))
+                return 0
             return [0]
 
         dev.call.side_effect = _call
+        dev.arena.get.return_value = _np.zeros((60, 80, 3))
         repl._render_device = dev
         repl._render_neural = MagicMock()
         return dev
@@ -8311,8 +8314,10 @@ class TestCmdTui:
         def mock_import(name, *args, **kwargs):
             # A relative import passes the bare name ('tui_repl', level=1), not
             # the resolved dotted path -- matching the dotted path never fired
-            # and let the real TuiRepl start curses in-process.
-            if name == "tui_repl":
+            # and let the real TuiRepl start curses in-process. repl._cmd_tui
+            # has since moved to an absolute import, which arrives fully
+            # dotted; match both spellings so the shim fires either way.
+            if name in ("tui_repl", "domain.shell._internal.tui_repl"):
                 mod = MagicMock()
                 mod.TuiRepl.side_effect = RuntimeError("tui crashed")
                 return mod
@@ -13089,7 +13094,7 @@ class TestCmdRenderExecution:
         mock_dev, _ = self._setup_render(repl)
         import numpy as np
 
-        mock_dev.call.return_value = np.random.rand(60, 80, 3).astype(np.float32) * 0.5
+        mock_dev.arena.get.return_value = np.random.rand(60, 80, 3).astype(np.float32) * 0.5
         repl._cmd_render("go")
         assert repl._last_exit_code == 0
 
@@ -13097,7 +13102,7 @@ class TestCmdRenderExecution:
         mock_dev, _ = self._setup_render(repl)
         import numpy as np
 
-        mock_dev.call.return_value = np.random.rand(40, 50, 3).astype(np.float32) * 0.5
+        mock_dev.arena.get.return_value = np.random.rand(40, 50, 3).astype(np.float32) * 0.5
         repl._cmd_render("go 50 40 2")
         assert repl._last_exit_code == 0
 
@@ -31048,3 +31053,68 @@ class TestCwdHygiene:
         gate run #3). `monkeypatch.chdir` first restores at teardown.
         """
         assert Path.cwd() == _INITIAL_CWD
+
+
+# ── serve — thin projection over scripts/run_frontend_latest.sh ────
+
+
+class _FakeServeProc:
+    """Stands in for a Popen that already exited with *rc*."""
+
+    def __init__(self, rc: int):
+        self.returncode = None
+        self._rc = rc
+
+    def poll(self):
+        self.returncode = self._rc
+        return self._rc
+
+
+class TestCmdServe:
+    def _invoke(self, repl, monkeypatch, args: str, rc: int = 0):
+        """Run _cmd_serve with Popen faked; return (captured call, output)."""
+        import subprocess
+
+        captured: dict = {}
+
+        def fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return _FakeServeProc(rc)
+
+        monkeypatch.setattr(subprocess, "Popen", fake_popen)
+        out = _run_with_io(repl, [], lambda: repl._cmd_serve(args))
+        return captured, out
+
+    def test_builds_script_argv(self, repl, monkeypatch):
+        captured, _ = self._invoke(repl, monkeypatch, "--watch --port 9999 /some/worktree")
+        cmd = captured["cmd"]
+        assert cmd[0].endswith("scripts/run_frontend_latest.sh")
+        assert "--watch" in cmd
+        assert "/some/worktree" in cmd
+        assert captured["kwargs"]["env"]["SLO_FRONTEND_PORT"] == "9999"
+        assert captured["kwargs"]["start_new_session"] is True
+        # script stdout lands in a log, never in the REPL's stdin/stdout
+        assert captured["kwargs"]["stdout"].name.endswith("serve-cmd.log")
+
+    def test_defaults_to_main_worktree(self, repl, monkeypatch):
+        captured, _ = self._invoke(repl, monkeypatch, "")
+        cmd = captured["cmd"]
+        assert len(cmd) == 1 and cmd[0].endswith("run_frontend_latest.sh")
+        assert captured["kwargs"]["env"].get("SLO_FRONTEND_PORT") is None
+
+    def test_unknown_flag_fails_without_spawn(self, repl, monkeypatch):
+        captured, out = self._invoke(repl, monkeypatch, "--bogus")
+        assert "cmd" not in captured
+        assert repl._last_exit_code == 1
+        assert "unknown flag" in out
+
+    def test_help_prints_usage_without_spawn(self, repl, monkeypatch):
+        captured, out = self._invoke(repl, monkeypatch, "--help")
+        assert "cmd" not in captured
+        assert "serve [" in out
+
+    def test_failed_script_surfaces_log(self, repl, monkeypatch):
+        captured, _ = self._invoke(repl, monkeypatch, "", rc=7)
+        assert "cmd" in captured
+        assert repl._last_exit_code == 1

@@ -7,6 +7,7 @@ import { useConsciousnessStatus, getQualiaMood } from '@/hooks/useConsciousnessS
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
+import { serverNow } from '../../lib/clock'
 import { useErrorStream } from '@/hooks/useErrorStream'
 import {
   cn,
@@ -47,7 +48,7 @@ export function StatusBar() {
   const clearFailures = useApiMonitor((s) => s.clearFailures)
   const errorCount = useErrorStore((s) =>
     s.errors.reduce(
-      (sum, e) => (Date.now() - e.timestamp < ERROR_BADGE_TTL_MS ? sum + e.count : sum),
+      (sum, e) => (serverNow() - e.timestamp < ERROR_BADGE_TTL_MS ? sum + e.count : sum),
       0,
     ),
   )
@@ -279,10 +280,7 @@ export function StatusBar() {
               className="sl-badge sl-badge-secondary"
               title={`Consciousness: ${consciousnessStatus.level}/3 | Mood: ${getQualiaMood(consciousnessStatus.current_qualia)}`}
             >
-              <span
-                className="h-1 w-1 rounded-full bg-violet-400 animate-pulse"
-                aria-hidden="true"
-              />
+              <span className="h-1 w-1 rounded-full bg-primary animate-pulse" aria-hidden="true" />
               {getQualiaMood(consciousnessStatus.current_qualia) || `L${consciousnessStatus.level}`}
             </span>
           )}

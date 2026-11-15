@@ -20,11 +20,10 @@ from pathlib import Path
 # paths in commands keep firing.
 signal.signal(signal.SIGINT, signal.default_int_handler)
 
-# Ensure repo root (domain shims), CLI core, and core-py domains are on the path
+# Ensure repo root (domain shims) and CLI core are on the path
 _CLI_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _CLI_DIR.parent.parent.parent
-_CORE_PY_DIR = _ROOT_DIR / "packages" / "core-py"
-for _sys_path in [_CLI_DIR, str(_ROOT_DIR), str(_CORE_PY_DIR)]:
+for _sys_path in [_CLI_DIR, str(_ROOT_DIR)]:
     if str(_sys_path) not in sys.path:
         sys.path.insert(0, str(_sys_path))
 
@@ -410,6 +409,47 @@ def completion(shell):
         )
     elif _shell == "fish":
         echo(f"source (_{{COMPLETE}}={_shell}_complete sloughgpt | psub)")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Gates — static invariant checks as a product feature (card 20261112_060632)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Run the static gates (command parity, domain baseline, router manifest)")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Also fail on known (baselined) findings — debt the baseline tolerates",
+)
+def gates(strict):
+    """Report on the repo's static invariants without running the test suite.
+
+    \b
+    Examples:
+      sloughgpt gates             # fail only on new drift
+      sloughgpt gates --strict    # also fail on baselined known gaps
+    """
+    from domain.gates import run_gates
+
+    reports = run_gates()
+    failed = False
+    for report in reports:
+        mark = "ok" if report.ok else "FAIL"
+        echo(f"  {report.name}: {mark}" + (f" ({len(report.known)} known)" if report.known else ""))
+        for finding in report.findings:
+            echo(f"    - {finding}")
+        if strict:
+            for known in report.known:
+                echo(f"    ~ {known}")
+        if not report.ok:
+            failed = True
+        elif strict and report.known:
+            failed = True
+    if failed:
+        echo("gates: FAILED" + (" (--strict)" if strict else ""))
+        sys.exit(1)
+    echo("gates: all green")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -850,7 +890,11 @@ def simulate(
 
             npu = NPUDevice(name="npu")
             npu.open()
-            result = npu.load_model(model, f"huggingface:{model}")
+            # LOAD takes (path, name). An explicit .slnc path loads for real;
+            # an HF id is not a device file, so LOAD fails and the existing
+            # mock fallback below reports it (the NPU loads files, not ids).
+            source = model if model.endswith(".slnc") else f"huggingface:{model}"
+            result = npu.ioctl("LOAD", source, model)
             if not result.success:
                 _p(f"  {_c(f"⚠ Could not load '{model}': {result.error}", _YELLOW)}")
                 _p(
@@ -886,7 +930,7 @@ def simulate(
 
                 k.engine.load_model(model, FallbackModel())
             else:
-                provider = npu._models[model].provider
+                provider = npu.model(model).provider
                 k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
         _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load * 1000:.1f}ms")

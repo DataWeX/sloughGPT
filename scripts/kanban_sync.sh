@@ -21,14 +21,33 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WT="${KANBAN_SYNC_WT:-$HOME/.cache/kanban-sync-wt}"
-LOCK="${XDG_RUNTIME_DIR:-/tmp}/kanban-sync.lock"
+LOCK="${KANBAN_SYNC_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/kanban-sync.lock}"
+HOLDER="${LOCK}.holder"
 ATTEMPTS="${KANBAN_SYNC_ATTEMPTS:-3}"
 
 exec 9>"$LOCK"
 if ! flock -n 9; then
-  echo "kanban-sync: another run holds the lock — skipping"
+  # A LOUD skip, not a silent one. flock gives no owner, and `exit 0` on
+  # contention made every 5-minute tick of a wedged run look like success:
+  # one hung `git fetch` froze the producer for ~13h while main went 13h
+  # behind and CI reddened, with nothing in the journal but "skipping".
+  # So the holder publishes who it is, and contention past a bound is a
+  # failure the timer surfaces.
+  if [ -f "$HOLDER" ] && read -r holder_pid holder_started _ <"$HOLDER"; then
+    age=$(( $(date +%s) - ${holder_started:-0} ))
+    if [ "$age" -ge "${KANBAN_SYNC_LOCK_STALE:-900}" ]; then
+      echo "kanban-sync: lock held by pid ${holder_pid:-?} for ${age}s — producer is wedged" >&2
+      exit 1
+    fi
+    echo "kanban-sync: lock held by pid ${holder_pid:-?} (${age}s) — skipping"
+    exit 0
+  fi
+  echo "kanban-sync: lock held, no holder marker — skipping"
   exit 0
 fi
+# Written only while the lock is ours, so a reader never sees a torn marker.
+printf '%s %s %s\n' "$$" "$(date +%s)" "$REPO_ROOT" >"$HOLDER"
+trap 'rm -f "$HOLDER"' EXIT
 
 # The export worktree must be a real worktree of this repo; never rm -rf our
 # way out of doubt — a broken worktree is a loud failure, not a cleanup job.
@@ -50,8 +69,23 @@ while [ "$attempt" -le "$ATTEMPTS" ]; do
   fi
 
   # Producer: mirror canonical -> .kanban/board.jsonl + .dev-notes/ + manifest.
-  PYTHONPATH="$WT/packages/app-planner/src" \
-    "$WT/scripts/python" -m app_planner.cli export --repo "$WT" >/dev/null
+  # The module dir is DISCOVERED, not pinned: this script runs from whichever
+  # checkout owns the installed unit while exporting a worktree reset to
+  # origin/main, so a package rename landing on main would otherwise freeze
+  # the 5-minute producer until that other checkout happens to pull.
+  PRODUCER_SRC=""
+  for d in "$WT"/packages/*/src; do
+    if [ -d "$d/grib" ]; then
+      PRODUCER_SRC="$d"
+      break
+    fi
+  done
+  if [ -z "$PRODUCER_SRC" ]; then
+    echo "kanban-sync: no package under $WT/packages provides the grib module" >&2
+    exit 1
+  fi
+  PYTHONPATH="$PRODUCER_SRC" \
+    "$WT/scripts/python" -m grib.cli export --repo "$WT" >/dev/null
 
   # -f: .dev-notes/*.md stays gitignored (.gitignore:277) so ordinary sessions
   # never commit stale copies; the producer force-adds the canonical mirror.

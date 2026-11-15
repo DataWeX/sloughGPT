@@ -3,13 +3,7 @@
 import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
 import { cn } from '@sloughgpt/strui'
-import {
-  IconChat,
-  IconTraining,
-  IconBookmark,
-  IconBrain,
-  IconSettings,
-} from '@/components/icons/NavIcons'
+import { IconChat, IconTraining, IconBookmark, IconSettings } from '@/components/icons/NavIcons'
 import { useLocale } from '@/hooks/useLocale'
 import type { ComponentType } from 'react'
 
@@ -23,7 +17,6 @@ const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
   { path: '/chat', labelKey: 'nav.chat', icon: IconChat },
   { path: '/training', labelKey: 'nav.training', icon: IconTraining },
   { path: '/knowledge', labelKey: 'nav.knowledge', icon: IconBookmark },
-  { path: '/personality', labelKey: 'nav.personality', icon: IconBrain },
   { path: '/settings', labelKey: 'nav.settings', icon: IconSettings },
 ]
 

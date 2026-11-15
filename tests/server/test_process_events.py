@@ -12,6 +12,8 @@ from __future__ import annotations
 import pytest
 from training.job_store import JobStore
 from training.process_events import (
+    _ACTIONS_BY_STATE,
+    _TITLES,
     ACTION_INTENTS,
     ACTION_SCHEMA,
     CONTRACT_VERSION,
@@ -19,8 +21,6 @@ from training.process_events import (
     EVENTS,
     PROJECTOR_KIND,
     STATES,
-    _ACTIONS_BY_STATE,
-    _TITLES,
     action_ids,
     boot_snapshot,
     make_event,
@@ -194,11 +194,7 @@ class TestContractSchema:
             make_event("j1", "interrupted", "interrupted", surface="bogus")
 
     def test_every_table_intent_is_declared(self):
-        intents = {
-            a["intent"]
-            for surface in _ACTIONS_BY_STATE.values()
-            for a in surface
-        }
+        intents = {a["intent"] for surface in _ACTIONS_BY_STATE.values() for a in surface}
         assert intents <= set(ACTION_INTENTS)
 
     def test_every_table_action_matches_the_action_schema(self):

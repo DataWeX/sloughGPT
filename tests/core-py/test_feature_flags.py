@@ -386,6 +386,52 @@ class TestRegisterDefaults:
         assert count_before == count_after
 
 
+class TestRegistryJsonParity:
+    """config/feature_flags.json must declare exactly the registered flags.
+
+    A flag registered in code but absent from the JSON runs on its code
+    default forever and cannot be flipped via config — silently, which is how
+    ``slonet_provider_wave_i`` and ``slonet_wave_f`` went unnoticed (they
+    were found while landing step_trace, card 20261104_091710).
+
+    The reverse direction (JSON key with no registration) is load_config's
+    documented ignore behaviour, pinned separately by
+    ``test_load_config_ignores_unregistered_flags``.
+
+    Statuses are deliberately NOT compared here: config's whole job is to
+    override the registration default — ``hf_finetune`` registers DISABLED
+    and the repo config flips it to enabled.
+    """
+
+    @staticmethod
+    def _registered() -> set[str]:
+        from domain.shared._internal.feature_flags import _register_defaults
+
+        _register_defaults()  # idempotent; guarantees the canonical set
+        return set(FeatureFlags._flags)
+
+    @staticmethod
+    def _declared() -> set[str]:
+        from pathlib import Path
+
+        real = Path(__file__).resolve().parents[2] / "config" / "feature_flags.json"
+        return set(json.loads(real.read_text()))
+
+    def test_every_registered_flag_is_declared_in_json(self):
+        missing = self._registered() - self._declared()
+        assert not missing, (
+            "registered in code but missing from config/feature_flags.json: "
+            f"{sorted(missing)} — declare them so they are flippable via config"
+        )
+
+    def test_every_json_key_is_a_registered_flag(self):
+        extra = self._declared() - self._registered()
+        assert not extra, (
+            "declared in config/feature_flags.json but not registered in code: "
+            f"{sorted(extra)} — load_config silently ignores these"
+        )
+
+
 class TestFlagVersioning:
     """Version fields on flags + the append-only change ledger."""
 

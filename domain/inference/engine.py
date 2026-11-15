@@ -57,6 +57,12 @@ class TurnRequest:
     agent_id: str | None = None
     use_context_core: bool = True
     use_rag: bool = True
+    use_consciousness: bool = True
+    """Run the consciousness reflection pipeline for this turn.
+
+    Quick probes (QuickActions "Test model") set it false so the bare
+    "Hello!" never receives the reflection narrative as context.
+    """
     cancel_event: threading.Event | None = None
     """Cooperative cancellation for this turn.
 

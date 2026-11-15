@@ -20,6 +20,28 @@ def _alive(prefix: str) -> list[threading.Thread]:
     return [t for t in threading.enumerate() if t.name.startswith(prefix) and t.is_alive()]
 
 
+def _idle_alive(mgr) -> bool:
+    """True while *mgr*'s idle-check loop is live.
+
+    Stage 3B (``f2f91016a``) migrated this loop off ``threading.Thread`` onto
+    ``spawn_loop()``: the work now runs as an engine ``Process`` named
+    ``idle-manager`` on a pool thread (``tree-loops_*``), so a
+    ``threading.enumerate()`` scan for that name returns ``[]`` **whether the
+    loop is running or not**. That made the shutdown assertions below
+    vacuously true — they passed even while the loop kept running, which is
+    the exact leak this file exists to catch.
+
+    ``ThreadHandle.is_alive()`` is the surface the migration deliberately
+    kept (``is_alive``/``join``/``daemon``/``name``), so the assertions read
+    the loop's real state again. The thread scan stays as an OR: it still
+    catches a loop running as a raw thread, in either shape.
+    """
+    handle = getattr(mgr, "_thread", None)
+    if handle is not None and handle.is_alive():
+        return True
+    return bool(_alive("idle-manager"))
+
+
 def _mock_manager(config):
     from domain.feedback._internal.workflow import FeedbackWorkflowManager
 
@@ -92,12 +114,12 @@ class TestIdleReset:
 
         mgr = get_idle_manager()
         mgr.register("l3-teardown-probe-model")
-        assert any(t.name == "idle-manager" for t in threading.enumerate())
+        assert _idle_alive(mgr)
         mgr.reset()
         deadline = time.time() + 5.0
-        while time.time() < deadline and _alive("idle-manager"):
+        while time.time() < deadline and _idle_alive(mgr):
             time.sleep(0.05)
-        assert not _alive("idle-manager")
+        assert not _idle_alive(mgr)
 
 
 class TestOrphanInstances:
@@ -112,12 +134,12 @@ class TestOrphanInstances:
         orphan = IdleManager()
         orphan.register("l3-orphan-model")
         try:
-            assert _alive("idle-manager")
+            assert _idle_alive(orphan)
             stop_all_idle_managers()
             deadline = time.time() + 5.0
-            while time.time() < deadline and _alive("idle-manager"):
+            while time.time() < deadline and _idle_alive(orphan):
                 time.sleep(0.05)
-            assert not _alive("idle-manager")
+            assert not _idle_alive(orphan)
         finally:
             orphan.reset()
 
@@ -166,8 +188,13 @@ class TestConftestTeardown:
         _leaked_workflow.start()
 
     def test_b_no_leaked_threads_after_teardown(self):
+        from domain.infrastructure._internal.idle_manager import get_idle_manager
+
         assert _leaked_workflow is not None
-        assert not _alive("idle-manager")
+        # The loop is engine-owned now, so this reads the handle rather than
+        # scanning thread names (see _idle_alive) — a name scan would pass
+        # even with the loop still running.
+        assert not _idle_alive(get_idle_manager())
         assert not _alive("faf-worker")
         thread = _leaked_workflow._scheduler_thread
         assert thread is None or not thread.is_alive()

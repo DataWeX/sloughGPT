@@ -124,14 +124,23 @@ class DatasetsController:
                 from domain.training import find_corpus_file as _find
 
                 _primary = _find(d)
+                has_corpus = _primary is not None
                 size = _primary.stat().st_size if _primary is not None else 0
             num_samples = 0
-            if has_corpus and size < 1_000_000:
+            if has_corpus and size > 0:
+                # Count records regardless of size (card 20261104_060023): the
+                # old `< 1 MB` gate reported samples=0 for 18 MB corpora. Line
+                # counting is a streaming read — cheap even at 18 MB.
+                _count_file = (
+                    corpus_file
+                    if corpus_file.exists()
+                    else (input_file if input_file.exists() else _primary)
+                )
                 try:
-                    with open(corpus_file) as f:
-                        num_samples = sum(1 for _ in f)
+                    with open(_count_file, encoding="utf-8", errors="replace") as f:
+                        num_samples = sum(1 for line in f if line.strip())
                 except Exception as e:
-                    logger.debug("Failed to count samples in %s: %s", corpus_file, e)
+                    logger.debug("Failed to count samples in %s: %s", _count_file, e)
 
             # Detect Visual dataset from metadata marker
             # NOTE: local name must not shadow the dataset_type filter param.
@@ -163,6 +172,7 @@ class DatasetsController:
                 "size": size,
                 "num_samples": num_samples,
                 "samples": num_samples,
+                "has_corpus": has_corpus,
                 "description": self._describe_dataset(d, [], size)
                 if (corpus_file.exists() or input_file.exists())
                 else "",

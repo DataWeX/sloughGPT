@@ -138,6 +138,9 @@ class WorldToSceneMapper:
         voxel_size: float,
         material_indices_map: dict[int, int],
     ) -> Mesh:
+        native = self._voxel_mesh_native(indices, world_grid, voxel_size, material_indices_map)
+        if native is not None:
+            return native
         vs = voxel_size
         half = vs * 0.5
         cube_verts = np.array(
@@ -201,6 +204,36 @@ class WorldToSceneMapper:
 
         mesh = Mesh(vertices=all_vertices, faces=all_faces, material_idx=all_mat_idx)
         return mesh
+
+    def _voxel_mesh_native(
+        self,
+        indices: np.ndarray,
+        world_grid,
+        vs: float,
+        material_indices_map: dict[int, int],
+    ) -> Mesh | None:
+        """Native mesher through scene_build.c — None means python path.
+
+        Byte-identical to the loop above (same single-rounding
+        arithmetic; card bdfcb8cb parity gate), and disabled by the same
+        SLO_CYCLES_NATIVE=0 escape hatch as the trace core.
+        """
+        if len(indices) == 0:
+            return None
+        from domain.shell._internal._native_build import build_mesh_native
+
+        flat = np.ascontiguousarray(indices[:, 0], dtype=np.int64)
+        mats = world_grid.material[flat]
+        # material_indices_map.get(mat, 0), vectorized: the map covers
+        # every material present, and the zero fill keeps the .get default.
+        lut = np.zeros(int(mats.max()) + 1, dtype=np.int32)
+        for mat_type, mapped in material_indices_map.items():
+            lut[mat_type] = mapped
+        out = build_mesh_native(flat, lut[mats], world_grid.size[1], world_grid.size[2], vs)
+        if out is None:
+            return None
+        verts, faces, fmat = out
+        return Mesh(vertices=verts, faces=faces, material_idx=fmat)
 
     def baby_to_light(self, baby) -> Light | None:
         if not baby.alive:

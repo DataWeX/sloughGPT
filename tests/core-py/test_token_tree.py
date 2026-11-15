@@ -298,3 +298,62 @@ class TestEmbeddingMatrixCaching:
 
     def _matrix_cached(self) -> bool:
         return self.tree._embedding_matrix_cached
+
+
+# ── lowercase flag ──────────────────────────────────────────────────────────
+
+
+class TestLowercaseFlag:
+    """The trained lowercase flag governs encode/trace_path and survives I/O."""
+
+    CORPUS = "Hello World hello world Hello there WORLD"
+
+    def test_train_default_lowercases(self):
+        tree = TokenTree()
+        tree.train([self.CORPUS], vocab_size=64)
+        assert tree.decode(tree.encode("HELLO")) == "hello"
+
+    def test_lowercase_false_preserves_case(self):
+        tree = TokenTree()
+        tree.train([self.CORPUS], vocab_size=64, lowercase=False)
+        assert tree.decode(tree.encode("Hello World")) == "Hello World"
+
+    def test_to_dict_carries_lowercase(self):
+        tree = TokenTree()
+        tree.train([self.CORPUS], vocab_size=64, lowercase=False)
+        assert tree.to_dict()["lowercase"] is False
+
+    def test_from_dict_round_trip_preserves_case(self):
+        tree = TokenTree()
+        tree.train([self.CORPUS], vocab_size=64, lowercase=False)
+        tree2 = TokenTree.from_dict(tree.to_dict())
+        assert tree2.decode(tree2.encode("Hello World")) == "Hello World"
+
+    def test_from_dict_defaults_legacy_trees_to_lowercase(self):
+        # dicts serialized before this flag existed trained lowercase=True
+        tree = TokenTree()
+        tree.train([self.CORPUS], vocab_size=64, lowercase=False)
+        legacy = tree.to_dict()
+        del legacy["lowercase"]
+        tree2 = TokenTree.from_dict(legacy)
+        assert tree2.decode(tree2.encode("HELLO")) == "hello"
+
+    def test_save_load_preserves_case(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tree = TokenTree()
+            tree.train([self.CORPUS], vocab_size=64, lowercase=False)
+            path = os.path.join(tmpdir, "lowercase_tree")
+            tree.save(path)
+            tree2 = TokenTree.load(path)
+            assert tree2.to_dict()["lowercase"] is False
+            assert tree2.decode(tree2.encode("Hello World")) == "Hello World"
+
+    def test_trace_path_respects_flag(self):
+        tree = TokenTree()
+        tree.train([self.CORPUS], vocab_size=64, lowercase=False)
+        steps = tree.trace_path("Hello")
+        assert steps and steps[0]["remaining"].startswith("Hello")
+        tree_l = TokenTree()
+        tree_l.train([self.CORPUS], vocab_size=64)
+        steps_l = tree_l.trace_path("Hello")
+        assert steps_l and steps_l[0]["remaining"].startswith("hello")

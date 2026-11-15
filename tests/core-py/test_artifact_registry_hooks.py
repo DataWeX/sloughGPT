@@ -99,3 +99,42 @@ class TestLiveDatasetHook:
         assert record["id"] == "hook-ds"
         assert record["kind"] == "dataset"
         assert Path(record["path"]).is_file()
+
+
+class TestProvenanceStampSites:
+    def test_slonet_export_stamps_model(self):
+        src = _src("domain/training/_internal/slonet.py")
+        assert 'stamp_export(path, "model", metadata' in src
+
+    def test_export_module_writers_stamp(self):
+        src = _src("domain/training/_internal/export.py")
+        # sou writer + 3 gguf writers + the export_model metadata re-stamp.
+        assert src.count("stamp_export(") >= 5
+
+    def test_checkpoint_savers_stamp_checkpoint_kind(self):
+        src = _src("domain/training/_internal/training_handler.py")
+        assert src.count('stamp_export(path, "checkpoint"') >= 2  # soul + npz savers
+
+    def test_experience_chat_corpus_resolves_via_registry(self):
+        src = _src("domain/training/_internal/experience_adapter.py")
+        assert 'resolve("dataset", dataset_id)' in src
+        assert '_registry_dataset_path("api_conversations")' in src
+        # The hardcoded repo-relative guesses are retired: the registry's
+        # scan roots cover datasets/, data/ and just-cache already.
+        assert 'Path("datasets/api_conversations/corpus.jsonl")' not in src
+        assert 'Path("data/api_conversations/corpus.jsonl")' not in src
+
+
+class TestLiveExperienceCorpusHook:
+    def test_chat_corpus_resolves_through_registry(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        ds = tmp_path / "cache" / "external" / "api_conversations"
+        ds.mkdir(parents=True)
+        (ds / "corpus.jsonl").write_text(
+            '{"user_msg": "hi", "assistant_msg": "hello"}\n', encoding="utf-8"
+        )
+
+        from domain.training._internal.experience_adapter import _load_chat_corpus
+
+        pairs = _load_chat_corpus()
+        assert pairs == [{"user_msg": "hi", "assistant_msg": "hello"}]

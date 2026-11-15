@@ -45,7 +45,7 @@ class TestSpecializedAgent:
 class TestTaskStatus:
     def test_values(self):
         assert TaskStatus.PENDING == "pending"
-        assert TaskStatus.IN_PROGRESS == "in_progress"
+        assert TaskStatus.LIVE == "live"
         assert TaskStatus.COMPLETED == "completed"
         assert TaskStatus.FAILED == "failed"
 

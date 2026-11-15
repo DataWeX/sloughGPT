@@ -43,9 +43,7 @@ def rope_frequencies(dim: int, base: float = 10000.0) -> np.ndarray:
     return np.exp(-i / dim * np.log(base))
 
 
-def rope_rotation(
-    pos: int, freqs: np.ndarray, seq_len: int = 1
-) -> tuple[np.ndarray, np.ndarray]:
+def rope_rotation(pos: int, freqs: np.ndarray, seq_len: int = 1) -> tuple[np.ndarray, np.ndarray]:
     """Compute cos and sin for a range of positions.
 
     Derivation:
@@ -69,9 +67,7 @@ def rope_rotation(
     return np.cos(angles), np.sin(angles)
 
 
-def rope_apply(
-    x: np.ndarray, pos: int, dim: int, base: float = 10000.0
-) -> np.ndarray:
+def rope_apply(x: np.ndarray, pos: int, dim: int, base: float = 10000.0) -> np.ndarray:
     """Apply rotary position embeddings to a vector.
 
     Derivation:

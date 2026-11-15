@@ -21,7 +21,7 @@ import { NotificationDock } from '@/components/NotificationDock'
 import { loadProcessSnapshot } from '@/lib/process-notifications'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, syncWithBackend } from '@/lib/store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
@@ -60,8 +60,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
   const toasts = useToastStore((s) => s.toasts)
-  const dismissToast = useToastStore((s) => s.dismissToast)
-  const clearToasts = useToastStore((s) => s.clearToasts)
+  const dismissToast = notify.dismissToast
+  const clearToasts = notify.clearToasts
   const apiStatus = useApiMonitor((s) => s.status)
   const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed, toggleConv } = useConvSidebar()
   useGlobalShortcuts()
@@ -78,6 +78,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   // Contract-versioned and failure-tolerant inside (never blocks boot).
   useEffect(() => {
     void loadProcessSnapshot()
+  }, [])
+
+  // Global defaults are server truth (Phase 2): pull them once at boot so the
+  // chat dialog can resolve an effective value per conversation
+  // (conversation AppScope delta ?? this global default).
+  useEffect(() => {
+    void syncWithBackend()
   }, [])
 
   useEffect(() => {
@@ -194,7 +201,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         // A superseded id is a no-op (single-slot store) — another producer's
         // banner is left alone. `id` tracks the latest raise, so a re-raised
         // banner is retired here too when the status moves on.
-        if (id) useBannerStore.getState().dismissBanner(id)
+        if (id) notify.dismissBanner(id)
       }
     }
 
@@ -224,14 +231,14 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     // StrictMode remount (cleanup clears the timer, ref still set) re-raises
     // the banner and re-arms the hold instead of leaving it stuck on screen.
     const timer = setTimeout(() => {
-      useBannerStore.getState().dismissBanner(greenId)
+      notify.dismissBanner(greenId)
       connectionDropRef.current = false
     }, bannerHoldMs ?? RECOVERY_BANNER_HOLD_MS)
     return () => {
       clearTimeout(timer)
       // Retire the green banner on re-run/unmount; the drop ref stays set so a
       // StrictMode second pass re-shows it (single slot replaces, never stacks).
-      useBannerStore.getState().dismissBanner(greenId)
+      notify.dismissBanner(greenId)
     }
   }, [apiStatus])
 

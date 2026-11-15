@@ -19,12 +19,15 @@ export function KnowledgeAdvancedSection({ wb }: { wb: KnowledgeWorkbench }) {
     adapterTraining,
     addToast,
     handleRAGClear,
+    handleRAGLoadMoreDocs,
     handleRAGSync,
     handleTrainAdapter,
     items,
     loading,
     ragClearing,
     ragDocs,
+    ragDocsTotal,
+    ragLoadingMore,
     ragStats,
     ragSyncing,
     setActiveTopic,
@@ -144,21 +147,39 @@ export function KnowledgeAdvancedSection({ wb }: { wb: KnowledgeWorkbench }) {
               <span>{ragStats.total_chunks} pieces indexed</span>
             </div>
             {showRagDocs && ragDocs.length > 0 && (
-              <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
-                {ragDocs.map((doc, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <span className="text-foreground truncate block">
-                        {(doc.metadata?.source as string) || 'unknown'}
-                      </span>
-                      <span className="text-muted-foreground">{doc.num_chunks} pieces</span>
+              <>
+                <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
+                  {ragDocs.map((doc, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-foreground truncate block">
+                          {(doc.metadata?.source as string) || 'unknown'}
+                        </span>
+                        <span className="text-muted-foreground">{doc.num_chunks} pieces</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    Showing {ragDocs.length} of {ragDocsTotal}
+                  </span>
+                  {ragDocs.length < ragDocsTotal && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={handleRAGLoadMoreDocs}
+                      disabled={ragLoadingMore}
+                    >
+                      {ragLoadingMore ? 'Loading…' : 'Load more'}
+                    </Button>
+                  )}
+                </div>
+              </>
             )}
             {showRagDocs && ragDocs.length === 0 && (
               <p className="mt-3 text-xs text-muted-foreground">No sources yet.</p>

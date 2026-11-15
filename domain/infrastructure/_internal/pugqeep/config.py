@@ -11,6 +11,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Done processes kept in Engine._processes before the oldest are evicted.
+DEFAULT_RETENTION_LIMIT = 256
+
 
 @dataclass(slots=True)
 class PointConfig:
@@ -120,3 +123,8 @@ class EngineConfig:
     subprocess: SubprocessConfig = field(default_factory=SubprocessConfig)
     restart: RestartPolicy = field(default_factory=RestartPolicy)
     monitor: MonitorConfig = field(default_factory=MonitorConfig)
+    # Done processes retained in the registry before the oldest are evicted.
+    # Live (pending/running) procs are never evicted, and a dep still
+    # referenced by a pending dependent is an anchor (evicting it would
+    # strand the dependent). 0 = evict done procs as soon as they're reported.
+    retention_limit: int = DEFAULT_RETENTION_LIMIT

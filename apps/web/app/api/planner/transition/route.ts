@@ -6,5 +6,7 @@ export async function POST(request: NextRequest) {
   return proxyRequest('/api/board/transition', {
     method: 'POST',
     body: JSON.stringify(body),
+    // first-party relay marker consumed by proxyRequest (card 20261108_142919)
+    headers: { 'x-slo-relay': '1' },
   })
 }

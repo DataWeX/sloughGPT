@@ -1,4 +1,4 @@
-import { getApiUrl } from './api-client'
+import {getApiUrl, getAuthHeaders} from './api-client';
 
 export interface SSEEvent {
   stream?: string
@@ -44,6 +44,7 @@ async function _connectSSE(
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
+      ...(await getAuthHeaders()),
     },
     body: JSON.stringify(body),
     signal,
@@ -55,6 +56,8 @@ async function _connectSSE(
   }
 
   const reader = res.body?.getReader()
+  // A 200 with no body stream is a permanent condition (bad proxy / bad
+  // content negotiation) — retrying cannot produce a body.
   if (!reader) throw new SSENoBodyError('No response body')
   return reader
 }
@@ -116,7 +119,8 @@ export async function* streamSSE(
     } catch (err: any) {
       if (signal?.aborted) return
 
-      // Don't retry HTTP errors (4xx/5xx are permanent) or a missing stream
+      // Don't retry HTTP errors (4xx/5xx are permanent) or other
+      // conditions that a reconnect can never fix (missing response body).
       if (err instanceof SSEHttpError || err instanceof SSENoBodyError) {
         throw err
       }
