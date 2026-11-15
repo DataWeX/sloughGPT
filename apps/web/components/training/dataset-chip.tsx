@@ -1,7 +1,7 @@
 'use client'
 
 import { Badge, Tooltip, TooltipContent, TooltipTrigger } from '@sloughgpt/strui'
-import { humanizeDatasetName } from '@/lib/dataset-controller'
+import { humanizeDatasetName, isDatasetEmpty } from '@/lib/dataset-controller'
 import type { Dataset } from '@/lib/dataset-controller'
 
 export function formatSize(bytes: number | undefined | null): string {
@@ -14,6 +14,7 @@ export function formatSize(bytes: number | undefined | null): string {
 export function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
   const hasSize = dataset.size != null && Number.isFinite(dataset.size) && dataset.size > 0
   const hasSamples = dataset.samples != null && dataset.samples > 0
+  const isEmpty = isDatasetEmpty(dataset)
   const hasTags = dataset.tags && dataset.tags.length > 0
   const hasVlm = dataset.vlm_metadata != null
   const createdDate = dataset.created_at ? new Date(dataset.created_at) : null
@@ -49,7 +50,9 @@ export function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
           </>
         )}
         <span>Size</span>
-        <span className="text-right font-numeric">{formatSize(dataset.size)}</span>
+        <span className={`text-right font-numeric${isEmpty ? ' text-warning' : ''}`}>
+          {isEmpty ? 'Empty' : formatSize(dataset.size)}
+        </span>
         {isValidDate && (
           <>
             <span>Created</span>
@@ -71,11 +74,15 @@ export function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
           {dataset.vlm_metadata!.auto_captioned && ' · auto-captioned'}
         </div>
       )}
-      {!hasSize && !hasSamples && (
+      {isEmpty ? (
+        <div className="text-xs text-warning border-t border-border/30 pt-1">
+          Empty — no training text retrieved
+        </div>
+      ) : !hasSize && !hasSamples ? (
         <div className="text-xs text-muted-foreground/60 italic">
           No size data available — preview for details
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -111,10 +118,19 @@ export function DatasetChip({
           `}
         >
           <span className="truncate max-w-[120px]">{humanizeDatasetName(dataset.name)}</span>
-          {dataset.samples != null && dataset.samples > 0 && (
-            <span className="text-[11px] opacity-60 font-numeric">
-              {dataset.samples.toLocaleString()}
-            </span>
+          {isDatasetEmpty(dataset) ? (
+            <span
+              aria-hidden="true"
+              title="Empty — no training text"
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+            />
+          ) : (
+            dataset.samples != null &&
+            dataset.samples > 0 && (
+              <span className="text-[11px] opacity-60 font-numeric">
+                {dataset.samples.toLocaleString()}
+              </span>
+            )
           )}
         </button>
       </TooltipTrigger>
