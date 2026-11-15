@@ -108,6 +108,14 @@ class ElementLocator:
         return " | ".join(s.describe() for s in self.selectors)
 
 
+def _num(value: Any) -> str:
+    """Compact number for provenance output — ``12.0`` prints as ``12``."""
+    try:
+        return f"{float(value):g}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 @dataclass
 class Element:
     """Wrapper around a raw backend element with interaction methods."""
@@ -115,6 +123,11 @@ class Element:
     raw: Any
     locator: ElementLocator
     backend: str = "unknown"
+    # Match-time descriptor captured by the backend when the element was
+    # resolved (tag/id/class/text/rect/visibility + match ordinal). This is
+    # the action-provenance source: what the log reports must be what the
+    # resolution site saw, never an echo of the caller's locator.
+    descriptor: dict[str, Any] = field(default_factory=dict)
     _cache: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -155,6 +168,61 @@ class Element:
     def describe(self) -> str:
         loc = self.locator.describe()
         return f"Element({loc}, tag={self.tag!r}, text={self.text!r})"
+
+    def provenance(self) -> str:
+        """Identity of the element an action actually resolved to.
+
+        Built from the backend's match-time ``descriptor`` when present
+        (CDP), falling back to the element cache (Playwright). Every
+        mutating verb appends this to its log line, so ``clicked text:
+        Dismiss`` says *which* Dismiss was hit — tag, id, class, content,
+        rect, visibility and the match ordinal (``match 1/3``) — instead of
+        merely echoing the locator back. Observability only: never used for
+        matching.
+        """
+        d = self.descriptor or {}
+        attrs = self._cache.get("attributes") or {}
+        if not isinstance(attrs, dict):
+            attrs = {}
+
+        tag = str(d.get("tag") or self._cache.get("tag") or "?")
+        el_id = str(d.get("id") or attrs.get("id") or "")
+        cls = str(d.get("cls") or attrs.get("class") or "")
+        head = tag + (f"#{el_id}" if el_id else "")
+        first_cls = cls.split()[0] if cls.strip() else ""
+        if first_cls:
+            head += f".{first_cls}"
+
+        # Content: descriptor text (innerText), else placeholder — form
+        # controls have no innerText, and the placeholder is what identifies
+        # them to a human reading the log.
+        text = str(
+            d.get("text")
+            or d.get("placeholder")
+            or self._cache.get("text")
+            or attrs.get("placeholder")
+            or ""
+        ).strip()
+        if text:
+            text = " ".join(text.split())
+            if len(text) > 40:
+                text = text[:39] + "…"
+            head += f" {text!r}"
+
+        rect = d.get("rect") or self._cache.get("bounding_box")
+        if isinstance(rect, dict) and rect.get("width") is not None:
+            head += (
+                f" @{_num(rect.get('x'))},{_num(rect.get('y'))}"
+                f" {_num(rect.get('width'))}x{_num(rect.get('height'))}"
+            )
+
+        idx, total = d.get("idx"), d.get("total")
+        if isinstance(idx, int) and isinstance(total, int) and total > 1 and 0 <= idx < total:
+            head += f" (match {idx + 1}/{total})"
+
+        if d.get("visible") is False or self._cache.get("is_visible") is False:
+            head += " (hidden)"
+        return head
 
     def __repr__(self) -> str:
         return self.describe()

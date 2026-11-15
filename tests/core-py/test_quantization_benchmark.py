@@ -302,7 +302,10 @@ class TestQuantizationBenchmark:
             t_unfused = _time_it(lambda: Q.quantized_linear(x, w, bscale, 0, bias))
         finally:
             Q.matmul_int8_f32_c = saved
-        np.testing.assert_array_equal(fused, unfused)
+        # Two independent implementations (C kernel vs numpy): FMA/BLAS
+        # rounding differs per runner CPU/BLAS build (max delta 2.4e-7 on
+        # ubuntu-26.04 runners) — bit-exact equality is not a valid contract.
+        np.testing.assert_allclose(fused, unfused, atol=1e-6)
         assert t_fused < t_unfused * 3.0, (
             f"fused {t_fused * 1000:.2f}ms not faster than unfused {t_unfused * 1000:.2f}ms"
         )
