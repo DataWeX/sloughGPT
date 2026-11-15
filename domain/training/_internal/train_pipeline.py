@@ -1014,8 +1014,12 @@ def _gc_parked(fn):
     Each train step allocates millions of short-lived temporaries plus
     cyclic autograd-graph garbage; at default thresholds CPython runs full
     cyclic collections constantly (~90% of loop wall time — measured 2.9 vs
-    31+ steps/s with GC parked). Refcounting still frees acyclic temps
-    instantly. Toggling per step does NOT work: re-enabling lets the
+    31+ steps/s with GC parked). The 31+ figure is a parked-GC
+    micro-measurement on a small config, NOT whole-run throughput: real
+    runs vary with model size and count eval/checkpoint pauses against
+    elapsed time (card 20261107_113837). Benchmarks are the source of
+    truth: ``scripts/benchmark_slonet_training.py``. Refcounting still
+    frees acyclic temps instantly. Toggling per step does NOT work: re-enabling lets the
     over-threshold allocation counter trip an immediate collection, so the
     collector stays parked for the entire run and state restores once, in
     the finally, on every exit path.
@@ -2039,7 +2043,13 @@ class SloughGPTTrainer:
         return max(0.0, time.time() - start)
 
     def _steps_per_sec(self) -> float:
-        """Rolling optimizer steps per second based on whole-run elapsed time."""
+        """Whole-run optimizer steps per second (``global_step / elapsed``).
+
+        Not a rolling window: eval and checkpoint pauses count against
+        elapsed time, so this understates raw step compute after heavy IO
+        (the "1.4 steps/s" symptom in card 20261107_113837 — since fixed
+        by the binary optimizer sidecar, 16.5s → 0.47s per save).
+        """
         elapsed = self._training_elapsed()
         if elapsed <= 0 or self.global_step <= 0:
             return 0.0

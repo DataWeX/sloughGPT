@@ -1393,32 +1393,52 @@ def relu(x):
     return out
 
 
+# GELU constants, hoisted: np.sqrt(2/pi) was recomputed on every call
+# (forward, backward cache, and again inside each closure).
+_GELU_C = float(np.sqrt(2 / np.pi))
+_GELU_K = 0.044715
+
+
+def _gelu_tv(d: np.ndarray) -> np.ndarray:
+    """tanh term of the GELU — one pass, shared by forward and backward."""
+    return np.tanh(_GELU_C * (d + _GELU_K * (d * d * d)))
+
+
 def gelu_np(d: np.ndarray) -> np.ndarray:
     """NumPy-only GELU (no Tensor wrapping)."""
-    return 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
+    return 0.5 * d * (1 + _gelu_tv(d))
 
 
 def gelu(x):
     d = x.data if isinstance(x, Tensor) else x
     acc = _get_accelerator()
-    if acc is not None and acc.name != "cpu":
+    on_acc = acc is not None and acc.name != "cpu"
+    # The tanh term feeds the CPU value and always the backward closure;
+    # skip it only on the pure-GPU non-Tensor path.
+    tv = None if (on_acc and not isinstance(x, Tensor)) else _gelu_tv(d)
+    if on_acc:
         try:
             t = acc.gelu(d)
         except Exception:
-            t = 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
+            if tv is None:
+                tv = _gelu_tv(d)
+            t = 0.5 * d * (1.0 + tv)
     else:
-        t = 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
+        t = 0.5 * d * (1.0 + tv)
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-        # Cache tanh value for backward (avoids 3x recomputation)
-        _tanh_val = np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3))
-        _sqrt_2_pi = np.sqrt(2 / np.pi)
+        if tv is None:  # accelerator produced t; backward still needs tv
+            tv = _gelu_tv(d)
+        # Elementwise derivative, computed ONCE here and cached. bk and fwd
+        # previously each rebuilt this full expression per call — cProfile
+        # attributed ~50% of step wall time to gelu fwd+bwd (card
+        # 20261107_113837, 1.4 steps/s investigation).
+        d_gelu = 0.5 * (1.0 + tv) + 0.5 * d * (1.0 - tv * tv) * _GELU_C * (
+            1.0 + 3.0 * _GELU_K * (d * d)
+        )
 
         def bk(g):
             if x.requires_grad:
-                d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (
-                    1 + 3 * 0.044715 * d**2
-                )
                 grad_val = d_gelu * g
                 if x.grad is None:
                     x.grad = Tensor(grad_val, _copy=False)
@@ -1432,9 +1452,6 @@ def gelu(x):
         def fwd(t_x):
             if t_x is None:
                 return np.zeros(out_shape, dtype=out_dtype)
-            d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (
-                1 + 3 * 0.044715 * d**2
-            )
             return d_gelu * t_x
 
         out._forward_fn = fwd
