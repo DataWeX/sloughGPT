@@ -32,11 +32,6 @@ import { IconTrash } from '@/components/icons/NavIcons'
 import { apiGet, apiPut, apiDelete, apiPost } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useLocale } from '@/hooks/useLocale'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface WorkspaceSettings {
   workspace_id: string

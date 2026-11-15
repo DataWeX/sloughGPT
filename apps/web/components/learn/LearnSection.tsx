@@ -17,11 +17,6 @@ import {
 import { SectionLabel } from '@/components/composed/SectionLabel'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type Tab = 'search' | 'ingest' | 'knowledge' | 'feeds'
 

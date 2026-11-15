@@ -19,11 +19,6 @@ import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface GalleryImage {
   id: string

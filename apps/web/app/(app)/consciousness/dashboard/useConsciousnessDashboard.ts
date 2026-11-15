@@ -19,11 +19,6 @@ import {
   type QualiaChartPoint,
   type GrowthChartPoint,
 } from './dashboard-data'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function useConsciousnessDashboard() {
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()

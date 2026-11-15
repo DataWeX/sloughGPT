@@ -7,11 +7,6 @@ import { consciousnessController } from '@/lib/consciousness-controller'
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@sloughgpt/strui'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface HealthData {
   health_score: number

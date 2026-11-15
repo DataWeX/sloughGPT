@@ -42,11 +42,6 @@ import { DatasetQualityCard } from '@/components/dataset/DatasetQualityCard'
 import { DatasetInsightsCard } from '@/components/dataset/DatasetInsightsCard'
 import { formatBytes } from '@/lib/format-bytes'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const DatasetImportDialog = dynamicNext(
   () => import('@/components/DatasetImportDialog').then((m) => m.DatasetImportDialog),

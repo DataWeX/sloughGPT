@@ -6,11 +6,6 @@ import { modelController } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export interface ModelEntry {
   id: string

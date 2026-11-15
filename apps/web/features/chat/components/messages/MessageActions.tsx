@@ -25,11 +25,6 @@ import {
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface MessageActionsProps {
   content: string
