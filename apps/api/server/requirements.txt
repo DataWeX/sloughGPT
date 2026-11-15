@@ -1,6 +1,6 @@
 fastapi>=0.100.0
 uvicorn[standard]>=0.54.0
-pydantic>=2.0.0
+pydantic>=2.14.3
 # torch>=2.0.0  # Optional: needed for HuggingFace models and legacy trainers
 transformers>=4.30.0
 datasets>=5.1.0
