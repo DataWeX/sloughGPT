@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   memoryController,
@@ -9,6 +9,11 @@ import {
   type MemoryArchiveStats,
   type MemoryArchiveRecord,
 } from '@/lib/memory-controller'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export interface UseMemoryDataReturn {
   stats: MemoryStats | null
@@ -27,7 +32,6 @@ export interface UseMemoryDataReturn {
 }
 
 export function useMemoryData(): UseMemoryDataReturn {
-  const addToast = notify.toast
   const [stats, setStats] = useState<MemoryStats | null>(null)
   const [items, setItems] = useState<MemoryItem[]>([])
   const [archiveStats, setArchiveStats] = useState<MemoryArchiveStats | null>(null)
@@ -56,11 +60,11 @@ export function useMemoryData(): UseMemoryDataReturn {
         setSearchResults(searchResult.results || [])
       }
     } catch {
-      addToast('Could not load memory', 'error')
+      notify.toast('Could not load memory', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -78,7 +82,7 @@ export function useMemoryData(): UseMemoryDataReturn {
           setArchiveStats(archiveResult)
         }
       } catch {
-        if (active) addToast('Could not load memory', 'error')
+        if (active) notify.toast('Could not load memory', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }
@@ -87,25 +91,22 @@ export function useMemoryData(): UseMemoryDataReturn {
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
-  const handleSearch = useCallback(
-    async (q: string) => {
-      if (!q.trim()) {
-        setSearchResults(null)
-        setSearched(false)
-        return
-      }
-      try {
-        const result = await memoryController.search(q)
-        setSearchResults(result.results || [])
-        setSearched(true)
-      } catch {
-        addToast('Could not memory search', 'error')
-      }
-    },
-    [addToast],
-  )
+  const handleSearch = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      setSearchResults(null)
+      setSearched(false)
+      return
+    }
+    try {
+      const result = await memoryController.search(q)
+      setSearchResults(result.results || [])
+      setSearched(true)
+    } catch {
+      notify.toast('Could not memory search', { type: 'error' })
+    }
+  }, [])
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {

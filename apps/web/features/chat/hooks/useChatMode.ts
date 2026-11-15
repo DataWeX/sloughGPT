@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { imagesController } from '@/lib/images-controller'
@@ -173,7 +173,7 @@ export function useChatMode({ chat }: UseChatModeOptions) {
 
       if (chatMode === 'read') {
         if (!readFileData) {
-          notify.toast('Upload a file first, then ask your question', 'info')
+          notify.toast('Upload a file first, then ask your question', { type: 'info' })
           return
         }
         chat.setInput('')

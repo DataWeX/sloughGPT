@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -19,6 +19,11 @@ import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTab
 import { settingsTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Notification {
   type: string
@@ -34,7 +39,6 @@ interface NotificationsResponse {
 
 export default function NotificationsPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
@@ -50,11 +54,11 @@ export default function NotificationsPage() {
       )
       setNotifications(res?.data?.notifications ?? [])
     } catch {
-      addToast('Could not load notifications', 'error')
+      notify.toast('Could not load notifications', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, addToast])
+  }, [currentWorkspace?.id])
 
   useEffect(() => {
     fetchNotifications()

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -17,9 +17,13 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { vectorController, type VectorSearchResult } from '@/lib/vector-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export default function VectorPage() {
-  const addToast = notify.toast
   const [provider, setProvider] = useState('in_memory')
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -38,11 +42,11 @@ export default function VectorPage() {
       setProvider(stats.provider)
       setCount(stats.count)
     } catch {
-      addToast('Could not load vector store data', 'error')
+      notify.toast('Could not load vector store data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useRefreshShortcut(fetchStats)
 
@@ -55,10 +59,12 @@ export default function VectorPage() {
     try {
       const result = await vectorController.init(prov)
       setProvider(result.provider)
-      addToast(result.note || `Initialized ${result.provider} vector store`, 'success')
+      notify.toast(result.note || `Initialized ${result.provider} vector store`, {
+        type: 'success',
+      })
       await fetchStats()
     } catch {
-      addToast('Could not initialize vector store', 'error')
+      notify.toast('Could not initialize vector store', { type: 'error' })
     } finally {
       setInitializing(false)
     }
@@ -72,7 +78,7 @@ export default function VectorPage() {
       setSearchResults(result.results)
       setSearchTime(result.elapsed_ms)
     } catch {
-      addToast('Could not search vector store', 'error')
+      notify.toast('Could not search vector store', { type: 'error' })
     } finally {
       setSearching(false)
     }
@@ -84,11 +90,11 @@ export default function VectorPage() {
     setUpserting(true)
     try {
       const result = await vectorController.upsert(texts)
-      addToast(`Added ${result.count} entries in ${result.elapsed_ms}ms`, 'success')
+      notify.toast(`Added ${result.count} entries in ${result.elapsed_ms}ms`, { type: 'success' })
       setUpsertText('')
       await fetchStats()
     } catch {
-      addToast('Could not add entries', 'error')
+      notify.toast('Could not add entries', { type: 'error' })
     } finally {
       setUpserting(false)
     }

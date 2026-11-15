@@ -8,7 +8,9 @@ const mockSearch = vi.fn()
 const mockDelete = vi.fn()
 const mockGetStats = vi.fn()
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 

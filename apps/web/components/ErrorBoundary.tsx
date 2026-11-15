@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import type { ReactNode } from 'react'
 import { Component } from 'react'
 import { Button } from '@sloughgpt/strui'
@@ -46,7 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (isNonFatalError(error)) {
       // Log to toast instead
       try {
-        notify.toast('Something went wrong. Try refreshing the page.', 'error')
+        notify.toast('Something went wrong. Try refreshing the page.', { type: 'error' })
       } catch {
         logger.warning('ErrorBoundary: toast store not initialized', { error: error.message })
       }

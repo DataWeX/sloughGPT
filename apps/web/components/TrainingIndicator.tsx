@@ -1,9 +1,11 @@
 'use client'
 
 import Link from '@/vite/next-compat/link'
-import { memo, useEffect, useState } from 'react'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { memo, useEffect, useRef, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
+import { notify, useBannerStore } from '@/lib/notify'
 
 export const TrainingIndicator = memo(function TrainingIndicator() {
   // Mount gate: training state is rehydrated from localStorage, so the
@@ -13,9 +15,39 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
   useEffect(() => {
     setMounted(true)
   }, [])
-  const { trainingRunning, phase, progress, loss, method } = useTrainingSession()
+  const { trainingRunning, phase, progress, loss, method, error } = useTrainingSession()
+  const router = useRouter()
+  const routerRef = useRef(router)
+  // The banner is sticky and outlives renders (single slot) — its action
+  // must call the current router, so keep the ref fresh.
+  routerRef.current = router
 
-  if (!mounted || (!trainingRunning && phase !== 'complete' && phase !== 'error')) {
+  // A failed run is a journey blocker, so it goes through the ONE global
+  // banner surface (rule 16) instead of a sidebar-only label: the banner is
+  // impossible to miss and can carry the remedy (→ /training). Same key → a
+  // repeated error phase refreshes the row rather than stacking; leaving the
+  // error state retires it. The sidebar row itself stays silent on error —
+  // the banner IS the failure surface.
+  useEffect(() => {
+    if (phase !== 'error') {
+      const store = useBannerStore.getState()
+      const stale = store.banners.find((b) => b.key === 'training-failed')
+      if (stale) notify.dismissBanner(stale.id)
+      return
+    }
+    notify.banner({
+      key: 'training-failed',
+      tone: 'destructive',
+      title: 'Training failed',
+      message: error || undefined,
+      action: {
+        label: 'View training',
+        onAction: () => routerRef.current.push('/training'),
+      },
+    })
+  }, [phase, error])
+
+  if (!mounted || phase === 'error' || (!trainingRunning && phase !== 'complete')) {
     return null
   }
 
@@ -26,11 +58,7 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
       className={cn(
         'flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] transition-colors',
         'hover:bg-primary/10',
-        phase === 'error'
-          ? 'text-destructive'
-          : phase === 'complete'
-            ? 'text-success'
-            : 'text-primary',
+        phase === 'complete' ? 'text-success' : 'text-primary',
       )}
       title="View training status"
     >
@@ -41,21 +69,15 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
         <span
           className={cn(
             'relative inline-flex h-1.5 w-1.5 rounded-full',
-            phase === 'error'
-              ? 'bg-destructive'
-              : phase === 'complete'
-                ? 'bg-success'
-                : 'bg-primary',
+            phase === 'complete' ? 'bg-success' : 'bg-primary',
           )}
         />
       </div>
       <div className="min-w-0 flex-1" role="status" aria-live="polite">
         <div className="truncate text-[10px] font-medium">
-          {phase === 'error'
-            ? 'Training failed'
-            : phase === 'complete'
-              ? 'Training complete'
-              : `${method === 'turbo' ? 'Turbo' : 'Training'}`}
+          {phase === 'complete'
+            ? 'Training complete'
+            : `${method === 'turbo' ? 'Turbo' : 'Training'}`}
         </div>
         {trainingRunning && (
           <div className="flex items-center gap-0.5 text-[9px] text-muted-foreground/60 tabular-nums">

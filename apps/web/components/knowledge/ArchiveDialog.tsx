@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useCallback, useEffect, useState } from 'react'
 import { cn, Button, Skeleton, EmptyCard } from '@sloughgpt/strui'
 import {
@@ -21,6 +21,11 @@ import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson } from '@/lib/download-utils'
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { archiveTypeLabel, archiveBadgeClass, archiveSummary } from '@/lib/memory-card-utils'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface ArchiveDialogProps {
   open: boolean
@@ -29,7 +34,6 @@ interface ArchiveDialogProps {
 }
 
 export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialogProps) {
-  const addToast = notify.toast
   const [records, setRecords] = useState<MemoryArchiveRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null)
@@ -41,11 +45,11 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
       const result = await memoryController.archive(20)
       setRecords(result.records || [])
     } catch {
-      addToast('Could not load archive records', 'error')
+      notify.toast('Could not load archive records', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     if (open) loadArchive()
@@ -64,13 +68,13 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
     try {
       const result = await memoryController.archive(1000)
       downloadJson(result.records || [], `memory-archive-${todayDateString()}.json`)
-      addToast(`Exported ${result.records?.length ?? 0} archive record(s)`, 'success')
+      notify.toast(`Exported ${result.records?.length ?? 0} archive record(s)`, { type: 'success' })
     } catch {
-      addToast('Could not export archive', 'error')
+      notify.toast('Could not export archive', { type: 'error' })
     } finally {
       setExporting(false)
     }
-  }, [addToast])
+  }, [])
 
   return (
     <SectionErrorBoundary sectionName="Import dialog">

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   cn,
@@ -61,7 +61,6 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
   const [comparing, setComparing] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [result, setResult] = useState<CompareResult | null>(null)
-  const addToast = notify.toast
 
   const load = useCallback(async () => {
     try {
@@ -85,7 +84,9 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       const res = await tokenTreeController.compare(a, b, 10)
       setResult(res)
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not compare token trees', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not compare token trees', {
+        type: 'error',
+      })
     } finally {
       setComparing(false)
     }

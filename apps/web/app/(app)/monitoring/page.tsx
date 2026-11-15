@@ -1,7 +1,7 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
-import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
@@ -63,6 +63,11 @@ import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
 import { TestRunsCard } from '@/components/monitoring/TestRunsCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const POLL_INTERVAL_MS = 5000
 const POLL_MAX_BACKOFF_MS = 60_000
@@ -219,42 +224,33 @@ export default function SystemHealthPage() {
     )
   }, [cpuThreshold, memThreshold])
 
-  const addToast = notify.toast
+  const handleBatteryLimit = useCallback(async (percent: number) => {
+    try {
+      const result = await systemController.setBatteryLimit(percent)
+      const next = await systemController.getBattery().catch(() => null)
+      if (next) setBattery(next)
+      notify.toast(result.reason, { type: result.applied ? 'success' : 'error' })
+    } catch (e: unknown) {
+      notify.toast(extractErrorMessage(e, 'Could not change the charge cap'), { type: 'error' })
+    }
+  }, [])
 
-  const handleBatteryLimit = useCallback(
-    async (percent: number) => {
-      try {
-        const result = await systemController.setBatteryLimit(percent)
-        const next = await systemController.getBattery().catch(() => null)
-        if (next) setBattery(next)
-        addToast(result.reason, result.applied ? 'success' : 'error')
-      } catch (e: unknown) {
-        addToast(extractErrorMessage(e, 'Could not change the charge cap'), 'error')
+  const handleBatteryPolicy = useCallback(async (enabled: boolean) => {
+    try {
+      const result = await systemController.setBatteryPolicy({ enabled })
+      if (!result.ok) {
+        notify.toast(result.error || 'Could not update the charge policy', { type: 'error' })
+        return
       }
-    },
-    [addToast],
-  )
-
-  const handleBatteryPolicy = useCallback(
-    async (enabled: boolean) => {
-      try {
-        const result = await systemController.setBatteryPolicy({ enabled })
-        if (!result.ok) {
-          addToast(result.error || 'Could not update the charge policy', 'error')
-          return
-        }
-        const next = await systemController.getBattery().catch(() => null)
-        if (next) setBattery(next)
-        addToast(
-          result.policy.enabled ? 'Battery management on' : 'Battery management off',
-          'success',
-        )
-      } catch (e: unknown) {
-        addToast(extractErrorMessage(e, 'Could not update the charge policy'), 'error')
-      }
-    },
-    [addToast],
-  )
+      const next = await systemController.getBattery().catch(() => null)
+      if (next) setBattery(next)
+      notify.toast(result.policy.enabled ? 'Battery management on' : 'Battery management off', {
+        type: 'success',
+      })
+    } catch (e: unknown) {
+      notify.toast(extractErrorMessage(e, 'Could not update the charge policy'), { type: 'error' })
+    }
+  }, [])
 
   const fetchAll = useCallback(async (showRefreshing = false): Promise<boolean> => {
     if (showRefreshing) setRefreshing(true)

@@ -2,23 +2,13 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
-const mockAddToast = vi.fn()
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (selector: any) => selector({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (selector: any) => selector({ addToast: mockAddToast }),
+}))
 
 vi.mock('@sloughgpt/strui', () => {
   function Dialog({ children, open }: any) {
@@ -186,7 +176,7 @@ describe('NoteDialog', () => {
     fireEvent.click(screen.getByText('Save'))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Note saved', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Note saved', { type: 'success' })
     })
   })
 
@@ -201,7 +191,7 @@ describe('NoteDialog', () => {
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalled()
-      expect(mockAddToast).toHaveBeenCalledWith('Note deleted', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Note deleted', { type: 'success' })
     })
   })
 

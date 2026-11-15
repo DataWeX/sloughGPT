@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect } from 'react'
 import {
   cn,
@@ -27,14 +27,13 @@ export function WorkflowSection() {
   const [toggling, setToggling] = useState(false)
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null)
   const [triggering, setTriggering] = useState(false)
-  const addToast = notify.toast
 
   const fetchStatus = async () => {
     setLoading(true)
     try {
       setStatus(await workflowController.status())
     } catch {
-      addToast('Could not load workflow status', 'error')
+      notify.toast('Could not load workflow status', { type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -48,7 +47,7 @@ export function WorkflowSection() {
         const s = await workflowController.status()
         if (active) setStatus(s)
       } catch {
-        if (active) addToast('Could not load workflow status', 'error')
+        if (active) notify.toast('Could not load workflow status', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }
@@ -69,7 +68,7 @@ export function WorkflowSection() {
       }
       await fetchStatus()
     } catch {
-      addToast('Could not toggle workflow', 'error')
+      notify.toast('Could not toggle workflow', { type: 'error' })
     } finally {
       setToggling(false)
     }

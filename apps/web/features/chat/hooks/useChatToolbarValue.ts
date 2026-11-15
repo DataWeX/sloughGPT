@@ -71,10 +71,24 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
     showToast,
   } = config
 
+  // ONE active-conversation lookup for the header: the same row object the
+  // sidebar card renders (both read chat.sidebarConversations, keyed by the
+  // same sessionIdRef), so name and count cannot split-source. The count uses
+  // ConvRow's exact formula (persisted row messages) — the old live
+  // chat.messages.length counted the loadSession-filtered list and disagreed
+  // with the card by the empty assistant messages it drops (29 vs 30).
+  const activeConversation = chat.sidebarConversations.find(
+    (c) => c.session_id === chat.sessionIdRef.current,
+  )
+  const activeMessageCount = activeConversation
+    ? (activeConversation.messages?.length ?? activeConversation.message_count ?? 0)
+    : chat.messages.length
+
   return useMemo<ChatToolbarContextValue>(
     () => ({
       conversations: {
         conversations: chat.sidebarConversations,
+        activeName: activeConversation?.name,
         sessionIdRef: chat.sessionIdRef,
         onLoad: chat.loadSession,
         onStar: chat.starSession,
@@ -158,8 +172,8 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
             showToast('Could not save dataset', 'error')
           }
         },
-        hasMessages: chat.messages.length > 0,
-        messageCount: chat.messages.length,
+        hasMessages: activeMessageCount > 0,
+        messageCount: activeMessageCount,
         bookmarkCount: config.bookmarkCount,
       },
       health: {

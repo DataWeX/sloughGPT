@@ -1,11 +1,16 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { modelController } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export interface ModelEntry {
   id: string
@@ -41,7 +46,6 @@ export function useComparison() {
   const [loading, setLoading] = useState(true)
   const [snapshots, setSnapshots] = useState<SavedSnapshot[]>([])
   const [snapshotName, setSnapshotName] = useState('')
-  const addToast = notify.toast
 
   useEffect(() => {
     loadSnapshots().then(setSnapshots)
@@ -62,33 +66,30 @@ export function useComparison() {
         }))
         setModels(entries)
       } catch {
-        addToast('Could not load models', 'error')
+        notify.toast('Could not load models', { type: 'error' })
       } finally {
         setLoading(false)
       }
     })()
-  }, [addToast])
+  }, [])
 
-  const runBenchmark = useCallback(
-    async (modelId: string) => {
-      setRunning((prev) => new Set(prev).add(modelId))
-      setResults((prev) => ({ ...prev, [modelId]: null }))
-      try {
-        const result = await benchmarkController.run({ model: modelId })
-        setResults((prev) => ({ ...prev, [modelId]: result }))
-      } catch {
-        setResults((prev) => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
-        addToast(`Could not complete performance test for ${modelId}`, 'error')
-      } finally {
-        setRunning((prev) => {
-          const n = new Set(prev)
-          n.delete(modelId)
-          return n
-        })
-      }
-    },
-    [addToast],
-  )
+  const runBenchmark = useCallback(async (modelId: string) => {
+    setRunning((prev) => new Set(prev).add(modelId))
+    setResults((prev) => ({ ...prev, [modelId]: null }))
+    try {
+      const result = await benchmarkController.run({ model: modelId })
+      setResults((prev) => ({ ...prev, [modelId]: result }))
+    } catch {
+      setResults((prev) => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
+      notify.toast(`Could not complete performance test for ${modelId}`, { type: 'error' })
+    } finally {
+      setRunning((prev) => {
+        const n = new Set(prev)
+        n.delete(modelId)
+        return n
+      })
+    }
+  }, [])
 
   const runAll = useCallback(async () => {
     for (const m of models) await runBenchmark(m.id)
@@ -121,11 +122,11 @@ export function useComparison() {
       num_parameters: r.num_parameters,
     }))
     downloadJson(data, `benchmark-comparison-${todayDateString()}.json`)
-    addToast(`Exported ${data.length} results`, 'success')
-  }, [completedResults, models, addToast])
+    notify.toast(`Exported ${data.length} results`, { type: 'success' })
+  }, [completedResults, models])
 
   const saveSnapshot = useCallback(() => {
-    if (completedResults.length === 0) return addToast('No results to save', 'error')
+    if (completedResults.length === 0) return notify.toast('No results to save', { type: 'error' })
     const name = snapshotName.trim() || `Comparison ${new Date().toLocaleDateString()}`
     const modelNames: Record<string, string> = {}
     completedResults.forEach(([id]) => {
@@ -142,25 +143,22 @@ export function useComparison() {
     setSnapshots(updated)
     persistSnapshots(updated).catch(() => {})
     setSnapshotName('')
-    addToast(`Saved "${name}"`, 'success')
-  }, [completedResults, snapshots, snapshotName, models, addToast])
+    notify.toast(`Saved "${name}"`, { type: 'success' })
+  }, [completedResults, snapshots, snapshotName, models])
 
-  const loadSnapshot = useCallback(
-    (snap: SavedSnapshot) => {
-      setResults(snap.results)
-      addToast(`Loaded "${snap.name}"`, 'success')
-    },
-    [addToast],
-  )
+  const loadSnapshot = useCallback((snap: SavedSnapshot) => {
+    setResults(snap.results)
+    notify.toast(`Loaded "${snap.name}"`, { type: 'success' })
+  }, [])
 
   const deleteSnapshot = useCallback(
     (id: string) => {
       const updated = snapshots.filter((s) => s.id !== id)
       setSnapshots(updated)
       persistSnapshots(updated).catch(() => {})
-      addToast('Snapshot deleted', 'success')
+      notify.toast('Snapshot deleted', { type: 'success' })
     },
-    [snapshots, addToast],
+    [snapshots],
   )
 
   const bestMetrics: Record<string, number> = useMemo(() => {

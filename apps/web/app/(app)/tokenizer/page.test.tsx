@@ -145,21 +145,11 @@ vi.mock('@/lib/tokenizer-controller', () => ({
     train: mockTrain,
   },
 }))
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 vi.mock('@/components/tokenizer/TokenizerEfficiencyCard', () => ({
   TokenizerEfficiencyCard: ({ stats }: any) =>
     stats ? <div data-testid="tokenizer-efficiency-card" /> : null,
@@ -291,7 +281,7 @@ describe('TokenizerPage', () => {
       screen.getByText('Tokenize').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not tokenize', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not tokenize', { type: 'error' })
     })
   })
 
@@ -358,7 +348,7 @@ describe('TokenizerPage', () => {
       screen.getByText('Vocabulary').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not load vocabulary', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not load vocabulary', { type: 'error' })
     })
   })
 
@@ -407,7 +397,7 @@ describe('TokenizerPage', () => {
       screen.getByText('Vocabulary').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not load samples', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not load samples', { type: 'error' })
     })
   })
 

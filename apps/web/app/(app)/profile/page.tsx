@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -41,7 +41,6 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
-  const addToast = notify.toast
   const { user, setUser } = useAuthStore()
 
   const fetchProfile = useCallback(async () => {
@@ -75,10 +74,10 @@ export default function ProfilePage() {
         if (user) {
           setUser({ ...user, email: p.email })
         }
-        addToast('Profile updated', 'success')
+        notify.toast('Profile updated', { type: 'success' })
       }
     } catch {
-      addToast('Could not update profile', 'error')
+      notify.toast('Could not update profile', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -86,11 +85,11 @@ export default function ProfilePage() {
 
   const changePassword = async () => {
     if (newPassword !== confirmPassword) {
-      addToast('Passwords do not match', 'error')
+      notify.toast('Passwords do not match', { type: 'error' })
       return
     }
     if (newPassword.length < 8) {
-      addToast('Password must be at least 8 characters', 'error')
+      notify.toast('Password must be at least 8 characters', { type: 'error' })
       return
     }
     setChangingPassword(true)
@@ -102,9 +101,9 @@ export default function ProfilePage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      addToast('Password changed', 'success')
+      notify.toast('Password changed', { type: 'success' })
     } catch {
-      addToast('Could not change password — check current password', 'error')
+      notify.toast('Could not change password — check current password', { type: 'error' })
     } finally {
       setChangingPassword(false)
     }

@@ -12,21 +12,11 @@ vi.mock('@/lib/files-controller', () => ({
   filesController: { upload: mockUpload },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (selector: any) => selector({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (selector: any) => selector({ addToast: mockAddToast }),
+}))
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
@@ -67,7 +57,7 @@ describe('DatasetDropZone', () => {
 
     await waitFor(() => {
       expect(mockUpload).toHaveBeenCalled()
-      expect(mockAddToast).toHaveBeenCalledWith('Uploaded 1 file(s)', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Uploaded 1 file(s)', { type: 'success' })
       expect(onComplete).toHaveBeenCalled()
     })
   })
@@ -81,7 +71,7 @@ describe('DatasetDropZone', () => {
     fireEvent.change(input, { target: { files: [file] } })
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Upload failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Upload failed', { type: 'error' })
     })
   })
 })

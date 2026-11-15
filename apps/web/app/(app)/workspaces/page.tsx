@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -59,7 +59,6 @@ export default function WorkspacesPage() {
   const [editingWs, setEditingWs] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
-  const addToast = notify.toast
   const { currentWorkspace, switchWorkspace } = useAuthStore()
 
   const fetchWorkspaces = useCallback(async () => {
@@ -81,9 +80,9 @@ export default function WorkspacesPage() {
       setNewName('')
       setNewDesc('')
       await fetchWorkspaces()
-      addToast('Workspace created', 'success')
+      notify.toast('Workspace created', { type: 'success' })
     } catch {
-      addToast('Could not create workspace', 'error')
+      notify.toast('Could not create workspace', { type: 'error' })
     } finally {
       setCreating(false)
     }
@@ -95,9 +94,9 @@ export default function WorkspacesPage() {
       await apiDelete(`/workspaces/${id}`)
       if (selectedWs === id) setSelectedWs(null)
       await fetchWorkspaces()
-      addToast('Workspace deleted', 'success')
+      notify.toast('Workspace deleted', { type: 'success' })
     } catch {
-      addToast('Could not delete workspace', 'error')
+      notify.toast('Could not delete workspace', { type: 'error' })
     }
   }
 
@@ -113,10 +112,10 @@ export default function WorkspacesPage() {
         a.download = `${name.replace(/\s+/g, '_')}_export.json`
         a.click()
         URL.revokeObjectURL(url)
-        addToast('Workspace exported', 'success')
+        notify.toast('Workspace exported', { type: 'success' })
       }
     } catch {
-      addToast('Could not export workspace', 'error')
+      notify.toast('Could not export workspace', { type: 'error' })
     }
   }
 
@@ -132,9 +131,9 @@ export default function WorkspacesPage() {
       await apiPut(`/workspaces/${editingWs}`, { name: editName, description: editDesc })
       setEditingWs(null)
       await fetchWorkspaces()
-      addToast('Workspace updated', 'success')
+      notify.toast('Workspace updated', { type: 'success' })
     } catch {
-      addToast('Could not update workspace', 'error')
+      notify.toast('Could not update workspace', { type: 'error' })
     }
   }
 
@@ -150,9 +149,9 @@ export default function WorkspacesPage() {
         const data = JSON.parse(text)
         await apiPost('/workspaces/import', { workspace_data: data })
         await fetchWorkspaces()
-        addToast('Workspace imported', 'success')
+        notify.toast('Workspace imported', { type: 'success' })
       } catch {
-        addToast('Could not import workspace', 'error')
+        notify.toast('Could not import workspace', { type: 'error' })
       }
     }
     input.click()
@@ -179,9 +178,9 @@ export default function WorkspacesPage() {
       })
       setAddMemberId('')
       await fetchMembers(selectedWs)
-      addToast('Member added', 'success')
+      notify.toast('Member added', { type: 'success' })
     } catch {
-      addToast('Could not add member', 'error')
+      notify.toast('Could not add member', { type: 'error' })
     }
   }
 
@@ -190,9 +189,9 @@ export default function WorkspacesPage() {
     try {
       await apiDelete(`/workspaces/${selectedWs}/members/${userId}`)
       await fetchMembers(selectedWs)
-      addToast('Member removed', 'success')
+      notify.toast('Member removed', { type: 'success' })
     } catch {
-      addToast('Could not remove member', 'error')
+      notify.toast('Could not remove member', { type: 'error' })
     }
   }
 

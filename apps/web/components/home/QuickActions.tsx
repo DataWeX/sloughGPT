@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useRef } from 'react'
 import { Card, CardContent, Button } from '@sloughgpt/strui'
 import { chatController } from '@/lib/chat-controller'
@@ -28,7 +28,6 @@ export function QuickActions({
   knowledgeCount,
   setKnowledgeCount,
 }: QuickActionsProps) {
-  const addToast = notify.toast
   const [streaming, setStreaming] = useState(false)
   const streamingRef = useRef(false)
 
@@ -137,9 +136,9 @@ export function QuickActions({
                 await knowledgeController.add(text, 'general')
                 input.value = ''
                 setKnowledgeCount((k) => k + 1)
-                addToast('Fact saved', 'success')
+                notify.toast('Fact saved', { type: 'success' })
               } catch {
-                addToast('Could not save', 'error')
+                notify.toast('Could not save', { type: 'error' })
               }
             }}
             className="flex gap-2"

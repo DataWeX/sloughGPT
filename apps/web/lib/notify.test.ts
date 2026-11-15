@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
- * notify() — the unified notification dispatch handle (card 20261107_064201).
+ * notify() — the unified notification dispatch handle (card 20261107_064201,
+ * reconciled 2026-11-14: `lib/notify/` directory wins over the former
+ * `lib/notify.ts` dispatcher; this test now exercises the directory facade).
  *
  * A THIN PURE DISPATCHER: no state, no timers, no policy of its own — it
- * forwards intents verbatim to the three existing tier stores, which stay
- * the state owners (banner-store single-slot, toast-store dedupe/TTL,
- * process dock projector). The surface lock below is deliberate: this
- * module is producers' ONLY door to notification tiers, and the dock's
+ * forwards intents verbatim to the tier modules, which stay the state
+ * owners (toast channel dedupe/TTL, banner single-slot, process dock
+ * projector). The surface lock below is deliberate: this module is
+ * producers' ONLY door to notification tiers, and the dock's
  * `dispatchAction` (server-validated command execution) must never become
  * reachable through it — notifications are not commands.
  */
@@ -23,23 +25,22 @@ const { toastAdd, toastDismiss, toastClear, bannerShow, bannerDismiss, ingest } 
   }),
 )
 
-vi.mock('./toast-store', () => ({
+vi.mock('./notify/toast', () => ({
   useToastStore: {
-    getState: () => ({
-      addToast: toastAdd,
-      dismissToast: toastDismiss,
-      clearToasts: toastClear,
-    }),
+    getState: () => ({ addToast: toastAdd, dismissToast: toastDismiss, clearToasts: toastClear }),
   },
+  toast: toastAdd,
+  dismissToast: toastDismiss,
+  clearToasts: toastClear,
 }))
 
-vi.mock('./banner-store', () => ({
+vi.mock('./notify/banner', () => ({
   useBannerStore: {
-    getState: () => ({
-      showBanner: bannerShow,
-      dismissBanner: bannerDismiss,
-    }),
+    getState: () => ({ showBanner: bannerShow, dismissBanner: bannerDismiss }),
   },
+  banner: bannerShow,
+  dismissBanner: bannerDismiss,
+  clearBanners: vi.fn(),
 }))
 
 vi.mock('./process-notifications', () => ({
@@ -53,25 +54,24 @@ beforeEach(() => {
 })
 
 describe('notify — tier dispatch', () => {
-  it('routes toast intents to the toast store, argument-for-argument', () => {
+  it('routes toast intents to the toast tier, argument-for-argument', () => {
     const undo = () => {}
-    notify.toast('Saved', 'success')
-    expect(toastAdd).toHaveBeenLastCalledWith('Saved', 'success')
-    notify.toast('Exported', 'info', 'full detail…', undo, 'export-key')
-    expect(toastAdd).toHaveBeenLastCalledWith(
-      'Exported',
-      'info',
-      'full detail…',
-      undo,
-      'export-key',
-    )
+    notify.toast('Saved', { type: 'success' })
+    expect(toastAdd).toHaveBeenLastCalledWith('Saved', { type: 'success' })
+    notify.toast('Exported', { type: 'info', verbose: 'full detail…', onUndo: undo, key: 'export-key' })
+    expect(toastAdd).toHaveBeenLastCalledWith('Exported', {
+      type: 'info',
+      verbose: 'full detail…',
+      onUndo: undo,
+      key: 'export-key',
+    })
   })
 
-  it('mirrors the store return (toast id)', () => {
+  it('mirrors the tier return (toast id)', () => {
     expect(notify.toast('x')).toBe('toast_1')
   })
 
-  it('routes banner intents to the banner store and passes the id through', () => {
+  it('routes banner intents to the banner tier and passes the id through', () => {
     const id = notify.banner({
       tone: 'warning',
       title: 'Training interrupted',

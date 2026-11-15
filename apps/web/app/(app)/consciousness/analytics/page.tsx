@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -19,6 +19,11 @@ import {
 } from '@sloughgpt/strui'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Episode {
   input: string
@@ -214,7 +219,6 @@ function TooltipBox({ x, y, lines }: { x: number; y: number; lines: string[] }) 
 }
 
 export default function ConsciousnessAnalyticsPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [episodes, setEpisodes] = useState<Episode[]>([])
@@ -247,11 +251,11 @@ export default function ConsciousnessAnalyticsPage() {
         )
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()

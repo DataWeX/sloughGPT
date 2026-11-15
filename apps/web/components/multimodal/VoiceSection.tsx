@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useRef } from 'react'
 import {
   ActionCard,
@@ -32,7 +32,6 @@ export function VoiceSection() {
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [ttsCount, setTtsCount] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const addToast = notify.toast
 
   useEffect(() => {
     let active = true
@@ -42,7 +41,7 @@ export function VoiceSection() {
         if (active) setStatus(d)
       })
       .catch(() => {
-        if (active) addToast('Could not load voice status', 'error')
+        if (active) notify.toast('Could not load voice status', { type: 'error' })
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -56,7 +55,7 @@ export function VoiceSection() {
     try {
       setStatus(await voiceController.getStatus())
     } catch {
-      addToast('Could not refresh voice status', 'error')
+      notify.toast('Could not refresh voice status', { type: 'error' })
     }
   }
 

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -60,7 +60,6 @@ export default function MembersPage() {
   const [bulkRole, setBulkRole] = useState('user')
   const [bulkImporting, setBulkImporting] = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
-  const addToast = notify.toast
   const { currentWorkspace } = useAuthStore()
 
   const fetchWorkspaces = useCallback(async () => {
@@ -101,9 +100,9 @@ export default function MembersPage() {
       })
       setAddMemberId('')
       await fetchMembers(selectedWs)
-      addToast('Member added', 'success')
+      notify.toast('Member added', { type: 'success' })
     } catch {
-      addToast('Could not add member', 'error')
+      notify.toast('Could not add member', { type: 'error' })
     }
   }
 
@@ -113,9 +112,9 @@ export default function MembersPage() {
     try {
       await apiDelete(`/workspaces/${selectedWs}/members/${userId}`)
       await fetchMembers(selectedWs)
-      addToast('Member removed', 'success')
+      notify.toast('Member removed', { type: 'success' })
     } catch {
-      addToast('Could not remove member', 'error')
+      notify.toast('Could not remove member', { type: 'error' })
     }
   }
 
@@ -126,9 +125,9 @@ export default function MembersPage() {
       await apiPost(`/workspaces/${selectedWs}/invite`, { email: inviteEmail, role: inviteRole })
       setInviteEmail('')
       await fetchMembers(selectedWs)
-      addToast('Member invited', 'success')
+      notify.toast('Member invited', { type: 'success' })
     } catch {
-      addToast('Could not invite member', 'error')
+      notify.toast('Could not invite member', { type: 'error' })
     } finally {
       setInviting(false)
     }
@@ -158,13 +157,15 @@ export default function MembersPage() {
       setShowBulkImport(false)
       await fetchMembers(selectedWs)
       if (data) {
-        addToast(`Imported ${data.added} member(s), ${data.skipped} skipped`, 'success')
+        notify.toast(`Imported ${data.added} member(s), ${data.skipped} skipped`, {
+          type: 'success',
+        })
         if (data.errors?.length > 0) {
-          addToast(`${data.errors.length} error(s) during import`, 'error')
+          notify.toast(`${data.errors.length} error(s) during import`, { type: 'error' })
         }
       }
     } catch {
-      addToast('Could not import members', 'error')
+      notify.toast('Could not import members', { type: 'error' })
     } finally {
       setBulkImporting(false)
     }

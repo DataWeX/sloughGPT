@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import {
@@ -32,6 +32,11 @@ import { IconTrash } from '@/components/icons/NavIcons'
 import { apiGet, apiPut, apiDelete, apiPost } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useLocale } from '@/hooks/useLocale'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface WorkspaceSettings {
   workspace_id: string
@@ -82,7 +87,6 @@ interface HealthResponse {
 
 export default function WorkspaceSettingsPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
   const { t } = useLocale()
 
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null)
@@ -127,11 +131,11 @@ export default function WorkspaceSettingsPage() {
         setAllowSharing(s.allow_sharing)
       }
     } catch {
-      addToast('Could not load workspace settings', 'error')
+      notify.toast('Could not load workspace settings', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [wsId, addToast])
+  }, [wsId])
 
   const fetchUsage = useCallback(async () => {
     if (!wsId) return
@@ -174,10 +178,10 @@ export default function WorkspaceSettingsPage() {
         max_members: maxMembers,
         allow_sharing: allowSharing,
       })
-      addToast('Settings saved', 'success')
+      notify.toast('Settings saved', { type: 'success' })
       await fetchSettings()
     } catch {
-      addToast('Could not save settings', 'error')
+      notify.toast('Could not save settings', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -188,10 +192,10 @@ export default function WorkspaceSettingsPage() {
     setDeleting(true)
     try {
       await apiDelete(`/workspaces/${wsId}`)
-      addToast('Workspace deleted', 'success')
+      notify.toast('Workspace deleted', { type: 'success' })
       window.location.href = '/workspaces'
     } catch {
-      addToast('Could not delete workspace', 'error')
+      notify.toast('Could not delete workspace', { type: 'error' })
     } finally {
       setDeleting(false)
       setDeleteConfirm('')
@@ -207,9 +211,9 @@ export default function WorkspaceSettingsPage() {
       }>(`/workspaces/${wsId}/cleanup`, {})
       const cleaned = res?.data?.cleaned ?? {}
       const total = Object.values(cleaned).reduce((a, b) => a + b, 0)
-      addToast(`Cleanup complete: ${total} items removed`, 'success')
+      notify.toast(`Cleanup complete: ${total} items removed`, { type: 'success' })
     } catch {
-      addToast('Could not run cleanup', 'error')
+      notify.toast('Could not run cleanup', { type: 'error' })
     } finally {
       setCleaning(false)
     }
@@ -225,10 +229,12 @@ export default function WorkspaceSettingsPage() {
       )
       const data = res?.data
       if (data) {
-        addToast(`Cloned to "${data.name}" with ${data.members_cloned} members`, 'success')
+        notify.toast(`Cloned to "${data.name}" with ${data.members_cloned} members`, {
+          type: 'success',
+        })
       }
     } catch {
-      addToast('Could not clone workspace', 'error')
+      notify.toast('Could not clone workspace', { type: 'error' })
     } finally {
       setCloning(false)
     }

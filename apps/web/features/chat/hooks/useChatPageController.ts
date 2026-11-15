@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 
@@ -545,7 +545,7 @@ export function useChatPageController(
           },
         ])
       } catch (err: unknown) {
-        notify.toast(formatToastError(err, "Couldn't read file"), 'error')
+        notify.toast(formatToastError(err, "Couldn't read file"), { type: 'error' })
       } finally {
         setReadLoading(false)
       }

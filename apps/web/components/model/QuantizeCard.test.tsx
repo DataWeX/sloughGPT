@@ -17,22 +17,11 @@ vi.mock('@/lib/model-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) =>
-      sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -68,7 +57,7 @@ describe('QuantizeCard', () => {
     render(<QuantizeCard isLoaded={true} modelId="gpt2" health={null} />)
     fireEvent.click(screen.getByText('Int8'))
     await waitFor(() => expect(mockQuantize).toHaveBeenCalledWith(8, 'symmetric'))
-    expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('8-bit'), 'success')
+    expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('8-bit'), { type: 'success' })
   })
 
   it('calls quantize on Int4 click', async () => {
@@ -110,7 +99,9 @@ describe('QuantizeCard', () => {
     )
     fireEvent.click(screen.getByText('Restore'))
     await waitFor(() => expect(mockDequantize).toHaveBeenCalled())
-    expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('full precision'), 'success')
+    expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('full precision'), {
+      type: 'success',
+    })
   })
 
   it('shows precision details when quantized', () => {

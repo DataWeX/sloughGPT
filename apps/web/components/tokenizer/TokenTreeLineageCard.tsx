@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import {
   Card,
@@ -21,7 +21,6 @@ export function TokenTreeLineageCard() {
   const [input, setInput] = useState('')
   const [result, setResult] = useState<LineageResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const addToast = notify.toast
 
   const handleLookup = async () => {
     const term = input.trim()
@@ -31,7 +30,7 @@ export function TokenTreeLineageCard() {
     try {
       setResult(await tokenTreeController.lineage(term))
     } catch {
-      addToast(`Token not in vocabulary: ${term}`, 'error')
+      notify.toast(`Token not in vocabulary: ${term}`, { type: 'error' })
     } finally {
       setLoading(false)
     }

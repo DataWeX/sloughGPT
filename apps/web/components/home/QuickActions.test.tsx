@@ -5,7 +5,7 @@ import React from 'react'
 const mockSend = vi.fn()
 const mockStream = vi.fn()
 const mockAdd = vi.fn()
-const mockAddToast = vi.fn()
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
 
 vi.mock('@/lib/chat-controller', () => ({
   chatController: {
@@ -18,21 +18,11 @@ vi.mock('@/lib/knowledge-controller', () => ({
   knowledgeController: { add: (...args: any[]) => mockAdd(...args) },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: (e: any, fallback = 'Unknown error') => e?.message || fallback,

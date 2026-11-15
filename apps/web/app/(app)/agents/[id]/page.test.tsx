@@ -104,21 +104,11 @@ vi.mock('@/lib/agents-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 
 import Page from './page'
 
@@ -293,7 +283,7 @@ describe('AgentDetailPage', () => {
     await waitFor(() => {
       expect(mockUpdate).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Updated', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Updated', { type: 'success' })
   })
 
   it('cancels edit mode without saving', async () => {
@@ -322,7 +312,7 @@ describe('AgentDetailPage', () => {
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('agent-1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Deleted', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Deleted', { type: 'success' })
     expect(mockPush).toHaveBeenCalledWith('/agents')
   })
 
@@ -336,7 +326,7 @@ describe('AgentDetailPage', () => {
       screen.getByText('Delete').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Delete failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Delete failed', { type: 'error' })
     })
   })
 
@@ -374,7 +364,7 @@ describe('AgentDetailPage', () => {
       screen.getByText('Run').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Execution failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Execution failed', { type: 'error' })
     })
   })
 
@@ -393,7 +383,7 @@ describe('AgentDetailPage', () => {
     mockList.mockRejectedValue(new Error('network error'))
     render(<Page />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to load agent', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Failed to load agent', { type: 'error' })
     })
   })
 

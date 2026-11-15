@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { TrainingIndicator } from './TrainingIndicator'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
+import { notify } from '@/lib/notify'
 
 vi.mock('@/hooks/useTrainingSession', () => ({
   useTrainingSession: vi.fn(),
@@ -14,6 +15,17 @@ vi.mock('@/vite/next-compat/link', () => ({
       {children}
     </a>
   ),
+}))
+
+vi.mock('@/vite/next-compat/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn(), dismissBanner: vi.fn() },
+  useBannerStore: {
+    getState: () => ({ banners: [], dismissBanner: vi.fn(), clearBanners: vi.fn() }),
+  },
 }))
 
 describe('TrainingIndicator', () => {
@@ -74,16 +86,28 @@ describe('TrainingIndicator', () => {
     expect(screen.getByText('Training complete')).toBeTruthy()
   })
 
-  it('shows error status', () => {
+  it('routes failures to the global banner, not a sidebar label', () => {
     mockUseTrainingSession.mockReturnValue({
       trainingRunning: false,
       phase: 'error',
       progress: 0,
       loss: null,
       method: 'native',
+      error: 'CUDA out of memory',
     } as any)
-    render(<TrainingIndicator />)
-    expect(screen.getByText('Training failed')).toBeTruthy()
+    const { container } = render(<TrainingIndicator />)
+    // The sidebar row is silent on error — the banner is the failure surface.
+    expect(container.firstChild).toBeNull()
+    expect(screen.queryByText('Training failed')).toBeNull()
+    expect(notify.banner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'training-failed',
+        tone: 'destructive',
+        title: 'Training failed',
+        message: 'CUDA out of memory',
+        action: expect.objectContaining({ label: 'View training' }),
+      }),
+    )
   })
 
   it('links to training page', () => {

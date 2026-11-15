@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Textarea } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
@@ -17,7 +17,6 @@ interface EvalPerplexityCardProps {
 }
 
 export function EvalPerplexityCard({ result: externalResult, onResult }: EvalPerplexityCardProps) {
-  const addToast = notify.toast
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [internalResult, setInternalResult] = useState<PerplexityResult | null>(null)
@@ -32,7 +31,7 @@ export function EvalPerplexityCard({ result: externalResult, onResult }: EvalPer
       setInternalResult(data)
       onResult?.(data)
     } catch {
-      addToast('Could not calculate perplexity', 'error')
+      notify.toast('Could not calculate perplexity', { type: 'error' })
     } finally {
       setLoading(false)
     }

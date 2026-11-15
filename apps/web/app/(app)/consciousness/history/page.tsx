@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -23,6 +23,11 @@ import {
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { useSelection } from '@/hooks/useSelection'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Episode {
   input: string
@@ -95,7 +100,6 @@ function StarRating({
 }
 
 export default function ConsciousnessHistoryPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const { selectedIds, toggleSelect, clearSelection } = useSelection()
   const [loading, setLoading] = useState(true)
@@ -115,25 +119,22 @@ export default function ConsciousnessHistoryPage() {
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
 
-  const fetchEpisodes = useCallback(
-    async (off: number, append: boolean) => {
-      try {
-        const data = await consciousnessController.getEpisodeHistory(PAGE_SIZE)
-        const newEps: Episode[] = data.episodes ?? []
-        const total: number = data.total ?? 0
-        if (append) {
-          setEpisodes((prev) => [...prev, ...newEps])
-        } else {
-          setEpisodes(newEps)
-        }
-        setTotalEpisodes(total)
-        setHasMore(off + newEps.length < total)
-      } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
+  const fetchEpisodes = useCallback(async (off: number, append: boolean) => {
+    try {
+      const data = await consciousnessController.getEpisodeHistory(PAGE_SIZE)
+      const newEps: Episode[] = data.episodes ?? []
+      const total: number = data.total ?? 0
+      if (append) {
+        setEpisodes((prev) => [...prev, ...newEps])
+      } else {
+        setEpisodes(newEps)
       }
-    },
-    [addToast],
-  )
+      setTotalEpisodes(total)
+      setHasMore(off + newEps.length < total)
+    } catch (e) {
+      notify.toast(extractErrorMessage(e), { type: 'error' })
+    }
+  }, [])
 
   const initialLoad = useCallback(async () => {
     setLoading(true)
@@ -153,21 +154,18 @@ export default function ConsciousnessHistoryPage() {
     setLoadingMore(false)
   }, [offset, fetchEpisodes])
 
-  const handleFeedback = useCallback(
-    async (episodeIndex: number, rating: number) => {
-      setRatingEpisode(episodeIndex)
-      try {
-        await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
-        addToast(`Rated ${rating}/5`, 'success')
-        setEpisodes((prev) => prev.map((ep, i) => (i === episodeIndex ? { ...ep, rating } : ep)))
-      } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
-      } finally {
-        setRatingEpisode(null)
-      }
-    },
-    [addToast],
-  )
+  const handleFeedback = useCallback(async (episodeIndex: number, rating: number) => {
+    setRatingEpisode(episodeIndex)
+    try {
+      await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
+      notify.toast(`Rated ${rating}/5`, { type: 'success' })
+      setEpisodes((prev) => prev.map((ep, i) => (i === episodeIndex ? { ...ep, rating } : ep)))
+    } catch (e) {
+      notify.toast(extractErrorMessage(e), { type: 'error' })
+    } finally {
+      setRatingEpisode(null)
+    }
+  }, [])
 
   const filteredEpisodes = useMemo(() => {
     let result = [...episodes]
@@ -225,13 +223,13 @@ export default function ConsciousnessHistoryPage() {
       a.download = `consciousness-history-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('Exported history', 'success')
+      notify.toast('Exported history', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setExporting(false)
     }
-  }, [episodes, addToast])
+  }, [episodes])
 
   const handleImport = useCallback(async () => {
     const input = document.createElement('input')
@@ -244,16 +242,18 @@ export default function ConsciousnessHistoryPage() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        addToast(`Imported ${Array.isArray(data) ? data.length : 0} episodes`, 'success')
+        notify.toast(`Imported ${Array.isArray(data) ? data.length : 0} episodes`, {
+          type: 'success',
+        })
         await initialLoad()
       } catch {
-        addToast('Invalid JSON file', 'error')
+        notify.toast('Invalid JSON file', { type: 'error' })
       } finally {
         setImporting(false)
       }
     }
     input.click()
-  }, [addToast, initialLoad])
+  }, [initialLoad])
 
   if (loading) {
     return (

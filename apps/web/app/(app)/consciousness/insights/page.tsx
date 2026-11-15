@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -17,6 +17,11 @@ import {
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { IconSparkle, IconRefresh, IconDownload } from '@/components/icons/NavIcons'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Insight {
   id: string
@@ -48,7 +53,6 @@ export function joinSuggestions(suggestions: string[]): string {
 }
 
 export default function ConsciousnessInsightsPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -87,12 +91,12 @@ export default function ConsciousnessInsightsPage() {
         setStatsData(statsResult.value)
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -287,11 +291,11 @@ export default function ConsciousnessInsightsPage() {
       a.download = `consciousness-insights-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast(t('consciousness_insights.toast_exported'), 'success')
+      notify.toast(t('consciousness_insights.toast_exported'), { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [episodes, healthData, evalData, personalityData, statsData, computedInsights, addToast, t])
+  }, [episodes, healthData, evalData, personalityData, statsData, computedInsights, t])
 
   const overallScore = useMemo(() => {
     if (computedInsights.length === 0) return 0

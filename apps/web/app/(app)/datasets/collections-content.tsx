@@ -1,9 +1,14 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label } from '@sloughgpt/strui'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Pipeline {
   id: string
@@ -22,7 +27,6 @@ interface CollectionStats {
 }
 
 export default function CollectionsContent() {
-  const addToast = notify.toast
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [stats, setStats] = useState<CollectionStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -39,11 +43,11 @@ export default function CollectionsContent() {
       setPipelines(data.pipelines ?? [])
       setStats(data.counts ?? null)
     } catch {
-      addToast('Could not load collections', 'error')
+      notify.toast('Could not load collections', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     void fetchPipelines()
@@ -51,7 +55,7 @@ export default function CollectionsContent() {
 
   const createPipeline = useCallback(async () => {
     if (!newName.trim()) {
-      addToast('Name is required', 'error')
+      notify.toast('Name is required', { type: 'error' })
       return
     }
     setCreating(true)
@@ -61,44 +65,44 @@ export default function CollectionsContent() {
         source_type: newSourceType,
         store_type: newStoreType,
       })
-      addToast(`Created pipeline: ${newName}`, 'success')
+      notify.toast(`Created pipeline: ${newName}`, { type: 'success' })
       setNewName('')
       setShowCreate(false)
       void fetchPipelines()
     } catch {
-      addToast('Could not create pipeline', 'error')
+      notify.toast('Could not create pipeline', { type: 'error' })
     } finally {
       setCreating(false)
     }
-  }, [newName, newSourceType, newStoreType, addToast, fetchPipelines])
+  }, [newName, newSourceType, newStoreType, fetchPipelines])
 
   const runPipeline = useCallback(
     async (pipelineId: string) => {
       setRunningId(pipelineId)
       try {
         await apiPost(`/collections/run?name=${encodeURIComponent(pipelineId)}`)
-        addToast('Pipeline executed', 'success')
+        notify.toast('Pipeline executed', { type: 'success' })
         void fetchPipelines()
       } catch {
-        addToast('Could not run pipeline', 'error')
+        notify.toast('Could not run pipeline', { type: 'error' })
       } finally {
         setRunningId(null)
       }
     },
-    [addToast, fetchPipelines],
+    [fetchPipelines],
   )
 
   const deletePipeline = useCallback(
     async (pipelineId: string) => {
       try {
         await apiDelete(`/collections/${pipelineId}`)
-        addToast('Pipeline deleted', 'success')
+        notify.toast('Pipeline deleted', { type: 'success' })
         void fetchPipelines()
       } catch {
-        addToast('Could not delete pipeline', 'error')
+        notify.toast('Could not delete pipeline', { type: 'error' })
       }
     },
-    [addToast, fetchPipelines],
+    [fetchPipelines],
   )
 
   const sourceTypes = ['file', 'url', 'rss', 'api', 'sse', 'watch', 'generator']

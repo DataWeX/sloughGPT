@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Textarea, Input, Button } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -19,7 +19,6 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
   const [training, setTraining] = useState(false)
   const [result, setResult] = useState<TrainTreeResult | null>(null)
   const [failed, setFailed] = useState(false)
-  const addToast = notify.toast
 
   const handleTrain = async () => {
     setTraining(true)
@@ -38,7 +37,9 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
       onTrained?.()
     } catch (err) {
       setFailed(true)
-      addToast(err instanceof Error ? err.message : 'Could not train token tree', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not train token tree', {
+        type: 'error',
+      })
     } finally {
       setTraining(false)
     }

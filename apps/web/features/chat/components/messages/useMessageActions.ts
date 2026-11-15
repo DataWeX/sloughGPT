@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
@@ -60,7 +60,11 @@ export function useMessageActions(
   const [retryTemperature, setRetryTemperature] = useState(temperature)
   const [localReactions, setLocalReactions] = useState<Record<string, number>>({})
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const addToast = notify.toast as (message: string, type?: string) => void
+  const addToast = useCallback(
+    (message: string, type?: string) =>
+      notify.toast(message, { type: type as 'success' | 'error' | 'info' }),
+    [],
+  )
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement>(null!)

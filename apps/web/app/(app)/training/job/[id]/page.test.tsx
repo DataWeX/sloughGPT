@@ -147,21 +147,11 @@ vi.mock('@/lib/training-controller', () => ({
   },
 }))
 vi.mock('@/lib/model-controller', () => ({ modelController: { loadModelPath: mockLoadModelPath } }))
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/download-utils', () => ({
   downloadBlob: mockDownloadBlob,
   downloadJson: mockDownloadJson,
@@ -352,7 +342,7 @@ describe('TrainingJobDetailPage', () => {
     await waitFor(() => {
       expect(mockStop).toHaveBeenCalledWith('job-1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Training stopped', 'info')
+    expect(mockAddToast).toHaveBeenCalledWith('Training stopped', { type: 'info' })
     expect(mockGet).toHaveBeenCalledWith('job-1')
   })
 
@@ -367,7 +357,9 @@ describe('TrainingJobDetailPage', () => {
     await waitFor(() => {
       expect(mockLoadModelPath).toHaveBeenCalledWith('cp-20260801')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Loaded trained version: cp-20260801', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Loaded trained version: cp-20260801', {
+      type: 'success',
+    })
   })
 
   it('exports checkpoint on export click', async () => {
@@ -382,7 +374,7 @@ describe('TrainingJobDetailPage', () => {
       expect(mockDownloadTrainingJob).toHaveBeenCalledWith('job-1')
     })
     expect(mockDownloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'job-1.checkpoint')
-    expect(mockAddToast).toHaveBeenCalledWith('Checkpoint downloaded', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Checkpoint downloaded', { type: 'success' })
   })
 
   it('exports job details JSON', async () => {
@@ -395,7 +387,7 @@ describe('TrainingJobDetailPage', () => {
       expect(mockDownloadJson).toHaveBeenCalled()
     })
     expect(mockDownloadJson).toHaveBeenCalledWith(expect.any(Object), 'training-job-job-1.json')
-    expect(mockAddToast).toHaveBeenCalledWith('Job details exported', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Job details exported', { type: 'success' })
   })
 
   it('deletes job after confirmation', async () => {
@@ -416,7 +408,7 @@ describe('TrainingJobDetailPage', () => {
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('job-1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Job deleted', 'info')
+    expect(mockAddToast).toHaveBeenCalledWith('Job deleted', { type: 'info' })
     expect(mockPush).toHaveBeenCalledWith('/training')
   })
 

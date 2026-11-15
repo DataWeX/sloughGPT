@@ -13,22 +13,12 @@ vi.mock('@/lib/token-tree-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
-      selector({ addToast: mocks.mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.mockAddToast, banner: vi.fn() },
+
+  useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
+    selector({ addToast: mocks.mockAddToast }),
+}))
 
 vi.mock('@sloughgpt/strui', () => ({
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -144,7 +134,9 @@ describe('TokenTreePathCard', () => {
     render(<TokenTreePathCard />)
     fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
     await waitFor(() =>
-      expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not trace the token path', 'error'),
+      expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not trace the token path', {
+        type: 'error',
+      }),
     )
   })
 

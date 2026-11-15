@@ -1,0 +1,13 @@
+---
+id: 20261111_134201_fixtest-slo-manager-preference-tests-write-the-real-datasoul
+status: done
+board: 20261111_134201_fixtest-slo-manager-preference-tests-write-the-real-datasoul
+title: "fix(test): slo_manager preference tests write the REAL data/.soul_preference and pass for the wrong reason"
+tags: ["testing", "test-hygiene", "slo-manager"]
+sprint: ""
+gh: null
+---
+
+# fix(test): slo_manager preference tests write the REAL data/.soul_preference and pass for the wrong reason
+
+BUG (diagnosed 2026-11-11, session-contract lane, full-suite evidence): tests/core-py/test_slo_manager.py::TestSloManagerPreference has two defects. (a) WRONG PATH — test_preference_missing_soul_ignored and test_preference_empty_file write their preference file to tmp_path/data/.soul_preference, but SloManager reads <repo_root>/data/.soul_preference (domain/inference/_internal/slo_manager.py:78-79, find_repo_root based). The scenario (preference for a missing/empty soul) is NEVER exercised; the tests pass only when the real repo file happens to be absent. (b) POLLUTION + USER-STATE CLOBBER — test_save_preference_creates_directory calls switch_soul('x') which _save_preference() writes to the REAL gitignored data/.soul_preference (the app's actual soul-selection file) with NO cleanup, so (i) it overwrites the user's real soul choice whenever the suite runs, and (ii) every SUBSEQUENT run fails the two tests in (a) (they now see preference='x' which resolves to the tmp x.soul). EVIDENCE: full suite recorded 2 failures; isolated rerun still failed while file present; file moved aside → TestSloManagerPreference 4/4 pass; running test_save_preference_creates_directory ALONE recreated data/.soul_preference='x'; same tests PASSED earlier the same day in affected-closure on the identical tree (so not a Phase 2 regression — pre-existing). FIX (test-only): in all 4 TestSloManagerPreference tests, point the instance's _preference_file at tmp_path (m._preference_file = tmp_path/'data'/'.soul_preference' after construction, or patch before use) so the scenario is genuinely tested and nothing outside tmp_path is ever written. GATES: pytest tests/core-py/test_slo_manager.py run TWICE back-to-back — both runs green (second run proves cross-run pollution gone); ruff check+format; no changes to domain/inference/_internal/slo_manager.py (production code is correct — the tests are wrong). OWNED: tests/core-py/test_slo_manager.py only. MUST NOT: weaken assertions (keep 'pref for missing soul → None'), touch other test files, modify SloManager production logic. RELATED: blocks honest 'green suite' evidence for every landing until fixed (Phase 2 landed with these 2 documented as pre-existing per user ruling 2026-11-11).

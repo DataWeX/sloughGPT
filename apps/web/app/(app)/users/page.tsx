@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -47,7 +47,6 @@ export default function UsersAdminPage() {
   const [editEmail, setEditEmail] = useState('')
   const [editRole, setEditRole] = useState('')
   const [editStatus, setEditStatus] = useState('')
-  const addToast = notify.toast
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -75,9 +74,9 @@ export default function UsersAdminPage() {
       setNewPassword('')
       setNewRole('user')
       await fetchUsers()
-      addToast('User created', 'success')
+      notify.toast('User created', { type: 'success' })
     } catch {
-      addToast('Could not create user', 'error')
+      notify.toast('Could not create user', { type: 'error' })
     } finally {
       setCreating(false)
     }
@@ -88,9 +87,9 @@ export default function UsersAdminPage() {
     try {
       await apiDelete(`/users/${id}`)
       await fetchUsers()
-      addToast('User deleted', 'success')
+      notify.toast('User deleted', { type: 'success' })
     } catch {
-      addToast('Could not delete user', 'error')
+      notify.toast('Could not delete user', { type: 'error' })
     }
   }
 
@@ -111,9 +110,9 @@ export default function UsersAdminPage() {
       })
       setEditingUser(null)
       await fetchUsers()
-      addToast('User updated', 'success')
+      notify.toast('User updated', { type: 'success' })
     } catch {
-      addToast('Could not update user', 'error')
+      notify.toast('Could not update user', { type: 'error' })
     }
   }
 

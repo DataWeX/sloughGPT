@@ -3,10 +3,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { ChatMessage } from '@/lib/chat-utils'
 
 const {
-  mockSaveSession, mockLoadSession, mockLoadSessions,
-  mockDeleteSession, mockUpdateSessionFn,
-  mockCreate, mockUpdate, mockDelete, mockFetchMessages,
-  mockAddGlobalError, mockGetKV, mockSetKV, mockDeleteKV, mockGetDraft,
+  mockSaveSession,
+  mockLoadSession,
+  mockLoadSessions,
+  mockDeleteSession,
+  mockUpdateSessionFn,
+  mockCreate,
+  mockUpdate,
+  mockDelete,
+  mockFetchMessages,
+  mockAddGlobalError,
+  mockGetKV,
+  mockSetKV,
+  mockDeleteKV,
+  mockGetDraft,
 } = vi.hoisted(() => {
   const kvStore = new Map<string, unknown>()
   return {
@@ -21,8 +31,12 @@ const {
     mockFetchMessages: vi.fn(),
     mockAddGlobalError: vi.fn(),
     mockGetKV: vi.fn(async (key: string) => kvStore.get(key)),
-    mockSetKV: vi.fn(async (key: string, value: unknown) => { kvStore.set(key, value) }),
-    mockDeleteKV: vi.fn(async (key: string) => { kvStore.delete(key) }),
+    mockSetKV: vi.fn(async (key: string, value: unknown) => {
+      kvStore.set(key, value)
+    }),
+    mockDeleteKV: vi.fn(async (key: string) => {
+      kvStore.delete(key)
+    }),
     mockGetDraft: vi.fn(async () => ''),
   }
 })
@@ -54,7 +68,8 @@ vi.mock('@/lib/error-store', () => ({
   addGlobalError: mockAddGlobalError,
 }))
 
-vi.mock('@/lib/chat-utils', () => ({
+vi.mock('@/lib/chat-utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/chat-utils')>()),
   CURRENT_SESSION_KEY: 'man_current_conversation',
   generateSessionId: () => 'session_test',
 }))
@@ -89,8 +104,17 @@ describe('useChatSessions', () => {
   it('saveSessionToStorage saves to DB and creates remote session', async () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
-    const msgs = [{ id: '1', role: 'user' as const, content: 'What is machine learning', timestamp: new Date() }]
-    await act(async () => { await result.current.saveSessionToStorage(msgs, 's1') })
+    const msgs = [
+      {
+        id: '1',
+        role: 'user' as const,
+        content: 'What is machine learning',
+        timestamp: new Date(),
+      },
+    ]
+    await act(async () => {
+      await result.current.saveSessionToStorage(msgs, 's1')
+    })
     const saved = mockSaveSession.mock.calls[0][0]
     expect(saved.id).toBe('s1')
     expect(saved.name).toContain('machine learning')
@@ -99,11 +123,22 @@ describe('useChatSessions', () => {
 
   it('duplicateSession copies session with new id', async () => {
     const opts = defaultOpts()
-    const session = { id: 's1', name: 'Chat', messages: [], createdAt: '2024-01-01', updatedAt: '2024-01-01', synced: false, starred: false, pinned: false }
+    const session = {
+      id: 's1',
+      name: 'Chat',
+      messages: [],
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01',
+      synced: false,
+      starred: false,
+      pinned: false,
+    }
     mockLoadSession.mockResolvedValue(session)
     mockLoadSessions.mockResolvedValue([session])
     const { result } = renderHook(() => useChatSessions(opts))
-    await act(async () => { await result.current.duplicateSession('s1') })
+    await act(async () => {
+      await result.current.duplicateSession('s1')
+    })
     const saved = mockSaveSession.mock.calls[0][0]
     expect(saved.name).toBe('Chat (copy)')
     expect(saved.id).not.toBe('s1')
@@ -112,7 +147,9 @@ describe('useChatSessions', () => {
   it('starSession updates starred state', async () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
-    await act(async () => { await result.current.starSession('s1', true) })
+    await act(async () => {
+      await result.current.starSession('s1', true)
+    })
     expect(mockUpdateSessionFn).toHaveBeenCalledWith('s1', { starred: true })
     expect(opts.showToast).toHaveBeenCalledWith('Conversation starred')
   })
@@ -120,14 +157,18 @@ describe('useChatSessions', () => {
   it('pinSession updates pinned state', async () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
-    await act(async () => { await result.current.pinSession('s1', true) })
+    await act(async () => {
+      await result.current.pinSession('s1', true)
+    })
     expect(mockUpdateSessionFn).toHaveBeenCalledWith('s1', { pinned: true })
   })
 
   it('renameSession updates name', async () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
-    await act(async () => { await result.current.renameSession('s1', 'New Name') })
+    await act(async () => {
+      await result.current.renameSession('s1', 'New Name')
+    })
     expect(mockUpdateSessionFn).toHaveBeenCalledWith('s1', { name: 'New Name' })
     expect(opts.showToast).toHaveBeenCalledWith('Conversation renamed')
   })
@@ -137,7 +178,9 @@ describe('useChatSessions', () => {
     mockLoadSessions.mockResolvedValue([])
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
-    await act(async () => { await result.current.deleteSession('s1') })
+    await act(async () => {
+      await result.current.deleteSession('s1')
+    })
     expect(mockDeleteSession).toHaveBeenCalledWith('s1')
     expect(mockDelete).toHaveBeenCalledWith('s1')
     expect(opts.setMessages).toHaveBeenCalledWith([])
@@ -148,15 +191,52 @@ describe('useChatSessions', () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
     act(() => {
-      result.current.setSessions([{
-        id: 's1', name: 'Test Chat', messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: new Date() }],
-        createdAt: '2024-01-01', updatedAt: '2024-01-02', synced: true, starred: true, pinned: false,
-      }])
+      result.current.setSessions([
+        {
+          id: 's1',
+          name: 'Test Chat',
+          messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: new Date() }],
+          createdAt: '2024-01-01',
+          updatedAt: '2024-01-02',
+          synced: true,
+          starred: true,
+          pinned: false,
+        },
+      ])
     })
     expect(result.current.sidebarConversations).toHaveLength(1)
     expect(result.current.sidebarConversations[0].name).toBe('Test Chat')
     expect(result.current.sidebarConversations[0].starred).toBe(true)
     expect(result.current.sidebarConversations[0].message_count).toBe(1)
+  })
+
+  it('derives the name from messages when the stored name is blank (header/card parity)', async () => {
+    const opts = defaultOpts()
+    const { result } = renderHook(() => useChatSessions(opts))
+    act(() => {
+      result.current.setSessions([
+        {
+          id: 's1',
+          name: '',
+          messages: [
+            {
+              id: 'm1',
+              role: 'user',
+              content: 'How do caches stay coherent?',
+              timestamp: new Date(),
+            },
+          ],
+          createdAt: '2024-01-01',
+          updatedAt: '2024-01-02',
+          synced: true,
+          starred: false,
+          pinned: false,
+        },
+      ])
+    })
+    // The header reads this exact row (activeName) — no 'Untitled' in the
+    // toolbar while the card shows a derived title, and vice versa.
+    expect(result.current.sidebarConversations[0].name).toBe('How do caches stay coherent')
   })
 })
 
@@ -164,9 +244,7 @@ describe('useChatSessions.loadSession', () => {
   const localSession = {
     id: 's1',
     name: 'Test chat',
-    messages: [
-      { id: 'm1', role: 'user' as const, content: 'hello', timestamp: new Date() },
-    ],
+    messages: [{ id: 'm1', role: 'user' as const, content: 'hello', timestamp: new Date() }],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     synced: false,
@@ -196,10 +274,15 @@ describe('useChatSessions.loadSession', () => {
 
   it('merges remote messages with local and releases sessionLoading', async () => {
     mockFetchMessages.mockResolvedValue([{ role: 'assistant', content: 'remote reply' }])
-    const opts = { ...defaultOpts(), sessionIdRef: { current: 's9' } as React.MutableRefObject<string> }
+    const opts = {
+      ...defaultOpts(),
+      sessionIdRef: { current: 's9' } as React.MutableRefObject<string>,
+    }
     const { result } = renderHook(() => useChatSessions(opts))
 
-    await act(async () => { await result.current.loadSession('s1') })
+    await act(async () => {
+      await result.current.loadSession('s1')
+    })
 
     expect(opts.sessionIdRef.current).toBe('s1')
     expect(opts.setSessionLoading).toHaveBeenNthCalledWith(1, true)
@@ -208,7 +291,10 @@ describe('useChatSessions.loadSession', () => {
     expect(contents).toContain('hello')
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
     expect(opts.showToast).toHaveBeenCalledWith('Loaded: Test chat')
-    expect(mockFetchMessages).toHaveBeenCalledWith('s1', expect.objectContaining({ silent: true, signal: expect.any(AbortSignal) }))
+    expect(mockFetchMessages).toHaveBeenCalledWith(
+      's1',
+      expect.objectContaining({ silent: true, signal: expect.any(AbortSignal) }),
+    )
   })
 
   it('falls back to local messages when the remote merge hangs past the timeout', async () => {
@@ -222,9 +308,13 @@ describe('useChatSessions.loadSession', () => {
       return new Promise<never>(() => {})
     })
     let settled = false
-    const load = result.current.loadSession('s1').then(() => { settled = true })
+    const load = result.current.loadSession('s1').then(() => {
+      settled = true
+    })
     await vi.advanceTimersByTimeAsync(8001)
-    await act(async () => { await load })
+    await act(async () => {
+      await load
+    })
 
     expect(settled).toBe(true)
     expect(capturedSignal?.aborted).toBe(true)
@@ -238,7 +328,9 @@ describe('useChatSessions.loadSession', () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
 
-    await act(async () => { await result.current.loadSession('s1') })
+    await act(async () => {
+      await result.current.loadSession('s1')
+    })
 
     expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
@@ -250,7 +342,10 @@ describe('useChatSessions.loadSession', () => {
 
     let resolveRemote: (v: Array<{ role: string; content: string }>) => void = () => {}
     mockFetchMessages.mockImplementation(
-      () => new Promise<Array<{ role: string; content: string }>>(res => { resolveRemote = res }),
+      () =>
+        new Promise<Array<{ role: string; content: string }>>((res) => {
+          resolveRemote = res
+        }),
     )
     const load = result.current.loadSession('s1')
     await vi.waitFor(() => expect(mockFetchMessages).toHaveBeenCalled())
@@ -278,7 +373,9 @@ describe('useChatSessions.loadSession', () => {
     opts.sessionIdRef.current = 's2'
 
     await vi.advanceTimersByTimeAsync(8001)
-    await act(async () => { await load })
+    await act(async () => {
+      await load
+    })
 
     expect(opts.setMessages).not.toHaveBeenCalled()
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
@@ -299,13 +396,17 @@ describe('useChatSessions.loadSession', () => {
     expect(opts.sessionIdRef.current).toBe('s2')
 
     await vi.advanceTimersByTimeAsync(7900)
-    await act(async () => { await load1 })
+    await act(async () => {
+      await load1
+    })
 
     expect(opts.setMessages).not.toHaveBeenCalled()
     expect(opts.setSessionLoading).not.toHaveBeenLastCalledWith(false)
 
     await vi.advanceTimersByTimeAsync(200)
-    await act(async () => { await load2 })
+    await act(async () => {
+      await load2
+    })
 
     expect(opts.setSessionLoading).toHaveBeenLastCalledWith(false)
     expect(opts.setMessages).toHaveBeenCalledWith(localSession.messages)
@@ -317,13 +418,18 @@ describe('useChatSessions.loadSession', () => {
 
     let resolveRemote: (v: Array<{ role: string; content: string }>) => void = () => {}
     mockFetchMessages.mockImplementation(
-      () => new Promise<Array<{ role: string; content: string }>>(res => { resolveRemote = res }),
+      () =>
+        new Promise<Array<{ role: string; content: string }>>((res) => {
+          resolveRemote = res
+        }),
     )
     const load = result.current.loadSession('s1')
     await vi.waitFor(() => expect(mockFetchMessages).toHaveBeenCalled())
 
     mockGetKV.mockResolvedValueOnce('s1')
-    await act(async () => { await result.current.deleteSession('s1') })
+    await act(async () => {
+      await result.current.deleteSession('s1')
+    })
 
     await act(async () => {
       resolveRemote([{ role: 'assistant', content: 'stale reply for deleted session' }])
@@ -342,7 +448,9 @@ describe('useChatSessions.loadSession', () => {
     const { result } = renderHook(() => useChatSessions(opts))
 
     mockGetKV.mockResolvedValueOnce('s1')
-    await act(async () => { await result.current.deleteSession('s1') })
+    await act(async () => {
+      await result.current.deleteSession('s1')
+    })
 
     await act(async () => {
       await result.current.saveSessionToStorage(
@@ -352,11 +460,13 @@ describe('useChatSessions.loadSession', () => {
     })
 
     mockFetchMessages.mockResolvedValue([{ role: 'assistant', content: 'remote reply' }])
-    await act(async () => { await result.current.loadSession('s1') })
+    await act(async () => {
+      await result.current.loadSession('s1')
+    })
 
-    expect(opts.setMessages).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({ content: 'remote reply' }),
-    ]))
+    expect(opts.setMessages).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ content: 'remote reply' })]),
+    )
     expect(mockSetKV).toHaveBeenCalledWith('man_current_conversation', 's1')
   })
 
@@ -366,12 +476,17 @@ describe('useChatSessions.loadSession', () => {
 
     let resolveRemote: (v: Array<{ role: string; content: string }>) => void = () => {}
     mockFetchMessages.mockImplementation(
-      () => new Promise<Array<{ role: string; content: string }>>(res => { resolveRemote = res }),
+      () =>
+        new Promise<Array<{ role: string; content: string }>>((res) => {
+          resolveRemote = res
+        }),
     )
     const load = result.current.loadSession('s1')
     await vi.waitFor(() => expect(mockFetchMessages).toHaveBeenCalled())
 
-    opts.messagesRef.current = [{ id: 'u1', role: 'user', content: 'sent mid-load', timestamp: new Date() }]
+    opts.messagesRef.current = [
+      { id: 'u1', role: 'user', content: 'sent mid-load', timestamp: new Date() },
+    ]
 
     await act(async () => {
       resolveRemote([{ role: 'assistant', content: 'stale loaded reply' }])

@@ -1,9 +1,9 @@
+import { notify, useBannerStore } from '@/lib/notify'
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { GlobalBanner } from './GlobalBanner'
-import { useBannerStore } from '@/lib/banner-store'
 
 vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick, ...props }: any) => (
@@ -28,7 +28,7 @@ describe('GlobalBanner', () => {
 
   it('renders banner with action and dismisses on action', () => {
     const onAction = vi.fn()
-    useBannerStore.getState().showBanner({
+    notify.banner({
       tone: 'warning',
       title: 'Training failed',
       message: 'empty dataset',
@@ -42,15 +42,15 @@ describe('GlobalBanner', () => {
   })
 
   it('dismisses via close button', () => {
-    useBannerStore.getState().showBanner({ tone: 'info', title: 'Hello' })
+    notify.banner({ tone: 'info', title: 'Hello' })
     render(<GlobalBanner />)
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss: Hello' }))
     expect(useBannerStore.getState().banners).toHaveLength(0)
   })
 
   it('renders exactly one banner row when two producers raised banners', () => {
-    useBannerStore.getState().showBanner({ tone: 'info', title: 'First concern' })
-    useBannerStore.getState().showBanner({
+    notify.banner({ tone: 'info', title: 'First concern' })
+    notify.banner({
       tone: 'warning',
       title: 'Backend restarting',
       message: 'reconnecting…',
@@ -64,7 +64,7 @@ describe('GlobalBanner', () => {
 
   it('renders the structured payload: tone, title, message, action', () => {
     const onAction = vi.fn()
-    useBannerStore.getState().showBanner({
+    notify.banner({
       tone: 'warning',
       title: 'Backend not responding',
       message: 'the app is running in degraded mode.',
@@ -82,7 +82,7 @@ describe('GlobalBanner', () => {
   })
 
   it('never dims the message with opacity (the ink contrast contract covers it)', () => {
-    useBannerStore.getState().showBanner({
+    notify.banner({
       tone: 'warning',
       title: 'Backend not responding',
       message: 'supporting detail stays legible',

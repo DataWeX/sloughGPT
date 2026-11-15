@@ -1,7 +1,7 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
-import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
@@ -33,9 +33,14 @@ import { DatasetDropZone } from '@/components/DatasetDropZone'
 import { useDatasetList, useDeleteDataset } from '@/lib/cache'
 import { isTrainingCorpus } from '@/lib/dataset-controller'
 
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
+
 export default function DatasetsPage() {
   const router = useRouter()
-  const addToast = notify.toast
   const { data: allDatasets = [], isLoading: loading, refetch: refetchDatasets } = useDatasetList()
   const deleteDataset = useDeleteDataset()
   const [search, setSearch] = useState('')
@@ -52,9 +57,9 @@ export default function DatasetsPage() {
       await refetchDatasets()
     } catch {
       setFetchError(true)
-      addToast('Could not load files', 'error')
+      notify.toast('Could not load files', { type: 'error' })
     }
-  }, [refetchDatasets, addToast])
+  }, [refetchDatasets])
 
   const searchMatch = (ds: Dataset) =>
     !search ||
@@ -75,9 +80,9 @@ export default function DatasetsPage() {
     setPendingDelete(null)
     try {
       await deleteDataset.mutateAsync(deleted.id)
-      addToast(`Deleted "${deleted.name}"`, 'info')
+      notify.toast(`Deleted "${deleted.name}"`, { type: 'info' })
     } catch {
-      addToast('Could not delete', 'error')
+      notify.toast('Could not delete', { type: 'error' })
     }
   }
 
@@ -93,7 +98,7 @@ export default function DatasetsPage() {
       const preview = await datasetController.preview(ds.id, 3)
       setPreviewData(preview)
     } catch {
-      addToast('Could not load preview', 'error')
+      notify.toast('Could not load preview', { type: 'error' })
     } finally {
       setPreviewLoading(false)
     }
@@ -109,9 +114,9 @@ export default function DatasetsPage() {
       a.download = `${ds.name || ds.id}.jsonl`
       a.click()
       URL.revokeObjectURL(url)
-      addToast(`Exported "${ds.name}"`, 'success')
+      notify.toast(`Exported "${ds.name}"`, { type: 'success' })
     } catch {
-      addToast('Could not export', 'error')
+      notify.toast('Could not export', { type: 'error' })
     }
   }
 

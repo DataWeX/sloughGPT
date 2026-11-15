@@ -14,7 +14,9 @@ vi.mock('@/lib/model-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
@@ -33,7 +35,16 @@ describe('DownloadsCard', () => {
 
   it('renders active download with progress', async () => {
     vi.mocked(modelController.listDownloads).mockResolvedValue({
-      downloads: [{ model_id: 'gpt2', status: 'downloading', progress: 0.5, bytes_downloaded: 500, total_bytes: 1000, speed_bps: 200 }],
+      downloads: [
+        {
+          model_id: 'gpt2',
+          status: 'downloading',
+          progress: 0.5,
+          bytes_downloaded: 500,
+          total_bytes: 1000,
+          speed_bps: 200,
+        },
+      ],
       count: 1,
     })
     render(<DownloadsCard />)
@@ -45,7 +56,16 @@ describe('DownloadsCard', () => {
 
   it('renders failed download with retry/verify buttons', async () => {
     vi.mocked(modelController.listDownloads).mockResolvedValue({
-      downloads: [{ model_id: 'bert', status: 'failed', progress: 0, bytes_downloaded: 100, total_bytes: 500, speed_bps: 0 }],
+      downloads: [
+        {
+          model_id: 'bert',
+          status: 'failed',
+          progress: 0,
+          bytes_downloaded: 100,
+          total_bytes: 500,
+          speed_bps: 0,
+        },
+      ],
       count: 1,
     })
     render(<DownloadsCard />)
@@ -59,7 +79,16 @@ describe('DownloadsCard', () => {
 
   it('renders cancel button for active downloads', async () => {
     vi.mocked(modelController.listDownloads).mockResolvedValue({
-      downloads: [{ model_id: 'llama', status: 'downloading', progress: 0.3, bytes_downloaded: 300, total_bytes: 1000, speed_bps: 100 }],
+      downloads: [
+        {
+          model_id: 'llama',
+          status: 'downloading',
+          progress: 0.3,
+          bytes_downloaded: 300,
+          total_bytes: 1000,
+          speed_bps: 100,
+        },
+      ],
       count: 1,
     })
     render(<DownloadsCard />)

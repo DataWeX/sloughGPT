@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   cn,
@@ -19,6 +19,11 @@ import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface GalleryImage {
   id: string
@@ -40,7 +45,6 @@ export function ImageSection() {
   const [generating, setGenerating] = useState(false)
   const [lastGenerated, setLastGenerated] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
-  const addToast = notify.toast
 
   const fetchData = useCallback(async () => {
     try {
@@ -51,11 +55,11 @@ export function ImageSection() {
       setGallery(galleryRes?.images ?? [])
       setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
     } catch {
-      addToast('Could not load image data', 'error')
+      notify.toast('Could not load image data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -72,7 +76,7 @@ export function ImageSection() {
           )
         }
       } catch {
-        if (active) addToast('Could not load image data', 'error')
+        if (active) notify.toast('Could not load image data', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }

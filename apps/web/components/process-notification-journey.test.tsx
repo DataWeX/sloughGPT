@@ -75,11 +75,18 @@ vi.mock('@/lib/backend-retry', () => ({ probeBackendAndRevalidate: vi.fn() }))
 vi.mock('@/lib/api-monitor-store', () => ({
   useApiMonitor: (sel?: any) => (sel ? sel({ status: 'connected' }) : { status: 'connected' }),
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: Object.assign((sel?: any) => (sel ? sel({ toasts: [] }) : { toasts: [] }), {
-    getState: () => ({ toasts: [] }),
-  }),
-}))
+vi.mock('@/lib/notify', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/notify')>()
+  return {
+    ...actual,
+    // Banner side stays REAL (single shared slot between AppLayout's writes and
+    // GlobalBanner's reads); only the toast surface is stubbed.
+    notify: { ...actual.notify, toast: vi.fn() },
+    useToastStore: Object.assign((sel?: any) => (sel ? sel({ toasts: [] }) : { toasts: [] }), {
+      getState: () => ({ toasts: [] }),
+    }),
+  }
+})
 vi.mock('@/lib/store', () => ({
   useAppStore: Object.assign((sel?: any) => (sel ? sel({ settings: {} }) : { settings: {} }), {
     getState: () => ({ settings: {} }),

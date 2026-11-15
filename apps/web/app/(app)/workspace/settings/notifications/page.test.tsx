@@ -15,7 +15,9 @@ vi.mock('@/lib/auth', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))
@@ -30,9 +32,27 @@ describe('NotificationsPage', () => {
   const mockNotifications = {
     data: {
       notifications: [
-        { type: 'training', title: 'Job Completed', detail: 'Training job finished', status: 'completed', timestamp: '2024-01-01T00:00:00Z' },
-        { type: 'member', title: 'Member Joined', detail: 'alice joined the workspace', status: '', timestamp: '2024-01-02T00:00:00Z' },
-        { type: 'training', title: 'Job Failed', detail: 'Out of memory', status: 'failed', timestamp: '2024-01-03T00:00:00Z' },
+        {
+          type: 'training',
+          title: 'Job Completed',
+          detail: 'Training job finished',
+          status: 'completed',
+          timestamp: '2024-01-01T00:00:00Z',
+        },
+        {
+          type: 'member',
+          title: 'Member Joined',
+          detail: 'alice joined the workspace',
+          status: '',
+          timestamp: '2024-01-02T00:00:00Z',
+        },
+        {
+          type: 'training',
+          title: 'Job Failed',
+          detail: 'Out of memory',
+          status: 'failed',
+          timestamp: '2024-01-03T00:00:00Z',
+        },
       ],
     },
   }

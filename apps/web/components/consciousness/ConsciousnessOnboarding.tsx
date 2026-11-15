@@ -1,11 +1,16 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback } from 'react'
 import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { consciousnessController } from '@/lib/consciousness-controller'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const TOTAL_STEPS = 5
 
@@ -31,7 +36,6 @@ interface ConsciousnessOnboardingProps {
 }
 
 export function ConsciousnessOnboarding({ onComplete, onDismiss }: ConsciousnessOnboardingProps) {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [step, setStep] = useState(1)
   const [selectedLevel, setSelectedLevel] = useState(2)
@@ -45,9 +49,9 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
       setSubmitting(true)
       try {
         await consciousnessController.updateConfig({ level: selectedLevel })
-        addToast(t('consciousness_onboarding.toast_level_set'), 'success')
+        notify.toast(t('consciousness_onboarding.toast_level_set'), { type: 'success' })
       } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
+        notify.toast(extractErrorMessage(e), { type: 'error' })
         setSubmitting(false)
         return
       }
@@ -58,9 +62,9 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
       setSubmitting(true)
       try {
         await consciousnessController.applyPersonalityPreset(selectedPreset)
-        addToast(t('consciousness_onboarding.toast_preset_applied'), 'success')
+        notify.toast(t('consciousness_onboarding.toast_preset_applied'), { type: 'success' })
       } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
+        notify.toast(extractErrorMessage(e), { type: 'error' })
         setSubmitting(false)
         return
       }
@@ -70,16 +74,16 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
     if (step < TOTAL_STEPS) {
       setStep((s) => s + 1)
     }
-  }, [step, selectedLevel, selectedPreset, addToast, t])
+  }, [step, selectedLevel, selectedPreset, t])
 
   const handleSeed = async () => {
     setSeeding(true)
     try {
       await consciousnessController.seedData({ count: 10 })
       setSeedDone(true)
-      addToast(t('consciousness_onboarding.toast_seeded'), 'success')
+      notify.toast(t('consciousness_onboarding.toast_seeded'), { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }

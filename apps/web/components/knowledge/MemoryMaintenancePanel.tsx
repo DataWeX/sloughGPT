@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Input } from '@sloughgpt/strui'
 import { FoldSection } from '@sloughgpt/strui'
@@ -10,6 +10,11 @@ import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { parseMemoryImport } from '@/lib/memory-card-utils'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface MemoryMaintenancePanelProps {
   itemCount: number
@@ -26,7 +31,6 @@ export function MemoryMaintenancePanel({
   fetchData,
   openArchive,
 }: MemoryMaintenancePanelProps) {
-  const addToast = notify.toast
   const [consolidating, setConsolidating] = useState(false)
   const [pruning, setPruning] = useState(false)
   const [retentionDays, setRetentionDays] = useState<number | null>(null)
@@ -61,39 +65,41 @@ export function MemoryMaintenancePanel({
     try {
       const result = await memoryController.consolidate()
       if (result.removed > 0) {
-        addToast(`Consolidated ${result.removed} duplicate fact(s), kept ${result.kept}`, 'success')
+        notify.toast(`Consolidated ${result.removed} duplicate fact(s), kept ${result.kept}`, {
+          type: 'success',
+        })
       } else {
-        addToast('No near-duplicate facts found', 'info')
+        notify.toast('No near-duplicate facts found', { type: 'info' })
       }
       await fetchData()
     } catch {
-      addToast('Could not consolidate memory', 'error')
+      notify.toast('Could not consolidate memory', { type: 'error' })
     } finally {
       setConsolidating(false)
     }
-  }, [addToast, fetchData])
+  }, [fetchData])
 
   const handlePruneArchive = useCallback(async () => {
     setPruning(true)
     try {
       const result = await memoryController.archivePrune(retentionDays ?? undefined)
-      addToast(
+      notify.toast(
         result.pruned > 0
           ? `Pruned ${result.pruned} archive record(s)`
           : 'Archive already within retention',
-        'success',
+        { type: 'success' },
       )
       await fetchData()
     } catch {
-      addToast('Could not prune archive', 'error')
+      notify.toast('Could not prune archive', { type: 'error' })
     } finally {
       setPruning(false)
     }
-  }, [addToast, fetchData, retentionDays])
+  }, [fetchData, retentionDays])
 
   const handleSaveRetention = useCallback(async () => {
     if (retentionDays == null || Number.isNaN(retentionDays)) {
-      addToast('Enter a retention window in days', 'error')
+      notify.toast('Enter a retention window in days', { type: 'error' })
       return
     }
     const days = Math.round(Math.max(0, Math.min(retentionDays, 3650)))
@@ -101,13 +107,15 @@ export function MemoryMaintenancePanel({
     try {
       const config = await memoryController.updateConfig({ archive_retention_days: days })
       setRetentionDays(config.archive_retention_days)
-      addToast(`Archive retention set to ${config.archive_retention_days} day(s)`, 'success')
+      notify.toast(`Archive retention set to ${config.archive_retention_days} day(s)`, {
+        type: 'success',
+      })
     } catch {
-      addToast('Could not save retention', 'error')
+      notify.toast('Could not save retention', { type: 'error' })
     } finally {
       setSavingRetention(false)
     }
-  }, [retentionDays, addToast])
+  }, [retentionDays])
 
   const handleExportMemory = useCallback(async () => {
     try {
@@ -118,11 +126,11 @@ export function MemoryMaintenancePanel({
         source: i.source || 'api',
       }))
       downloadJson(data, `memory-export-${todayDateString()}.json`)
-      addToast(`Exported ${data.length} memory item(s)`, 'success')
+      notify.toast(`Exported ${data.length} memory item(s)`, { type: 'success' })
     } catch {
-      addToast('Could not export memory', 'error')
+      notify.toast('Could not export memory', { type: 'error' })
     }
-  }, [addToast])
+  }, [])
 
   const handleImportMemory = useCallback(async () => {
     const file = await importFile('.json,.csv')
@@ -133,7 +141,7 @@ export function MemoryMaintenancePanel({
       const text = await file.text()
       const entries = parseMemoryImport(text, file.name)
       if (entries.length === 0) {
-        addToast('No memory items found in file', 'error')
+        notify.toast('No memory items found in file', { type: 'error' })
         return
       }
       setImportProgress({ current: 0, total: entries.length })
@@ -147,15 +155,15 @@ export function MemoryMaintenancePanel({
         }
         setImportProgress({ current: i + 1, total: entries.length })
       }
-      addToast(`Imported ${stored} of ${entries.length} memory item(s)`, 'success')
+      notify.toast(`Imported ${stored} of ${entries.length} memory item(s)`, { type: 'success' })
       await fetchData()
     } catch {
-      addToast('Could not import memory', 'error')
+      notify.toast('Could not import memory', { type: 'error' })
     } finally {
       setImporting(false)
       setImportProgress(null)
     }
-  }, [addToast, fetchData])
+  }, [fetchData])
 
   return (
     <SectionErrorBoundary sectionName="Archive panel">

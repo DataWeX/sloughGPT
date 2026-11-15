@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useEffect, useState, useCallback, memo } from 'react'
 import { cn, ActionCard, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -14,7 +14,6 @@ interface WorkflowCardProps {
 export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCardProps) {
   const [status, setStatus] = useState<WorkflowStatus | null>(null)
   const [loading, setLoading] = useState(true)
-  const addToast = notify.toast
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -80,7 +79,7 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
       onRefresh?.()
     } catch (e: unknown) {
       logger.warning('Could not workflow start', { exception: String(e) })
-      addToast('Could not start workflow', 'error')
+      notify.toast('Could not start workflow', { type: 'error' })
     }
   }
 
@@ -91,7 +90,7 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
       onRefresh?.()
     } catch (e: unknown) {
       logger.warning('Could not workflow stop', { exception: String(e) })
-      addToast('Could not stop workflow', 'error')
+      notify.toast('Could not stop workflow', { type: 'error' })
     }
   }
 

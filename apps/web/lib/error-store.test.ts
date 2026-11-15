@@ -1,7 +1,6 @@
+import { useBannerStore, useToastStore } from '@/lib/notify'
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { useErrorStore, addGlobalError } from './error-store'
-import { useBannerStore } from './banner-store'
-import { useToastStore } from './toast-store'
 
 describe('error-store', () => {
   beforeEach(() => {

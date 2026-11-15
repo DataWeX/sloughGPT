@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -36,7 +36,6 @@ function qualityGrade(cos: number): { label: string; color: string } {
 }
 
 export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
-  const addToast = notify.toast
   const [bits, setBits] = useState<4 | 8>(8)
   const [mode, setMode] = useState<'symmetric' | 'asymmetric'>('symmetric')
   const [quantizing, setQuantizing] = useState(false)
@@ -50,12 +49,12 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
     try {
       const res = await modelController.quantize(bits, mode)
       setResult(res)
-      addToast(
+      notify.toast(
         `${res.bits}-bit ${mode} quantization applied (${res.layers_quantized} layers)`,
-        'success',
+        { type: 'success' },
       )
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not quantization'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not quantization'), { type: 'error' })
     } finally {
       setQuantizing(false)
     }
@@ -67,9 +66,9 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       await modelController.dequantize()
       setResult(null)
       setShowLayers(false)
-      addToast('Reset to float32', 'success')
+      notify.toast('Reset to float32', { type: 'success' })
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not reset'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not reset'), { type: 'error' })
     } finally {
       setResetting(false)
     }

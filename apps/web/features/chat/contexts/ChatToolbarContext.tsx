@@ -21,6 +21,11 @@ type DownloadProgressInfo = {
 
 interface ConversationsGroup {
   conversations: Conversation[]
+  /** Display name of the ACTIVE conversation — the exact string the sidebar
+   *  card renders for the same row (single lookup in useChatToolbarValue),
+   *  so header and card can never disagree on the title. Undefined when no
+   *  row exists yet (unsaved new chat → header shows 'New chat'). */
+  activeName?: string
   sessionIdRef: React.MutableRefObject<string>
   onLoad: (id: string) => Promise<void>
   onStar: (id: string, starred: boolean) => Promise<void>

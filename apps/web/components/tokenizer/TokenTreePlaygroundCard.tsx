@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Textarea, Button, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -18,7 +18,6 @@ export function TokenTreePlaygroundCard() {
   const [text, setText] = useState('the quick brown fox jumps over the lazy dog')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<PlaygroundResult | null>(null)
-  const addToast = notify.toast
 
   const handleCompare = async () => {
     const term = text.trim()
@@ -34,7 +33,7 @@ export function TokenTreePlaygroundCard() {
       tree: treeRes.status === 'fulfilled' ? treeRes.value : null,
     })
     if (baseRes.status === 'rejected' && treeRes.status === 'rejected') {
-      addToast('Both tokenizers failed. Is the tokenizer trained?', 'error')
+      notify.toast('Both tokenizers failed. Is the tokenizer trained?', { type: 'error' })
     }
     setRunning(false)
   }

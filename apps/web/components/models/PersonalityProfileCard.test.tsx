@@ -2,22 +2,12 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
 
-const mockAddToast = vi.fn()
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (s: any) => s({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (s: any) => s({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/souls-controller', () => ({
   soulsController: {
     listWeightSnapshots: vi.fn().mockResolvedValue([]),
@@ -217,7 +207,9 @@ describe('PersonalityProfileCard', () => {
       target: { value: 'fail' },
     })
     fireEvent.click(screen.getByText('Save'))
-    await vi.waitFor(() => expect(mockAddToast).toHaveBeenCalledWith('disk full', 'error'))
+    await vi.waitFor(() =>
+      expect(mockAddToast).toHaveBeenCalledWith('disk full', { type: 'error' }),
+    )
   })
 
   it('shows toast on load error', async () => {
@@ -236,7 +228,9 @@ describe('PersonalityProfileCard', () => {
     fireEvent.click(screen.getByText('Save'))
     const loadBtn = await screen.findByText('Load')
     fireEvent.click(loadBtn)
-    await vi.waitFor(() => expect(mockAddToast).toHaveBeenCalledWith('not found', 'error'))
+    await vi.waitFor(() =>
+      expect(mockAddToast).toHaveBeenCalledWith('not found', { type: 'error' }),
+    )
   })
 
   it('shows formatted date for snapshots', async () => {

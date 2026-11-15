@@ -107,7 +107,9 @@ vi.mock('@/lib/feedback-store', () => ({
   }),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: { getState: vi.fn(() => ({ addToast: vi.fn() })) },
 }))
 

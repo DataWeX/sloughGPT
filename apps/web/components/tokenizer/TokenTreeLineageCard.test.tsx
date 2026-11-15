@@ -12,22 +12,12 @@ vi.mock('@/lib/token-tree-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
-      selector({ addToast: mocks.mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.mockAddToast, banner: vi.fn() },
+
+  useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
+    selector({ addToast: mocks.mockAddToast }),
+}))
 
 vi.mock('@sloughgpt/strui', () => ({
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -143,7 +133,9 @@ describe('TokenTreeLineageCard', () => {
     fireEvent.change(screen.getByLabelText('Token to inspect'), { target: { value: 'zzz' } })
     fireEvent.click(screen.getByText('Show lineage'))
     await waitFor(() =>
-      expect(mocks.mockAddToast).toHaveBeenCalledWith('Token not in vocabulary: zzz', 'error'),
+      expect(mocks.mockAddToast).toHaveBeenCalledWith('Token not in vocabulary: zzz', {
+        type: 'error',
+      }),
     )
     await waitFor(() => {
       expect(screen.queryByText(/Merge lineage of/)).toBeNull()

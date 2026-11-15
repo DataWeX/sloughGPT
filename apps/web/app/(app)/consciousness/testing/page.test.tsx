@@ -54,7 +54,9 @@ vi.mock('@/hooks/useLocale', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: Object.assign(
     vi.fn((sel: any) => sel({ addToast: vi.fn() })),
     { getState: () => ({ addToast: vi.fn() }) },

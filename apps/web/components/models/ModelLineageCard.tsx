@@ -16,7 +16,6 @@ import { registryController, type ArtifactRecord } from '@/lib/registry-controll
 export default function ModelLineageCard() {
   const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const addToast = notify.toast
 
   useEffect(() => {
     let active = true
@@ -26,7 +25,7 @@ export default function ModelLineageCard() {
         if (active) setArtifacts(result)
       } catch {
         if (active) {
-          addToast('Could not load model lineage', 'error')
+          notify.toast('Could not load model lineage', { type: 'error' })
           setArtifacts([])
         }
       } finally {
@@ -37,7 +36,7 @@ export default function ModelLineageCard() {
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
   const stamped = artifacts.filter((a) => (a.parents?.length ?? 0) > 0)
 

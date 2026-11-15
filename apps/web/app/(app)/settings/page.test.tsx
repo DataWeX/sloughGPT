@@ -36,7 +36,9 @@ vi.mock('@/lib/store', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
   useToastStore: () => ({ addToast: mockAddToast }),
 }))
 

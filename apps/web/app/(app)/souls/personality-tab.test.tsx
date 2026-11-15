@@ -55,22 +55,12 @@ const mockProfile = {
 
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://localhost:8000' }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => typeof mockAddToast) =>
-      selector({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => typeof mockAddToast) =>
+    selector({ addToast: mockAddToast }),
+}))
 
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: (key: string) => key, locale: 'en' }),
@@ -297,7 +287,7 @@ describe('PersonalityTab', () => {
       }),
     )
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Personality saved', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Personality saved', { type: 'success' })
     })
   })
 
@@ -309,7 +299,9 @@ describe('PersonalityTab', () => {
     })
     expect(consciousnessController.resetPersonality).toHaveBeenCalled()
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Personality reset to defaults', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Personality reset to defaults', {
+        type: 'success',
+      })
     })
   })
 
@@ -361,7 +353,7 @@ describe('PersonalityTab', () => {
       }),
     )
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Persona saved', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Persona saved', { type: 'success' })
     })
   })
 
@@ -373,7 +365,7 @@ describe('PersonalityTab', () => {
     })
     expect(consciousnessController.activatePersona).toHaveBeenCalledWith('p1')
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Persona activated', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Persona activated', { type: 'success' })
     })
   })
 
@@ -386,7 +378,7 @@ describe('PersonalityTab', () => {
     })
     expect(consciousnessController.deletePersona).toHaveBeenCalledWith('p1')
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Persona deleted', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Persona deleted', { type: 'success' })
     })
   })
 

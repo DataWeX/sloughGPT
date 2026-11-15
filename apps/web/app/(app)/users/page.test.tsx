@@ -14,7 +14,9 @@ vi.mock('@/lib/http-client', () => ({
   apiDelete: (...args: unknown[]) => mockApiDelete(...args),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))

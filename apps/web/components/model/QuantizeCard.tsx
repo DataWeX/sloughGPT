@@ -1,11 +1,16 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { modelController, type QuantizationResult } from '@/lib/model-controller'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface QuantizeCardProps {
   isLoaded: boolean
@@ -31,7 +36,6 @@ interface DisplayState {
 }
 
 export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: QuantizeCardProps) {
-  const addToast = notify.toast
   const [quantizing, setQuantizing] = useState(false)
   const [dequantizing, setDequantizing] = useState(false)
   const [lastResult, setLastResult] = useState<QuantizationResult | null>(null)
@@ -46,15 +50,17 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
       try {
         const result = await modelController.quantize(bits, 'symmetric')
         setLastResult(result)
-        addToast(`Quantized to ${bits}-bit (${result.summary?.tensors ?? 0} tensors)`, 'success')
+        notify.toast(`Quantized to ${bits}-bit (${result.summary?.tensors ?? 0} tensors)`, {
+          type: 'success',
+        })
         onQuantized?.()
       } catch {
-        addToast('Could not quantize model', 'error')
+        notify.toast('Could not quantize model', { type: 'error' })
       } finally {
         setQuantizing(false)
       }
     },
-    [quantizing, dequantizing, addToast, onQuantized],
+    [quantizing, dequantizing, onQuantized],
   )
 
   const handleDequantize = useCallback(async () => {
@@ -63,14 +69,14 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
     try {
       await modelController.dequantize()
       setLastResult(null)
-      addToast('Model restored to full precision', 'success')
+      notify.toast('Model restored to full precision', { type: 'success' })
       onQuantized?.()
     } catch {
-      addToast('Could not dequantize model', 'error')
+      notify.toast('Could not dequantize model', { type: 'error' })
     } finally {
       setDequantizing(false)
     }
-  }, [quantizing, dequantizing, addToast, onQuantized])
+  }, [quantizing, dequantizing, onQuantized])
 
   if (!isLoaded) return null
 

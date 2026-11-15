@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Badge,
@@ -38,7 +38,6 @@ const TIER_COLORS: Record<string, string> = {
 }
 
 export function ServingProfilesCard() {
-  const addToast = notify.toast
   const [profiles, setProfiles] = useState<ServingProfile[]>([])
   const [activeId, setActiveId] = useState<string>('balanced')
   const [loading, setLoading] = useState(true)
@@ -72,15 +71,14 @@ export function ServingProfilesCard() {
       const result = await profilesController.apply(id)
       setApplyResult(result)
       setActiveId(id)
-      addToast(`Applied "${result.profile.name}" profile`, 'success')
+      notify.toast(`Applied "${result.profile.name}" profile`, { type: 'success' })
       if (result.requires_restart.length > 0) {
-        addToast(
-          `${result.requires_restart.length} settings require restart to take effect`,
-          'info',
-        )
+        notify.toast(`${result.requires_restart.length} settings require restart to take effect`, {
+          type: 'info',
+        })
       }
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Could not apply profile'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not apply profile'), { type: 'error' })
     } finally {
       setApplying(null)
     }

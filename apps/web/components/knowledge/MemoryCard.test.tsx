@@ -63,22 +63,11 @@ vi.mock('@/lib/memory-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) =>
-      sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
+}))
 
 vi.mock('@/lib/download-utils', () => ({
   downloadJson: mockDownloadJson,
@@ -413,7 +402,7 @@ describe('MemoryCard', () => {
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith('User prefers espresso in the morning'),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Memory fact copied', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Memory fact copied', { type: 'success' })
   })
 
   it('edits a memory fact and saves via the API', async () => {
@@ -440,7 +429,7 @@ describe('MemoryCard', () => {
         0.8,
       ),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', { type: 'success' })
     await waitFor(() => expect(screen.queryByLabelText('Edit memory fact text')).toBeNull())
   })
 
@@ -466,7 +455,7 @@ describe('MemoryCard', () => {
         0.3,
       ),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', { type: 'success' })
   })
 
   it('surfaces a duplicate error when the edited fact already exists', async () => {
@@ -482,7 +471,9 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getAllByText('Save')[0])
 
     await waitFor(() =>
-      expect(mockAddToast).toHaveBeenCalledWith('That fact already exists in memory', 'error'),
+      expect(mockAddToast).toHaveBeenCalledWith('That fact already exists in memory', {
+        type: 'error',
+      }),
     )
   })
 
@@ -501,7 +492,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Saved to memory', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Saved to memory', { type: 'success' })
   })
 
   it('disables Save when empty', async () => {
@@ -524,7 +515,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockClear).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Cleared 3 memory items', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Cleared 3 memory items', { type: 'success' })
   })
 
   it('deletes a single memory item after confirmation', async () => {
@@ -540,7 +531,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('m1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Memory item deleted', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Memory item deleted', { type: 'success' })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
@@ -570,7 +561,7 @@ describe('MemoryCard', () => {
     })
     expect(mockDelete).toHaveBeenCalledWith('m1')
     expect(mockDelete).toHaveBeenCalledWith('m2')
-    expect(mockAddToast).toHaveBeenCalledWith('Deleted 2 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Deleted 2 memory item(s)', { type: 'success' })
     await waitFor(() => {
       expect(screen.queryByText('Delete (2)')).toBeNull()
     })
@@ -599,7 +590,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('m1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Selected items not found', 'error')
+    expect(mockAddToast).toHaveBeenCalledWith('Selected items not found', { type: 'error' })
   })
 
   it('selects all facts with the select-all checkbox', async () => {
@@ -637,7 +628,7 @@ describe('MemoryCard', () => {
       [{ content: geographyItem.content, topic: 'geography', source: 'task' }],
       expect.stringContaining('memory-export-selected-'),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 memory item(s)', { type: 'success' })
   })
 
   it('clears the selection when Cancel is clicked', async () => {
@@ -679,7 +670,9 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockConsolidate).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Consolidated 2 duplicate fact(s), kept 3', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Consolidated 2 duplicate fact(s), kept 3', {
+      type: 'success',
+    })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
@@ -693,7 +686,7 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getAllByText('Consolidate')[0])
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('No near-duplicate facts found', 'info')
+      expect(mockAddToast).toHaveBeenCalledWith('No near-duplicate facts found', { type: 'info' })
     })
   })
 
@@ -715,7 +708,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockArchivePrune).toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Pruned 4 archive record(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Pruned 4 archive record(s)', { type: 'success' })
   })
 
   it('loads the configured retention into the maintenance input', async () => {
@@ -740,7 +733,9 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith({ archive_retention_days: 14 })
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Archive retention set to 14 day(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Archive retention set to 14 day(s)', {
+      type: 'success',
+    })
   })
 
   it('prunes using the configured retention window', async () => {
@@ -767,7 +762,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockUpdateConfig).not.toHaveBeenCalled()
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Enter a retention window in days', 'error')
+    expect(mockAddToast).toHaveBeenCalledWith('Enter a retention window in days', { type: 'error' })
   })
 
   it('opens the archive browser and lists records', async () => {
@@ -909,7 +904,7 @@ describe('MemoryCard', () => {
       [{ task_type: 'memory.store', task_id: 's1', ts: 1700000000, content: 'Archive fact one' }],
       expect.stringContaining('memory-archive-'),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 archive record(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Exported 1 archive record(s)', { type: 'success' })
   })
 
   it('exports all memory as JSON', async () => {
@@ -935,7 +930,7 @@ describe('MemoryCard', () => {
       ],
       expect.stringContaining('memory-export-'),
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Exported 2 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Exported 2 memory item(s)', { type: 'success' })
   })
 
   it('imports memory from a JSON file', async () => {
@@ -954,7 +949,7 @@ describe('MemoryCard', () => {
     })
     expect(mockStore).toHaveBeenCalledWith('Fact one', 'notes')
     expect(mockStore).toHaveBeenCalledWith('Fact two', 'manual')
-    expect(mockAddToast).toHaveBeenCalledWith('Imported 2 of 2 memory item(s)', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Imported 2 of 2 memory item(s)', { type: 'success' })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
@@ -985,7 +980,7 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getAllByText('Import')[0])
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('No memory items found in file', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('No memory items found in file', { type: 'error' })
     })
     expect(mockStore).not.toHaveBeenCalled()
   })
@@ -1020,7 +1015,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith(
         'Memory is off — the AI will stop storing new facts',
-        'success',
+        { type: 'success' },
       )
     })
     await waitFor(() => {
@@ -1049,7 +1044,7 @@ describe('MemoryCard', () => {
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith(
         'Memory is on — the AI will keep learning from conversations',
-        'success',
+        { type: 'success' },
       )
     })
   })
@@ -1067,7 +1062,9 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle automatic memory' }))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not update memory setting', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not update memory setting', {
+        type: 'error',
+      })
     })
   })
 })

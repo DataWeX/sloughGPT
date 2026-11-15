@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the Personality page.
@@ -8,7 +9,6 @@
  * save, preset application, CSV-ish comma-list inputs and the import
  * comparison. The sections own render.
  */
-import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { apiPatch } from '@/lib/http-client'
@@ -21,9 +21,13 @@ import {
   type PersonalityProfile,
   type PersonalityHistory,
 } from './personality-model'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function usePersonalityWorkbench() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -83,12 +87,12 @@ export function usePersonalityWorkbench() {
         setConflicts((conflictsResult.value as any)?.conflicts ?? [])
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
     fetchPersonas()
-  }, [addToast, fetchPersonas])
+  }, [fetchPersonas])
 
   useEffect(() => {
     fetchProfile()
@@ -120,11 +124,11 @@ export function usePersonalityWorkbench() {
         style: profile.style,
       })
       setProfile(data as PersonalityProfile)
-      addToast('Personality saved', 'success')
+      notify.toast('Personality saved', { type: 'success' })
       const conflictsData = await consciousnessController.getPersonalityConflicts()
       setConflicts((conflictsData as any)?.conflicts ?? [])
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -140,7 +144,7 @@ export function usePersonalityWorkbench() {
     a.download = `personality-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast('Personality exported', 'success')
+    notify.toast('Personality exported', { type: 'success' })
   }
 
   const handleImport = () => {
@@ -160,9 +164,9 @@ export function usePersonalityWorkbench() {
         setInterestsInput(data.interests?.join(', ') ?? '')
         setAvoidInput(data.avoid?.join(', ') ?? '')
         setShowComparison(true)
-        addToast('Personality imported — review and save', 'success')
+        notify.toast('Personality imported — review and save', { type: 'success' })
       } catch {
-        addToast('Invalid JSON file', 'error')
+        notify.toast('Invalid JSON file', { type: 'error' })
       }
     }
     input.click()
@@ -187,9 +191,9 @@ export function usePersonalityWorkbench() {
     try {
       await consciousnessController.resetPersonality()
       fetchProfile()
-      addToast('Personality reset to defaults', 'success')
+      notify.toast('Personality reset to defaults', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
@@ -199,9 +203,9 @@ export function usePersonalityWorkbench() {
       await consciousnessController.applyPersonalityPreset(presetName)
       fetchProfile()
       setActivePreset(presetName)
-      addToast(`Applied "${presetName}" preset`, 'success')
+      notify.toast(`Applied "${presetName}" preset`, { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setApplyingPreset(null)
     }
@@ -226,12 +230,12 @@ export function usePersonalityWorkbench() {
         name: personaNameInput.trim(),
         profile,
       } as any)
-      addToast('Persona saved', 'success')
+      notify.toast('Persona saved', { type: 'success' })
       setShowSavePersonaDialog(false)
       setPersonaNameInput('')
       fetchPersonas()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSavingPersona(false)
     }
@@ -241,10 +245,10 @@ export function usePersonalityWorkbench() {
     setActivatingPersona(id)
     try {
       await consciousnessController.activatePersona(id)
-      addToast('Persona activated', 'success')
+      notify.toast('Persona activated', { type: 'success' })
       fetchProfile()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setActivatingPersona(null)
     }
@@ -254,10 +258,10 @@ export function usePersonalityWorkbench() {
     setDeletingPersona(id)
     try {
       await consciousnessController.deletePersona(id)
-      addToast('Persona deleted', 'success')
+      notify.toast('Persona deleted', { type: 'success' })
       fetchPersonas()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setDeletingPersona(null)
     }

@@ -61,8 +61,8 @@ export const chatController = {
         error: err instanceof Error ? err.message : String(err),
       })
       try {
-        const { notify } = await import('./notify')
-        notify.toast('Using basic mode — conversation context unavailable', 'info')
+        const { notify } = await import('@/lib/notify')
+        notify.toast('Using basic mode — conversation context unavailable', { type: 'info' })
       } catch {
         /* best-effort */
       }

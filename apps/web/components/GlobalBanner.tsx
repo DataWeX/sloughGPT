@@ -1,10 +1,10 @@
 'use client'
+import { useBannerStore, type BannerTone } from '@/lib/notify'
 
 import { notify } from '@/lib/notify'
 import { memo } from 'react'
 
 import { Button, StatusDot, IconX } from '@sloughgpt/strui'
-import { useBannerStore, type BannerTone } from '@/lib/banner-store'
 
 const TONE_MAP: Record<BannerTone, 'primary' | 'success' | 'warning' | 'destructive'> = {
   info: 'primary',

@@ -15,7 +15,6 @@ import { MemoryEditForm } from './MemoryEditForm'
 const MAX_VISIBLE = 8
 
 export const MemoryTab = memo(function MemoryTab() {
-  const addToast = notify.toast
   const {
     stats,
     items,

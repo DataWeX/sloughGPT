@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -9,6 +9,11 @@ import { membersTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface PermissionsResponse {
   data: {
@@ -39,7 +44,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function PermissionsPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
   const [roles, setRoles] = useState<Record<string, { name: string; permissions: string[] }>>({})
   const [allPermissions, setAllPermissions] = useState<Record<string, string[]>>({})
   const [memberPerms, setMemberPerms] = useState<
@@ -63,11 +67,11 @@ export default function PermissionsPage() {
         setMemberPerms(res.data.member_permissions)
       }
     } catch {
-      addToast('Could not load permissions', 'error')
+      notify.toast('Could not load permissions', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, addToast])
+  }, [currentWorkspace?.id])
 
   useRefreshShortcut(fetchPermissions)
 

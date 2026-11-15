@@ -3,7 +3,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
 
-const tabButton = (name: string) => screen.getAllByRole('button', { name }).filter(b => b.className.includes('px-2.5'))[0]
+const tabButton = (name: string) =>
+  screen.getAllByRole('button', { name }).filter((b) => b.className.includes('px-2.5'))[0]
 
 const mocks = vi.hoisted(() => ({
   mockStatus: vi.fn(),
@@ -28,66 +29,84 @@ vi.mock('@/lib/learner-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.mockAddToast, banner: vi.fn() },
+
   useToastStore: (selector: any) => selector({ addToast: mocks.mockAddToast }),
 }))
 
 vi.mock('@/components/learn/LearningInsightsCard', () => ({
-  LearningInsightsCard: ({ facts }: any) => <div data-testid="insights">{facts.length} insights</div>,
+  LearningInsightsCard: ({ facts }: any) => (
+    <div data-testid="insights">{facts.length} insights</div>
+  ),
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(' '),
   Card: ({ children }: any) => <div>{children}</div>,
-  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
+  ActionCard: ({ title, actions, children, ...p }: any) => (
+    <div data-testid="action-card" {...p}>
+      {title}
+      {actions}
+      {children}
+    </div>
+  ),
   CardHeader: ({ children }: any) => <div>{children}</div>,
   CardTitle: ({ children }: any) => <div>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
   Button: ({ children, onClick, disabled, ...props }: any) => (
-    <button onClick={onClick} disabled={disabled} {...props}>{children}</button>
+    <button onClick={onClick} disabled={disabled} {...props}>
+      {children}
+    </button>
   ),
   Input: ({ value, onChange, onKeyDown, placeholder, ...props }: any) => (
-    <input value={value} onChange={onChange} onKeyDown={onKeyDown} placeholder={placeholder} {...props} />
+    <input
+      value={value}
+      onChange={onChange}
+      onKeyDown={onKeyDown}
+      placeholder={placeholder}
+      {...props}
+    />
   ),
   Textarea: ({ value, onChange, rows, placeholder, ...props }: any) => (
     <textarea value={value} onChange={onChange} rows={rows} placeholder={placeholder} {...props} />
   ),
   IconRefresh: () => <span data-testid="icon-refresh" />,
 
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { LearnSection } from './LearnSection'
@@ -136,7 +155,12 @@ describe('LearnSection', () => {
       feeds_count: 0,
       total_tokens: 0,
     })
-    mocks.mockSearch.mockResolvedValue({ tokens_ingested: 500, new_facts: 12, rejected: 0, filter_stats: {} })
+    mocks.mockSearch.mockResolvedValue({
+      tokens_ingested: 500,
+      new_facts: 12,
+      rejected: 0,
+      filter_stats: {},
+    })
     render(<LearnSection />)
     await screen.findByText('Continual Learning')
     const input = screen.getByPlaceholderText('Search query...')
@@ -171,7 +195,9 @@ describe('LearnSection', () => {
     render(<LearnSection />)
     await screen.findByText('Continual Learning')
     fireEvent.click(tabButton('Ingest'))
-    fireEvent.change(screen.getByPlaceholderText('https://...'), { target: { value: 'https://example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('https://...'), {
+      target: { value: 'https://example.com' },
+    })
     fireEvent.click(screen.getByText('Ingest URL'))
     expect(await screen.findByText('Added 7 facts from URL')).toBeDefined()
   })
@@ -222,7 +248,9 @@ describe('LearnSection', () => {
     render(<LearnSection />)
     await screen.findByText('Continual Learning')
     fireEvent.click(tabButton('Knowledge'))
-    expect(await screen.findByText('No knowledge yet. Use Search or Ingest to learn.')).toBeDefined()
+    expect(
+      await screen.findByText('No knowledge yet. Use Search or Ingest to learn.'),
+    ).toBeDefined()
   })
 
   it('lists feeds on the feeds tab and subscribes a new feed', async () => {
@@ -240,7 +268,9 @@ describe('LearnSection', () => {
     await screen.findByText('Continual Learning')
     fireEvent.click(tabButton('Feeds'))
     expect(await screen.findByText('https://feed.example/rss')).toBeDefined()
-    fireEvent.change(screen.getByPlaceholderText('RSS feed URL...'), { target: { value: 'https://new.example/rss' } })
+    fireEvent.change(screen.getByPlaceholderText('RSS feed URL...'), {
+      target: { value: 'https://new.example/rss' },
+    })
     fireEvent.click(screen.getByText('Subscribe'))
     expect(await screen.findByText('Subscribed')).toBeDefined()
   })

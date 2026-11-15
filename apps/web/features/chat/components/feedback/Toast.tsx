@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { cn, IconX, IconCheckCircle, IconError, IconInfo } from '@sloughgpt/strui'
+import { cn, IconX, IconCheckCircle, IconError, IconInfo, IconPin } from '@sloughgpt/strui'
 
 export type ToastType = 'success' | 'error' | 'info'
 
@@ -12,6 +12,8 @@ export interface Toast {
   type: ToastType
   verbose?: string
   onUndo?: () => void
+  /** Sticky toasts never auto-expire — pinned until the user dismisses them. */
+  sticky?: boolean
 }
 
 interface ToastItemProps {
@@ -62,6 +64,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
   }
 
   useEffect(() => {
+    if (toast.sticky) return // pinned rows have no countdown — no auto-dismiss
     startRef.current = Date.now()
     const id = toast.id
 
@@ -114,6 +117,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       onClick={dismiss}
     >
       <span className="sr-only">
+        {toast.sticky && 'Pinned. '}
         {toast.type === 'success' && 'Success: '}
         {toast.type === 'error' && 'Error: '}
         {toast.type === 'info' && 'Information: '}
@@ -124,6 +128,12 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       <span className="sl-toast__body">
         <ToastIcon type={toast.type} className={cn('sl-toast__icon', styles.icon)} />
         <span className="sl-toast__message">
+          {toast.sticky && (
+            <span className="mr-1 inline-flex shrink-0 items-center align-middle text-[10px] text-muted-foreground">
+              <IconPin className="h-3 w-3" aria-hidden="true" />
+              <span className="sr-only">Pinned: </span>
+            </span>
+          )}
           {toast.message}
           {toast.verbose && (
             <button
@@ -168,9 +178,11 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         <pre className="sl-toast__verbose-block">{toast.verbose}</pre>
       )}
 
-      <span className="sl-toast__track">
-        <span className={cn('sl-toast__fill', styles.bar)} style={{ width: `${progress}%` }} />
-      </span>
+      {!toast.sticky && (
+        <span className="sl-toast__track">
+          <span className={cn('sl-toast__fill', styles.bar)} style={{ width: `${progress}%` }} />
+        </span>
+      )}
     </div>
   )
 }
@@ -267,7 +279,15 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
                     )}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <ToastTitle className="text-sm">{t.message}</ToastTitle>
+                    <ToastTitle className="text-sm">
+                      {t.sticky && (
+                        <span className="mr-1 inline-flex items-center align-middle text-[10px] font-normal text-muted-foreground">
+                          <IconPin className="h-3 w-3" aria-hidden="true" />
+                          <span className="sr-only">Pinned: </span>
+                        </span>
+                      )}
+                      {t.message}
+                    </ToastTitle>
                     {t.verbose && <ToastDescription className="mt-1">{t.verbose}</ToastDescription>}
                   </div>
                   <ToastClose onClick={() => onDismiss(t.id)} />

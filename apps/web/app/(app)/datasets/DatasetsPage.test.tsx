@@ -147,22 +147,11 @@ vi.mock('@/lib/dataset-controller', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) =>
-      sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
+}))
 
 vi.mock('@/components/DatasetImportDialog', () => ({
   DatasetImportDialog: ({ open, onOpenChange }: any) =>
@@ -278,7 +267,9 @@ describe('DatasetsPage', () => {
     await waitFor(() => {
       expect(mockExport).toHaveBeenCalledWith('ds1', 'jsonl')
       expect(createObjectURL).toHaveBeenCalled()
-      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Exported'), 'success')
+      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Exported'), {
+        type: 'success',
+      })
     })
     vi.unstubAllGlobals()
   })
@@ -292,7 +283,7 @@ describe('DatasetsPage', () => {
     fireEvent.click(screen.getByLabelText('Export Shakespeare'))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not export', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not export', { type: 'error' })
     })
     vi.unstubAllGlobals()
   })
@@ -352,7 +343,7 @@ describe('DatasetsPage', () => {
     })
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('ds1')
-      expect(mockAddToast).toHaveBeenCalledWith('Deleted "Shakespeare"', 'info')
+      expect(mockAddToast).toHaveBeenCalledWith('Deleted "Shakespeare"', { type: 'info' })
     })
   })
 

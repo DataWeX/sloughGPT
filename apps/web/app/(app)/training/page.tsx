@@ -1,7 +1,7 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
-import { notify } from '@/lib/notify'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from '@/vite/next-compat/navigation'
 import Link from '@/vite/next-compat/link'
@@ -24,8 +24,11 @@ import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
-  const addToast = notify.toast
   const initialLoadDone = useRef(false)
+  // Typed adapter: this page threads `addToast` into hooks/props that take
+  // the legacy (message, type?) shape — one place, over the notify facade.
+  const addToast = (message: string, type?: string) =>
+    notify.toast(message, { type: type as 'success' | 'error' | 'info' })
   const session = useTrainingSession()
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()

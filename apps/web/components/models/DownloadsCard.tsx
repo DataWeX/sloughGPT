@@ -1,12 +1,17 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { cn, ActionCard, Progress, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { formatBytes } from '@/lib/format-bytes'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Download {
   model_id: string
@@ -25,18 +30,17 @@ function formatSpeed(bps: number): string {
 export default function DownloadsCard() {
   const [downloads, setDownloads] = useState<Download[]>([])
   const [loading, setLoading] = useState(true)
-  const addToast = notify.toast
 
   const fetchDownloads = useCallback(async () => {
     try {
       const result = await modelController.listDownloads()
       setDownloads(result.downloads ?? [])
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not load downloads'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not load downloads'), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -47,7 +51,7 @@ export default function DownloadsCard() {
         if (active) setDownloads(result.downloads ?? [])
       } catch {
         if (active) {
-          addToast('Could not load downloads', 'error')
+          notify.toast('Could not load downloads', { type: 'error' })
           setDownloads([])
         }
       } finally {
@@ -58,7 +62,7 @@ export default function DownloadsCard() {
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     const hasActive = downloads.some((d) => d.status === 'downloading' || d.status === 'queued')
@@ -70,20 +74,20 @@ export default function DownloadsCard() {
   const handleCancel = async (modelId: string) => {
     try {
       await modelController.cancelDownload(modelId)
-      addToast(`Cancelled download: ${modelId}`, 'success')
+      notify.toast(`Cancelled download: ${modelId}`, { type: 'success' })
       await fetchDownloads()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not cancel'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not cancel'), { type: 'error' })
     }
   }
 
   const handleRetry = async (modelId: string) => {
     try {
       await modelController.retryDownload(modelId)
-      addToast(`Retrying download: ${modelId}`, 'success')
+      notify.toast(`Retrying download: ${modelId}`, { type: 'success' })
       await fetchDownloads()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not retry'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not retry'), { type: 'error' })
     }
   }
 
@@ -91,12 +95,14 @@ export default function DownloadsCard() {
     try {
       const result = await modelController.verifyDownload(modelId)
       if (result.verified) {
-        addToast(`${modelId} verified`, 'success')
+        notify.toast(`${modelId} verified`, { type: 'success' })
       } else {
-        addToast(`${modelId} verification failed: ${result.error || 'unknown'}`, 'error')
+        notify.toast(`${modelId} verification failed: ${result.error || 'unknown'}`, {
+          type: 'error',
+        })
       }
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not verify'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not verify'), { type: 'error' })
     }
   }
 

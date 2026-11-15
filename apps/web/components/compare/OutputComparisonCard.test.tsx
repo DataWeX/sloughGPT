@@ -2,22 +2,12 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 
-const mockAddToast = vi.fn()
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (s: any) => s({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (s: any) => s({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/generate-controller', () => ({
   generateController: { generate: vi.fn() },
 }))
@@ -174,7 +164,7 @@ describe('OutputComparisonCard', () => {
     await waitFor(() => expect(screen.getByLabelText('Copy response')).toBeDefined())
     fireEvent.click(screen.getByLabelText('Copy response'))
     expect(writeText).toHaveBeenCalledWith('copy me')
-    expect(mockAddToast).toHaveBeenCalledWith('Copied to clipboard', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Copied to clipboard', { type: 'success' })
   })
 
   it('shows querying count while loading', async () => {

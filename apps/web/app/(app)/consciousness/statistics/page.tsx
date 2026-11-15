@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -19,6 +19,11 @@ import {
 } from '@sloughgpt/strui'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Episode {
   input: string
@@ -282,7 +287,6 @@ function BarChart({
 }
 
 export default function ConsciousnessStatisticsPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [episodes, setEpisodes] = useState<Episode[]>([])
@@ -326,11 +330,11 @@ export default function ConsciousnessStatisticsPage() {
         setEvalData(evalRes.value as unknown as EvalData)
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -519,7 +523,7 @@ export default function ConsciousnessStatisticsPage() {
     a.download = `consciousness-statistics-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast('Statistics exported', 'success')
+    notify.toast('Statistics exported', { type: 'success' })
   }, [
     healthScore,
     trend,
@@ -532,7 +536,6 @@ export default function ConsciousnessStatisticsPage() {
     healthData,
     evalData,
     statusData,
-    addToast,
   ])
 
   const healthColor =

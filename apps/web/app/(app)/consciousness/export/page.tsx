@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -89,7 +89,6 @@ function formatDate(iso: string): string {
 }
 
 export default function ConsciousnessExportPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [selected, setSelected] = useState<Record<string, boolean>>({
     episodes: true,
@@ -116,7 +115,7 @@ export default function ConsciousnessExportPage() {
   const handleExport = async () => {
     const keys = Object.keys(selected).filter((k) => selected[k])
     if (keys.length === 0) {
-      addToast(t('consciousness_export.toast_no_selection'), 'error')
+      notify.toast(t('consciousness_export.toast_no_selection'), { type: 'error' })
       return
     }
 
@@ -200,9 +199,9 @@ export default function ConsciousnessExportPage() {
       setBackups(updated)
       saveBackups(updated)
 
-      addToast(t('consciousness_export.toast_exported'), 'success')
+      notify.toast(t('consciousness_export.toast_exported'), { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setExporting(false)
     }
@@ -237,7 +236,7 @@ export default function ConsciousnessExportPage() {
             : [parsed]
         setImportPreview(records.slice(0, 5))
       } catch {
-        addToast(t('consciousness_export.toast_invalid_file'), 'error')
+        notify.toast(t('consciousness_export.toast_invalid_file'), { type: 'error' })
       }
     }
     reader.readAsText(file)
@@ -257,11 +256,11 @@ export default function ConsciousnessExportPage() {
       } else {
         parsed = JSON.parse(text)
       }
-      addToast(t('consciousness_export.toast_imported'), 'success')
+      notify.toast(t('consciousness_export.toast_imported'), { type: 'success' })
       setImportFile(null)
       setImportPreview([])
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setImporting(false)
     }
@@ -276,9 +275,9 @@ export default function ConsciousnessExportPage() {
   const handleRestoreBackup = (backup: BackupEntry) => {
     try {
       localStorage.setItem('consciousness_export_restore', JSON.stringify(backup.data))
-      addToast(t('consciousness_export.toast_restored'), 'success')
+      notify.toast(t('consciousness_export.toast_restored'), { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 

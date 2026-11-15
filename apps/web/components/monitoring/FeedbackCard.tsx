@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { memo } from 'react'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
@@ -41,7 +41,6 @@ export const FeedbackCard = memo(function FeedbackCard({
   onDpoRunningChange,
   onRefresh,
 }: FeedbackCardProps) {
-  const addToast = notify.toast
   if (!dpoStatus && !visualStatus) return null
 
   return (
@@ -133,7 +132,7 @@ export const FeedbackCard = memo(function FeedbackCard({
                 await apiPost('/multimodal/dpo', {})
                 onRefresh()
               } catch (err) {
-                addToast('DPO training failed', 'error')
+                notify.toast('DPO training failed', { type: 'error' })
                 logger.error('Could not dpo training', { exception: String(err) })
               }
               onDpoRunningChange(false)

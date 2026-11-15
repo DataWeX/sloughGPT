@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect } from 'react'
 import {
   cn,
@@ -17,6 +17,11 @@ import {
 import { SectionLabel } from '@/components/composed/SectionLabel'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type Tab = 'search' | 'ingest' | 'knowledge' | 'feeds'
 
@@ -45,7 +50,6 @@ export function LearnSection() {
   )
   const [newFeedUrl, setNewFeedUrl] = useState('')
   const [feedMsg, setFeedMsg] = useState<string | null>(null)
-  const addToast = notify.toast
 
   useEffect(() => {
     let active = true
@@ -59,14 +63,14 @@ export function LearnSection() {
       })
       .catch(() => {
         if (active) {
-          addToast('Failed to load learner status', 'error')
+          notify.toast('Failed to load learner status', { type: 'error' })
           setLoading(false)
         }
       })
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -118,7 +122,7 @@ export function LearnSection() {
       const res = await learnerController.queryKnowledge(knowledgeQuery || undefined)
       setKnowledge(res.facts ?? [])
     } catch {
-      addToast('Could not load knowledge', 'error')
+      notify.toast('Could not load knowledge', { type: 'error' })
     } finally {
       setLoadingKnowledge(false)
     }
@@ -129,7 +133,7 @@ export function LearnSection() {
       const res = await learnerController.listFeeds()
       setFeeds(res.feeds ?? [])
     } catch {
-      addToast('Could not load feeds', 'error')
+      notify.toast('Could not load feeds', { type: 'error' })
     }
   }
 

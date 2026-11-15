@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -19,6 +19,11 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 import { useLocale } from '@/hooks/useLocale'
 import { IconActivity, IconClock, IconTrash } from '@/components/icons/NavIcons'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface MonitorEvent {
   id: string
@@ -55,7 +60,6 @@ function formatTimestamp(ts: number): string {
 }
 
 export default function ConsciousnessMonitorPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
 
@@ -201,8 +205,8 @@ export default function ConsciousnessMonitorPage() {
     setGrowthStream([])
     setRatingStream([])
     setEvents([])
-    addToast(t('consciousness_monitor.toast_cleared'), 'success')
-  }, [addToast, t])
+    notify.toast(t('consciousness_monitor.toast_cleared'), { type: 'success' })
+  }, [t])
 
   const qualiaSvg = useMemo(() => {
     const w = 400

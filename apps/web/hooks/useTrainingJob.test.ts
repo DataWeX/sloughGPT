@@ -35,23 +35,13 @@ vi.mock('@/lib/model-controller', () => ({
   modelController: { loadModelPath: (...args: unknown[]) => mockLoadModelPath(...args) },
 }))
 
-const mockAddToast = vi.fn()
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => unknown) =>
-      selector({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+const { mockAddToast } = vi.hoisted(() => ({ mockAddToast: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => unknown) =>
+    selector({ addToast: mockAddToast }),
+}))
 
 const mockDownloadJson = vi.fn()
 const mockDownloadBlob = vi.fn()
@@ -129,7 +119,7 @@ describe('useTrainingJob', () => {
     })
     expect(mockDelete).toHaveBeenCalledWith('job-1')
     expect(result.current.showDelete).toBe(false)
-    expect(mockAddToast).toHaveBeenCalledWith('Job deleted', 'info')
+    expect(mockAddToast).toHaveBeenCalledWith('Job deleted', { type: 'info' })
   })
 
   it('exports job details as JSON', async () => {
@@ -141,7 +131,7 @@ describe('useTrainingJob', () => {
       expect.objectContaining({ id: 'job-1', name: 'My fine-tune' }),
       'training-job-job-1.json',
     )
-    expect(mockAddToast).toHaveBeenCalledWith('Job details exported', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Job details exported', { type: 'success' })
   })
 
   it('routes resume to the recovery job when it differs', async () => {

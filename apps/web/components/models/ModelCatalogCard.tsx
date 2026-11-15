@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, memo } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle, Progress, Spinner } from '@sloughgpt/strui'
@@ -44,7 +44,6 @@ export default memo(function ModelCatalogCard({
   onModelLoaded,
 }: ModelCatalogCardProps) {
   const router = useRouter()
-  const addToast = notify.toast
   const { mutateAsync: loadModel } = useLoadModel()
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [warmingModel, setWarmingModel] = useState<string | null>(null)
@@ -82,12 +81,14 @@ export default memo(function ModelCatalogCard({
     try {
       const data = await loadModel(modelId)
       if (data.error) {
-        addToast(data.error, 'error')
+        notify.toast(data.error, { type: 'error' })
         return
       }
       const loadTime = Date.now() - startTime
       setLoadTimes((prev) => ({ ...prev, [modelId]: loadTime }))
-      addToast(`${data.model_id ?? modelId} ready (${(loadTime / 1000).toFixed(1)}s)`, 'success')
+      notify.toast(`${data.model_id ?? modelId} ready (${(loadTime / 1000).toFixed(1)}s)`, {
+        type: 'success',
+      })
       setLoadingModel(null)
       setWarmingModel(modelId)
       try {
@@ -97,7 +98,7 @@ export default memo(function ModelCatalogCard({
       }
       setWarmingModel(null)
     } catch (err) {
-      addToast(extractErrorMessage(err), 'error')
+      notify.toast(extractErrorMessage(err), { type: 'error' })
     } finally {
       setLoadingModel(null)
       setWarmingModel(null)

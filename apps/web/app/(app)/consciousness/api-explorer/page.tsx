@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
@@ -17,6 +17,11 @@ import {
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { IconCode, IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 
@@ -246,7 +251,6 @@ function generateId() {
 }
 
 export default function ConsciousnessApiExplorerPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
 
   const [selectedIdx, setSelectedIdx] = useState(0)
@@ -407,8 +411,8 @@ export default function ConsciousnessApiExplorerPage() {
     setSaveName('')
     setSaveTag('')
     setShowSave(false)
-    addToast(t('consciousness_api_explorer.toast_saved'), 'success')
-  }, [saveName, saveTag, endpoint, body, params, headers, collection, addToast, t])
+    notify.toast(t('consciousness_api_explorer.toast_saved'), { type: 'success' })
+  }, [saveName, saveTag, endpoint, body, params, headers, collection, t])
 
   const handleLoad = useCallback(
     (req: SavedRequest) => {

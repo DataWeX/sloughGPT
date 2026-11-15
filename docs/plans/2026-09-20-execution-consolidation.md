@@ -167,6 +167,23 @@ grandfathered per stage 3. The `process` kind is the pugqeep-engine half
 of this spec's original four-kind table — the audit confirmed the
 kind-routing design and quantified stage 3's scope.
 
+## Audit 2026-11-04 (call-site inventory)
+
+Counts (main checkout; `.wt-*` worktrees excluded as copies):
+
+| Area                        | `threading.Thread`         | `subprocess.*` |
+| --------------------------- | -------------------------- | -------------- |
+| `apps/`                     | 23                         | 41             |
+| `domain/`                   | 48                         | 26             |
+| `packages/` (src, non-test) | ~11                        | —              |
+| `scripts/`                  | 11                         | —              |
+| **Total**                   | **~160** (~130 production) |                |
+
+Migration candidates ≈ 55 (bucket A ~30, bucket B ~25); the rest are
+grandfathered per stage 3. The `process` kind is the pugqeep-engine half
+of this spec's original four-kind table — the audit confirmed the
+kind-routing design and quantified stage 3's scope.
+
 ## Stage 1 — built
 
 - New module `domain/infrastructure/_internal/fire_and_forget.py`:

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import {
@@ -21,6 +21,11 @@ import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { RefreshCw, ExternalLink, ChevronRight, AlertTriangle } from 'lucide-react'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface WorkspaceStats {
   workspace_id: string
@@ -78,7 +83,6 @@ export default function WorkspaceDashboardPage() {
   const [checkingHealth, setCheckingHealth] = useState(false)
   const [showAllActivities, setShowAllActivities] = useState(false)
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
 
   const runHealthCheck = useCallback(async () => {
     if (!currentWorkspace?.id) return
@@ -111,11 +115,11 @@ export default function WorkspaceDashboardPage() {
       setUsage(usageRes?.data ?? null)
       runHealthCheck()
     } catch {
-      addToast('Failed to load workspace data', 'error')
+      notify.toast('Failed to load workspace data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, runHealthCheck, addToast])
+  }, [currentWorkspace?.id, runHealthCheck])
 
   useEffect(() => {
     fetchData()

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback } from 'react'
 import { cn, ActionCard } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -28,7 +28,6 @@ interface OutputComparisonCardProps {
 }
 
 export default function OutputComparisonCard({ models }: OutputComparisonCardProps) {
-  const addToast = notify.toast
   const [selectedForOutput, setSelectedForOutput] = useState<Set<string>>(new Set())
   const [outputPrompt, setOutputPrompt] = useState('')
   const [outputResults, setOutputResults] = useState<Record<string, OutputResult>>({})
@@ -84,7 +83,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
 
   const copyOutputResult = (text: string) => {
     navigator.clipboard.writeText(text)
-    addToast('Copied to clipboard', 'success')
+    notify.toast('Copied to clipboard', { type: 'success' })
   }
 
   const clearOutputComparison = () => {
