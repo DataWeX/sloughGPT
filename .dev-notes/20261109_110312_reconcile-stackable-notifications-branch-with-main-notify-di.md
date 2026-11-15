@@ -1,6 +1,6 @@
 ---
 id: 20261109_110312_reconcile-stackable-notifications-branch-with-main-notify-di
-status: todo
+status: done
 board: 20261109_110312_reconcile-stackable-notifications-branch-with-main-notify-di
 title: "RECONCILE stackable-notifications branch with main notify dispatcher (f96411252) — ruling HELD: Path A 618 conflicts vs Path B proven clean"
 tags: ["web", "notifications", "reconcile", "area:web"]
@@ -21,3 +21,5 @@ PROBES (read-only, 2026-11-09):
 AGENT RECOMMENDATION: Path B. USER RULING: hold — record findings only, decide later. Branch stays pushed, NOT merged; local main untouched; probe worktrees removed.
 
 WHEN THE RULING COMES — Path B recipe: new branch off origin/main → cherry-pick a6c8b6dd3 (proven clean) → extend lib/notify.ts toast() labeled tuple with opts?: ToastOptions + forward + extend notify.test.ts → gates (tsc 0 / eslint --max-warnings 900 / vitest closure incl. ratchet) → AGENT_SYNC entry. The 741c5da2e object-shape migration is then SUPERSEDED (its goal, zero old-API call sites, already holds on main) — keep feat/stackable-notifications for reference until the ruling, then close/delete. Path A recipe only if the user specifically wants the one-module engine architecture to replace dispatcher+stores.
+
+RULED + LANDED 2026-11-15 — user ruling was **Path A** (NOT the held Path B recommendation): our `lib/notify/` directory library wins over main's `lib/notify.ts` dispatcher. Executed as `merge/notify-reconcile` → `3cc5e9ff5` (222 conflicts resolved incl. 51 accepted main-side deletions) + `97d72b45d` (moved tip `d427fbe87` absorbed) + `62e889c3b` (deps tip) → pushed `HEAD:main`. 6-intent facade contract (toast/dismissToast/clearToasts/banner/dismissBanner/process) ported into the directory facade; shadow dispatcher deleted and pinned absent by the ratchet. Full gates green + benchmark_slonet 7/7 (evidence in docs/AGENT_SYNC.md 2026-11-15 entry). Supersedes the Path B recipe below — `feat/stackable-notifications` branch can be deleted as cleanup.

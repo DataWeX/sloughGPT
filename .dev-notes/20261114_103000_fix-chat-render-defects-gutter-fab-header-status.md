@@ -1,6 +1,6 @@
 ---
 id: 20261114_103000_fix-chat-render-defects-gutter-fab-header-status
-status: review
+status: done
 board: 20261114_103000_fix-chat-render-defects-gutter-fab-header-status
 title: "fix: chat render defects — gutter gap, global FAB over toast, header/session split-source, Slow+green Live"
 tags: ["web", "chat", "ui", "fix"]
@@ -25,3 +25,5 @@ Also: TrainingIndicator.tsx:55 'Training failed' sidebar-only label -> should ro
 OUT OF SCOPE (existing cards): over-refusal + duplicate replies = consciousness narrative injection (card 20261114_092948). Pink nav bookmark tab + right-margin metadata = intentional design.
 
 VERIFY: chat vitest suites green; header name == card name; visible gutter gap; FAB not covering toast on /chat; Slow renders amber dot.
+
+Landed 2026-11-15 — pushed `HEAD:main` as `62e889c3b` (merge `3cc5e9ff5` on `merge/notify-reconcile`, Path A ruling: our `lib/notify/` directory facade wins, 6-intent contract ported, shadow `lib/notify.ts` git rm'd + ratchet-pinned). All five defects land with it. Gates: tsc 0; notify ratchet 2/2 + facade lock 7/7; eslint 785/900 warnings 0 errors; vitest 789 files / 8018 tests; python closure 342; router manifest + TS contracts fresh; domain baseline no drift; benchmark_slonet 7/7. Main moved twice mid-session — absorbed via merges `97d72b45d` + `62e889c3b`.
