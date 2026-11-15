@@ -193,7 +193,9 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Responsive root scale: 14px base (mobile) → 16px on md+ (desktop) */
+/* Responsive root scale: root stays at the 16px default below md
+   (the old "14px base" comment was doc drift — no such rule exists),
+   explicitly 16px on md+ (desktop). */
 @media (min-width: 768px) {
   html {
     font-size: 16px;
