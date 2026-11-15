@@ -47,8 +47,15 @@ class ChatRequest(BaseModel):
         default=True, description="Use production RAG for document-grounded responses"
     )
     use_consciousness: bool = Field(
-        default=True,
-        description="Run the consciousness reflection pipeline for this turn",
+        default=False,
+        description=(
+            "Run the consciousness reflection pipeline for this turn. OFF by "
+            "default (card 20261114_092948): when ON, the reflection "
+            "narrative rides the volatile tail — attached to the last user "
+            "turn, framed as context — while it previously prepended as a "
+            "SYSTEM message and the model answered the narrative instead of "
+            "the user (probed live 2026-11-14). Clients opt in per turn."
+        ),
     )
     agent_id: str | None = Field(default=None, description="Agent ID for role-play instructions")
 
