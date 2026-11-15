@@ -81,6 +81,23 @@ def selector_to_all_js(selector) -> str | None:
     return None
 
 
+# The descriptor fields of ONE match, declared once and shared by the
+# single- and all-match probes: both descriptions of the same element are
+# built from this string, so the identify block and the click line can
+# never drift apart about an element's identity (tag/id/class, content,
+# rect, visibility). ``idx``/``total`` differ per probe and stay local.
+_DESCRIPTOR_FIELDS_JS = (
+    "tag: (el.tagName || '').toLowerCase(), "
+    "id: el.id || '', "
+    "cls: cls, "
+    "name: el.getAttribute('name') || '', "
+    "placeholder: el.getAttribute('placeholder') || '', "
+    "text: ((el.innerText || el.textContent || '')).trim().replace(/\\s+/g, ' ').slice(0, 60), "
+    "rect: {x: r.x, y: r.y, width: r.width, height: r.height}, "
+    "visible: !!(r.width && r.height) && cs.display !== 'none' && cs.visibility !== 'hidden', "
+)
+
+
 def selector_probe_js(selector) -> str | None:
     """Expression evaluating to the resolved element's match-time descriptor.
 
@@ -105,16 +122,38 @@ def selector_probe_js(selector) -> str | None:
         "const r = el.getBoundingClientRect(); "
         "const cs = getComputedStyle(el); "
         "const cls = typeof el.className === 'string' ? el.className : ''; "
-        "return {found: true, "
-        "tag: (el.tagName || '').toLowerCase(), "
-        "id: el.id || '', "
-        "cls: cls, "
-        "name: el.getAttribute('name') || '', "
-        "placeholder: el.getAttribute('placeholder') || '', "
-        "text: ((el.innerText || el.textContent || '')).trim().replace(/\\s+/g, ' ').slice(0, 60), "
-        "rect: {x: r.x, y: r.y, width: r.width, height: r.height}, "
-        "visible: !!(r.width && r.height) && cs.display !== 'none' && cs.visibility !== 'hidden', "
-        "idx: all.indexOf(el), total: all.length};"
+        "return {found: true, " + _DESCRIPTOR_FIELDS_JS + "idx: all.indexOf(el), total: all.length};"
+    )
+
+
+def selector_probe_all_js(selector) -> str | None:
+    """Expression evaluating to the match-time descriptor of EVERY match.
+
+    Returns ``[{tag, id, cls, name, placeholder, text, rect, visible, idx,
+    total}, ...]`` — one entry per match in the action's own document
+    order (``idx`` is the position in ``selector_to_all_js``, so
+    ``idx + 1/total`` is the ``match i/n`` ordinal the multi-match click
+    stamps on its lines) — or ``[]`` when the selector matches nothing.
+    ``None`` only when the selector itself is unresolvable (mirrors
+    ``selector_probe_js``).
+
+    Fields come from the SAME ``_DESCRIPTOR_FIELDS_JS`` declaration as the
+    single-match probe, so identifying a set and clicking a member of it
+    describe an element identically. Observability only — a probe that
+    fails degrades ``find_elements`` to the single-match probe, never the
+    match.
+    """
+    all_js = selector_to_all_js(selector)
+    if all_js is None:
+        return None
+    return _js_iife(
+        "const all = (" + all_js + "); "
+        "if (!all.length) return []; "
+        "return all.map((el, i) => { "
+        "const r = el.getBoundingClientRect(); "
+        "const cs = getComputedStyle(el); "
+        "const cls = typeof el.className === 'string' ? el.className : ''; "
+        "return {" + _DESCRIPTOR_FIELDS_JS + "idx: i, total: all.length}; })"
     )
 
 
@@ -644,52 +683,98 @@ class CdpBackend:
         return elements[0] if elements else None
 
     async def find_elements(self, locator: ElementLocator) -> list[Element]:
-        found = []
+        """Every element the locator matches, in the action's document order.
+
+        One ``selector_probe_all_js`` evaluate per selector returns the
+        match-time descriptor of each match (the same predicates the
+        action resolves with), so a multi-match click can identify the
+        whole set — ordinals included — before the first click lands.
+        The first selector with matches wins (pre-multi semantics); a
+        probe that fails degrades to the single-match probe verbatim,
+        never the match itself.
+        """
         for selector in locator.selectors:
             js = selector_to_js(selector)
             if js is None:
                 continue
-            # Match-time descriptor: the probe embeds the SAME expression the
-            # action will later hit, so the element recorded here (and logged
-            # by every mutating verb) is byte-for-byte the element clicked.
-            probe = selector_probe_js(selector)
-            try:
-                desc = await self.evaluate(probe if probe is not None else f"!!({js})")
-            except Exception:
-                continue
-            if desc is True:
-                # Bare-existence fallback (no probe for this strategy):
-                # found, but descriptor-less — provenance degrades.
-                found.append(
+            all_js = selector_to_all_js(selector)
+            descs: list | None = None
+            probe_all = selector_probe_all_js(selector)
+            if probe_all is not None:
+                try:
+                    res = await self.evaluate(probe_all)
+                except Exception:
+                    res = None
+                if isinstance(res, list):
+                    descs = res
+            if descs is None:
+                # Single-match probe: the pre-multi path verbatim — the
+                # degradation when the all-probe cannot run.
+                probe = selector_probe_js(selector)
+                try:
+                    desc = await self.evaluate(probe if probe is not None else f"!!({js})")
+                except Exception:
+                    continue
+                if desc is True:
+                    # Bare-existence fallback (no probe for this strategy):
+                    # found, but descriptor-less — provenance degrades.
+                    return [
+                        Element(
+                            raw={"js": js},
+                            locator=ElementLocator(selectors=(selector,)),
+                            backend=self.name,
+                        )
+                    ]
+                if not (isinstance(desc, dict) and desc.get("found")):
+                    continue
+                d = {k: v for k, v in desc.items() if k != "found"}
+                return [
                     Element(
                         raw={"js": js},
                         locator=ElementLocator(selectors=(selector,)),
                         backend=self.name,
+                        descriptor=d,
+                        # Cache the descriptor too: tag/text/bounding_box feed
+                        # the existing Element properties (describe, event
+                        # rects), which were empty on the CDP path until now.
+                        _cache={
+                            "tag": d.get("tag", ""),
+                            "text": d.get("text", ""),
+                            "bounding_box": d.get("rect"),
+                            "is_visible": bool(d.get("visible", True)),
+                        },
+                    )
+                ]
+            found: list[Element] = []
+            for i, d in enumerate(descs):
+                if not isinstance(d, dict):
+                    continue
+                d = {k: v for k, v in d.items() if k != "found"}
+                # Match 0 keeps the byte-identical single-match action
+                # expression; later matches click through the SAME
+                # all-expression by index — re-evaluated at click time, the
+                # per-hit re-resolve that keeps a backward click loop honest
+                # after earlier hits mutate the page (worst case a stale
+                # index degrades to a no-op, never to a wrong element).
+                raw_js = js if i == 0 else f"(({all_js})[{i}])"
+                found.append(
+                    Element(
+                        raw={"js": raw_js},
+                        locator=ElementLocator(selectors=(selector,)),
+                        backend=self.name,
+                        descriptor=d,
+                        _cache={
+                            "tag": d.get("tag", ""),
+                            "text": d.get("text", ""),
+                            "bounding_box": d.get("rect"),
+                            "is_visible": bool(d.get("visible", True)),
+                        },
                     )
                 )
-                break
-            if not (isinstance(desc, dict) and desc.get("found")):
-                continue
-            d = {k: v for k, v in desc.items() if k != "found"}
-            found.append(
-                Element(
-                    raw={"js": js},
-                    locator=ElementLocator(selectors=(selector,)),
-                    backend=self.name,
-                    descriptor=d,
-                    # Cache the descriptor too: tag/text/bounding_box feed the
-                    # existing Element properties (describe, event rects),
-                    # which were empty on the CDP path until now.
-                    _cache={
-                        "tag": d.get("tag", ""),
-                        "text": d.get("text", ""),
-                        "bounding_box": d.get("rect"),
-                        "is_visible": bool(d.get("visible", True)),
-                    },
-                )
-            )
-            break
-        return found
+            if found:
+                return found
+            # this selector matched nothing — try the next one
+        return []
 
     async def near_miss(self, locator: ElementLocator) -> list[str]:
         """Why a locator that matched nothing came close — candidates + reasons.

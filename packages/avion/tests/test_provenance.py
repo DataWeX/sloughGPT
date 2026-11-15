@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import asyncio
 
-from avion.backends.cdp import selector_probe_js, selector_to_all_js, selector_to_js
+from avion.backends.cdp import (
+    selector_probe_all_js,
+    selector_probe_js,
+    selector_to_all_js,
+    selector_to_js,
+)
 from avion.core.element import Element, ElementLocator
 
 # ── the log must describe what the action hits ───────────────────────────
@@ -49,7 +54,23 @@ def test_probe_and_all_mirror_unsupported_strategies():
     role = ElementLocator.role("button").selectors[0]
     assert selector_to_js(role) is None
     assert selector_probe_js(role) is None
+    assert selector_probe_all_js(role) is None
     assert selector_to_all_js(role) is None
+
+
+def test_probe_all_shares_the_field_declaration_with_single_probe():
+    """Both probes describe a match from ONE field declaration — the
+    identify block and the click line can never drift apart about an
+    element's identity."""
+    sel = ElementLocator.text("Go").selectors[0]
+    single = selector_probe_js(sel)
+    all_probe = selector_probe_all_js(sel)
+    assert single is not None and all_probe is not None
+    assert f"const all = ({selector_to_all_js(sel)});" in all_probe
+    shared = "text: ((el.innerText || el.textContent || '')).trim()"
+    assert shared in single and shared in all_probe
+    assert "idx: all.indexOf(el)" in single  # single probe: position of THE match
+    assert "idx: i, total: all.length" in all_probe  # all probe: position in the set
 
 
 def test_all_js_uses_the_same_predicate():
@@ -161,7 +182,7 @@ class _NearMissBackend(_MissBackend):
 def test_miss_without_near_miss_degrades_to_plain_line(capsys):
     from avion.cli import _cmd_click
 
-    code = asyncio.run(_cmd_click(_MissBackend(), "#x", "css"))
+    code, _ = asyncio.run(_cmd_click(_MissBackend(), "#x", "css"))
     assert code == 1
     err = capsys.readouterr().err
     assert "element not found (css): #x" in err
@@ -171,7 +192,7 @@ def test_miss_without_near_miss_degrades_to_plain_line(capsys):
 def test_miss_prints_near_miss_report(capsys):
     from avion.cli import _cmd_click
 
-    code = asyncio.run(_cmd_click(_NearMissBackend(), "Dismiss", "text"))
+    code, _ = asyncio.run(_cmd_click(_NearMissBackend(), "Dismiss", "text"))
     assert code == 1
     err = capsys.readouterr().err
     assert "element not found (text): Dismiss" in err
@@ -204,8 +225,9 @@ def test_click_logs_provenance_from_resolved_element(capsys):
         async def click(self, element, *, force=False):
             pass
 
-    code = asyncio.run(_cmd_click(_Hit(), "#go", "css"))
+    code, hits = asyncio.run(_cmd_click(_Hit(), "#go", "css"))
     assert code == 0
+    assert len(hits) == 1  # the hit list feeds per-hit recording
     out = capsys.readouterr().out
     assert out.strip() == "clicked css: #go → button#go 'Go' @8,8 62x18"
 
@@ -238,3 +260,119 @@ def test_fill_logs_provenance_from_resolved_element(capsys):
     assert code == 0
     out = capsys.readouterr().out
     assert out.strip() == "filled css: input[name=q] → input @12,34 100x20"
+
+
+# ── multi-match click: identify first, then act ───────────────────────────
+
+
+def _desc(idx: int, total: int, *, el_id: str, visible: bool = True) -> dict:
+    return {
+        "tag": "button",
+        "id": el_id,
+        "cls": "",
+        "text": "Go",
+        "rect": {"x": 8.0, "y": 8.0 + 32 * idx, "width": 62.0, "height": 18.0},
+        "visible": visible,
+        "idx": idx,
+        "total": total,
+    }
+
+
+class _MultiBackend:
+    """find_elements-capable fake: N descriptor-stamped matches + click log.
+
+    Deliberately has NO ``find_element``: ``find_elements`` is the
+    authoritative resolution when a backend offers it.
+    """
+
+    name = "fake"
+
+    def __init__(self, descs: list[dict]) -> None:
+        self._descs = descs
+        self.clicked: list[int] = []
+
+    async def find_elements(self, locator):
+        return [
+            Element(
+                raw={"js": f"all[{i}]"},
+                locator=locator,
+                backend="cdp",
+                descriptor=d,
+                _cache={
+                    "tag": d.get("tag", ""),
+                    "text": d.get("text", ""),
+                    "bounding_box": d.get("rect"),
+                    "is_visible": bool(d.get("visible", True)),
+                },
+            )
+            for i, d in enumerate(self._descs)
+        ]
+
+    async def click(self, element, *, force: bool = False) -> None:
+        self.clicked.append(int(element.descriptor["idx"]))
+
+
+def test_multi_click_identifies_then_clicks_all_rendered(capsys):
+    from avion.cli import _cmd_click
+
+    b = _MultiBackend(
+        [
+            _desc(0, 3, el_id="a"),
+            _desc(1, 3, el_id="b"),
+            _desc(2, 3, el_id="c", visible=False),
+        ]
+    )
+    code, hits = asyncio.run(_cmd_click(b, "Go", "text"))
+    assert code == 0
+    # backward over rendered indices [0, 1] → 1 first; hidden 2 never clicked
+    assert b.clicked == [1, 0]
+    assert len(hits) == 2
+    out = capsys.readouterr()
+    # identify block: the WHOLE set with ordinals before any click
+    assert "3 matches for text: Go:" in out.out
+    assert "button#a 'Go'" in out.out and "(match 1/3)" in out.out
+    assert "button#c 'Go'" in out.out and "(hidden)" in out.out
+    # the hidden skip is reported on stderr
+    assert "skipping hidden match 3/3" in out.err
+    # click lines carry the ORIGINAL set ordinals, in execution order
+    lines = [ln for ln in out.out.splitlines() if ln.startswith("clicked text:")]
+    assert len(lines) == 2
+    assert "button#b" in lines[0] and "(match 2/3)" in lines[0]
+    assert "button#a" in lines[1] and "(match 1/3)" in lines[1]
+
+
+def test_click_nth_picks_one_match(capsys):
+    from avion.cli import _cmd_click
+
+    b = _MultiBackend([_desc(0, 2, el_id="a"), _desc(1, 2, el_id="b")])
+    code, hits = asyncio.run(_cmd_click(b, "Go", "text", nth=2))
+    assert code == 0
+    assert b.clicked == [1] and len(hits) == 1
+    out = capsys.readouterr()
+    # the set is still identified — nth picks from it, it does not hide it
+    assert "2 matches for text: Go:" in out.out
+    assert "clicked text: Go → button#b 'Go'" in out.out and "(match 2/2)" in out.out
+    assert out.err == ""
+
+
+def test_click_nth_out_of_range_fails_without_clicking(capsys):
+    from avion.cli import _cmd_click
+
+    b = _MultiBackend([_desc(0, 2, el_id="a"), _desc(1, 2, el_id="b")])
+    code, hits = asyncio.run(_cmd_click(b, "Go", "text", nth=3))
+    assert code == 1 and hits == [] and b.clicked == []
+    assert "--nth 3 out of range" in capsys.readouterr().err
+
+
+def test_multi_click_all_hidden_falls_back_to_first(capsys):
+    from avion.cli import _cmd_click
+
+    b = _MultiBackend(
+        [_desc(0, 2, el_id="a", visible=False), _desc(1, 2, el_id="b", visible=False)]
+    )
+    code, hits = asyncio.run(_cmd_click(b, "Go", "text"))
+    assert code == 0
+    assert b.clicked == [0] and len(hits) == 1  # first match, like pre-multi
+    err = capsys.readouterr().err
+    assert "all 2 matches are hidden" in err
+    assert "clicking the first match anyway" in err
