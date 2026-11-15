@@ -545,6 +545,11 @@ class KanbanStore:
     def _find_one(self, board: Board, prefix: str) -> Card | None:
         lower = prefix.lower()
         matches = [c for c in board.cards if c.id.lower().startswith(lower)]
+        if not matches:
+            # Ids are timestamped (``20261115_081635_ux…``) — a user reaches
+            # for the human slug, which is mid-string; substring tier keeps
+            # `kanban <verb> <slug>` working without the full id.
+            matches = [c for c in board.cards if lower in c.id.lower()]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
