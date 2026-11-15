@@ -25,6 +25,20 @@ def _websockets():
         ) from e
 
 
+def _text_predicate_js(selector) -> str:
+    """JS arrow predicate for a TEXT selector — the ONE source of the rule.
+
+    Shared by ``selector_to_js`` (what the action resolves), the match-time
+    probe (what the log describes) and the near-miss report (what the miss
+    explains), so the observability layer can never disagree with the
+    action layer about which elements match.
+    """
+    needle = selector.value.replace("'", "\\'")
+    if selector.exact:
+        return f"e => e.textContent?.trim() === '{needle}'"
+    return f"e => e.textContent?.includes('{needle}') && e.children.length === 0"
+
+
 def selector_to_js(selector) -> str | None:
     """Map an Arken selector to a document.querySelector expression."""
     s = selector
@@ -39,18 +53,69 @@ def selector_to_js(selector) -> str | None:
             "null).singleNodeValue"
         )
     if s.strategy == SelectorStrategy.TEXT:
-        needle = s.value.replace("'", "\\'")
-        if s.exact:
-            return (
-                "[...document.querySelectorAll('body *')]"
-                f".find(e => e.textContent?.trim() === '{needle}')"
-            )
-        return (
-            "[...document.querySelectorAll('body *')]"
-            f".find(e => e.textContent?.includes('{needle}')"
-            " && e.children.length === 0)"
-        )
+        return f"[...document.querySelectorAll('body *')].find({_text_predicate_js(s)})"
     return None
+
+
+def selector_to_all_js(selector) -> str | None:
+    """Expression evaluating to EVERY element a selector matches (an array).
+
+    Same predicates as ``selector_to_js`` — powers the match ordinal
+    (``match 1/3``) and the near-miss candidate count. ``None`` for the
+    strategies this backend cannot resolve (mirrors ``selector_to_js``).
+    """
+    s = selector
+    if s.strategy == SelectorStrategy.CSS:
+        return f"[...document.querySelectorAll({s.value!r})]"
+    if s.strategy == SelectorStrategy.TEST_ID:
+        return f"[...document.querySelectorAll('[data-testid={s.value!r}]')]"
+    if s.strategy == SelectorStrategy.XPATH:
+        return (
+            "(() => { const out = []; const snap = document.evaluate("
+            f"{s.value!r}, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null); "
+            "for (let i = 0; i < snap.snapshotLength; i++) out.push(snap.snapshotItem(i)); "
+            "return out; })()"
+        )
+    if s.strategy == SelectorStrategy.TEXT:
+        return f"[...document.querySelectorAll('body *')].filter({_text_predicate_js(s)})"
+    return None
+
+
+def selector_probe_js(selector) -> str | None:
+    """Expression evaluating to the resolved element's match-time descriptor.
+
+    Returns ``{found: true, tag, id, cls, name, placeholder, text, rect,
+    visible, idx, total}`` (or ``{found: false}``) — ``None`` only when the
+    selector itself is unresolvable. The lookup embeds the byte-identical
+    ``selector_to_js`` expression, so the element the log describes IS the
+    element the action hits; ``idx``/``total`` come from
+    ``selector_to_all_js`` (same predicate) for the ``match 1/3`` ordinal.
+
+    Observability only — a probe that fails degrades the log, never the
+    match (``find_elements`` falls back to the bare existence check).
+    """
+    js = selector_to_js(selector)
+    if js is None:
+        return None
+    all_js = selector_to_all_js(selector) or "[]"
+    return _js_iife(
+        "const el = (" + js + "); "
+        "if (!el) return {found: false}; "
+        "const all = (" + all_js + "); "
+        "const r = el.getBoundingClientRect(); "
+        "const cs = getComputedStyle(el); "
+        "const cls = typeof el.className === 'string' ? el.className : ''; "
+        "return {found: true, "
+        "tag: (el.tagName || '').toLowerCase(), "
+        "id: el.id || '', "
+        "cls: cls, "
+        "name: el.getAttribute('name') || '', "
+        "placeholder: el.getAttribute('placeholder') || '', "
+        "text: ((el.innerText || el.textContent || '')).trim().replace(/\\s+/g, ' ').slice(0, 60), "
+        "rect: {x: r.x, y: r.y, width: r.width, height: r.height}, "
+        "visible: !!(r.width && r.height) && cs.display !== 'none' && cs.visibility !== 'hidden', "
+        "idx: all.indexOf(el), total: all.length};"
+    )
 
 
 def _js_iife(body: str) -> str:
@@ -577,11 +642,17 @@ class CdpBackend:
             js = selector_to_js(selector)
             if js is None:
                 continue
+            # Match-time descriptor: the probe embeds the SAME expression the
+            # action will later hit, so the element recorded here (and logged
+            # by every mutating verb) is byte-for-byte the element clicked.
+            probe = selector_probe_js(selector)
             try:
-                exists = await self.evaluate(f"!!({js})")
+                desc = await self.evaluate(probe if probe is not None else f"!!({js})")
             except Exception:
                 continue
-            if exists:
+            if desc is True:
+                # Bare-existence fallback (no probe for this strategy):
+                # found, but descriptor-less — provenance degrades.
                 found.append(
                     Element(
                         raw={"js": js},
@@ -590,7 +661,119 @@ class CdpBackend:
                     )
                 )
                 break
+            if not (isinstance(desc, dict) and desc.get("found")):
+                continue
+            d = {k: v for k, v in desc.items() if k != "found"}
+            found.append(
+                Element(
+                    raw={"js": js},
+                    locator=ElementLocator(selectors=(selector,)),
+                    backend=self.name,
+                    descriptor=d,
+                    # Cache the descriptor too: tag/text/bounding_box feed the
+                    # existing Element properties (describe, event rects),
+                    # which were empty on the CDP path until now.
+                    _cache={
+                        "tag": d.get("tag", ""),
+                        "text": d.get("text", ""),
+                        "bounding_box": d.get("rect"),
+                        "is_visible": bool(d.get("visible", True)),
+                    },
+                )
+            )
+            break
         return found
+
+    async def near_miss(self, locator: ElementLocator) -> list[str]:
+        """Why a locator that matched nothing came close — candidates + reasons.
+
+        The miss-path half of action provenance: the CLI prints this after
+        ``element not found`` so a failed action is diagnosable (the toast
+        that is hidden, the button whose label lives in child spans, the
+        strategy this backend cannot resolve). One line per selector,
+        candidate lines beneath it.
+
+        Observability only — never called on the success path, never part
+        of matching; exceptions degrade to an empty report, never to a
+        crash on top of the miss.
+        """
+        lines: list[str] = []
+        for selector in locator.selectors:
+            if selector_to_js(selector) is None:
+                lines.append(
+                    f"{selector.describe()} — unsupported by this backend"
+                    " (use css|text|testid|xpath)"
+                )
+                continue
+            if selector.strategy == SelectorStrategy.TEXT:
+                cands = await self._text_candidates(selector)
+                if not cands:
+                    lines.append(
+                        f"{selector.describe()} — no element on the page contains"
+                        f" {selector.value!r}"
+                    )
+                else:
+                    lines.append(
+                        f"{selector.describe()} — {len(cands)} candidate(s), none matched:"
+                    )
+                    lines.extend(cands)
+                continue
+            all_js = selector_to_all_js(selector)
+            try:
+                count = len(await self.evaluate(f"({all_js})") or [])
+            except Exception as e:
+                lines.append(f"{selector.describe()} — selector error: {str(e)[:120]}")
+                continue
+            if count:
+                lines.append(
+                    f"{selector.describe()} — {count} element(s) match now"
+                    " (page changed since the lookup?)"
+                )
+            else:
+                lines.append(f"{selector.describe()} — 0 elements match")
+        return lines
+
+    async def _text_candidates(self, selector) -> list[str]:
+        """Elements CONTAINING the needle that the match rule rejected, with reasons.
+
+        Collects on a looser rule than the predicate (``includes`` only) so
+        rejects become visible. Each line states the actual predicate
+        violation first (child elements / non-exact text), then visibility
+        state as context — the report must explain the real rejection, not
+        invent one.
+        """
+        needle = selector.value.replace("'", "\\'")
+        js = _js_iife(
+            "const needle = '" + needle + "'; "
+            "const exact = " + ("true" if selector.exact else "false") + "; "
+            "const out = []; "
+            "for (const e of document.querySelectorAll('body *')) { "
+            "  const tc = e.textContent || ''; "
+            "  if (!tc.includes(needle)) continue; "
+            "  const r = e.getBoundingClientRect(); "
+            "  const cs = getComputedStyle(e); "
+            "  const why = []; "
+            "  if (exact && tc.trim() !== needle) "
+            "why.push('text is not exact: ' + tc.trim().replace(/\\s+/g, ' ').slice(0, 40)); "
+            "  if (!exact && e.children.length) why.push('has child elements (not a leaf)'); "
+            "  const state = []; "
+            "  if (!r.width || !r.height) state.push('zero size (not rendered)'); "
+            "  if (cs.display === 'none' || cs.visibility === 'hidden') "
+            "state.push('hidden: display ' + cs.display + ', visibility ' + cs.visibility); "
+            "  if (!why.length) "
+            "why.push('passes the match rule now (page changed since the lookup?)'); "
+            "  const nm = (e.tagName || '').toLowerCase() + (e.id ? '#' + e.id : ''); "
+            "  out.push('<' + nm + '> ' + "
+            "JSON.stringify(tc.trim().replace(/\\s+/g, ' ').slice(0, 40)) + ' — ' + "
+            "why.concat(state).join('; ')); "
+            "  if (out.length >= 6) break; "
+            "} "
+            "return out;"
+        )
+        try:
+            return [str(line) for line in (await self.evaluate(js) or [])]
+        except Exception:
+            return []
 
     async def click(self, element: Element, *, force: bool = False) -> None:
         """JS-dispatched click already bypasses actionability — force is a
