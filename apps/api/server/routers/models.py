@@ -91,9 +91,6 @@ class ModelsRouter:
 
     def __init__(self):
         self.router = APIRouter(prefix="/models", tags=["models"])
-        from mogdb.cache import QueryCache
-
-        self._cache = QueryCache(ttl_seconds=5.0, max_entries=16)
         self._register_routes()
 
     def _register_routes(self):
@@ -382,7 +379,10 @@ class ModelsRouter:
             return [m.model_dump() for m in models]
 
         try:
-            data = self._cache.get_or_set("models:list", compute)
+            # Live view, deliberately uncached (PR #91): a model list must
+            # reflect load/unload/download immediately — a 5s QueryCache
+            # served stale state and broke the parameter-coercion tests.
+            data = compute()
             return success_response(data=data)
         except Exception as e:
             classify_and_raise(e, source="models.list")

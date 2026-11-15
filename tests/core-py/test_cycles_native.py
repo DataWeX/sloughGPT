@@ -55,7 +55,8 @@ def _native_available(gpu: bool) -> bool:
         eng = _load_engines()
     except Exception:
         return False
-    if eng is None:
+    if not eng:
+        # None = off/first failure, False = cached failure (both falsy).
         return False
     return (eng.gpu is not None) if gpu else (eng.cpu is not None)
 
