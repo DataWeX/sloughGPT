@@ -31,12 +31,6 @@ import {
   XCircle,
 } from 'lucide-react'
 
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
-
 const TOOL_LABELS: Record<string, string> = {
   code_execution: 'Code Execution',
   file_read: 'File Read',

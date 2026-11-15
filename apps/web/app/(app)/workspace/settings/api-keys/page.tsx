@@ -29,11 +29,6 @@ import {
 import { IconPlus, IconTrash, IconRefresh } from '@/components/icons/NavIcons'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface ApiKey {
   id: string

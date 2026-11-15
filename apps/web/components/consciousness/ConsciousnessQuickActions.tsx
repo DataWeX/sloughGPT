@@ -8,11 +8,6 @@ import { useLocale } from '@/hooks/useLocale'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { useBootstrap } from '@/contexts/BootstrapContext'
 import { extractErrorMessage } from '@/lib/error-utils'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function ConsciousnessQuickActions() {
   const router = useRouter()

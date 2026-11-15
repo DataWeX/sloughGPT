@@ -22,11 +22,6 @@ import { reportError } from '@/lib/error-reporter'
 import { logger } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
 import { chatDB } from '@/lib/db'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const _log = logger.child('error-lifecycle')
 

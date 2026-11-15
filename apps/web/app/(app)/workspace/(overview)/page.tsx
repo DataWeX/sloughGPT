@@ -21,11 +21,6 @@ import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { RefreshCw, ExternalLink, ChevronRight, AlertTriangle } from 'lucide-react'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface WorkspaceStats {
   workspace_id: string

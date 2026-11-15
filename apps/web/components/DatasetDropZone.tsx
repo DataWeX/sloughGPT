@@ -5,11 +5,6 @@ import { useState, useCallback, useRef } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconUpload } from '@sloughgpt/strui'
 import { useUploadFile } from '@/lib/cache'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface DatasetDropZoneProps {
   onUploadComplete: () => void

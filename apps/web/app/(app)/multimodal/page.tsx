@@ -29,11 +29,6 @@ import VqaSection from '@/components/multimodal/VqaSection'
 import ObjectDetectionSection from '@/components/multimodal/ObjectDetectionSection'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), {
   ssr: false,

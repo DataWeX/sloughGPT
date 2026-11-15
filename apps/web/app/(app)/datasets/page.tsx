@@ -33,12 +33,6 @@ import { DatasetDropZone } from '@/components/DatasetDropZone'
 import { useDatasetList, useDeleteDataset } from '@/lib/cache'
 import { isTrainingCorpus } from '@/lib/dataset-controller'
 
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
-
 export default function DatasetsPage() {
   const router = useRouter()
   const { data: allDatasets = [], isLoading: loading, refetch: refetchDatasets } = useDatasetList()
