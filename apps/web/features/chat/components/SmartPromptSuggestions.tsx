@@ -187,7 +187,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
         <Button
           variant="ghost"
           size="sm"
-          className="text-[10px] h-5"
+          className="text-xs h-5"
           onClick={() => setCreating(!creating)}
         >
           {creating ? 'Cancel' : '+ Custom'}
@@ -215,7 +215,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-5"
+              className="text-xs h-5"
               onClick={handleCreate}
               disabled={!newName.trim() || !newContent.trim()}
             >
@@ -224,7 +224,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-5"
+              className="text-xs h-5"
               onClick={() => setCreating(false)}
             >
               Cancel
@@ -238,7 +238,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
           type="button"
           onClick={() => setSelectedCategory(null)}
           className={cn(
-            'text-[10px] px-2 py-0.5 rounded transition-colors',
+            'text-xs px-2 py-0.5 rounded transition-colors',
             selectedCategory === null
               ? 'bg-primary/20 text-primary'
               : 'text-muted-foreground hover:bg-muted/50',
@@ -253,7 +253,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
             type="button"
             onClick={() => setSelectedCategory(cat)}
             className={cn(
-              'text-[10px] px-2 py-0.5 rounded transition-colors',
+              'text-xs px-2 py-0.5 rounded transition-colors',
               selectedCategory === cat
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50',
@@ -275,7 +275,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
             >
               <div className="min-w-0 flex-1">
                 <span className="text-xs font-medium truncate block">{prompt.name}</span>
-                <span className="text-[10px] text-muted-foreground truncate block">
+                <span className="text-xs text-muted-foreground truncate block">
                   {prompt.content.slice(0, 30)}...
                 </span>
               </div>
@@ -291,7 +291,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
                   title="Delete"
                   aria-label="Delete prompt"
                 >
-                  <span className="text-destructive text-[10px]">×</span>
+                  <span className="text-destructive text-xs">×</span>
                 </Button>
               )}
             </div>
@@ -310,7 +310,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
           <Button
             variant="ghost"
             size="sm"
-            className="text-[10px] h-5"
+            className="text-xs h-5"
             onClick={() => setShowAll(true)}
           >
             Show All
@@ -323,7 +323,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
           <Button
             variant="ghost"
             size="sm"
-            className="text-[10px] h-5"
+            className="text-xs h-5"
             onClick={() => setShowAll(false)}
           >
             Show Less

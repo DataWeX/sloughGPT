@@ -76,7 +76,7 @@ export function SettingsBackupRestoreCard({
       </CardContent>
       <CardFooter className="justify-end">
         {version && (
-          <span className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs">
+          <span className="text-xs font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs">
             v{version}
           </span>
         )}

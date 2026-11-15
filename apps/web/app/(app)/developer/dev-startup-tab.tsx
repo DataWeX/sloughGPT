@@ -121,7 +121,7 @@ export function StartupTab() {
                 >
                   {alert.type.replace(/_/g, ' ')}
                 </span>
-                <span className="text-[10px] text-muted-foreground/60 ml-2">{alert.message}</span>
+                <span className="text-xs text-muted-foreground/60 ml-2">{alert.message}</span>
               </div>
             </div>
           ))}
@@ -135,7 +135,7 @@ export function StartupTab() {
             <span className="text-[11px] font-medium text-muted-foreground/80">
               Optimization Suggestions
             </span>
-            <span className="text-[9px] text-muted-foreground/60 ml-2">
+            <span className="text-[11px] text-muted-foreground/60 ml-2">
               {suggestions.length} suggestions
             </span>
           </div>
@@ -166,17 +166,17 @@ export function StartupTab() {
                       {suggestion.type.replace(/_/g, ' ')}
                     </span>
                     {suggestion.stage && (
-                      <span className="text-[9px] text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded">
                         {suggestion.stage}
                       </span>
                     )}
                     {suggestion.hook && (
-                      <span className="text-[9px] text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded">
                         {suggestion.hook}
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground/80">{suggestion.message}</span>
+                  <span className="text-xs text-muted-foreground/80">{suggestion.message}</span>
                 </div>
               </div>
             ))}
@@ -190,7 +190,7 @@ export function StartupTab() {
       {/* Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+          <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
             Stage
           </div>
           <div
@@ -203,7 +203,7 @@ export function StartupTab() {
           </div>
         </div>
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+          <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
             Elapsed
           </div>
           <div className="text-[14px] font-medium font-mono text-muted-foreground">
@@ -211,7 +211,7 @@ export function StartupTab() {
           </div>
         </div>
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+          <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
             Model
           </div>
           <div className="text-[14px] font-medium font-mono text-muted-foreground">
@@ -219,7 +219,7 @@ export function StartupTab() {
           </div>
         </div>
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+          <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
             Status
           </div>
           <div
@@ -254,7 +254,7 @@ export function StartupTab() {
             <span
               key={stage}
               className={cn(
-                'text-[9px] font-mono',
+                'text-[11px] font-mono',
                 i <= ['init', 'critical', 'ready', 'background'].indexOf(startupStage)
                   ? 'text-success'
                   : 'text-foreground',
@@ -273,14 +273,14 @@ export function StartupTab() {
             <span className="text-[11px] font-medium text-muted-foreground/80">
               Performance History
             </span>
-            <span className="text-[9px] text-muted-foreground/60 ml-2">
+            <span className="text-[11px] text-muted-foreground/60 ml-2">
               {stats.count} startups recorded
             </span>
           </div>
           <div className="p-4">
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
                   Avg
                 </div>
                 <div className="text-[14px] font-mono text-muted-foreground">
@@ -288,7 +288,7 @@ export function StartupTab() {
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
                   P50
                 </div>
                 <div className="text-[14px] font-mono text-muted-foreground">
@@ -296,7 +296,7 @@ export function StartupTab() {
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
                   P95
                 </div>
                 <div className="text-[14px] font-mono text-muted-foreground">
@@ -304,13 +304,13 @@ export function StartupTab() {
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
                   Min
                 </div>
                 <div className="text-[14px] font-mono text-success">{stats.min_duration}s</div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                <div className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-1">
                   Max
                 </div>
                 <div className="text-[14px] font-mono text-destructive">{stats.max_duration}s</div>
@@ -318,7 +318,7 @@ export function StartupTab() {
             </div>
             {startupElapsed > 0 && stats.avg_duration > 0 && (
               <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-center gap-2">
-                <span className="text-[10px] text-muted-foreground/60">Current:</span>
+                <span className="text-xs text-muted-foreground/60">Current:</span>
                 <span
                   className={cn(
                     'text-[11px] font-mono font-medium',
@@ -327,16 +327,16 @@ export function StartupTab() {
                 >
                   {startupElapsed.toFixed(1)}s
                 </span>
-                <span className="text-[10px] text-muted-foreground/60">
+                <span className="text-xs text-muted-foreground/60">
                   vs avg {stats.avg_duration}s
                 </span>
                 {startupElapsed < stats.avg_duration && (
-                  <span className="text-[9px] text-success">
+                  <span className="text-[11px] text-success">
                     ({((1 - startupElapsed / stats.avg_duration) * 100).toFixed(0)}% faster)
                   </span>
                 )}
                 {startupElapsed > stats.avg_duration && (
-                  <span className="text-[9px] text-warning">
+                  <span className="text-[11px] text-warning">
                     (+{((startupElapsed / stats.avg_duration - 1) * 100).toFixed(0)}% slower)
                   </span>
                 )}
@@ -365,7 +365,7 @@ export function StartupTab() {
                   <span className="text-[12px] font-medium text-muted-foreground capitalize">
                     {stage}
                   </span>
-                  <span className="text-[10px] text-muted-foreground/60 font-mono">
+                  <span className="text-xs text-muted-foreground/60 font-mono">
                     {data.hooks.length} hooks
                   </span>
                 </div>
@@ -396,7 +396,7 @@ export function StartupTab() {
                       {stage}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <span className="text-muted-foreground/60">Avg</span>
                       <span className="ml-1 font-mono text-muted-foreground">{data.avg}s</span>
@@ -447,22 +447,22 @@ export function StartupTab() {
                     pulse={hook.status === 'running'}
                   />
                   <span className="text-[11px] font-mono text-muted-foreground">{hook.name}</span>
-                  <span className="text-[9px] text-muted-foreground/60 uppercase">
+                  <span className="text-[11px] text-muted-foreground/60 uppercase">
                     {hook.stage}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   {hook.error && (
-                    <span className="text-[9px] text-destructive max-w-32 truncate">
+                    <span className="text-[11px] text-destructive max-w-32 truncate">
                       {hook.error}
                     </span>
                   )}
-                  <span className="text-[10px] font-mono text-muted-foreground/60">
+                  <span className="text-xs font-mono text-muted-foreground/60">
                     {hook.duration_seconds > 0 ? `${hook.duration_seconds}s` : '—'}
                   </span>
                   <span
                     className={cn(
-                      'text-[9px] font-mono uppercase',
+                      'text-[11px] font-mono uppercase',
                       HOOK_STATUS_COLORS[hook.status],
                     )}
                   >

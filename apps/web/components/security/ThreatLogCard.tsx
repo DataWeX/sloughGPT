@@ -143,7 +143,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Threat Log</CardTitle>
           {totalAnomalies > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
               {totalAnomalies} anomal{totalAnomalies === 1 ? 'y' : 'ies'}
             </span>
           )}
@@ -157,7 +157,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
                 <span
                   key={sev}
                   className={cn(
-                    'text-[9px] px-1.5 py-0.5 rounded font-medium border',
+                    'text-[11px] px-1.5 py-0.5 rounded font-medium border',
                     SEVERITY_STYLES[sev],
                   )}
                 >
@@ -171,7 +171,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
           <Button
             size="sm"
             variant={!showAnomalies ? 'default' : 'ghost'}
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={() => setShowAnomalies(false)}
           >
             All Events
@@ -179,7 +179,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
           <Button
             size="sm"
             variant={showAnomalies ? 'default' : 'ghost'}
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={() => setShowAnomalies(true)}
             disabled={totalAnomalies === 0}
           >
@@ -197,7 +197,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
               <div
                 key={i}
                 className={cn(
-                  'flex items-start gap-2 rounded-md border px-2 py-1.5 text-[10px]',
+                  'flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs',
                   SEVERITY_STYLES[entry.severity],
                 )}
               >
@@ -210,16 +210,18 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium truncate">{entry.log.event_type}</span>
-                    <span className="text-[9px] text-muted-foreground shrink-0">
+                    <span className="text-[11px] text-muted-foreground shrink-0">
                       {timeAgo(entry.log.timestamp)}
                     </span>
                   </div>
-                  <p className="text-[9px] text-muted-foreground/70 mt-0.5">{entry.reason}</p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">{entry.reason}</p>
                   {entry.log.user && (
-                    <span className="text-[9px] text-muted-foreground/60">@{entry.log.user} </span>
+                    <span className="text-[11px] text-muted-foreground/60">@{entry.log.user} </span>
                   )}
                   {entry.log.ip && (
-                    <span className="text-[9px] text-muted-foreground/60">from {entry.log.ip}</span>
+                    <span className="text-[11px] text-muted-foreground/60">
+                      from {entry.log.ip}
+                    </span>
                   )}
                 </div>
               </div>
@@ -231,7 +233,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-[10px] w-full"
+            className="h-6 text-xs w-full"
             onClick={() => setExpanded(!expanded)}
           >
             {expanded ? 'Show less' : `Show all ${classified.length} events`}

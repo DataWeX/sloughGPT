@@ -42,7 +42,7 @@ function clamp(v: number, lo: number, hi: number) {
  * renders as "…objectives.; Introduce varied topics…".
  */
 export function joinSuggestions(suggestions: string[]): string {
-  const parts = suggestions.map(s => s.trim().replace(/\.$/, '')).filter(Boolean)
+  const parts = suggestions.map((s) => s.trim().replace(/\.$/, '')).filter(Boolean)
   if (parts.length === 0) return ''
   return `${parts.join('; ')}.`
 }
@@ -403,7 +403,7 @@ export default function ConsciousnessInsightsPage() {
                             ? 'outline'
                             : 'secondary'
                       }
-                      className="text-[10px]"
+                      className="text-xs"
                     >
                       {insight.severity}
                     </Badge>
@@ -416,7 +416,7 @@ export default function ConsciousnessInsightsPage() {
                   <div className="text-xs text-muted-foreground">{insight.description}</div>
                   <div className="text-xs font-medium">{insight.suggestion}</div>
                   {expandedCard === insight.id && (
-                    <div className="mt-2 rounded border border-border/30 bg-muted/10 p-2 text-[10px] text-muted-foreground font-mono">
+                    <div className="mt-2 rounded border border-border/30 bg-muted/10 p-2 text-xs text-muted-foreground font-mono">
                       {insight.detail}
                     </div>
                   )}

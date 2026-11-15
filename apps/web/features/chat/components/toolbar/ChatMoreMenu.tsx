@@ -23,7 +23,7 @@ import {
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 
 function ShortcutHint({ keys }: { keys: string }) {
-  return <span className="ml-auto text-[9px] text-muted-foreground/50 font-mono">{keys}</span>
+  return <span className="ml-auto text-[11px] text-muted-foreground/50 font-mono">{keys}</span>
 }
 
 export function ChatMoreMenu() {
@@ -62,7 +62,7 @@ export function ChatMoreMenu() {
 
         {ctx.agent.agents.length > 0 && (
           <>
-            <div className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Agent {ctx.agent.current && `— ${ctx.agent.current.name}`}
             </div>
             {ctx.agent.agents.map((a) => {
@@ -88,12 +88,12 @@ export function ChatMoreMenu() {
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{a.name}</div>
                     {a.description && (
-                      <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
                         {a.description}
                       </div>
                     )}
                     {a.capabilities && a.capabilities.length > 0 && (
-                      <span className="text-[9px] text-muted-foreground mt-1 inline-block">
+                      <span className="text-[11px] text-muted-foreground mt-1 inline-block">
                         {a.capabilities.length} capabilities
                       </span>
                     )}

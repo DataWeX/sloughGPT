@@ -157,18 +157,18 @@ export default function PersonalitySummary({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold capitalize">{currentSoulName}</span>
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary badge-glow">
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary badge-glow">
                   {archetype.label}
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">{archetype.description}</p>
             </div>
             <div className="flex flex-col items-center shrink-0">
-              <span className="text-[9px] text-muted-foreground uppercase tracking-wider">
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
                 Overall
               </span>
               <span className={cn('text-base font-bold', ratingColor(overall))}>{overall}</span>
-              <span className="text-[8px] text-muted-foreground/50">/100</span>
+              <span className="text-[11px] text-muted-foreground/50">/100</span>
             </div>
           </div>
         </div>
@@ -186,7 +186,7 @@ export default function PersonalitySummary({
               style={staggerDelay(idx)}
             >
               <span className="text-base mb-1">{GROUP_ICONS[group]}</span>
-              <span className="text-[9px] text-muted-foreground uppercase tracking-wider mb-0.5">
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider mb-0.5">
                 {GROUP_LABELS[group]}
               </span>
               <span className="text-base font-bold" style={{ color }}>
@@ -215,10 +215,10 @@ export default function PersonalitySummary({
           return (
             <div key={group}>
               <div className="flex items-center gap-1.5 mb-1.5">
-                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   {GROUP_LABELS[group]}
                 </span>
-                <span className="text-[9px] text-muted-foreground/40">
+                <span className="text-[11px] text-muted-foreground/40">
                   · {entries.length} traits
                 </span>
               </div>
@@ -227,7 +227,7 @@ export default function PersonalitySummary({
                   const pct = Math.round(value * 100)
                   return (
                     <div key={name} className="flex items-center gap-2 py-0.5">
-                      <span className="text-[10px] text-muted-foreground capitalize min-w-0 flex-1 truncate">
+                      <span className="text-xs text-muted-foreground capitalize min-w-0 flex-1 truncate">
                         {name.replace(/_/g, ' ')}
                       </span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -238,7 +238,7 @@ export default function PersonalitySummary({
                           />
                         </div>
                         <span
-                          className="text-[10px] font-mono font-medium tabular-nums w-6 text-right"
+                          className="text-xs font-mono font-medium tabular-nums w-6 text-right"
                           style={{ color: groupColor }}
                         >
                           {pct}

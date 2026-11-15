@@ -380,7 +380,7 @@ export default function ConsciousnessDebugPage() {
                   min={1}
                   max={300}
                 />
-                <span className="text-[10px] text-muted-foreground">s</span>
+                <span className="text-xs text-muted-foreground">s</span>
               </div>
             )}
           </div>
@@ -431,18 +431,16 @@ export default function ConsciousnessDebugPage() {
                     <div className="flex items-center gap-2">
                       <Badge
                         variant="outline"
-                        className="font-mono text-[9px] border px-1.5 py-0 shrink-0 bg-success/15 text-success border-success/30"
+                        className="font-mono text-[11px] border px-1.5 py-0 shrink-0 bg-success/15 text-success border-success/30"
                       >
                         GET
                       </Badge>
                       <span className="text-xs font-medium">{t(ep.labelKey)}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {ep.endpoint}
-                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">{ep.endpoint}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {stateLoading[ep.key] && <Skeleton className="h-3 w-3" />}
-                      <span className="text-muted-foreground text-[10px]">
+                      <span className="text-muted-foreground text-xs">
                         {expandedState[ep.key] ? '▼' : '▶'}
                       </span>
                     </div>
@@ -499,24 +497,24 @@ export default function ConsciousnessDebugPage() {
               </select>
               <div className="max-h-80 overflow-y-auto space-y-1">
                 {filteredEvents.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground text-center py-4">
+                  <p className="text-xs text-muted-foreground text-center py-4">
                     {t('consciousness_debug.no_events')}
                   </p>
                 )}
                 {filteredEvents.map((ev) => (
                   <div
                     key={ev.id}
-                    className="rounded border border-border/30 bg-muted/10 px-2 py-1.5 text-[10px]"
+                    className="rounded border border-border/30 bg-muted/10 px-2 py-1.5 text-xs"
                   >
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-muted-foreground font-mono">
                         {formatTimestamp(ev.timestamp)}
                       </span>
-                      <Badge variant="outline" className="text-[8px] font-mono border px-1 py-0">
+                      <Badge variant="outline" className="text-[11px] font-mono border px-1 py-0">
                         {ev.type}
                       </Badge>
                     </div>
-                    <pre className="whitespace-pre-wrap break-all text-[9px] font-mono text-muted-foreground">
+                    <pre className="whitespace-pre-wrap break-all text-[11px] font-mono text-muted-foreground">
                       {formatJson(ev.data)}
                     </pre>
                   </div>
@@ -537,7 +535,7 @@ export default function ConsciousnessDebugPage() {
                     key={expr.endpoint}
                     variant="outline"
                     size="sm"
-                    className="h-6 text-[10px] px-2"
+                    className="h-6 text-xs px-2"
                     onClick={() => handleShortcut(expr.endpoint)}
                     disabled={consoleLoading}
                   >
@@ -610,30 +608,30 @@ export default function ConsciousnessDebugPage() {
               </div>
               {healthData != null && (
                 <div>
-                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">
                     {t('consciousness_debug.health_report')}
                   </p>
-                  <pre className="max-h-40 overflow-auto rounded border border-border/30 bg-background/50 p-2 text-[10px] font-mono whitespace-pre-wrap">
+                  <pre className="max-h-40 overflow-auto rounded border border-border/30 bg-background/50 p-2 text-xs font-mono whitespace-pre-wrap">
                     {formatJson(healthData as Record<string, unknown>)}
                   </pre>
                 </div>
               )}
               {evalData != null && (
                 <div>
-                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">
                     {t('consciousness_debug.eval_report')}
                   </p>
-                  <pre className="max-h-40 overflow-auto rounded border border-border/30 bg-background/50 p-2 text-[10px] font-mono whitespace-pre-wrap">
+                  <pre className="max-h-40 overflow-auto rounded border border-border/30 bg-background/50 p-2 text-xs font-mono whitespace-pre-wrap">
                     {formatJson(evalData as Record<string, unknown>)}
                   </pre>
                 </div>
               )}
               {lastError && (
                 <div>
-                  <p className="text-[10px] font-medium text-destructive mb-1">
+                  <p className="text-xs font-medium text-destructive mb-1">
                     {t('consciousness_debug.last_error')}
                   </p>
-                  <pre className="max-h-24 overflow-auto rounded border border-destructive/20 bg-destructive/5 p-2 text-[10px] font-mono text-destructive whitespace-pre-wrap">
+                  <pre className="max-h-24 overflow-auto rounded border border-destructive/20 bg-destructive/5 p-2 text-xs font-mono text-destructive whitespace-pre-wrap">
                     {lastError}
                   </pre>
                 </div>

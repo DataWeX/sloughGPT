@@ -341,7 +341,7 @@ export const MemoryCard = memo(function MemoryCard() {
           {stats && (
             <span
               className={cn(
-                'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                'text-xs px-1.5 py-0.5 rounded-full font-medium',
                 stats.enabled ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
               )}
             >
@@ -351,7 +351,7 @@ export const MemoryCard = memo(function MemoryCard() {
         </CardTitle>
         <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-1.5 mr-1.5 pr-1.5 border-r border-border/60">
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
               Remember
             </span>
             <Switch
@@ -386,7 +386,7 @@ export const MemoryCard = memo(function MemoryCard() {
       </CardHeader>
 
       <CardContent>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-3">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3">
           Facts the AI remembers across conversations
         </p>
 
@@ -545,7 +545,7 @@ export const MemoryCard = memo(function MemoryCard() {
               type="button"
               onClick={() => setActiveTopic(null)}
               className={cn(
-                'text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                'text-xs px-2 py-1 rounded-full font-medium transition-colors',
                 activeTopic === null
                   ? 'bg-primary/15 text-primary'
                   : 'bg-muted text-muted-foreground hover:bg-muted/70',
@@ -559,7 +559,7 @@ export const MemoryCard = memo(function MemoryCard() {
                 type="button"
                 onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
                 className={cn(
-                  'text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                  'text-xs px-2 py-1 rounded-full font-medium transition-colors',
                   activeTopic === topic
                     ? 'bg-primary/15 text-primary'
                     : 'bg-muted text-muted-foreground hover:bg-muted/70',
@@ -569,7 +569,7 @@ export const MemoryCard = memo(function MemoryCard() {
               </button>
             ))}
             {extraTopicCount > 0 && (
-              <span className="text-[10px] text-muted-foreground">+{extraTopicCount} more</span>
+              <span className="text-xs text-muted-foreground">+{extraTopicCount} more</span>
             )}
           </div>
         )}

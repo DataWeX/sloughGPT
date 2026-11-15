@@ -48,15 +48,18 @@ export const ChatSessionFavorites = memo(function ChatSessionFavorites({
   }, [])
 
   const favoriteSessions = favoriteIds
-    .map(id => sessions.find(s => s.id === id))
+    .map((id) => sessions.find((s) => s.id === id))
     .filter((s): s is Session => s !== undefined)
 
-  const handleRemove = useCallback((sessionId: string) => {
-    const next = favoriteIds.filter(id => id !== sessionId)
-    setFavoriteIds(next)
-    saveFavorites(next)
-    onRemoveFavorite(sessionId)
-  }, [favoriteIds, onRemoveFavorite])
+  const handleRemove = useCallback(
+    (sessionId: string) => {
+      const next = favoriteIds.filter((id) => id !== sessionId)
+      setFavoriteIds(next)
+      saveFavorites(next)
+      onRemoveFavorite(sessionId)
+    },
+    [favoriteIds, onRemoveFavorite],
+  )
 
   const formatDate = useCallback((timestamp: number) => {
     const diff = Date.now() - timestamp
@@ -72,7 +75,7 @@ export const ChatSessionFavorites = memo(function ChatSessionFavorites({
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
         <span className="text-xs font-medium">Favorites</span>
-        <span className="text-[10px] text-muted-foreground">{favoriteSessions.length}</span>
+        <span className="text-xs text-muted-foreground">{favoriteSessions.length}</span>
       </div>
 
       <div className="max-h-[300px] overflow-y-auto">
@@ -82,7 +85,7 @@ export const ChatSessionFavorites = memo(function ChatSessionFavorites({
           </p>
         ) : (
           <div className="divide-y">
-            {favoriteSessions.map(session => (
+            {favoriteSessions.map((session) => (
               <div
                 key={session.id}
                 className="px-3 py-2 hover:bg-muted/30 group cursor-pointer"
@@ -92,13 +95,13 @@ export const ChatSessionFavorites = memo(function ChatSessionFavorites({
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium truncate">{session.title}</p>
                     {session.lastMessage && (
-                      <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
                         {session.lastMessage.slice(0, 50)}
                       </p>
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatDate(session.updatedAt)}
                     </span>
                     <Button
@@ -132,29 +135,41 @@ export function useSessionFavorites() {
     setFavorites(loadFavorites())
   }, [])
 
-  const addFavorite = useCallback((sessionId: string) => {
-    const next = [...new Set([...favorites, sessionId])]
-    setFavorites(next)
-    saveFavorites(next)
-  }, [favorites])
+  const addFavorite = useCallback(
+    (sessionId: string) => {
+      const next = [...new Set([...favorites, sessionId])]
+      setFavorites(next)
+      saveFavorites(next)
+    },
+    [favorites],
+  )
 
-  const removeFavorite = useCallback((sessionId: string) => {
-    const next = favorites.filter(id => id !== sessionId)
-    setFavorites(next)
-    saveFavorites(next)
-  }, [favorites])
+  const removeFavorite = useCallback(
+    (sessionId: string) => {
+      const next = favorites.filter((id) => id !== sessionId)
+      setFavorites(next)
+      saveFavorites(next)
+    },
+    [favorites],
+  )
 
-  const isFavorite = useCallback((sessionId: string) => {
-    return favorites.includes(sessionId)
-  }, [favorites])
+  const isFavorite = useCallback(
+    (sessionId: string) => {
+      return favorites.includes(sessionId)
+    },
+    [favorites],
+  )
 
-  const toggleFavorite = useCallback((sessionId: string) => {
-    if (favorites.includes(sessionId)) {
-      removeFavorite(sessionId)
-    } else {
-      addFavorite(sessionId)
-    }
-  }, [favorites, addFavorite, removeFavorite])
+  const toggleFavorite = useCallback(
+    (sessionId: string) => {
+      if (favorites.includes(sessionId)) {
+        removeFavorite(sessionId)
+      } else {
+        addFavorite(sessionId)
+      }
+    },
+    [favorites, addFavorite, removeFavorite],
+  )
 
   return { favorites, addFavorite, removeFavorite, isFavorite, toggleFavorite }
 }

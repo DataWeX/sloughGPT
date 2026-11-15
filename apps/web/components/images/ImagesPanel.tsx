@@ -85,7 +85,7 @@ export function ImagesPanel() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={fetchData}
             aria-label="Refresh"
           >
@@ -107,7 +107,7 @@ export function ImagesPanel() {
                 type="button"
                 onClick={() => setSelectedStyle(s.key as ImageStyle)}
                 className={cn(
-                  'px-2.5 py-1 text-[10px] font-medium rounded-full transition-colors',
+                  'px-2.5 py-1 text-xs font-medium rounded-full transition-colors',
                   selectedStyle === s.key
                     ? 'bg-primary/15 text-primary border border-primary/30'
                     : 'bg-muted/30 text-muted-foreground/60 border border-border/40 hover:bg-muted/50',
@@ -126,7 +126,7 @@ export function ImagesPanel() {
             >
               {generating ? 'Generating...' : 'Generate'}
             </Button>
-            {lastGenerated && <span className="text-[10px] text-success">Generated</span>}
+            {lastGenerated && <span className="text-xs text-success">Generated</span>}
           </div>
           {genError && <StatusBanner variant="error" message={genError} dismissible={false} />}
         </CardContent>
@@ -153,12 +153,12 @@ export function ImagesPanel() {
         </CardHeader>
         <CardContent className="px-2.5 pb-2.5">
           {gallery.length === 0 ? (
-            <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-1.5">
+            <div className="text-center py-6 text-xs text-muted-foreground/60 space-y-1.5">
               <div>No images generated yet.</div>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
                 onClick={() => router.push('/chat')}
               >
                 Open Chat
@@ -177,7 +177,7 @@ export function ImagesPanel() {
                     className="w-full aspect-square object-cover"
                     loading="lazy"
                   />
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground/60 truncate font-mono tabular-nums">
+                  <div className="px-2 py-1 text-xs text-muted-foreground/60 truncate font-mono tabular-nums">
                     {new Date(img.created * 1000).toLocaleDateString()}
                   </div>
                 </div>

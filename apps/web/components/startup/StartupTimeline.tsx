@@ -43,7 +43,7 @@ function TimelineBar({ hook, maxDuration, startOffset }: TimelineBarProps) {
 
   return (
     <div className="flex items-center gap-3 py-1">
-      <div className="w-24 text-[10px] text-muted-foreground truncate text-right">
+      <div className="w-24 text-xs text-muted-foreground truncate text-right">
         {HOOK_LABELS[hook.name] ?? hook.name}
       </div>
       <div className="flex-1 h-4 bg-muted rounded relative overflow-hidden">
@@ -56,7 +56,7 @@ function TimelineBar({ hook, maxDuration, startOffset }: TimelineBarProps) {
           }}
         />
       </div>
-      <div className="w-16 text-[10px] font-mono text-muted-foreground text-right">
+      <div className="w-16 text-xs font-mono text-muted-foreground text-right">
         {hook.duration_seconds > 0 ? `${hook.duration_seconds}s` : '—'}
       </div>
     </div>
@@ -79,16 +79,20 @@ export function StartupTimeline() {
 
   // Group by stage
   const stages = ['critical', 'ready', 'background']
-  const grouped = stages.map(stage => ({
-    stage,
-    hooks: hooks.filter((h: HookStatus) => h.stage === stage),
-  })).filter(g => g.hooks.length > 0)
+  const grouped = stages
+    .map((stage) => ({
+      stage,
+      hooks: hooks.filter((h: HookStatus) => h.stage === stage),
+    }))
+    .filter((g) => g.hooks.length > 0)
 
   return (
     <div className="rounded-xl border border-border/10 bg-card overflow-hidden">
       <div className="h-9 px-4 bg-muted/50 border-b border-border/10 flex items-center justify-between">
         <span className="text-[11px] font-medium text-muted-foreground">Startup Timeline</span>
-        <span className="text-[10px] text-muted-foreground font-mono">{startupElapsed.toFixed(1)}s total</span>
+        <span className="text-xs text-muted-foreground font-mono">
+          {startupElapsed.toFixed(1)}s total
+        </span>
       </div>
       <div className="p-4 space-y-4">
         {grouped.map(({ stage, hooks: stageHooks }) => (
@@ -98,7 +102,9 @@ export function StartupTimeline() {
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: STAGE_COLORS[stage] }}
               />
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{stage}</span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                {stage}
+              </span>
             </div>
             <div className="space-y-0.5">
               {stageHooks.map((hook: HookStatus) => (

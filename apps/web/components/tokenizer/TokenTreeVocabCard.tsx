@@ -158,12 +158,12 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
                 </span>
                 <span className="text-xs text-muted-foreground tabular-nums">{entry.freq}</span>
                 {entry.is_special && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
+                  <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
                     Special
                   </span>
                 )}
                 {entry.is_merged && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
+                  <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
                     Merged
                   </span>
                 )}

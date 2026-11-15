@@ -38,7 +38,7 @@ export function TrainingStatus({
                   style={{ width: `${(modelReadiness.step / modelReadiness.total) * 100}%` }}
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground/60">
+              <p className="text-xs text-muted-foreground/60">
                 First startup may take 90 seconds while AI components load.
               </p>
             </CardContent>
@@ -66,11 +66,11 @@ export function TrainingStatus({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">Training: {runningTraining.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground truncate">
                     {runningTraining.status_message}
                   </p>
                 </div>
-                <span className="text-[10px] text-primary/60 shrink-0">View →</span>
+                <span className="text-xs text-primary/60 shrink-0">View →</span>
               </div>
             </CardContent>
           </Card>
@@ -90,7 +90,7 @@ export function TrainingStatus({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">Model loading</p>
-                  <p className="text-[10px] text-muted-foreground">{modelReadiness.message}</p>
+                  <p className="text-xs text-muted-foreground">{modelReadiness.message}</p>
                 </div>
                 <div className="h-1.5 w-16 rounded-full bg-muted/60 overflow-hidden shrink-0">
                   <div
@@ -108,7 +108,7 @@ export function TrainingStatus({
           <CardContent className="py-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">No model loaded</p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Load a model in Developer to start chatting
               </p>
             </div>

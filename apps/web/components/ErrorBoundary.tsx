@@ -90,7 +90,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <h1 className="text-sm font-semibold flex items-center justify-center gap-1.5">
                 Something went wrong
                 {errorType && (
-                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
+                  <span className="text-[11px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
                     {errorType}
                   </span>
                 )}
@@ -105,7 +105,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <button
                   type="button"
                   onClick={() => this.setState({ showDetails: !this.state.showDetails })}
-                  className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors"
+                  className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
                 >
                   {this.state.showDetails ? 'Hide details' : 'Show details'}
                 </button>
@@ -113,7 +113,7 @@ export class ErrorBoundary extends Component<Props, State> {
             )}
 
             {this.state.showDetails && error && (
-              <div className="rounded-md bg-muted p-2 text-[10px] font-mono max-h-40 overflow-y-auto">
+              <div className="rounded-md bg-muted p-2 text-xs font-mono max-h-40 overflow-y-auto">
                 <pre className="whitespace-pre-wrap break-all text-muted-foreground/60">
                   {stackFrames.length > 0
                     ? stackFrames.map((frame, i) => <div key={i}>{frame}</div>)

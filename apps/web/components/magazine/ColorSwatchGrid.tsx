@@ -18,15 +18,17 @@ function Swatch({ rgb, label, description }: { rgb: string; label: string; descr
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div
-        className={cn('h-12 w-12 rounded-md border border-border/40 shadow-sm transition-transform hover:scale-110')}
+        className={cn(
+          'h-12 w-12 rounded-md border border-border/40 shadow-sm transition-transform hover:scale-110',
+        )}
         style={{ backgroundColor: `rgb(${rgb})` }}
         role="img"
         aria-label={`${label}: rgb(${rgb})`}
       />
       <div className="text-center">
-        <div className="text-[10px] font-medium">{label}</div>
-        <div className="font-mono text-[10px] text-muted-foreground">{rgb}</div>
-        {description && <div className="text-[10px] text-muted-foreground">{description}</div>}
+        <div className="text-xs font-medium">{label}</div>
+        <div className="font-mono text-xs text-muted-foreground">{rgb}</div>
+        {description && <div className="text-xs text-muted-foreground">{description}</div>}
       </div>
     </div>
   )

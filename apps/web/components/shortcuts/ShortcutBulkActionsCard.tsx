@@ -13,7 +13,10 @@ export interface ShortcutBulkActionsCardProps {
   disabled?: boolean
 }
 
-export function ShortcutBulkActionsCard({ actions, disabled = false }: ShortcutBulkActionsCardProps) {
+export function ShortcutBulkActionsCard({
+  actions,
+  disabled = false,
+}: ShortcutBulkActionsCardProps) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -29,7 +32,7 @@ export function ShortcutBulkActionsCard({ actions, disabled = false }: ShortcutB
               key={i}
               size="sm"
               variant="outline"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={action.onClick}
               disabled={disabled}
             >

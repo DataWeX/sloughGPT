@@ -18,7 +18,9 @@ function loadHistory(): HistoryEntry[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 function saveHistory(history: HistoryEntry[]) {
@@ -34,14 +36,15 @@ export function ImageHistoryCard({ onReUse }: ImageHistoryCardProps) {
   const [filter, setFilter] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const filtered = history.filter(h =>
-    !filter || h.prompt.toLowerCase().includes(filter.toLowerCase()) || h.style.includes(filter)
+  const filtered = history.filter(
+    (h) =>
+      !filter || h.prompt.toLowerCase().includes(filter.toLowerCase()) || h.style.includes(filter),
   )
 
-  const styles = [...new Set(history.map(h => h.style))]
+  const styles = [...new Set(history.map((h) => h.style))]
 
   const handleDelete = (id: string) => {
-    const updated = history.filter(h => h.id !== id)
+    const updated = history.filter((h) => h.id !== id)
     setHistory(updated)
     saveHistory(updated)
   }
@@ -66,10 +69,15 @@ export function ImageHistoryCard({ onReUse }: ImageHistoryCardProps) {
               type="text"
               placeholder="Filter..."
               value={filter}
-              onChange={e => setFilter(e.target.value)}
-              className="text-[10px] border border-border rounded px-2 py-0.5 bg-background w-24"
+              onChange={(e) => setFilter(e.target.value)}
+              className="text-xs border border-border rounded px-2 py-0.5 bg-background w-24"
             />
-            <Button size="sm" variant="ghost" className="text-destructive text-[10px]" onClick={handleClear}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive text-xs"
+              onClick={handleClear}
+            >
               Clear
             </Button>
           </div>
@@ -80,19 +88,19 @@ export function ImageHistoryCard({ onReUse }: ImageHistoryCardProps) {
           <Button
             size="sm"
             variant={filter === '' ? 'default' : 'ghost'}
-            className="text-[9px]"
+            className="text-[11px]"
             onClick={() => setFilter('')}
           >
             All ({history.length})
           </Button>
-          {styles.map(s => {
-            const count = history.filter(h => h.style === s).length
+          {styles.map((s) => {
+            const count = history.filter((h) => h.style === s).length
             return (
               <Button
                 key={s}
                 size="sm"
                 variant={filter === s ? 'default' : 'ghost'}
-                className="text-[9px]"
+                className="text-[11px]"
                 onClick={() => setFilter(s)}
               >
                 {s} ({count})
@@ -101,20 +109,22 @@ export function ImageHistoryCard({ onReUse }: ImageHistoryCardProps) {
           })}
         </div>
         <div className="space-y-1.5 max-h-80 overflow-y-auto">
-          {filtered.map(h => (
+          {filtered.map((h) => (
             <div
               key={h.id}
               className={cn(
                 'group p-2 rounded border border-border hover:border-primary/50 transition-colors',
-                expanded === h.id && 'border-primary/50'
+                expanded === h.id && 'border-primary/50',
               )}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium truncate">{h.prompt}</div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[9px] text-muted-foreground">{h.style}</span>
-                    <span className="text-[9px] text-muted-foreground">{timeAgo(h.timestamp)}</span>
+                    <span className="text-[11px] text-muted-foreground">{h.style}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {timeAgo(h.timestamp)}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -122,7 +132,7 @@ export function ImageHistoryCard({ onReUse }: ImageHistoryCardProps) {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-5 text-[9px]"
+                      className="h-5 text-[11px]"
                       onClick={() => onReUse(h.prompt, h.style)}
                     >
                       Re-use
@@ -131,7 +141,7 @@ export function ImageHistoryCard({ onReUse }: ImageHistoryCardProps) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-5 text-[9px] text-destructive"
+                    className="h-5 text-[11px] text-destructive"
                     onClick={() => handleDelete(h.id)}
                   >
                     Del

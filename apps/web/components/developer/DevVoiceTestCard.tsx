@@ -83,7 +83,7 @@ export function DevVoiceTestCard() {
               </p>
               {status.error && (
                 <div className="flex items-start gap-2 text-term-close bg-term-close/[0.08] rounded-lg px-3 py-2 text-[11px]">
-                  <span className="shrink-0 text-[10px] font-bold">!</span>
+                  <span className="shrink-0 text-xs font-bold">!</span>
                   {status.error}
                 </div>
               )}
@@ -121,12 +121,12 @@ export function DevVoiceTestCard() {
           </button>
           {ttsError && (
             <div className="flex items-start gap-2 text-term-close bg-term-close/[0.08] rounded-lg px-3 py-2 text-[11px]">
-              <span className="shrink-0 text-[10px] font-bold">!</span>
+              <span className="shrink-0 text-xs font-bold">!</span>
               {ttsError}
             </div>
           )}
           {lastResult && (
-            <p className="text-[10px] text-term-text-dim font-mono">
+            <p className="text-xs text-term-text-dim font-mono">
               {lastResult.duration_ms}ms · {lastResult.backend}
             </p>
           )}

@@ -19,13 +19,27 @@ export function SessionMessages({ messages, title }: SessionMessagesProps) {
       <CardContent>
         <div className="space-y-1 max-h-[240px] overflow-y-auto">
           {messages.map((msg, i) => (
-            <div key={i} className={cn('rounded p-1.5 text-[10px]', msg.role === 'assistant' ? 'bg-primary/5' : 'bg-muted/30')}>
+            <div
+              key={i}
+              className={cn(
+                'rounded p-1.5 text-xs',
+                msg.role === 'assistant' ? 'bg-primary/5' : 'bg-muted/30',
+              )}
+            >
               <div className="flex items-center gap-1 mb-0.5">
-                <span className={cn('text-[10px] font-medium', msg.role === 'assistant' ? 'text-primary' : 'text-muted-foreground/60')}>
+                <span
+                  className={cn(
+                    'text-xs font-medium',
+                    msg.role === 'assistant' ? 'text-primary' : 'text-muted-foreground/60',
+                  )}
+                >
                   {msg.role}
                 </span>
               </div>
-              <p className="whitespace-pre-wrap">{msg.content.slice(0, 500)}{msg.content.length > 500 ? '...' : ''}</p>
+              <p className="whitespace-pre-wrap">
+                {msg.content.slice(0, 500)}
+                {msg.content.length > 500 ? '...' : ''}
+              </p>
             </div>
           ))}
         </div>

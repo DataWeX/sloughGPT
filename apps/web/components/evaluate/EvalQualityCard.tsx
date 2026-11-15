@@ -24,18 +24,30 @@ export function EvalQualityCard({
         {hasData ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
             {[
-              { label: 'Coherence', value: `${((coherenceScore ?? 0) * 100).toFixed(1)}%`, color: 'text-success' },
-              { label: 'Quality', value: `${((qualityScore ?? 0) * 100).toFixed(1)}%`, color: 'text-primary' },
-              { label: 'Repetition', value: `${((repetitionRate ?? 0) * 100).toFixed(1)}%`, color: (repetitionRate ?? 0) > 0.3 ? 'text-destructive' : 'text-muted-foreground' },
-            ].map(s => (
+              {
+                label: 'Coherence',
+                value: `${((coherenceScore ?? 0) * 100).toFixed(1)}%`,
+                color: 'text-success',
+              },
+              {
+                label: 'Quality',
+                value: `${((qualityScore ?? 0) * 100).toFixed(1)}%`,
+                color: 'text-primary',
+              },
+              {
+                label: 'Repetition',
+                value: `${((repetitionRate ?? 0) * 100).toFixed(1)}%`,
+                color: (repetitionRate ?? 0) > 0.3 ? 'text-destructive' : 'text-muted-foreground',
+              },
+            ].map((s) => (
               <div key={s.label} className="rounded-lg bg-muted/20 p-2.5 text-center">
-                <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                <div className="text-xs text-muted-foreground">{s.label}</div>
                 <div className={cn('text-[11px] font-mono font-medium', s.color)}>{s.value}</div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-6 text-[10px] text-muted-foreground/60">
+          <div className="text-center py-6 text-xs text-muted-foreground/60">
             No quality data yet. Chat with the model to generate responses.
           </div>
         )}

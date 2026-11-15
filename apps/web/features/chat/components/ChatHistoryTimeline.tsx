@@ -62,7 +62,7 @@ export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
         <div className="flex items-center gap-2">
           <IconClock className="h-3 w-3 text-muted-foreground" />
           <span className="text-xs font-medium">History Timeline</span>
-          <span className="text-[10px] text-muted-foreground">({messages.length} messages)</span>
+          <span className="text-xs text-muted-foreground">({messages.length} messages)</span>
         </div>
         <Button
           variant="ghost"
@@ -82,7 +82,7 @@ export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
           <div className="space-y-3">
             {groups.map((group, gi) => (
               <div key={gi}>
-                <div className="text-[10px] text-muted-foreground mb-1 px-1">{group.label}</div>
+                <div className="text-xs text-muted-foreground mb-1 px-1">{group.label}</div>
                 <div className="space-y-0.5">
                   {group.messages.map((msg) => (
                     <button
@@ -101,7 +101,7 @@ export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
                           {msg.content.slice(0, 60)}
                           {msg.content.length > 60 ? '…' : ''}
                         </span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">
+                        <span className="text-xs text-muted-foreground shrink-0">
                           {formatTimeWithSeconds(msg.timestamp)}
                         </span>
                       </div>

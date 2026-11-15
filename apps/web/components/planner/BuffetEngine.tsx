@@ -380,7 +380,7 @@ export function BuffetEngine() {
 
       {/* Status bar */}
       <footer
-        className="relative shrink-0 px-5 py-1.5 flex items-center justify-between text-[10px] font-mono text-muted-foreground"
+        className="relative shrink-0 px-5 py-1.5 flex items-center justify-between text-xs font-mono text-muted-foreground"
         style={{ borderTop: '1px solid rgb(var(--sheen-rgb) / 0.04)' }}
       >
         <div className="flex items-center gap-4">

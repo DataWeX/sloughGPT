@@ -35,9 +35,7 @@ export const ChatBookmarksPanel = memo(function ChatBookmarksPanel({
           <IconStar className="h-3.5 w-3.5" />
           Bookmarks
           {bookmarks.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted">
-              {bookmarks.length}
-            </span>
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted">{bookmarks.length}</span>
           )}
         </span>
         <IconChevronDown
@@ -51,7 +49,7 @@ export const ChatBookmarksPanel = memo(function ChatBookmarksPanel({
             <div className="px-3 py-6 text-center">
               <IconStar className="h-5 w-5 mx-auto mb-1 text-muted-foreground/50" />
               <p className="text-xs text-muted-foreground/60">No bookmarks yet</p>
-              <p className="text-[10px] text-muted-foreground/40 mt-0.5">
+              <p className="text-xs text-muted-foreground/40 mt-0.5">
                 Star a message to save it here
               </p>
             </div>
@@ -69,7 +67,7 @@ export const ChatBookmarksPanel = memo(function ChatBookmarksPanel({
                 >
                   <div
                     className={cn(
-                      'text-[10px] font-medium mb-0.5',
+                      'text-xs font-medium mb-0.5',
                       bm.role === 'assistant' ? 'text-primary/70' : 'text-foreground/70',
                     )}
                   >

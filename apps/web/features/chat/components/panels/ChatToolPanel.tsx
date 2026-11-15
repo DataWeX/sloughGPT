@@ -116,7 +116,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Knowledge">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Knowledge
                     </span>
                   </div>
@@ -131,7 +131,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Memory">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconSparkle className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Memory
                     </span>
                   </div>
@@ -142,7 +142,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Context">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconCode className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Context
                     </span>
                   </div>
@@ -153,7 +153,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Quick Prompts">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconBolt className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Quick Prompts
                     </span>
                   </div>
@@ -164,7 +164,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Summary">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Summary
                     </span>
                   </div>
@@ -175,7 +175,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Statistics">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconChart className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Statistics
                     </span>
                   </div>
@@ -186,7 +186,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Export">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDownload className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Export
                     </span>
                   </div>
@@ -195,7 +195,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                 <section aria-label="Analytics">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconChart className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Analytics
                     </span>
                   </div>
@@ -221,7 +221,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-7 flex-1"
+              className="text-xs h-7 flex-1"
               onClick={ctx.onOpenConversationViewer}
             >
               <IconEye className="h-3 w-3 mr-1" />
@@ -230,7 +230,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-7 flex-1"
+              className="text-xs h-7 flex-1"
               onClick={ctx.onOpenSettings}
             >
               <IconSettings className="h-3 w-3 mr-1" />
@@ -239,7 +239,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-7 flex-1"
+              className="text-xs h-7 flex-1"
               onClick={ctx.onOpenShortcuts}
             >
               <IconBolt className="h-3 w-3 mr-1" />

@@ -87,7 +87,7 @@ export function ConsciousnessSidebarWidget() {
             />
           </div>
 
-          <div className="mb-2 flex items-center justify-between text-[10px] text-muted-foreground/70">
+          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground/70">
             <span>{t('consciousness_sidebar.episodes', { count: episodes })}</span>
             <span>{getConsciousnessLevelLabel(level)}</span>
           </div>
@@ -153,13 +153,11 @@ function MiniQualiaBar({ label, value, color }: { label: string; value: number; 
   const pct = Math.round(((value + 1) / 2) * 100)
   return (
     <div className="flex items-center gap-2">
-      <span className="w-12 truncate text-[10px] text-muted-foreground/60">{label}</span>
+      <span className="w-12 truncate text-xs text-muted-foreground/60">{label}</span>
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
         <div className={cn('h-full rounded-full', color)} style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-6 text-right text-[10px] tabular-nums text-muted-foreground/60">
-        {pct}
-      </span>
+      <span className="w-6 text-right text-xs tabular-nums text-muted-foreground/60">{pct}</span>
     </div>
   )
 }

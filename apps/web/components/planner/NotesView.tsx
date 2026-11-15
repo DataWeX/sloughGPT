@@ -61,9 +61,7 @@ export function NotesView({ notes, onRefresh }: NotesViewProps) {
 
       <div className="space-y-2">
         {filteredNotes.length === 0 ? (
-          <div className="text-center py-8 text-sm text-muted-foreground">
-            No notes found
-          </div>
+          <div className="text-center py-8 text-sm text-muted-foreground">No notes found</div>
         ) : (
           filteredNotes.map((note) => (
             <div
@@ -72,16 +70,12 @@ export function NotesView({ notes, onRefresh }: NotesViewProps) {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {note.title}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {note.body}
-                  </p>
+                  <p className="text-sm font-medium text-foreground truncate">{note.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{note.body}</p>
                 </div>
                 <span
                   className={cn(
-                    'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider',
+                    'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider',
                     note.status === 'done'
                       ? 'bg-success/15 text-success'
                       : note.status === 'wip'
@@ -96,15 +90,13 @@ export function NotesView({ notes, onRefresh }: NotesViewProps) {
                 {note.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground"
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted text-muted-foreground"
                   >
                     {tag}
                   </span>
                 ))}
                 {note.tags.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    +{note.tags.length - 3}
-                  </span>
+                  <span className="text-xs text-muted-foreground">+{note.tags.length - 3}</span>
                 )}
               </div>
             </div>

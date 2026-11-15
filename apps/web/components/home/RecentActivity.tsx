@@ -81,7 +81,7 @@ export function RecentActivity({
                 {s.pinned && (
                   <IconPin className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
                 )}
-                <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
+                <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
                   {s.message_count != null && <span>{s.message_count}m · </span>}
                   {timeAgo(s.updated_at)}
                 </span>
@@ -104,7 +104,7 @@ export function RecentActivity({
                 <span className="text-xs truncate flex-1 font-medium">{j.name || j.id}</span>
                 <span
                   className={cn(
-                    'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                    'text-xs px-1.5 py-0.5 rounded-full font-medium',
                     j.status === 'running'
                       ? 'bg-warning/15 text-warning'
                       : j.status === 'completed'
@@ -132,7 +132,7 @@ export function RecentActivity({
               <Link
                 href="/datasets"
                 prefetch={false}
-                className="text-[10px] text-primary hover:text-primary/80 ml-auto"
+                className="text-xs text-primary hover:text-primary/80 ml-auto"
               >
                 View all →
               </Link>
@@ -148,11 +148,11 @@ export function RecentActivity({
                   <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0 group-hover:bg-accent transition-colors" />
                   <span className="text-xs truncate flex-1 font-medium">{ds.name}</span>
                   {ds.samples != null && (
-                    <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
+                    <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
                       {ds.samples.toLocaleString()} samples
                     </span>
                   )}
-                  <span className="text-[10px] text-primary/60 shrink-0 group-hover:text-primary transition-colors">
+                  <span className="text-xs text-primary/60 shrink-0 group-hover:text-primary transition-colors">
                     Train →
                   </span>
                 </button>

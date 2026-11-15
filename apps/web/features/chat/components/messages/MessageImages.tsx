@@ -25,7 +25,7 @@ export const MessageImages = memo(function MessageImages({ images, role }: Messa
             // show a named fallback instead of a bare broken-image glyph.
             <div
               key={img.id}
-              className="max-h-24 min-w-[7rem] px-3 py-2 rounded-xl border border-dashed border-current/30 bg-muted/40 text-[10px] font-medium flex flex-col items-start justify-center gap-0.5"
+              className="max-h-24 min-w-[7rem] px-3 py-2 rounded-xl border border-dashed border-current/30 bg-muted/40 text-xs font-medium flex flex-col items-start justify-center gap-0.5"
               role="img"
               aria-label={`Image unavailable: ${img.name}`}
             >

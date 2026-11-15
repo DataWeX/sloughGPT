@@ -507,7 +507,7 @@ export default function ConsciousnessTestingPage() {
                           <td className="px-3 py-1.5">
                             <Badge
                               variant={r.growth_delta >= 0 ? 'default' : 'destructive'}
-                              className="text-[10px]"
+                              className="text-xs"
                             >
                               {r.growth_delta >= 0 ? '+' : ''}
                               {(r.growth_delta * 100).toFixed(1)}%

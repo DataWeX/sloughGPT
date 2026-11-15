@@ -1,7 +1,18 @@
 'use client'
 
 import { useMemo, memo } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+  Area,
+  ComposedChart,
+} from 'recharts'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
 interface TrendPoint {
@@ -15,7 +26,10 @@ interface TrendChartProps {
   liveHealth: LiveHealthSnapshot | null
 }
 
-function nearestMemory(ts: number, memory: LiveHealthSnapshot['memory_history']): { system_percent: number; rss_mb: number } | undefined {
+function nearestMemory(
+  ts: number,
+  memory: LiveHealthSnapshot['memory_history'],
+): { system_percent: number; rss_mb: number } | undefined {
   if (!memory.length) return undefined
   let best: { system_percent: number; rss_mb: number } | undefined
   let bestDist = Infinity
@@ -48,22 +62,39 @@ function buildPoints(liveHealth: LiveHealthSnapshot | null): TrendPoint[] {
     }
   } else {
     for (const m of memory) {
-      points.push({ ago: `${Math.max(0, Math.round(now - m.ts))}s`, mem: m.system_percent, rss: m.rss_mb })
+      points.push({
+        ago: `${Math.max(0, Math.round(now - m.ts))}s`,
+        mem: m.system_percent,
+        rss: m.rss_mb,
+      })
     }
   }
   return points
 }
 
-function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+function TrendTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ name: string; value: number; color: string }>
+  label?: string
+}) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg text-xs font-numeric">
       <p className="text-muted-foreground mb-1">{label} ago</p>
       {payload.map((entry, i) => (
         <div key={i} className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+          <span
+            className="w-2 h-2 rounded-full shrink-0"
+            style={{ backgroundColor: entry.color }}
+          />
           <span className="text-muted-foreground">{entry.name}:</span>
-          <span className="font-medium">{typeof entry.value === 'number' ? entry.value.toFixed(0) : entry.value}</span>
+          <span className="font-medium">
+            {typeof entry.value === 'number' ? entry.value.toFixed(0) : entry.value}
+          </span>
         </div>
       ))}
     </div>
@@ -86,30 +117,30 @@ export const TrendChart = memo(function TrendChart({ liveHealth }: TrendChartPro
       <ComposedChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
         <XAxis
-            dataKey="ago"
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-            interval="preserveStartEnd"
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            yAxisId="left"
-            domain={[0, 100]}
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-            width={35}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            yAxisId="right"
+          dataKey="ago"
+          tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+          interval="preserveStartEnd"
+          tickLine={false}
+          axisLine={false}
+        />
+        <YAxis
+          yAxisId="left"
+          domain={[0, 100]}
+          tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+          width={35}
+          tickLine={false}
+          axisLine={false}
+        />
+        <YAxis
+          yAxisId="right"
           orientation="right"
-          tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+          tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
           width={45}
           tickLine={false}
           axisLine={false}
         />
         <Tooltip content={<TrendTooltip />} />
-        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
+        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
         <Area
           yAxisId="left"
           type="monotone"

@@ -68,7 +68,7 @@ export const MessageTranslation = memo(function MessageTranslation({
         variant="ghost"
         size="sm"
         className={cn(
-          'text-[10px] h-5 text-muted-foreground/50 hover:text-muted-foreground',
+          'text-xs h-5 text-muted-foreground/50 hover:text-muted-foreground',
           className,
         )}
         onClick={handleOpen}
@@ -81,7 +81,7 @@ export const MessageTranslation = memo(function MessageTranslation({
   return (
     <div className={cn('mt-1 rounded border bg-muted/30 p-2 space-y-2', className)}>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium text-muted-foreground">Translate to</span>
+        <span className="text-xs font-medium text-muted-foreground">Translate to</span>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -100,7 +100,7 @@ export const MessageTranslation = memo(function MessageTranslation({
             type="button"
             onClick={() => setTargetLang(lang.code)}
             className={cn(
-              'text-[10px] px-1.5 py-0.5 rounded transition-colors',
+              'text-xs px-1.5 py-0.5 rounded transition-colors',
               targetLang === lang.code
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50',
@@ -115,7 +115,7 @@ export const MessageTranslation = memo(function MessageTranslation({
       <Button
         variant="ghost"
         size="sm"
-        className="text-[10px] h-6"
+        className="text-xs h-6"
         onClick={handleTranslate}
         disabled={loading}
       >

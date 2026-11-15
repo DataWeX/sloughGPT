@@ -34,9 +34,11 @@ export function TokenTreeStatsCard({ stats }: TokenTreeStatsCardProps) {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          {items.map(s => (
+          {items.map((s) => (
             <div key={s.label} className="rounded-lg bg-muted/20 p-2 text-center">
-              <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</div>
+              <div className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">
+                {s.label}
+              </div>
               <div className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{s.value}</div>
             </div>
           ))}

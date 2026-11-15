@@ -31,15 +31,15 @@ export interface LossChartProps {
 
 function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
   const allSteps = new Set<number>()
-  data.forEach(d => allSteps.add(d.step))
-  rewardData?.forEach(d => allSteps.add(d.step))
+  data.forEach((d) => allSteps.add(d.step))
+  rewardData?.forEach((d) => allSteps.add(d.step))
   const steps = [...allSteps].sort((a, b) => a - b)
 
   const headers = ['step', 'train_loss', 'eval_loss', 'reward']
-  const rows = steps.map(s => {
-    const train = data.find(d => d.step === s && d.type === 'train')
-    const eval_ = data.find(d => d.step === s && d.type === 'eval')
-    const reward = rewardData?.find(d => d.step === s)
+  const rows = steps.map((s) => {
+    const train = data.find((d) => d.step === s && d.type === 'train')
+    const eval_ = data.find((d) => d.step === s && d.type === 'eval')
+    const reward = rewardData?.find((d) => d.step === s)
     return [s, train?.value ?? '', eval_?.value ?? '', reward?.value ?? ''].join(',')
   })
 
@@ -120,7 +120,7 @@ export const LossChart = memo(function LossChart({
   useEffect(() => {
     const el = containerRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(entries => {
+    const observer = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 0
       if (w > 0) setWidth(w)
     })
@@ -130,12 +130,12 @@ export const LossChart = memo(function LossChart({
 
   const { steps, hasTrain, hasEval } = useMemo(() => {
     const allSteps = new Set<number>()
-    data.forEach(d => allSteps.add(d.step))
-    rewardData?.forEach(d => allSteps.add(d.step))
+    data.forEach((d) => allSteps.add(d.step))
+    rewardData?.forEach((d) => allSteps.add(d.step))
     return {
       steps: [...allSteps].sort((a, b) => a - b),
-      hasTrain: data.some(d => d.type === 'train'),
-      hasEval: data.some(d => d.type === 'eval'),
+      hasTrain: data.some((d) => d.type === 'train'),
+      hasEval: data.some((d) => d.type === 'eval'),
     }
   }, [data, rewardData])
 
@@ -153,9 +153,9 @@ export const LossChart = memo(function LossChart({
       if (d.type === 'train') trainMap.set(d.step, d.value)
       else evalMap.set(d.step, d.value)
     }
-    rewardData?.forEach(d => rewardMap.set(d.step, d.value))
+    rewardData?.forEach((d) => rewardMap.set(d.step, d.value))
 
-    return visibleSteps.map(s => {
+    return visibleSteps.map((s) => {
       const point: ChartPoint = { step: s }
       const train = trainMap.get(s)
       const eval_ = evalMap.get(s)
@@ -192,7 +192,9 @@ export const LossChart = memo(function LossChart({
     // Linear scales + explicit tick counts are the fix for the old category
     // axis: ticks are evenly spaced multiples of a 1/2/5×10^k step, never
     // "one tick per data point" (the irregular 2,5,6,9,11,14,... axis).
-    const xScale = scaleLinear().domain(xDomain).range([margin.left, margin.left + plotW])
+    const xScale = scaleLinear()
+      .domain(xDomain)
+      .range([margin.left, margin.left + plotW])
     const yScale = scaleLinear()
       .domain(paddedDomain(lossValues))
       .nice(5)
@@ -220,14 +222,14 @@ export const LossChart = memo(function LossChart({
   const paths = useMemo(() => {
     const build = (key: 'train' | 'eval' | 'reward') => {
       const points = chartData
-        .filter(p => p[key] !== undefined)
-        .map(p => ({ step: p.step, v: p[key] as number }))
+        .filter((p) => p[key] !== undefined)
+        .map((p) => ({ step: p.step, v: p[key] as number }))
       if (points.length === 0) return ''
       const scale = key === 'reward' && layout.rewardScale ? layout.rewardScale : layout.yScale
       return (
         d3Line<{ step: number; v: number }>()
-          .x(d => layout.xScale(d.step))
-          .y(d => scale(d.v))
+          .x((d) => layout.xScale(d.step))
+          .y((d) => scale(d.v))
           .curve(curveMonotoneX)(points) ?? ''
       )
     }
@@ -247,7 +249,8 @@ export const LossChart = memo(function LossChart({
     setHoveredStep(nearest)
   }
 
-  const hoveredPoint = hoveredStep !== null ? chartData.find(p => p.step === hoveredStep) : undefined
+  const hoveredPoint =
+    hoveredStep !== null ? chartData.find((p) => p.step === hoveredStep) : undefined
 
   if (!data.length && !rewardData?.length) return null
 
@@ -281,7 +284,7 @@ export const LossChart = memo(function LossChart({
       >
         {/* grid */}
         <g aria-hidden="true">
-          {yTicks.map(t => (
+          {yTicks.map((t) => (
             <line
               key={`gy-${t}`}
               x1={margin.left}
@@ -293,7 +296,7 @@ export const LossChart = memo(function LossChart({
               strokeDasharray="3 3"
             />
           ))}
-          {xTicks.map(t => (
+          {xTicks.map((t) => (
             <line
               key={`gx-${t}`}
               x1={xScale(t)}
@@ -312,31 +315,31 @@ export const LossChart = memo(function LossChart({
         <line x1={margin.left} x2={margin.left} y1={margin.top} y2={axisYEnd} stroke={AXIS_COLOR} />
 
         <g data-testid="x-axis">
-          {xTicks.map(t => (
+          {xTicks.map((t) => (
             <text
               key={`tx-${t}`}
               x={xScale(t)}
               y={axisYEnd + 14}
               textAnchor="middle"
-              fontSize={10}
+              fontSize={11}
               fill={AXIS_COLOR}
             >
               {t}
             </text>
           ))}
-          <text x={axisXEnd} y={height - 4} textAnchor="end" fontSize={9} fill={AXIS_COLOR}>
+          <text x={axisXEnd} y={height - 4} textAnchor="end" fontSize={11} fill={AXIS_COLOR}>
             Step
           </text>
         </g>
 
         <g data-testid="y-axis">
-          {yTicks.map(t => (
+          {yTicks.map((t) => (
             <text
               key={`ty-${t}`}
               x={margin.left - 6}
               y={yScale(t) + 3.5}
               textAnchor="end"
-              fontSize={10}
+              fontSize={11}
               fill={AXIS_COLOR}
             >
               {formatTick(t, ySpan)}
@@ -346,7 +349,7 @@ export const LossChart = memo(function LossChart({
             x={14}
             y={margin.top + plotH / 2}
             textAnchor="middle"
-            fontSize={9}
+            fontSize={11}
             fill={AXIS_COLOR}
             transform={`rotate(-90 14 ${margin.top + plotH / 2})`}
           >
@@ -357,13 +360,13 @@ export const LossChart = memo(function LossChart({
         {rewardScale && (
           <g data-testid="reward-axis">
             <line x1={axisXEnd} x2={axisXEnd} y1={margin.top} y2={axisYEnd} stroke={AXIS_COLOR} />
-            {rewardTicks.map(t => (
+            {rewardTicks.map((t) => (
               <text
                 key={`tr-${t}`}
                 x={axisXEnd + 6}
                 y={rewardScale(t) + 3.5}
                 textAnchor="start"
-                fontSize={10}
+                fontSize={11}
                 fill={AXIS_COLOR}
               >
                 {formatTick(t, rewardSpan)}
@@ -373,7 +376,7 @@ export const LossChart = memo(function LossChart({
               x={width - 14}
               y={margin.top + plotH / 2}
               textAnchor="middle"
-              fontSize={9}
+              fontSize={11}
               fill={REWARD_COLOR}
               transform={`rotate(90 ${width - 14} ${margin.top + plotH / 2})`}
             >
@@ -384,10 +387,22 @@ export const LossChart = memo(function LossChart({
 
         {/* series — connectNulls semantics: gaps are bridged, single path */}
         {hasTrain && paths.train && (
-          <path data-testid="train-line" d={paths.train} fill="none" stroke={LOSS_COLOR} strokeWidth={1.5} />
+          <path
+            data-testid="train-line"
+            d={paths.train}
+            fill="none"
+            stroke={LOSS_COLOR}
+            strokeWidth={1.5}
+          />
         )}
         {hasEval && paths.eval && (
-          <path data-testid="eval-line" d={paths.eval} fill="none" stroke={EVAL_COLOR} strokeWidth={1.5} />
+          <path
+            data-testid="eval-line"
+            d={paths.eval}
+            fill="none"
+            stroke={EVAL_COLOR}
+            strokeWidth={1.5}
+          />
         )}
         {hasReward && paths.reward && (
           <path
@@ -403,7 +418,14 @@ export const LossChart = memo(function LossChart({
         {/* hover marker */}
         {hoveredPoint && (
           <g aria-hidden="true">
-            <line x1={hoverX} x2={hoverX} y1={margin.top} y2={axisYEnd} stroke={GRID_COLOR} strokeDasharray="3 3" />
+            <line
+              x1={hoverX}
+              x2={hoverX}
+              y1={margin.top}
+              y2={axisYEnd}
+              stroke={GRID_COLOR}
+              strokeDasharray="3 3"
+            />
             {hoveredPoint.train !== undefined && (
               <circle cx={hoverX} cy={yScale(hoveredPoint.train)} r={3} fill={LOSS_COLOR} />
             )}
@@ -455,7 +477,7 @@ export const LossChart = memo(function LossChart({
       {showLegend && (
         <div
           data-testid="legend"
-          className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground"
+          className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
         >
           {hasTrain && <LegendSwatch color={LOSS_COLOR} label="Train loss" />}
           {hasEval && <LegendSwatch color={EVAL_COLOR} label="Validation loss" />}

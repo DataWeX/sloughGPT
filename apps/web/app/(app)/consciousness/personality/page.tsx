@@ -307,7 +307,7 @@ export default function ConsciousnessPersonalityPage() {
                     )}
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(entry.traits).map(([k, v]) => (
-                        <span key={k} className="text-[10px] text-muted-foreground">
+                        <span key={k} className="text-xs text-muted-foreground">
                           {TRAIT_LABELS[k] ?? k}: {((v as number) * 100).toFixed(0)}%
                         </span>
                       ))}

@@ -59,10 +59,23 @@ export function DetailList({
       <div className={cn('grid gap-3', gridCols[columns], className)} data-testid={testId}>
         {items.map((item, i) => (
           <div key={i}>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{item.label}</div>
-            <div className={cn('text-sm font-semibold mt-0.5', item.mono && 'font-mono text-xs', item.valueClassName)}>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              {item.label}
+            </div>
+            <div
+              className={cn(
+                'text-sm font-semibold mt-0.5',
+                item.mono && 'font-mono text-xs',
+                item.valueClassName,
+              )}
+            >
               {item.href ? (
-                <a href={item.href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
                   {item.value}
                 </a>
               ) : (
@@ -80,9 +93,16 @@ export function DetailList({
       {items.map((item, i) => (
         <div key={i} className="flex items-center justify-between">
           <span className="text-muted-foreground">{item.label}</span>
-          <span className={cn('font-numeric', item.mono && 'font-mono text-[10px]', item.valueClassName)}>
+          <span
+            className={cn('font-numeric', item.mono && 'font-mono text-xs', item.valueClassName)}
+          >
             {item.href ? (
-              <a href={item.href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 {item.value}
               </a>
             ) : (

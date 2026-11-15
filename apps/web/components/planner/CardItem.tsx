@@ -88,7 +88,7 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
             {card.description}
           </p>
         )}
-        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[9px] font-mono text-muted-foreground">
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px] font-mono text-muted-foreground">
           {card.tags.slice(0, 3).map((tag) => (
             <span key={tag} className="px-1 py-px rounded bg-muted text-muted-foreground">
               {tag}

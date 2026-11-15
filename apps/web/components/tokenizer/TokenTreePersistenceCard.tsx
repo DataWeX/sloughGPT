@@ -178,11 +178,11 @@ export function TokenTreePersistenceCard({
                       <Chip label={`Vocab ${tree.vocab_size}`} />
                       <Chip label={`Merged ${tree.num_merges}`} />
                       {tree.trained && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-success/10 text-success">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-success/10 text-success">
                           Trained
                         </span>
                       )}
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         saved {formatDate(tree.saved_at)}
                       </span>
                     </div>

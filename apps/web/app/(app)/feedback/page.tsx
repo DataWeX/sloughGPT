@@ -175,7 +175,7 @@ export default function FeedbackPage() {
         {/* Tab bar skeleton */}
         <div className="flex gap-0.5 border-b border-border/20 pb-0 mb-4">
           {['stats', 'conversations', 'training'].map((t) => (
-            <div key={t} className="px-2.5 py-1 text-[10px]">
+            <div key={t} className="px-2.5 py-1 text-xs">
               <Skeleton className="h-3 w-16" />
             </div>
           ))}
@@ -230,7 +230,7 @@ export default function FeedbackPage() {
               if (t === 'conversations') handleLoadConversations()
             }}
             className={cn(
-              'px-2.5 py-1 text-[10px] font-medium rounded-t transition-colors',
+              'px-2.5 py-1 text-xs font-medium rounded-t transition-colors',
               tab === t
                 ? 'bg-primary/10 text-primary border-b-2 border-primary'
                 : 'text-muted-foreground/60 hover:text-foreground',
@@ -295,7 +295,7 @@ export default function FeedbackPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={handleLoadConversations}
               aria-label="Refresh conversations"
             >
@@ -330,7 +330,7 @@ export default function FeedbackPage() {
               />
             )}
             {conversations.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground/60">No conversations yet.</p>
+              <p className="text-xs text-muted-foreground/60">No conversations yet.</p>
             ) : (
               <div className="space-y-0.5 max-h-96 overflow-y-auto">
                 {conversations
@@ -346,17 +346,17 @@ export default function FeedbackPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium truncate">{conv.name}</span>
                           {conv.pinned && (
-                            <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                            <span className="text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
                               pinned
                             </span>
                           )}
                           {conv.starred && (
-                            <span className="text-[9px] bg-warning/10 text-warning px-1.5 py-0.5 rounded-full">
+                            <span className="text-[11px] bg-warning/10 text-warning px-1.5 py-0.5 rounded-full">
                               starred
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
+                        <div className="text-xs text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
                           {conv.message_count} messages · {formatLocaleDate(conv.created_at) || '—'}
                         </div>
                       </div>
@@ -364,7 +364,7 @@ export default function FeedbackPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 text-[10px]"
+                          className="h-6 text-xs"
                           onClick={() => handleTogglePin(conv)}
                         >
                           {conv.pinned ? 'Unpin' : 'Pin'}
@@ -372,7 +372,7 @@ export default function FeedbackPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 text-[10px]"
+                          className="h-6 text-xs"
                           onClick={() => handleToggleStar(conv)}
                         >
                           {conv.starred ? 'Unstar' : 'Star'}
@@ -380,7 +380,7 @@ export default function FeedbackPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 text-[10px] text-destructive"
+                          className="h-6 text-xs text-destructive"
                           onClick={() => handleDeleteConversation(conv.id)}
                         >
                           Delete
@@ -416,13 +416,13 @@ export default function FeedbackPage() {
                   />
                 </KpiGrid>
               ) : (
-                <div className="text-center py-3 text-[10px] text-muted-foreground/60">
+                <div className="text-center py-3 text-xs text-muted-foreground/60">
                   No training data available.
                   <div className="mt-1.5">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-6 text-[10px]"
+                      className="h-6 text-xs"
                       onClick={() => router.push('/training')}
                     >
                       Go to Training
@@ -440,7 +440,7 @@ export default function FeedbackPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                   onClick={handleRefreshStats}
                   aria-label="Refresh stats"
                 >
@@ -463,7 +463,7 @@ export default function FeedbackPage() {
                     { label: 'Prunes', value: String(workflow.stats?.prunes_performed ?? 0) },
                   ].map((s) => (
                     <div key={s.label} className="rounded-lg bg-muted/20 p-2 text-center">
-                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">
+                      <div className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">
                         {s.label}
                       </div>
                       <div
@@ -478,7 +478,7 @@ export default function FeedbackPage() {
                   ))}
                 </div>
                 {workflow.stats?.feedback_recorded != null && (
-                  <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground/60">
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground/60">
                     <span>Feedback recorded: {workflow.stats.feedback_recorded}</span>
                     <span>Exports: {workflow.stats.exports_performed ?? 0}</span>
                   </div>

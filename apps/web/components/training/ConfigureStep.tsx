@@ -141,7 +141,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
           </ToggleGroup>
         </div>
 
-        <div className="text-[10px] text-muted-foreground/60">
+        <div className="text-xs text-muted-foreground/60">
           {form.method === 'vlm'
             ? 'Teach the AI to understand images and text'
             : 'Train a model on text data'}
@@ -199,7 +199,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               </ToggleGroup>
             </div>
 
-            <div className="text-[10px] text-muted-foreground/60">
+            <div className="text-xs text-muted-foreground/60">
               {form.method === 'distill' &&
                 'Train a small model from text data — no teacher needed'}
               {form.method === 'finetune' && 'Continue training an existing model on new data'}
@@ -242,7 +242,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   aria-label="Training text input"
                 />
                 <span
-                  className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums"
+                  className="absolute bottom-1.5 right-2 text-xs text-muted-foreground/50 tabular-nums"
                   aria-live="polite"
                   aria-atomic="true"
                 >
@@ -257,7 +257,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="train-base-model"
-                  className="text-[10px] text-muted-foreground uppercase tracking-wider"
+                  className="text-xs text-muted-foreground uppercase tracking-wider"
                 >
                   Base model
                 </label>
@@ -286,7 +286,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                 {/* Tokenizer selection */}
                 {form.method !== 'finetune' && (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    <label className="text-xs text-muted-foreground uppercase tracking-wider">
                       Tokenizer
                     </label>
                     <div
@@ -315,7 +315,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                         </ToggleGroupItem>
                       </ToggleGroup>
                     </div>
-                    <p className="text-[10px] text-muted-foreground/60">
+                    <p className="text-xs text-muted-foreground/60">
                       {form.algo === 'bpe' &&
                         'Byte Pair Encoding — fast, deterministic tokenization. Best for most use cases.'}
                       {form.algo === 'unigram' &&
@@ -452,7 +452,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   <div className="flex flex-col gap-1.5">
                     <label
                       htmlFor="resume-checkpoint"
-                      className="text-[10px] text-muted-foreground uppercase tracking-wider"
+                      className="text-xs text-muted-foreground uppercase tracking-wider"
                     >
                       Resume from checkpoint (optional)
                     </label>
@@ -496,13 +496,13 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={applyRecommendation}
                   >
                     Apply
                   </Button>
                 </div>
-                <div className="text-[10px] text-muted-foreground/60 space-y-0.5">
+                <div className="text-xs text-muted-foreground/60 space-y-0.5">
                   <div>Dataset: {recommendation.dataset_size.toLocaleString()} examples</div>
                   <div>Reason: {recommendation.recommendation.reason}</div>
                   <div className="flex gap-3 tabular-nums">
@@ -517,7 +517,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               </div>
             )}
             {loadingRec && (
-              <div className="text-[10px] text-muted-foreground animate-pulse">
+              <div className="text-xs text-muted-foreground animate-pulse">
                 Loading recommendation...
               </div>
             )}

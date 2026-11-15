@@ -25,7 +25,7 @@ export function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
         {humanizeDatasetName(dataset.name)}
       </div>
       {dataset.name !== humanizeDatasetName(dataset.name) && (
-        <div className="text-[10px] text-muted-foreground/60 font-mono">
+        <div className="text-xs text-muted-foreground/60 font-mono">
           {dataset.id || dataset.name}
         </div>
       )}
@@ -41,7 +41,7 @@ export function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
           </Badge>
         )}
       </div>
-      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
         {hasSamples && (
           <>
             <span>Samples</span>
@@ -66,13 +66,13 @@ export function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
         )}
       </div>
       {hasVlm && (
-        <div className="text-[10px] text-muted-foreground border-t border-border/30 pt-1">
+        <div className="text-xs text-muted-foreground border-t border-border/30 pt-1">
           {dataset.vlm_metadata!.image_count.toLocaleString()} images · {dataset.vlm_metadata!.type}
           {dataset.vlm_metadata!.auto_captioned && ' · auto-captioned'}
         </div>
       )}
       {!hasSize && !hasSamples && (
-        <div className="text-[10px] text-muted-foreground/60 italic">
+        <div className="text-xs text-muted-foreground/60 italic">
           No size data available — preview for details
         </div>
       )}
@@ -112,7 +112,7 @@ export function DatasetChip({
         >
           <span className="truncate max-w-[120px]">{humanizeDatasetName(dataset.name)}</span>
           {dataset.samples != null && dataset.samples > 0 && (
-            <span className="text-[9px] opacity-60 font-numeric">
+            <span className="text-[11px] opacity-60 font-numeric">
               {dataset.samples.toLocaleString()}
             </span>
           )}

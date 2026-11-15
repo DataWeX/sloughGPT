@@ -1,6 +1,19 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Button, Skeleton, StatCard, KpiGrid, IconRefresh, cn } from '@sloughgpt/strui'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Button,
+  Skeleton,
+  StatCard,
+  KpiGrid,
+  IconRefresh,
+  cn,
+} from '@sloughgpt/strui'
 import { formatUptime } from '@/lib/chat-utils'
 
 import type { DetailedHealth } from '@/lib/system-controller'
@@ -73,51 +86,135 @@ export function SettingsSystemHealthCard({
               <StatCard
                 label="API"
                 value={<span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-                icon={<span className={cn('inline-block w-2 h-2 rounded-full', apiOk ? 'bg-success' : 'bg-destructive')} />}
+                icon={
+                  <span
+                    className={cn(
+                      'inline-block w-2 h-2 rounded-full',
+                      apiOk ? 'bg-success' : 'bg-destructive',
+                    )}
+                  />
+                }
               />
               <StatCard
                 label="Model"
-                value={<span className="font-mono text-xs">{modelLoaded ? (modelType || 'Loaded') : 'None'}</span>}
-                icon={<span className={cn('inline-block w-2 h-2 rounded-full', modelLoaded ? 'bg-success' : 'bg-muted-foreground/50')} />}
+                value={
+                  <span className="font-mono text-xs">
+                    {modelLoaded ? modelType || 'Loaded' : 'None'}
+                  </span>
+                }
+                icon={
+                  <span
+                    className={cn(
+                      'inline-block w-2 h-2 rounded-full',
+                      modelLoaded ? 'bg-success' : 'bg-muted-foreground/50',
+                    )}
+                  />
+                }
               />
               <StatCard
                 label="Uptime"
-                value={<span className="font-mono">{formatUptime(detailed?.uptime_seconds ?? 0)}</span>}
+                value={
+                  <span className="font-mono">{formatUptime(detailed?.uptime_seconds ?? 0)}</span>
+                }
               />
               <StatCard
                 label="Responses"
-                value={<span className="font-mono">{String(detailed?.inference?.inference_count ?? 0)}</span>}
+                value={
+                  <span className="font-mono">
+                    {String(detailed?.inference?.inference_count ?? 0)}
+                  </span>
+                }
               />
             </KpiGrid>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="CPU"
-                value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : <Skeleton className="h-5 w-10 inline-block" />}</span>}
-                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
+                value={
+                  <span className="font-mono">
+                    {metrics ? (
+                      `${metrics.cpu_percent}%`
+                    ) : (
+                      <Skeleton className="h-5 w-10 inline-block" />
+                    )}
+                  </span>
+                }
+                icon={
+                  <span
+                    className={cn(
+                      'inline-block w-2 h-2 rounded-full',
+                      (metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success',
+                    )}
+                  />
+                }
               />
               <StatCard
                 label="Memory"
-                value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
-                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
+                value={
+                  <span className="font-mono">
+                    {metrics ? (
+                      `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB`
+                    ) : (
+                      <Skeleton className="h-5 w-20 inline-block" />
+                    )}
+                  </span>
+                }
+                icon={
+                  <span
+                    className={cn(
+                      'inline-block w-2 h-2 rounded-full',
+                      (metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success',
+                    )}
+                  />
+                }
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="Disk"
-                value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
-                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
+                value={
+                  <span className="font-mono">
+                    {disk ? (
+                      `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB`
+                    ) : (
+                      <Skeleton className="h-5 w-20 inline-block" />
+                    )}
+                  </span>
+                }
+                icon={
+                  <span
+                    className={cn(
+                      'inline-block w-2 h-2 rounded-full',
+                      (disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success',
+                    )}
+                  />
+                }
               />
               <StatCard
                 label="GPU"
-                value={<span className="font-mono text-xs">{detailed?.gpu ? `${detailed.gpu.backend.toUpperCase()} · ${detailed.gpu.tier}` : 'None'}</span>}
-                icon={<span className={cn('inline-block w-2 h-2 rounded-full', detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50')} />}
+                value={
+                  <span className="font-mono text-xs">
+                    {detailed?.gpu
+                      ? `${detailed.gpu.backend.toUpperCase()} · ${detailed.gpu.tier}`
+                      : 'None'}
+                  </span>
+                }
+                icon={
+                  <span
+                    className={cn(
+                      'inline-block w-2 h-2 rounded-full',
+                      detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50',
+                    )}
+                  />
+                }
               />
             </div>
 
             {info && (
               <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground font-mono flex flex-wrap gap-x-4 gap-y-1">
-                <span>{info.platform} {info.platform_release}</span>
+                <span>
+                  {info.platform} {info.platform_release}
+                </span>
                 <span>{info.architecture}</span>
                 <span>{info.processor}</span>
                 <span>{info.cpu_count} cores</span>
@@ -134,10 +231,14 @@ export function SettingsSystemHealthCard({
       </CardContent>
       <CardFooter className="justify-end">
         {detailed?.versions?.package && (
-          <span className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs mr-2">pkg {detailed.versions.package}</span>
+          <span className="text-xs font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs mr-2">
+            pkg {detailed.versions.package}
+          </span>
         )}
         {detailed?.versions?.api && (
-          <span className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs">api {detailed.versions.api}</span>
+          <span className="text-xs font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs">
+            api {detailed.versions.api}
+          </span>
         )}
       </CardFooter>
     </Card>

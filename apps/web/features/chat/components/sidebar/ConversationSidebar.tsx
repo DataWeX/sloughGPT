@@ -287,7 +287,7 @@ function SidebarContent({
           <span className="text-xs font-medium text-foreground">Conversations</span>
           {unreadCount > 0 && (
             <>
-              <span className="h-4 min-w-4 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium px-1 tabular-nums">
+              <span className="h-4 min-w-4 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium px-1 tabular-nums">
                 {unreadCount}
               </span>
               <button

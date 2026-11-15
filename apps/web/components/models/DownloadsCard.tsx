@@ -129,7 +129,7 @@ export default function DownloadsCard() {
                   <span className="font-medium truncate text-[11px]">{d.model_id}</span>
                   <span
                     className={cn(
-                      'text-[9px] px-1.5 py-0.5 rounded-full font-medium',
+                      'text-[11px] px-1.5 py-0.5 rounded-full font-medium',
                       isActive
                         ? 'bg-primary/10 text-primary'
                         : isFailed
@@ -142,7 +142,7 @@ export default function DownloadsCard() {
                     {d.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 text-[9px] text-muted-foreground/60 shrink-0 tabular-nums">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 shrink-0 tabular-nums">
                   <span>
                     {formatBytes(d.bytes_downloaded)} / {formatBytes(d.total_bytes)}
                   </span>
@@ -157,7 +157,7 @@ export default function DownloadsCard() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={() => handleRetry(d.model_id)}
                   >
                     Retry
@@ -165,7 +165,7 @@ export default function DownloadsCard() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={() => handleVerify(d.model_id)}
                   >
                     Verify
@@ -176,7 +176,7 @@ export default function DownloadsCard() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px] mt-1"
+                  className="h-6 text-xs mt-1"
                   onClick={() => handleCancel(d.model_id)}
                 >
                   Cancel

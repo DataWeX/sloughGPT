@@ -371,10 +371,10 @@ export default function ConsciousnessComparePage() {
                       return (
                         <div key={dim} className="space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] sm:text-xs text-muted-foreground capitalize">
+                            <span className="text-xs sm:text-xs text-muted-foreground capitalize">
                               {dim}
                             </span>
-                            <span className={`text-[10px] tabular-nums ${diffClass}`}>
+                            <span className={`text-xs tabular-nums ${diffClass}`}>
                               {val.toFixed(2)} {getDiffIcon(val, otherVal)}
                             </span>
                           </div>
@@ -400,8 +400,8 @@ export default function ConsciousnessComparePage() {
                         return (
                           <div key={belief} className="flex items-center gap-2">
                             <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                            <span className="flex-1 text-[10px] sm:text-xs truncate">{belief}</span>
-                            <span className={`text-[10px] tabular-nums ${diffClass}`}>
+                            <span className="flex-1 text-xs sm:text-xs truncate">{belief}</span>
+                            <span className={`text-xs tabular-nums ${diffClass}`}>
                               {(confidence * 100).toFixed(0)}% {getDiffIcon(confidence, otherVal)}
                             </span>
                           </div>
@@ -413,7 +413,7 @@ export default function ConsciousnessComparePage() {
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
                       <div className="text-lg font-bold">{data?.episodes ?? '—'}</div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {t('consciousness_compare.episodes')}
                       </div>
                     </div>
@@ -425,7 +425,7 @@ export default function ConsciousnessComparePage() {
                           ? `${data.avg_growth >= 0 ? '+' : ''}${avgGrowthA || (data.avg_growth * 100).toFixed(1)}%`
                           : '—'}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {t('consciousness_compare.avg_growth')}
                       </div>
                     </div>
@@ -433,7 +433,7 @@ export default function ConsciousnessComparePage() {
                       <div className="text-lg font-bold">
                         {data ? `${(data.positive_ratio * 100).toFixed(0)}%` : '—'}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {t('consciousness_compare.positive_ratio')}
                       </div>
                     </div>

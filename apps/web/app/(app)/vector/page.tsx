@@ -139,7 +139,7 @@ export default function VectorPage() {
           <CardTitle className="text-[11px] font-medium">Initialize</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 px-2.5 pb-2.5">
-          <p className="text-[10px] text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/60">
             Choose a vector store backend. ChromaDB persists to disk; in-memory is faster but does
             not survive restarts.
           </p>
@@ -171,7 +171,7 @@ export default function VectorPage() {
           <CardTitle className="text-[11px] font-medium">Add Entries</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 px-2.5 pb-2.5">
-          <p className="text-[10px] text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/60">
             Add text entries to the vector store. Each line becomes one entry.
           </p>
           <textarea
@@ -184,7 +184,7 @@ export default function VectorPage() {
             aria-label="Vector store entries"
           />
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">
+            <span className="text-xs text-muted-foreground/60 font-mono tabular-nums">
               {upsertText.split('\n').filter((t) => t.trim()).length} entries
             </span>
             <Button
@@ -224,7 +224,7 @@ export default function VectorPage() {
 
           {searchResults.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] text-muted-foreground/60">
+              <p className="text-xs text-muted-foreground/60">
                 {searchResults.length} results in {searchTime?.toFixed(1)}ms
               </p>
               {searchResults.map((r, i) => (
@@ -234,20 +234,18 @@ export default function VectorPage() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[11px]">{r.text}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-primary/10 text-primary tabular-nums">
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-primary/10 text-primary tabular-nums">
                       {(r.score * 100).toFixed(1)}%
                     </span>
                   </div>
-                  {r.id && <p className="text-[10px] text-muted-foreground/60 font-mono">{r.id}</p>}
+                  {r.id && <p className="text-xs text-muted-foreground/60 font-mono">{r.id}</p>}
                 </div>
               ))}
             </div>
           )}
 
           {searchResults.length === 0 && !searching && searchQuery && (
-            <p className="text-[10px] text-muted-foreground/60 text-center py-3">
-              No results found
-            </p>
+            <p className="text-xs text-muted-foreground/60 text-center py-3">No results found</p>
           )}
         </CardContent>
       </Card>

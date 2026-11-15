@@ -19,7 +19,8 @@ interface SecurityOverviewCardProps {
 
 function categorize(eventType: string): string {
   const t = eventType.toLowerCase()
-  if (t.includes('auth') || t.includes('login') || t.includes('token') || t.includes('key')) return 'Auth'
+  if (t.includes('auth') || t.includes('login') || t.includes('token') || t.includes('key'))
+    return 'Auth'
   if (t.includes('delet') || t.includes('remov')) return 'Destructive'
   if (t.includes('model') || t.includes('load') || t.includes('inference')) return 'Model'
   if (t.includes('train') || t.includes('checkpoint')) return 'Training'
@@ -36,15 +37,19 @@ const CATEGORY_COLORS: Record<string, string> = {
   System: 'bg-muted text-muted-foreground',
 }
 
-export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: SecurityOverviewCardProps) {
+export function SecurityOverviewCard({
+  logs,
+  apiKeyConfigured,
+  apiKeyCount,
+}: SecurityOverviewCardProps) {
   const categories: Record<string, number> = {}
   for (const log of logs) {
     const cat = categorize(log.event_type)
     categories[cat] = (categories[cat] ?? 0) + 1
   }
 
-  const ips = new Set(logs.filter(l => l.ip).map(l => l.ip))
-  const users = new Set(logs.filter(l => l.user).map(l => l.user))
+  const ips = new Set(logs.filter((l) => l.ip).map((l) => l.ip))
+  const users = new Set(logs.filter((l) => l.user).map((l) => l.user))
 
   const recent = logs.slice(0, 5)
 
@@ -55,7 +60,14 @@ export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: Se
       </CardHeader>
       <CardContent>
         <KpiGrid columns={4} className="mb-3">
-          <StatCard label="API Keys" value={<span className={apiKeyConfigured ? 'text-success' : 'text-warning'}>{apiKeyConfigured ? apiKeyCount : 'None'}</span>} />
+          <StatCard
+            label="API Keys"
+            value={
+              <span className={apiKeyConfigured ? 'text-success' : 'text-warning'}>
+                {apiKeyConfigured ? apiKeyCount : 'None'}
+              </span>
+            }
+          />
           <StatCard label="Events" value={logs.length} />
           <StatCard label="IPs" value={ips.size} />
           <StatCard label="Users" value={users.size} />
@@ -63,31 +75,54 @@ export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: Se
 
         {Object.keys(categories).length > 0 && (
           <div className="mb-3">
-            <div className="text-[10px] text-muted-foreground mb-1.5">Event Categories</div>
+            <div className="text-xs text-muted-foreground mb-1.5">Event Categories</div>
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(categories).sort((a, b) => b[1] - a[1]).map(([cat, count]) => (
-                <span key={cat} className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.System)}>
-                  {cat} ({count})
-                </span>
-              ))}
+              {Object.entries(categories)
+                .sort((a, b) => b[1] - a[1])
+                .map(([cat, count]) => (
+                  <span
+                    key={cat}
+                    className={cn(
+                      'text-[11px] px-1.5 py-0.5 rounded font-medium',
+                      CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.System,
+                    )}
+                  >
+                    {cat} ({count})
+                  </span>
+                ))}
             </div>
           </div>
         )}
 
         {recent.length > 0 && (
           <div>
-            <div className="text-[10px] text-muted-foreground mb-1.5">Recent Activity</div>
+            <div className="text-xs text-muted-foreground mb-1.5">Recent Activity</div>
             <div className="space-y-1">
               {recent.map((log, i) => (
-                <div key={i} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0">
+                <div
+                  key={i}
+                  className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0"
+                >
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', log.event_type.toLowerCase().includes('delete') ? 'bg-destructive' :
-                      log.event_type.toLowerCase().includes('auth') || log.event_type.toLowerCase().includes('login') ? 'bg-primary' :
-                      'bg-success')} />
+                    <span
+                      className={cn(
+                        'h-1.5 w-1.5 rounded-full shrink-0',
+                        log.event_type.toLowerCase().includes('delete')
+                          ? 'bg-destructive'
+                          : log.event_type.toLowerCase().includes('auth') ||
+                              log.event_type.toLowerCase().includes('login')
+                            ? 'bg-primary'
+                            : 'bg-success',
+                      )}
+                    />
                     <span className="font-medium truncate">{log.event_type}</span>
-                    {log.user && <span className="text-muted-foreground truncate">@{log.user}</span>}
+                    {log.user && (
+                      <span className="text-muted-foreground truncate">@{log.user}</span>
+                    )}
                   </div>
-                  <span className="text-muted-foreground shrink-0 ml-2">{timeAgo(log.timestamp)}</span>
+                  <span className="text-muted-foreground shrink-0 ml-2">
+                    {timeAgo(log.timestamp)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -95,7 +130,9 @@ export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: Se
         )}
 
         {logs.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-2">No audit events recorded.</p>
+          <p className="text-sm text-muted-foreground text-center py-2">
+            No audit events recorded.
+          </p>
         )}
       </CardContent>
     </Card>

@@ -76,7 +76,7 @@ export function EpisodeDetailDialog({
                           }}
                         />
                       </div>
-                      <span className="text-[10px] text-muted-foreground w-8 text-right">
+                      <span className="text-xs text-muted-foreground w-8 text-right">
                         {(v as number).toFixed(2)}
                       </span>
                     </div>

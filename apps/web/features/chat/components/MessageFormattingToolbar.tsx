@@ -69,7 +69,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className="text-[10px] h-6"
+        className="text-xs h-6"
         onClick={() => setExpanded(!expanded)}
         title="Formatting options"
       >
@@ -84,7 +84,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
               variant="ghost"
               size="sm"
               className={cn(
-                'text-[10px] h-6',
+                'text-xs h-6',
                 selectedFormat === option.prefix && 'bg-primary/20 text-primary',
               )}
               onClick={() => handleFormat(option.prefix, option.suffix)}
@@ -99,7 +99,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className={cn('text-[10px] h-6', copied && 'bg-success/20 text-success')}
+        className={cn('text-xs h-6', copied && 'bg-success/20 text-success')}
         onClick={handleCopy}
       >
         {copied ? 'Copied!' : 'Copy'}
@@ -109,7 +109,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
         <Button
           variant="ghost"
           size="sm"
-          className="text-[10px] h-6 text-destructive"
+          className="text-xs h-6 text-destructive"
           onClick={onClear}
         >
           Clear

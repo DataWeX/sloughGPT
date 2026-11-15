@@ -159,7 +159,7 @@ export const ChatInputRow = memo(function ChatInputRow({
         {value.length > 0 && (
           <span
             className={cn(
-              'text-[10px] tabular-nums self-end mb-2 mr-1',
+              'text-xs tabular-nums self-end mb-2 mr-1',
               value.length > 4000
                 ? 'text-destructive'
                 : value.length > 2000

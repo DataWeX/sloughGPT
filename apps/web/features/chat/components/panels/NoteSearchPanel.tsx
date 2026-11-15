@@ -116,7 +116,7 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
 
           {!loading && results.length > 0 && (
             <div className="py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider px-4 py-1">
+              <p className="text-xs text-muted-foreground/60 uppercase tracking-wider px-4 py-1">
                 {results.length} note{results.length !== 1 ? 's' : ''} found
               </p>
               {results.map((note) => (
@@ -130,10 +130,10 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
                   className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[10px] text-muted-foreground/50 font-mono">
+                    <span className="text-xs text-muted-foreground/50 font-mono">
                       {note.sessionId.slice(0, 8)}...
                     </span>
-                    <span className="text-[10px] text-muted-foreground/40">
+                    <span className="text-xs text-muted-foreground/40">
                       {new Date(note.updatedAt).toLocaleDateString()}
                     </span>
                   </div>

@@ -52,7 +52,7 @@ export function StatusBanner({
         {onRetry && (
           <button
             type="button"
-            className="underline text-current opacity-80 hover:opacity-100 text-[10px]"
+            className="underline text-current opacity-80 hover:opacity-100 text-xs"
             onClick={onRetry}
             aria-label="Retry"
           >
@@ -62,7 +62,7 @@ export function StatusBanner({
         {(dismissible || onDismiss) && (
           <button
             type="button"
-            className="underline text-current opacity-80 hover:opacity-100 text-[10px]"
+            className="underline text-current opacity-80 hover:opacity-100 text-xs"
             onClick={handleDismiss}
             aria-label="Dismiss"
           >

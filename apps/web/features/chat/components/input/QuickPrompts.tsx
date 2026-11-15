@@ -155,7 +155,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
           <Button
             variant="outline"
             size="sm"
-            className="h-6 text-[10px] px-2"
+            className="h-6 text-xs px-2"
             onClick={async () => {
               await resetToDefaults()
               await refresh()
@@ -166,7 +166,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
           <Button
             variant="outline"
             size="sm"
-            className="h-6 text-[10px] px-2"
+            className="h-6 text-xs px-2"
             onClick={() => setShowCreate(true)}
           >
             + New
@@ -203,13 +203,13 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
             aria-label="New prompt template"
           />
           <div className="flex gap-1">
-            <Button size="sm" className="h-6 text-[10px] flex-1" onClick={handleCreate}>
+            <Button size="sm" className="h-6 text-xs flex-1" onClick={handleCreate}>
               Save
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={() => setShowCreate(false)}
             >
               Cancel
@@ -223,7 +223,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
       ) : (
         Object.entries(filtered).map(([category, prompts]) => (
           <div key={category}>
-            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1 mt-2 first:mt-0">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1 mt-2 first:mt-0">
               {CATEGORY_LABELS[category] || category}
             </div>
             <div className="space-y-1">
@@ -253,7 +253,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                       <div className="flex gap-1">
                         <Button
                           size="sm"
-                          className="h-5 text-[10px] px-2 flex-1"
+                          className="h-5 text-xs px-2 flex-1"
                           onClick={() => handleEdit(p.id)}
                         >
                           Save
@@ -261,7 +261,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-5 text-[10px] px-2"
+                          className="h-5 text-xs px-2"
                           onClick={() => setEditingId(null)}
                         >
                           Cancel
@@ -284,10 +284,12 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                           </span>
                           <span className="text-xs font-medium">{p.name}</span>
                           {p.category === 'custom' && (
-                            <span className="text-[9px] text-muted-foreground ml-auto">custom</span>
+                            <span className="text-[11px] text-muted-foreground ml-auto">
+                              custom
+                            </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
+                        <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                           {p.description}
                         </div>
                       </button>
@@ -295,7 +297,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-5 text-[9px] px-1.5"
+                          className="h-5 text-[11px] px-1.5"
                           onClick={() => {
                             setEditingId(p.id)
                             setEditName(p.name)
@@ -309,7 +311,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 text-[9px] px-1.5 text-error hover:text-error"
+                            className="h-5 text-[11px] px-1.5 text-error hover:text-error"
                             onClick={() => handleDelete(p.id)}
                           >
                             Delete

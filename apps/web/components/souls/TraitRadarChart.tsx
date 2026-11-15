@@ -1,7 +1,14 @@
 'use client'
 
 import { memo, useMemo } from 'react'
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts'
+import {
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+} from 'recharts'
 
 interface TraitRadarChartProps {
   data: Record<string, number>
@@ -38,17 +45,21 @@ const LABEL_MAP: Record<string, string> = {
 export default memo(function TraitRadarChart({ data, label, color }: TraitRadarChartProps) {
   const entries = Object.entries(data)
 
-  const chartData = useMemo(() => entries.map(([name, value]) => ({
-    trait: LABEL_MAP[name] || name.replace(/_/g, ' '),
-    value: Math.round(value * 100),
-    fullName: name.replace(/_/g, ' '),
-  })), [entries])
+  const chartData = useMemo(
+    () =>
+      entries.map(([name, value]) => ({
+        trait: LABEL_MAP[name] || name.replace(/_/g, ' '),
+        value: Math.round(value * 100),
+        fullName: name.replace(/_/g, ' '),
+      })),
+    [entries],
+  )
 
   if (entries.length === 0) return null
 
   return (
     <div className="flex flex-col items-center">
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
         {label}
       </span>
       <ResponsiveContainer width="100%" height={180}>
@@ -56,29 +67,24 @@ export default memo(function TraitRadarChart({ data, label, color }: TraitRadarC
           <PolarGrid stroke="rgb(var(--border))" strokeOpacity={0.4} />
           <PolarAngleAxis
             dataKey="trait"
-            tick={{ fontSize: 8, fill: 'rgb(var(--muted-foreground))' }}
+            tick={{ fontSize: 11, fill: 'rgb(var(--muted-foreground))' }}
             tickLine={false}
           />
-          <PolarRadiusAxis
-            angle={30}
-              domain={[0, 100]}
-              tick={false}
-              axisLine={false}
-            />
-            <Radar
-              name={label}
-              dataKey="value"
-              stroke={color}
-              fill={color}
-              fillOpacity={0.15}
-              strokeWidth={1.5}
-              dot={false}
+          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+          <Radar
+            name={label}
+            dataKey="value"
+            stroke={color}
+            fill={color}
+            fillOpacity={0.15}
+            strokeWidth={1.5}
+            dot={false}
           />
         </RadarChart>
       </ResponsiveContainer>
       <div className="flex flex-wrap justify-center gap-x-3 gap-y-0.5 mt-1">
-        {chartData.map(d => (
-          <span key={d.trait} className="text-[9px] text-muted-foreground">
+        {chartData.map((d) => (
+          <span key={d.trait} className="text-[11px] text-muted-foreground">
             {d.trait}: <span className="font-mono font-medium">{d.value}</span>
           </span>
         ))}

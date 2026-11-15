@@ -44,7 +44,7 @@ function SourceGroup({ source }: { source: QuickImportSource }) {
             {source.label}
           </h4>
         </div>
-        <span className="text-[10px] tabular-nums text-muted-foreground/60">
+        <span className="text-xs tabular-nums text-muted-foreground/60">
           {source.presets.length} preset{source.presets.length !== 1 ? 's' : ''}
         </span>
       </div>

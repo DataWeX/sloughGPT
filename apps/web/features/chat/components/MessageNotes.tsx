@@ -42,14 +42,17 @@ export const MessageNotes = memo(function MessageNotes({
     setDraft('')
   }, [])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      handleSave()
-    } else if (e.key === 'Escape') {
-      handleCancel()
-    }
-  }, [handleSave, handleCancel])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        handleSave()
+      } else if (e.key === 'Escape') {
+        handleCancel()
+      }
+    },
+    [handleSave, handleCancel],
+  )
 
   if (!sessionId) return null
 
@@ -60,7 +63,8 @@ export const MessageNotes = memo(function MessageNotes({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Add a note..." aria-label="Add a note"
+          placeholder="Add a note..."
+          aria-label="Add a note"
           className="w-full text-xs bg-transparent border-0 p-0 resize-none focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50 min-h-[60px]"
           autoFocus
         />
@@ -85,9 +89,7 @@ export const MessageNotes = memo(function MessageNotes({
           >
             <IconX className="h-3 w-3" />
           </Button>
-          <span className="text-[10px] text-muted-foreground ml-1">
-            Ctrl+Enter to save
-          </span>
+          <span className="text-xs text-muted-foreground ml-1">Ctrl+Enter to save</span>
         </div>
       </div>
     )
@@ -117,7 +119,7 @@ export const MessageNotes = memo(function MessageNotes({
     <Button
       variant="ghost"
       size="sm"
-      className={cn('text-[10px] h-5 text-muted-foreground/50 hover:text-muted-foreground', className)}
+      className={cn('text-xs h-5 text-muted-foreground/50 hover:text-muted-foreground', className)}
       onClick={handleStartEdit}
     >
       <IconEdit className="h-3 w-3 mr-1" />

@@ -172,7 +172,7 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
         >
           <span
             className={cn(
-              'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
+              'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
               item.type === 'agent' ? 'bg-primary/15 text-primary' : 'bg-success/15 text-success',
             )}
           >
@@ -181,12 +181,10 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{item.name}</p>
             {item.description && (
-              <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">
-                {item.description}
-              </p>
+              <p className="text-xs text-muted-foreground/60 truncate mt-0.5">{item.description}</p>
             )}
           </div>
-          <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums">
+          <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">
             {i + 1}/{scored.length}
           </span>
         </button>

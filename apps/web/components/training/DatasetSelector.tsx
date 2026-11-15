@@ -47,13 +47,13 @@ export function DatasetSelector({
     <div className="flex items-center gap-1.5">
       {visible.length === 0 ? (
         <>
-          <span className="text-[10px] text-muted-foreground/60">
+          <span className="text-xs text-muted-foreground/60">
             No datasets — import one to get started.
           </span>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-[10px]"
+            className="h-7 text-xs"
             onClick={() => datasets.setImportModalOpen(true)}
           >
             + Import
@@ -80,7 +80,7 @@ export function DatasetSelector({
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-[10px]"
+              className="h-7 text-xs"
               onClick={() => datasets.setImportModalOpen(true)}
             >
               + Import

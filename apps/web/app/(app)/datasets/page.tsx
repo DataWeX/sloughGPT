@@ -208,7 +208,7 @@ export default function DatasetsPage() {
                         {ds.tags.slice(0, 3).map((t) => (
                           <span
                             key={t}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
+                            className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
                           >
                             {t}
                           </span>
@@ -327,7 +327,7 @@ export default function DatasetsPage() {
                       <p className="text-xs font-medium truncate text-muted-foreground">
                         {ds.name}
                       </p>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                         <span>{ds.kind}</span>
                         {ds.has_corpus === false ? (
                           <span>no corpus</span>

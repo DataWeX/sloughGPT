@@ -127,7 +127,7 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
             className="w-full text-xs bg-transparent border rounded px-2 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           />
           {query && (
-            <div className="mt-2 text-[10px] text-muted-foreground">
+            <div className="mt-2 text-xs text-muted-foreground">
               {filtered.length} of {sessions.length} sessions
             </div>
           )}
@@ -149,7 +149,7 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
             >
               <span>{option.label}</span>
               {sort === option.value && (
-                <span className="text-[10px]">{direction === 'desc' ? '↓' : '↑'}</span>
+                <span className="text-xs">{direction === 'desc' ? '↓' : '↑'}</span>
               )}
             </button>
           ))}

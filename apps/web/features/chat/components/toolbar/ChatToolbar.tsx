@@ -70,7 +70,7 @@ export const ChatToolbar = memo(function ChatToolbar({
             effect NOW, so the header can't go stale against the mode tabs. */}
         {ctx.mode && (
           <span
-            className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 shrink-0"
+            className="hidden sm:inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 shrink-0"
             aria-label={`Active mode: ${MODE_LABELS[ctx.mode.current]}`}
           >
             {MODE_LABELS[ctx.mode.current]}
@@ -78,7 +78,7 @@ export const ChatToolbar = memo(function ChatToolbar({
         )}
 
         {ctx.actions.hasMessages && (
-          <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded shrink-0 tabular-nums">
+          <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded shrink-0 tabular-nums">
             <span className="font-mono">{ctx.actions.messageCount}</span>
             <span>msgs</span>
           </span>

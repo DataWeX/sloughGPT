@@ -123,7 +123,7 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
           <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/30" />
           <XAxis
             dataKey="time"
-            tick={{ fontSize: 10 }}
+            tick={{ fontSize: 11 }}
             tickLine={false}
             stroke="rgb(var(--muted-foreground))"
             interval="preserveStartEnd"
@@ -133,7 +133,7 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
             domain={[0, 1]}
             ticks={[0, 0.25, 0.5, 0.75, 1]}
             tickFormatter={(value: number) => formatPercent(value)}
-            tick={{ fontSize: 10 }}
+            tick={{ fontSize: 11 }}
             tickLine={false}
             stroke="rgb(var(--muted-foreground))"
             width={36}

@@ -19,9 +19,12 @@ function statusVariant(status: string): 'success' | 'error' | 'warning' | 'secon
 }
 
 export function RegistryHealthCard({ models, stats }: RegistryHealthCardProps) {
-  const loaded = useMemo(() => models.filter(m => m.status === 'loaded'), [models])
-  const failed = useMemo(() => models.filter(m => m.status === 'failed'), [models])
-  const other = useMemo(() => models.filter(m => m.status !== 'loaded' && m.status !== 'failed'), [models])
+  const loaded = useMemo(() => models.filter((m) => m.status === 'loaded'), [models])
+  const failed = useMemo(() => models.filter((m) => m.status === 'failed'), [models])
+  const other = useMemo(
+    () => models.filter((m) => m.status !== 'loaded' && m.status !== 'failed'),
+    [models],
+  )
 
   if (models.length === 0) return null
 
@@ -35,7 +38,7 @@ export function RegistryHealthCard({ models, stats }: RegistryHealthCardProps) {
               <Badge label="Circuit Open" variant="error" size="sm" />
             )}
           </div>
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span>{loaded.length} loaded</span>
             {failed.length > 0 && <span className="text-destructive">{failed.length} failed</span>}
           </div>
@@ -43,18 +46,28 @@ export function RegistryHealthCard({ models, stats }: RegistryHealthCardProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-1.5">
-          {models.map(m => {
+          {models.map((m) => {
             const metrics = m.metrics as Record<string, unknown> | undefined
             const failures = metrics?.failure_count as number | undefined
             const lastHealth = metrics?.last_health_check as string | undefined
             const requestCount = metrics?.request_count as number | undefined
 
             return (
-              <div key={m.model_id} className="flex items-center justify-between text-[11px] py-1 border-b border-border/30 last:border-0">
+              <div
+                key={m.model_id}
+                className="flex items-center justify-between text-[11px] py-1 border-b border-border/30 last:border-0"
+              >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', m.status === 'loaded' ? 'bg-success' :
-                    m.status === 'failed' ? 'bg-destructive' :
-                    'bg-muted-foreground/30')} />
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full shrink-0',
+                      m.status === 'loaded'
+                        ? 'bg-success'
+                        : m.status === 'failed'
+                          ? 'bg-destructive'
+                          : 'bg-muted-foreground/30',
+                    )}
+                  />
                   <span className="font-medium truncate">{m.model_id}</span>
                   <Badge label={m.status} variant={statusVariant(m.status)} size="sm" />
                 </div>
@@ -62,15 +75,9 @@ export function RegistryHealthCard({ models, stats }: RegistryHealthCardProps) {
                   {failures != null && failures > 0 && (
                     <span className="text-destructive">{failures} failures</span>
                   )}
-                  {requestCount != null && (
-                    <span>{requestCount} reqs</span>
-                  )}
-                  {lastHealth && (
-                    <span>{timeAgo(lastHealth)}</span>
-                  )}
-                  {m.registered_at && !lastHealth && (
-                    <span>{timeAgo(m.registered_at)}</span>
-                  )}
+                  {requestCount != null && <span>{requestCount} reqs</span>}
+                  {lastHealth && <span>{timeAgo(lastHealth)}</span>}
+                  {m.registered_at && !lastHealth && <span>{timeAgo(m.registered_at)}</span>}
                 </div>
               </div>
             )

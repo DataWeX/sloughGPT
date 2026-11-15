@@ -33,10 +33,14 @@ function severityLevel(message: string): { label: string; color: string } {
   return { label: 'Error', color: 'bg-muted text-muted-foreground' }
 }
 
-function computeInsights(grouped: GroupedError[], recent: Array<{ message: string; timestamp: string }>, total: number) {
+function computeInsights(
+  grouped: GroupedError[],
+  recent: Array<{ message: string; timestamp: string }>,
+  total: number,
+) {
   if (grouped.length === 0 && recent.length === 0) return null
 
-  const topError = grouped.length > 0 ? grouped.reduce((a, b) => a.count > b.count ? a : b) : null
+  const topError = grouped.length > 0 ? grouped.reduce((a, b) => (a.count > b.count ? a : b)) : null
   const severityCounts: Record<string, number> = {}
   for (const g of grouped) {
     const { label } = severityLevel(g.message)
@@ -45,11 +49,20 @@ function computeInsights(grouped: GroupedError[], recent: Array<{ message: strin
 
   const recentWindow = 3600000
   const now = Date.now()
-  const recentErrors = recent.filter(r => {
-    try { return now - new Date(r.timestamp).getTime() < recentWindow } catch { return false }
+  const recentErrors = recent.filter((r) => {
+    try {
+      return now - new Date(r.timestamp).getTime() < recentWindow
+    } catch {
+      return false
+    }
   })
 
-  return { topError, severityCounts, recentCount: recentErrors.length, uniqueErrors: grouped.length }
+  return {
+    topError,
+    severityCounts,
+    recentCount: recentErrors.length,
+    uniqueErrors: grouped.length,
+  }
 }
 
 export function ErrorInsightsCard({ grouped, recent, total }: ErrorInsightsCardProps) {
@@ -66,28 +79,43 @@ export function ErrorInsightsCard({ grouped, recent, total }: ErrorInsightsCardP
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Total
+            </div>
             <div className="text-sm font-semibold">{total}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Unique</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Unique
+            </div>
             <div className="text-sm font-semibold">{insights.uniqueErrors}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last Hour</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Last Hour
+            </div>
             <div className="text-sm font-semibold">{insights.recentCount}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Top Error</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Top Error
+            </div>
             <div className="text-sm font-semibold truncate">{insights.topError?.count ?? 0}x</div>
           </div>
         </div>
         {severityEntries.length > 0 && (
           <div className="space-y-1.5">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">By Severity</div>
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              By Severity
+            </div>
             {severityEntries.map(([label, count]) => (
               <div key={label} className="flex items-center gap-2">
-                <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', severityEntriesColors[label] ?? 'bg-muted text-muted-foreground')}>
+                <span
+                  className={cn(
+                    'text-[11px] px-1.5 py-0.5 rounded font-medium',
+                    severityEntriesColors[label] ?? 'bg-muted text-muted-foreground',
+                  )}
+                >
                   {label}
                 </span>
                 <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
@@ -96,7 +124,9 @@ export function ErrorInsightsCard({ grouped, recent, total }: ErrorInsightsCardP
                     style={{ width: `${(count / total) * 100}%` }}
                   />
                 </div>
-                <span className="text-[10px] font-mono text-muted-foreground w-8 text-right">{count}</span>
+                <span className="text-xs font-mono text-muted-foreground w-8 text-right">
+                  {count}
+                </span>
               </div>
             ))}
           </div>

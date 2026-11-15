@@ -107,7 +107,7 @@ export const MessageThreading = memo(function MessageThreading({
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium">Threads</span>
-          <span className="text-[10px] text-muted-foreground">({threads.length})</span>
+          <span className="text-xs text-muted-foreground">({threads.length})</span>
         </div>
       </div>
 
@@ -129,10 +129,10 @@ export const MessageThreading = memo(function MessageThreading({
                     }
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                         Thread
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {thread.replies.length} {thread.replies.length === 1 ? 'reply' : 'replies'}
                       </span>
                     </div>
@@ -158,7 +158,7 @@ export const MessageThreading = memo(function MessageThreading({
                   <div className="mt-2 space-y-2 pl-4 border-l-2 border-primary/20">
                     {thread.replies.map((reply) => (
                       <div key={reply.id} className="text-xs">
-                        <span className="text-[10px] text-muted-foreground mr-1">
+                        <span className="text-xs text-muted-foreground mr-1">
                           {reply.role === 'user' ? 'You' : 'AI'}:
                         </span>
                         {reply.content.slice(0, 80)}
@@ -184,7 +184,7 @@ export const MessageThreading = memo(function MessageThreading({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-[10px] h-5"
+                            className="text-xs h-5"
                             onClick={handleSubmitReply}
                             disabled={!replyDraft.trim()}
                           >
@@ -194,7 +194,7 @@ export const MessageThreading = memo(function MessageThreading({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-[10px] h-5"
+                            className="text-xs h-5"
                             onClick={handleCancelReply}
                           >
                             Cancel
@@ -205,7 +205,7 @@ export const MessageThreading = memo(function MessageThreading({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-[10px] h-5"
+                        className="text-xs h-5"
                         onClick={() => handleStartReply(thread.parentMessageId)}
                       >
                         Reply to thread
@@ -220,7 +220,7 @@ export const MessageThreading = memo(function MessageThreading({
       </div>
 
       {messagesWithThreads.length > 0 && (
-        <div className="px-3 py-2 border-t text-[10px] text-muted-foreground">
+        <div className="px-3 py-2 border-t text-xs text-muted-foreground">
           {messagesWithThreads.length} messages with threads
         </div>
       )}

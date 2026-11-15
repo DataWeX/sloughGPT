@@ -125,7 +125,7 @@ export function ConsciousnessQuickActions() {
             <span className="text-sm font-semibold text-zinc-100">
               {t('consciousness_quick_actions.title')}
             </span>
-            <span className="text-[10px] text-zinc-500">Ctrl+Shift+Q</span>
+            <span className="text-xs text-zinc-500">Ctrl+Shift+Q</span>
           </div>
 
           <div className="p-2 space-y-1">
@@ -174,7 +174,7 @@ export function ConsciousnessQuickActions() {
 
           {result && (
             <div className="px-4 py-3 border-t border-zinc-700 max-h-48 overflow-auto">
-              <div className="text-[10px] font-medium text-zinc-500 mb-1 uppercase tracking-wider">
+              <div className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">
                 {t(`consciousness_quick_actions.label_${result.action}`)}
               </div>
               <pre className="text-xs text-zinc-400 whitespace-pre-wrap break-all font-mono">

@@ -24,7 +24,7 @@ function StatBox({ label, value }: { label: string; value: string | number | boo
   const display = typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value
   return (
     <div className="rounded-lg border border-border/50 bg-muted/30 p-2.5 space-y-0.5">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="text-sm font-medium font-mono truncate" title={String(display)}>
         {display}
       </div>

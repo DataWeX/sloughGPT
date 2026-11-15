@@ -43,7 +43,7 @@ export function SearchResultsCard({ groups, total, query, onNavigate }: SearchRe
           <Card key={group.type} className="mb-4">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs flex items-center gap-2">
-                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${group.color}`}>
+                <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${group.color}`}>
                   {group.label}
                 </span>
                 <span className="text-muted-foreground">({group.items.length})</span>
@@ -67,7 +67,7 @@ export function SearchResultsCard({ groups, total, query, onNavigate }: SearchRe
                   </>
                 )
                 const rowClass =
-                  'w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50 transition-colors text-left group'
+                  'w-full flex items-center justify-between px-3 py-2 rounded-md text-xs hover:bg-muted/50 border border-transparent hover:border-border/50 transition-colors text-left group'
                 // File-backed groups (docs/notes/kanban) have no viewer yet —
                 // render as inert rows rather than dead navigation.
                 return group.link ? (

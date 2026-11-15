@@ -148,7 +148,7 @@ export function LearnSection() {
     <>
       <div className="flex items-center justify-between border-b border-border/30 pb-1.5 pt-0.5">
         <SectionLabel>Continual Learning</SectionLabel>
-        <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+        <span className="text-xs text-muted-foreground/60 tabular-nums">
           {status
             ? `${status.total_tokens_ingested} tokens · ${status.feeds_subscribed} feeds`
             : 'Search the web and learn'}
@@ -171,7 +171,7 @@ export function LearnSection() {
               { label: 'Buffer', value: `${status.buffer_size}/${status.buffer_capacity}` },
             ].map((s) => (
               <div key={s.label} className="rounded-lg bg-muted/30 p-2.5 text-center">
-                <div className="text-[10px] text-muted-foreground/60">{s.label}</div>
+                <div className="text-xs text-muted-foreground/60">{s.label}</div>
                 <div className="text-[13px] font-mono font-medium tabular-nums">{s.value}</div>
               </div>
             ))}
@@ -192,7 +192,7 @@ export function LearnSection() {
               if (t === 'feeds') handleLoadFeeds()
             }}
             className={cn(
-              'px-2.5 py-1 text-[10px] font-medium rounded-t transition-colors',
+              'px-2.5 py-1 text-xs font-medium rounded-t transition-colors',
               tab === t
                 ? 'bg-primary/10 text-primary border-b-2 border-primary'
                 : 'text-muted-foreground/60 hover:text-foreground',
@@ -220,11 +220,11 @@ export function LearnSection() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="Search query..."
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
               />
               <Button
                 size="sm"
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
                 onClick={handleSearch}
                 disabled={searching || !searchQuery.trim()}
               >
@@ -244,17 +244,17 @@ export function LearnSection() {
               </div>
             )}
             <div>
-              <div className="text-[10px] text-muted-foreground/60 mb-1">From URL</div>
+              <div className="text-xs text-muted-foreground/60 mb-1">From URL</div>
               <div className="flex gap-1.5">
                 <Input
                   value={ingestUrl}
                   onChange={(e) => setIngestUrl(e.target.value)}
                   placeholder="https://..."
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                 />
                 <Button
                   size="sm"
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                   onClick={handleIngestUrl}
                   disabled={ingesting || !ingestUrl.trim()}
                 >
@@ -263,7 +263,7 @@ export function LearnSection() {
               </div>
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground/60 mb-1">From Text</div>
+              <div className="text-xs text-muted-foreground/60 mb-1">From Text</div>
               <Textarea
                 value={ingestText}
                 onChange={(e) => setIngestText(e.target.value)}
@@ -273,7 +273,7 @@ export function LearnSection() {
               />
               <Button
                 size="sm"
-                className="h-6 text-[10px] mt-1"
+                className="h-6 text-xs mt-1"
                 onClick={handleIngestText}
                 disabled={ingesting || !ingestText.trim()}
               >
@@ -305,12 +305,12 @@ export function LearnSection() {
               value={knowledgeQuery}
               onChange={(e) => setKnowledgeQuery(e.target.value)}
               placeholder="Filter by topic..."
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={handleLoadKnowledge}
             >
               Search
@@ -323,12 +323,9 @@ export function LearnSection() {
           ) : (
             <div className="space-y-1 max-h-80 overflow-y-auto">
               {knowledge.map((f, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-border/40 px-2.5 py-1.5 text-[10px]"
-                >
+                <div key={i} className="rounded-lg border border-border/40 px-2.5 py-1.5 text-xs">
                   <div className="truncate">{f.content}</div>
-                  <div className="text-[9px] text-muted-foreground/60 mt-0.5">
+                  <div className="text-[11px] text-muted-foreground/60 mt-0.5">
                     {f.topic && <span className="bg-muted/50 px-1 rounded mr-0.5">{f.topic}</span>}
                     {f.source}
                   </div>
@@ -351,9 +348,9 @@ export function LearnSection() {
                 value={newFeedUrl}
                 onChange={(e) => setNewFeedUrl(e.target.value)}
                 placeholder="RSS feed URL..."
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
               />
-              <Button size="sm" className="h-6 text-[10px]" onClick={handleSubscribeFeed}>
+              <Button size="sm" className="h-6 text-xs" onClick={handleSubscribeFeed}>
                 Subscribe
               </Button>
             </div>
@@ -364,7 +361,7 @@ export function LearnSection() {
                 {feeds.map((f, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between text-[10px] py-1 border-b border-border/20"
+                    className="flex items-center justify-between text-xs py-1 border-b border-border/20"
                   >
                     <span className="truncate">{f.url}</span>
                     <span className="text-muted-foreground/60 shrink-0 ml-1.5 tabular-nums">

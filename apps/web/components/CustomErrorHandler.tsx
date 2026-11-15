@@ -82,19 +82,17 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
                       ? 'Page Not Found'
                       : 'Something went wrong'}
                 {errorType && (
-                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
+                  <span className="text-[11px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
                     {errorType}
                   </span>
                 )}
               </CardTitle>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5 break-words">
-                {errorMessage}
-              </p>
+              <p className="text-xs text-muted-foreground/60 mt-0.5 break-words">{errorMessage}</p>
             </div>
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}
-              className="text-[9px] text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
+              className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
             >
               {showDetails ? 'Hide' : 'Details'}
             </button>
@@ -102,10 +100,10 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
         </CardHeader>
         <CardContent className="space-y-3">
           {showDetails && (
-            <div className="rounded-md bg-muted p-2 text-[10px] font-mono space-y-2 max-h-56 overflow-y-auto">
+            <div className="rounded-md bg-muted p-2 text-xs font-mono space-y-2 max-h-56 overflow-y-auto">
               {digest && (
                 <div>
-                  <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">
+                  <span className="text-muted-foreground/60 text-[11px] uppercase tracking-wider">
                     Digest
                   </span>
                   <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">
@@ -116,7 +114,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               {stackFrames.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">
+                    <span className="text-muted-foreground/60 text-[11px] uppercase tracking-wider">
                       Stack Trace
                     </span>
                     <button
@@ -138,7 +136,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               {error.stack && stackFrames.length === 0 && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">
+                    <span className="text-muted-foreground/60 text-[11px] uppercase tracking-wider">
                       Raw Stack
                     </span>
                     <button
@@ -175,12 +173,12 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
           </div>
 
           {isNetworkError && (
-            <p className="text-[9px] text-muted-foreground/60 text-center">
+            <p className="text-[11px] text-muted-foreground/60 text-center">
               Check your internet connection and try again. The service might be unreachable.
             </p>
           )}
 
-          <p className="text-[9px] text-muted-foreground/60 text-center">{MAN_FULL_NAME}</p>
+          <p className="text-[11px] text-muted-foreground/60 text-center">{MAN_FULL_NAME}</p>
         </CardContent>
       </Card>
     </div>

@@ -33,7 +33,7 @@ export function DashboardHealthStatus({
             <button
               onClick={onRecheck}
               disabled={checking}
-              className="text-[10px] text-muted-foreground hover:text-foreground"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               {checking ? 'Checking...' : 'Re-check'}
             </button>

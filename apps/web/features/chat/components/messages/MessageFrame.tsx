@@ -50,7 +50,7 @@ export function MessageFrame({
             data-message-frame-footer
             className={cn(
               'mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5',
-              'select-none font-mono text-[10px] leading-5 text-muted-foreground/60',
+              'select-none font-mono text-xs leading-5 text-muted-foreground/60',
             )}
           >
             {footer}

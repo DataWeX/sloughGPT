@@ -398,7 +398,7 @@ export default function ConsciousnessPage() {
               <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-4">
                 {Object.entries(qualia).map(([key, value]) => (
                   <div key={key} className="space-y-1">
-                    <div className="text-[10px] sm:text-xs font-medium text-muted-foreground capitalize">
+                    <div className="text-xs sm:text-xs font-medium text-muted-foreground capitalize">
                       {key}
                     </div>
                     <div className="flex items-center gap-2">

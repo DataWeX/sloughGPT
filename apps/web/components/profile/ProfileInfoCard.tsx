@@ -28,29 +28,29 @@ export function ProfileInfoCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-1">
-          <label className="text-[10px] text-muted-foreground">Username</label>
-          <Input value={username} disabled className="h-6 text-[10px] opacity-60" />
+          <label className="text-xs text-muted-foreground">Username</label>
+          <Input value={username} disabled className="h-6 text-xs opacity-60" />
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] text-muted-foreground">Display Name</label>
+          <label className="text-xs text-muted-foreground">Display Name</label>
           <Input
             value={displayName}
             onChange={(e) => onDisplayNameChange?.(e.target.value)}
             placeholder="Your display name"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] text-muted-foreground">Email</label>
+          <label className="text-xs text-muted-foreground">Email</label>
           <Input
             value={email}
             onChange={(e) => onEmailChange?.(e.target.value)}
             type="email"
             placeholder="your@email.com"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
         </div>
-        <Button size="sm" className="h-6 text-[10px]" onClick={onSave} disabled={saving}>
+        <Button size="sm" className="h-6 text-xs" onClick={onSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </CardContent>

@@ -14,17 +14,19 @@ interface TraitEditorProps {
 const GROUPS = SOUL_GROUPS
 
 function formatTraitName(name: string): string {
-  return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEditorProps) {
-  const [weights, setWeights] = useState(() => JSON.parse(JSON.stringify(traitWeights)) as Record<string, Record<string, number>>)
+  const [weights, setWeights] = useState(
+    () => JSON.parse(JSON.stringify(traitWeights)) as Record<string, Record<string, number>>,
+  )
   const [dirty, setDirty] = useState(false)
 
   const archetype = useMemo(() => deriveArchetype(weights), [weights])
 
   const handleChange = useCallback((group: string, trait: string, value: number) => {
-    setWeights(prev => {
+    setWeights((prev) => {
       const next = { ...prev }
       next[group] = { ...next[group], [trait]: value / 100 }
       return next
@@ -49,14 +51,14 @@ export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEdit
 
       {/* Trait sliders by group */}
       <div className="space-y-4">
-        {GROUPS.map(group => {
+        {GROUPS.map((group) => {
           const traits = weights[group.key]
           if (!traits || Object.keys(traits).length === 0) return null
           return (
             <div key={group.key}>
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: group.color }} />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {group.label}
                 </span>
               </div>
@@ -65,7 +67,7 @@ export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEdit
                   const pct = Math.round((val ?? 0.5) * 100)
                   return (
                     <div key={name} className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground w-20 truncate shrink-0">
+                      <span className="text-xs text-muted-foreground w-20 truncate shrink-0">
                         {formatTraitName(name)}
                       </span>
                       <Slider
@@ -77,7 +79,10 @@ export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEdit
                         className="flex-1"
                         aria-label={`${formatTraitName(name)}: ${pct}`}
                       />
-                      <span className="text-[10px] font-mono tabular-nums w-6 text-right" style={{ color: group.color }}>
+                      <span
+                        className="text-xs font-mono tabular-nums w-6 text-right"
+                        style={{ color: group.color }}
+                      >
                         {pct}
                       </span>
                     </div>
@@ -101,13 +106,17 @@ export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEdit
         </button>
         <button
           type="button"
-          onClick={() => { setWeights(JSON.parse(JSON.stringify(traitWeights))); setDirty(false); onReset() }}
+          onClick={() => {
+            setWeights(JSON.parse(JSON.stringify(traitWeights)))
+            setDirty(false)
+            onReset()
+          }}
           disabled={!dirty}
           className="text-[11px] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground border border-border/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Reset
         </button>
-        <span className="text-[9px] text-muted-foreground/60 ml-auto">
+        <span className="text-[11px] text-muted-foreground/60 ml-auto">
           {archetype.description}
         </span>
       </div>

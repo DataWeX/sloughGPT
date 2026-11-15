@@ -23,7 +23,7 @@ export function AccountDetailsCard({
         <CardTitle className="text-xs">Account Details</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 gap-2 text-[10px]">
+        <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <span className="text-muted-foreground">User ID: </span>
             <span className="font-mono">{userId}</span>

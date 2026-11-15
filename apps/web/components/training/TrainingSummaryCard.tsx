@@ -18,16 +18,23 @@ interface Stat {
 function computeStats(checkpoints: Checkpoint[]): Stat[] {
   if (checkpoints.length === 0) return []
 
-  const withLoss = checkpoints.filter(c => c.loss != null && c.loss > 0)
-  const withDuration = checkpoints.filter(c => c.training_duration_s != null && c.training_duration_s > 0)
-  const withVocab = checkpoints.filter(c => c.vocab_size != null && c.vocab_size > 0)
-  const withQuality = checkpoints.filter(c => c.avg_quality != null && c.avg_quality > 0)
+  const withLoss = checkpoints.filter((c) => c.loss != null && c.loss > 0)
+  const withDuration = checkpoints.filter(
+    (c) => c.training_duration_s != null && c.training_duration_s > 0,
+  )
+  const withVocab = checkpoints.filter((c) => c.vocab_size != null && c.vocab_size > 0)
+  const withQuality = checkpoints.filter((c) => c.avg_quality != null && c.avg_quality > 0)
 
-  const bestLoss = withLoss.length > 0 ? Math.min(...withLoss.map(c => c.loss!)) : null
-  const avgLoss = withLoss.length > 0 ? withLoss.reduce((s, c) => s + c.loss!, 0) / withLoss.length : null
+  const bestLoss = withLoss.length > 0 ? Math.min(...withLoss.map((c) => c.loss!)) : null
+  const avgLoss =
+    withLoss.length > 0 ? withLoss.reduce((s, c) => s + c.loss!, 0) / withLoss.length : null
   const totalDuration = withDuration.reduce((s, c) => s + c.training_duration_s!, 0)
-  const bestDuration = withDuration.length > 0 ? Math.min(...withDuration.map(c => c.training_duration_s!)) : null
-  const avgQuality = withQuality.length > 0 ? withQuality.reduce((s, c) => s + c.avg_quality!, 0) / withQuality.length : null
+  const bestDuration =
+    withDuration.length > 0 ? Math.min(...withDuration.map((c) => c.training_duration_s!)) : null
+  const avgQuality =
+    withQuality.length > 0
+      ? withQuality.reduce((s, c) => s + c.avg_quality!, 0) / withQuality.length
+      : null
 
   const modelTypes = new Map<string, number>()
   for (const c of checkpoints) {
@@ -36,21 +43,21 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   }
   const topModel = [...modelTypes.entries()].sort((a, b) => b[1] - a[1])[0]
 
-  const stats: Stat[] = [
-    { label: 'Total checkpoints', value: String(checkpoints.length) },
-  ]
+  const stats: Stat[] = [{ label: 'Total checkpoints', value: String(checkpoints.length) }]
 
   if (bestLoss != null) stats.push({ label: 'Best loss', value: bestLoss.toFixed(4) })
   if (avgLoss != null) stats.push({ label: 'Avg loss', value: avgLoss.toFixed(4) })
   if (withLoss.length > 1) {
-    const spread = Math.max(...withLoss.map(c => c.loss!)) - bestLoss!
+    const spread = Math.max(...withLoss.map((c) => c.loss!)) - bestLoss!
     stats.push({ label: 'Loss spread', value: spread.toFixed(4) })
   }
-  if (totalDuration > 0) stats.push({ label: 'Total training time', value: formatDuration(totalDuration) })
-  if (bestDuration != null) stats.push({ label: 'Fastest run', value: formatDuration(bestDuration) })
+  if (totalDuration > 0)
+    stats.push({ label: 'Total training time', value: formatDuration(totalDuration) })
+  if (bestDuration != null)
+    stats.push({ label: 'Fastest run', value: formatDuration(bestDuration) })
   if (avgQuality != null) stats.push({ label: 'Avg quality', value: `${avgQuality.toFixed(1)}/5` })
   if (withVocab.length > 0) {
-    const maxVocab = Math.max(...withVocab.map(c => c.vocab_size!))
+    const maxVocab = Math.max(...withVocab.map((c) => c.vocab_size!))
     stats.push({ label: 'Max vocab size', value: String(maxVocab) })
   }
   if (topModel && modelTypes.size > 1) {
@@ -60,7 +67,10 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   return stats
 }
 
-export const TrainingSummaryCard = memo(function TrainingSummaryCard({ checkpoints, loading }: TrainingSummaryCardProps) {
+export const TrainingSummaryCard = memo(function TrainingSummaryCard({
+  checkpoints,
+  loading,
+}: TrainingSummaryCardProps) {
   const stats = useMemo(() => computeStats(checkpoints), [checkpoints])
 
   if (loading && stats.length === 0) {
@@ -92,9 +102,11 @@ export const TrainingSummaryCard = memo(function TrainingSummaryCard({ checkpoin
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-          {stats.map(s => (
+          {stats.map((s) => (
             <div key={s.label} className="rounded-lg bg-muted/20 px-2.5 py-2">
-              <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</p>
+              <p className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">
+                {s.label}
+              </p>
               <p className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{s.value}</p>
             </div>
           ))}

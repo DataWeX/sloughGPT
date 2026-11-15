@@ -218,7 +218,7 @@ export function ApiTab() {
                   <summary className="text-muted-foreground/60 cursor-pointer hover:text-muted-foreground/80 transition-colors">
                     Response Headers
                   </summary>
-                  <pre className="mt-1.5 rounded-lg border border-white/[0.04] bg-muted/20 p-2.5 font-mono text-[10px] text-muted-foreground overflow-auto max-h-32 leading-relaxed">
+                  <pre className="mt-1.5 rounded-lg border border-white/[0.04] bg-muted/20 p-2.5 font-mono text-xs text-muted-foreground overflow-auto max-h-32 leading-relaxed">
                     {Object.entries(responseHeaders)
                       .map(([k, v]) => `${k}: ${v}`)
                       .join('\n')}
@@ -244,7 +244,7 @@ export function ApiTab() {
             <button
               type="button"
               onClick={clearHistory}
-              className="text-[10px] text-destructive/60 hover:text-destructive transition-colors"
+              className="text-xs text-destructive/60 hover:text-destructive transition-colors"
             >
               Clear
             </button>

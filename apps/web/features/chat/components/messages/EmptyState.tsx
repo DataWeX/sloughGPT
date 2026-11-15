@@ -183,7 +183,7 @@ export const EmptyState = memo(function EmptyState({
       {/* Tool Mode Cards */}
       {hasModel && (
         <div className="w-full max-w-lg space-y-3">
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.12em]">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.12em]">
             Quick tools
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -205,7 +205,7 @@ export const EmptyState = memo(function EmptyState({
       {/* Quick Starters */}
       {displayStarters && (
         <div className="w-full max-w-lg space-y-2.5 pt-1">
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.12em]">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.12em]">
             Or try asking
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -239,25 +239,25 @@ export const EmptyState = memo(function EmptyState({
 
       {/* Keyboard hints */}
       <div
-        className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] text-muted-foreground"
+        className="flex flex-wrap items-center justify-center gap-2.5 text-xs text-muted-foreground"
         aria-label="Keyboard shortcuts"
       >
         <span className="flex items-center gap-1">
-          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
+          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] border border-border/20">
             ↵
           </kbd>
           <span>{t('chat.send')}</span>
         </span>
         <span className="text-muted-foreground">·</span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
+          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] border border-border/20">
             /
           </kbd>
           <span>commands</span>
         </span>
         <span className="text-muted-foreground">·</span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
+          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] border border-border/20">
             ?
           </kbd>
           <span>shortcuts</span>

@@ -22,7 +22,7 @@ export function WorkspaceSelector({ workspaces, selectedId, onSelect }: Workspac
       </CardHeader>
       <CardContent>
         <div className="flex gap-2">
-          {workspaces.map(ws => (
+          {workspaces.map((ws) => (
             <button
               key={ws.id}
               onClick={() => onSelect(ws.id)}
@@ -33,7 +33,7 @@ export function WorkspaceSelector({ workspaces, selectedId, onSelect }: Workspac
               }`}
             >
               {ws.name}
-              <span className="ml-1.5 text-[10px] opacity-70">({ws.member_count})</span>
+              <span className="ml-1.5 text-xs opacity-70">({ws.member_count})</span>
             </button>
           ))}
         </div>

@@ -102,7 +102,7 @@ export function DocsEndpointList({ wb }: { wb: DocsWorkbench }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 px-2 text-[10px]"
+                      className="h-6 px-2 text-xs"
                       onClick={() => {
                         copyToClipboard(ep.requestBody!)
                         addToast(t('consciousness_docs.copied'), 'success')
@@ -125,7 +125,7 @@ export function DocsEndpointList({ wb }: { wb: DocsWorkbench }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[10px]"
+                    className="h-6 px-2 text-xs"
                     onClick={() => {
                       copyToClipboard(ep.responseExample)
                       addToast(t('consciousness_docs.copied'), 'success')
@@ -178,7 +178,7 @@ export function DocsEndpointList({ wb }: { wb: DocsWorkbench }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-5 px-1.5 text-[10px] ml-auto"
+                      className="h-5 px-1.5 text-xs ml-auto"
                       onClick={() => {
                         copyToClipboard(result.body)
                         addToast(t('consciousness_docs.copied'), 'success')

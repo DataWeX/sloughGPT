@@ -83,7 +83,7 @@ export const NoteDialog = memo(function NoteDialog({
               onKeyDown={handleKeyDown}
               aria-label="Message note"
             />
-            <p className="text-[10px] text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground/60">
               Press Ctrl+Enter to save, Escape to cancel
             </p>
             <div className="flex items-center justify-between gap-2">

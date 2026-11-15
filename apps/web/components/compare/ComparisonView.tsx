@@ -78,18 +78,18 @@ export function ComparisonView({
                   <button
                     type="button"
                     onClick={() => onLoadSnapshot(snap)}
-                    className="text-[10px] font-medium hover:text-primary transition-colors"
+                    className="text-xs font-medium hover:text-primary transition-colors"
                   >
                     {snap.name}
                   </button>
-                  <span className="text-[9px] text-muted-foreground/60 tabular-nums">
+                  <span className="text-[11px] text-muted-foreground/60 tabular-nums">
                     {new Date(snap.savedAt).toLocaleDateString()}
                   </span>
                   <button
                     type="button"
                     onClick={() => onDeleteSnapshot(snap.id)}
                     aria-label={`Delete snapshot ${snap.name}`}
-                    className="text-[10px] text-muted-foreground/60 hover:text-destructive ml-0.5"
+                    className="text-xs text-muted-foreground/60 hover:text-destructive ml-0.5"
                   >
                     ×
                   </button>
@@ -113,20 +113,20 @@ export function ComparisonView({
         <Card>
           <CardContent className="py-8 text-center space-y-2">
             <p className="text-[11px] text-muted-foreground/60">No benchmark results yet.</p>
-            <p className="text-[10px] text-muted-foreground/50 max-w-sm mx-auto">
+            <p className="text-xs text-muted-foreground/50 max-w-sm mx-auto">
               Run benchmarks on your models to see side-by-side comparisons. Click &ldquo;Benchmark
               all&rdquo; or use the benchmark button on each model card above.
             </p>
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={onRunAll}
               disabled={loading || models.length === 0}
             >
               Benchmark all
             </Button>
-            <div className="flex items-center justify-center gap-3 text-[9px] text-muted-foreground/40 pt-1">
+            <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground/40 pt-1">
               <span>
                 <kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">
                   R
@@ -202,21 +202,16 @@ export function ComparisonHeader({
               }
               placeholder="Snapshot name..."
               aria-label="Snapshot name"
-              className="h-6 w-36 text-[10px]"
+              className="h-6 w-36 text-xs"
               onKeyDown={(e: React.KeyboardEvent) => {
                 if (e.key === 'Enter') onSaveSnapshot()
               }}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-6 text-[10px]"
-              onClick={onSaveSnapshot}
-            >
+            <Button variant="outline" size="sm" className="h-6 text-xs" onClick={onSaveSnapshot}>
               Save
             </Button>
           </div>
-          <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={onExport}>
+          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={onExport}>
             <IconDownload className="h-2.5 w-2.5 mr-0.5" />
             Export
           </Button>
@@ -225,7 +220,7 @@ export function ComparisonHeader({
       <Button
         variant="outline"
         size="sm"
-        className="h-6 text-[10px]"
+        className="h-6 text-xs"
         onClick={onRunAll}
         disabled={loading || running.size > 0}
       >

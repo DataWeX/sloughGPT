@@ -74,12 +74,12 @@ export function Tray({
           borderBottom: '1px solid rgb(var(--sheen-rgb) / 0.05)',
         }}
       >
-        <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           {COLUMN_LABELS[column.name] || column.name}
         </h3>
         <span
           className={cn(
-            'inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded',
+            'inline-flex items-center gap-1 text-xs font-mono px-1.5 py-0.5 rounded',
             'transition-colors duration-200',
             showOverWip
               ? 'bg-[rgb(var(--destructive)/0.15)] text-destructive border border-[rgb(var(--destructive)/0.3)]'
@@ -113,7 +113,7 @@ export function Tray({
           >
             <p
               className={cn(
-                'text-[10px] font-mono',
+                'text-xs font-mono',
                 dropAllowed ? 'text-muted-foreground' : 'text-destructive',
               )}
             >

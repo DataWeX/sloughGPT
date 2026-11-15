@@ -32,7 +32,9 @@ export function quantSummary(q: unknown): string | null {
   return null
 }
 
-function connectionTone(status?: ConnectionStatus): 'success' | 'warning' | 'destructive' | 'muted' {
+function connectionTone(
+  status?: ConnectionStatus,
+): 'success' | 'warning' | 'destructive' | 'muted' {
   if (status === 'connected') return 'success'
   if (status === 'connecting' || status === 'reloading') return 'warning'
   if (status === 'offline' || status === 'error') return 'destructive'
@@ -42,7 +44,7 @@ function connectionTone(status?: ConnectionStatus): 'success' | 'warning' | 'des
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dt className="text-xs uppercase tracking-wider text-muted-foreground">{label}</dt>
       <dd className="truncate text-xs font-medium text-foreground">{value}</dd>
     </div>
   )
@@ -65,10 +67,10 @@ function Cell({
       className="rounded-md border border-border/50 bg-card/50 px-3 py-2"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
-        <StatusDot tone={tone} label={status} showLabel className="text-[10px] text-foreground" />
+        <StatusDot tone={tone} label={status} showLabel className="text-xs text-foreground" />
       </div>
       <dl className="mt-1.5 space-y-0.5">
         {rows.map((r) => (
@@ -107,7 +109,7 @@ export function ComponentHealthStrip({ health, connectionStatus }: ComponentHeal
           tone={connectionTone(connectionStatus)}
           label={connected ? 'live' : (connectionStatus ?? 'unknown')}
           showLabel
-          className="text-[10px] text-muted-foreground"
+          className="text-xs text-muted-foreground"
         />
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -119,7 +121,7 @@ export function ComponentHealthStrip({ health, connectionStatus }: ComponentHeal
             {
               label: 'Model',
               value: health.model_loaded
-                ? (health.model_type || 'loaded')
+                ? health.model_type || 'loaded'
                 : health.model_loading
                   ? 'loading…'
                   : 'not loaded',
@@ -130,9 +132,7 @@ export function ComponentHealthStrip({ health, connectionStatus }: ComponentHeal
         />
         <Cell
           label="Engines / system"
-          tone={
-            score >= 80 ? 'success' : score >= 50 || score === 0 ? 'warning' : 'destructive'
-          }
+          tone={score >= 80 ? 'success' : score >= 50 || score === 0 ? 'warning' : 'destructive'}
           status={health.health_status || (score >= 80 ? 'healthy' : 'degraded')}
           rows={[
             { label: 'Health score', value: `${score}/100` },

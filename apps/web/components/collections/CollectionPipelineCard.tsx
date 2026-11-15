@@ -29,7 +29,12 @@ const SOURCE_COLORS: Record<string, string> = {
   generator: 'bg-primary/15 text-primary',
 }
 
-export function CollectionPipelineCard({ pipelines, runningId, onRun, onDelete }: CollectionPipelineCardProps) {
+export function CollectionPipelineCard({
+  pipelines,
+  runningId,
+  onRun,
+  onDelete,
+}: CollectionPipelineCardProps) {
   if (pipelines.length === 0) return null
 
   return (
@@ -42,20 +47,32 @@ export function CollectionPipelineCard({ pipelines, runningId, onRun, onDelete }
       </CardHeader>
       <CardContent>
         <div className="space-y-1.5">
-          {pipelines.map(p => (
-            <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border hover:border-primary/30 transition-colors">
+          {pipelines.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between p-2.5 rounded-lg border border-border hover:border-primary/30 transition-colors"
+            >
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-medium">{p.name}</div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', SOURCE_COLORS[p.source_type] ?? 'bg-muted text-muted-foreground')}>
+                  <span
+                    className={cn(
+                      'text-[11px] px-1.5 py-0.5 rounded font-medium',
+                      SOURCE_COLORS[p.source_type] ?? 'bg-muted text-muted-foreground',
+                    )}
+                  >
                     {p.source_type}
                   </span>
-                  <span className="text-[9px] text-muted-foreground">→ {p.store_type}</span>
+                  <span className="text-[11px] text-muted-foreground">→ {p.store_type}</span>
                   {p.records_count != null && (
-                    <span className="text-[9px] text-muted-foreground">{p.records_count} records</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {p.records_count} records
+                    </span>
                   )}
                   {p.last_run && (
-                    <span className="text-[9px] text-muted-foreground">Last: {timeAgo(new Date(p.last_run).getTime())}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Last: {timeAgo(new Date(p.last_run).getTime())}
+                    </span>
                   )}
                 </div>
               </div>
@@ -64,7 +81,7 @@ export function CollectionPipelineCard({ pipelines, runningId, onRun, onDelete }
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={() => onRun(p.id)}
                     disabled={runningId === p.id}
                   >
@@ -75,7 +92,7 @@ export function CollectionPipelineCard({ pipelines, runningId, onRun, onDelete }
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px] text-destructive"
+                    className="h-6 text-xs text-destructive"
                     onClick={() => onDelete(p.id)}
                   >
                     Del

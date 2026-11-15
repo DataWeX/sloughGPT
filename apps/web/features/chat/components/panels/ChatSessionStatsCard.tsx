@@ -9,8 +9,15 @@ interface ChatSessionStatsCardProps {
   sessionId: string | null
 }
 
-export const ChatSessionStatsCard = memo(function ChatSessionStatsCard({ sessionId }: ChatSessionStatsCardProps) {
-  const [stats, setStats] = useState<{ totalSessions: number; totalMessages: number; avgMessages: number; lastActive: number | null } | null>(null)
+export const ChatSessionStatsCard = memo(function ChatSessionStatsCard({
+  sessionId,
+}: ChatSessionStatsCardProps) {
+  const [stats, setStats] = useState<{
+    totalSessions: number
+    totalMessages: number
+    avgMessages: number
+    lastActive: number | null
+  } | null>(null)
 
   useEffect(() => {
     let ignore = false
@@ -20,20 +27,25 @@ export const ChatSessionStatsCard = memo(function ChatSessionStatsCard({ session
         if (ignore) return
         const totalMessages = sessions.reduce((s, c) => s + (c.messages?.length ?? 0), 0)
         const avgMessages = sessions.length > 0 ? totalMessages / sessions.length : 0
-        const lastActive = sessions.length > 0
-          ? Math.max(...sessions.map(c => {
-              const u = c.updatedAt ? new Date(c.updatedAt).getTime() : 0
-              const cr = c.createdAt ? new Date(c.createdAt).getTime() : 0
-              return Math.max(u, cr)
-            }))
-          : null
+        const lastActive =
+          sessions.length > 0
+            ? Math.max(
+                ...sessions.map((c) => {
+                  const u = c.updatedAt ? new Date(c.updatedAt).getTime() : 0
+                  const cr = c.createdAt ? new Date(c.createdAt).getTime() : 0
+                  return Math.max(u, cr)
+                }),
+              )
+            : null
         setStats({ totalSessions: sessions.length, totalMessages, avgMessages, lastActive })
       } catch {
         if (!ignore) setStats(null)
       }
     }
     load()
-    return () => { ignore = true }
+    return () => {
+      ignore = true
+    }
   }, [sessionId])
 
   if (!stats || stats.totalSessions === 0) return null
@@ -46,19 +58,27 @@ export const ChatSessionStatsCard = memo(function ChatSessionStatsCard({ session
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Sessions</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Sessions
+            </div>
             <div className="text-sm font-semibold">{stats.totalSessions}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Messages</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Messages
+            </div>
             <div className="text-sm font-semibold">{stats.totalMessages}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Avg/Session</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Avg/Session
+            </div>
             <div className="text-sm font-semibold">{stats.avgMessages.toFixed(1)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last Active</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              Last Active
+            </div>
             <div className="text-sm font-semibold">
               {stats.lastActive ? timeAgo(stats.lastActive) : '—'}
             </div>

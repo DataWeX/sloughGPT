@@ -473,7 +473,7 @@ export default function ConsciousnessApiExplorerPage() {
               <div className="max-h-[50vh] overflow-y-auto space-y-1">
                 {CATEGORIES.map((cat) => (
                   <div key={cat.id}>
-                    <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                    <p className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       {t(cat.labelKey)}
                     </p>
                     {ENDPOINTS[cat.id].map((ep) => {
@@ -491,7 +491,7 @@ export default function ConsciousnessApiExplorerPage() {
                         >
                           <Badge
                             variant="outline"
-                            className={`font-mono text-[9px] border px-1 py-0 shrink-0 ${METHOD_COLORS[ep.method]}`}
+                            className={`font-mono text-[11px] border px-1 py-0 shrink-0 ${METHOD_COLORS[ep.method]}`}
                           >
                             {ep.method}
                           </Badge>
@@ -512,25 +512,25 @@ export default function ConsciousnessApiExplorerPage() {
                   <IconClock className="h-3 w-3" />
                   {t('consciousness_api_explorer.history')}
                 </CardTitle>
-                <span className="text-[10px] text-muted-foreground">{history.length}</span>
+                <span className="text-xs text-muted-foreground">{history.length}</span>
               </div>
             </CardHeader>
             <CardContent className="p-2">
               <div className="max-h-48 overflow-y-auto space-y-1">
                 {history.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground text-center py-2">
+                  <p className="text-xs text-muted-foreground text-center py-2">
                     {t('consciousness_api_explorer.no_history')}
                   </p>
                 )}
                 {history.map((h) => (
                   <div
                     key={h.id}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-muted/50 text-[10px] cursor-pointer group"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-muted/50 text-xs cursor-pointer group"
                     onClick={() => handleReplay(h)}
                   >
                     <Badge
                       variant="outline"
-                      className={`font-mono text-[8px] border px-1 py-0 shrink-0 ${METHOD_COLORS[h.method]}`}
+                      className={`font-mono text-[11px] border px-1 py-0 shrink-0 ${METHOD_COLORS[h.method]}`}
                     >
                       {h.method}
                     </Badge>
@@ -617,7 +617,7 @@ export default function ConsciousnessApiExplorerPage() {
                   <div className="space-y-1.5">
                     {endpoint.params.map((p, i) => (
                       <div key={p.name} className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-muted-foreground w-24 shrink-0">
+                        <span className="text-xs font-mono text-muted-foreground w-24 shrink-0">
                           {p.name}
                           {p.required && <span className="text-destructive">*</span>}
                         </span>
@@ -738,7 +738,7 @@ export default function ConsciousnessApiExplorerPage() {
                       </h4>
                       <div className="rounded-md border border-border/40 bg-muted/20 p-2 space-y-0.5">
                         {Object.entries(response.headers).map(([k, v]) => (
-                          <div key={k} className="text-[10px] font-mono">
+                          <div key={k} className="text-xs font-mono">
                             <span className="text-primary">{k}</span>
                             <span className="text-muted-foreground">: {v}</span>
                           </div>
@@ -776,17 +776,17 @@ export default function ConsciousnessApiExplorerPage() {
                     >
                       <Badge
                         variant="outline"
-                        className={`font-mono text-[9px] border px-1 py-0 shrink-0 ${METHOD_COLORS[req.method]}`}
+                        className={`font-mono text-[11px] border px-1 py-0 shrink-0 ${METHOD_COLORS[req.method]}`}
                       >
                         {req.method}
                       </Badge>
                       <span className="font-medium truncate">{req.name}</span>
                       {req.tag && (
-                        <Badge variant="secondary" className="text-[8px] px-1 py-0 shrink-0">
+                        <Badge variant="secondary" className="text-[11px] px-1 py-0 shrink-0">
                           {req.tag}
                         </Badge>
                       )}
-                      <span className="text-muted-foreground truncate font-mono text-[9px]">
+                      <span className="text-muted-foreground truncate font-mono text-[11px]">
                         {req.path}
                       </span>
                       <button

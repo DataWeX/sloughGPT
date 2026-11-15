@@ -155,6 +155,43 @@ const TEXT_2XL_BASELINE: Record<string, number> = {
 
 const TEXT_2XL_TOTAL_CEILING = 41
 
+/**
+ * Minimum Size Floor (DESIGN_SYSTEM.md §Minimum Size Floor, 2026-11-15):
+ * content text never renders below 11px. `px`-pinned utilities bypass the
+ * rem root scale, so they are gated directly. ZERO TOLERANCE outside the
+ * exempt files below — the same shape as STOCK_PALETTE.
+ *
+ * Mapping applied 2026-11-15 (1,965 replacements / 391 files):
+ *   text-[7|8|9px] -> text-[11px], text-[10px] -> text-xs,
+ *   inline fontSize 9/10 (recharts ticks) -> 11.
+ *
+ * Exemptions are debt (may only shrink):
+ * - StatusBar.tsx: `.sl-status-bar` chrome (9–10px by design, globals.css).
+ * - magazine/*: the styleguide renders literal type-scale samples — data
+ *   class, same exemption as its RGB_BASELINE / TEXT_2XL rows.
+ */
+const TEXT_FLOOR_RE = /\btext-\[(?:[1-9]|10)px\]/g
+
+/** Inline `fontSize: 9|10` / `fontSize={9|10}` — chart axis ticks, SVG text. */
+const INLINE_FLOOR_RE = /\bfontSize: *'?([1-9]|10)(?:px)?'?(?=[,}\s])|\bfontSize=\{([1-9]|10)\}/g
+
+const TEXT_FLOOR_EXEMPT = [
+  'components/StatusBar.tsx',
+  'app/(app)/magazine/magazine-accents.tsx',
+  'app/(app)/magazine/magazine-components.tsx',
+  'app/(app)/magazine/magazine-dark-preview.tsx',
+  'app/(app)/magazine/magazine-interactive.tsx',
+  'app/(app)/magazine/magazine-palette-spec.tsx',
+  'app/(app)/magazine/magazine-spacing.tsx',
+  'app/(app)/magazine/magazine-typography.tsx',
+  'app/(app)/magazine/magazine-ui.tsx',
+  'app/(app)/magazine/page.tsx',
+  'app/(app)/magazine/magazine-tokens.ts',
+]
+
+/** Sum of exempt-file violations today — rows may only shrink. */
+const TEXT_FLOOR_EXEMPT_CEILING = 42
+
 /** Numeric rgb()/rgba() — `rgb(var(--…))` is tokenised and does not match. */
 const RGB_RE = /\brgba?\(\s*\d/
 
@@ -432,6 +469,39 @@ describe('Design criteria — Noir Violet ratchets', () => {
       `text-2xl debt grew past ${TEXT_2XL_TOTAL_CEILING}. Fix files and lower ` +
         `the ceiling — never raise it.`,
     ).toBeLessThanOrEqual(TEXT_2XL_TOTAL_CEILING)
+  })
+
+  it('no source file pins content text below the 11px floor', () => {
+    const offenders: Record<string, number> = {}
+    const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
+    for (const rel of files) {
+      if (TEXT_FLOOR_EXEMPT.includes(rel)) continue
+      const src = stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))
+      const n = (src.match(TEXT_FLOOR_RE)?.length ?? 0) + (src.match(INLINE_FLOOR_RE)?.length ?? 0)
+      if (n) offenders[rel] = n
+    }
+    expect(
+      Object.keys(offenders),
+      `Text below the 11px minimum floor (DESIGN_SYSTEM.md §Minimum Size Floor) — ` +
+        `content text must be text-[11px] or a scale step (text-xs = 12px). ` +
+        `Offenders: ${Object.entries(offenders)
+          .map(([f, n]) => `${f}(${n})`)
+          .join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('text-floor exempt rows may only shrink (sum <= 42)', () => {
+    let total = 0
+    for (const rel of TEXT_FLOOR_EXEMPT) {
+      const full = join(WEB_ROOT, rel)
+      const src = stripComments(readFileSync(full, 'utf-8'))
+      total += (src.match(TEXT_FLOOR_RE)?.length ?? 0) + (src.match(INLINE_FLOOR_RE)?.length ?? 0)
+    }
+    expect(
+      total,
+      `Floor-exempt debt grew past ${TEXT_FLOOR_EXEMPT_CEILING} instances — fix the ` +
+        `file, delete its row, and lower the ceiling. Never raise it.`,
+    ).toBeLessThanOrEqual(TEXT_FLOOR_EXEMPT_CEILING)
   })
 
   it('sanity: the catalogue of pages exists (fixture guard)', () => {

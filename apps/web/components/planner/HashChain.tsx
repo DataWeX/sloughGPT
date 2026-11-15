@@ -43,10 +43,10 @@ export function HashChain({ cardId, refreshKey = 0 }: HashChainProps) {
   return (
     <div className="rounded-lg border border-border bg-card/50 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Hash Chain
         </span>
-        <span className="text-[10px] text-muted-foreground font-mono">
+        <span className="text-xs text-muted-foreground font-mono">
           {tree.history.length} {tree.history.length === 1 ? 'change' : 'changes'}
         </span>
       </div>
@@ -74,7 +74,7 @@ export function HashChain({ cardId, refreshKey = 0 }: HashChainProps) {
         <>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-[10px] font-mono text-muted-foreground hover:text-muted-foreground transition-colors"
+            className="text-xs font-mono text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             {expanded ? 'hide chain' : 'show chain'}
           </button>
@@ -82,7 +82,7 @@ export function HashChain({ cardId, refreshKey = 0 }: HashChainProps) {
           {expanded && (
             <div className="space-y-0.5 border-t border-border pt-2">
               {tree.history.map((h, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-[10px] font-mono">
+                <div key={i} className="flex items-center gap-1.5 text-xs font-mono">
                   <span className="text-muted-foreground w-4">{i}</span>
                   <span className="text-muted-foreground">{short(h.old_hash)}</span>
                   <span className="text-muted-foreground">→</span>

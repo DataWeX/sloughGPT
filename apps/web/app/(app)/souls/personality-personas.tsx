@@ -71,12 +71,12 @@ export function PersonalityPersonas({ wb }: { wb: PersonalityWorkbench }) {
                           {persona.name}
                         </span>
                         {persona.active && (
-                          <Badge variant="outline" className="text-[10px] text-primary shrink-0">
+                          <Badge variant="outline" className="text-xs text-primary shrink-0">
                             Active
                           </Badge>
                         )}
                       </div>
-                      <div className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
+                      <div className="text-xs sm:text-xs text-muted-foreground line-clamp-2">
                         {persona.values?.join(', ') || '—'}
                       </div>
                     </div>
@@ -86,7 +86,7 @@ export function PersonalityPersonas({ wb }: { wb: PersonalityWorkbench }) {
                     <div className="space-y-1" aria-label={`${persona.name} defining traits`}>
                       {persona.top_traits!.map(({ key, value }) => (
                         <div key={key} className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground capitalize w-24 shrink-0 truncate">
+                          <span className="text-xs text-muted-foreground capitalize w-24 shrink-0 truncate">
                             {key.replace(/_/g, ' ')}
                           </span>
                           <div className="flex-1 h-1 rounded-full bg-muted/50 overflow-hidden">
@@ -95,7 +95,7 @@ export function PersonalityPersonas({ wb }: { wb: PersonalityWorkbench }) {
                               style={{ width: `${Math.round(value * 100)}%` }}
                             />
                           </div>
-                          <span className="text-[10px] font-mono text-muted-foreground w-8 text-right shrink-0">
+                          <span className="text-xs font-mono text-muted-foreground w-8 text-right shrink-0">
                             {Math.round(value * 100)}%
                           </span>
                         </div>

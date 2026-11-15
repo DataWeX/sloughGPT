@@ -343,14 +343,14 @@ export default function ConsciousnessHistoryPage() {
                           opacity: 0.8,
                         }}
                       />
-                      <span className="text-[10px] text-muted-foreground">{count}</span>
+                      <span className="text-xs text-muted-foreground">{count}</span>
                     </div>
                   )
                 })}
               </div>
               <div className="flex gap-2 mt-1">
                 {['1', '2', '3', '4', '5'].map((r) => (
-                  <span key={r} className="flex-1 text-center text-[10px] text-muted-foreground">
+                  <span key={r} className="flex-1 text-center text-xs text-muted-foreground">
                     {r}\u2605
                   </span>
                 ))}
@@ -493,7 +493,7 @@ export default function ConsciousnessHistoryPage() {
                                 <div className="flex items-center gap-2 mt-1.5">
                                   <Badge
                                     variant={ep.growth_delta >= 0 ? 'default' : 'destructive'}
-                                    className="text-[10px] px-1.5 py-0"
+                                    className="text-xs px-1.5 py-0"
                                   >
                                     {ep.growth_delta >= 0 ? '+' : ''}
                                     {(ep.growth_delta * 100).toFixed(1)}%
@@ -555,7 +555,7 @@ export default function ConsciousnessHistoryPage() {
                                               }}
                                             />
                                           </div>
-                                          <span className="text-[10px] text-muted-foreground w-8 text-right">
+                                          <span className="text-xs text-muted-foreground w-8 text-right">
                                             {(val as number).toFixed(2)}
                                           </span>
                                         </div>
