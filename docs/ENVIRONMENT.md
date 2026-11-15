@@ -86,10 +86,10 @@ MAN_CORE_URL=http://127.0.0.1:8000
 
 **Optional** · Rust edge
 
-Directory of static files to mount at `/static` when present (default `apps/web/.next/static`). Missing dir is skipped.
+Directory holding the web build. When it contains `index.html` the gateway serves it as the **site document root** (SPA navigation → `index.html`, data requests → relay to the sidecar, all on one origin); when it does not, it falls back to the legacy assets-only mode mounted at `/static`. Defaults to `apps/web/dist-vite` when that directory exists, otherwise `apps/web/.next/static` — a Next artifact path kept only for checkouts that never built with Vite. A missing dir is skipped; an explicit `MAN_STATIC_DIR` always wins.
 
 ```bash
-MAN_STATIC_DIR=apps/web/.next/static
+MAN_STATIC_DIR=apps/web/dist-vite
 ```
 
 ### MAN_GATEWAY_DENY

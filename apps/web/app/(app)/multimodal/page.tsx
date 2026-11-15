@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
@@ -11,7 +12,7 @@ import type {
   TrainingReport,
   TrainingStatus,
 } from '@/lib/multimodal-controller'
-import { useToastStore } from '@/lib/toast-store'
+import type { DetectedObject } from '@/components/multimodal/ObjectDetectionSection'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { apiPost } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
@@ -24,6 +25,8 @@ import VisualDatasetCard from '@/components/multimodal/VisualDatasetCard'
 import PreferenceOptimizationCard from '@/components/multimodal/PreferenceOptimizationCard'
 import ImageGenerationCard from '@/components/multimodal/ImageGenerationCard'
 import AudioCard from '@/components/multimodal/AudioCard'
+import VqaSection from '@/components/multimodal/VqaSection'
+import ObjectDetectionSection from '@/components/multimodal/ObjectDetectionSection'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
 
@@ -32,7 +35,7 @@ const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingC
 })
 
 export default function MultimodalPage() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [caps, setCaps] = useState<MultimodalCapabilities | null>(null)
   const [report, setReport] = useState<TrainingReport | null>(null)
   const [trainStatus, setTrainStatus] = useState<TrainingStatus | null>(null)
@@ -45,6 +48,14 @@ export default function MultimodalPage() {
   const [transcript, setTranscript] = useState<string | null>(null)
   const [synthesizing, setSynthesizing] = useState(false)
   const [synthAudio, setSynthAudio] = useState<{ audio: string; duration_sec: number } | null>(null)
+  const [asking, setAsking] = useState(false)
+  const [vqaResult, setVqaResult] = useState<{
+    answer: string
+    question: string
+    elapsed_ms: number
+  } | null>(null)
+  const [detecting, setDetecting] = useState(false)
+  const [detectedObjects, setDetectedObjects] = useState<DetectedObject[] | null>(null)
   const [creatingDataset, setCreatingDataset] = useState(false)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [dpoStatus, setDpoStatus] = useState<string>('idle')
@@ -263,6 +274,32 @@ export default function MultimodalPage() {
     }
   }
 
+  const handleAskQuestion = async (file: File, question: string) => {
+    setAsking(true)
+    setVqaResult(null)
+    try {
+      const result = await multimodalController.askQuestion(file, question)
+      setVqaResult(result)
+    } catch (err: unknown) {
+      addToast(extractErrorMessage(err, 'Could not ask question'), 'error')
+    } finally {
+      setAsking(false)
+    }
+  }
+
+  const handleDetectObjects = async (file: File) => {
+    setDetecting(true)
+    setDetectedObjects(null)
+    try {
+      const result = await multimodalController.detectObjects(file)
+      setDetectedObjects(result.objects)
+    } catch (err: unknown) {
+      addToast(extractErrorMessage(err, 'Could not detect objects'), 'error')
+    } finally {
+      setDetecting(false)
+    }
+  }
+
   const headerRight = (
     <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}>
       <IconRefresh className="h-4 w-4 mr-1" /> Refresh
@@ -319,6 +356,12 @@ export default function MultimodalPage() {
         synthAudio={synthAudio}
         onTranscribe={handleTranscribe}
         onSynthesize={handleSynthesize}
+      />
+      <VqaSection asking={asking} onAsk={handleAskQuestion} answer={vqaResult} />
+      <ObjectDetectionSection
+        detecting={detecting}
+        onDetect={handleDetectObjects}
+        objects={detectedObjects}
       />
       <VoiceSection />
       <ImageSection />

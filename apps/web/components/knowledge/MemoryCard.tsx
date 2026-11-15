@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import {
   AlertDialog,
@@ -31,7 +32,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson } from '@/lib/download-utils'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
@@ -48,7 +48,7 @@ import { ArchiveDialog } from './ArchiveDialog'
  * and a confirmed clear-all. Wired to `memoryController` (`/memory/*`).
  */
 export const MemoryCard = memo(function MemoryCard() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const {
     stats,
     items,
@@ -460,7 +460,7 @@ export const MemoryCard = memo(function MemoryCard() {
         {showAdd && (
           <div className="rounded-lg border border-border/60 p-3 mb-3 space-y-2">
             <textarea
-              className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 border-input"
+              className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset border-input"
               placeholder="Type a fact the AI should remember..."
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
@@ -494,7 +494,7 @@ export const MemoryCard = memo(function MemoryCard() {
                 Edit memory fact
               </p>
               <textarea
-                className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 border-input"
+                className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset border-input"
                 placeholder="Fact text..."
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}

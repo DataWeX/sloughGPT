@@ -1,10 +1,20 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
-import { ActionCard, Card, CardContent, CardHeader, CardTitle, Button, KpiGrid, StatCard, Skeleton } from '@sloughgpt/strui'
+import {
+  ActionCard,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  KpiGrid,
+  StatCard,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { formatUptime } from '@/lib/chat-utils'
 
@@ -20,7 +30,7 @@ export default function EngineStatusCard() {
   const [status, setStatus] = useState<EngineStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [reloading, setReloading] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -46,7 +56,9 @@ export default function EngineStatusCard() {
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [addToast])
 
   const handleReload = async () => {
@@ -65,7 +77,9 @@ export default function EngineStatusCard() {
   if (loading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="text-base">Engine</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Engine</CardTitle>
+        </CardHeader>
         <CardContent>
           <KpiGrid columns={3}>
             <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
@@ -84,7 +98,12 @@ export default function EngineStatusCard() {
       title="Engine"
       actions={
         <div className="flex items-center gap-1">
-          <Button size="sm" variant="ghost" onClick={fetchStatus} aria-label="Refresh engine status">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={fetchStatus}
+            aria-label="Refresh engine status"
+          >
             <IconRefresh className="h-3.5 w-3.5" />
           </Button>
           <Button size="sm" variant="outline" onClick={handleReload} disabled={reloading}>
@@ -93,13 +112,13 @@ export default function EngineStatusCard() {
         </div>
       }
     >
-        <KpiGrid columns={3}>
-          <StatCard label="Engine" value={status.engine} />
-          <StatCard label="Version" value={status.version} />
-          <StatCard label="Models Loaded" value={status.models_loaded} />
-          <StatCard label="Uptime" value={formatUptime(status.uptime_s)} />
-          <StatCard label="Memory" value={`${status.memory_usage_mb} MB`} />
-        </KpiGrid>
+      <KpiGrid columns={3}>
+        <StatCard label="Engine" value={status.engine} />
+        <StatCard label="Version" value={status.version} />
+        <StatCard label="Models Loaded" value={status.models_loaded} />
+        <StatCard label="Uptime" value={formatUptime(status.uptime_s)} />
+        <StatCard label="Memory" value={`${status.memory_usage_mb} MB`} />
+      </KpiGrid>
     </ActionCard>
   )
 }

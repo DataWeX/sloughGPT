@@ -132,7 +132,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
                 e.stopPropagation()
                 setShowVerbose((v) => !v)
               }}
-              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__verbose"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__verbose hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               {showVerbose ? 'Hide' : 'Details'}
             </button>
@@ -146,7 +146,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
               toast.onUndo!()
               dismiss()
             }}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__undo"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__undo hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             Undo
           </button>
@@ -157,7 +157,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
             e.stopPropagation()
             dismiss()
           }}
-          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__close"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__close hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           aria-label={`Dismiss notification: ${toast.message}`}
         >
           <IconX className="h-3 w-3" />

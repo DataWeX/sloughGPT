@@ -38,7 +38,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .point import Point
+from .point import Point, accuracy_from_error
 from .store import DirectoryStore, JSONStore, MemoryStore
 
 logger = logging.getLogger("slo.pugqeep")
@@ -312,7 +312,7 @@ class ClusterStrategy(CompressionStrategy):
         reconstructed = centroids[assignments]
         mse = np.mean((flat - reconstructed) ** 2)
         var = np.var(flat)
-        accuracy = 1.0 - mse / (var + 1e-8)
+        accuracy = accuracy_from_error(mse, var)
 
         return Point(
             identity=identity,
@@ -347,7 +347,7 @@ class FunctionStrategy(CompressionStrategy):
         ]
 
         best_type, (params, mse) = min(fits, key=lambda x: x[1][1])
-        accuracy = 1.0 - mse / (var + 1e-8)
+        accuracy = accuracy_from_error(mse, var)
 
         residual = None
         if accuracy < self.residual_threshold:

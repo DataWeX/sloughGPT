@@ -13,7 +13,7 @@ _AUTH_USER = {"sub": "user1", "tenant_id": "t1", "workspace_id": "ws1"}
 
 
 def _build_app(manager=None, auth_user_dict=_AUTH_USER):
-    from routers.api_keys import ApiKeysRouter
+    from routers.settings import ApiKeysRouter
 
     router_obj = ApiKeysRouter(key_manager=manager)
     _app = FastAPI()

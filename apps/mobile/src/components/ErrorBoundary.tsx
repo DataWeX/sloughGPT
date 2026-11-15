@@ -1,23 +1,21 @@
-import React from 'react';
-import {Pressable, View, Text as RNText, StyleSheet, ScrollView} from 'react-native';
-import {useColors} from '../theme/colors';
+import React from 'react'
+import { Pressable, View, Text as RNText, StyleSheet, ScrollView } from 'react-native'
+import { useColors } from '../theme/colors'
 
 interface ErrorFallbackProps {
-  error: Error | null;
-  onRetry: () => void;
+  error: Error | null
+  onRetry: () => void
 }
 
-function ErrorFallback({error, onRetry}: ErrorFallbackProps) {
-  const colors = useColors();
-  const s = makeStyles(colors);
+function ErrorFallback({ error, onRetry }: ErrorFallbackProps) {
+  const colors = useColors()
+  const s = makeStyles(colors)
   return (
     <View style={s.container}>
       <ScrollView contentContainerStyle={s.scrollContent}>
         <RNText style={s.icon}>!</RNText>
         <RNText style={s.title}>Something went wrong</RNText>
-        <RNText style={s.message}>
-          {error?.message || 'An unexpected error occurred'}
-        </RNText>
+        <RNText style={s.message}>{error?.message || 'An unexpected error occurred'}</RNText>
         {error?.stack && (
           <View style={s.stackContainer}>
             <ScrollView horizontal={false} style={s.stackScroll}>
@@ -32,7 +30,7 @@ function ErrorFallback({error, onRetry}: ErrorFallbackProps) {
         </Pressable>
       </ScrollView>
     </View>
-  );
+  )
 }
 
 function makeStyles(colors: ReturnType<typeof useColors>) {
@@ -51,7 +49,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     icon: {
       fontSize: 48,
       marginBottom: 16,
-      color: colors.error || '#EF4444',
+      color: colors.error,
       fontWeight: '700',
     },
     title: {
@@ -70,7 +68,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     stackContainer: {
       backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: colors.border || 'rgba(255,255,255,0.1)',
+      borderColor: colors.border,
       borderRadius: 8,
       padding: 12,
       marginBottom: 24,
@@ -95,40 +93,49 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     buttonText: {
       fontSize: 15,
       fontWeight: '600',
-      color: '#FFFFFF',
+      color: colors.white,
     },
-  });
+  })
 }
 
 interface Props {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
 interface State {
-  hasError: boolean;
-  error: Error | null;
+  hasError: boolean
+  error: Error | null
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
-    super(props);
-    this.state = {hasError: false, error: null};
+    super(props)
+    this.state = { hasError: false, error: null }
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return {hasError: true, error};
+    return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[ErrorBoundary]', error, errorInfo);
+    console.error('[ErrorBoundary]', error, errorInfo)
     try {
-      const {api} = require('../services/api-client');
-      api.post('/mobile/errors', {
-        level: 'error',
-        message: error.message,
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
-      }).catch(() => {});
+      const { api } = require('../services/api-client')
+      api
+        .post('/errors/log', {
+          errors: [
+            {
+              message: (error.message || 'Unknown error').slice(0, 5000),
+              source: 'mobile',
+              stack: error.stack?.slice(0, 20000),
+              metadata: {
+                componentStack: errorInfo.componentStack,
+                level: 'error',
+              },
+            },
+          ],
+        })
+        .catch(() => {})
     } catch {}
   }
 
@@ -137,14 +144,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
       return (
         <ErrorBoundaryFallback
           error={this.state.error}
-          onRetry={() => this.setState({hasError: false, error: null})}
+          onRetry={() => this.setState({ hasError: false, error: null })}
         />
-      );
+      )
     }
-    return this.props.children;
+    return this.props.children
   }
 }
 
 function ErrorBoundaryFallback(props: ErrorFallbackProps) {
-  return <ErrorFallback {...props} />;
+  return <ErrorFallback {...props} />
 }

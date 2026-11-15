@@ -142,7 +142,7 @@ BCRYPT_ROUNDS=12
 # API Settings
 API_HOST=0.0.0.0
 API_PORT=8000
-# Web UI (local dev): Next.js in apps/web — typically http://localhost:5173
+# Web UI (local dev): Vite in apps/web — typically http://localhost:5173
 
 # Logging
 LOG_LEVEL=INFO
@@ -184,6 +184,7 @@ GRAFANA_PORT=3000
 **Problem**: `A module that was compiled using NumPy 1.x cannot be run in NumPy 2.0.2`
 
 **Solution**:
+
 ```bash
 python3 -m pip install "numpy<2.0"
 python3 -m pip install --force-reinstall torch torchvision torchaudio
@@ -200,6 +201,7 @@ python3 -m pip install --force-reinstall torch torchvision torchaudio
 **Problem**: `No module named 'torch'`
 
 **Solution**:
+
 ```bash
 # Install with specific version
 python3 -m pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0
@@ -213,6 +215,7 @@ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvi
 **Problem**: `Permission denied` when running scripts
 
 **Solution**:
+
 ```bash
 chmod +x install.sh verify.sh run.sh
 # Optional: repo-root CLI wrapper
@@ -243,7 +246,7 @@ except Exception as e:
     print(f'❌ Import error: {e}')
 "
 
-# 4. Check ports (API vs Next.js dev server)
+# 4. Check ports (API vs Vite dev server)
 lsof -i :8000  # Should be free before starting API
 lsof -i :5173  # Should be free before npm run dev (web)
 ```

@@ -15,12 +15,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from domain.infrastructure._internal.pugqeep.engine import Process
 
 logger = logging.getLogger("slo.model_health")
 
@@ -69,13 +71,24 @@ class ModelHealthMonitor:
         self._load_history()
 
     def _init_mogdb(self):
-        """Initialize MogDB with JSON sync for model health."""
+        """Initialize MogDB with JSON sync for model health.
+
+        The store lives beside ``db_path`` (``<stem>_mogdb`` / ``<stem>_json``)
+        so the isolation a caller asks for is the isolation it gets. The old
+        derivation walked ``db_path.parent.parent.parent`` and hardcoded
+        ``data/model_health_*``, which assumed ``db_path`` is always exactly
+        three levels deep (``data/model_health.json``): for any other path —
+        e.g. a pytest ``tmp_path`` — every instance collapsed onto the same
+        shared directory, so monitors shared one store and history leaked
+        across tests. Deriving from ``db_path`` itself keeps the production
+        default byte-identical (``data/model_health_mogdb``) while isolating
+        each custom path.
+        """
         from mogdb import MogDB
 
-        repo_root = self.db_path.parent.parent.parent
-        db_path = os.path.join(repo_root, "data", "model_health_mogdb")
-        sync_path = os.path.join(repo_root, "data", "model_health_json")
-        return MogDB(db_path, sync_dir=sync_path)
+        db_path = self.db_path.parent / f"{self.db_path.stem}_mogdb"
+        sync_path = self.db_path.parent / f"{self.db_path.stem}_json"
+        return MogDB(str(db_path), sync_dir=str(sync_path))
 
     def set_model(self, model, tokenizer) -> None:
         """Set the model and tokenizer to benchmark."""
@@ -251,27 +264,35 @@ class ModelHealthMonitor:
             ),
         }
 
-    def start_auto_monitoring(self, interval_seconds: int = 300) -> threading.Thread:
-        """Start a background thread that periodically benchmarks the model.
+    def start_auto_monitoring(self, interval_seconds: int = 300) -> Process:
+        """Start background monitoring as a pugqeep Process (shared engine).
+
+        Replaces the raw ``threading.Thread`` per the ``process`` kind in
+        ``docs/plans/2026-09-20-execution-consolidation.md``. The loop is
+        cancellable: ``proc.cancel()`` (or shared-engine stop) releases it.
 
         Args:
             interval_seconds: Seconds between benchmarks (default: 5 min)
 
         Returns:
-            The background thread (daemon).
+            The spawned :class:`Process` (name ``health-monitor``).
         """
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        stop = threading.Event()
 
         def _loop():
-            while True:
+            while not stop.is_set():
                 self.run_benchmark()
                 drift = self.detect_drift()
                 if drift.get("drifted"):
                     logger.warning(drift["message"], extra={"tag": "INFRA"})
-                time.sleep(interval_seconds)
+                stop.wait(interval_seconds)
 
-        thread = threading.Thread(target=_loop, daemon=True, name="health-monitor")
-        thread.start()
-        return thread
+        engine = get_engine()
+        proc = engine.spawn(_loop, name="health-monitor")
+        proc.on_cancel(lambda _p: stop.set())
+        return proc
 
     def get_stats(self) -> dict[str, Any]:
         """Get full health statistics including trend and drift."""

@@ -6,6 +6,23 @@ import { apiGet, apiPost, apiDelete, apiPatch, authFetch, streamSSE } from './ht
 import { extractErrorMessage } from '@/lib/error-utils'
 import type { Checkpoint } from './souls-controller'
 
+export interface ProbeStanding {
+  stage: number
+  dataset: string
+  manifest?: string
+  global_step: number
+  probes: Record<string, number | null>
+}
+
+export interface TrainedOnEntry {
+  kind?: string
+  ref: string
+  manifest?: string
+  stage: number
+  global_step: number
+  finished_at?: string
+}
+
 export interface TrainingJob {
   id: string
   name: string
@@ -41,6 +58,10 @@ export interface TrainingJob {
   explanation?: string
   status_message?: string
   avg_quality?: number
+  mode?: string
+  manifests?: string[]
+  probe_standings?: ProbeStanding[]
+  trained_on?: TrainedOnEntry[]
 }
 
 export interface TrainingStatus {
@@ -81,6 +102,7 @@ export interface AutoTrainStartRequest {
   source_text?: string
   checkpoint_name?: string
   experiment_id?: string
+  manifests?: string[]
 }
 
 export interface AutoTrainStartResponse {

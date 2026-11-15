@@ -8,6 +8,8 @@ from collections.abc import Callable
 from threading import Event, Lock, Thread
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
+
 from .structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.idle_manager")
@@ -55,7 +57,7 @@ class IdleManager:
             str, dict
         ] = {}  # model_id → {last_touch, unload_fn, reload_fn, unloaded_at}
         self._lock = Lock()
-        self._thread: Thread | None = None
+        self._thread: ThreadHandle | None = None
         self._running = False
         self._stop_event = Event()
         self._on_unload: Callable[[str], None] | None = None
@@ -205,12 +207,17 @@ class IdleManager:
                 return
             self._running = True
         self._stop_event.clear()
-        self._thread = Thread(target=self._check_loop, daemon=True, name="idle-manager")
-        self._thread.start()
+        # Stage 3B (docs/plans/2026-09-20-execution-consolidation.md): the
+        # check loop is an engine process on the `loops` tree — registry-
+        # visible, and `stop=` releases it on engine stop/interpreter exit
+        # (the daemon-equivalent guarantee). The loop must honor the event
+        # itself: the engine cancels the process, it cannot interrupt a
+        # blocking wait.
+        self._thread = spawn_loop(self._check_loop, name="idle-manager", stop=self._stop_event)
 
     def _check_loop(self) -> None:
         """Background loop: check for idle models and unload them."""
-        while self._running:
+        while self._running and not self._stop_event.is_set():
             self._stop_event.wait(self._check_interval_s)
             now = time.time()
             with self._lock:

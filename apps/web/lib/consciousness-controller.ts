@@ -23,12 +23,21 @@ export interface ConsciousnessStatus {
   }
 }
 
+// Matches GET /consciousness/self-model exactly (routers/consciousness.py
+// get_self_model). `beliefs` holds the numeric self-beliefs — there is no
+// `self_beliefs` key at the HTTP boundary even though the engine field is
+// named that. Declaring the engine's names here instead of the wire's is how
+// the dashboard's beliefs panel silently never populated.
 export interface SelfModel {
-  traits: Record<string, number>
-  beliefs: string[]
-  goals: string[]
-  memories: string[]
-  self_beliefs: Record<string, number>
+  identity: {
+    name: string
+    capabilities: string[]
+    limitations: string[]
+    values: string[]
+  }
+  beliefs: Record<string, number>
+  doubts: string[]
+  episode_count: number
 }
 
 export interface QualiaEntry {
@@ -98,7 +107,18 @@ export const consciousnessController = {
     return apiGet<SelfModel>('/consciousness/self-model')
   },
 
-  async getQualia(): Promise<Record<string, number>> {
+  // GET /consciousness/qualia returns a NESTED envelope — the flat map of
+  // dimensions lives under `current`, alongside `narrative` and a count.
+  // Declaring this as a flat Record<string, number> (what it was before) made
+  // the dashboard store the whole envelope as its qualia map, so the qualia
+  // bars called Object.entries over `{current, narrative, history_count}` and
+  // hit `.toFixed()` on an object and a string — a render-time TypeError that
+  // unmounted the entire route.
+  async getQualia(): Promise<{
+    current: Record<string, number>
+    narrative: string
+    history_count: number
+  }> {
     return apiGet('/consciousness/qualia')
   },
 

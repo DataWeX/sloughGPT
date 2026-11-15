@@ -1,12 +1,13 @@
-import React from 'react';
-import {render} from '@testing-library/react-native';
-import {Icon, IconName} from '../Icon';
+import React from 'react'
+import { render } from '@testing-library/react-native'
+import type { IconName } from '../Icon'
+import { Icon } from '../Icon'
 
 jest.mock('lucide-react-native', () => {
-  const React = require('react');
-  const {View} = require('react-native');
-  const MockIcon = ({size, color}: {size?: number; color?: string}) =>
-    React.createElement(View, {style: {width: size, height: size, backgroundColor: color}});
+  const React = require('react')
+  const { View } = require('react-native')
+  const MockIcon = ({ size, color }: { size?: number; color?: string }) =>
+    React.createElement(View, { style: { width: size, height: size, backgroundColor: color } })
   return {
     Copy: MockIcon,
     ExternalLink: MockIcon,
@@ -63,47 +64,87 @@ jest.mock('lucide-react-native', () => {
     ArchiveX: MockIcon,
     MessageSquare: MockIcon,
     SmilePlus: MockIcon,
-  };
-});
+  }
+})
 
 const ALL_ICONS: IconName[] = [
-  'copy', 'external-link', 'reply', 'forward', 'edit',
-  'pin', 'pin-off', 'star', 'star-outline',
-  'smile-plus', 'thumbs-up', 'thumbs-down',
-  'refresh-cw', 'trash-2', 'check', 'mic',
-  'arrow-up', 'arrow-down',
-  'stop-circle', 'zap', 'message-circle',
-  'brain', 'dumbbell', 'book-open',
-  'search', 'x', 'menu', 'settings',
-  'sun', 'moon', 'package', 'archive',
-  'triangle-alert', 'palette', 'bar-chart', 'plus',
-  'bookmark', 'share-2', 'image', 'upload',
-  'download', 'lock', 'unlock', 'info',
-  'more-horizontal', 'more-vertical',
-  'music', 'headphones', 'target', 'save',
-  'help', 'user', 'book', 'square',
-  'archive-x', 'message-square',
-];
+  'copy',
+  'external-link',
+  'reply',
+  'forward',
+  'edit',
+  'pin',
+  'pin-off',
+  'star',
+  'star-outline',
+  'smile-plus',
+  'thumbs-up',
+  'thumbs-down',
+  'refresh-cw',
+  'trash-2',
+  'check',
+  'mic',
+  'arrow-up',
+  'arrow-down',
+  'stop-circle',
+  'zap',
+  'message-circle',
+  'brain',
+  'dumbbell',
+  'book-open',
+  'search',
+  'x',
+  'menu',
+  'settings',
+  'sun',
+  'moon',
+  'package',
+  'archive',
+  'triangle-alert',
+  'palette',
+  'bar-chart',
+  'plus',
+  'bookmark',
+  'share-2',
+  'image',
+  'upload',
+  'download',
+  'lock',
+  'unlock',
+  'info',
+  'more-horizontal',
+  'more-vertical',
+  'music',
+  'headphones',
+  'target',
+  'save',
+  'help',
+  'user',
+  'book',
+  'square',
+  'archive-x',
+  'message-square',
+]
 
 describe('Icon', () => {
   it('renders without crashing with default props', () => {
-    expect(() => render(<Icon name="star" />)).not.toThrow();
-  });
+    expect(() => render(<Icon name="star" />)).not.toThrow()
+  })
 
   it('renders with custom size', () => {
-    expect(() => render(<Icon name="star" size={32} />)).not.toThrow();
-  });
+    expect(() => render(<Icon name="star" size={32} />)).not.toThrow()
+  })
 
   it('renders with custom color', () => {
-    expect(() => render(<Icon name="star" color="red" />)).not.toThrow();
-  });
+    expect(() => render(<Icon name="star" color="red" />)).not.toThrow()
+  })
 
   it('renders nothing for unknown icon name', () => {
     // @ts-expect-error — testing runtime fallback
-    expect(() => render(<Icon name="nonexistent" />)).not.toThrow();
-  });
+    expect(() => render(<Icon name="nonexistent" />)).not.toThrow()
+  })
 
-  it.each(ALL_ICONS)('renders icon "%s" without crashing', name => {
-    expect(() => render(<Icon name={name} />)).not.toThrow();
-  });
-});
+  it.each(ALL_ICONS)('renders icon "%s" without crashing', (name) => {
+    expect(() => render(<Icon name={name} />)).not.toThrow()
+  })
+})

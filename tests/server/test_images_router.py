@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.images import ImagesRouter, router
+from apps.api.server.routers.files import ImagesRouter, router
 
 
 @pytest.fixture
@@ -197,28 +197,28 @@ class TestHexToRgb:
     """Module-level hex_to_rgb helper"""
 
     def test_converts_hex(self):
-        from apps.api.server.routers.images import hex_to_rgb
+        from apps.api.server.routers.files import hex_to_rgb
 
         assert hex_to_rgb("#ff0000") == (255, 0, 0)
 
     def test_converts_without_hash(self):
-        from apps.api.server.routers.images import hex_to_rgb
+        from apps.api.server.routers.files import hex_to_rgb
 
         assert hex_to_rgb("00ff00") == (0, 255, 0)
 
     def test_converts_uppercase(self):
-        from apps.api.server.routers.images import hex_to_rgb
+        from apps.api.server.routers.files import hex_to_rgb
 
         assert hex_to_rgb("#AABBCC") == (170, 187, 204)
 
     def test_invalid_length_raises(self):
-        from apps.api.server.routers.images import hex_to_rgb
+        from apps.api.server.routers.files import hex_to_rgb
 
         with pytest.raises(ValueError):
             hex_to_rgb("#ff00")
 
     def test_static_method_equivalent(self):
-        from apps.api.server.routers.images import ImagesRouter
+        from apps.api.server.routers.files import ImagesRouter
 
         assert ImagesRouter.hex_to_rgb("#123456") == (18, 52, 86)
 
@@ -258,7 +258,7 @@ def _fake_file(stem, mtime):
 class TestListGalleryWithFiles:
     """GET /images/gallery with a populated gallery dir."""
 
-    @patch("apps.api.server.routers.images.Path")
+    @patch("apps.api.server.routers.files.Path")
     def test_lists_images_sorted_newest_first(self, mock_path, client):
         mock_path.return_value = _FakeGalleryPath(
             files=[
@@ -272,7 +272,7 @@ class TestListGalleryWithFiles:
         images = resp.json()["data"]["images"]
         assert [i["id"] for i in images] == ["generated_bbb", "generated_ccc", "generated_aaa"]
 
-    @patch("apps.api.server.routers.images.Path")
+    @patch("apps.api.server.routers.files.Path")
     def test_image_entries_have_expected_fields(self, mock_path, client):
         mock_path.return_value = _FakeGalleryPath(files=[_fake_file("generated_abc", 123)])
         resp = client.get("/images/gallery")
@@ -281,14 +281,14 @@ class TestListGalleryWithFiles:
         assert entry["path"] == "/data/gallery/generated_abc.png"
         assert entry["created"] == 123
 
-    @patch("apps.api.server.routers.images.Path")
+    @patch("apps.api.server.routers.files.Path")
     def test_caps_at_fifty_images(self, mock_path, client):
         files = [_fake_file(f"generated_{i:04d}", i) for i in range(60)]
         mock_path.return_value = _FakeGalleryPath(files=files)
         resp = client.get("/images/gallery")
         assert len(resp.json()["data"]["images"]) == 50
 
-    @patch("apps.api.server.routers.images.Path")
+    @patch("apps.api.server.routers.files.Path")
     def test_missing_dir_returns_empty(self, mock_path, client):
         mock_path.return_value = _FakeGalleryPath(exists=False)
         resp = client.get("/images/gallery")

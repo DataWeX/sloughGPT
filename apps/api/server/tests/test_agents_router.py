@@ -265,3 +265,89 @@ class TestAgentCRUDLifecycle:
         # Verify gone
         resp = self.client.get(f"/agents/{aid}")
         assert resp.status_code == 404
+
+
+def _sse_frames(text: str) -> list[dict]:
+    """Parse 'data: {json}' SSE lines from a buffered response body."""
+    import json
+
+    frames = []
+    for line in text.splitlines():
+        if line.startswith("data: "):
+            frames.append(json.loads(line[len("data: ") :]))
+    return frames
+
+
+class TestRunLoop:
+    """POST /agents/loop — canonical AgentLoop over the live provider (SSE)."""
+
+    def setup_method(self):
+        self.client = get_test_client()
+
+    def test_no_provider_yields_503_frame(self):
+        from domain.models._internal.provider import registry as reg
+
+        saved = dict(reg._providers)
+        reg.clear_providers()
+        try:
+            resp = self.client.post("/agents/loop", json={"task": "hello"})
+            assert resp.status_code == 200  # SSE always 200; error in-band
+            frames = _sse_frames(resp.text)
+            assert frames, "no SSE frames"
+            assert frames[0]["status"] == "error"
+            assert frames[0]["data"]["code"] == "E_MODEL_NOT_READY"
+            assert frames[0]["data"]["http_status"] == 503
+        finally:
+            reg._providers.update(saved)
+
+    def test_unknown_tool_yields_400_frame(self):
+        from domain.models._internal.provider import registry as reg
+
+        reg.register_provider("slonet-native", object())  # truthy sentinel
+        try:
+            resp = self.client.post(
+                "/agents/loop", json={"task": "hello", "tools": ["no_such_tool"]}
+            )
+            frames = _sse_frames(resp.text)
+            assert frames[0]["status"] == "error"
+            assert frames[0]["data"]["code"] == "E_INVALID_REQUEST"
+            assert "no_such_tool" in frames[0]["data"]["error"]
+        finally:
+            del reg._providers["slonet-native"]
+
+    def test_happy_path_streams_tool_round_trip(self):
+        from domain.models._internal.provider import registry as reg
+
+        class FakeProvider:
+            def __init__(self):
+                self.calls = 0
+
+            async def chat(self, messages, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    block = '{"name": "calculator", "args": {"expression": "2+2"}}'
+                    return f"```tool_call\n{block}\n```"
+                return "The answer is 4."
+
+        reg.register_provider("slonet-native", FakeProvider())
+        try:
+            resp = self.client.post(
+                "/agents/loop",
+                json={"task": "what is 2+2?", "tools": ["calculator"], "max_iters": 3},
+            )
+            assert resp.status_code == 200
+            assert resp.headers["content-type"].startswith("text/event-stream")
+            frames = _sse_frames(resp.text)
+            phases = [f["phase"] for f in frames]
+            assert phases[0] == "PLAN"
+            assert "TOOL_CALL" in phases
+            assert "TOOL_RESULT" in phases
+            assert phases[-1] == "FINAL"
+            final = frames[-1]
+            assert final["status"] == "complete"
+            assert final["data"]["text"] == "The answer is 4."
+            call = next(f for f in frames if f["phase"] == "TOOL_CALL")
+            assert call["data"]["name"] == "calculator"
+            assert call["data"]["args"] == {"expression": "2+2"}
+        finally:
+            del reg._providers["slonet-native"]

@@ -133,9 +133,21 @@ vi.mock('@/lib/lora-eval-controller', () => ({
   loraEvalController: { runEval: mockRunEval, getHistory: mockGetHistory },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://test-api' }))
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ title, children, loading, error, onRetry, headerRight }: any) => (
@@ -167,7 +179,8 @@ vi.mock('@/components/adapters/AdapterHealthCard', () => ({
   ),
 }))
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: any, fallback: string) => (e instanceof Error ? e.message : fallback),
+  extractErrorMessage: (e: any, fallback = 'Unknown error') =>
+    e instanceof Error ? e.message : fallback,
 }))
 
 import AdaptersPage from './page'
@@ -376,7 +389,9 @@ describe('AdaptersPage', () => {
     await waitFor(() => {
       expect(mockPrune).toHaveBeenCalled()
     })
-    expect(screen.getByText('Pruned 2 adapters')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Pruned 2 adapters')).toBeTruthy()
+    })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalledTimes(2)
     })

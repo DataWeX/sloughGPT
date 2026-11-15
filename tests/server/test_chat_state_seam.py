@@ -314,6 +314,49 @@ def test_post_chat_surfaces_engine_details(client, manager):
         assert key in body, f"closing frame must carry {key} off the TurnResult"
 
 
+def test_post_chat_renders_turn_result_sideband_before_close(client, manager):
+    """Stage payloads on the final TurnResult must reach the wire as SSE.
+
+    The engine yields raw tokens, so it cannot emit SSE frames mid-stream —
+    MEMORY/CONSCIOUSNESS ride on the final result as data, the chat edge
+    renders them ahead of the closing frame (the web client parses them via
+    ``stream-chat-response``'s phase handlers).
+    """
+    turn = TurnResult(
+        text="answer",
+        session_id="s1",
+        consciousness={"reflection": "ok"},
+        memory={"stored": True},
+    )
+    # Token first, then the final result carrying the stage payloads.
+    fake_engine = _engine_yielding("answer", turn)
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(ChatManager, "_store"),
+        patch.object(ChatManager, "_track", return_value=("op-6", None)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": "s1", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert '"phase": "CONSCIOUSNESS"' in body, "the CONSCIOUSNESS frame must reach the wire"
+    assert '"Reflection updated"' in body
+    assert '"reflection": "ok"' in body, "payload data rides the rendered frame"
+    assert '"phase": "MEMORY"' in body, "the MEMORY frame must reach the wire"
+    assert '"stored": true' in body, "payload data rides the rendered frame"
+    closing = body.index('"phase": "STREAMING", "status": "complete"')
+    assert body.index('"phase": "CONSCIOUSNESS"') < closing, (
+        "stage frames must precede the closing frame"
+    )
+    assert body.index('"phase": "MEMORY"') < closing, "stage frames must precede the closing frame"
+
+
 def test_chat_router_does_not_import_inference_router():
     """Layering pin: the chat surface must read the engine via its port, never
     by importing the sibling inference router (routers must not import routers)."""

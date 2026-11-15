@@ -1,4 +1,4 @@
-import {useTheme, useThemeName} from 'tamagui';
+import { useTheme, useThemeName } from 'tamagui'
 
 /**
  * Noir Violet Design System — Mobile Color Access
@@ -9,9 +9,9 @@ import {useTheme, useThemeName} from 'tamagui';
  * For static values, prefer Tamagui theme tokens ($background, $color, etc.).
  */
 export function useColors() {
-  const theme = useTheme();
-  const themeName = useThemeName();
-  const isDark = themeName === 'dark';
+  const theme = useTheme()
+  const themeName = useThemeName()
+  const isDark = themeName === 'dark'
 
   return {
     // ── Core ──────────────────────────────────────────
@@ -70,5 +70,20 @@ export function useColors() {
     warningAlpha: (opacity: number) =>
       isDark ? `rgba(240, 192, 80, ${opacity})` : `rgba(236, 168, 60, ${opacity})`,
     whiteAlpha: (opacity: number) => `rgba(255, 255, 255, ${opacity})`,
-  };
+  }
 }
+
+/**
+ * Syntax-highlight palette for code blocks (CodeHighlight).
+ * Fixed colors — not theme-dependent; lives here as the single color source.
+ */
+export const SYNTAX_COLORS = {
+  keyword: '#C4AAF0',
+  string: '#7CC88E',
+  number: '#EC915F',
+  comment: '#8A8A00',
+  function: '#EC915F',
+  operator: '#C4A8D8',
+  punctuation: '#B0A8C4',
+  variable: '#E8C87A',
+} as const

@@ -11,6 +11,8 @@ Public API:
     LongRunRecorder (durable JSONL metrics for long unattended runs)
 """
 
+from __future__ import annotations
+
 from domain.training._internal.checkpoints import (
     find_checkpoint,
     load_lora_soul,
@@ -89,7 +91,44 @@ _LAZY_IMPORTS = {
     "get_turbo_state": ("._internal.state", "get_turbo_state"),
     "peek_training_executor": ("._internal.executor", "peek_training_executor"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
+    "CrawlStoreError": ("._internal.crawl_store", "CrawlStoreError"),
+    "ingest_crawl": ("._internal.crawl_store", "ingest_crawl"),
+    "parse_jsonl_pages": ("._internal.crawl_store", "parse_jsonl_pages"),
     "executor": ("._internal.executor", None),
+    # Route-surface reads for the API layer — card 20261101_140447 (routers
+    # out of domain.*._internal*): every training sub-router imports through
+    # this facade; each entry maps to the module that reads it today (and
+    # that tests patch). `_state` / `_turbo_*` are shared module singletons —
+    # private by name, but they are the historical read points, so the facade
+    # binds them there rather than inventing a new indirection (facade
+    # binding rule: map to the module the tests actually patch).
+    "is_feed_source": ("._internal.training_feed", "is_feed_source"),
+    "ManifestError": ("._internal.dataset_manifest", "ManifestError"),
+    "create_training_tracker_for_api_job": (
+        "._internal.wandb_helpers",
+        "create_training_tracker_for_api_job",
+    ),
+    "DistillationConfig": ("._internal.distillation", "DistillationConfig"),
+    "DistillationTrainer": ("._internal.distillation", "DistillationTrainer"),
+    "load_lora_adapter": ("._internal.hf_lora_finetune", "load_lora_adapter"),
+    "merge_lora_adapter": ("._internal.hf_lora_finetune", "merge_lora_adapter"),
+    "unload_lora_adapter": ("._internal.hf_lora_finetune", "unload_lora_adapter"),
+    "HFLoraConfig": ("._internal.hf_lora_finetune", "HFLoraConfig"),
+    "HFLoraTrainer": ("._internal.hf_lora_finetune", "HFLoraTrainer"),
+    "count_lora_parameters": ("._internal.lora", "count_lora_parameters"),
+    "get_turbo_status": ("._internal.service", "get_turbo_status"),
+    "_state": ("._internal.service", "_state"),
+    "start_from_sessions_training": ("._internal.service", "start_from_sessions_training"),
+    "run_turbo_worker": ("._internal.service", "run_turbo_worker"),
+    "start_turbo_training": ("._internal.service", "start_turbo_training"),
+    "resolve_in_cache": ("._internal.cache_tags", "resolve_in_cache"),
+    "_turbo_pause_event": ("._internal.state", "_turbo_pause_event"),
+    "_turbo_lock": ("._internal.turbo", "_turbo_lock"),
+    "_turbo_state": ("._internal.turbo", "_turbo_state"),
+    "VideoTrainConfig": ("._internal.video_trainer", "VideoTrainConfig"),
+    # Route-surface facade (layer conformance): the training execution routes
+    # run staged pipelines through the public package, not _internal.
+    "run_sequential_stages": ("._internal.sequential", "run_sequential_stages"),
 }
 
 
@@ -176,6 +215,32 @@ __all__ = [
     "get_auto_trainer",
     "executor",
     "peek_training_executor",
+    "CrawlStoreError",
+    "ingest_crawl",
+    "parse_jsonl_pages",
+    # Route-surface reads (card 20261101_140447)
+    "is_feed_source",
+    "ManifestError",
+    "create_training_tracker_for_api_job",
+    "DistillationConfig",
+    "DistillationTrainer",
+    "load_lora_adapter",
+    "merge_lora_adapter",
+    "unload_lora_adapter",
+    "HFLoraConfig",
+    "HFLoraTrainer",
+    "count_lora_parameters",
+    "get_turbo_status",
+    "_state",
+    "start_from_sessions_training",
+    "run_turbo_worker",
+    "start_turbo_training",
+    "resolve_in_cache",
+    "_turbo_pause_event",
+    "_turbo_lock",
+    "_turbo_state",
+    "VideoTrainConfig",
+    "run_sequential_stages",
 ]
 
 

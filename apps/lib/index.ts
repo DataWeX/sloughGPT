@@ -53,5 +53,6 @@ export { httpClient, createHttpClient } from './client'
 
 // SSE streaming + raw auth fetch
 export type { SSEEvent } from './sse'
-export { streamSSE } from './sse'
+export { streamSSE, fetchSSE } from './sse'
+export type { SSEFetchOptions } from './sse'
 export { authFetch } from './auth'

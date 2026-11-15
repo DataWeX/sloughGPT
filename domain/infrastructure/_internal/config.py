@@ -163,15 +163,16 @@ _SKIP_ENV_KEYS: frozenset[str] = frozenset(
         "SLO_WATCHDOG",
         "SLO_WEB",
         "SLO_AUTO_WORKFLOW",
-        # Fail-closed auth flag — read directly by infrastructure/auth.py,
-        # auth_middleware.py and routers/inference.py (os.environ), not by
-        # the AppConfig schema. Without this entry every deployment that
-        # sets it (all of them, since the fail-closed default) logs
-        # "Unknown config key: auth_required" at boot.
+        # Fail-closed-capable auth flag — read directly via os.environ by
+        # infrastructure/auth.py, auth_middleware.py, startup.py and
+        # routers/inference.py, never by the AppConfig schema. Without this
+        # entry every deployment that sets it logs "Unknown config key:
+        # auth_required" at boot. (Whether the DEFAULT should be fail-closed
+        # is a separate, deliberate decision — card fcc6ebfe8.)
         "SLO_AUTH_REQUIRED",
-        # CORS allowlist — read directly by main.py (os.environ.get at the
-        # CORS-middleware wiring); the local dev drop-in 10-cors-vite-origin
-        # sets it, so it warned at every boot.
+        # CORS allowlist — read directly by main.py's CORS-middleware wiring;
+        # infra/docker and the local dev drop-in both set it, so it warned at
+        # every boot.
         "SLO_CORS_ORIGINS",
         # Accelerator probe bound — read directly by domain/slolib gpu.py
         # (get_accelerator's per-epoch wait), not by the AppConfig schema.

@@ -3,9 +3,21 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 import React from 'react'
 
 const mockAddToast = vi.fn()
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (s: any) => s({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (s: any) => s({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 vi.mock('@/lib/generate-controller', () => ({
   generateController: { generate: vi.fn() },
 }))
@@ -14,7 +26,9 @@ vi.mock('@sloughgpt/strui', async () => {
   return {
     ...actual,
     Chip: ({ label, selected, onClick }: any) => (
-      <button data-testid={`chip-${label}`} data-selected={selected} onClick={onClick}>{label}</button>
+      <button data-testid={`chip-${label}`} data-selected={selected} onClick={onClick}>
+        {label}
+      </button>
     ),
     Spinner: ({ size, className }: any) => <span data-testid="spinner" className={className} />,
   }
@@ -65,16 +79,23 @@ describe('OutputComparisonCard', () => {
   it('enables Compare when prompt and model selected', async () => {
     vi.mocked(generateController.generate).mockResolvedValue({ text: 'hi', tokens_generated: 1 })
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'hello' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'hello' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     const btn = screen.getByText('Compare').closest('button')!
     expect(btn.disabled).toBe(false)
   })
 
   it('runs comparison and displays results', async () => {
-    vi.mocked(generateController.generate).mockResolvedValue({ text: 'response from model', tokens_generated: 5 })
+    vi.mocked(generateController.generate).mockResolvedValue({
+      text: 'response from model',
+      tokens_generated: 5,
+    })
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'test prompt' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'test prompt' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByText('Compare'))
     await waitFor(() => expect(screen.getByText('response from model')).toBeDefined())
@@ -85,7 +106,9 @@ describe('OutputComparisonCard', () => {
   it('shows error badge on generate failure', async () => {
     vi.mocked(generateController.generate).mockRejectedValue(new Error('timeout'))
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'fail' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'fail' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByText('Compare'))
     await waitFor(() => expect(screen.getByText('Error')).toBeDefined())
@@ -95,7 +118,9 @@ describe('OutputComparisonCard', () => {
   it('shows Clear button when results exist', async () => {
     vi.mocked(generateController.generate).mockResolvedValue({ text: 'ok', tokens_generated: 1 })
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'x' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'x' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByText('Compare'))
     await waitFor(() => expect(screen.getByText('Clear')).toBeDefined())
@@ -104,20 +129,29 @@ describe('OutputComparisonCard', () => {
   it('Clear button resets results and prompt', async () => {
     vi.mocked(generateController.generate).mockResolvedValue({ text: 'ok', tokens_generated: 1 })
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'x' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'x' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByText('Compare'))
     await waitFor(() => expect(screen.getByText('Clear')).toBeDefined())
     fireEvent.click(screen.getByText('Clear'))
     expect(screen.queryByText('ok')).toBeNull()
-    expect((screen.getByPlaceholderText(/Enter a prompt to compare/) as HTMLTextAreaElement).value).toBe('')
+    expect(
+      (screen.getByPlaceholderText(/Enter a prompt to compare/) as HTMLTextAreaElement).value,
+    ).toBe('')
   })
 
   it('truncates long output and shows expand button', async () => {
     const longText = 'a'.repeat(400)
-    vi.mocked(generateController.generate).mockResolvedValue({ text: longText, tokens_generated: 100 })
+    vi.mocked(generateController.generate).mockResolvedValue({
+      text: longText,
+      tokens_generated: 100,
+    })
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'long' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'long' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByText('Compare'))
     await waitFor(() => expect(screen.getByText(/Show all \(400 chars\)/)).toBeDefined())
@@ -127,9 +161,14 @@ describe('OutputComparisonCard', () => {
   it('copies result to clipboard on copy button click', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
-    vi.mocked(generateController.generate).mockResolvedValue({ text: 'copy me', tokens_generated: 1 })
+    vi.mocked(generateController.generate).mockResolvedValue({
+      text: 'copy me',
+      tokens_generated: 1,
+    })
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'copy' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'copy' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByText('Compare'))
     await waitFor(() => expect(screen.getByLabelText('Copy response')).toBeDefined())
@@ -140,9 +179,16 @@ describe('OutputComparisonCard', () => {
 
   it('shows querying count while loading', async () => {
     let resolveGen: any
-    vi.mocked(generateController.generate).mockImplementation(() => new Promise(r => { resolveGen = r }))
+    vi.mocked(generateController.generate).mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolveGen = r
+        }),
+    )
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'wait' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'wait' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByText('Compare'))
     await waitFor(() => expect(screen.getByText(/Querying 1 model/)).toBeDefined())
@@ -151,10 +197,13 @@ describe('OutputComparisonCard', () => {
 
   it('handles multiple model results in parallel', async () => {
     vi.mocked(generateController.generate).mockImplementation(async ({ model }) => ({
-      text: `output-${model}`, tokens_generated: 1,
+      text: `output-${model}`,
+      tokens_generated: 1,
     }))
     render(<OutputComparisonCard models={models} />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), { target: { value: 'multi' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to compare/), {
+      target: { value: 'multi' },
+    })
     fireEvent.click(screen.getByTestId('chip-GPT-2'))
     fireEvent.click(screen.getByTestId('chip-Qwen'))
     fireEvent.click(screen.getByText('Compare'))

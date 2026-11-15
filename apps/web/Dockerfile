@@ -7,19 +7,38 @@ FROM node:20-alpine AS base
 
 FROM base AS deps
 WORKDIR /app
-COPY apps/web/package.json apps/web/package-lock.json* ./apps/web/
-COPY packages/strui/package.json packages/strui/package-lock.json* ./packages/strui/
-WORKDIR /app/apps/web
-RUN npm ci
-WORKDIR /app/packages/strui
-RUN npm ci --omit=peer
+# One lock, one truth: install from the WORKSPACE ROOT lock, the same install
+# every CI job uses (npm ci inside a workspace member climbs to the root
+# anyway). The nested apps/web lock is stale — react ^19 + r3f landed in
+# package.json (fd86ab831) without regenerating it, so the old nested
+# `npm ci` died on ERESOLVE (react 18.3.1 vs @react-three/fiber peer >=19).
+# All four workspace manifests are required: npm ci validates every
+# workspace entry against the lock before installing.
+# --ignore-scripts: matches test-web (husky prepare needs .git; cypress's
+# postinstall downloads a browser binary the image never runs).
+COPY package.json package-lock.json ./
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/strui/package.json ./packages/strui/package.json
+COPY packages/sdk-ts/typescript-sdk/package.json ./packages/sdk-ts/typescript-sdk/package.json
+COPY packages/eslint-config/package.json ./packages/eslint-config/package.json
+RUN npm ci --ignore-scripts
 
 FROM base AS builder
 WORKDIR /app
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages/strui/node_modules ./packages/strui/node_modules
+# The root install hoists all deps to /app/node_modules and links
+# @sloughgpt/strui as a workspace symlink; sources layer on top. Copy the
+# whole deps tree (COPY of a member node_modules that npm never created
+# would fail the build) and let source COPYs merge over it — .dockerignore
+# keeps any host node_modules out of the context, so the installed tree wins.
+COPY --from=deps /app ./
 COPY apps/web ./apps/web
+# apps/web/lib/* is a facade: http-client/dev-log/sse-client re-export
+# ../../lib/* (the shared apps/lib implementation) — the image needs it.
+COPY apps/lib ./apps/lib
 COPY packages/strui ./packages/strui
+# apps/web/tsconfig.json extends the repo-root base config — vite v8/rolldown
+# resolves it during the build and hard-fails without it.
+COPY tsconfig.base.json ./tsconfig.base.json
 WORKDIR /app/apps/web
 RUN npm run build:vite \
   && test -f dist-vite/index.html

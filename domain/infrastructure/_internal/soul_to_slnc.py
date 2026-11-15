@@ -23,13 +23,16 @@ def build_slnc_config_from_soul(soul: Any, state_dict: dict) -> dict:
     """Build an SLNC config dict from soul metadata + weights (no HF)."""
     meta = soul.metadata if hasattr(soul, "metadata") else {}
     cfg = meta.get("config") or {}
-    n_embed = int(cfg.get("n_embed") or next(
-        (v.shape[1] for k, v in state_dict.items() if k == "tok_emb.weight" and v.ndim == 2),
-        128,
-    ))
-    n_layer = int(cfg.get("n_layer") or sum(
-        1 for k in state_dict if k.endswith(".attn_norm.weight")
-    ) or 1)
+    n_embed = int(
+        cfg.get("n_embed")
+        or next(
+            (v.shape[1] for k, v in state_dict.items() if k == "tok_emb.weight" and v.ndim == 2),
+            128,
+        )
+    )
+    n_layer = int(
+        cfg.get("n_layer") or sum(1 for k in state_dict if k.endswith(".attn_norm.weight")) or 1
+    )
     n_head = int(cfg.get("n_head") or 4)
     block_size = int(cfg.get("block_size") or 128)
     vocab_size = int(meta.get("vocab_size") or cfg.get("vocab_size") or 256)
@@ -141,9 +144,7 @@ def soul_to_slnc(
     config = build_slnc_config_from_soul(soul, state_dict)
     slnc_path.parent.mkdir(parents=True, exist_ok=True)
 
-    out = SLNCCompiler().compile_from_dict(
-        config, state_dict, str(slnc_path), quantize=quantize
-    )
+    out = SLNCCompiler().compile_from_dict(config, state_dict, str(slnc_path), quantize=quantize)
     logger.info(
         "soul_to_slnc: %s → %s (%d tensors, vocab=%s)",
         soul_path,

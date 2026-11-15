@@ -120,7 +120,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
             value={customCategory}
             onChange={(e) => setCustomCategory(e.target.value)}
             placeholder="Category name..."
-            className="flex-1 text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="flex-1 text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
           />
           <Button
@@ -180,7 +180,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
                 <div className="flex items-start justify-between gap-2">
                   <button
                     type="button"
-                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     onClick={() => onJumpToMessage(bookmark.messageId)}
                   >
                     <div className="flex items-center gap-2 mb-1">

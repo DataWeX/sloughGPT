@@ -199,7 +199,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
             placeholder="Prompt template. Use {{text}} where user input goes."
             value={newPrompt}
             onChange={(e) => setNewPrompt(e.target.value)}
-            className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             aria-label="New prompt template"
           />
           <div className="flex gap-1">
@@ -247,7 +247,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                       <textarea
                         value={editPrompt}
                         onChange={(e) => setEditPrompt(e.target.value)}
-                        className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                         aria-label="Edit prompt template"
                       />
                       <div className="flex gap-1">
@@ -272,7 +272,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                     <>
                       <button
                         type="button"
-                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left"
+                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                         onClick={() => handleUse(p)}
                         title="Use this prompt"
                       >

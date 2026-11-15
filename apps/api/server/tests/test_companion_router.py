@@ -33,7 +33,7 @@ def _traits(resp):
 @pytest.fixture(autouse=True)
 def _fresh_companion():
     """Reset the companion singleton before each test."""
-    import routers.companion as comp_mod
+    import routers.souls as comp_mod
 
     import domain.companion as dom_mod
     import domain.companion._internal.companion as dom_internal

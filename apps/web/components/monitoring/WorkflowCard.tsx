@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useEffect, useState, useCallback, memo } from 'react'
 import { cn, ActionCard, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController, type WorkflowStatus } from '@/lib/workflow-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
 interface WorkflowCardProps {
@@ -14,7 +14,7 @@ interface WorkflowCardProps {
 export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCardProps) {
   const [status, setStatus] = useState<WorkflowStatus | null>(null)
   const [loading, setLoading] = useState(true)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -39,7 +39,10 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
       fetching = true
       try {
         const s = await workflowController.status()
-        if (gen === generation) { setStatus(s); failures = 0 }
+        if (gen === generation) {
+          setStatus(s)
+          failures = 0
+        }
       } catch (e: unknown) {
         if (gen === generation) {
           failures++
@@ -56,12 +59,18 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
 
     const tick = () => {
       const gen = ++generation
-      if (timer !== null) { clearTimeout(timer); timer = null }
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
       run(gen)
     }
 
     run(0)
-    return () => { generation++; if (timer !== null) clearTimeout(timer) }
+    return () => {
+      generation++
+      if (timer !== null) clearTimeout(timer)
+    }
   }, [])
 
   const handleStart = async () => {
@@ -88,7 +97,12 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
 
   if (loading && !status) {
     return (
-      <ActionCard title="Background Training" className="p-4" aria-busy="true" testId="workflow-card">
+      <ActionCard
+        title="Background Training"
+        className="p-4"
+        aria-busy="true"
+        testId="workflow-card"
+      >
         <div className="animate-pulse h-20 rounded bg-muted/50" />
       </ActionCard>
     )
@@ -122,11 +136,22 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
             <IconRefresh className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
           {status?.running ? (
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleStop} aria-label="Stop background training">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleStop}
+              aria-label="Stop background training"
+            >
               Stop
             </Button>
           ) : (
-            <Button size="sm" className="h-7 text-xs" onClick={handleStart} aria-label="Start background training">
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleStart}
+              aria-label="Start background training"
+            >
               Start
             </Button>
           )}
@@ -135,7 +160,12 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
     >
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <div className={cn('h-2 w-2 rounded-full', status?.running ? 'bg-success' : 'bg-muted-foreground/40')} />
+          <div
+            className={cn(
+              'h-2 w-2 rounded-full',
+              status?.running ? 'bg-success' : 'bg-muted-foreground/40',
+            )}
+          />
           <span className="text-xs text-muted-foreground">
             {status?.running ? 'Running' : 'Stopped'}
           </span>

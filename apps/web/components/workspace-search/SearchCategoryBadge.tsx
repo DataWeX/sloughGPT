@@ -1,7 +1,5 @@
 'use client'
 
-import { Badge } from '@sloughgpt/strui'
-
 interface SearchCategoryBadgeProps {
   type: string
   label: string

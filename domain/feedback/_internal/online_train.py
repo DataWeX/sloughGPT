@@ -126,9 +126,12 @@ class OnlineLoRAUpdater:
         if self._is_updating:
             return
 
-        # Don't block - run in background
-        thread = threading.Thread(target=self._perform_update, daemon=True)
-        thread.start()
+        # Don't block - fire-and-forget (bounded shared pool). Drop-tolerant:
+        # the buffer is only drained inside _perform_update, so a dropped
+        # submit leaves it full and the poll loop re-triggers.
+        from domain.infrastructure._internal.fire_and_forget import get_pool
+
+        get_pool().submit(self._perform_update)
 
     def _perform_update(self):
         """Perform the actual LoRA weight update."""

@@ -1,0 +1,6 @@
+{
+  "deny": "--persist and the --all-<risk> family are parsed but never declared in the docstring",
+  "ln": "--symbolic is parsed but the docstring documents only -s",
+  "permit": "--persist and the --all-<risk> family are parsed but never declared in the docstring",
+  "train": "--merge is parsed but never declared in the docstring"
+}

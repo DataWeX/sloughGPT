@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -24,7 +25,6 @@ import {
   Skeleton,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -110,7 +110,7 @@ function buildDiff(a: string, b: string): { value: string; type: 'same' | 'chang
 const LEVEL_LABELS = ['Off', 'Basic', 'Full', 'Deep']
 
 export default function ConsciousnessVersionsPage() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [config, setConfig] = useState<ConfigSnapshot | null>(null)
   const [personality, setPersonality] = useState<PersonalitySnapshot | null>(null)

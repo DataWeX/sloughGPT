@@ -1,6 +1,13 @@
 """LoRA fine-tuning routes — lora-finetune, load-adapter, unload-adapter.
 
 Extracted from execution.py to keep each module focused.
+
+Descriptor-projected (card 20261104_151036): three ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Raw wire — the
+handlers' dicts are served unwrapped (``envelope=False``), byte-identical to
+the hand-built routes. ``lora-finetune`` declares its body's model constraints
+and ``auth_user`` scope; ``load-adapter``/``unload-adapter`` stay public (no
+``auth_user`` in their signatures).
 """
 
 from __future__ import annotations
@@ -14,10 +21,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -30,7 +39,6 @@ logger = logging.getLogger("slo")
 router = APIRouter(tags=["training-lora"])
 
 
-@router.post("/training/lora-finetune")
 async def start_lora_finetune(
     request: LoraFinetuneRequest, auth_user: dict = Depends(require_auth_if_enabled)
 ):
@@ -179,7 +187,7 @@ async def start_lora_finetune(
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
-            from domain.training._internal.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
+            from domain.training import HFLoraConfig, HFLoraTrainer
 
             start_time = time.time()
 
@@ -331,7 +339,6 @@ def _resolve_adapter_path(raw: str) -> Path:
     raise_error(f"Adapter not found: {raw}", "E_BAD_REQUEST", status_code=400)
 
 
-@router.post("/training/load-adapter")
 async def load_adapter(request: LoadAdapterRequest):
     """Load a LoRA adapter into the currently running model for inference."""
     adapter_path = _resolve_adapter_path(request.adapter_path)
@@ -346,12 +353,13 @@ async def load_adapter(request: LoadAdapterRequest):
     try:
         import numpy as np
 
-        from domain.training._internal.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
-        from domain.training._internal.lora import (
+        from domain.training import (
             LoRAConfig,
             apply_lora_to_model,
             count_lora_parameters,
             get_lora_parameters,
+            load_lora_adapter,
+            merge_lora_adapter,
         )
 
         adapter = np.load(str(adapter_path), allow_pickle=True)
@@ -398,7 +406,6 @@ async def load_adapter(request: LoadAdapterRequest):
     }
 
 
-@router.post("/training/unload-adapter")
 async def unload_adapter():
     """Unload the active LoRA adapter, reverting to base weights."""
     from domain.infrastructure.server_state import get_server_state
@@ -408,10 +415,69 @@ async def unload_adapter():
         raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domain.training._internal.hf_lora_finetune import unload_lora_adapter
+        from domain.training import unload_lora_adapter
 
         unload_lora_adapter(provider)
     except Exception as e:
         raise_error(f"Failed to unload adapter: {e}", "E_BAD_REQUEST", status_code=400)
 
     return {"status": "unloaded", "message": "LoRA adapter unloaded"}
+
+
+# ── descriptor projection (card 20261104_151036) ────────────────────────
+#
+# One ToolSpec per capability; create_router derives verb, auth, validation,
+# envelope and OpenAPI metadata. RouteSpec.summary carries the hand-built
+# operation title (FastAPI derives it from the route name as
+# ``route.name.replace("_", " ").title()``); spec.description is the handler
+# docstring verbatim, so summary/description publish byte-identically.
+
+SPEC_LORA_FINETUNE = ToolSpec(
+    name="training.lora.finetune",
+    description="LoRA fine-tuning on .slnc models using SloNet numpy autograd (no PyTorch).",
+    parameters=params_from_model(LoraFinetuneRequest),
+    execute=start_lora_finetune,
+    idempotent=False,
+    auth_scope="authenticated",
+    version="1",
+)
+
+SPEC_LOAD_ADAPTER = ToolSpec(
+    name="training.lora.load_adapter",
+    description="Load a LoRA adapter into the currently running model for inference.",
+    parameters=params_from_model(LoadAdapterRequest),
+    execute=load_adapter,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_UNLOAD_ADAPTER = ToolSpec(
+    name="training.lora.unload_adapter",
+    description="Unload the active LoRA adapter, reverting to base weights.",
+    parameters=[],
+    execute=unload_adapter,
+    idempotent=False,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_LORA_FINETUNE,
+        RouteSpec(path="/training/lora-finetune", envelope=False, summary="Start Lora Finetune"),
+        start_lora_finetune,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_LOAD_ADAPTER,
+        RouteSpec(path="/training/load-adapter", envelope=False, summary="Load Adapter"),
+        load_adapter,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_UNLOAD_ADAPTER,
+        RouteSpec(path="/training/unload-adapter", envelope=False, summary="Unload Adapter"),
+        unload_adapter,
+    )
+)

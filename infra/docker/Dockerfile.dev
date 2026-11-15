@@ -26,7 +26,6 @@ RUN pip install --no-cache-dir \
     transformers accelerate scipy pytest pytest-asyncio pytest-cov ruff black ipython psutil
 
 COPY apps/api/server /app/apps/api/server
-COPY packages/core-py /app/packages/core-py
 COPY packages/sdk-py /app/packages/sdk-py
 COPY pyproject.toml README.md LICENSE /app/
 

@@ -243,7 +243,7 @@ def cmd_health(quiet: bool = False, summary: bool = False, verbose: bool = False
     areas = [
         ("CLI framework", "apps/cli/tests/test_slo_cli.py"),
         ("CLI commands", "apps/cli/tests/"),
-        ("Core Python", "packages/core-py/tests/"),
+        ("Core Python", "tests/core-py/"),
         ("Root tests", "tests/"),
     ]
 

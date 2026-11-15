@@ -77,7 +77,7 @@ python3 -m pip install -e ".[dev]"
 
 ### API + web (local)
 
-Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full options are in **QUICKSTART.md**.
+Run the FastAPI app and the Vite dev server in **one terminal** or two. Full options are in **QUICKSTART.md**.
 
 ```bash
 # One terminal (API :8000 + web :5173)
@@ -232,7 +232,7 @@ cd apps/web && npx tsc --noEmit
 source = ["domains"]
 omit = [
 "_/tests/_",
-"_/test__",
+"_/test\__",
 "_/**pycache**/_",
 "_/site-packages/_",
 ]
@@ -248,12 +248,20 @@ python3 -m pytest tests/ -q
 # Run a subset
 python3 -m pytest tests/test_api.py -v
 
-# Run with coverage (domains live under packages/core-py)
+# Run with coverage (domain/ lives at the repo root)
 python3 -m pytest tests/ --cov=domain --cov-report=html
 
 # Run integration-focused tests
 python3 -m pytest tests/test_integration.py -v
 ````
+
+### Stale bytecode guard
+
+`tests/conftest.py` registers a `pytest_sessionstart` hook that purges orphaned
+and stale `.pyc` under `tests/` before each session (repo-restructures leave
+caches whose `co_filename` cites dead paths, so tracebacks cite files that no
+longer exist). The logic lives in `scripts/purge_stale_pyc.py`; dry-run by
+default, `--apply` to delete outside pytest.
 
 ## 📊 Monitoring & Debugging
 

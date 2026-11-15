@@ -14,6 +14,10 @@ const {
   mockGetAdapterStatus,
   mockTrainAdapter,
   mockAddToast,
+  mockGetRAGStats,
+  mockListRAGDocuments,
+  searchParamsStore,
+  mockPush,
 } = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockStats: vi.fn(),
@@ -26,6 +30,10 @@ const {
   mockGetAdapterStatus: vi.fn(),
   mockTrainAdapter: vi.fn(),
   mockAddToast: vi.fn(),
+  mockGetRAGStats: vi.fn(),
+  mockListRAGDocuments: vi.fn(),
+  searchParamsStore: { value: new URLSearchParams() },
+  mockPush: vi.fn(),
 }))
 
 vi.mock('@/lib/knowledge-controller', () => ({
@@ -43,21 +51,40 @@ vi.mock('@/lib/knowledge-controller', () => ({
   },
 }))
 
+vi.mock('@/lib/rag-controller', () => ({
+  getRAGStats: (...a: unknown[]) => mockGetRAGStats(...a),
+  listRAGDocuments: (...a: unknown[]) => mockListRAGDocuments(...a),
+  clearRAG: vi.fn().mockResolvedValue({ cleared: 0 }),
+  syncKGToRAG: vi.fn().mockResolvedValue({ total_triples: 0 }),
+}))
+
 vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
     back: vi.fn(),
     forward: vi.fn(),
     refresh: vi.fn(),
     replace: vi.fn(),
   }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParamsStore.value,
   usePathname: () => '/knowledge',
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/download-utils', () => ({ downloadJson: vi.fn() }))
 vi.mock('@/lib/format-bytes', () => ({
@@ -256,6 +283,10 @@ beforeEach(() => {
   mockUpdate.mockResolvedValue(true)
   mockBatchDelete.mockResolvedValue(2)
   mockSearch.mockResolvedValue([])
+  // RAG endpoints are exercised by the dedicated paging test below; reject by
+  // default so the Deep Memory card stays hidden exactly as before this suite.
+  mockGetRAGStats.mockRejectedValue(new Error('rag not under test'))
+  mockListRAGDocuments.mockRejectedValue(new Error('rag not under test'))
 })
 
 describe('KnowledgePage — loading flow', () => {
@@ -728,6 +759,116 @@ describe('KnowledgePage — batch operations flow', () => {
           .find((b) => b.textContent?.includes('trash') || b.textContent?.includes('Delete'))
         expect(batchBtn).toBeTruthy()
       })
+    }
+  })
+})
+
+describe('KnowledgePage — RAG sources panel paging', () => {
+  const doc = (source: string) => ({
+    metadata: { source },
+    chunk_size: 512,
+    num_chunks: 1,
+    added_at: 1,
+  })
+  const ragStats = { total_documents: 5, total_chunks: 5, index_size: 10 }
+
+  it('shows first page with count, appends on Load more, hides button when complete', async () => {
+    mockGetRAGStats.mockResolvedValue(ragStats)
+    mockListRAGDocuments
+      .mockResolvedValueOnce({
+        documents: [doc('src-a'), doc('src-b')],
+        stats: ragStats,
+        ready: true,
+        total: 5,
+        limit: 200,
+        offset: 0,
+      })
+      .mockResolvedValueOnce({
+        documents: [doc('src-c'), doc('src-d'), doc('src-e')],
+        stats: ragStats,
+        ready: true,
+        total: 5,
+        limit: 200,
+        offset: 2,
+      })
+
+    render(<KnowledgePage />)
+    const sourcesBtn = await screen.findByRole('button', { name: 'Sources' })
+    fireEvent.click(sourcesBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText('Showing 2 of 5')).toBeTruthy()
+    })
+    expect(screen.getByText('src-a')).toBeTruthy()
+    expect(screen.queryByText('src-c')).toBeNull()
+
+    const loadMore = screen.getByRole('button', { name: 'Load more' })
+    await act(async () => {
+      fireEvent.click(loadMore)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Showing 5 of 5')).toBeTruthy()
+    })
+    expect(screen.getByText('src-c')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+})
+
+describe('KnowledgePage — ?id= detail fold (route-map card 7/7, 20261101_154056)', () => {
+  beforeEach(() => {
+    mockList.mockResolvedValue([
+      {
+        id: 'k1',
+        content: 'User likes Python',
+        topic: 'personal',
+        importance: 0.8,
+        created_at: '2026-08-01',
+      },
+    ])
+    searchParamsStore.value = new URLSearchParams('id=k1')
+    mockPush.mockClear()
+  })
+
+  afterEach(() => {
+    searchParamsStore.value = new URLSearchParams()
+    mockPush.mockClear()
+  })
+
+  it('renders the detail fold when ?id= is set (composed from /knowledge/[id])', async () => {
+    render(<KnowledgePage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('knowledge-detail-fold')).toBeTruthy()
+    })
+  })
+
+  it('renders no fold without ?id=', () => {
+    searchParamsStore.value = new URLSearchParams()
+    render(<KnowledgePage />)
+    expect(screen.queryByTestId('knowledge-detail-fold')).toBeNull()
+  })
+
+  it('list click pushes ?id= — the fold’s source link', async () => {
+    // List-only view (no ?id=): exactly one instance of the row text, so the
+    // click target is unambiguous.
+    searchParamsStore.value = new URLSearchParams()
+    render(<KnowledgePage />)
+    const rowText = await screen.findByText('User likes Python')
+    fireEvent.click(rowText)
+    expect(mockPush).toHaveBeenCalledWith('/knowledge?id=k1')
+  })
+})
+
+describe('KnowledgePage — plain-language jargon ban (Build Order #5 guard, UX_FLOWS Feature 3)', () => {
+  it('renders none of the banned jargon terms on the default view', async () => {
+    const { container } = render(<KnowledgePage />)
+    await waitFor(() => expectEmptyStateVisible())
+    const text = container.textContent ?? ''
+    // UX_FLOWS Feature 3 "What they should NOT see": "Knowledge base",
+    // "vector store", "ingestion", "indexing", "RAG", "embeddings",
+    // "chunks" — Card 058 shipped the ban; this pins it against regrowth.
+    for (const pattern of ['\\bRAG\\b', 'vector store', 'chunks', 'ingestion', 'Indexing']) {
+      expect(text, `banned term matched: ${pattern}`).not.toMatch(new RegExp(pattern, 'i'))
     }
   })
 })

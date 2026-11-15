@@ -61,7 +61,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
             onKeyDown={(e) => e.key === 'Enter' && handleSaveCustom()}
             placeholder="Template name..."
             aria-label="Template name"
-            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           />
           <select
             value={customFormat}
@@ -111,7 +111,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
               >
                 <button
                   type="button"
-                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
+                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   onClick={() => setSelectedId(template.id)}
                 >
                   <div className="text-xs font-medium">{template.name}</div>

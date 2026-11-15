@@ -8,6 +8,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useId,
   useRef,
   useState,
@@ -229,27 +230,62 @@ export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
 
     useEffect(() => setMounted(true), [])
 
-    useEffect(() => {
+    /* Position BEFORE paint (layout effect): a passive effect would render one
+       frame at the mount-time {0,0} corner, and the `duration-150` class on the
+       content would tween that correction (`transition-property` defaults to
+       `all`), visibly sliding the tooltip in from the page corner. */
+    useLayoutEffect(() => {
       if (!open || !triggerRef.current || !contentRef.current) return
 
       const trigger = triggerRef.current.getBoundingClientRect()
       const content = contentRef.current.getBoundingClientRect()
       const { scrollX, scrollY } = window
 
+      /* Collision flip: if the preferred side can't fit the content and the
+         opposite side has more room, resolve to the opposite side. */
+      const room = {
+        top: trigger.top - sideOffset,
+        bottom: window.innerHeight - trigger.bottom - sideOffset,
+        left: trigger.left - sideOffset,
+        right: window.innerWidth - trigger.right - sideOffset,
+      }
+      let resolved = side
+      if (side === 'top' && room.top < content.height && room.bottom > room.top) resolved = 'bottom'
+      else if (side === 'bottom' && room.bottom < content.height && room.top > room.bottom)
+        resolved = 'top'
+      else if (side === 'left' && room.left < content.width && room.right > room.left)
+        resolved = 'right'
+      else if (side === 'right' && room.right < content.width && room.left > room.right)
+        resolved = 'left'
+
+      /* Align: cross-axis offset of content within the trigger's span. */
+      const offsetX =
+        align === 'start'
+          ? 0
+          : align === 'end'
+            ? trigger.width - content.width
+            : (trigger.width - content.width) / 2
+      const offsetY =
+        align === 'start'
+          ? 0
+          : align === 'end'
+            ? trigger.height - content.height
+            : (trigger.height - content.height) / 2
+
       let top = 0
       let left = 0
 
-      if (side === 'top') {
+      if (resolved === 'top') {
         top = trigger.top + scrollY - content.height - sideOffset
-        left = trigger.left + scrollX + trigger.width / 2 - content.width / 2
-      } else if (side === 'bottom') {
+        left = trigger.left + scrollX + offsetX
+      } else if (resolved === 'bottom') {
         top = trigger.bottom + scrollY + sideOffset
-        left = trigger.left + scrollX + trigger.width / 2 - content.width / 2
-      } else if (side === 'left') {
-        top = trigger.top + scrollY + trigger.height / 2 - content.height / 2
+        left = trigger.left + scrollX + offsetX
+      } else if (resolved === 'left') {
+        top = trigger.top + scrollY + offsetY
         left = trigger.left + scrollX - content.width - sideOffset
       } else {
-        top = trigger.top + scrollY + trigger.height / 2 - content.height / 2
+        top = trigger.top + scrollY + offsetY
         left = trigger.right + scrollX + sideOffset
       }
 
@@ -258,7 +294,7 @@ export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
       top = Math.max(8, Math.min(top, window.innerHeight + scrollY - content.height - 8))
 
       setPos({ top, left })
-    }, [open, mounted, side, sideOffset, triggerRef])
+    }, [open, mounted, side, align, sideOffset, triggerRef])
 
     if (!mounted || !open) return null
 
@@ -273,7 +309,11 @@ export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
         role="tooltip"
         data-state={open ? 'open' : 'closed'}
         className={cn(tooltipContentVariants({ variant }), className)}
-        style={{ position: 'absolute', top: pos.top, left: pos.left }}
+        /* transition:none overrides the base `duration-150` (whose default
+           transition-property is `all`) so position changes never tween. The
+           entry animation is unaffected — it runs on `animation`, not
+           `transition`. Consumers can re-enable via props.style. */
+        style={{ position: 'absolute', top: pos.top, left: pos.left, transition: 'none' }}
         {...props}
       >
         {children}

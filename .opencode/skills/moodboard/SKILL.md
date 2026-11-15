@@ -53,7 +53,7 @@ idea fits:
 - strui + Noir Violet tokens ONLY (`rgb(var(--primary))`, `color-mix()` — see the
   `frontend-design` skill). No invented hex, no new tokens, no AI-default patterns.
 - Label each variant with which evidence item + reference it synthesizes.
-- Optional: delegate a variant to the `designer`/`ui-ux-pro-max` agent with a
+- Optional: delegate a variant to the `designer` agent with a
   precise brief (standalone HTML fragment, tokens only, no repo files).
 
 ## Stage 4 — REPORT (in chat, no files)

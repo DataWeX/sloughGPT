@@ -9,9 +9,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "core-py"))
 import numpy as np
-from domain.training.sloran import SloRAN
 
 from domain.training._internal.slonet import Tensor
+from domain.training.sloran import SloRAN
 
 # ── Config ─────────────────────────────────────────────────────────
 DATA_PATH = "datasets/shakespeare/input.txt"

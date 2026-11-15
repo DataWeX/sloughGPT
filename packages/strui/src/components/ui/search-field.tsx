@@ -10,7 +10,13 @@ interface SearchFieldProps {
   autoFocus?: boolean
 }
 
-export function SearchField({ value, onChange, placeholder = 'Search…', className, autoFocus }: SearchFieldProps) {
+export function SearchField({
+  value,
+  onChange,
+  placeholder = 'Search…',
+  className,
+  autoFocus,
+}: SearchFieldProps) {
   return (
     <div className={cn('relative', className)}>
       <svg
@@ -36,7 +42,7 @@ export function SearchField({ value, onChange, placeholder = 'Search…', classN
         className={cn(
           'w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-input bg-background',
           'text-foreground placeholder:text-muted-foreground',
-          'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:border-primary/60',
           'transition-[border-color,box-shadow] duration-200',
         )}
       />
@@ -47,8 +53,19 @@ export function SearchField({ value, onChange, placeholder = 'Search…', classN
           onClick={() => onChange('')}
           className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
         >
-          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       )}

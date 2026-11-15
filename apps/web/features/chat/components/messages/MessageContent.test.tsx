@@ -27,10 +27,16 @@ describe('MessageContent', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('shows bounce dots for empty assistant message', () => {
-    const { container } = render(<MessageContent content="" role="assistant" />)
+  it('shows bounce dots for empty assistant message while streaming', () => {
+    const { container } = render(<MessageContent content="" role="assistant" isStreaming />)
     const dots = container.querySelectorAll('.animate-bounce')
     expect(dots.length).toBe(3)
+  })
+
+  it('renders nothing for empty assistant message when not streaming', () => {
+    const { container } = render(<MessageContent content="" role="assistant" />)
+    expect(container.innerHTML).toBe('')
+    expect(container.querySelectorAll('.animate-bounce').length).toBe(0)
   })
 
   it('highlights search query in assistant message', () => {
@@ -76,15 +82,117 @@ describe('MessageContent', () => {
   })
 
   it('shows edit form when isEditing', () => {
-    render(<MessageContent content="Original" role="user" isEditing messageId="m1" onEdit={vi.fn()} onEditCancel={vi.fn()} />)
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={vi.fn()}
+        onEditCancel={vi.fn()}
+      />,
+    )
     expect(screen.getByLabelText('Edit message form')).toBeDefined()
     expect(screen.getByText('Cancel')).toBeDefined()
     expect(screen.getByText('Resend')).toBeDefined()
   })
 
+  it('calls onEdit when Resend button is clicked (real user path)', () => {
+    const onEdit = vi.fn()
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={onEdit}
+        onEditCancel={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Updated' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and resend message' }))
+    expect(onEdit).toHaveBeenCalledWith('m1', 'Updated')
+  })
+
+  it('calls onEdit on Ctrl+Enter in the textarea', () => {
+    const onEdit = vi.fn()
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={onEdit}
+        onEditCancel={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Updated' } })
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', ctrlKey: true })
+    expect(onEdit).toHaveBeenCalledWith('m1', 'Updated')
+  })
+
+  it('calls onEdit on Cmd+Enter in the textarea', () => {
+    const onEdit = vi.fn()
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={onEdit}
+        onEditCancel={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Updated' } })
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', metaKey: true })
+    expect(onEdit).toHaveBeenCalledWith('m1', 'Updated')
+  })
+
+  it('does not submit on plain Enter (newline only)', () => {
+    const onEdit = vi.fn()
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={onEdit}
+        onEditCancel={vi.fn()}
+      />,
+    )
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
+    expect(onEdit).not.toHaveBeenCalled()
+  })
+
+  it('does not resend when the edit is empty or whitespace', () => {
+    const onEdit = vi.fn()
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={onEdit}
+        onEditCancel={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and resend message' }))
+    expect(onEdit).not.toHaveBeenCalled()
+  })
+
   it('calls onEdit on form submit', () => {
     const onEdit = vi.fn()
-    render(<MessageContent content="Original" role="user" isEditing messageId="m1" onEdit={onEdit} onEditCancel={vi.fn()} />)
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={onEdit}
+        onEditCancel={vi.fn()}
+      />,
+    )
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Updated' } })
     fireEvent.submit(screen.getByLabelText('Edit message form'))
     expect(onEdit).toHaveBeenCalledWith('m1', 'Updated')
@@ -92,14 +200,32 @@ describe('MessageContent', () => {
 
   it('calls onEditCancel when Cancel clicked', () => {
     const onEditCancel = vi.fn()
-    render(<MessageContent content="Original" role="user" isEditing messageId="m1" onEdit={vi.fn()} onEditCancel={onEditCancel} />)
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={vi.fn()}
+        onEditCancel={onEditCancel}
+      />,
+    )
     fireEvent.click(screen.getByText('Cancel'))
     expect(onEditCancel).toHaveBeenCalled()
   })
 
   it('resets edit content to original on cancel', () => {
     const onEditCancel = vi.fn()
-    render(<MessageContent content="Original" role="user" isEditing messageId="m1" onEdit={vi.fn()} onEditCancel={onEditCancel} />)
+    render(
+      <MessageContent
+        content="Original"
+        role="user"
+        isEditing
+        messageId="m1"
+        onEdit={vi.fn()}
+        onEditCancel={onEditCancel}
+      />,
+    )
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Changed' } })
     fireEvent.click(screen.getByText('Cancel'))
     expect(onEditCancel).toHaveBeenCalled()
@@ -121,5 +247,33 @@ describe('MessageContent', () => {
     expect(screen.getByText(/Show more/)).toBeDefined()
     fireEvent.click(screen.getByText(/Show more/))
     expect(screen.getByText('Show less')).toBeDefined()
+  })
+
+  // ── MessageFrame enforcement (Direction B, ruling 2026-11-03) ───────
+  // Both roles must render through the shared frame — chrome is never
+  // re-decided here. See messages/MessageFrame.tsx.
+
+  it('renders the user role through MessageFrame', () => {
+    const { container } = render(<MessageContent content="Hello world" role="user" />)
+    const frame = container.querySelector('[data-message-frame="user"]')
+    expect(frame).not.toBeNull()
+    expect(frame!.textContent).toContain('Hello world')
+  })
+
+  it('renders the assistant role through MessageFrame', () => {
+    const { container } = render(<MessageContent content="Hello world" role="assistant" />)
+    const frame = container.querySelector('[data-message-frame="assistant"]')
+    expect(frame).not.toBeNull()
+    expect(frame!.textContent).toContain('Hello world')
+  })
+
+  it('renders the metadata footer inside the frame when given', () => {
+    const { container } = render(
+      <MessageContent content="Hello" role="assistant" footer={<span>gpt2 · 12 tok</span>} />,
+    )
+    const frame = container.querySelector('[data-message-frame]')!
+    const footer = frame.querySelector('[data-message-frame-footer]')
+    expect(footer).not.toBeNull()
+    expect(footer!.textContent).toContain('gpt2 · 12 tok')
   })
 })

@@ -1,0 +1,316 @@
+"""Tests for shell.repl — ShellREPL execute() and helper methods."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+from domain.shell._internal.commands import ShellCommands
+from domain.shell._internal.repl import ShellREPL
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+
+def _make_repl():
+    """Create a ShellREPL with mocked dependencies."""
+    mock_os = MagicMock()
+    mock_cmds = MagicMock()
+    repl = ShellREPL.__new__(ShellREPL)
+    repl.os = mock_os
+    repl.cmds = mock_cmds
+    repl.state = MagicMock()
+    repl.state.history = []
+    repl.state.aliases = {}
+    repl.state.env = {}
+    repl._history = []
+    repl._running = False
+    repl._use_tui = False
+    repl._bg_threads = {}
+    repl._next_bg_id = 1
+    repl._piped_input = ""
+    repl._aborted = False
+    repl._env = {"PS1": "λ", "SHELL": "sloughgpt", "HOME": "/tmp", "TERM": "xterm-256color"}
+    repl._last_exit_code = 0
+    repl._cmd_count = 0
+    repl._dir_stack = []
+    repl._chat_session_id = None
+    repl._chat_history = []
+    repl._completion_cache_obj = None
+    repl._completion_cache = {}
+    repl._aliases = {"q": "exit", "quit": "exit", "h": "help", "?": "help"}
+    repl._ext_cmds = {}
+
+    from domain.shell._internal.io import MemoryIO
+
+    repl.io = MemoryIO()
+
+    from domain.shell._internal.console import Console
+
+    repl.console = Console(repl.io, has_readline=False)
+
+    from domain.logging import LogLevel, ShellLogger
+
+    repl.log = ShellLogger("slo.shell.test", level=LogLevel.DEBUG)
+
+    from domain.shell._internal.log_buffer import get_log_buffer
+
+    repl._log_buffer = get_log_buffer()
+
+    from domain.shell._internal.log_display import LineModeLogDisplay
+
+    repl._log_display = LineModeLogDisplay(repl._log_buffer)
+
+    from domain.shell._internal.audit import get_shell_audit_logger
+
+    repl._audit = get_shell_audit_logger()
+
+    from domain.shell._internal.permissions import ShellPermissions
+
+    repl._perms = ShellPermissions()
+
+    repl.COMMANDS = {}
+    repl._print = lambda *a, **kw: None
+    return repl
+
+
+# ── execute() ───────────────────────────────────────────────────────────────
+
+
+class TestExecute:
+    def test_empty_line(self):
+        repl = _make_repl()
+        output, code = repl.execute("")
+        assert output == ""
+        assert code == 0
+
+    def test_whitespace_line(self):
+        repl = _make_repl()
+        output, code = repl.execute("   ")
+        assert output == ""
+        assert code == 0
+
+    def test_unknown_command(self):
+        repl = _make_repl()
+        output, code = repl.execute("notacommand")
+        assert code == 127
+        assert "Unknown command" in output
+
+    def test_execute_returns_tuple(self):
+        repl = _make_repl()
+        result = repl.execute("echo hello")
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+    def test_cmd_count_increments(self):
+        repl = _make_repl()
+        initial = repl._cmd_count
+        repl.execute("notacommand")
+        assert repl._cmd_count == initial + 1
+
+    def test_history_updated(self):
+        repl = _make_repl()
+        repl.execute("notacommand")
+        assert "notacommand" in repl._history
+
+
+# ── _expand_alias ───────────────────────────────────────────────────────────
+
+
+class TestExpandAlias:
+    def test_expand_alias(self):
+        repl = _make_repl()
+        repl._aliases = {"ll": "ls -la"}
+        result = repl._expand_alias("ll foo")
+        assert result == "ls -la foo"
+
+    def test_no_alias(self):
+        repl = _make_repl()
+        repl._aliases = {}
+        result = repl._expand_alias("ls foo")
+        assert result == "ls foo"
+
+
+# ── _suggest_command ────────────────────────────────────────────────────────
+
+
+class TestSuggestCommand:
+    def test_suggest_similar(self):
+        repl = _make_repl()
+        repl.COMMANDS = {"help": None, "exit": None, "load": None}
+        suggestion = repl._suggest_command("hep")
+        assert suggestion == "help"
+
+    def test_no_suggestion(self):
+        repl = _make_repl()
+        repl.COMMANDS = {"help": None}
+        suggestion = repl._suggest_command("xyz")
+        assert suggestion is None
+
+
+# ── _render_prompt ──────────────────────────────────────────────────────────
+
+
+class TestRenderPrompt:
+    def test_default_prompt(self):
+        repl = _make_repl()
+        prompt = repl._render_prompt()
+        assert "λ" in prompt
+
+    def test_error_code_prefix(self):
+        repl = _make_repl()
+        repl._last_exit_code = 1
+        prompt = repl._render_prompt()
+        assert "[1]" in prompt
+
+
+# ── _format_error ───────────────────────────────────────────────────────────
+
+
+class TestFormatError:
+    def test_format_error(self):
+        repl = _make_repl()
+        err = ValueError("test error")
+        msg = repl._format_error(err, "testcmd")
+        assert "test error" in msg or "ValueError" in msg
+
+
+# ── _update_color_state ─────────────────────────────────────────────────────
+
+
+class TestUpdateColorState:
+    def test_no_color_true(self):
+        repl = _make_repl()
+        repl._env["NO_COLOR"] = "1"
+        repl._update_color_state()
+        import domain.shell._internal.repl as mod
+
+        # After update, colors should be empty
+        assert mod._C_CYAN == "" or mod._COLOR_ENABLED is False
+
+    def test_no_color_false(self):
+        repl = _make_repl()
+        repl._env.pop("NO_COLOR", None)
+        repl._update_color_state()
+
+
+# ── _complete ───────────────────────────────────────────────────────────────
+
+
+class TestComplete:
+    def test_complete_first_word(self):
+        repl = _make_repl()
+        repl.COMMANDS = {"help": None, "exit": None}
+        result = repl._complete("he", 0)
+        assert result == "help"
+
+    def test_complete_no_match(self):
+        repl = _make_repl()
+        repl.COMMANDS = {"help": None}
+        result = repl._complete("xyz", 0)
+        assert result is None
+
+
+# ── _complete_args_for ──────────────────────────────────────────────────────
+
+
+class TestCompleteArgsFor:
+    def test_train_subcommands(self):
+        repl = _make_repl()
+        result = repl._complete_args_for_uncached("train")
+        assert "status" in result
+        assert "stop" in result
+
+    def test_finetuned_subcommands(self):
+        repl = _make_repl()
+        result = repl._complete_args_for_uncached("finetuned")
+        assert "load" in result
+        assert "rm" in result
+
+
+# ── spinner discipline: no animation, no residue on non-TTY captures ─────────
+
+
+class TestSpinnerNonTty:
+    def test_spinner_is_quiet_on_memory_io(self):
+        repl = _make_repl()
+        with repl.console.spinner("Fetching models"):
+            pass
+        assert repl.io.get_output() == ""
+
+    def test_spinner_is_not_the_animated_class(self):
+        from domain.shell._internal.console import _Spinner
+
+        repl = _make_repl()
+        spin = repl.console.spinner("Loading")
+        assert not isinstance(spin, _Spinner)
+
+    def test_spinner_ok_reports_final_status_only(self):
+        repl = _make_repl()
+        with repl.console.spinner("Loading") as s:
+            pass
+        s.ok("Done")
+        out = repl.io.get_output()
+        assert "Done" in out
+        assert "Loading" not in out  # enter must not replay the label
+        assert "\r" not in out  # no frame protocol; color policy is NO_COLOR/B3's job
+
+
+# ── execute("models") end-to-end on the live API payload shape ──────────────
+
+
+def _repl_with_live_models():
+    """A repl whose `models` command runs the REAL ShellCommands adapter
+    against the REAL /models payload shape (no mock in the data path)."""
+    repl = _make_repl()
+    repl.COMMANDS = {"models": ShellREPL._cmd_models}
+    repl.cmds = ShellCommands()
+    return repl
+
+
+_LIVE_MODELS_PAYLOAD = {
+    "data": [
+        {
+            "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+            "status": "loaded",
+            "device": "cpu",
+            "parameters": 0,
+            "vocab_size": 0,
+        },
+        {"model_id": "openai-community/gpt2", "status": "available", "device": "cpu"},
+    ]
+}
+
+
+def _execute_models(repl):
+    from unittest.mock import patch
+
+    with patch("domain.shell._internal.commands._api_get", return_value=_LIVE_MODELS_PAYLOAD):
+        return repl.execute("models")
+
+
+class TestExecuteModelsContract:
+    def test_exit_zero(self):
+        repl = _repl_with_live_models()
+        out, code = _execute_models(repl)
+        assert code == 0
+
+    def test_no_control_bytes_in_output(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "\r" not in out
+        assert "\x1b" not in out
+
+    def test_no_spinner_residue(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "Fetching" not in out
+
+    def test_rows_show_real_model_ids(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "Qwen/Qwen2.5-0.5B-Instruct" in out
+        assert "openai-community/gpt2" in out
+
+    def test_status_column_marks_loaded(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "loaded" in out

@@ -37,7 +37,9 @@ describe('chatController.stream', () => {
 
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      body: sseResponse(['data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":"ok"}}\n\n']),
+      body: sseResponse([
+        'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":"ok"}}\n\n',
+      ]),
     } as Response)
 
     const tokens: string[] = []
@@ -53,6 +55,44 @@ describe('chatController.stream', () => {
           messages: [{ role: 'user', content: 'hi' }],
           max_new_tokens: 40,
           temperature: 0.5,
+        }),
+      }),
+    )
+  })
+
+  it('passes session_id and pipeline flags through when set (bare probe)', async () => {
+    apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
+
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      body: sseResponse([
+        'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":"ok"}}\n\n',
+      ]),
+    } as Response)
+
+    const tokens: string[] = []
+    for await (const token of chatController.stream('Hello!', {
+      session_id: 'quick-test',
+      use_consciousness: false,
+      use_context_core: false,
+      use_rag: false,
+    })) {
+      tokens.push(token)
+    }
+
+    expect(tokens).toContain('ok')
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/chat$/),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'Hello!' }],
+          max_new_tokens: 100,
+          temperature: 0.8,
+          session_id: 'quick-test',
+          use_consciousness: false,
+          use_context_core: false,
+          use_rag: false,
         }),
       }),
     )
@@ -248,7 +288,9 @@ describe('chatController.regenerateStream', () => {
     } as Response)
 
     const results: any[] = []
-    for await (const r of chatController.regenerateStream('sess-1', [{ role: 'user', content: 'hi' }])) {
+    for await (const r of chatController.regenerateStream('sess-1', [
+      { role: 'user', content: 'hi' },
+    ])) {
       results.push(r)
     }
     expect(results).toEqual([{ token: 're' }, { done: true }])
@@ -257,9 +299,7 @@ describe('chatController.regenerateStream', () => {
   it('yields error on SSE error event', async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      body: sseResponse([
-        'data: {"stream":"chat","status":"error","message":"regen failed"}\n\n',
-      ]),
+      body: sseResponse(['data: {"stream":"chat","status":"error","message":"regen failed"}\n\n']),
     } as Response)
 
     const results: any[] = []

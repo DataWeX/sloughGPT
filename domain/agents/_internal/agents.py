@@ -15,17 +15,22 @@ Architecture:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import logging
 import os
 import re
+import sys
 import tempfile
+import urllib.parse
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+from domain.agents._internal import code_guard
 
 logger = logging.getLogger("slo.agents")
 
@@ -49,18 +54,9 @@ class SecurityConfig:
 class SecurityBoundary:
     """Security boundaries for safe execution."""
 
-    BLOCKED_PATTERNS = [
-        r"import\s+os\s*.*remove",
-        r"import\s+shutil\s*.*rmtree",
-        r"subprocess\s*\..*shell\s*=\s*True",
-        r"__import__\s*\(\s*['\"]os['\"]",
-        r"eval\s*\(",
-        r"exec\s*\(",
-        r"open\s*\([^)]*\br\/w",
-        r"pickle",
-        r"marshal",
-        r"compile\s*\(",
-    ]
+    #: Aliased to the SHARED list in ``code_guard`` — one list, both tool
+    #: surfaces; the chat run_code tool consults the same patterns.
+    BLOCKED_PATTERNS = code_guard.BLOCKED_PATTERNS
 
     ALLOWED_DIRS = [
         "data",
@@ -74,11 +70,13 @@ class SecurityBoundary:
         self._blocked_re = [re.compile(p) for p in self.BLOCKED_PATTERNS]
 
     def is_allowed(self, code: str) -> tuple[bool, str]:
-        """Check if code is safe to execute."""
-        for pattern in self._blocked_re:
-            if pattern.search(code):
-                return False, f"Blocked pattern: {pattern.pattern}"
-        return True, ""
+        """Check if code is safe to execute.
+
+        Delegates to the shared ``code_guard`` so both tool surfaces run
+        one list and one loop; ``self._blocked_re`` is the instance view
+        of that same list (kept for callers that inspect it).
+        """
+        return code_guard.is_allowed(code)
 
     @contextmanager
     def resource_limit(self, tool: str):
@@ -181,6 +179,17 @@ class ToolRunner:
         self._executed_count += 1
         return True
 
+    def _path_violation(self, path: str) -> str | None:
+        """Deny model-supplied paths: sensitive locations, then allowlist.
+
+        Delegates to the shared ``path_guard`` (also enforced by tools.py's
+        ToolRegistry) so both tool surfaces keep ONE blocklist; this method
+        only supplies this agent's allowlist config.
+        """
+        from domain.agents._internal.path_guard import path_violation
+
+        return path_violation(path, self.security.config.allowed_directories)
+
     async def _run_code(
         self,
         args: dict[str, Any],
@@ -223,7 +232,7 @@ class ToolRunner:
             f.write(code)
             path = f.name
 
-        cmd = ["python3", path] if language == "python" else ["node", path]
+        cmd = [sys.executable, path] if language == "python" else ["node", path]
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -232,7 +241,14 @@ class ToolRunner:
         )
 
         try:
-            stdout, stderr = await proc.communicate()
+            try:
+                stdout, stderr = await proc.communicate()
+            except asyncio.CancelledError:
+                # asyncio.wait_for timeout cancels us mid-communicate — kill
+                # the child or it outlives the timeout as an orphan.
+                proc.kill()
+                await proc.communicate()
+                raise
             return {
                 "stdout": stdout.decode() if stdout else "",
                 "stderr": stderr.decode() if stderr else "",
@@ -253,6 +269,9 @@ class ToolRunner:
 
         if not query:
             return {"error": "query required", "success": False}
+        violation = self._path_violation(path)
+        if violation:
+            return {"error": violation, "success": False}
 
         try:
             files = await self._search_files(query, path, limit)
@@ -266,14 +285,21 @@ class ToolRunner:
         path: str,
         limit: int,
     ) -> list[str]:
-        """Search files using grep."""
+        """Search files using grep.
+
+        No ``--max-count``: GNU grep treats ``-m 0`` as "stop after 0
+        matches", which silently made every search return zero files.
+        ``--exclude-dir`` keeps .git/node_modules noise (and speed) out.
+        """
         proc = await asyncio.create_subprocess_exec(
             "grep",
             "-r",
             "-l",
+            "--exclude-dir=.git",
+            "--exclude-dir=node_modules",
+            "--exclude-dir=__pycache__",
             query,
             path,
-            "--max-count=0",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -304,30 +330,53 @@ class ToolRunner:
         query: str,
         limit: int = 10,
     ) -> list[dict[str, str]]:
-        """Search web using httpx + BeautifulSoup."""
+        """Search web using httpx + BeautifulSoup.
+
+        follow_redirects because DDG's POST endpoint 302s; raise_for_status
+        so bot-challenge/403 pages surface as errors instead of silent empty
+        success; every result carries its url (citations need one).
+        """
         import httpx
         from bs4 import BeautifulSoup
 
         url = "https://html.duckduckgo.com/html/"
         data = {"q": query}
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             response = await client.post(url, data=data, timeout=15)
+            response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
             results = []
             for result in soup.select(".result")[:limit]:
                 title = result.select_one(".result__title")
                 snippet = result.select_one(".result__snippet")
+                anchor = result.select_one(".result__a")
+                link = ""
+                if anchor is not None and hasattr(anchor, "get"):
+                    link = self._unwrap_ddg(anchor.get("href") or "")
 
                 results.append(
                     {
                         "title": title.get_text(strip=True) if title else "",
                         "snippet": snippet.get_text(strip=True) if snippet else "",
+                        "url": link,
                     }
                 )
 
             return results
+
+    @staticmethod
+    def _unwrap_ddg(link: str) -> str:
+        """Resolve DDG's ``/l/?uddg=<target>`` redirect wrapper to the target."""
+        if link.startswith("//"):
+            link = "https:" + link
+        if "duckduckgo.com/l/" in link and "uddg=" in link:
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
+            targets = query.get("uddg")
+            if targets:
+                return targets[0]
+        return link
 
     async def _run_citation(
         self,
@@ -379,6 +428,9 @@ class ToolRunner:
         path = args.get("path", "")
         if not path:
             return {"error": "path required", "success": False}
+        violation = self._path_violation(path)
+        if violation:
+            return {"error": violation, "success": False}
         try:
             if not os.path.exists(path):
                 return {"error": f"File not found: {path}", "success": False}
@@ -443,12 +495,17 @@ class ToolRunner:
             for p in patterns:
                 files.extend(globmod.glob(os.path.join(workspace, p), recursive=True))
             matches = []
-            query_lower = query.lower()
+            # Token-subset match on word characters only: the old
+            # whole-phrase substring check broke on punctuation
+            # ("caching:" never equals "caching") and on words split
+            # across a line wrap ("redis\ncaching").
+            query_tokens = {t for t in re.sub(r"[^\w]+", " ", query.lower()).split() if t}
             for fp in files[:50]:
                 try:
                     with open(fp, errors="replace") as f:
                         text = f.read(8192)
-                    if query_lower in text.lower():
+                    text_tokens = {t for t in re.sub(r"[^\w]+", " ", text.lower()).split() if t}
+                    if query_tokens and query_tokens <= text_tokens:
                         matches.append(
                             {
                                 "file": os.path.relpath(fp, workspace),
@@ -471,58 +528,52 @@ class ToolRunner:
         args: dict[str, Any],
         context: ToolExecutionContext,
     ) -> dict[str, Any]:
-        """Analyze an image using VisionCNN — embedding, caption, and object detection."""
+        """Analyze an image via the inference image-capability facade."""
         image_path = args.get("image_path", "")
         if not image_path:
             return {"error": "image_path required", "success": False}
+        violation = self._path_violation(image_path)
+        if violation:
+            return {"error": violation, "success": False}
         try:
-            if not os.path.exists(image_path):
-                return {"error": f"Image not found: {image_path}", "success": False}
+            from domain.inference import analyze_image
 
-            size = os.path.getsize(image_path)
-            ext = os.path.splitext(image_path)[1].lower()
-
-            try:
-                from domain.multimodal._internal.vision import VisionCNN
-
-                vision = VisionCNN()
-                caption_result = vision.caption(image_path)
-                objects = vision.detect(image_path)
-                embedding = vision.get_embedding(image_path)
-
+            result = analyze_image(image_path)
+            if not result.success:
+                # Map the facade's taxonomy onto this tool's existing shape.
+                if result.error_kind == "not_found":
+                    return {"error": result.error, "success": False}
+                message = (
+                    "Vision model not available — install SloNet dependencies"
+                    if result.error_kind == "unavailable"
+                    else f"Vision analysis error: {result.error}"
+                )
                 return {
-                    "success": True,
-                    "format": ext,
-                    "size_bytes": size,
-                    "caption": caption_result.text,
-                    "confidence": round(caption_result.confidence, 3),
-                    "tags": caption_result.tags,
-                    "objects": [
-                        {"label": obj.label, "confidence": round(obj.confidence, 3)}
-                        for obj in objects
-                    ],
-                    "embedding_dim": len(embedding),
-                    "embedding_stats": {
-                        "mean": round(float(embedding.mean()), 4),
-                        "std": round(float(embedding.std()), 4),
-                        "l2_norm": round(float((embedding**2).sum() ** 0.5), 4),
-                    },
+                    "success": False,
+                    "format": result.format,
+                    "size_bytes": result.size_bytes,
+                    "error": message,
                 }
-            except ImportError:
-                return {
-                    "success": True,
-                    "format": ext,
-                    "size_bytes": size,
-                    "note": "Vision model not available — install SloNet dependencies",
-                }
-            except Exception as ve:
-                logger.warning("VisionCNN analysis failed, falling back to metadata: %s", ve)
-                return {
-                    "success": True,
-                    "format": ext,
-                    "size_bytes": size,
-                    "note": f"Vision analysis error: {ve}",
-                }
+
+            embedding = result.embedding
+            return {
+                "success": True,
+                "format": result.format,
+                "size_bytes": result.size_bytes,
+                "caption": result.caption,
+                "confidence": round(result.confidence, 3),
+                "tags": result.tags,
+                "objects": [
+                    {"label": o["label"], "confidence": round(o["confidence"], 3)}
+                    for o in result.objects
+                ],
+                "embedding_dim": len(embedding),
+                "embedding_stats": {
+                    "mean": round(float(embedding.mean()), 4),
+                    "std": round(float(embedding.std()), 4),
+                    "l2_norm": round(float((embedding**2).sum() ** 0.5), 4),
+                },
+            }
         except Exception as e:
             return {"error": str(e), "success": False}
 
@@ -535,11 +586,16 @@ class ToolRunner:
         data_path = args.get("data_path", "")
         if not data_path:
             return {"error": "data_path required", "success": False}
+        violation = self._path_violation(data_path)
+        if violation:
+            return {"error": violation, "success": False}
         try:
             if not os.path.exists(data_path):
                 return {"error": f"Data file not found: {data_path}", "success": False}
             with open(data_path, errors="replace") as f:
-                raw = f.read(500_000)
+                raw = f.read(500_001)
+            truncated = len(raw) > 500_000
+            raw = raw[:500_000]
             ext = os.path.splitext(data_path)[1].lower()
             if ext == ".csv":
                 lines = raw.strip().split("\n")
@@ -549,19 +605,35 @@ class ToolRunner:
                     "rows": len(lines) - 1,
                     "columns": len(headers),
                     "headers": headers,
+                    "truncated": truncated,
                 }
             elif ext in (".json", ".jsonl"):
                 import json
 
-                data = (
-                    json.loads(raw)
-                    if ext == ".json"
-                    else [json.loads(line) for line in raw.strip().split("\n") if line]
-                )
-                if isinstance(data, list):
-                    keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
-                    return {"success": True, "items": len(data), "keys": keys}
-                return {"success": True, "keys": list(data.keys())}
+                if ext == ".json":
+                    data = json.loads(raw)
+                    if isinstance(data, list):
+                        keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+                        return {"success": True, "items": len(data), "keys": keys}
+                    return {"success": True, "keys": list(data.keys())}
+                # JSONL: the 500KB cap can cut the tail mid-line — skip bad
+                # lines instead of failing the whole tool on one of them.
+                data, bad_lines = [], 0
+                for line in raw.strip().split("\n"):
+                    if not line:
+                        continue
+                    try:
+                        data.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        bad_lines += 1
+                keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+                return {
+                    "success": True,
+                    "items": len(data),
+                    "keys": keys,
+                    "bad_lines": bad_lines,
+                    "truncated": truncated,
+                }
             return {"success": True, "lines": len(raw.strip().split("\n")), "chars": len(raw)}
         except Exception as e:
             return {"error": str(e), "success": False}
@@ -586,6 +658,15 @@ class AgentConfig:
     max_iterations: int = 10
     timeout: int = 120
     instructions: str = ""
+    # Model tier, decided once at agent construction (never branched on
+    # inside execute_stream): "main" always asks the model, "fast" is
+    # cache-first so lightweight bots do not hit the slow model every run.
+    inference_tier: str = "main"
+    # Model tier, decided ONCE at agent construction (never branched on
+    # inside execute_stream): "main" always calls the model, "fast" serves
+    # identical prompts from the response cache first so lightweight bots
+    # do not always pay for the slow model.
+    inference_tier: str = "main"
 
 
 class Agent:
@@ -622,39 +703,134 @@ class Agent:
 
         This is the main entry point - frontend calls this,
         NOT tools directly.
+
+        Consumes ``execute_stream`` — one loop implementation for both the
+        dict API and the SSE API.
         """
-        # Get or create session
-        context = self._get_session(session_id, user_id)
-
-        # Agent reasoning to decide tools
-        plan = await self._plan_execution(user_request, context)
-
-        # Execute planned tools
-        results = []
-        for tool_name, args in plan:
-            result = await self._runner.execute(
-                tool_name,
-                args,
-                context,
-            )
-            results.append(
-                {
-                    "tool": tool_name,
-                    "result": result,
-                }
-            )
-
-        # Generate response (use inference if no tools ran)
-        if not results and self._inference_fn:
-            response = self._generate_response(user_request, context)
-        else:
-            response = self._compose_response(user_request, results)
-
+        tools_used: list[dict[str, Any]] = []
+        response = ""
+        async for event in self.execute_stream(user_request, session_id, user_id):
+            kind = event.get("event")
+            if kind == "tool_result":
+                tools_used.append({"tool": event["tool"], "result": event["result"]})
+            elif kind == "final":
+                response = event.get("text", "")
+            elif kind == "error":
+                raise RuntimeError(event.get("error", "agent run failed"))
+        if not response:
+            response = self._compose_response(user_request, tools_used)
         return {
             "response": response,
-            "tools_used": results,
+            "tools_used": tools_used,
             "session_id": session_id,
         }
+
+    async def execute_stream(
+        self,
+        user_request: str,
+        session_id: str,
+        user_id: str = "default",
+    ):
+        """Yield step events for one bounded model⇄tool loop run.
+
+        Events: ``run_start`` → (``tool_start`` → ``tool_result``)* →
+        ``final`` → ``run_end``; ``error`` on failure. The loop lets the
+        model observe tool results before deciding the next step, and every
+        run is recorded in the shared run store.
+        """
+        from domain.agents._internal.run_history import get_agent_run_store
+
+        context = self._get_session(session_id, user_id)
+        store = None
+        run_id = None
+        try:
+            store = get_agent_run_store()
+            run_id = store.start(user_request, session_id)
+        except Exception as e:
+            logger.debug("Run persistence unavailable: %s", e, extra={"tag": "AGENT"})
+            store = None
+
+        yield {"event": "run_start", "run_id": run_id, "session_id": session_id}
+
+        observations: list[dict[str, Any]] = []
+        tool_results: list[dict[str, Any]] = []
+        final_text = ""
+        budget = max(1, int(self.config.max_iterations))
+        try:
+            for step in range(budget):
+                plan = await self._plan_next(user_request, context, observations)
+                if not plan:
+                    break
+                for tool_name, args in plan:
+                    yield {
+                        "event": "tool_start",
+                        "tool": tool_name,
+                        "args": args,
+                        "step": step,
+                        "run_id": run_id,
+                    }
+                    try:
+                        result = await self._runner.execute(tool_name, args, context)
+                    except Exception as e:
+                        result = {"success": False, "error": str(e)}
+                    summary = _result_summary(result)
+                    observations.append({"tool": tool_name, "args": args, "summary": summary})
+                    tool_results.append({"tool": tool_name, "result": result})
+                    if store is not None and run_id is not None:
+                        try:
+                            store.append_log(run_id, f"step {step}: {tool_name} → {summary[:180]}")
+                        except Exception as e:
+                            logger.debug("append_log failed: %s", e, extra={"tag": "AGENT"})
+                    yield {
+                        "event": "tool_result",
+                        "tool": tool_name,
+                        "result": result,
+                        "step": step,
+                        "run_id": run_id,
+                    }
+            final_text = await self._synthesize(user_request, context, observations, tool_results)
+            yield {"event": "final", "text": final_text, "run_id": run_id}
+        except Exception as e:
+            if store is not None and run_id is not None:
+                try:
+                    store.fail(run_id, str(e))
+                except Exception:
+                    pass
+            yield {"event": "error", "error": str(e), "run_id": run_id}
+            raise
+        else:
+            if store is not None and run_id is not None:
+                try:
+                    store.complete(run_id, response=final_text)
+                except Exception as e:
+                    logger.debug("complete failed: %s", e, extra={"tag": "AGENT"})
+        yield {"event": "run_end", "run_id": run_id, "session_id": session_id}
+
+    async def _plan_next(
+        self,
+        request: str,
+        context: ToolExecutionContext,
+        observations: list[dict[str, Any]],
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Decide the next tools given what has run so far (bounded loop).
+
+        With inference the model re-plans after every batch of observations
+        (``[]`` = enough information, synthesize). The bootstrap model plans
+        ``[]`` even for explicit tool requests (0/5 selection live
+        2026-10-30), so on step 0 an empty model plan falls back to the
+        keyword matcher — conservative patterns only (quoted searches,
+        code blocks) — until SFT tool-use training lands.
+        """
+        if self._inference_fn:
+            plan = await self._plan_with_llm(request, observations)
+            if plan:
+                return plan
+            if not observations:
+                return self._plan_with_keywords(request)
+            return []
+        if observations:
+            return []
+        return self._plan_with_keywords(request)
 
     def _generate_response(self, request: str, context: ToolExecutionContext) -> str:
         """Generate a response via LLM when no tools are needed."""
@@ -698,12 +874,9 @@ class Agent:
         """
         Plan which tools to use.
 
-        Uses LLM reasoning when ``inference_fn`` is available,
-        falls back to keyword matching otherwise.
+        Compatibility shim — the loop uses ``_plan_next`` (one planner path).
         """
-        if self._inference_fn:
-            return await self._plan_with_llm(request)
-        return self._plan_with_keywords(request)
+        return await self._plan_next(request, context, [])
 
     def _plan_with_keywords(
         self,
@@ -723,8 +896,10 @@ class Agent:
                     )
                 )
 
-        if "search" in lower or "find" in lower:
-            query = re.search(r"(?:search|find)\s+(?:for\s+)?['\"](.+?)['\"]", lower)
+        if "search" in lower or "find" in lower or "match" in lower:
+            # Any quoted span works as the query — the earlier pattern only
+            # fired for `search for "x"` and missed `search for files matching "x"`.
+            query = re.search(r"[\"'](.+?)[\"']", request)
             if query:
                 plan.append(
                     (
@@ -798,25 +973,53 @@ class Agent:
     async def _plan_with_llm(
         self,
         request: str,
+        observations: list[dict[str, Any]] | None = None,
     ) -> list[tuple[str, dict[str, Any]]]:
-        """Plan tools using LLM reasoning."""
-        tool_names = [c.value for c in ToolCapability]
+        """Plan (or re-plan) tools using LLM reasoning.
+
+        With ``observations`` the model sees what already ran and decides the
+        next step — ``[]`` means "enough information, synthesize now".
+        """
+        allowed = [t.value for t in self.config.tools] or [c.value for c in ToolCapability]
+        # The 0.5B bootstrap model treats a bare "decide which tools" question
+        # as chit-chat and refuses/loops (live journey 2026-10-30). A tiny
+        # format example + strict format line raises JSON compliance without
+        # any training — the SFT lever stays carded for real quality.
         prompt = (
-            f"Given this user request, decide which tools (if any) to use.\n"
-            f"Available tools: {', '.join(tool_names)}\n"
+            "You are a tool-calling assistant. Pick tools for the request.\n"
+            f"Available tools: {', '.join(allowed)}\n"
+            "Respond with ONLY one JSON array, no prose. Examples:\n"
+            '  [{"tool": "file_search", "args": {"query": "run_history"}}]\n'
+            "  []\n"
+            "Use [] when no tool is needed.\n"
             f"User request: {request}\n"
-            f"Return a JSON array of {{'tool': str, 'args': dict}} objects, "
-            f"or an empty array [] if no tools are needed.\n"
-            f"Return ONLY the JSON, no other text."
+        )
+        if observations:
+            prompt += (
+                "You already ran tools. Observations:\n"
+                f"{json.dumps(observations, ensure_ascii=False)[:4000]}\n"
+                "Decide the NEXT step now: another JSON array of tools to run, "
+                "or [] if you have enough information to answer.\n"
+            )
+        prompt += (
+            "Return a JSON array of {'tool': str, 'args': dict} objects, "
+            "or an empty array [] if no tools are needed.\n"
+            "Return ONLY the JSON, no other text."
         )
         try:
-            resp = self._inference_fn(prompt)
+            resp = await asyncio.to_thread(self._inference_fn, prompt)
             text = resp.get("text", "") if isinstance(resp, dict) else str(resp)
             text = text.strip()
             # Extract JSON array
             match = re.search(r"\[.*?\]", text, re.DOTALL)
             if match:
-                plan = json.loads(match.group())
+                span = match.group()
+                try:
+                    plan = json.loads(span)
+                except json.JSONDecodeError:
+                    # The 0.5B model often emits single-quoted Python-style
+                    # dicts — literal_eval is safe (no exec) and recovers it.
+                    plan = ast.literal_eval(span)
             else:
                 return []
             return [
@@ -826,7 +1029,50 @@ class Agent:
             ]
         except Exception as e:
             logger.warning("LLM planning failed: %s", e, extra={"tag": "MODEL"})
+            # Never keyword-replan mid-loop: it would re-run the same tools.
+            if observations:
+                return []
             return self._plan_with_keywords(request)
+
+    async def _synthesize(
+        self,
+        request: str,
+        context: ToolExecutionContext,
+        observations: list[dict[str, Any]],
+        tool_results: list[dict[str, Any]],
+    ) -> str:
+        """Produce the final answer: model reads observations, compose is fallback."""
+        if self._inference_fn:
+            try:
+                if observations:
+                    system = getattr(self.config, "instructions", "") or "You are an AI assistant."
+                    prompt = (
+                        f"{system}\n\n"
+                        f"User: {request}\n"
+                        "Tool observations:\n"
+                        f"{json.dumps(observations, ensure_ascii=False)[:6000]}\n"
+                        "Write the final answer for the user based on these observations. "
+                        "One answer only: never repeat a phrase or sentence, and do not "
+                        "mention your tools or limits."
+                    )
+                    resp = await asyncio.to_thread(self._inference_fn, prompt)
+                    text = resp.get("text", "") if isinstance(resp, dict) else str(resp)
+                    if text.strip():
+                        from domain.agents._internal.run_history import looks_like_refusal
+
+                        # Bootstrap-model symptoms: canned refusals and
+                        # phrase loops make bad training/UX — compose is honest.
+                        if looks_like_refusal(text):
+                            logger.debug("Synthesis refusal, composing", extra={"tag": "MODEL"})
+                        elif _looks_degenerate(text):
+                            logger.debug("Synthesis loop, composing", extra={"tag": "MODEL"})
+                        else:
+                            return text.strip()
+                else:
+                    return await asyncio.to_thread(self._generate_response, request, context)
+            except Exception as e:
+                logger.warning("Synthesis failed: %s", e, extra={"tag": "MODEL"})
+        return self._compose_response(request, tool_results)
 
     def _compose_response(
         self,
@@ -854,6 +1100,42 @@ class Agent:
 
 
 # ============ Singleton Instances ============
+
+
+def _result_summary(result: Any) -> str:
+    """One-line human/model summary of a tool result (loop observation)."""
+    if not isinstance(result, dict):
+        return str(result)[:300]
+    if not result.get("success", True):
+        return f"error: {result.get('error', 'unknown')}"
+    for key in ("stdout", "answer", "text", "results", "files", "citations"):
+        if key in result:
+            value = result[key]
+            if isinstance(value, str):
+                return value[:300]
+            return f"{key}: {str(value)[:300]}"
+    return str(result)[:300]
+
+
+def _looks_degenerate(text: str) -> bool:
+    """True when output loops — the 0.5B repeats a phrase 3x in a row.
+
+    Checked from long chunks down to bigrams: live runs showed both
+    sentence-level loops and tails like "artificial intelligence, ..."
+    three times over. A legit answer never repeats any chunk exactly 3x
+    consecutively, so short answers simply can't trip it.
+    """
+    words = text.split()
+    if len(words) < 8:
+        return False
+    for n in (6, 5, 4, 3, 2):
+        chunk_len = 3 * n
+        for i in range(len(words) - chunk_len + 1):
+            chunk = words[i : i + n]
+            if words[i + n : i + 2 * n] == chunk and words[i + 2 * n : i + chunk_len] == chunk:
+                return True
+    return False
+
 
 _agent: Agent | None = None
 _runner: ToolRunner | None = None

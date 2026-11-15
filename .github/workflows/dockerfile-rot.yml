@@ -1,0 +1,83 @@
+name: Dockerfile rot gate
+
+# Build-checks the Dockerfiles ci_cd.yml's `build` job never touches
+# (card 20261027_070731_infra-dockerfile-rot-gate).
+#
+# ci_cd.yml publishes exactly three images — infra/docker/Dockerfile (API),
+# apps/web/Dockerfile (web), infra/docker/Dockerfile.cli (CLI) — and only on
+# push, never on a PR. Everything else was built by nobody: 8 Dockerfiles
+# sat rotting silently (one of them, infra/docker/Dockerfile.test, has been
+# unbuildable since 2026-06-21 because .dockerignore excludes the `tests/`
+# it COPYs — nothing would have told us, because nothing built it).
+#
+# Rules of this gate:
+#   * push: false — it VERIFIES, it never publishes. Publishing stays in
+#     ci_cd.yml's build job, one writer.
+#   * fail-fast: false — every file reports independently; you see exactly
+#     which ones rotted instead of stopping at the first.
+#   * gha cache is scoped per matrix entry so the seven builds never evict
+#     each other's layers.
+#   * infra/docker/Dockerfile.test is deliberately absent: it cannot build
+#     (see scripts/dockerfile_context_baseline.json) and awaits a ruling —
+#     fix its context vs retire an image that only mirrors the CI test job.
+#
+# Sequencing: dispatched manually first to prove the matrix green; `schedule`
+# is armed only once proven, so main never carries an unverified red.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "infra/docker/Dockerfile*"
+      - "apps/api/server/Dockerfile"
+      - "apps/web/Dockerfile"
+      - "buildroot/Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/dockerfile-rot.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "infra/docker/Dockerfile*"
+      - "apps/api/server/Dockerfile"
+      - "apps/web/Dockerfile"
+      - "buildroot/Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/dockerfile-rot.yml"
+
+concurrency:
+  group: dockerfile-rot-${{ github.workflow }}-${{ github.ref }}
+  # Same rule as CI/CD: a main run is a distinct commit that needs its own
+  # verdict; only superseded PR runs cancel (card 20261102_025758).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  actions: write # gha build cache
+
+jobs:
+  build-check:
+    name: build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: dev, file: infra/docker/Dockerfile.dev }
+          - { name: server, file: infra/docker/Dockerfile.server }
+          - { name: api-server, file: apps/api/server/Dockerfile }
+          - { name: sdk, file: infra/docker/Dockerfile.sdk }
+          - { name: gateway, file: infra/docker/Dockerfile.gateway }
+          - { name: gpu, file: infra/docker/Dockerfile.gpu }
+          - { name: buildroot, file: buildroot/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.file }} (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: false
+          cache-from: type=gha,scope=dockerfile-rot-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=dockerfile-rot-${{ matrix.name }}

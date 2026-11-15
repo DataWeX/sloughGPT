@@ -3,11 +3,14 @@
 Public API:
     FeedbackDB, get_feedback_db, Message, Feedback, SimilarPattern
     MetaWeightManager, MetaWeights, get_meta_weight_manager
+    SAFE_BAND — the one generation-safe bounds authority (card 20261101_182428)
     ResponseTracker, get_response_tracker
     WorkflowConfig, get_feedback_workflow
     get_per_user_lora, create_training_pipeline
     get_health_monitor, get_message_feedback, HFDPOTrainer
 """
+
+from __future__ import annotations
 
 from domain.feedback._internal.database import (
     Feedback,
@@ -18,6 +21,7 @@ from domain.feedback._internal.database import (
 )
 from domain.feedback._internal.message_feedback import get_message_feedback
 from domain.feedback._internal.meta_weights import (
+    SAFE_BAND,
     MetaWeightManager,
     MetaWeights,
     get_meta_weight_manager,
@@ -52,6 +56,7 @@ __all__ = [
     "MetaWeightManager",
     "MetaWeights",
     "get_meta_weight_manager",
+    "SAFE_BAND",
     "ResponseTracker",
     "get_response_tracker",
     "WorkflowConfig",
@@ -62,6 +67,8 @@ __all__ = [
     "get_message_feedback",
     "HFDPOTrainer",
     "get_online_lora_updater",
+    # Route-surface read (card 20261101_140447)
+    "FeedbackTrainer",
 ]
 
 _LAZY_IMPORTS = {
@@ -69,6 +76,9 @@ _LAZY_IMPORTS = {
     "HFDPOTrainer": ("._internal.hf_dpo", "HFDPOTrainer"),
     "get_feedback_workflow": ("._internal.workflow", "get_feedback_workflow"),
     "get_online_lora_updater": ("._internal.online_train", "get_online_lora_updater"),
+    # Route-surface read (card 20261101_140447) — from_feedback.py imports
+    # through the facade, mapped to the module it reads today.
+    "FeedbackTrainer": ("._internal.training", "FeedbackTrainer"),
 }
 
 

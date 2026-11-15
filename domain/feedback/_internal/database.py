@@ -27,6 +27,30 @@ from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.feedback.database")
 
+# How far feedback may move each sampling knob from its neutral value.
+# These are integration BOUNDS, not preferences: feedback is noisy and
+# unbounded accumulation turns "what users liked" into "the most extreme
+# corner of the parameter space" regardless of the up/down balance. The band
+# is deliberately wider than a single rating's nudge (0.02) so 15+ consistent
+# ratings still express a real preference, and narrow enough that the sampler
+# stays inside the region where a chat model emits coherent, terminating text.
+_META_WEIGHT_CAP: dict[str, float] = {
+    "temperature_boost": 0.3,
+    "repetition_boost": 0.15,
+    "top_p_boost": 0.15,
+    "top_k_boost": 12.0,
+    "style_bias": 0.5,
+    "confidence_boost": 0.3,
+}
+
+
+def _cap_boost(field: str, value: float) -> float:
+    """Clamp one accumulated boost into its integration band."""
+    cap = _META_WEIGHT_CAP.get(field)
+    if cap is None:
+        return value
+    return max(-cap, min(cap, value))
+
 
 @dataclass
 class Message:
@@ -546,12 +570,17 @@ class FeedbackDB:
             return None
         return {
             "user_id": doc["user_id"],
-            "temperature_boost": doc.get("temperature_boost", 0.0),
-            "repetition_boost": doc.get("repetition_boost", 0.0),
-            "top_p_boost": doc.get("top_p_boost", 0.0),
-            "top_k_boost": doc.get("top_k_boost", 0.0),
-            "style_bias": doc.get("style_bias", 0.0),
-            "confidence_boost": doc.get("confidence_boost", 0.0),
+            # Clamped on read as well as on write: rows written before the
+            # saturating accumulator existed still hold runaway values, and
+            # every consumer of this row feeds the sampler. Repairing at the
+            # read seam fixes existing profiles without a migration and
+            # without touching stored history.
+            "temperature_boost": _cap_boost("temperature_boost", doc.get("temperature_boost", 0.0)),
+            "repetition_boost": _cap_boost("repetition_boost", doc.get("repetition_boost", 0.0)),
+            "top_p_boost": _cap_boost("top_p_boost", doc.get("top_p_boost", 0.0)),
+            "top_k_boost": _cap_boost("top_k_boost", doc.get("top_k_boost", 0.0)),
+            "style_bias": _cap_boost("style_bias", doc.get("style_bias", 0.0)),
+            "confidence_boost": _cap_boost("confidence_boost", doc.get("confidence_boost", 0.0)),
             "thumbs_up_count": doc.get("thumbs_up_count", 0),
             "thumbs_down_count": doc.get("thumbs_down_count", 0),
             "last_updated": doc.get("last_updated"),
@@ -574,6 +603,17 @@ class FeedbackDB:
         Each delta is applied positively for thumbs_up, negatively for
         thumbs_down (except repetition_delta which is inverted — good
         responses get lower repetition penalty).
+
+        Accumulation saturates at ``_META_WEIGHT_CAP`` per field. This is an
+        integrator: without a bound, the count of ratings (not their balance)
+        decides how far the sampler is pushed. Measured 2026-11-02 on the live
+        profile: 473 thumbs-up against 10 thumbs-down had accumulated
+        ``temperature_boost`` 9.26, ``repetition_boost`` -9.26 and
+        ``top_k_boost`` -450. Clamped downstream that is temperature 1.5 /
+        top_k 5 / repetition_penalty 0.8 — a corner that actively rewards
+        verbatim repetition, so a chat model answered correctly and then
+        replayed the block until ``max_tokens`` instead of emitting its
+        turn-end token (card 20261102_001621).
         """
         now = utc_now_iso()
 
@@ -594,7 +634,7 @@ class FeedbackDB:
             if existing:
                 updated = {}
                 for field, delta in d.items():
-                    updated[field] = existing.get(field, 0.0) + delta
+                    updated[field] = _cap_boost(field, existing.get(field, 0.0) + delta)
                 updated["thumbs_up_count"] = existing.get("thumbs_up_count", 0) + (
                     1 if is_up else 0
                 )

@@ -15,9 +15,9 @@
  *   + backend report (explicit stack-rich report; funnel's batch is deduped).
  */
 
+import { notify } from '@/lib/notify'
 import { useEffect, useRef } from 'react'
 import { useErrorStore } from '@/lib/error-store'
-import { useToastStore } from '@/lib/toast-store'
 import { reportError } from '@/lib/error-reporter'
 import { logger } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
@@ -110,7 +110,7 @@ function extractStackInfo(error: ErrorEvent | PromiseRejectionEvent): {
 
 export function ErrorLifecycle() {
   const addError = useErrorStore((s) => s.addError)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const initialized = useRef(false)
 
   useEffect(() => {

@@ -1,11 +1,12 @@
 ---
 name: responsive-design
-description: Mobile-first responsive design patterns for Next.js + Tailwind CSS. Enforces breakpoint usage, touch targets, fluid layouts, and mobile-specific patterns.
+description: Mobile-first responsive design patterns for Vite + React + Tailwind CSS. Enforces breakpoint usage, touch targets, fluid layouts, and mobile-specific patterns.
 ---
 
 # Responsive Design Skill
 
 ## When to Use
+
 - Creating new page layouts or components
 - Fixing mobile rendering issues
 - Adding responsive behavior to existing components
@@ -13,13 +14,13 @@ description: Mobile-first responsive design patterns for Next.js + Tailwind CSS.
 
 ## Breakpoint System
 
-| Prefix | Min-width | Usage |
-|--------|-----------|-------|
-| (none) | 0px | Mobile-first default |
-| `sm` | 640px | Small tablets |
-| `md` | 768px | Tablets |
-| `lg` | 1024px | Desktop |
-| `xl` | 1280px | Large desktop |
+| Prefix | Min-width | Usage                |
+| ------ | --------- | -------------------- |
+| (none) | 0px       | Mobile-first default |
+| `sm`   | 640px     | Small tablets        |
+| `md`   | 768px     | Tablets              |
+| `lg`   | 1024px    | Desktop              |
+| `xl`   | 1280px    | Large desktop        |
 
 **Rule:** Always start mobile-first. Add complexity with `sm:`, `md:`, `lg:` prefixes.
 
@@ -34,22 +35,22 @@ description: Mobile-first responsive design patterns for Next.js + Tailwind CSS.
 </div>
 ```
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `sl-page` | `p-4 sm:p-6 md:p-8` | Responsive page padding |
-| `max-w-4xl` | 896px | Max content width |
-| `space-y-4` | 16px | Gap between cards |
+| Token       | Value               | Usage                   |
+| ----------- | ------------------- | ----------------------- |
+| `sl-page`   | `p-4 sm:p-6 md:p-8` | Responsive page padding |
+| `max-w-4xl` | 896px               | Max content width       |
+| `space-y-4` | 16px                | Gap between cards       |
 
 ## Mobile-First Patterns
 
 ### Sidebar/Navigation
 
-| Pattern | Mobile | Desktop |
-|---------|--------|---------|
-| Navigation | Drawer (hamburger menu) | Persistent sidebar |
-| Sidebar width | Full screen width | Collapsible panel |
-| Close mechanism | X button + backdrop | Toggle button |
-| Safe area | `pb-[max(0px,env(safe-area-inset-bottom))]` | N/A |
+| Pattern         | Mobile                                      | Desktop            |
+| --------------- | ------------------------------------------- | ------------------ |
+| Navigation      | Drawer (hamburger menu)                     | Persistent sidebar |
+| Sidebar width   | Full screen width                           | Collapsible panel  |
+| Close mechanism | X button + backdrop                         | Toggle button      |
+| Safe area       | `pb-[max(0px,env(safe-area-inset-bottom))]` | N/A                |
 
 ```tsx
 // Mobile drawer
@@ -74,12 +75,12 @@ description: Mobile-first responsive design patterns for Next.js + Tailwind CSS.
 
 ### Touch Targets
 
-| Element | Mobile Size | Desktop Size |
-|---------|-------------|-------------|
-| Buttons | `h-11` (44px) | `h-9` (36px) |
-| Icon buttons | `h-11 w-11` | `h-7 w-7` |
-| List items | `min-h-11` | `min-h-9` |
-| Input fields | `h-11` | `h-9` |
+| Element      | Mobile Size   | Desktop Size |
+| ------------ | ------------- | ------------ |
+| Buttons      | `h-11` (44px) | `h-9` (36px) |
+| Icon buttons | `h-11 w-11`   | `h-7 w-7`    |
+| List items   | `min-h-11`    | `min-h-9`    |
+| Input fields | `h-11`        | `h-9`        |
 
 ### Header/Toolbar
 
@@ -90,10 +91,10 @@ description: Mobile-first responsive design patterns for Next.js + Tailwind CSS.
   <Button variant="menu" size="icon" className="lg:hidden">
     <IconMenu />
   </Button>
-  
+
   {/* Mobile: simplified */}
   <span className="text-sm font-semibold truncate lg:hidden">Title</span>
-  
+
   {/* Desktop: full toolbar */}
   <div className="hidden lg:flex lg:items-center lg:gap-4">
     <SearchInput />
@@ -151,15 +152,15 @@ description: Mobile-first responsive design patterns for Next.js + Tailwind CSS.
 
 ## Anti-Patterns
 
-| Anti-Pattern | Fix |
-|-------------|-----|
-| `px-8 py-6` on page body | Use `sl-page` class instead |
-| Fixed widths `w-[500px]` | Use `max-w-*` with responsive prefixes |
-| `overflow-x: auto` on body | Fix layout to not overflow |
-| Mobile layout breaking on zoom | Use relative units, test at 200% zoom |
-| Touch targets < 44px | Use `min-h-11` or `h-11` on interactive elements |
-| Hidden content still focusable | Remove from tab order when hidden |
-| No `env(safe-area-inset-*)` on mobile | Add safe area padding for notch devices |
+| Anti-Pattern                          | Fix                                              |
+| ------------------------------------- | ------------------------------------------------ |
+| `px-8 py-6` on page body              | Use `sl-page` class instead                      |
+| Fixed widths `w-[500px]`              | Use `max-w-*` with responsive prefixes           |
+| `overflow-x: auto` on body            | Fix layout to not overflow                       |
+| Mobile layout breaking on zoom        | Use relative units, test at 200% zoom            |
+| Touch targets < 44px                  | Use `min-h-11` or `h-11` on interactive elements |
+| Hidden content still focusable        | Remove from tab order when hidden                |
+| No `env(safe-area-inset-*)` on mobile | Add safe area padding for notch devices          |
 
 ## Verification
 

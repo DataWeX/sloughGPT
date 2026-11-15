@@ -1,0 +1,10 @@
+{
+  "comment": "Strict xfails for scripts/check_dockerfile_contexts.py — exact-set matched, same ratchet as page-baseline.json / command_parity_baseline.json. Fix the Dockerfile (or its .dockerignore) and this entry goes stale: the gate fails until the entry is deleted. Adding an entry is an explicit, reviewed edit.",
+  "entries": {
+    "infra/docker/Dockerfile.test": {
+      "since": "2026-11-03",
+      "paths": ["tests"],
+      "reason": "COPY tests/ but .dockerignore excludes tests/ (line 30, in place since d1b7e7484 2026-06-21) — unbuildable for 4+ months because nothing ever built it. Pending ruling: fix (narrow .dockerignore so the test image keeps a self-contained context) vs retire (the image mirrors the CI test job, whose own comment says so, and CI runs those tests natively)."
+    }
+  }
+}

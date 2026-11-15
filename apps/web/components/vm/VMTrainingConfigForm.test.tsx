@@ -168,4 +168,21 @@ describe('VMTrainingConfigForm', () => {
     fireEvent.click(screen.getByText('Dismiss'))
     expect(onDismissJob).toHaveBeenCalledOnce()
   })
+
+  it('clamps out-of-range input through the shared sanitizer', () => {
+    const onConfigChange = vi.fn()
+    render(<VMTrainingConfigForm {...defaultProps} onConfigChange={onConfigChange} />)
+    fireEvent.change(screen.getByLabelText('Training epochs'), { target: { value: '99999' } })
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ epochs: 1000 }))
+  })
+
+  it('keeps NaN for cleared fields so hint fallbacks stay intact', () => {
+    // The hint contract: empty input → NaN → "using default X" hint →
+    // clampTrainConfig at launch. The migration to the shared sanitizer
+    // must preserve NaN-on-empty, only adding range clamping.
+    const onConfigChange = vi.fn()
+    render(<VMTrainingConfigForm {...defaultProps} onConfigChange={onConfigChange} />)
+    fireEvent.change(screen.getByLabelText('Training learning rate'), { target: { value: '' } })
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ lr: Number.NaN }))
+  })
 })

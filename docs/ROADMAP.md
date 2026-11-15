@@ -7,7 +7,22 @@
 > gateway built well as the edge optimizer of the core infra stack.
 > Borrowed weights (HF conversion, distillation) are bootstrap, not destination.
 
-## Current state (September 2026)
+## How to read this roadmap
+
+- **This file = intent, sequence, and release definition.** Execution state
+  lives on the board (`.kanban/board.jsonl`, derived from
+  `~/.config/dev-notes/*.md`). Forward items reference card IDs and never
+  restate card status — restated status drifts the moment the board moves
+  (the notes↔board rule, applied to docs).
+- **Not this file:** `PRODUCT_ENGINEERING.md` owns what/why plus the route
+  map's per-page detail; `UX_FLOWS.md` owns journey flows; `USER_PERSONA.md`
+  owns who it is for. This roadmap sequences those plans, it does not restate
+  them.
+- The root `ROADMAP.md` is a pointer stub. Phase 1–8 history and the frozen
+  velocity table (last row 2026-07-13) live in that file's pre-restructure
+  git revision — a metric nothing regenerates is retired, not maintained.
+
+## Current state (last truth-up 2026-10-09)
 
 ### Model — owned machinery, bootstrap weights
 
@@ -28,8 +43,8 @@
 ### Clients (separate from core infra — see PRODUCT_ENGINEERING.md)
 
 - Web: 32 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Voyager journey library (`packages/voyager/` src; journey coverage runs via
-Avion — `scripts/run_journey_tests.py`, `packages/avion/tests/test_journeys.py`
-— and `packages/core-py/tests/test_user_journeys.py`). Mobile: not started. Clients reach core only through the API/protocol — never internals.
+  Avion — `scripts/run_journey_tests.py`, `packages/avion/tests/test_journeys.py`
+  — and `tests/core-py/test_user_journeys.py`). Mobile: **exists, parked** — `apps/mobile/` is a React Native scaffold (mid-2026: screens, services, on-device inference) that no session works and no release ships; re-decide after v1. (This replaces the old contradiction: the root roadmap's "Phase 7 ✅" and this file's "not started" were both wrong.) Clients reach core only through the API/protocol — never internals.
 
 ### Compression (pugqeep)
 
@@ -44,6 +59,129 @@ Avion — `scripts/run_journey_tests.py`, `packages/avion/tests/test_journeys.py
 - Prompt middleware (processors) works and stays — but injections are context-token spend, so each one justifies its tokens.
 - Feedback→LoRA was wired years late, so learning lagged use. Training story ships with the feature now (fairness rule).
 
+## Now — v1 release: route map first
+
+Release definition (user decision, 2026-10-19): **ship the route map before
+anything else ships** — a clean, small app first. Training delivery (goals
+15–19) and the owned milestones (12–14) have all landed, so the route map is
+the remaining release mass, not one track among several.
+
+Definition of done — all four, each closing with a card ID + landed sha:
+
+1. **Seven ⏳ route-map targets landed** ✅ (2026-11-09, card `20261101_140445_v1-route-map-land-the-7-pending-targets-models-souls-knowled`) — `/models`, `/souls`, `/knowledge`,
+   `/settings`, `/shell`, `/files`, `/monitoring` → ~20 frontend pages, ~15
+   routers (per-page merge detail lives in `PRODUCT_ENGINEERING.md` → Route
+   Map; this file does not duplicate that table).
+2. **Every 🔧 partial fully integrated** ✅ (2026-11-09, card `20261101_140445_v1-integration-fold-every-partial-surface-into-its-merged-ho`) — `/training` sidebar consolidation,
+   `/benchmark` headless (nav-level: no sidebar entry; page kept as a hidden
+   deep-link surface), `/feedback` kept, `/voice` → chat mode: no
+   half-merged navigation left behind (19/19 nav paths resolve, 0 straggler
+   pages; Route Map status cells truthed up).
+3. **Build order #5** ✅ (2026-11-09, card `20261101_140445_build-order-5-restructure-phoneme-knowledge-and-training-pag`) — phoneme, knowledge, and training pages restructured
+   to follow `UX_FLOWS.md` (`PRODUCT_ENGINEERING.md` → Build Order) —
+   knowledge + training landed 2026-11-08; phoneme split to card
+   `20261108_152007` (model-capability ruling, not a learning UI).
+4. **Build order #7** ✅ (2026-11-09, card `20261101_140446`) — user journeys green:
+   `tests/core-py/test_user_journeys.py` 103 passed (live stack of this checkout:
+   `SLO_WEB_URL`/`SLO_API_URL` — default `:5173` was a foreign session's tree),
+   `packages/avion/tests/test_journeys.py` 3 passed (FakeBackend),
+   `scripts/run_journey_tests.py` 8/8 API + 8/8 Playwright, exit 0.
+
+## Next — after v1
+
+### Product
+
+- **Visual/UX quality bar** — opened by the user 2026-10-19: our
+  visualizations read as "bland, primitive, and designed without
+  consideration for the user" (default chart-lib output, no annotation, no
+  motion, no staged reveals). Open discussion — needs a definition of done
+  and a card before anything is built (candidate shape: a visualization
+  grammar shared by charts, diagrams, and motion, instead of per-component
+  ad-hoc rendering).
+- **Session recording, viewer-first** — direction decided 2026-10-19: raw
+  frames + timestamped events + boxes as a _derived_ overlay (never burned
+  into the frames), HTML viewer with toggleable boxes and an event timeline,
+  capture targets full/rect/element via the existing avion element picker.
+  No install: mp4 (H.264) export stays gated on approving `imageio-ffmpeg`
+  in the shared conda env. Card pending.
+
+### Platform
+
+- **test-core-py green baseline ✅ (umbrella closed 2026-11-03, card
+  `20261101_140448` — consecutive green CI runs + honest quarantine of the
+  pre-existing timeouts under `pytest.mark.slow`: shell TUI 18, quant e2e 17,
+  VM benchmarks 71)** — the warning ("a permanently red baseline stops being
+  visible debt the day someone starts believing it") proved right once more:
+  the residual `test_quantization_benchmark_e2e` A-B pair flaked red on CI
+  twice in a row (2026-11-08/09). Fixed 2026-11-09, card
+  `20261105_170745` — the tests asserted runner stability instead of our
+  code; replaced with round-trip + exit/report-coherence claims and a
+  synthetic regression pin. Land bar (two consecutive green CI test-core-py
+  runs) **met 2026-11-09**: `42561514492` (42903 passed) → `42563910820`
+  (42903) → rerun of `42561514492` (42904) — three green executions, 0
+  failed, plus a 4th clean execution of the fixed pair in the pre-rehash
+  run (its only failure was the since-fixed baseline drift).
+- **Routers out of `domain.*_internal*` ✅ (2026-11-09, card
+  `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`,
+  supersedes lost `97260724`)** — re-measured: 8 in scope (not the 2 the
+  router playbook claimed), all in `training/`'s sub-routers; migrated
+  through facades, conformance scan made structural (route surface outside
+  `routers/`+`controllers/` now scanned; `world_render` zone emptied),
+  landed sha in `AGENT_SYNC.md`.
+- **Feature-flag kill/merge memo — declined (user ruling, 2026-11-02)** — no
+  memo, no deletion; the 10 flags that gate nothing stay as-is. Was card
+  `d94aea1c` (lost to churn), re-carded, then dropped by ruling; no open
+  action remains here.
+- **Frontend baseline debt** — the 2 pre-existing tsc errors
+  (`PersonalityTrendChart.tsx` TS2869, missing `@vitejs/plugin-react`) and
+  the `tests/web` `/valence/i` compare-page flake: close them or pin them as
+  accepted-with-evidence.
+
+### Model
+
+- Every numbered model goal is resolved — owned milestones 12–14 and
+  training delivery 15–19. **No open model goal remains; that is a decision
+  point, not a resting place.**
+- **Candidates decided (user ruling, 2026-11-01, session card
+  `20261101_140449` → done):**
+  - **Committed** — hot-loop profiling (goal 1's stated remnant; gates the
+    deferred PyO3 kernel rewrite) → card `20261101_144012_hot-loop-profiling…`;
+    owned-vs-bootstrap quality benchmark (SloNet vs Qwen2.5-0.5B, one eval
+    set; makes "bootstrap, not destination" a measurement) → card
+    `20261101_144012_owned-vs-bootstrap…`; Track A packaging as a
+    distributable release (sequencing vs v1 open at pickup) → card
+    `20261101_144013_track-a-packaging…`.
+  - **Declined** — scaling the owned loop to a real unattended run: one box
+    serves inference and training; revisit with a bounded soak experiment
+    when the corpus is real.
+  - **Added as release mass** — model loading infrastructure must land
+    before v1 ships (user ruling) → card
+    `20261101_144013_model-loading-infrastructure…`, counted under Now.
+
+## Later
+
+- **Mobile** — `apps/mobile/` stays parked (see Current state); re-decide
+  after v1.
+- **Session recording desktop tier** — window/region capture (X11 window
+  pick / Wayland portal), AT-SPI or vision-derived boxes, audio track.
+
+### Deferred (potential Rust)
+
+| Item                         | When                                                               | Why Rust                                        |
+| ---------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
+| SloNet kernel rewrite (PyO3) | If training profiling shows Python loop overhead is the bottleneck | 10-50x speedup on backward pass ops             |
+| CLI rewrite (binary)         | If startup time or distribution becomes a pain point               | Instant startup, single binary, native readline |
+| Token streaming proxy        | If Python async polling becomes a bottleneck                       | Zero-gap streaming, clean cancellation          |
+
+Revisit after stabilizing the Python codebase — current bottlenecks are model inference (2s/request CPU), not Python overhead.
+
+---
+
+**Status: every numbered goal below is resolved** (last batch 2026-10-09).
+Numbers are never reused or renumbered, because notes and cards cite them
+("Roadmap #1", "goal 17") — the sections below are the evidence archive;
+sequenced work lives in Now / Next / Later above.
+
 ## Near-term goals
 
 1. ~~**Stabilize SloNet training** — Fix remaining backward pass broadcast bugs (test_tokenizer.py failures).~~ **Done** — `_mul` backward uses `_broadcast_back`; `test_slonet_broadcast.py` + `TestSloEngineLearn` 17/17 pass. Remaining: profile and optimize hot loops.
@@ -55,7 +193,7 @@ Avion — `scripts/run_journey_tests.py`, `packages/avion/tests/test_journeys.py
 4. ~~**Incremental training from feedback** — Wire OnlineLoRAUpdater + PerUserLORAStore into a continuous background loop (currently only fires on explicit aggregation).~~ **Done** — `_run_background_training` now reads the tokenizer from the workflow's `set_model()` state (was reading a nonexistent `lora_updater._tokenizer`, so the loop always no-opped); the active server model is wired into the workflow at startup (`main.py:_start_feedback_workflow`) and on feedback (`FeedbackController._wire_model` falls back to `server_state.model` when no auto-train student is set).
 5. ~~**Multi-agent orchestration polish** — Async executor works, needs UI for agent creation/editing and dashboard for runs.~~ **Done** — full agent CRUD (create/edit/delete + validation), multi-agent orchestration card (goal/context, per-agent picks via `agent_ids`, live plan→execute→compose→complete SSE timeline), and runs dashboard on `apps/web/app/(app)/agents/page.tsx` (list/timeline views, status + agent filters, expandable detail with per-task dots/previews, result + logs). Backend: `apps/api/server/routers/agents.py` CRUD + `POST /orchestrate` (SSE, `asyncio.gather` level execution) + `GET /runs` + `GET /runs/{run_id}`; persistence via `domain/agents/_internal/run_history.py` (file-backed `data/agent_runs/`). Covered by 26 frontend + 179 backend/core tests.
 6. ~~**Dataset management UI** — Import/export/versioning/search frontend.~~ **Done** — list page (search/sort/preview/compare/export/delete/version badges), detail page (rename/stats/quality/insights/preview/snapshots/JSONL+CSV export/convert-to-chat-format), import modals (local/GitHub/HF/URL/ISBN/Kaggle/CSV), chat→dataset export. Backend convert + versioning covered by tests.
-7. ~~**Voyager journey testing library** — Build a modular, cross-platform library for user journey tests and computer-use automation.~~ **Done** — `packages/voyager/` shipped the cross-platform journey library (Playwright, Selenium, CDP, API-only, CLI, Appium, Desktop backends, AI model integration, learning system, and full computer-use primitives: Mouse, Keyboard, InteractionChain, visual detection, smart waits, time-travel debugging, network interception, performance markers). **Truth-up 2026-10-09:** the 201-test suite no longer ships in-tree (`packages/voyager/` = `src/` + `pyproject.toml`); journey coverage runs through Avion — `packages/avion/tests/test_journeys.py` (the eight sloughGPT journeys) and `scripts/run_journey_tests.py` — plus `packages/core-py/tests/test_user_journeys.py`.
+7. ~~**Voyager journey testing library** — Build a modular, cross-platform library for user journey tests and computer-use automation.~~ **Done** — `packages/voyager/` shipped the cross-platform journey library (Playwright, Selenium, CDP, API-only, CLI, Appium, Desktop backends, AI model integration, learning system, and full computer-use primitives: Mouse, Keyboard, InteractionChain, visual detection, smart waits, time-travel debugging, network interception, performance markers). **Truth-up 2026-10-09:** the 201-test suite no longer ships in-tree (`packages/voyager/` = `src/` + `pyproject.toml`); journey coverage runs through Avion — `packages/avion/tests/test_journeys.py` (the eight sloughGPT journeys) and `scripts/run_journey_tests.py` — plus `tests/core-py/test_user_journeys.py`.
 
 ## New goals (September 2026)
 
@@ -66,6 +204,9 @@ Avion — `scripts/run_journey_tests.py`, `packages/avion/tests/test_journeys.py
 
 ## Training delivery — two tracks (October 2026)
 
+> **Both tracks resolved 2026-10-09** — kept for its delivery reasoning and
+> the goal evidence below; sequenced work lives in Now / Next / Later above.
+
 The destination is an **owned model** (milestones 12–14): SloNet trains from scratch on its own data and objective. A years-long "couldn't train" streak (broken router import, untested loops, silent divergence risk) proves the failure mode: a months-long run that diverges at hour 30 is a total loss. Delivery therefore splits into two tracks that share the one loop (goals 15–19).
 
 - **Track A — Ship (now).** Fine-tune a small open base (Phi/Qwen/Mistral-1B class) with LoRA on our own data + the consciousness layer, benchmark quality, release. It is client value today and keeps momentum while the owned model cooks. Borrowed weights are bootstrap, not destination (per the lessons above).
@@ -74,25 +215,14 @@ The destination is an **owned model** (milestones 12–14): SloNet trains from s
 "Can train" is defined operationally: a real run completes and produces a **`TrainingStatus`/`TrainResult`** (loss, epoch, pairs, duration) that tests assert on and benchmarks record. Everything below hangs off that.
 
 15. ~~**Train status contract is real** — `/consciousness/status`, `/consciousness/train/status`, `/self-train/status`, `/training/start` all report a testable status from the one loop. Restore `domain/consciousness/training.py` as a thin dataset adapter over `training_handler.py` (fixes the dead import, no new loop). Status transitions asserted in backend tests; `scripts/benchmark_slonet_training.py` records loss and tokens/sec.~~ **Done** — adapter is `domain.cognition._internal.consciousness.training` (dataset adapter over the one loop, no duplicate train body; `domain/consciousness/` package was deleted in goal 20, so consumers import the cognition path directly). Status transitions asserted in `tests/test_training_status_transitions.py` (consciousness idle→run→terminal, self-train not_started→running→exited, controller idle→running→completed, job running→completed/failed) plus existing endpoint suites. Benchmark records loss + steps/sec via `scripts/benchmark_slonet_training.py` → `benchmark_results.py record --kind training`.
-16. ~~**Tiny convergence proof** — the one loop drives a small model on a small corpus to near-zero loss in <100 steps, asserted in test + benchmark. This is the release gate for *any* longer run: no long job starts until the loop has demonstrably converged once (catches gradient/layernorm bugs before they eat a month).~~ **Done** — `tests/test_training_convergence.py` (seed 0, e64/1L, deterministic 10-cycle corpus, final <0.01 in ≤120 steps, ratio <10%, no NaN) green in ~13s; `scripts/benchmark_slonet_training.py` gate config PASS (final 1.33e-05 < 0.01, initial 2.92 → near-zero in 120 steps) and is recorded with `--kind training`. Fixed a `data_path` leak where the gate corpus overwrote later configs (small/medium starved on 2201 chars).
+16. ~~**Tiny convergence proof** — the one loop drives a small model on a small corpus to near-zero loss in <100 steps, asserted in test + benchmark. This is the release gate for _any_ longer run: no long job starts until the loop has demonstrably converged once (catches gradient/layernorm bugs before they eat a month).~~ **Done** — `tests/test_training_convergence.py` (seed 0, e64/1L, deterministic 10-cycle corpus, final <0.01 in ≤120 steps, ratio <10%, no NaN) green in ~13s; `scripts/benchmark_slonet_training.py` gate config PASS (final 1.33e-05 < 0.01, initial 2.92 → near-zero in 120 steps) and is recorded with `--kind training`. Fixed a `data_path` leak where the gate corpus overwrote later configs (small/medium starved on 2201 chars).
 17. ~~**Track A ship — trainable fine-tune** — LoRA (`HFLoraTrainer`) on a small open base with our data; benchmark reports quality + speed; click-through journey (dataset → start → loss curve → checkpoint → load into chat) passes for a non-technical user. This is the release.~~ **Done** — live LoRA path fixed (`train(on_progress=)` + `progress_callback` config path, `target_modules=None` → `W_q/W_k/W_v/W_o` default, `unload_lora_adapter` import + `last_path`, `_job_summary` exposes `loss_history`/`rank`/`alpha`/`result`, `MorphTokenizer.stoi/itos` aliases). `tests/test_lora_ship_journey.py` hermetic end-to-end: dataset → `POST /training/lora-finetune` → poll job → finite `loss_history` + `journey_lora.npz` → `POST /training/load-adapter` → `POST /training/unload-adapter`. `scripts/benchmark_hf_lora.py` records quality (finite improving loss) + speed (steps/s, peak mem, adapter size) and was recorded with `benchmark_results.py record --kind training`. Consciousness adapter falls back to `data_saved` when the model file is missing (restores goal-15 contract after `HFLoraConfig` became a pure spec). Scoped suites + journey + status transitions green; ruff clean.
 18. ~~**Track B — long-run pretraining** — owned from-scratch run with checkpoint/resume, monitoring, and benchmark hooks; runs for months while Track A ships. Starts only after goal 16 is green.~~ **Done** — `LongRunRecorder` (`domain/training/_internal/long_run.py`) streams durable JSONL metrics under the checkpoint dir; `SloughGPTTrainer` `cancel_event` now stops the whole run (not just the current epoch) and still leaves a final resumable checkpoint. `tests/test_long_run_resume.py`: recorder append/reopen, crash→resume step continuity (12→24), cancel→checkpoint→resume. `scripts/train_longrun.py` supervisor: resume-latest, restart budget, `--bench-every` eval hooks into `metrics.jsonl`, `--json` for `benchmark_results record --kind training`, `--smoke` hermetic gate. Smoke recorded; related suites + scatter gate green; ruff clean. No fourth loop — all via `SloughGPTTrainer.train`.
 19. ~~**Scatter gate** — new training surfaces (pages, routers, adapters) are rejected unless they feed the one loop. Adapters only; a fourth loop gets the PR rejected.~~ **Done** — `tests/contract/test_scatter_gate.py` pins every production file under `domain/**` + `domain/**` that pairs `loss.backward`/`.backward()` with `optimizer.step`/`clip_gradients` (19-file shrink-only allowlist); any new pair-signal file fails. Routers must not contain loop bodies, must not import `training_handler`/`train_pipeline`/`SloughGPTTrainer`, and new `*train*`/`*lora*` routers must declare a `domain.training` or `domain.cognition` facade (justified allowlist for subprocess/eval-only routers). Negative canary verified; contract suite green.
-20. ~~**Consciousness re-homed under cognition** — move `domain/consciousness/_internal/` modules into `domain/cognition/_internal/consciousness/` as the self-awareness/metacognition slice of the cognitive domain; clean move, all references (router, tests, consumers) updated in one pass, old files deleted — no deprecated shims.~~ **Done** — canonical home is `domain/cognition/_internal/consciousness/` (facade `domain.cognition`); remaining `domain.consciousness` imports retargeted (`domain/core` lazy map, `context_core`, tests, demos, `packages/core-py` re-export); `domain/consciousness/` package deleted (no shims). Reflection loop closes at `ConsciousnessEngine.reflect(apply=True)` (belief deltas commit + persist). Training stays a dataset adapter into the one loop (goal 15). Public HTTP branding stays `consciousness`. Covered by `tests/test_consciousness.py`, `packages/core-py/tests/test_consciousness_reflection.py`, and `scripts/benchmark_consciousness_reflection.py`.
+20. ~~**Consciousness re-homed under cognition** — move `domain/consciousness/_internal/` modules into `domain/cognition/_internal/consciousness/` as the self-awareness/metacognition slice of the cognitive domain; clean move, all references (router, tests, consumers) updated in one pass, old files deleted — no deprecated shims.~~ **Done** — canonical home is `domain/cognition/_internal/consciousness/` (facade `domain.cognition`); remaining `domain.consciousness` imports retargeted (`domain/core` lazy map, `context_core`, tests, demos, `packages/core-py` re-export); `domain/consciousness/` package deleted (no shims). Reflection loop closes at `ConsciousnessEngine.reflect(apply=True)` (belief deltas commit + persist). Training stays a dataset adapter into the one loop (goal 15). Public HTTP branding stays `consciousness`. Covered by `tests/test_consciousness.py`, `tests/core-py/test_consciousness_reflection.py`, and `scripts/benchmark_consciousness_reflection.py`.
 
 ## Owned-model milestones (the destination past bootstrap)
 
 12. ~~**Owned architecture** — SloNet stands alone: no HF conversion in the default path, native `.soul` training → `.slnc` serving end to end.~~ **Done** — `soul_to_slnc` bridge (`domain/infrastructure/_internal/soul_to_slnc.py`) is pure (no HF import): native layout in `SLNCCompiler` + identity `build_load_plan` when `tok_emb.weight` present + embedded `slo_tokenizer` in SLNC config (`_load_tokenizer` prefers it). Priority flip: `ModelLoader` loads `.soul` first, then `.slnc`; `_autoload_model` HF download gated behind `SLO_BOOTSTRAP_HF=1`. `SloughGPTTrainer.save(compile_slnc=…)` / `SLO_COMPILE_SLNC=1` writes sibling `.slnc`. `AutoTrainer` re-pointed to `scripts/train_auto_native.py` → `SloughGPTTrainer` (JSON `{"success","loss","steps"}` contract kept). `tests/test_goal12_owned_path.py` 7/7 green (weight-identity roundtrip, embedded tokenizer, priority, no-HF default, bootstrap gate, no fourth loop); scatter gate green; `scripts/benchmark_owned_path.py` records weight-identity PASS (19/19 tensors, bridge 0.18s, slnc first-token 12ms vs soul 45ms) via `benchmark_results record --kind training`.
 13. ~~**Owned objective** — at least one training objective beyond next-token prediction (memory consolidation, tool-use success, planning) running in the single `TrainingLoop`.~~ **Done** — `OwnedObjective` (`domain/training/_internal/owned_objective.py`) is wired into `SloughGPTTrainer.train_step`: optional `use_owned_objective` / `owned_tool_weight` / `owned_memory_weight` on `TrainerConfig` (legacy kwargs too). With experience metadata it scales the primary loss by tool-success/memory-match rates; without metadata it collapses to pure next-token (backward compat). Combined loss still goes through the one `(loss * scale).backward()` in `train_pipeline` — no fourth loop (scatter gate green). Covered by `tests/test_owned_objective_experience.py`.
 14. ~~**Owned data** — the model trains on experience it generates (chat sessions, tool outcomes, feedback), not only third-party text.~~ **Done** — `data_path="experience"` (or `experience:<corpus.jsonl>`) loads owned chat+feedback via `load_experience_text` into `prepare_data`; `ExperienceSampler` is the train-batch source when that path is set (synthetic seed corpus when the install is empty so a fresh run still trains). Chat corpus + feedback corrections aggregate through `load_experience_pairs`. Covered by `tests/test_owned_objective_experience.py` (end-to-end `data_path=experience` + owned objective through `train()`). No fourth loop — adapters only.
-
-
-## Deferred (potential Rust)
-
-| Item                         | When                                                               | Why Rust                                        |
-| ---------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
-| SloNet kernel rewrite (PyO3) | If training profiling shows Python loop overhead is the bottleneck | 10-50x speedup on backward pass ops             |
-| CLI rewrite (binary)         | If startup time or distribution becomes a pain point               | Instant startup, single binary, native readline |
-| Token streaming proxy        | If Python async polling becomes a bottleneck                       | Zero-gap streaming, clean cancellation          |
-
-Revisit after stabilizing the Python codebase — current bottlenecks are model inference (2s/request CPU), not Python overhead.

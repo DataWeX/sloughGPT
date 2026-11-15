@@ -31,6 +31,7 @@ import { multimodalController } from '@/lib/multimodal-controller'
 import { chatDB } from '@/lib/db'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { publishMemoryEvent } from '@/lib/memory-events'
+import { effectiveGeneration } from '@/lib/conversation-scope-store'
 import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
@@ -289,12 +290,13 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
       })
     }
 
-    // Load existing session
-    setTimeout(() => {
-      chatDB.getKV<string>(CURRENT_SESSION_KEY).then((currentId) => {
-        if (currentId) get().loadSession(currentId)
-      })
-    }, 0)
+    // NOTE: Do not load the session here. The controller (useChatMessages) is the
+    // single source of truth for messages and loads the session on mount; the
+    // one-way bridge (useChatStoreBridge) mirrors controller → store. An
+    // independent store-side loadSession raced the bridge, resolving later with a
+    // stale/persisted read and clobbering live messages — blanking the pane while
+    // the toolbar (controller) still showed the real count. Session hydration is
+    // the controller's job, not the store's.
   },
 
   // ── Set Input ──
@@ -447,10 +449,16 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         const prompt = buildLocalPrompt(messagesWithNew, systemPrompt)
         let assistantContentLen = 0
         const signal = loadingController.signal
+        // Offline twin of the turn seam: resolve this conversation's delta
+        // over the global default — the local engine has no server to ask.
+        const eff = effectiveGeneration(state.sessionId, {
+          temperature: config.temperature,
+          maxTokens: config.maxTokens,
+        })
         for await (const token of config.engineRef.current.generate(
           prompt,
-          config.maxTokens,
-          config.temperature,
+          eff.maxTokens,
+          eff.temperature,
         )) {
           if (signal.aborted) break
           let cleanedToken = token
@@ -474,8 +482,6 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
             .map((m) => ({ role: m.role, content: m.content })),
           model: config.model,
           systemPrompt,
-          maxTokens: config.maxTokens,
-          temperature: config.temperature,
           userId: state.userId,
           sessionId: state.sessionId,
           images: userImages.length > 0 ? userImages.map((img) => img.dataUrl) : undefined,
@@ -731,8 +737,6 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         messages: truncated.map((m) => ({ role: m.role, content: m.content })),
         model: config.model,
         systemPrompt,
-        maxTokens: config.maxTokens,
-        temperature: config.temperature,
         userId: state.userId,
         sessionId: state.sessionId,
         signal: loadingController.signal,
@@ -841,8 +845,10 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         messages: truncated.map((m) => ({ role: m.role, content: m.content })),
         model: config.model,
         systemPrompt,
-        maxTokens: options?.maxTokens ?? config.maxTokens,
-        temperature: options?.temperature ?? config.temperature,
+        // Turn-layer overrides only — absent options fall through to the
+        // conversation AppScope / global defaults (same rule as the wire).
+        maxTokens: options?.maxTokens,
+        temperature: options?.temperature,
         userId: state.userId,
         sessionId: state.sessionId,
         signal: loadingController.signal,

@@ -29,6 +29,17 @@ function InlineCode({ children }: { children: string }) {
   )
 }
 
+/**
+ * Sources an <img> may load. Mirrors the link allowlist, plus raster-only
+ * data URLs: `data:image/svg+xml` and `data:text/html` can execute script in
+ * some contexts, so only png/jpeg/gif/webp/avif inline data is accepted.
+ */
+const SAFE_IMAGE_SRC = /^(https?:|\/|#|data:image\/(?:png|jpe?g|gif|webp|avif);)/i
+
+function isSafeImageSrc(src: string): boolean {
+  return SAFE_IMAGE_SRC.test(src)
+}
+
 function parseInline(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = []
   let remaining = text
@@ -77,6 +88,34 @@ function parseInline(text: string): React.ReactNode[] {
       const idx = remaining.indexOf(match[0])
       if (idx > 0) parts.push(remaining.slice(0, idx))
       parts.push(<em key={key++}>{match[1]}</em>)
+      remaining = remaining.slice(idx + match[0].length)
+      continue
+    }
+
+    // Image — MUST precede Link: ![alt](url) contains [alt](url), so the
+    // link regex below would otherwise match the inner text and render a
+    // literal "!" followed by an <a>.
+    match = remaining.match(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) parts.push(remaining.slice(0, idx))
+      const alt = match[1]
+      const src = match[2]
+      if (isSafeImageSrc(src)) {
+        parts.push(
+          <img
+            key={key++}
+            src={src}
+            alt={alt}
+            loading="lazy"
+            className="my-1 max-h-[24rem] max-w-full rounded-md border border-border/50 align-middle"
+          />,
+        )
+      } else {
+        // Unusable src (javascript:, data:text/html, data:image/svg+xml):
+        // keep the source text verbatim so nothing executes or loads.
+        parts.push(match[0])
+      }
       remaining = remaining.slice(idx + match[0].length)
       continue
     }

@@ -7,6 +7,7 @@ import { useConsciousnessStatus, getQualiaMood } from '@/hooks/useConsciousnessS
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
+import { serverNow } from '../../lib/clock'
 import { useErrorStream } from '@/hooks/useErrorStream'
 import {
   cn,
@@ -21,8 +22,13 @@ import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
 import { formatDuration } from '@/lib/formatDuration'
-import { apiGet } from '@/lib/http-client'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 import { useModelReadiness } from '@/lib/store'
+
+/** Errors older than this drop out of the errs badge: the badge reports what
+ *  is going wrong NOW, not the undismissed backlog since page load (which
+ *  produced live-but-"21 errs" screens nothing could clear). */
+export const ERROR_BADGE_TTL_MS = 10 * 60_000
 
 function getFailureSummary(
   failures: { kind: string; timeoutMs: number; error: string; timestamp: number }[],
@@ -40,7 +46,12 @@ export function StatusBar() {
   const failureCount = useApiMonitor((s) => s.failureCount)
   const lastOffline = useApiMonitor((s) => s.lastOffline)
   const clearFailures = useApiMonitor((s) => s.clearFailures)
-  const errorCount = useErrorStore((s) => s.errors.reduce((sum, e) => sum + e.count, 0))
+  const errorCount = useErrorStore((s) =>
+    s.errors.reduce(
+      (sum, e) => (serverNow() - e.timestamp < ERROR_BADGE_TTL_MS ? sum + e.count : sum),
+      0,
+    ),
+  )
   const { connected: errorStreamConnected, totalReceived: errorStreamTotal } = useErrorStream()
   const modelReadiness = useModelReadiness()
   const [soulName, setSoulName] = useState<string | null>(null)
@@ -100,10 +111,10 @@ export function StatusBar() {
   const handleRetry = useCallback(async () => {
     setRetrying(true)
     try {
-      await apiGet('/health', undefined, { signal: AbortSignal.timeout(5000), silent: true })
-      window.location.reload()
-    } catch {
-      /* will be picked up by existing monitor */
+      // One retry path for every surface (see lib/backend-retry): silent
+      // /health probe, then revalidate cached views in place — never a
+      // document reload, which threw away drafts and in-flight streams.
+      await probeBackendAndRevalidate()
     } finally {
       setTimeout(() => setRetrying(false), 1000)
     }
@@ -147,6 +158,11 @@ export function StatusBar() {
     statusText = failInfo
       ? `Offline — ${failInfo}${elapsed ? ` (${elapsed})` : ''}`
       : `Offline${elapsed ? ` (${elapsed})` : ''}`
+  } else if (connectionStatus === 'connecting' && health !== null) {
+    // A drop mid-stream: the last snapshot is still here, but claiming
+    // "healthy" while reconnecting is a lie. The model stays named in the
+    // detail rows — only the verdict changes.
+    statusText = 'Reconnecting…'
   } else {
     statusText =
       health?.health_summary || (health?.model_loaded ? health.model_type || 'Loaded' : 'No model')
@@ -216,11 +232,17 @@ export function StatusBar() {
             </Tooltip>
           )}
 
-          {/* Error count */}
+          {/* Error count — recent window only; click clears the backlog */}
           {errorCount > 0 && (
-            <span className="sl-badge sl-badge-destructive">
+            <button
+              type="button"
+              className="sl-badge sl-badge-destructive"
+              onClick={() => useErrorStore.getState().clearErrors()}
+              aria-label="Clear error count"
+              title={`Errors in the last ${Math.round(ERROR_BADGE_TTL_MS / 60_000)} minutes — click to clear`}
+            >
               {errorCount} err{errorCount !== 1 ? 's' : ''}
-            </span>
+            </button>
           )}
 
           {/* Error stream */}
@@ -245,10 +267,7 @@ export function StatusBar() {
               className="sl-badge sl-badge-secondary"
               title={`Consciousness: ${consciousnessStatus.level}/3 | Mood: ${getQualiaMood(consciousnessStatus.current_qualia)}`}
             >
-              <span
-                className="h-1 w-1 rounded-full bg-violet-400 animate-pulse"
-                aria-hidden="true"
-              />
+              <span className="h-1 w-1 rounded-full bg-primary animate-pulse" aria-hidden="true" />
               {getQualiaMood(consciousnessStatus.current_qualia) || `L${consciousnessStatus.level}`}
             </span>
           )}

@@ -59,10 +59,7 @@ def build_prompt(
             tools.describe(),
             "",
         ]
-    lines.append(
-        'Reply format: {"action_type": "<name>", "params": {...}, '
-        '"reasoning": "<why>"}'
-    )
+    lines.append('Reply format: {"action_type": "<name>", "params": {...}, "reasoning": "<why>"}')
     return "\n".join(lines)
 
 
@@ -92,10 +89,7 @@ def _history_text(history: list[Step] | None, budget: int | None = None) -> str:
     for s in steps[-_HISTORY_STEPS:]:
         if s.action is None:
             continue
-        lines.append(
-            f"- {s.action.action_type.value} {s.action.params} "
-            f"=> {s.observation[:120]}"
-        )
+        lines.append(f"- {s.action.action_type.value} {s.action.params} => {s.observation[:120]}")
     text = "\n".join(lines) or "(no actions yet)"
     if budget is not None and len(text) > budget:
         text = "...[trimmed]\n" + text[-budget:]
@@ -322,6 +316,33 @@ class SloModel:
             ) from e
         provider = SloNetChatProvider.from_soul(soul_path, model_id=soul_path)
         return cls.from_inference_client(provider, **kwargs)
+
+    @classmethod
+    def from_chat_api(
+        cls,
+        base_url: str,
+        api_key: str,
+        model: str | None = None,
+        timeout: float = 120.0,
+        **kwargs,
+    ) -> SloModel:
+        """Drive a hosted chat-completions endpoint (Authorization: Bearer).
+
+        Delegates to ``domain.inference.generation.hosted`` — the wire
+        shape and the Bearer header live in core, not here; this adapter
+        only projects the standard language client into the agent's
+        model interface. The key reaches the header and nothing else —
+        never the model name, logs, or error strings.
+        """
+        try:
+            from domain.inference.generation import hosted
+        except ImportError as e:
+            raise ImportError(
+                "the generation API needs the sloughgpt core packages (domain)."
+            ) from e
+
+        client = hosted(base_url, api_key=api_key, model=model, timeout=timeout)
+        return cls.from_inference_client(client, **kwargs)
 
     @classmethod
     def from_http(

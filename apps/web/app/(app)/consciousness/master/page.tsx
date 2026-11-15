@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -14,7 +15,6 @@ import {
   Skeleton,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessStats } from '@/hooks/useConsciousnessStats'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
@@ -70,7 +70,7 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessMasterDashboardPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const { stats, loading: statsLoading } = useConsciousnessStats()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
@@ -258,7 +258,12 @@ export default function ConsciousnessMasterDashboardPage() {
     )
   }
 
-  const healthColor = healthScore > 80 ? 'rgb(var(--success))' : healthScore > 50 ? 'rgb(var(--warning))' : 'rgb(var(--destructive))'
+  const healthColor =
+    healthScore > 80
+      ? 'rgb(var(--success))'
+      : healthScore > 50
+        ? 'rgb(var(--warning))'
+        : 'rgb(var(--destructive))'
 
   return (
     <PageContainer

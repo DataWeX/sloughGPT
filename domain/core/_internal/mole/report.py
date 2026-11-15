@@ -32,7 +32,7 @@ def default_report_path() -> str:
 def default_targets() -> dict:
     """Probe targets from env — also applies the mole-side :5173 fix.
 
-    Must run BEFORE ``domain.journeys`` is imported anywhere: the journey
+    Must run BEFORE ``journeys`` is imported anywhere: the journey
     runner freezes these values at import and its own web default is
     stale (``:5175``).
     """

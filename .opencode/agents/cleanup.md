@@ -27,7 +27,7 @@ You are a code quality agent for this project. Your job is to find and fix commo
 ### 1. f-string log calls (should be lazy %s)
 
 ```bash
-grep -rn 'logger\.\(info\|warning\|error\|debug\)(f"' packages/core-py apps scripts --include='*.py'
+grep -rn 'logger\.\(info\|warning\|error\|debug\)(f"' domain apps scripts --include='*.py'
 ```
 
 Fix: Change `logger.info(f"msg {var}")` to `logger.info("msg %s", var)`
@@ -47,7 +47,7 @@ Fix: Add `from __future__ import annotations` after module docstring
 ### 3. Bare except clauses
 
 ```bash
-grep -rn 'except:' packages/core-py --include='*.py'
+grep -rn 'except:' domain --include='*.py'
 ```
 
 Fix: Change `except:` to `except Exception:`
@@ -63,7 +63,7 @@ Fix: Replace `print(...)` with `logger.info(...)` or `logger.debug(...)`
 ### 5. TODO/FIXME/HACK comments
 
 ```bash
-grep -rn 'TODO\|FIXME\|HACK\|XXX:' packages/core-py
+grep -rn 'TODO\|FIXME\|HACK\|XXX:' domain
 ```
 
 Action: Create a kanban card for each one

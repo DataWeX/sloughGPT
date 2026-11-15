@@ -57,13 +57,15 @@ function ToolModeCard({ mode, label, description, icon, color, onClick }: ToolMo
           {label}
         </span>
       </div>
-      <p className="text-[11px] text-muted-foreground/50 leading-snug group-hover:text-muted-foreground/70 transition-colors">
+      <p className="text-[11px] text-muted-foreground leading-snug group-hover:text-muted-foreground transition-colors">
         {description}
       </p>
     </button>
   )
 }
 
+// Single-accent tiles — same MODE_ACCENT hue language as the tab bar and
+// composer chip (this icon-tile composition just drops the border).
 const TOOL_MODES = [
   {
     mode: 'write',
@@ -77,42 +79,42 @@ const TOOL_MODES = [
     label: 'Translate',
     description: 'Across languages',
     icon: <IconVision className="h-3.5 w-3.5" />,
-    color: 'bg-info/10 text-info/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'rewrite',
     label: 'Rewrite',
     description: 'Polish your text',
     icon: <IconSparkle className="h-3.5 w-3.5" />,
-    color: 'bg-warning/10 text-warning/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'brainstorm',
     label: 'Brainstorm',
     description: 'Generate ideas',
     icon: <IconBolt className="h-3.5 w-3.5" />,
-    color: 'bg-success/10 text-success/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'decide',
     label: 'Decide',
     description: 'Compare options',
     icon: <IconBrain className="h-3.5 w-3.5" />,
-    color: 'bg-destructive/10 text-destructive/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'explain',
     label: 'Explain',
     description: 'Simplify topics',
     icon: <IconSearch className="h-3.5 w-3.5" />,
-    color: 'bg-accent/10 text-accent/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'wellness',
     label: 'Wellness',
     description: 'Calm your mind',
     icon: <Waves className="h-3.5 w-3.5" />,
-    color: 'bg-success/10 text-success',
+    color: 'bg-primary/10 text-primary/70',
   },
 ]
 
@@ -168,10 +170,10 @@ export const EmptyState = memo(function EmptyState({
 
       {/* Greeting */}
       <div className="space-y-1.5">
-        <p className="text-lg font-semibold text-foreground tracking-tight">
+        <p className="text-base font-semibold text-foreground tracking-tight">
           {hasModel ? (greeting || 'Ready') + '!' : t('common.starting')}
         </p>
-        <p className="text-xs text-muted-foreground/50 max-w-[280px] leading-relaxed">
+        <p className="text-xs text-muted-foreground max-w-[280px] leading-relaxed">
           {hasModel
             ? 'Chat, write, translate, or brainstorm — pick a tool or just ask.'
             : t('common.starting_sub')}
@@ -181,7 +183,7 @@ export const EmptyState = memo(function EmptyState({
       {/* Tool Mode Cards */}
       {hasModel && (
         <div className="w-full max-w-lg space-y-3">
-          <p className="text-[10px] text-muted-foreground/30 font-medium uppercase tracking-[0.12em]">
+          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.12em]">
             Quick tools
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -203,7 +205,7 @@ export const EmptyState = memo(function EmptyState({
       {/* Quick Starters */}
       {displayStarters && (
         <div className="w-full max-w-lg space-y-2.5 pt-1">
-          <p className="text-[10px] text-muted-foreground/30 font-medium uppercase tracking-[0.12em]">
+          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.12em]">
             Or try asking
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -214,10 +216,10 @@ export const EmptyState = memo(function EmptyState({
                 onClick={() => onSuggestionClick?.(s.text)}
                 className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-3 py-2 text-xs rounded-xl border border-border/30 bg-card/30 hover:border-primary/20 hover:bg-primary/[0.03] hover:shadow-sm transition-all duration-200 cursor-pointer flex items-center gap-2 group"
               >
-                <span className="text-muted-foreground/30 group-hover:text-primary/50 shrink-0 transition-colors">
+                <span className="text-muted-foreground group-hover:text-primary/50 shrink-0 transition-colors">
                   {s.icon}
                 </span>
-                <span className="text-muted-foreground/60 group-hover:text-foreground/80 transition-colors truncate">
+                <span className="text-muted-foreground group-hover:text-foreground/80 transition-colors truncate">
                   {s.text}
                 </span>
               </button>
@@ -237,7 +239,7 @@ export const EmptyState = memo(function EmptyState({
 
       {/* Keyboard hints */}
       <div
-        className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] text-muted-foreground/25"
+        className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] text-muted-foreground"
         aria-label="Keyboard shortcuts"
       >
         <span className="flex items-center gap-1">
@@ -246,14 +248,14 @@ export const EmptyState = memo(function EmptyState({
           </kbd>
           <span>{t('chat.send')}</span>
         </span>
-        <span className="text-muted-foreground/10">·</span>
+        <span className="text-muted-foreground">·</span>
         <span className="flex items-center gap-1">
           <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
             /
           </kbd>
           <span>commands</span>
         </span>
-        <span className="text-muted-foreground/10">·</span>
+        <span className="text-muted-foreground">·</span>
         <span className="flex items-center gap-1">
           <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
             ?

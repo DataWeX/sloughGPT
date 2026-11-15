@@ -1,4 +1,10 @@
-FROM nvidia/cuda:12.1.0-cudnn-runtime-ubuntu22.04 AS builder
+# NVIDIA purged the 12.1.x tags from Docker Hub (12.1.0-cudnn-runtime-ubuntu22.04
+# answers 404 as of 2026-11-03), so this file had not been buildable since the
+# purge — caught by the rot gate, not by anyone building it. 12.4.1 is the
+# oldest still-published 12.x tag, the smallest jump that resolves. torch stays
+# on the cu121 wheels: pip wheels ship their own bundled CUDA/cuDNN runtime, so
+# the toolkit version in the base image does not select the wheel ABI.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -18,7 +24,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.11 /usr/bin/python
 
-RUN python3 -m venv /opt/venv
+# `python3` here is jammy's 3.10, but the apt line above installs
+# python3.11-venv only — `python3 -m venv` died with "ensurepip is not
+# available" the first time anyone built this file (rot gate, 2026-11-03).
+# Build the venv with the interpreter the image actually ships.
+RUN python3.11 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY apps/api/server/requirements.txt /tmp/requirements-api.txt
@@ -28,16 +38,14 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir scipy psutil
 
 COPY apps/api/server /build/apps/api/server
-COPY packages/core-py /build/packages/core-py
 COPY packages/sdk-py/sloughgpt_sdk /build/packages/sdk-py/sloughgpt_sdk
 COPY pyproject.toml README.md LICENSE /build/
 
 RUN pip install --no-cache-dir -e /build \
-    && pip install --no-cache-dir -e /build/packages/core-py \
     && pip install --no-cache-dir -e /build/packages/sdk-py/sloughgpt_sdk
 
 # ─── Runtime stage (no build tools, no CUDA dev libs) ───────────
-FROM nvidia/cuda:12.1.0-cudnn-runtime-ubuntu22.04 AS runtime
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -60,7 +68,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy app code
 COPY apps/api/server /app/apps/api/server
-COPY packages/core-py /app/packages/core-py
 COPY packages/sdk-py/sloughgpt_sdk /app/packages/sdk-py/sloughgpt_sdk
 COPY pyproject.toml README.md LICENSE /app/
 

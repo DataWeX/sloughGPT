@@ -59,8 +59,12 @@ vi.mock('@/lib/system-controller', () => ({
     getMetrics: vi.fn().mockResolvedValue(null),
     getDisk: vi.fn().mockResolvedValue(null),
     getInfo: vi.fn().mockResolvedValue(null),
-    getProcessGuardStatus: vi.fn().mockResolvedValue({ enabled: false, active: false, model_id: null, health: null }),
-    setProcessGuardEnabled: vi.fn().mockResolvedValue({ enabled: true, active: false, model_id: null, health: null }),
+    getProcessGuardStatus: vi
+      .fn()
+      .mockResolvedValue({ enabled: false, active: false, model_id: null, health: null }),
+    setProcessGuardEnabled: vi
+      .fn()
+      .mockResolvedValue({ enabled: true, active: false, model_id: null, health: null }),
   },
 }))
 
@@ -142,7 +146,7 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/theme-storage', () => ({
   PALETTE_IDS: ['noir-violet', 'ocean'],
-  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', 'ocean': 'Ocean' },
+  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', ocean: 'Ocean' },
 }))
 
 vi.mock('@/lib/config', () => ({
@@ -184,6 +188,20 @@ describe('SettingsPage', () => {
   it('renders Connection section', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders the Connection banner card with both timing flags', () => {
+    render(<SettingsPage />)
+    expect(screen.getByTestId('settings-connection-banner')).toBeTruthy()
+    expect(screen.getByText('Drop notice delay')).toBeTruthy()
+    expect(screen.getByText('Reconnected confirmation')).toBeTruthy()
+  })
+
+  it('shows the default flag timings on the Connection banner card', () => {
+    render(<SettingsPage />)
+    // Defaults: 5.0s grace, 4.0s hold — rendered by the page's formatValue.
+    expect(screen.getAllByText('5.0s').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('4.0s').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders External model provider card', async () => {
@@ -253,7 +271,9 @@ describe('SettingsPage', () => {
 
   it('renders collapsible message length control', () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
 
   it('renders Process isolation card', () => {

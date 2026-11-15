@@ -19,6 +19,7 @@ from typing import Any
 
 logger = logging.getLogger("slo.feedback")
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
 from domain.infrastructure._internal.training_pipeline import TrainingDataPipeline, get_pipeline
 from domain.shared import find_repo_root
 
@@ -110,7 +111,7 @@ class FeedbackWorkflowManager:
 
         self._running = False
         self._stop_event = threading.Event()
-        self._scheduler_thread: threading.Thread | None = None
+        self._scheduler_thread: ThreadHandle | None = None
         self._health_thread: threading.Thread | None = None
         self._last_aggregate_time: float = 0
         self._last_prune_time: float = 0
@@ -885,8 +886,9 @@ class FeedbackWorkflowManager:
                 self.run_scheduled_tasks()
                 self._stop_event.wait(self.config.health_check_interval_seconds)
 
-        self._scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
-        self._scheduler_thread.start()
+        self._scheduler_thread = spawn_loop(
+            scheduler_loop, name="feedback-scheduler", stop=self._stop_event
+        )
 
         if self.config.background_training_enabled:
 
@@ -898,8 +900,9 @@ class FeedbackWorkflowManager:
                         logger.error("Background training failed: %s", e, extra={"tag": "INFRA"})
                     self._stop_event.wait(self.config.background_training_interval_seconds)
 
-            self._training_thread = threading.Thread(target=background_training_loop, daemon=True)
-            self._training_thread.start()
+            self._training_thread = spawn_loop(
+                background_training_loop, name="feedback-training", stop=self._stop_event
+            )
 
         logger.info("Started automated feedback workflow", extra={"tag": "INFRA"})
 

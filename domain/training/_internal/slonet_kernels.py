@@ -19,6 +19,12 @@ All kernels are @njit(cache=True, nogil=True) — compiled once, cached to disk,
 and entered with the GIL released, so a thread-domain call never starves the
 host loop (probe: scripts/probe_gil_hold.py; card f30be275).
 
+NOTE — the compiled kernels are now OPT-IN (SLO_USE_NUMBA=1); by default the
+numpy fallbacks below are what run, because they measured ~1.8x faster
+end-to-end on this box. See _check_numba for the numbers and the reasoning.
+Everything below describes the compiled kernels, which is what you get once
+you opt in.
+
 Six of them additionally carry parallel=True + prange, for multi-core
 throughput (probe: scripts/probe_parallel_kernels.py,
 scripts/probe_parallel_small.py, scripts/probe_parallel_elementwise.py;
@@ -51,20 +57,140 @@ einsum is kept for attention; numba is used for element-wise ops only.
 
 from __future__ import annotations
 
+import logging
+import os
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 _NUMBA_AVAILABLE: bool | None = None
 
+# Bytes in one float32 element, and the count of concurrent (H, blk, new_len)
+# temporaries the numpy prefill fallback holds live at once. Both are named
+# because the budget below is derived from them: if a future edit adds a fifth
+# temporary without bumping _FALLBACK_TEMP_COUNT, the chunk size silently
+# under-counts and prefill grows past the budget again with no error to warn us.
+_FALLBACK_ITEMSIZE = 4  # float32
+_FALLBACK_TEMP_COUNT = 4  # scores, scores+causal, exp, normalized
+
+# Default size of the prefill fallback budget, in megabytes. Named because it
+# is consumed in four places -- the env-var default, both fallback warnings,
+# and the regression test -- so writing it once here keeps those four in step.
+# Changing it to 128 must not leave a warning claiming 64.
+_DEFAULT_FALLBACK_BUDGET_MB = 64
+
+# Causal-mask additive sentinel for masked-out (future) key positions. -1e9 is
+# far below any real logit yet still finite, so exp(score - max) underflows to
+# exactly 0.0 in float32 rather than producing -inf or a NaN on division --
+# inf-inf and 0/0 are the two ways a softmax silently poisons a whole row.
+_CAUSAL_MASK = np.float32(-1e9)
+
+# Opt-in switch for the compiled kernels. Off by default: see _check_numba for
+# the measurement behind that (compiled ran ~1.8x slower end-to-end here).
+_NUMBA_OPT_IN_ENV = "SLO_USE_NUMBA"
+_NUMBA_OPT_IN_TRUTHY = ("1", "true", "yes")
+
+
+def _numba_opted_in() -> bool:
+    """True when SLO_USE_NUMBA asks for the compiled kernels."""
+    return os.environ.get(_NUMBA_OPT_IN_ENV, "0").strip().lower() in _NUMBA_OPT_IN_TRUTHY
+
+
+def _prefill_fallback_budget() -> int:
+    """Byte budget for the numpy prefill-attention fallback's temporaries.
+
+    Overridable with ``SLO_PREFILL_FALLBACK_BUDGET_MB`` (default
+    ``_DEFAULT_FALLBACK_BUDGET_MB``), matching the SLO_* runtime-tuning
+    convention used by the memory-pressure thresholds and the stack-dump
+    interval -- the right size depends on the machine, so it is not the
+    kernel's call to freeze.
+
+    The fallback runs only when numba is unavailable. It computes attention by
+    materializing (H, blk, new_len) float32 scores and softmaxing them. Unchunked
+    that was _FALLBACK_TEMP_COUNT temporaries of that shape -- at
+    seq_len = new_len = 8192 with H = 16 that is ~16 GB, which is what OOM-killed
+    the API server on 2026-11-01. Chunking over the query axis turns it into
+    _FALLBACK_TEMP_COUNT * H * blk * new_len * _FALLBACK_ITEMSIZE with `blk`
+    sized to this budget, so the allocation is bounded however long the prompt.
+    """
+    default_mb = float(_DEFAULT_FALLBACK_BUDGET_MB)
+    raw = os.environ.get("SLO_PREFILL_FALLBACK_BUDGET_MB", str(_DEFAULT_FALLBACK_BUDGET_MB))
+    try:
+        mb = float(raw)
+    except ValueError:
+        logger.warning(
+            "SLO_PREFILL_FALLBACK_BUDGET_MB=%r is not a number; using %g MB",
+            raw,
+            _DEFAULT_FALLBACK_BUDGET_MB,
+            extra={"tag": "KERNELS"},
+        )
+        mb = default_mb
+    if mb <= 0:
+        logger.warning(
+            "SLO_PREFILL_FALLBACK_BUDGET_MB=%r is not positive; using %g MB",
+            raw,
+            _DEFAULT_FALLBACK_BUDGET_MB,
+            extra={"tag": "KERNELS"},
+        )
+        mb = default_mb
+    return int(mb * 1024 * 1024)
+
 
 def _check_numba() -> bool:
+    """True when numba is BOTH available and opted in; warns once otherwise.
+
+    **numba is opt-in, not opt-out.** Measured 2026-11-01 on this box
+    (Qwen2.5-0.5B, POST /chat, 15 rate-limit-safe samples per arm):
+
+        numpy fallbacks : mean 13.4s   (SLO_USE_NUMBA unset)
+        compiled kernels: mean 24.5s   (SLO_USE_NUMBA=1)
+
+    i.e. the compiled kernels made end-to-end latency ~1.8x WORSE. The kernels
+    are deliberately serial -- see the note above on prange losing under load
+    and on einsum beating manual-loop attention -- so they give up the
+    multithreaded BLAS that the numpy fallbacks get for free. Attention alone
+    IS faster compiled in isolation (1.4-1.7x), so this may invert on a
+    many-core box; that uncertainty is why it is a flag and not a deletion.
+
+    Set ``SLO_USE_NUMBA=1`` to run the compiled kernels.
+
+    A silent ``False`` here still cost an entire investigation on 2026-11-01:
+    numba installed under ``~/.local`` is invisible while
+    ``PYTHONNOUSERSITE=1`` is set (which the API server sets deliberately), so
+    the server quietly ran every fused kernel as numpy -- including the
+    attention prefill fallback, whose unchunked form allocated O(seq^2) and was
+    OOM-killed by the kernel at ~21 GB RSS. The fallback is correct and is now
+    memory-bounded, but silently taking *either* path is never acceptable, so
+    say out loud which one is in use the first time it is observed.
+    """
     global _NUMBA_AVAILABLE
     if _NUMBA_AVAILABLE is None:
-        try:
-            from numba import njit  # noqa: F401
-
-            _NUMBA_AVAILABLE = True
-        except ImportError:
+        if not _numba_opted_in():
             _NUMBA_AVAILABLE = False
+            logger.info(
+                "numba disabled by default (SLO_USE_NUMBA is not set) — running "
+                "the numpy kernels. Measured ~1.8x faster than the compiled "
+                "path end-to-end on this box; set SLO_USE_NUMBA=1 to opt in.",
+                extra={"tag": "KERNELS"},
+            )
+        else:
+            try:
+                from numba import njit  # noqa: F401
+
+                _NUMBA_AVAILABLE = True
+            except ImportError as exc:
+                _NUMBA_AVAILABLE = False
+                logger.warning(
+                    "SLO_USE_NUMBA=1 but numba unavailable (%s: %s) — falling "
+                    "back to the numpy kernels. If unexpected, check that numba "
+                    "is installed in this interpreter's own site-packages: "
+                    "PYTHONNOUSERSITE=1 hides ~/.local, where a user-site "
+                    "install lives.",
+                    type(exc).__name__,
+                    exc,
+                    extra={"tag": "KERNELS"},
+                )
     return _NUMBA_AVAILABLE
 
 
@@ -193,7 +319,7 @@ def _build_kernels():
                 x.flat[base + d] += pos_emb.flat[p * emb_dim + d]
 
     # ---- SwiGLU + element-wise multiply (fused) ---------------------------
-    @njit(cache=True, nogil=True, parallel=True)
+    @njit(cache=True, nogil=True, parallel=True, fastmath=True)
     def nb_swi_glu_mul(h1, h3):
         """SwiGLU(h1) * h3 — single pass, no temp alloc.
 
@@ -202,9 +328,12 @@ def _build_kernels():
         Returns: (..., 4E) = swiglu(h1) * h3
         """
         out = np.empty_like(h1)
+        one = np.float32(1.0)
         for i in prange(h1.size):
             v = h1.flat[i]
-            s = v * (1.0 / (1.0 + np.exp(-v)))
+            # f32 arithmetic (literals kept float32 — f64 promotion here
+            # doubled the work and blocked vectorization)
+            s = v * (one / (one + np.exp(-v)))
             out.flat[i] = s * h3.flat[i]
         return out
 
@@ -445,8 +574,31 @@ def nb_add_pos(x, pos_emb, pos, seq_len):
     return x
 
 
+def _swiglu_c(h1, h3):
+    """Vectorized C SwiGLU, lazily loaded; None → caller uses numba/numpy."""
+    global _swiglu_c_fn
+    if _swiglu_c_fn is None:
+        try:
+            from domain.infrastructure._internal.quant_core.wrapper import (
+                swiglu_f32_c as _fn,
+            )
+
+            _swiglu_c_fn = _fn
+        except Exception:
+            _swiglu_c_fn = False
+    if _swiglu_c_fn is False:
+        return None
+    return _swiglu_c_fn(h1, h3)
+
+
+_swiglu_c_fn = None
+
+
 def nb_swi_glu_mul(h1, h3):
     """SwiGLU(h1) * h3 — fused activation + multiply with numba acceleration."""
+    out = _swiglu_c(h1, h3)
+    if out is not None:
+        return out
     _ensure_kernels()
     if _nb_swi_glu_mul is not None:
         return _nb_swi_glu_mul(h1, h3)
@@ -503,7 +655,7 @@ def _build_fused_kernels():
             v = h.flat[i]
             h.flat[i] = 0.5 * v * (1.0 + np.tanh(0.7978845608 * (v + 0.044715 * v * v * v)))
 
-    @njit(cache=True, nogil=True, parallel=True)
+    @njit(cache=True, nogil=True, fastmath=True)
     def _fused_attention_single(
         q,
         k_full,
@@ -514,48 +666,59 @@ def _build_fused_kernels():
         E_head,
         seq_len,
         new_len,
+        reps,
     ):
         """Attention for single-token query (seq_len=1) with full KV cache.
 
         q: (H, E_head) — single query per head
-        k_full: (H, new_len, E_head) — already GQA-expanded
-        v_full: (H, new_len, E_head) — already GQA-expanded
+        k_full: (K_H, new_len, E_head) — GQA kv cache, NOT expanded:
+                query head h reads kv head h // reps (reps = H // K_H,
+                equals 1 for an already-expanded cache)
+        v_full: (K_H, new_len, E_head)
         out: (H, E_head) — output
 
-        Heads are independent (each writes out[h, :]), so the head loop is a
-        prange — measured 3.7-6.0x over the serial form, bit-identical.
+        Heads are independent (each writes out[h, :]). Serial with a
+        per-call scores buffer — one Q·K pass instead of the old three
+        (pass 3 used to recompute every dot: ~56x the work); a prange over H
+        measured slower than serial here (scheduling overhead exceeds the
+        parallel win at decode sizes).
         """
-        for h in prange(H):
-            # Pass 1: compute all scores, find max
-            scores_max = -1e30
+        scores = np.empty(new_len, dtype=np.float32)
+        acc = np.empty(E_head, dtype=np.float32)
+        for h in range(H):
+            kh = h // reps
+            scores_max = np.float32(-1e30)
             for n in range(new_len):
                 dot = 0.0
                 for d in range(E_head):
-                    dot += q[h, d] * k_full[h, n, d]
+                    dot += q[h, d] * k_full[kh, n, d]
                 dot *= scale
-                if dot > scores_max:
-                    scores_max = dot
-            # Pass 2: softmax (exp + sum)
+                s = np.float32(dot)
+                scores[n] = s
+                if s > scores_max:
+                    scores_max = s
+            # Pass 2: softmax in place — one exp per position
             total = 0.0
             for n in range(new_len):
-                dot = 0.0
-                for d in range(E_head):
-                    dot += q[h, d] * k_full[h, n, d]
-                val = np.exp(dot * scale - scores_max)
+                val = np.exp(scores[n] - scores_max)
+                scores[n] = val
                 total += val
-            inv_total = 1.0 / total
-            # Pass 3: weighted sum of V
+            inv_total = np.float32(1.0 / total)
+            for n in range(new_len):
+                scores[n] *= inv_total
+            # Pass 3: weighted sum of V — positions OUTER so the inner loop
+            # streams v_full[kh, n, :] contiguously (the old d-outer order
+            # read with a stride of E_head and dominated the decode slope).
             for d in range(E_head):
-                acc = 0.0
-                for n in range(new_len):
-                    dot = 0.0
-                    for dd in range(E_head):
-                        dot += q[h, dd] * k_full[h, n, dd]
-                    attn_w = np.exp(dot * scale - scores_max) * inv_total
-                    acc += attn_w * v_full[h, n, d]
-                out[h, d] = acc
+                acc[d] = np.float32(0.0)
+            for n in range(new_len):
+                w = scores[n]
+                for d in range(E_head):
+                    acc[d] += w * v_full[kh, n, d]
+            for d in range(E_head):
+                out[h, d] = acc[d]
 
-    @njit(cache=True, nogil=True, parallel=True)
+    @njit(cache=True, nogil=True, fastmath=True)
     def _fused_attention_multi(
         q,
         k_full,
@@ -566,59 +729,61 @@ def _build_fused_kernels():
         E_head,
         seq_len,
         new_len,
+        reps,
     ):
         """Attention for multi-token query (prompt processing, step 0).
 
         q: (seq_len, H, E_head) — query for all prompt tokens
-        k_full: (H, new_len, E_head) — already GQA-expanded
-        v_full: (H, new_len, E_head) — already GQA-expanded
+        k_full: (K_H, new_len, E_head) — GQA kv cache, NOT expanded:
+                query head h reads kv head h // reps (reps = H // K_H,
+                equals 1 for an already-expanded cache)
+        v_full: (K_H, new_len, E_head)
         out: (seq_len, H, E_head) — output
 
         Each (h, s) pair writes its own out[s, h, :] slice and carries no state
-        into any other pair, so the two loops are flattened into one prange over
-        H * seq_len — the only way to get enough parallel tasks out of a short
-        prompt (prange over heads alone would cap us at H ways). Measured
-        3.1-6.2x over the serial form, bit-identical.
+        into any other pair. Serial with a per-call scores buffer: one Q·K pass
+        (the old three-pass form recomputed every dot in pass 3 — ~56x the
+        work) and a prange over H*seq_len was measured slower than this serial
+        form under load (task scheduling ate the parallel win), so the head
+        loop stays plain range.
         """
-        for hs in prange(H * seq_len):
-            h = hs // seq_len
-            s = hs - h * seq_len
-            # Pass 1: compute all scores with causal mask, find max
-            scores_max = -1e30
-            for n in range(new_len):
-                dot = 0.0
-                for d in range(E_head):
-                    dot += q[s, h, d] * k_full[h, n, d]
-                dot *= scale
-                if n > s:
-                    dot = -1e9
-                if dot > scores_max:
-                    scores_max = dot
-            # Pass 2: softmax
-            total = 0.0
-            for n in range(new_len):
-                dot = 0.0
-                for d in range(E_head):
-                    dot += q[s, h, d] * k_full[h, n, d]
-                dot *= scale
-                if n > s:
-                    dot = -1e9
-                val = np.exp(dot - scores_max)
-                total += val
-            inv_total = 1.0 / total
-            # Pass 3: weighted sum of V
-            for d in range(E_head):
-                acc = 0.0
+        scores = np.empty(new_len, dtype=np.float32)
+        acc = np.empty(E_head, dtype=np.float32)
+        for h in range(H):
+            kh = h // reps
+            for s in range(seq_len):
+                # Pass 1: score every position once with causal mask, track max
+                scores_max = np.float32(-1e30)
                 for n in range(new_len):
                     dot = 0.0
-                    for dd in range(E_head):
-                        dot += q[s, h, dd] * k_full[h, n, dd]
+                    for d in range(E_head):
+                        dot += q[s, h, d] * k_full[kh, n, d]
                     dot *= scale
                     if n > s:
                         dot = -1e9
-                    attn_w = np.exp(dot - scores_max) * inv_total
-                    acc += attn_w * v_full[h, n, d]
-                out[s, h, d] = acc
+                    st = np.float32(dot)
+                    scores[n] = st
+                    if st > scores_max:
+                        scores_max = st
+                # Pass 2: softmax in place — one exp per position
+                total = 0.0
+                for n in range(new_len):
+                    val = np.exp(scores[n] - scores_max)
+                    scores[n] = val
+                    total += val
+                inv_total = np.float32(1.0 / total)
+                for n in range(new_len):
+                    scores[n] *= inv_total
+                # Pass 3: weighted sum of V — positions OUTER so the inner
+                # loop streams v_full[kh, n, :] contiguously (see single).
+                for d in range(E_head):
+                    acc[d] = np.float32(0.0)
+                for n in range(new_len):
+                    w = scores[n]
+                    for d in range(E_head):
+                        acc[d] += w * v_full[kh, n, d]
+                for d in range(E_head):
+                    out[s, h, d] = acc[d]
 
     @njit(cache=True, nogil=True)
     def _gqa_expand(k, out, reps):
@@ -659,11 +824,11 @@ def _build_fused_kernels():
         k = np.ones((H, new_len, E), dtype=np.float32)
         v = np.ones((H, new_len, E), dtype=np.float32)
         out = np.zeros((H, E), dtype=np.float32)
-        _fused_attention_single(q, k, v, out, np.float32(0.125), H, E, seq, new_len)
+        _fused_attention_single(q, k, v, out, np.float32(0.125), H, E, seq, new_len, 1)
 
         qm = np.ones((2, H, E), dtype=np.float32)
         outm = np.zeros((2, H, E), dtype=np.float32)
-        _fused_attention_multi(qm, k, v, outm, np.float32(0.125), H, E, 2, new_len)
+        _fused_attention_multi(qm, k, v, outm, np.float32(0.125), H, E, 2, new_len, 1)
 
         k_small = np.ones((K_H, new_len, E), dtype=np.float32)
         k_big = np.zeros((H, new_len, E), dtype=np.float32)
@@ -708,14 +873,23 @@ def fused_layer_norm(x, w, b, eps=np.float32(1e-5)):
 
 
 def fused_attention_single(q, k, v, scale, H, E_head):
-    """Single-token attention — numba manual loops. Returns (H, E_head)."""
+    """Single-token attention — numba manual loops. Returns (H, E_head).
+
+    ``k``/``v`` may be either fully expanded ``(H, new_len, E_head)`` or
+    GQA-unexpanded ``(K_H, new_len, E_head)``; the head mapping is derived
+    as ``reps = H // k.shape[0]`` (1 when already expanded).
+    """
     _ensure_fused()
     new_len = k.shape[1]
+    reps = H // k.shape[0]
     out = np.zeros((H, E_head), dtype=np.float32)
     if _nb_fused_attention_single is not None:
-        _nb_fused_attention_single(q, k, v, out, scale, H, E_head, 1, new_len)
+        _nb_fused_attention_single(q, k, v, out, scale, H, E_head, 1, new_len, reps)
     else:
-        # Numpy fallback
+        # Numpy fallback (no numba): materialize the expansion explicitly
+        if reps != 1:
+            k = k[np.arange(H) // reps]
+            v = v[np.arange(H) // reps]
         scores = np.einsum("hd,hnd->hn", q, k) * scale  # (H, new_len)
         attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
         attn = attn / attn.sum(axis=-1, keepdims=True)
@@ -724,21 +898,55 @@ def fused_attention_single(q, k, v, scale, H, E_head):
 
 
 def fused_attention_multi(q, k, v, scale, H, E_head):
-    """Multi-token attention (prompt) — numba manual loops. Returns (seq, H, E_head)."""
+    """Multi-token attention (prompt) — numba manual loops. Returns (seq, H, E_head).
+
+    ``k``/``v`` accept GQA-unexpanded ``(K_H, new_len, E_head)`` input — see
+    :func:`fused_attention_single`.
+    """
     _ensure_fused()
     seq_len = q.shape[0]
     new_len = k.shape[1]
+    reps = H // k.shape[0]
     out = np.zeros((seq_len, H, E_head), dtype=np.float32)
     if _nb_fused_attention_multi is not None:
-        _nb_fused_attention_multi(q, k, v, out, scale, H, E_head, seq_len, new_len)
+        _nb_fused_attention_multi(q, k, v, out, scale, H, E_head, seq_len, new_len, reps)
     else:
-        # Numpy fallback
-        scores = np.einsum("she,hne->hsn", q, k) * scale  # (H, seq, new_len)
-        causal = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
-        scores = scores + causal
-        attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
-        attn = attn / attn.sum(axis=-1, keepdims=True)
-        out = np.einsum("hsn,hne->she", attn, v)
+        # Numpy fallback (no numba): CHUNKED over the query axis.
+        #
+        # Attention is independent per query position — query s attends only to
+        # keys n <= s — so a contiguous slice of queries can be computed on its
+        # own and yields results identical to the whole-matrix form. That is what
+        # makes this memory-bounded: the previous one-shot version materialized
+        # _FALLBACK_TEMP_COUNT concurrent (H, seq_len, new_len) float32 arrays,
+        # which at seq_len = new_len = 8192 and H = 16 is ~16 GB and got the API
+        # server OOM-killed by the kernel (2026-11-01). Temporaries here are
+        # (H, blk, new_len), with blk sized to the prefill fallback budget.
+        if reps != 1:
+            k = k[np.arange(H) // reps]
+            v = v[np.arange(H) // reps]
+
+        per_chunk = max(1, H * new_len * _FALLBACK_ITEMSIZE * _FALLBACK_TEMP_COUNT)
+        blk = max(1, _prefill_fallback_budget() // per_chunk)
+
+        # Key indices are shared by every chunk; the mask broadcast is
+        # (blk, new_len) — H times smaller than scores, so it is cheap.
+        cols = np.arange(new_len, dtype=np.int64)[None, :]
+        for s0 in range(0, seq_len, blk):
+            s1 = min(s0 + blk, seq_len)
+            # Absolute query positions, so the causal mask stays correct across
+            # chunk boundaries (query s0+i sees keys n <= s0+i).
+            rows = np.arange(s0, s1, dtype=np.int64)[:, None]
+            scores = (
+                np.einsum("she,hne->hsn", q[s0:s1], k, optimize=True) * scale
+            )  # (H, blk, new_len)
+            scores += np.where(cols > rows, _CAUSAL_MASK, np.float32(0.0))
+            attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+            attn = attn / attn.sum(axis=-1, keepdims=True)
+            # optimize=True dispatches to BLAS; the default optimize=False takes
+            # a generic contraction loop. Measured 3.4-5.9x faster at prefill
+            # sizes (H=14, kv=2, E=128; interleaved arms, min-of-7) with
+            # identical output (allclose at every size tested).
+            out[s0:s1] = np.einsum("hsn,hne->she", attn, v, optimize=True)
     return out
 
 

@@ -9,7 +9,7 @@ mode: subagent
 
 # UI Error Fixer Agent
 
-You are a frontend debugging specialist for this Next.js + React project. Your job is to:
+You are a frontend debugging specialist for this Vite + React project. Your job is to:
 
 1. **Read the UI error log** at `~/.opencode-ui-error-log.json` (created by the ui-error-watcher plugin). Rows with category `runtime` are browser-reported errors the plugin pulls from the backend buffer automatically — they carry `runtimeId`, `stack`, and `source`.
 2. **Optionally query fresh errors** via `curl -s http://localhost:8000/errors/recent?limit=10` (for anything newer than the last 30s poll)
@@ -62,7 +62,7 @@ Check if the dynamic import path exists. If it's a network issue, add an error b
 
 ### runtime (browser-reported)
 
-The `stack` field holds the JS stack and `url`/`line`/`col` the origin. Parse the top stack frame to the source file (map `/_next/static/...` chunk names back through `lib/` or the page under `app/`), then treat the message with its matching template above (null-access, hydration, ...). If `source` is `window.onerror` and the stack is minified, reproduce locally: `npx next dev`, load the page, read the unminified error from the terminal.
+The `stack` field holds the JS stack and `url`/`line`/`col` the origin. Parse the top stack frame to the source file (map `assets/...-<hash>.js` chunk names back through `lib/` or the page under `app/`), then treat the message with its matching template above (null-access, hydration, ...). If `source` is `window.onerror` and the stack is minified, reproduce locally: `npm run dev` (Vite), load the page, read the unminified error from the terminal.
 
 ### auth (401/403)
 
@@ -86,7 +86,7 @@ Find the `setState` call inside `useEffect` that has no dependency guard. Add a 
 
 ### CORS
 
-Add to `next.config.js` rewrites or fix the backend CORS middleware in `apps/api/server/main.py`.
+Check the Vite dev-server proxy in `vite.config.ts` or fix the backend CORS middleware in `apps/api/server/main.py`.
 
 ## Project Structure
 

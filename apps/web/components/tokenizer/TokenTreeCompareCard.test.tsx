@@ -15,10 +15,22 @@ vi.mock('@/lib/token-tree-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
-    selector({ addToast: mocks.mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: typeof mocks.mockAddToast }) => unknown) =>
+      selector({ addToast: mocks.mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
@@ -27,12 +39,14 @@ vi.mock('@sloughgpt/strui', () => ({
   CardTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CardContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-  Skeleton: ({ className }: { className: string }) => <div data-testid="skeleton" className={className} />,
+  Skeleton: ({ className }: { className: string }) => (
+    <div data-testid="skeleton" className={className} />
+  ),
   Chip: ({ label }: { label: string }) => <span>{label}</span>,
   Select: ({ value, onValueChange, children }: any) => (
     <select
       value={value ?? ''}
-      onChange={e => onValueChange?.(e.target.value)}
+      onChange={(e) => onValueChange?.(e.target.value)}
       data-testid="select"
     >
       {children}
@@ -43,40 +57,47 @@ vi.mock('@sloughgpt/strui', () => ({
   SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
   SelectValue: () => null,
 
-    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { TokenTreeCompareCard } from './TokenTreeCompareCard'
@@ -95,7 +116,10 @@ const RESULT = {
   shared_merges: 15,
   only_a_merges: 5,
   only_b_merges: 12,
-  shared_examples: [['the', 100], ['quick', 60]],
+  shared_examples: [
+    ['the', 100],
+    ['quick', 60],
+  ],
   only_a_examples: [['fox', 30]],
   only_b_examples: [['jumps', 25]],
 }
@@ -164,10 +188,12 @@ describe('TokenTreeCompareCard', () => {
     expect(screen.getByText(/Shared token examples/)).toBeDefined()
     expect(screen.getByText(/Only in alpha/)).toBeDefined()
     expect(screen.getByText(/Only in beta/)).toBeDefined()
-    const hasText = (token: string, freq: number) => (content: string, element: Element | null): boolean => {
-      const text = element?.textContent ?? content
-      return text.includes(token) && text.includes(`×${freq}`)
-    }
+    const hasText =
+      (token: string, freq: number) =>
+      (content: string, element: Element | null): boolean => {
+        const text = element?.textContent ?? content
+        return text.includes(token) && text.includes(`×${freq}`)
+      }
     expect(screen.getAllByText(hasText('the', 100)).length).toBeGreaterThan(0)
     expect(screen.getAllByText(hasText('quick', 60)).length).toBeGreaterThan(0)
     expect(screen.getAllByText(hasText('fox', 30)).length).toBeGreaterThan(0)

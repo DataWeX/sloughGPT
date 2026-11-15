@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { cn, ActionCard, Progress, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { formatBytes } from '@/lib/format-bytes'
 
@@ -25,7 +25,7 @@ function formatSpeed(bps: number): string {
 export default function DownloadsCard() {
   const [downloads, setDownloads] = useState<Download[]>([])
   const [loading, setLoading] = useState(true)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const fetchDownloads = useCallback(async () => {
     try {
@@ -55,11 +55,13 @@ export default function DownloadsCard() {
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [addToast])
 
   useEffect(() => {
-    const hasActive = downloads.some(d => d.status === 'downloading' || d.status === 'queued')
+    const hasActive = downloads.some((d) => d.status === 'downloading' || d.status === 'queued')
     if (!hasActive) return
     const timer = setInterval(fetchDownloads, 2000)
     return () => clearInterval(timer)
@@ -111,42 +113,78 @@ export default function DownloadsCard() {
         </Button>
       }
     >
-        <div className="space-y-1.5">
-          {downloads.map(d => {
-            const pct = Math.round(d.progress * 100)
-            const isActive = d.status === 'downloading' || d.status === 'queued'
-            const isFailed = d.status === 'failed' || d.status === 'error'
-            return (
-              <div key={d.model_id} className="rounded-lg border border-border/40 px-2.5 py-2 text-xs">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-medium truncate text-[11px]">{d.model_id}</span>
-                    <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium', isActive ? 'bg-primary/10 text-primary' :
-                      isFailed ? 'bg-destructive/10 text-destructive' :
-                      d.status === 'completed' ? 'bg-success/10 text-success' :
-                      'bg-muted text-muted-foreground')}>{d.status}</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-[9px] text-muted-foreground/60 shrink-0 tabular-nums">
-                    <span>{formatBytes(d.bytes_downloaded)} / {formatBytes(d.total_bytes)}</span>
-                    <span className="ml-0.5">{formatSpeed(d.speed_bps)}</span>
-                  </div>
+      <div className="space-y-1.5">
+        {downloads.map((d) => {
+          const pct = Math.round(d.progress * 100)
+          const isActive = d.status === 'downloading' || d.status === 'queued'
+          const isFailed = d.status === 'failed' || d.status === 'error'
+          return (
+            <div
+              key={d.model_id}
+              className="rounded-lg border border-border/40 px-2.5 py-2 text-xs"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-medium truncate text-[11px]">{d.model_id}</span>
+                  <span
+                    className={cn(
+                      'text-[9px] px-1.5 py-0.5 rounded-full font-medium',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : isFailed
+                          ? 'bg-destructive/10 text-destructive'
+                          : d.status === 'completed'
+                            ? 'bg-success/10 text-success'
+                            : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {d.status}
+                  </span>
                 </div>
-                {isActive && (
-                  <Progress value={pct} size="sm" variant={pct > 0 ? 'default' : 'warning'} />
-                )}
-                {isFailed && (
-                  <div className="flex gap-0.5 mt-1">
-                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleRetry(d.model_id)}>Retry</Button>
-                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleVerify(d.model_id)}>Verify</Button>
-                  </div>
-                )}
-                {isActive && (
-                  <Button size="sm" variant="ghost" className="h-6 text-[10px] mt-1" onClick={() => handleCancel(d.model_id)}>Cancel</Button>
-                )}
+                <div className="flex items-center gap-1 text-[9px] text-muted-foreground/60 shrink-0 tabular-nums">
+                  <span>
+                    {formatBytes(d.bytes_downloaded)} / {formatBytes(d.total_bytes)}
+                  </span>
+                  <span className="ml-0.5">{formatSpeed(d.speed_bps)}</span>
+                </div>
               </div>
-            )
-          })}
-        </div>
+              {isActive && (
+                <Progress value={pct} size="sm" variant={pct > 0 ? 'default' : 'warning'} />
+              )}
+              {isFailed && (
+                <div className="flex gap-0.5 mt-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-[10px]"
+                    onClick={() => handleRetry(d.model_id)}
+                  >
+                    Retry
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-[10px]"
+                    onClick={() => handleVerify(d.model_id)}
+                  >
+                    Verify
+                  </Button>
+                </div>
+              )}
+              {isActive && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px] mt-1"
+                  onClick={() => handleCancel(d.model_id)}
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </ActionCard>
   )
 }

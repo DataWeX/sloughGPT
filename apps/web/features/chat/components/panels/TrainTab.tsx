@@ -38,7 +38,7 @@ export function TrainTab({ vs }: TrainTabProps) {
                 e.stopPropagation()
                 vs.clearPreview()
               }}
-              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full bg-background border border-border/50 shadow-sm"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full bg-background border border-border/50 shadow-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               aria-label="Remove"
             >
               <IconX className="h-3 w-3" />
@@ -65,7 +65,7 @@ export function TrainTab({ vs }: TrainTabProps) {
           Ground truth label (caption)
         </label>
         <input
-          className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           placeholder="e.g., 'a red car on a sunny road'"
           value={vs.trainLabel}
           onChange={(e) => vs.setTrainLabel(e.target.value)}

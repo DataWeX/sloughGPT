@@ -156,7 +156,9 @@ describe('TokenBilling', () => {
     await waitFor(() => {
       fireEvent.click(screen.getByText('history'))
     })
-    expect(screen.getByText('No usage yet')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('No usage yet')).toBeInTheDocument()
+    })
   })
 
   it('switches to pricing tab', async () => {
@@ -182,9 +184,11 @@ describe('TokenBilling', () => {
     await waitFor(() => {
       fireEvent.click(screen.getByText('pricing'))
     })
-    expect(screen.getByText('free')).toBeInTheDocument()
-    expect(screen.getByText('pro')).toBeInTheDocument()
-    expect(screen.getByText('enterprise')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('free')).toBeInTheDocument()
+      expect(screen.getByText('pro')).toBeInTheDocument()
+      expect(screen.getByText('enterprise')).toBeInTheDocument()
+    })
   })
 
   it('shows current plan highlight', async () => {
@@ -210,6 +214,8 @@ describe('TokenBilling', () => {
     await waitFor(() => {
       fireEvent.click(screen.getByText('pricing'))
     })
-    expect(screen.getByText('Current plan')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Current plan')).toBeInTheDocument()
+    })
   })
 })

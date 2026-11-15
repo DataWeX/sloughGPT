@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { THEME_IDS, isStoredThemeId, PALETTE_IDS, PALETTE_LABELS, isStoredPaletteId } from './theme-storage'
+import {
+  THEME_IDS,
+  isStoredThemeId,
+  PALETTE_IDS,
+  PALETTE_LABELS,
+  PALETTE_COLORS,
+  isStoredPaletteId,
+} from './theme-storage'
 
 describe('THEME_IDS', () => {
   it('contains 7 theme ids', () => {
@@ -41,8 +48,8 @@ describe('isStoredThemeId', () => {
 })
 
 describe('PALETTE_IDS', () => {
-  it('contains 2 palette ids', () => {
-    expect(PALETTE_IDS).toEqual(['noir-violet', 'neural-precision'])
+  it('contains 4 palette ids', () => {
+    expect(PALETTE_IDS).toEqual(['noir-violet', 'neural-precision', 'system-cobalt', 'rose-blue'])
   })
 
   it('has labels for every palette', () => {
@@ -51,12 +58,24 @@ describe('PALETTE_IDS', () => {
       expect(typeof PALETTE_LABELS[id]).toBe('string')
     }
   })
+
+  it('system-cobalt projects its label and swatch from the palette protocol', () => {
+    expect(PALETTE_LABELS['system-cobalt']).toBe('Operating System Blue')
+    expect(PALETTE_COLORS['system-cobalt']).toBe('#17599d')
+  })
+
+  it('rose-blue projects its label and swatch from the palette protocol', () => {
+    expect(PALETTE_LABELS['rose-blue']).toBe('Rose Blue')
+    expect(PALETTE_COLORS['rose-blue']).toBe('#5a5fc0')
+  })
 })
 
 describe('isStoredPaletteId', () => {
   it('returns true for valid palette id', () => {
     expect(isStoredPaletteId('noir-violet')).toBe(true)
     expect(isStoredPaletteId('neural-precision')).toBe(true)
+    expect(isStoredPaletteId('system-cobalt')).toBe(true)
+    expect(isStoredPaletteId('rose-blue')).toBe(true)
   })
 
   it('returns false for invalid palette id', () => {

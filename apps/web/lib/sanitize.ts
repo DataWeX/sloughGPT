@@ -115,3 +115,43 @@ export function clampTrainingField(key: string, value: number): number {
   if (!limit) return value
   return clampNumber(value, limit.min, limit.max)
 }
+
+/**
+ * Parse a raw input string for a training field.
+ *
+ * Empty or non-numeric → NaN, so the caller decides the fallback (the VM
+ * form renders a "using default X" hint for NaN and `clampTrainConfig`
+ * substitutes the default at launch). Finite values are clamped to the
+ * field's TRAINING_LIMITS range, so an out-of-range keystroke can never
+ * escape into form state.
+ *
+ * Unlike `parseAndClamp`, emptiness does NOT collapse to min: `Number('')`
+ * is 0, which would silently turn a cleared field into the minimum — the
+ * empty case is signalled explicitly as NaN instead.
+ */
+export function parseTrainingField(key: keyof typeof TRAINING_LIMITS, raw: string): number {
+  const trimmed = raw.trim()
+  if (trimmed === '') return NaN
+  const n = Number(trimmed)
+  if (!Number.isFinite(n)) return NaN
+  return clampTrainingField(key, n)
+}
+
+/**
+ * Validate a training field value against its TRAINING_LIMITS entry.
+ * Returns a human-readable limit message, or null when the value is valid.
+ * NaN is invalid — the old hand-rolled `< min || > max` checks let it slip
+ * through, because every comparison with NaN is false.
+ */
+export function validateTrainingField(
+  key: keyof typeof TRAINING_LIMITS,
+  value: number,
+  label: string,
+): string | null {
+  const limit = getFieldLimit(key)
+  if (!limit) return null
+  if (!Number.isFinite(value) || value < limit.min || value > limit.max) {
+    return `${label} must be ${limit.min}–${limit.max}`
+  }
+  return null
+}

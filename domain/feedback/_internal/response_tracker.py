@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,42 @@ class ResponseLog:
     has_images: bool = False
     context_tokens: int = 0
     eval_scores: dict[str, float] | None = None
+
+
+# ResponseLog field names — used to strip MogDB bookkeeping keys (_id,
+# expires_at) before reconstructing a dataclass from a stored document.
+_LOG_FIELDS = frozenset(f.name for f in fields(ResponseLog))
+
+
+def _canonical_log_dir() -> Path:
+    """The canonical response-log shard directory (``data/response_logs``)."""
+    return find_repo_root(Path(__file__).resolve()) / "data" / "response_logs"
+
+
+def read_response_docs(log_dir: str | Path) -> list[dict[str, Any]] | None:
+    """MogDB-first reader for the response docs backing *log_dir*.
+
+    Returns the stored documents in chronological order when *log_dir* is the
+    canonical ``data/response_logs`` store and its MogDB journal holds data;
+    ``None`` otherwise — callers then fall back to the JSONL shards (legacy
+    data, isolated/custom dirs, or MogDB unavailable). The canonical gate
+    keeps tests and custom log dirs reading their own files, never the real
+    store.
+    """
+    try:
+        path = Path(log_dir)
+        if not path.is_absolute():
+            path = find_repo_root(Path(__file__).resolve()) / path
+        if path.resolve() != _canonical_log_dir().resolve():
+            return None
+        tracker = get_response_tracker()
+        if tracker._coll is None:
+            return None
+        docs = tracker._coll.find(sort=[("timestamp", 1)])
+        return docs or None
+    except Exception as e:
+        logger.warning("MogDB response-doc read failed, falling back to JSONL: %s", e)
+        return None
 
 
 class ResponseTracker:
@@ -75,14 +111,24 @@ class ResponseTracker:
         # MogDB persistence
         self._mogdb = None
         self._coll = None
-        self._init_mogdb(repo_root)
+        self._init_mogdb()
 
-    def _init_mogdb(self, repo_root: Path) -> None:
-        """Initialize MogDB for response log persistence with TTL index."""
+    def _init_mogdb(self) -> None:
+        """Initialize MogDB for response log persistence with TTL index.
+
+        The journal path is derived from this instance's log dir so isolated
+        trackers (tests, custom log dirs) never read or write the canonical
+        store: canonical ``data/response_logs`` → ``data/response_mogdb``
+        (unchanged, existing data kept); any other dir → sibling
+        ``<name>_mogdb``.
+        """
         try:
             from mogdb import MogDB
 
-            db_path = str(repo_root / "data" / "response_mogdb")
+            if self.log_dir == _canonical_log_dir():
+                db_path = str(self.log_dir.parent / "response_mogdb")
+            else:
+                db_path = str(self.log_dir.parent / f"{self.log_dir.name}_mogdb")
             self._mogdb = MogDB(db_path)
             self._coll = self._mogdb.collection("responses")
             # Create TTL index on expires_at (numeric epoch) for auto-expiry
@@ -192,10 +238,34 @@ class ResponseTracker:
         model: str | None = None,
         since: str | None = None,
     ) -> list[ResponseLog]:
-        """Get recent responses."""
-        responses = []
+        """Get recent responses.
 
-        # Read from today's file
+        MogDB is authoritative when its journal holds docs (filters applied
+        in Python — timestamps are ISO strings); an empty/unavailable journal
+        falls back to today's JSONL shard, which covers legacy file-only data.
+        """
+        responses: list[ResponseLog] = []
+
+        if self._coll is not None:
+            try:
+                docs = self._coll.find(sort=[("timestamp", 1)])
+                if docs:
+                    for doc in docs:
+                        if model and doc.get("model") != model:
+                            continue
+                        if since and doc.get("timestamp", "") < since:
+                            continue
+                        data = {k: v for k, v in doc.items() if k in _LOG_FIELDS}
+                        try:
+                            responses.append(ResponseLog(**data))
+                        except (TypeError, ValueError, KeyError) as e:
+                            logger.debug("Skipping malformed response doc: %s", e)
+                            continue
+                    return responses[-limit:]
+            except Exception as e:
+                logger.warning("MogDB read failed, falling back to JSONL: %s", e)
+
+        # Fallback: read from today's file
         if self.current_file.exists():
             with open(self.current_file) as f:
                 for line in f:

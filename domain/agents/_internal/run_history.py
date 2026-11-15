@@ -31,6 +31,29 @@ logger = logging.getLogger("slo.agents.runs")
 
 RUNS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agent_runs")
 
+# Openers of the bootstrap model's canned refusals — shared by the export
+# filter and the loop's synthesis fallback (training on refusals teaches the
+# model to refuse; live journey 2026-10-30 proved one reached an export).
+REFUSAL_OPENERS = (
+    "i'm sorry",
+    "i am sorry",
+    "i'm afraid",
+    "i am afraid",
+    "i cannot",
+    "i can't",
+    "unable to assist",
+    "i'm not able",
+    "i am not able",
+    "i'm unable",
+    "i am unable",
+)
+
+
+def looks_like_refusal(text: str) -> bool:
+    """Conservative prefix test for the bootstrap model's canned refusals."""
+    return text.strip().lower().startswith(REFUSAL_OPENERS)
+
+
 _db = None
 _collection = None
 
@@ -179,6 +202,12 @@ class AgentRunStore:
                     }
                 },
             )
+        # Substrate record AFTER the lock: consciousness.process is unbounded
+        # and must not serialize the store's other writers. One recording
+        # seam for every runner — domain.cognition.record_experience.
+        from domain.cognition import record_experience
+
+        record_experience(existing.get("goal", ""), response, source="agent.run")
 
     def fail(self, run_id: str, error: str) -> None:
         """Mark a run as failed with an error message."""
@@ -199,6 +228,9 @@ class AgentRunStore:
                     }
                 },
             )
+        from domain.cognition import record_experience
+
+        record_experience(existing.get("goal", ""), f"Run failed: {error}", source="agent.run")
 
     # ── Queries ──────────────────────────────────────────────────────────
 
@@ -215,6 +247,59 @@ class AgentRunStore:
         """Return run records sorted newest-first, truncated to ``limit``."""
         docs = self._col.find({}, sort=[("_id", -1)], limit=limit)
         return [dict(d) for d in docs]
+
+    # ── Training export ─────────────────────────────────────────────────────
+
+    # Openers of the bootstrap model's canned refusals — training on those
+    # teaches the model to refuse (live journey on 2026-10-30 proved it:
+    # a refusal run made it into an export). Conservative prefix match.
+    _REFUSAL_OPENERS = REFUSAL_OPENERS
+
+    def _is_refusal(self, response: str) -> bool:
+        return looks_like_refusal(response)
+
+    def training_examples(self, min_response: int = 1) -> list[dict[str, Any]]:
+        """Convert completed runs into trainer-ready examples.
+
+        Each example is ``{"messages": [...], "source": "agent-run",
+        "run_id": ...}`` — the JSONL shape ``SloughGPTTrainer`` loads
+        (``{"messages": [...]}`` per line), so agent runs become training
+        data with their provenance intact. Refusal-shaped responses are
+        excluded — they are noise today and poison tomorrow.
+        """
+        with self._lock:
+            docs = self._col.find({"status": "completed"})
+        examples = []
+        for doc in docs if isinstance(docs, list) else []:
+            goal = str(doc.get("goal", "")).strip()
+            response = str(doc.get("response", "")).strip()
+            if len(goal) < 1 or len(response) < min_response:
+                continue
+            if self._is_refusal(response):
+                continue
+            examples.append(
+                {
+                    "messages": [
+                        {"role": "user", "content": goal},
+                        {"role": "assistant", "content": response},
+                    ],
+                    "source": "agent-run",
+                    "run_id": doc.get("_id", ""),
+                }
+            )
+        return examples
+
+    def export_training_jsonl(self, path: str, limit: int | None = None) -> int:
+        """Write training examples to ``path`` as JSONL; returns line count."""
+        import json
+
+        examples = self.training_examples()
+        if limit is not None:
+            examples = examples[: max(0, limit)]
+        with open(path, "w", encoding="utf-8") as fh:
+            for example in examples:
+                fh.write(json.dumps(example, ensure_ascii=False) + "\n")
+        return len(examples)
 
     def clear(self) -> int:
         """Delete all run records; returns the number removed."""

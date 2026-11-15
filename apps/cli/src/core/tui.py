@@ -12,7 +12,6 @@ import select
 import signal
 import subprocess
 import sys
-import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -1247,7 +1246,13 @@ class DevDashboard:
                                     self._startup_phase = True
                                     self._start_time = time.monotonic()
 
-                            threading.Thread(target=_do_restart, daemon=True).start()
+                            # Stage 3B: engine process so the restart can't
+                            # be dropped and stays registry-visible.
+                            from domain.infrastructure._internal.pugqeep.singleton import (
+                                get_engine,
+                            )
+
+                            get_engine().spawn(_do_restart, name="tui-restart")
                             self._frame += 1
                             continue
 

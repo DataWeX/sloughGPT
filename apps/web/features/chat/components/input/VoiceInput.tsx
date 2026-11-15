@@ -1,15 +1,17 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { multimodalController } from '@/lib/controllers'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { VoiceWaveform } from './VoiceWaveform'
 
 import { cn, Button, IconMic, AudioWaveform } from '@sloughgpt/strui'
 
 interface SpeechRecognitionEvent extends Event {
+  /** Index of the first result that changed in this event (W3C SpeechRecognitionEvent). */
+  resultIndex: number
   results: SpeechRecognitionResultList
 }
 
@@ -74,7 +76,7 @@ export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: 
   const [isListening, setIsListening] = useState(false)
   const [isBrowserSupported, setIsBrowserSupported] = useState(false)
   const [isServerSupported, setIsServerSupported] = useState(false)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
@@ -113,9 +115,21 @@ export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: 
     }
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map((result: SpeechRecognitionResult) => result[0].transcript)
-        .join('')
+      // Emit ONLY results that are final AND new since the previous event.
+      //
+      // ChatInput.handleVoiceTranscript APPENDS whatever we emit (and then
+      // auto-sends), so two failure modes are possible here:
+      //   1. re-joining every result from index 0 on each event re-emits the
+      //      whole utterance, which the composer appends to text it already
+      //      holds -> multiplicative growth;
+      //   2. emitting interim fragments sends half-finished words.
+      // Walking from event.resultIndex and keeping finals only mirrors the
+      // proven loop in features/chat/voice/speech-engine.ts.
+      let transcript = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i]
+        if (result.isFinal) transcript += result[0].transcript
+      }
       if (transcript) {
         onTranscript(transcript)
       }

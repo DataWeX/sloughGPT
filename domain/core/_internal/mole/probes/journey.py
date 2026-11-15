@@ -1,10 +1,10 @@
-"""Journey probe — reads the UX sweep report written by ``domain.journeys``.
+"""Journey probe — reads the UX sweep report written by ``journeys``.
 
 The journey runner freezes ``SLO_WEB_URL`` / ``SLO_API_URL`` as module
 globals at *import* time, and its web default is stale (``:5175``; the
 live vite dev server is ``:5173``). This probe therefore calls
 ``os.environ.setdefault`` for the live truth BEFORE importing anything
-from ``domain.journeys`` — the fix lives mole-side; journey files are
+from ``journeys`` — the fix lives mole-side; journey files are
 never edited.
 
 Findings (component ``journeys``):
@@ -33,7 +33,7 @@ _FAIL_CRITICAL_COUNT = 3
 
 
 def _set_env_defaults() -> None:
-    """Freeze live-stack env BEFORE ``domain.journeys`` import freezes it."""
+    """Freeze live-stack env BEFORE ``journeys`` import freezes it."""
     os.environ.setdefault("SLO_WEB_URL", "http://localhost:5173")
     os.environ.setdefault("SLO_API_URL", "http://localhost:8000")
 
@@ -67,9 +67,9 @@ def _sweep() -> tuple[str, str]:
     import importlib
 
     # importlib returns whatever sys.modules holds (stub-friendly) and
-    # runs domain.journeys.__init__ only if it has not been imported yet.
-    runner = importlib.import_module("domain.journeys.runner")
-    journeys = importlib.import_module("domain.journeys")
+    # runs journeys.__init__ only if it has not been imported yet.
+    runner = importlib.import_module("journeys.runner")
+    journeys = importlib.import_module("journeys")
     try:
         asyncio.run(runner.run(list(journeys.FLOWS), headed=False, strict_errors=False))
     except Exception as exc:  # a crashed sweep must still yield a probe result

@@ -1,11 +1,11 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Textarea, Input, Button } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenTreeController, type TrainTreeResult } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 interface TokenTreeTrainCardProps {
   onTrained?: () => void
@@ -19,15 +19,15 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
   const [training, setTraining] = useState(false)
   const [result, setResult] = useState<TrainTreeResult | null>(null)
   const [failed, setFailed] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const handleTrain = async () => {
     setTraining(true)
     setFailed(false)
     const texts = corpus
       .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
     try {
       const res = await tokenTreeController.train(
         texts.length > 0
@@ -51,10 +51,18 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {result && !training && (
-          <StatusBanner variant="success" message={`Trained: vocab ${result.vocab_size} · embed dim ${result.embed_dim} · compression ${result.embedding_compression_ratio}x`} dismissible={false} />
+          <StatusBanner
+            variant="success"
+            message={`Trained: vocab ${result.vocab_size} · embed dim ${result.embed_dim} · compression ${result.embedding_compression_ratio}x`}
+            dismissible={false}
+          />
         )}
         {failed && !training && (
-          <StatusBanner variant="error" message="Training failed. Check the logs and try again." dismissible={false} />
+          <StatusBanner
+            variant="error"
+            message="Training failed. Check the logs and try again."
+            dismissible={false}
+          />
         )}
         <div className="space-y-2">
           <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -62,7 +70,7 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
           </label>
           <Textarea
             value={corpus}
-            onChange={e => setCorpus(e.target.value)}
+            onChange={(e) => setCorpus(e.target.value)}
             rows={4}
             placeholder="Paste a corpus — one document per line. Leave empty to use the built-in default corpus."
             aria-label="Token tree training corpus"
@@ -76,7 +84,7 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
             <Input
               type="number"
               value={vocabSize}
-              onChange={e => setVocabSize(parseInt(e.target.value) || 512)}
+              onChange={(e) => setVocabSize(parseInt(e.target.value) || 512)}
               className="w-24"
               min={32}
               max={100000}
@@ -90,7 +98,7 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
             <Input
               type="number"
               value={embedDim}
-              onChange={e => setEmbedDim(parseInt(e.target.value) || 0)}
+              onChange={(e) => setEmbedDim(parseInt(e.target.value) || 0)}
               className="w-24"
               min={0}
               max={4096}
@@ -104,7 +112,7 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
             <Input
               type="number"
               value={minFreq}
-              onChange={e => setMinFreq(parseInt(e.target.value) || 1)}
+              onChange={(e) => setMinFreq(parseInt(e.target.value) || 1)}
               className="w-24"
               min={1}
               max={10000}
@@ -112,7 +120,9 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
             />
           </div>
           <Button size="sm" onClick={handleTrain} disabled={training}>
-            {training ? 'Training...' : (
+            {training ? (
+              'Training...'
+            ) : (
               <>
                 <IconRefresh className="h-4 w-4 mr-1" />
                 Train token tree
@@ -121,8 +131,8 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Learns BPE merges and co-occurrence embeddings, stored as compressed pugqeep points. The result powers the
-          semantic query card above.
+          Learns BPE merges and co-occurrence embeddings, stored as compressed pugqeep points. The
+          result powers the semantic query card above.
         </p>
       </CardContent>
     </Card>

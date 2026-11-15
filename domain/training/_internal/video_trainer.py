@@ -379,21 +379,31 @@ class VideoCaptionTrainer:
 
         np.savez_compressed(str(ckpt_path), **weights)
 
+        meta = {
+            "name": name,
+            "epoch": epoch,
+            "step": step,
+            "loss": loss,
+            "vocab_size": len(self._vocab),
+            "embed_dim": self.embed_dim,
+            "hidden_dim": self.hidden_dim,
+            "max_frames": self.max_frames,
+        }
         meta_path = checkpoint_dir / f"{name}_meta.json"
         with open(meta_path, "w") as f:
-            json.dump(
-                {
-                    "name": name,
-                    "epoch": epoch,
-                    "step": step,
-                    "loss": loss,
-                    "vocab_size": len(self._vocab),
-                    "embed_dim": self.embed_dim,
-                    "hidden_dim": self.hidden_dim,
-                    "max_frames": self.max_frames,
-                },
-                f,
-            )
+            json.dump(meta, f)
+
+        # Journal metadata to MogDB for the canonical dir only — tmp/custom
+        # dirs (tests, ad-hoc runs) must never touch the shared journal.
+        if checkpoint_dir.resolve() == CHECKPOINT_DIR:
+            try:
+                from domain.training._internal.checkpoint_journal import (
+                    journal_checkpoint,
+                )
+
+                journal_checkpoint(meta, ckpt_path)
+            except Exception as e:
+                logger.warning("Checkpoint journal write skipped: %s", e)
 
         logger.info(
             "Checkpoint saved: %s (loss=%.4f, step=%d)",
@@ -475,10 +485,26 @@ class VideoCaptionTrainer:
 
 
 def list_video_checkpoints(base_dir: str | None = None) -> list[dict]:
-    """List all saved video training checkpoints."""
+    """List all saved video training checkpoints.
+
+    For the canonical checkpoint dir, metadata comes from the MogDB journal
+    (written by ``_journal_checkpoint``) — each entry is validated against
+    the filesystem so checkpoints deleted behind the journal's back drop out
+    (and their stale docs are pruned). Custom ``base_dir``s and an
+    empty/unavailable journal fall back to scanning ``*_meta.json`` files.
+    """
     ckpt_dir = Path(base_dir) / "checkpoints" if base_dir else CHECKPOINT_DIR
     if not ckpt_dir.exists():
         return []
+
+    if base_dir is None:
+        from domain.training._internal.checkpoint_journal import (
+            list_journal_checkpoints,
+        )
+
+        journalled = list_journal_checkpoints(ckpt_dir)
+        if journalled is not None:
+            return journalled
 
     checkpoints = []
     for meta_file in sorted(ckpt_dir.glob("*_meta.json"), reverse=True):

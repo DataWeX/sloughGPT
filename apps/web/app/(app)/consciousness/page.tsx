@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -16,7 +17,6 @@ import {
   Slider,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { addGlobalError } from '@/lib/error-store'
 
@@ -74,7 +74,7 @@ const LEVEL_DESCRIPTIONS = [
 ]
 
 export default function ConsciousnessPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
   const [loading, setLoading] = useState(true)

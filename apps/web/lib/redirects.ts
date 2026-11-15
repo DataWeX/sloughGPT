@@ -5,6 +5,7 @@ export const IGNORE_PATHS = ['/_next', '/favicon', '/sw.js', '/workbox']
 
 export const REDIRECTS: Record<string, string> = {
   '/companion': '/souls',
+  '/personality': '/souls',
   '/evaluate': '/benchmark',
   '/compare': '/benchmark',
   '/lora-eval': '/benchmark',
@@ -27,9 +28,15 @@ export const REDIRECTS: Record<string, string> = {
   '/export': '/settings',
   '/errors': '/monitoring',
   '/security': '/monitoring',
-  '/images': '/developer',
+  // Route-map row `/files` <- `/files` + `/images` (card 7839a7c6): the images
+  // page was absorbed into /files, so the old path now 307s there. Note that
+  // /files itself is a LIVE route — never add it as a redirect source, or the
+  // 307 fires before routing and the page becomes unreachable (that exact bug
+  // shipped once: both /files and /images pointed at /developer). The entry
+  // count and that live-route invariant are pinned in redirect-plugin.test.ts.
+  '/images': '/files',
+  '/mole': '/plugins-cloud',
   '/session': '/chat',
-  '/files': '/developer',
   '/voice': '/chat?mode=talk',
   '/writing': '/chat?mode=write',
   '/rewrite': '/chat?mode=rewrite',
@@ -39,6 +46,7 @@ export const REDIRECTS: Record<string, string> = {
   '/explain': '/chat?mode=explain',
   '/wellness': '/chat?mode=wellness',
   '/shell': '/developer',
+  '/vm': '/developer',
   '/workflow': '/feedback',
   '/tools': '/chat',
   '/workspace-dashboard': '/workspace',

@@ -33,6 +33,7 @@ import os
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import requests
@@ -95,6 +96,77 @@ COMPRESSED_EXTENSIONS = {
 
 class DownloadError(Exception):
     """Raised when a download fails permanently."""
+
+
+@dataclass
+class WireStats:
+    """Bandwidth accounting for one download call (wire vs decoded bytes).
+
+    ``wire_bytes`` counts body bytes actually transferred on the wire for
+    THIS call — including failed attempts (bandwidth spent is bandwidth
+    spent) but excluding any partial a previous session left on disk.
+    Response header bytes are counted separately in ``header_bytes``.
+
+    Accuracy:
+    - With ``Content-Length`` (the normal case) the wire total is exact.
+    - Without ``Content-Length`` on an encoded body the wire size cannot be
+      recovered after transparent decoding → ``wire_known`` is False and
+      :attr:`saved_bytes`/:attr:`saved_pct` return ``None`` instead of a
+      number we'd have to invent.
+    - Identity responses without ``Content-Length`` fall back to
+      ``wire == decoded`` (true by definition).
+
+    ``saved_bytes``/``saved_pct`` are measured against ``decoded_bytes``
+    (identity bytes on disk) — the data the download actually delivered.
+    """
+
+    wire_bytes: int = 0
+    decoded_bytes: int = 0
+    header_bytes: int = 0
+    wire_known: bool = True
+    _encodings: list = field(default_factory=list, repr=False)
+
+    @property
+    def content_encoding(self) -> str:
+        """Unique content codings seen on recorded responses (``identity`` if none)."""
+        seen = list(dict.fromkeys(self._encodings))
+        return ",".join(seen) if seen else "identity"
+
+    @property
+    def saved_bytes(self) -> int | None:
+        if not self.wire_known:
+            return None
+        return max(0, self.decoded_bytes - self.wire_bytes)
+
+    @property
+    def saved_pct(self) -> float | None:
+        if not self.wire_known or self.decoded_bytes <= 0:
+            return None
+        saved = 100.0 * (self.decoded_bytes - self.wire_bytes) / self.decoded_bytes
+        return max(0.0, saved)  # failures can spend more wire than they deliver
+
+
+def _record_wire(stats: WireStats, resp: requests.Response, encoding: str) -> int | None:
+    """Record one response's wire cost into *stats* (call before consuming body).
+
+    ``encoding`` is the body's content coding (``identity`` for plain).
+    Wire length is the response's ``Content-Length`` when present (returned
+    so the caller can reconcile identity bodies that lack one); absent on an
+    encoded body, the pre-decode length is unrecoverable once requests has
+    transparently decoded the stream — ``wire_known`` is flipped off there
+    instead of inventing a number.
+    """
+    stats.header_bytes += sum(len(k) + len(v) + 4 for k, v in resp.headers.items())
+    stats._encodings.append(encoding)
+    cl = resp.headers.get("Content-Length", "")
+    if cl.isdigit():
+        n = int(cl)
+        stats.wire_bytes += n
+        return n
+    if encoding == "identity":
+        return None  # wire == decoded, resolved by the caller at completion
+    stats.wire_known = False
+    return None
 
 
 def _part_path(dest: Path) -> Path:
@@ -311,6 +383,7 @@ def download_file(
     on_complete: Callable[[Path], None] | None = None,
     compressed: bool = False,
     skip_if_exists: bool = True,
+    stats: WireStats | None = None,
 ) -> Path:
     """Download a single file with resume support.
 
@@ -333,6 +406,10 @@ def download_file(
                     any ``application/x-lz4`` response is stream-decoded to
                     identity before writing, regardless of this flag.
         skip_if_exists: If True and checksum provided, skip download if file exists with matching checksum.
+        stats: Optional :class:`WireStats` mutated in place with this call's
+               bandwidth accounting (wire bytes, decoded bytes, header bytes,
+               content codings) — see the WireStats docstring for accuracy
+               guarantees.  Spent on failed attempts counts too.
 
     Returns:
         The final destination path on success.
@@ -352,6 +429,29 @@ def download_file(
             return dest
 
     part = _part_path(dest)
+
+    # Wire accounting scope: bytes attributed to THIS call start at the disk
+    # size we begin with (prior-session partials excluded).  ``_flush``
+    # attributes the delta between the current on-disk size and what was
+    # already attributed — called after failed attempts (kept prefix counts:
+    # it was delivered) and at completion (the renamed final file).
+    decoded_at_entry = stats.decoded_bytes if stats is not None else 0
+    recorded_disk = _resolve_range_start(part)
+    wire_cl = 0  # sum of Content-Lengths recorded this call
+    wire_cl_seen = False
+    pending_identity = False
+
+    def _flush(path: Path) -> None:
+        nonlocal recorded_disk
+        if stats is None:
+            return
+        size = path.stat().st_size if path.exists() else 0
+        if size < recorded_disk:
+            recorded_disk = 0  # partial discarded (restart-from-0)
+        delta = size - recorded_disk
+        if delta > 0:
+            stats.decoded_bytes += delta
+            recorded_disk = size
 
     attempt = 0
     while attempt < MAX_RETRIES:
@@ -381,6 +481,7 @@ def download_file(
                 )
                 resp.close()
                 part.unlink(missing_ok=True)
+                recorded_disk = 0  # prior partial discarded → refetched this call
                 continue
 
             if resume_at > 0 and resp.status_code == 206:
@@ -389,9 +490,7 @@ def download_file(
                 # still carries a content coding slices the WIRE — its
                 # offsets can numerically equal ours while living in a
                 # different byte-space; appending would corrupt the file.
-                if _is_compressed_response(resp.headers) or _edge_content_encoding(
-                    resp.headers
-                ):
+                if _is_compressed_response(resp.headers) or _edge_content_encoding(resp.headers):
                     logger.warning(
                         "206 for %s carries a content coding (wire-space offsets), "
                         "restarting from 0",
@@ -399,6 +498,7 @@ def download_file(
                     )
                     resp.close()
                     part.unlink(missing_ok=True)
+                    recorded_disk = 0  # prior partial discarded → refetched this call
                     continue
 
                 full_size = expected_size
@@ -421,6 +521,7 @@ def download_file(
                     )
                     resp.close()
                     part.unlink(missing_ok=True)
+                    recorded_disk = 0  # prior partial discarded → refetched this call
                     continue
 
             mode = "ab" if resume_at > 0 else "wb"
@@ -442,6 +543,17 @@ def download_file(
             # and state.json stay in one byte-space.
             server_has_lz4 = _is_compressed_response(resp.headers)
             edge_ce = _edge_content_encoding(resp.headers)
+
+            # Wire accounting: record BEFORE consuming the body so bandwidth
+            # spent on an attempt that dies mid-stream is still counted.
+            if stats is not None:
+                enc = "lz4" if server_has_lz4 else (edge_ce or "identity")
+                recorded = _record_wire(stats, resp, enc)
+                if recorded is not None:
+                    wire_cl += recorded
+                    wire_cl_seen = True
+                elif enc == "identity":
+                    pending_identity = True
 
             # Write path:
             # 1. SLZ4 protocol → stream-decode to identity
@@ -480,6 +592,20 @@ def download_file(
             os.replace(str(part), str(dest))
             logger.info("Downloaded %s (%.2f MB)", dest.name, dest.stat().st_size / 1e6)
 
+            if stats is not None:
+                _flush(dest)  # final file: attribute bytes not yet counted
+                this_call_decoded = stats.decoded_bytes - decoded_at_entry
+                if pending_identity:
+                    if wire_cl_seen:
+                        # Mixed Content-Length / no-Length responses: wire
+                        # bytes can't be attributed per body → report
+                        # unknown rather than invent a number.
+                        stats.wire_known = False
+                    else:
+                        # Pure identity body without Content-Length:
+                        # wire == decoded by definition.
+                        stats.wire_bytes += this_call_decoded
+
             if on_complete:
                 on_complete(dest)
 
@@ -487,6 +613,7 @@ def download_file(
 
         except (requests.RequestException, OSError, urllib3.exceptions.HTTPError) as e:
             attempt += 1
+            _flush(part)  # bytes that reached disk before dying count
             logger.warning(
                 "Attempt %d/%d failed for %s: %s",
                 attempt,
@@ -694,7 +821,11 @@ def download_range(
     requested slice so callers pay for part of a file, not the whole file.
 
     Slice downloads are always raw bytes — never LZ4-decompressed, since a
-    partial LZ4 frame cannot be decoded on its own.
+    partial LZ4 frame cannot be decoded on its own.  The request pins
+    ``Accept-Encoding: identity``: HTTP ranges address the *selected
+    representation*, so a compressed 206 would slice WIRE bytes while this
+    function writes them as if they were the requested identity slice.
+    A response that still carries a content coding is rejected outright.
 
     Args:
         url: HTTP/HTTPS URL to download from.
@@ -711,8 +842,9 @@ def download_range(
     Raises:
         ValueError: If ``start``/``end`` are negative or ``end < start``.
         DownloadError: If the server ignores Range (no ``206``), returns a
-            mismatched ``Content-Range``, truncates the slice, or fails
-            permanently (after retries). Checksum mismatches also raise.
+            mismatched ``Content-Range``, serves a content-coded slice,
+            truncates the slice, or fails permanently (after retries).
+            Checksum mismatches also raise.
     """
     if start < 0 or end < 0:
         raise ValueError(f"Range offsets must be >= 0 (got start={start}, end={end})")
@@ -733,7 +865,9 @@ def download_range(
             return dest
 
     part = _part_path(dest)
-    headers = {"Range": f"bytes={start}-{end}"}
+    # Identity pin: ranges address the encoded representation, so we must
+    # only ever accept an identity body for a byte-space slice.
+    headers = {"Range": f"bytes={start}-{end}", "Accept-Encoding": "identity"}
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -745,6 +879,16 @@ def download_range(
                     f"Server does not honor Range for {dest.name} "
                     f"(got {resp.status_code}, expected 206); "
                     "refusing full download to save data"
+                )
+
+            # Byte-space guard: a 206 with a content coding (or the SLZ4
+            # content type) serves WIRE-space offsets — appending it to an
+            # identity slice would corrupt the file.
+            if _is_compressed_response(resp.headers) or _edge_content_encoding(resp.headers):
+                resp.close()
+                raise DownloadError(
+                    f"206 for {dest.name} carries a content coding "
+                    "(wire-space offsets) — refusing identity slice"
                 )
 
             cr = resp.headers.get("Content-Range", "")

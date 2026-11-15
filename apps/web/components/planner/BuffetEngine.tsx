@@ -195,15 +195,17 @@ export function BuffetEngine() {
 
   if (loading && !board) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-sm text-zinc-500 font-mono animate-pulse">loading board...</div>
+      <div className="min-h-screen bg-card flex items-center justify-center">
+        <div className="text-sm text-muted-foreground font-mono animate-pulse">
+          loading board...
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
+      <div className="min-h-screen bg-card flex flex-col items-center justify-center gap-3">
         <p className="text-sm text-destructive font-mono">{error}</p>
         <Button size="sm" variant="outline" onClick={refresh}>
           Retry
@@ -215,7 +217,7 @@ export function BuffetEngine() {
   return (
     <div
       ref={boardRef}
-      className="relative h-screen flex flex-col overflow-hidden select-none bg-zinc-950"
+      className="relative h-screen flex flex-col overflow-hidden select-none bg-card"
       onMouseMove={handleLight}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
@@ -242,8 +244,8 @@ export function BuffetEngine() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-light tracking-tight text-zinc-200">Planner</h1>
-            <p className="text-[11px] font-mono text-zinc-600">
+            <h1 className="text-base font-light tracking-tight text-foreground">Planner</h1>
+            <p className="text-[11px] font-mono text-muted-foreground">
               {board?.cards.length ?? 0} cards · {uniqueTags.length} tags
             </p>
           </div>
@@ -255,7 +257,7 @@ export function BuffetEngine() {
               disabled={!canUndo}
               title="Undo (Ctrl+Z)"
               aria-label="Undo"
-              className="text-zinc-500 hover:text-zinc-300"
+              className="text-muted-foreground hover:text-foreground"
             >
               <svg
                 className="h-4 w-4"
@@ -277,7 +279,7 @@ export function BuffetEngine() {
               onClick={refresh}
               disabled={loading}
               aria-label="Refresh"
-              className="text-zinc-500 hover:text-zinc-300"
+              className="text-muted-foreground hover:text-foreground"
             >
               <Spinner className="h-4 w-4" />
             </Button>
@@ -288,7 +290,7 @@ export function BuffetEngine() {
               disabled={syncing}
               title="Sync notes to board"
               aria-label="Sync notes"
-              className="text-zinc-500 hover:text-zinc-300"
+              className="text-muted-foreground hover:text-foreground"
             >
               {syncing ? (
                 <Spinner className="h-4 w-4" />
@@ -312,8 +314,8 @@ export function BuffetEngine() {
               onClick={() => setShowCreate(true)}
               className={cn(
                 'px-3 py-1.5 rounded-md text-sm font-medium',
-                'bg-zinc-800 text-zinc-300 border border-zinc-700',
-                'hover:bg-zinc-700 hover:text-zinc-100 hover:border-zinc-600',
+                'bg-muted text-foreground border border-border',
+                'hover:bg-secondary hover:text-foreground hover:border-border',
                 'active:scale-[0.97] transition-all duration-150',
                 'shadow-[0_1px_2px_rgb(var(--elevation-rgb)/0.3)]',
               )}
@@ -327,14 +329,14 @@ export function BuffetEngine() {
         {/* Toolbar row */}
         <div className="flex items-center gap-3 mt-3">
           <div className="relative flex-1 max-w-xs">
-            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-600" />
+            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search..."
               aria-label="Search cards"
-              className="w-full rounded-md bg-zinc-900 border border-zinc-800 pl-8 pr-3 py-1.5 text-sm text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600 transition-colors"
+              className="w-full rounded-md bg-card border border-border pl-8 pr-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-border transition-colors"
             />
           </div>
           {uniqueTags.length > 0 && (
@@ -346,8 +348,8 @@ export function BuffetEngine() {
                   className={cn(
                     'px-2 py-0.5 rounded text-[11px] font-mono transition-all duration-150',
                     filterTag === tag
-                      ? 'bg-zinc-800 text-zinc-300 border border-zinc-700'
-                      : 'text-zinc-600 hover:text-zinc-400 border border-transparent',
+                      ? 'bg-muted text-foreground border border-border'
+                      : 'text-muted-foreground hover:text-muted-foreground border border-transparent',
                   )}
                 >
                   {tag}
@@ -378,7 +380,7 @@ export function BuffetEngine() {
 
       {/* Status bar */}
       <footer
-        className="relative shrink-0 px-5 py-1.5 flex items-center justify-between text-[10px] font-mono text-zinc-700"
+        className="relative shrink-0 px-5 py-1.5 flex items-center justify-between text-[10px] font-mono text-muted-foreground"
         style={{ borderTop: '1px solid rgb(var(--sheen-rgb) / 0.04)' }}
       >
         <div className="flex items-center gap-4">
@@ -388,8 +390,10 @@ export function BuffetEngine() {
           <span>ctrl+z undo</span>
         </div>
         <div className="flex items-center gap-4">
-          {filterTag && <span className="text-zinc-500">filter: {filterTag}</span>}
-          {searchQuery && <span className="text-zinc-500">search: &quot;{searchQuery}&quot;</span>}
+          {filterTag && <span className="text-muted-foreground">filter: {filterTag}</span>}
+          {searchQuery && (
+            <span className="text-muted-foreground">search: &quot;{searchQuery}&quot;</span>
+          )}
           <span>
             {filteredCards.length} / {board?.cards.length ?? 0}
           </span>
@@ -429,8 +433,8 @@ function CreateCardDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
-        <h2 className="text-base font-medium mb-4 text-zinc-200">New Card</h2>
+      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
+        <h2 className="text-base font-medium mb-4 text-foreground">New Card</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
@@ -438,20 +442,20 @@ function CreateCardDialog({
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title"
             autoFocus
-            className="w-full rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+            className="w-full rounded-md bg-muted border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description"
             rows={3}
-            className="w-full rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+            className="w-full rounded-md bg-muted border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <div className="grid grid-cols-2 gap-4">
             <select
               value={column}
               onChange={(e) => setColumn(e.target.value)}
-              className="rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
+              className="rounded-md bg-muted border border-border px-3 py-2 text-sm text-foreground"
             >
               <option value="todo">To Do</option>
               <option value="wip">In Progress</option>
@@ -461,7 +465,7 @@ function CreateCardDialog({
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              className="rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
+              className="rounded-md bg-muted border border-border px-3 py-2 text-sm text-foreground"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -473,14 +477,14 @@ function CreateCardDialog({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!title.trim()}
-              className="px-3 py-1.5 rounded-md text-sm bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+              className="px-3 py-1.5 rounded-md text-sm bg-muted text-foreground border border-border hover:bg-secondary disabled:opacity-40 transition-colors"
             >
               Create
             </button>

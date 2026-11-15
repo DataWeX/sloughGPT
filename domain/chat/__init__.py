@@ -8,6 +8,8 @@ Public API:
     ChatManager, get_chat_manager, reset_chat_manager
 """
 
+from __future__ import annotations
+
 from domain.chat._internal.domain import (
     ChatDomain,
     ChatRequest,

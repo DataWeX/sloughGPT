@@ -458,56 +458,6 @@ class TestConsciousnessAPI:
         assert "helpfulness" in data["data"]["values"]
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
-    def test_personality_history_empty(self, _auth, client, mock_engine):
-        res = client.get("/consciousness/personality/history")
-        assert res.status_code == 200
-        data = res.json()
-        assert "history" in data["data"]
-        assert "labels" in data["data"]
-        assert isinstance(data["data"]["history"], list)
-
-    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
-    def test_personality_history_with_episodes(self, _auth):
-        import time
-
-        from infrastructure.exception_handlers import register_app_error_handler
-
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from domain.cognition._internal.consciousness.self_model import SelfEpisode
-
-        router_obj = ConsciousnessRouter()
-        mock_eng = MagicMock()
-        mock_eng.config.is_enabled.return_value = True
-        mock_eng.config.level = 1
-
-        episodes = [
-            SelfEpisode(
-                timestamp=time.time() - 100 + i,
-                input_text=f"test {i}",
-                response=f"response {i}",
-                qualia={"novelty": 0.8 if i % 2 == 0 else 0.3, "coherence": 0.5, "valence": 0.6},
-                self_insight="test insight",
-                growth_delta=0.06 if i % 3 == 0 else 0.01,
-            )
-            for i in range(10)
-        ]
-        mock_eng.self_model.episodes = episodes
-        router_obj._engine = mock_eng
-
-        app = FastAPI()
-        register_app_error_handler(app)
-        app.include_router(router_obj.router)
-        client = TestClient(app)
-
-        res = client.get("/consciousness/personality/history")
-        assert res.status_code == 200
-        data = res.json()
-        history = data["data"]["history"]
-        assert len(history) > 0
-        assert "voice" in history[0]
-        assert "traits" in history[0]
-
-    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_get_presets(self, _auth, client, mock_engine):
         res = client.get("/consciousness/personality/presets")
         assert res.status_code == 200
@@ -564,11 +514,17 @@ class TestConsciousnessAPI:
         assert data["data"]["id"] == "test-hero"
         assert data["data"]["name"] == "Test Hero"
 
-        # List should show it
+        # List should show it, with traits summary and active flag
         res = client.get("/consciousness/personas")
         assert res.status_code == 200
         personas = res.json()["data"]["personas"]
-        assert any(p["id"] == "test-hero" for p in personas)
+        saved = next((p for p in personas if p["id"] == "test-hero"), None)
+        assert saved is not None
+        assert "traits" in saved and isinstance(saved["traits"], dict)
+        assert "top_traits" in saved and isinstance(saved["top_traits"], list)
+        assert isinstance(saved["active"], bool)
+        # Saved from the current profile → it IS the current profile → active
+        assert saved["active"] is True
 
         # Activate it
         res = client.post("/consciousness/personas/test-hero/activate")

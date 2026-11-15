@@ -1,15 +1,29 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger, Badge, Button, Card, CardContent, CardDescription,
-  CardHeader, CardTitle, Skeleton, Slider,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+  Slider,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 
@@ -25,10 +39,14 @@ const TRAIT_LABELS: Record<string, string> = {
 }
 
 export default function ConsciousnessPersonalityPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
-  const [personality, setPersonality] = useState<{ name: string; description: string; traits: Record<string, number> } | null>(null)
+  const [personality, setPersonality] = useState<{
+    name: string
+    description: string
+    traits: Record<string, number>
+  } | null>(null)
   const [editTraits, setEditTraits] = useState<Record<string, number>>({})
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -36,7 +54,9 @@ export default function ConsciousnessPersonalityPage() {
   const [presets, setPresets] = useState<Record<string, unknown>[]>([])
   const [applyingPreset, setApplyingPreset] = useState<string | null>(null)
   const [conflicts, setConflicts] = useState<string[]>([])
-  const [history, setHistory] = useState<{ name: string; description: string; traits: Record<string, number> }[]>([])
+  const [history, setHistory] = useState<
+    { name: string; description: string; traits: Record<string, number> }[]
+  >([])
 
   const fetchAll = useCallback(async () => {
     try {
@@ -67,7 +87,9 @@ export default function ConsciousnessPersonalityPage() {
     }
   }, [addToast])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   const handleSave = async () => {
     setSaving(true)
@@ -111,14 +133,14 @@ export default function ConsciousnessPersonalityPage() {
   }
 
   const handleTraitChange = (trait: string, value: number) => {
-    setEditTraits(prev => ({ ...prev, [trait]: value }))
+    setEditTraits((prev) => ({ ...prev, [trait]: value }))
   }
 
   if (loading) {
     return (
       <PageContainer title={t('consciousness_personality.page_title')}>
         <div className="space-y-4">
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3].map((i) => (
             <Card key={i}>
               <CardHeader>
                 <Skeleton className="h-5 w-40" />
@@ -145,12 +167,12 @@ export default function ConsciousnessPersonalityPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">{t('consciousness_personality.overview_title')}</CardTitle>
+                <CardTitle className="text-base">
+                  {t('consciousness_personality.overview_title')}
+                </CardTitle>
                 <CardDescription>{t('consciousness_personality.overview_desc')}</CardDescription>
               </div>
-              {personality?.name && (
-                <Badge variant="outline">{personality.name}</Badge>
-              )}
+              {personality?.name && <Badge variant="outline">{personality.name}</Badge>}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -158,11 +180,13 @@ export default function ConsciousnessPersonalityPage() {
               <p className="text-sm text-muted-foreground">{personality.description}</p>
             )}
             <div className="space-y-3">
-              {traitKeys.map(trait => (
+              {traitKeys.map((trait) => (
                 <div key={trait} className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">{TRAIT_LABELS[trait] ?? trait}</label>
-                    <span className="text-xs text-muted-foreground">{(traits[trait] * 100).toFixed(0)}%</span>
+                    <span className="text-xs text-muted-foreground">
+                      {(traits[trait] * 100).toFixed(0)}%
+                    </span>
                   </div>
                   {isEditing ? (
                     <Slider
@@ -189,7 +213,14 @@ export default function ConsciousnessPersonalityPage() {
                   <Button size="sm" onClick={handleSave} disabled={saving}>
                     {saving ? 'Saving...' : t('common.save')}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => { setIsEditing(false); setEditTraits(personality?.traits ?? {}) }}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditing(false)
+                      setEditTraits(personality?.traits ?? {})
+                    }}
+                  >
                     {t('consciousness_settings.cancel')}
                   </Button>
                 </>
@@ -205,7 +236,9 @@ export default function ConsciousnessPersonalityPage() {
         {presets.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('consciousness_personality.presets_title')}</CardTitle>
+              <CardTitle className="text-base">
+                {t('consciousness_personality.presets_title')}
+              </CardTitle>
               <CardDescription>{t('consciousness_personality.presets_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
@@ -220,7 +253,9 @@ export default function ConsciousnessPersonalityPage() {
                   >
                     <span className="text-sm font-medium">{preset.name}</span>
                     {preset.description && (
-                      <span className="text-xs text-muted-foreground mt-1 line-clamp-2">{preset.description}</span>
+                      <span className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {preset.description}
+                      </span>
                     )}
                   </Button>
                 ))}
@@ -232,14 +267,18 @@ export default function ConsciousnessPersonalityPage() {
         {conflicts.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('consciousness_personality.conflicts_title')}</CardTitle>
+              <CardTitle className="text-base">
+                {t('consciousness_personality.conflicts_title')}
+              </CardTitle>
               <CardDescription>{t('consciousness_personality.conflicts_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {conflicts.map((conflict, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
-                    <Badge variant="destructive" className="shrink-0">!</Badge>
+                    <Badge variant="destructive" className="shrink-0">
+                      !
+                    </Badge>
                     <span>{conflict}</span>
                   </div>
                 ))}
@@ -251,7 +290,9 @@ export default function ConsciousnessPersonalityPage() {
         {history.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('consciousness_personality.history_title')}</CardTitle>
+              <CardTitle className="text-base">
+                {t('consciousness_personality.history_title')}
+              </CardTitle>
               <CardDescription>{t('consciousness_personality.history_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
@@ -268,7 +309,7 @@ export default function ConsciousnessPersonalityPage() {
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(entry.traits).map(([k, v]) => (
                         <span key={k} className="text-[10px] text-muted-foreground">
-                          {TRAIT_LABELS[k] ?? k}: {(v as number * 100).toFixed(0)}%
+                          {TRAIT_LABELS[k] ?? k}: {((v as number) * 100).toFixed(0)}%
                         </span>
                       ))}
                     </div>
@@ -281,7 +322,9 @@ export default function ConsciousnessPersonalityPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{t('consciousness_personality.actions_title')}</CardTitle>
+            <CardTitle className="text-base">
+              {t('consciousness_personality.actions_title')}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -296,12 +339,19 @@ export default function ConsciousnessPersonalityPage() {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>{t('consciousness_personality.reset_confirm_title')}</AlertDialogTitle>
-                    <AlertDialogDescription>{t('consciousness_personality.reset_confirm_desc')}</AlertDialogDescription>
+                    <AlertDialogTitle>
+                      {t('consciousness_personality.reset_confirm_title')}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('consciousness_personality.reset_confirm_desc')}
+                    </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>{t('consciousness_settings.cancel')}</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleReset} className="bg-destructive text-destructive-foreground">
+                    <AlertDialogAction
+                      onClick={handleReset}
+                      className="bg-destructive text-destructive-foreground"
+                    >
                       {t('consciousness_personality.reset_defaults')}
                     </AlertDialogAction>
                   </AlertDialogFooter>

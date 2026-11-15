@@ -1,6 +1,7 @@
 /*
  * Synced from apps/web/app/globals.css — keep in lockstep when the web shell changes.
- * Storybook loads Google Fonts here; Next.js uses next/font in apps/web.
+ * Storybook loads Google Fonts here; apps/web preloads self-hosted woff2 from
+ * `/fonts/` in `index.html` (no next/font since the Next removal).
  * Local fonts with fallbacks (network issues → system fonts)
  */
 

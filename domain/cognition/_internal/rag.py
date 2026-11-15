@@ -65,48 +65,128 @@ class BM25Indexer:
         self.doc_freq: dict[str, int] = Counter()
         self.num_docs: int = 0
         self.inverted_index: dict[str, list[tuple[int, int]]] = {}
+        # Running total of doc_lengths. Kept so append() can recompute
+        # avg_doc_length in O(1) instead of summing every length on each
+        # insert (which is O(corpus) and would defeat incremental indexing).
+        self._total_doc_length: int = 0
 
     def index(self, chunks: list[TextChunk]):
-        """Build BM25 index (idempotent: resets before rebuilding)."""
-        self.num_docs = len(chunks)
-        # Reset first — index() rebuilds from the full chunk list, so without
-        # this every call re-counts all docs (inflated frequencies, O(n^2)
-        # memory on bulk loads).
-        self.doc_lengths = []
-        self.doc_freq = Counter()
-        self.inverted_index = {}
-        logger.debug("BM25 indexing started: %d documents", self.num_docs)
+        """Build BM25 index (idempotent: resets before rebuilding).
+
+        Structures are built into locals and published at the end so a
+        concurrent score() never observes an emptied or half-built index
+        (which silently returned wrong or empty results mid-rebuild).
+        """
+        num_docs = len(chunks)
+        doc_lengths: list[int] = []
+        doc_freq: Counter = Counter()
+        inverted_index: dict[str, list[tuple[int, int]]] = {}
+        logger.debug("BM25 indexing started: %d documents", num_docs)
 
         for doc_id, chunk in enumerate(chunks):
             tokens = self._tokenize(chunk.content)
-            self.doc_lengths.append(len(tokens))
+            doc_lengths.append(len(tokens))
 
             # Count document frequencies
             for token in set(tokens):
-                self.doc_freq[token] += 1
+                doc_freq[token] += 1
 
             # Build inverted index
             for pos, token in enumerate(tokens):
-                if token not in self.inverted_index:
-                    self.inverted_index[token] = []
-                self.inverted_index[token].append((doc_id, pos))
+                if token not in inverted_index:
+                    inverted_index[token] = []
+                inverted_index[token].append((doc_id, pos))
 
-        self.avg_doc_length = sum(self.doc_lengths) / max(len(self.doc_lengths), 1)
-        logger.debug(
-            "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
-            self.avg_doc_length,
-            len(self.doc_freq),
-        )
+        avg_doc_length = sum(doc_lengths) / max(len(doc_lengths), 1)
 
         # Structural invariants — a term can occur in at most every chunk,
         # and there is exactly one length entry per chunk. If either breaks,
         # the index was double-counted: fail loud, never silently wrong.
-        assert len(self.doc_lengths) == len(chunks), (
-            f"BM25 index corrupt: {len(self.doc_lengths)} lengths for {len(chunks)} chunks"
+        assert len(doc_lengths) == num_docs, (
+            f"BM25 index corrupt: {len(doc_lengths)} lengths for {num_docs} chunks"
         )
-        assert all(df <= len(chunks) for df in self.doc_freq.values()), (
+        assert all(df <= num_docs for df in doc_freq.values()), (
             "BM25 index corrupt: term frequency exceeds chunk count"
         )
+
+        logger.debug(
+            "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
+            avg_doc_length,
+            len(doc_freq),
+        )
+
+        # Publish atomically (plain stores run without dropping the GIL, so
+        # readers see either the old complete index or the new one).
+        self.num_docs = num_docs
+        self.doc_lengths = doc_lengths
+        self.doc_freq = doc_freq
+        self.avg_doc_length = avg_doc_length
+        self.inverted_index = inverted_index
+        self._total_doc_length = sum(doc_lengths)
+
+    def append(self, chunks: list[TextChunk]):
+        """Incrementally add chunks to an existing index.
+
+        Same result as :meth:`index` over ``existing + chunks`` but costs
+        O(chunks) rather than O(corpus). Per-document ingestion used to call
+        ``index()`` every time, making a single insert O(corpus) and a whole
+        ingest O(corpus^2) — with the retriever living in a process-lifetime
+        singleton, insert latency grew without bound.
+
+        Publication order matters for concurrent readers: the length bookkeeping
+        is published *before* any new postings, so a concurrent ``score()`` can
+        never index a doc_id beyond ``num_docs`` (it would raise IndexError on
+        its scores array). At worst a reader momentarily misses the newest docs.
+
+        The ``index()`` path remains the repair mechanism for callers that
+        mutate the chunk list out of band.
+        """
+        if not chunks:
+            return
+
+        start_doc_id = self.num_docs
+
+        # Tokenize the batch first: pure work, nothing published yet.
+        token_lists = [self._tokenize(chunk.content) for chunk in chunks]
+        new_lengths = [len(tokens) for tokens in token_lists]
+
+        # 1. Lengths first — score() sizes its array from num_docs.
+        doc_lengths = self.doc_lengths
+        doc_lengths.extend(new_lengths)
+        num_docs = len(doc_lengths)
+        self.num_docs = num_docs
+        self._total_doc_length += sum(new_lengths)
+        self.avg_doc_length = self._total_doc_length / max(num_docs, 1)
+
+        # 2. Postings now that the array is guaranteed large enough.
+        inverted_index = self.inverted_index
+        doc_freq = self.doc_freq
+        for offset, tokens in enumerate(token_lists):
+            doc_id = start_doc_id + offset
+            for token in set(tokens):
+                doc_freq[token] += 1
+            for pos, token in enumerate(tokens):
+                inverted_index.setdefault(token, []).append((doc_id, pos))
+
+        # Same invariant as index(), but only over the terms this batch
+        # touched: an untouched term's df cannot grow, and num_docs only
+        # grows, so re-checking the whole vocabulary would be O(corpus).
+        assert len(doc_lengths) == num_docs, (
+            f"BM25 index corrupt: {len(doc_lengths)} lengths for {num_docs} chunks"
+        )
+        for token in {t for tokens in token_lists for t in tokens}:
+            assert doc_freq[token] <= num_docs, (
+                "BM25 index corrupt: term frequency exceeds chunk count"
+            )
+
+    def clear(self):
+        """Drop every index structure (full reset, e.g. on purge)."""
+        self.doc_lengths = []
+        self.avg_doc_length = 0.0
+        self.doc_freq = Counter()
+        self.num_docs = 0
+        self.inverted_index = {}
+        self._total_doc_length = 0
 
     def _tokenize(self, text: str) -> list[str]:
         """Tokenize text."""
@@ -116,33 +196,36 @@ class BM25Indexer:
 
     def score(self, query: str) -> list[tuple[int, float]]:
         """
-        Score all documents against query.
+        Score all documents against query (standard BM25).
         Returns list of (doc_id, score) tuples.
         """
         query_tokens = self._tokenize(query)
-        scores = np.zeros(self.num_docs)
+        scores = [0.0] * self.num_docs
 
         for token in query_tokens:
-            if token not in self.inverted_index:
+            postings = self.inverted_index.get(token)
+            if not postings:
                 continue
 
             # IDF for this term
             df = self.doc_freq.get(token, 0)
-            idf = np.log((self.num_docs - df + 0.5) / (df + 0.5) + 1)
+            idf = float(np.log((self.num_docs - df + 0.5) / (df + 0.5) + 1))
 
-            for doc_id, _ in self.inverted_index[token]:
+            # Term frequency counted ONCE per doc, O(postings). The old
+            # per-occurrence full rescan was O(postings^2): a common term
+            # in a large index burned minutes, tripped the chat pipeline's
+            # 15s RAG wait_for (TTFT +15s) and leaked a grinding thread.
+            for doc_id, tf in Counter(d for d, _ in postings).items():
                 doc_len = self.doc_lengths[doc_id]
-                tf = sum(1 for d, _ in self.inverted_index.get(token, []) if d == doc_id)
 
-                # BM25 formula
+                # BM25 formula, added once per doc (plain-float list — a
+                # numpy elementwise add costs ~10x per scalar update here)
                 numerator = tf * (self.k1 + 1)
                 denominator = tf + self.k1 * (1 - self.b + self.b * doc_len / self.avg_doc_length)
-                score = idf * numerator / denominator
-
-                scores[doc_id] += score
+                scores[doc_id] += idf * numerator / denominator
 
         # Return top docs with scores
-        results = [(i, float(scores[i])) for i in range(self.num_docs) if scores[i] > 0]
+        results = [(i, s) for i, s in enumerate(scores) if s > 0]
         results.sort(key=lambda x: -x[1])
         return results
 
@@ -177,12 +260,40 @@ class HybridRetriever:
         self._embedding_fn = embedding_fn or self._default_embedding
 
     def add_chunk(self, chunk: TextChunk):
-        """Add a chunk to the retriever."""
+        """Add a chunk to the retriever and index it incrementally.
+
+        Costs O(chunk) — previously the index was rebuilt from the full chunk
+        list on every insert, which is O(corpus) per document.
+        """
         self.chunks.append(chunk)
+        self.bm25.append([chunk])
+
+    def add_chunks(self, chunks: list[TextChunk]):
+        """Add several chunks with one incremental index update."""
+        if not chunks:
+            return
+        self.chunks.extend(chunks)
+        self.bm25.append(chunks)
 
     def build_index(self):
-        """Build retrieval indexes."""
+        """Rebuild retrieval indexes from scratch (idempotent).
+
+        ``add_chunk`` keeps the index current on its own, so this is only
+        needed after mutating ``self.chunks`` out of band, or as an explicit
+        repair. Bulk loaders may still call it once at the end of a load.
+        """
         self.bm25.index(self.chunks)
+
+    def clear(self):
+        """Drop every chunk, index and cached embedding.
+
+        Needed because the retriever lives behind a process-lifetime
+        singleton: without a reset, ``chunks`` only ever grew, so both memory
+        and per-insert latency grew with it for the life of the process.
+        """
+        self.chunks.clear()
+        self.embedding_cache.clear()
+        self.bm25.clear()
 
     def _get_embedding(self, text: str) -> np.ndarray:
         """Public entry point — delegates to the configured embedding function."""
@@ -196,9 +307,14 @@ class HybridRetriever:
         if text in self.embedding_cache:
             return self.embedding_cache[text]
 
-        # Simulated embedding (use real embeddings in production)
-        np.random.seed(hash(text) % (2**32))
-        embedding = np.random.randn(384)
+        # Simulated embedding (use real embeddings in production).
+        # Seed from a stable hash — NOT builtin hash(), which Python randomizes
+        # per-process via PYTHONHASHSEED. With hash() the same text got a
+        # different vector on every run, making dense scores (and therefore
+        # retrieval results and test_add_and_retrieve) nondeterministic. A
+        # local Generator also avoids mutating the global numpy RNG.
+        seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
+        embedding = np.random.default_rng(seed).standard_normal(384)
         embedding = embedding / np.linalg.norm(embedding)
 
         self.embedding_cache[text] = embedding
@@ -672,9 +788,12 @@ class ProductionRAG:
         ``chunk_size``/``overlap`` given: legacy TOKEN windows (the historic
         512/50 behaviour) — kept for callers and tests that count in tokens.
 
-        Set ``rebuild_index=False`` when bulk-loading many documents, then
-        call ``retriever.build_index()`` once at the end (rebuilding per
-        document is O(n^2)).
+        Indexing is incremental in both modes: each chunk is indexed as it is
+        created, in O(chunk) rather than O(corpus). ``rebuild_index`` is
+        retained for API compatibility and no longer triggers a per-document
+        rebuild — the bulk pattern (pass False, then call
+        ``retriever.build_index()`` once at the end) still works, since
+        ``build_index()`` is an idempotent full rebuild.
         """
         metadata = metadata or {"source": "user"}
         chunk_ids = []
@@ -714,9 +833,12 @@ class ProductionRAG:
                 self.retriever.add_chunk(chunk)
                 chunk_ids.append(chunk_id)
 
-        # Rebuild index (skipped for bulk loads — caller builds once)
-        if rebuild_index:
-            self.retriever.build_index()
+        # No rebuild needed: add_chunk() indexed each chunk incrementally, so
+        # the index is already current. Rebuilding here was the O(corpus) cost
+        # that made every single-document insert slower as the corpus grew.
+        # ``rebuild_index`` is retained for API compatibility; bulk loaders that
+        # pass False and call build_index() once at the end still work, since
+        # build_index() is an idempotent full rebuild.
 
         logger.debug(
             "Document ingestion complete: chunks=%d, total_tokens=%d",
@@ -739,11 +861,29 @@ class ProductionRAG:
         logger.debug("RAG query returned %d results", len(results))
 
         context = ""
+        parts: list[Any] = []
         if return_context:
             context_parts = []
             for r in results:
                 context_parts.append(r.chunk.content)
             context = "\n\n".join(context_parts)
+
+        # Context contract: structured parts carry score/rank/locator that
+        # the legacy "context" string above throws away. Producers rank,
+        # they never truncate — selection happens at the consumer seam.
+        from domain.inference._internal.context_contract import ContextPart
+
+        parts = [
+            ContextPart(
+                text=r.chunk.content,
+                source="rag",
+                layer="rag",
+                score=float(r.combined_score),
+                rank=int(r.rank),
+                locator=str(r.chunk.id),
+            )
+            for r in results
+        ]
 
         return {
             "question": question,
@@ -758,6 +898,7 @@ class ProductionRAG:
                 for r in results
             ],
             "context": context,
+            "parts": parts,
             "num_results": len(results),
         }
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
 import {
   Card,
@@ -19,7 +20,6 @@ import {
   type ProviderApiSettings,
   type ProviderApiSettingsUpdate,
 } from '@/lib/settings-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 interface SettingsExternalProviderCardProps {
@@ -27,7 +27,7 @@ interface SettingsExternalProviderCardProps {
 }
 
 export function SettingsExternalProviderCard({ version }: SettingsExternalProviderCardProps) {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(false)

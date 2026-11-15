@@ -1,13 +1,13 @@
 # Testing Guide
 
-This document covers the testing infrastructure for sloughGPT across both the Python backend and Next.js frontend.
+This document covers the testing infrastructure for sloughGPT across both the Python backend and Vite + React frontend.
 
 ## Test Overview
 
-| Stack | Framework | Location | Run Command |
-|-------|-----------|----------|-------------|
-| Frontend | Vitest + React Testing Library | `apps/web/` | `cd apps/web && npm test` |
-| Backend | pytest | `packages/core-py/tests/` | `cd packages/core-py && python -m pytest -n auto -x -q` |
+| Stack    | Framework                      | Location         | Run Command                                    |
+| -------- | ------------------------------ | ---------------- | ---------------------------------------------- |
+| Frontend | Vitest + React Testing Library | `apps/web/`      | `cd apps/web && npm test`                      |
+| Backend  | pytest                         | `tests/core-py/` | `python -m pytest tests/core-py -n auto -x -q` |
 
 ## Frontend Testing
 
@@ -55,40 +55,47 @@ import { createMockController } from '@/lib/__test-helper'
 
 const consciousnessController = createMockController()
 vi.mock('@/lib/consciousness-controller', () => ({
-  consciousnessController
+  consciousnessController,
 }))
 ```
 
 ### Common Mock Patterns
 
 **LocaleProvider:**
+
 ```tsx
 import { LocaleProvider } from '@/hooks/useLocale'
 
 render(
   <LocaleProvider>
     <Component />
-  </LocaleProvider>
+  </LocaleProvider>,
 )
 ```
 
-**Next.js Navigation:**
+**Router navigation (`@/vite/next-compat/navigation`):**
+
 ```typescript
-vi.mock('next/navigation', () => ({
+// App code imports the router from the Vite compat shim, never from `next/*`,
+// so this is the module a test has to mock.
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
   usePathname: () => '/current/path',
-  useSearchParams: () => new URLSearchParams()
+  useParams: () => ({}),
+  useSearchParams: () => new URLSearchParams(),
 }))
 ```
 
 **Toast Store:**
+
 ```typescript
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: () => ({ addToast: vi.fn() })
+  useToastStore: () => ({ addToast: vi.fn() }),
 }))
 ```
 
 **Strui Components:**
+
 ```typescript
 vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }) => <button {...props}>{children}</button>,
@@ -106,11 +113,7 @@ import { LocaleProvider } from '@/hooks/useLocale'
 import MyComponent from './page'
 
 const renderWithProviders = (ui: React.ReactElement) => {
-  return render(
-    <LocaleProvider>
-      {ui}
-    </LocaleProvider>
-  )
+  return render(<LocaleProvider>{ui}</LocaleProvider>)
 }
 
 describe('MyComponent', () => {
@@ -135,16 +138,34 @@ describe('MyComponent', () => {
 - **pytest** with parallel execution (`-n auto`)
 - **pytest-asyncio** for async tests
 
+### Canonical test roots
+
+Four test roots are canonical on `main` (do not invent others):
+
+| Root                      | Contents                                                                   |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `tests/`                  | flat root — `tests/server/`, `tests/contract/`, and other root-level tests |
+| `packages/core-py/tests/` | core-py unit tests (in-tree `pytest.ini` applies there)                    |
+| `apps/api/server/tests/`  | API-server tests                                                           |
+| `apps/cli/tests`          | CLI tests                                                                  |
+
+- Root `pytest.ini` declares the first three: `testpaths = packages/core-py/tests tests apps/cli/tests`;
+  CI jobs run pytest from their own working directory.
+- Every gate command and every piece of test evidence must **name the tree it was
+  measured in** (e.g. `tests/server/…` is the flat root), so baselines are never
+  compared across layouts.
+- The four-root consolidation commit (`dcb2a5eaf`) is 392 commits behind `main`
+  and sits on 76 off-main refs (both measured 2026-10-12) — it is **not
+  landing**; `main`'s layout is canonical.
+
 ### Running Tests
 
 ```bash
-cd packages/core-py
-
 # Run all tests (parallel)
 python -m pytest -n auto -x -q
 
 # Run specific test file
-python -m pytest tests/test_training_infrastructure.py
+python -m pytest tests/core-py/test_training_infrastructure.py
 
 # Run with coverage
 python -m pytest --cov=domain tests/
@@ -155,10 +176,10 @@ python -m pytest -v tests/
 
 ### Test File Convention
 
-Tests live in `packages/core-py/tests/`:
+Tests live in `tests/core-py/`:
 
 ```
-packages/core-py/tests/
+tests/core-py/
 ├── test_training_infrastructure.py
 ├── test_training_export_presets.py
 ├── test_inference.py
@@ -169,16 +190,16 @@ packages/core-py/tests/
 
 ### Current Status
 
-| Component | Coverage | Tests |
-|-----------|----------|-------|
-| Consciousness pages | 100% | 26 page tests |
-| Consciousness components | 100% | 5 component tests |
-| Consciousness hooks | 100% | 6 hook tests |
-| Consciousness lib | 100% | 3 lib tests |
-| Navigation | 100% | 8 tests |
-| Hooks/Lib | 95%+ | 1793 tests |
-| Features/Chat | 95%+ | 1467 tests |
-| Tools pages | 100% | 7 page tests |
+| Component                | Coverage | Tests             |
+| ------------------------ | -------- | ----------------- |
+| Consciousness pages      | 100%     | 26 page tests     |
+| Consciousness components | 100%     | 5 component tests |
+| Consciousness hooks      | 100%     | 6 hook tests      |
+| Consciousness lib        | 100%     | 3 lib tests       |
+| Navigation               | 100%     | 8 tests           |
+| Hooks/Lib                | 95%+     | 1793 tests        |
+| Features/Chat            | 95%+     | 1467 tests        |
+| Tools pages              | 100%     | 7 page tests      |
 
 ### Achieving High Coverage
 
@@ -190,6 +211,7 @@ packages/core-py/tests/
 ## CI/CD Integration
 
 Tests run automatically on:
+
 - Pull request creation
 - Push to main branch
 - Manual trigger via GitHub Actions
@@ -225,15 +247,11 @@ import { YourComponent } from './page'
 
 // Mock external dependencies
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() })
+  useRouter: () => ({ push: vi.fn() }),
 }))
 
 const renderWithProviders = (ui: React.ReactElement) => {
-  return render(
-    <LocaleProvider>
-      {ui}
-    </LocaleProvider>
-  )
+  return render(<LocaleProvider>{ui}</LocaleProvider>)
 }
 
 describe('YourComponent', () => {
@@ -267,12 +285,12 @@ There is nothing else to name: module, URLs, and CLI all say Mole
   (readers are hermetic in tests, never raise: missing sensors degrade to an
   explicit finding, not a crash); API health/errors (`/health*`, `/errors/*`);
   `/health/stream` cadence + payload size (flags >256 KB frames and >8s
-  stalls); the UX journey sweep report (`domain/journeys`); the newest
+  stalls); the UX journey sweep report (`journeys`); the newest
   full-suite gate artifact vs the drift baseline (`~/.cache/slog-gates`;
   env `SLO_GATES_DIR` / `SLO_GATES_DRIFT_MAX` / `SLO_GATES_FULL_PASSED`);
   and stored benchmark records vs thresholds — the verdict comes from
-  `scripts/benchmark_results.py` itself (`data/benchmark_results`;
-  env `SLO_BENCH_RESULTS_DIR`).
+  `scripts/benchmark_results.py` itself (`~/.local/share/sloughgpt/
+benchmark_results`; env `SLO_BENCH_DATA_DIR`).
 - **Sibling, standalone:** `scripts/site_doctor_probe.py` — the read-only
   **route/stream triage** probe (Site Doctor). It walks the router manifest
   (~246 routes, no write verbs) and judges each streaming route on its
@@ -309,7 +327,7 @@ There is nothing else to name: module, URLs, and CLI all say Mole
 ### Always-on monitoring: cadence + journal
 
 Mole runs the same read-only probes on a cadence: every tick journaled, an
-event only when the findings' *identity set* changes — identity = source +
+event only when the findings' _identity set_ changes — identity = source +
 check + severity + component. Payload counters (p95, health score, frame
 sizes) jitter every sweep and are hashed away, so the same finding never
 alerts twice. No AI anywhere; suggest-only — Mole never applies anything.
@@ -336,10 +354,10 @@ watch-error tick, `130` on Ctrl-C.
 
 ### App surface
 
-| Endpoint | Data | Notes |
-|----------|------|-------|
-| `GET /mole/report` | `{report, path, age_s}` | reads `$SLO_DOCTOR_REPORT`; missing/corrupt file → `report: null` + `age_s: null` (empty state, **not** an error); `age_s` = seconds since `report.ts` |
-| `POST /mole/run` | `{report}` | **light run**: `system` + `gates` + `benchmarks` + `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
+| Endpoint           | Data                    | Notes                                                                                                                                                                                                            |
+| ------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /mole/report` | `{report, path, age_s}` | reads `$SLO_DOCTOR_REPORT`; missing/corrupt file → `report: null` + `age_s: null` (empty state, **not** an error); `age_s` = seconds since `report.ts`                                                           |
+| `POST /mole/run`   | `{report}`              | **light run**: `system` + `gates` + `benchmarks` + `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
 
 The `/mole` page (`apps/web/app/(app)/mole/page.tsx`) fetches the report
 on mount and after every run, then shows the overall severity pill + severity
@@ -349,8 +367,7 @@ behind a disclosure.
 
 ```bash
 # Router + probe/report + Mole monitoring tests
-.venv/bin/python -m pytest tests/server/test_mole_router.py packages/core-py/tests/test_mole_probes.py packages/core-py/tests/test_mole.py -q
+.venv/bin/python -m pytest tests/server/test_mole_router.py tests/core-py/test_mole_probes.py tests/core-py/test_mole.py -q
 # Page + component tests (worktree: add --config /tmp/opencode/vitest-worktree.config.ts)
 node_modules/.bin/vitest run "app/(app)/mole/page.test.tsx" components/mole/
 ```
-

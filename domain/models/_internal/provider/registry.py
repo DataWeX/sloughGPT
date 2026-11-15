@@ -13,6 +13,15 @@ _processors: dict[str, Any] = {}
 
 def register_provider(name: str, provider) -> None:
     _providers[name] = provider
+    # A provider registration is a model load/swap boundary: invalidate every
+    # cached response so a stale reply from the previous model can never be
+    # replayed under the new one (coherence by generation bump).
+    try:
+        from domain.inference._internal.response_cache import bump_cache_generation
+
+        bump_cache_generation()
+    except Exception as e:  # pragma: no cover - cache must never block a load
+        logger.debug("response-cache bump skipped: %s", e)
 
 
 def get_provider(name: str):
@@ -60,5 +69,7 @@ async def apply_processors(messages: list, processors: list) -> list:
         try:
             messages = await proc.process(messages)
         except Exception as e:
-            logger.warning("Processor %s failed: %s", type(proc).__name__, e, extra={"tag": "MODEL"})
+            logger.warning(
+                "Processor %s failed: %s", type(proc).__name__, e, extra={"tag": "MODEL"}
+            )
     return messages

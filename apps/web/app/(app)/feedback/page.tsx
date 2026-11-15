@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -28,7 +29,6 @@ import { FeedbackFormCard } from '@/components/feedback/FeedbackFormCard'
 import { ConversationDetailCard } from '@/components/feedback/ConversationDetailCard'
 import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { formatLocaleDate } from '@/lib/time-format'
 
@@ -39,7 +39,7 @@ export default function FeedbackPage() {
   const [tab, setTab] = useState<Tab>('stats')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const [stats, setStats] = useState<FeedbackStats | null>(null)
   const [workflow, setWorkflow] = useState<WorkflowStatus | null>(null)

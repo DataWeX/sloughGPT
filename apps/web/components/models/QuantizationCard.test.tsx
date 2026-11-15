@@ -12,9 +12,19 @@ vi.mock('@/lib/model-controller', () => ({
   ...{ QuantizationResult: {} as new () => QuantizationResult },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => vi.fn()),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const state = { addToast: vi.fn(), dismissToast: vi.fn(), clearToasts: vi.fn(), toasts: [] }
+  const mod = {
+    useToastStore: vi.fn(() => state.addToast),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => state
+  }
+  return mod
+})
 
 const mockResult: QuantizationResult = {
   quantized: true,
@@ -32,9 +42,9 @@ const mockResultWithLayers: QuantizationResult = {
   ...mockResult,
   per_tensor: {
     'blocks.0.q_proj.weight': { scale: 0.01, zero_point: 0, cosine_sim: 0.9995 },
-    'blocks.0.k_proj.weight': { scale: 0.02, zero_point: 0, cosine_sim: 0.9980 },
-    'blocks.0.fc1.weight': { scale: 0.03, zero_point: 0, cosine_sim: 0.9920 },
-    'lm_head.weight': { scale: 0.04, zero_point: 0, cosine_sim: 0.9970 },
+    'blocks.0.k_proj.weight': { scale: 0.02, zero_point: 0, cosine_sim: 0.998 },
+    'blocks.0.fc1.weight': { scale: 0.03, zero_point: 0, cosine_sim: 0.992 },
+    'lm_head.weight': { scale: 0.04, zero_point: 0, cosine_sim: 0.997 },
   },
 }
 
@@ -127,6 +137,10 @@ describe('QuantizationCard', () => {
   it('shows error toast on failure', async () => {
     const addToast = vi.fn()
     vi.mocked(useToastStore).mockReturnValue(addToast)
+    // notify() reaches the store via getState — serve the same spy there.
+    vi.mocked(useToastStore).getState = (() => ({
+      addToast,
+    })) as unknown as typeof useToastStore.getState
     const mockQuantize = vi.mocked(modelController.quantize)
     mockQuantize.mockRejectedValue(new Error('No model loaded'))
 

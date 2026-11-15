@@ -1,9 +1,9 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback } from 'react'
 import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { consciousnessController } from '@/lib/consciousness-controller'
 
@@ -31,7 +31,7 @@ interface ConsciousnessOnboardingProps {
 }
 
 export function ConsciousnessOnboarding({ onComplete, onDismiss }: ConsciousnessOnboardingProps) {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [step, setStep] = useState(1)
   const [selectedLevel, setSelectedLevel] = useState(2)
@@ -68,7 +68,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
     }
 
     if (step < TOTAL_STEPS) {
-      setStep(s => s + 1)
+      setStep((s) => s + 1)
     }
   }, [step, selectedLevel, selectedPreset, addToast, t])
 
@@ -130,9 +130,11 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
           {step === 2 && (
             <div className="space-y-3">
               <CardTitle className="text-sm">{t('consciousness_onboarding.step2_title')}</CardTitle>
-              <p className="text-xs text-muted-foreground">{t('consciousness_onboarding.step2_desc')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('consciousness_onboarding.step2_desc')}
+              </p>
               <div className="grid gap-2">
-                {LEVEL_OPTIONS.map(opt => (
+                {LEVEL_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
@@ -146,7 +148,9 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium">{opt.label}</span>
                       {selectedLevel === opt.value && (
-                        <span className="text-[9px] text-primary">{t('consciousness_onboarding.selected')}</span>
+                        <span className="text-[9px] text-primary">
+                          {t('consciousness_onboarding.selected')}
+                        </span>
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-0.5">{opt.description}</p>
@@ -159,9 +163,11 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
           {step === 3 && (
             <div className="space-y-3">
               <CardTitle className="text-sm">{t('consciousness_onboarding.step3_title')}</CardTitle>
-              <p className="text-xs text-muted-foreground">{t('consciousness_onboarding.step3_desc')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('consciousness_onboarding.step3_desc')}
+              </p>
               <div className="grid grid-cols-2 gap-2">
-                {PERSONALITY_PRESETS.map(preset => (
+                {PERSONALITY_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
                     type="button"
@@ -189,10 +195,14 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
           {step === 4 && (
             <div className="space-y-3">
               <CardTitle className="text-sm">{t('consciousness_onboarding.step4_title')}</CardTitle>
-              <p className="text-xs text-muted-foreground">{t('consciousness_onboarding.step4_desc')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('consciousness_onboarding.step4_desc')}
+              </p>
               <div className="rounded-lg border border-border/40 p-3 text-center">
                 {seedDone ? (
-                  <p className="text-xs text-success font-medium">{t('consciousness_onboarding.step4_done')}</p>
+                  <p className="text-xs text-success font-medium">
+                    {t('consciousness_onboarding.step4_done')}
+                  </p>
                 ) : (
                   <Button
                     variant="secondary"
@@ -201,13 +211,15 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
                     disabled={seeding}
                     className="text-xs"
                   >
-                    {seeding ? t('consciousness_onboarding.step4_seeding') : t('consciousness_onboarding.step4_seed')}
+                    {seeding
+                      ? t('consciousness_onboarding.step4_seeding')
+                      : t('consciousness_onboarding.step4_seed')}
                   </Button>
                 )}
               </div>
               <button
                 type="button"
-                onClick={() => setStep(s => s + 1)}
+                onClick={() => setStep((s) => s + 1)}
                 className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 {t('consciousness_onboarding.step4_skip')}
@@ -218,10 +230,18 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
           {step === 5 && (
             <div className="space-y-3 text-center">
               <CardTitle className="text-sm">{t('consciousness_onboarding.step5_title')}</CardTitle>
-              <p className="text-xs text-muted-foreground">{t('consciousness_onboarding.step5_desc')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('consciousness_onboarding.step5_desc')}
+              </p>
               <div className="space-y-1 text-[10px] text-muted-foreground/80">
-                <p>{t('consciousness_onboarding.step5_level')}: {LEVEL_OPTIONS[selectedLevel].label}</p>
-                {selectedPreset && <p>{t('consciousness_onboarding.step5_preset')}: {selectedPreset}</p>}
+                <p>
+                  {t('consciousness_onboarding.step5_level')}: {LEVEL_OPTIONS[selectedLevel].label}
+                </p>
+                {selectedPreset && (
+                  <p>
+                    {t('consciousness_onboarding.step5_preset')}: {selectedPreset}
+                  </p>
+                )}
                 {seedDone && <p>{t('consciousness_onboarding.step5_seeded')}: 10</p>}
               </div>
             </div>
@@ -232,7 +252,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setStep(s => s - 1)}
+                onClick={() => setStep((s) => s - 1)}
                 className="text-xs h-7"
               >
                 {t('consciousness_onboarding.back')}
@@ -241,20 +261,11 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
               <div />
             )}
             {step < TOTAL_STEPS ? (
-              <Button
-                size="sm"
-                onClick={handleNext}
-                disabled={submitting}
-                className="text-xs h-7"
-              >
+              <Button size="sm" onClick={handleNext} disabled={submitting} className="text-xs h-7">
                 {submitting ? '...' : t('consciousness_onboarding.next')}
               </Button>
             ) : (
-              <Button
-                size="sm"
-                onClick={handleComplete}
-                className="text-xs h-7"
-              >
+              <Button size="sm" onClick={handleComplete} className="text-xs h-7">
                 {t('consciousness_onboarding.finish')}
               </Button>
             )}

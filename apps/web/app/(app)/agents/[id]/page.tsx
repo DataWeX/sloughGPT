@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import {
@@ -16,7 +17,6 @@ import {
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { agentsController, type Agent, type AgentRun } from '@/lib/agents-controller'
-import { useToastStore } from '@/lib/toast-store'
 import {
   ArrowLeft,
   Bot,
@@ -46,7 +46,7 @@ export default function AgentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const agentId = params.id as string
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [runs, setRuns] = useState<AgentRun[]>([])

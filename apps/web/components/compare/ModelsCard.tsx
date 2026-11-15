@@ -48,7 +48,7 @@ export default memo(function ModelsCard({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter..."
               aria-label="Filter models"
-              className="h-6 w-28 rounded-md border border-border/40 bg-background px-1.5 text-[10px] placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+              className="h-6 w-28 rounded-md border border-border/40 bg-background px-1.5 text-[10px] placeholder:text-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             />
           )}
         </div>

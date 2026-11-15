@@ -82,10 +82,14 @@ describe('TokenTreeMergesCard', () => {
     render(<TokenTreeMergesCard />)
 
     await waitFor(() => expect(mocks.mockGetMerges).toHaveBeenCalledWith(20, ''))
-    expect(screen.getByText('the')).toBeDefined()
-    expect(screen.getAllByText('quic')).toHaveLength(2)
-    expect(screen.getByText('quick')).toBeDefined()
-    expect(screen.getAllByText('42')).toHaveLength(1)
+    await waitFor(() => {
+      expect(screen.getByText('the')).toBeDefined()
+      expect(screen.getAllByText('quic')).toHaveLength(2)
+      expect(screen.getByText('quick')).toBeDefined()
+    })
+    await waitFor(() => {
+      expect(screen.getAllByText('42')).toHaveLength(1)
+    })
   })
 
   it('searches with the typed query', async () => {

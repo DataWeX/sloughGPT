@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, endpoint, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, success_response
 
 from domain.infrastructure.model_stack import ModelBase, ModelStack, StackLayer
 from domain.training import get_cache_root
@@ -76,6 +76,19 @@ class ModelStackRouter:
     async def push_layer(self, payload: dict) -> dict:
         """Push a knowledge/dataset/cache layer. Body: {kind, name, path, workspace_id}."""
         try:
+            # A missing required body field is a validation failure (422), not
+            # a missing resource: indexing the untyped dict raised KeyError,
+            # which classify_and_raise reported as 404 E_NOT_FOUND — the
+            # client was told the URL did not exist when the BODY was
+            # malformed (card 3bd79e78 BUG 2).
+            missing = [k for k in ("name", "path") if not payload.get(k)]
+            if missing:
+                raise_error(
+                    f"Missing required field(s): {', '.join(missing)}",
+                    "E_VALIDATION",
+                    status_code=422,
+                    details={"missing": missing},
+                )
             kind = payload.get("kind", "knowledge")
             name = payload["name"]
             path = Path(payload["path"])

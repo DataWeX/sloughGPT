@@ -6,6 +6,8 @@ Public API:
     KnowledgeProcessor, apply_processors, get_provider, list_providers
 """
 
+from __future__ import annotations
+
 from domain.models._internal.models import (
     ModelInterface,
     ModelLoader,
@@ -14,6 +16,7 @@ from domain.models._internal.models import (
     rotate_half,
 )
 from domain.models._internal.provider import (
+    ConsciousnessProcessor,
     KnowledgeProcessor,
     apply_processors,
     list_providers,
@@ -31,6 +34,9 @@ _LAZY_IMPORTS = {
         "attach_process_guard_to_provider",
     ),
     "clear_providers": ("._internal.provider", "clear_providers"),
+    # Route-surface facade (layer conformance) — lazy for the same
+    # patch-visibility reason as setup_providers above.
+    "register_provider": ("._internal.provider", "register_provider"),
 }
 
 
@@ -51,11 +57,13 @@ __all__ = [
     "rotate_half",
     "apply_rotary_pos_emb",
     "KnowledgeProcessor",
+    "ConsciousnessProcessor",
     "apply_processors",
     "get_provider",
     "list_providers",
     "update_personality_traits",
     "setup_providers",
+    "register_provider",
     "attach_process_guard_to_provider",
     "clear_providers",
 ]

@@ -22,10 +22,22 @@ vi.mock('@/lib/souls-controller', () => ({
     listCheckpoints: vi.fn(),
   },
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
-    sel({ addToast: vi.fn() }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+      sel({ addToast: vi.fn() }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 vi.mock('@/components/souls/SoulPersonalityCard', () => ({
   SoulPersonalityCard: () => <div data-testid="soul-personality-card" />,
 }))

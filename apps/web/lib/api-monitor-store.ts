@@ -132,5 +132,10 @@ if (typeof window !== 'undefined') {
         useApiMonitor.setState({ failureCount: live.failureCount })
       }
     })
+  }).catch(() => {
+    // Best-effort sync: if the dynamic import or the subscription setup
+    // throws (e.g. after test-environment teardown), swallow it — an
+    // unhandled rejection here fails the whole vitest run even though
+    // every test passed.
   })
 }

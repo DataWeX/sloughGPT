@@ -33,6 +33,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
@@ -41,6 +43,28 @@ from .state import ShellState
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
+
+
+class _BgJob:
+    """Background-job handle over an engine process (routing kind: process).
+
+    Keeps the ``threading.Thread`` surface (``is_alive``/``join``) that
+    ``_cmd_bg``/``_cmd_fg``/``_cmd_wait`` consume, so job bookkeeping is
+    unchanged while the work itself runs on the shared pugqeep engine
+    instead of a raw thread at the call site.
+    """
+
+    __slots__ = ("_engine", "_proc")
+
+    def __init__(self, engine: Any, proc: Any) -> None:
+        self._engine = engine
+        self._proc = proc
+
+    def is_alive(self) -> bool:
+        return not self._proc.is_done
+
+    def join(self, timeout: float | None = None) -> None:
+        self._engine.wait_for(self._proc.id, timeout=timeout)
 
 
 # ── Optional cmds extension — dynamic load ─────────────────────────────────
@@ -161,68 +185,70 @@ except ImportError:
 
 
 def _fetch_model_names() -> list[str]:
-    """Fetch available model names from the API for tab completion."""
-    import requests
+    """Fetch available model names for tab completion.
+
+    Rides the commands transport seam: in-process by default, HTTP in
+    remote mode (card ad4f5ec2).
+    """
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/models", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            models = data if isinstance(data, list) else data.get("models", [])
-            return sorted({m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)})
+        data = _api_get("/models")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        models = data if isinstance(data, list) else data.get("models", [])
+        return sorted(
+            {
+                m.get("name", m.get("id", m.get("model_id", "")))
+                for m in models
+                if isinstance(m, dict)
+            }
+        )
     except Exception as e:
         logger.debug("model names fetch failed: %s", e)
     return []
 
 
 def _fetch_soul_names() -> list[str]:
-    """Fetch soul names from the API for tab completion."""
-    import requests
+    """Fetch soul names for tab completion (in-process by default)."""
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/souls", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            souls = data if isinstance(data, list) else data.get("souls", [])
-            return sorted({s.get("name", "") for s in souls if isinstance(s, dict)})
+        data = _api_get("/souls")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        souls = data if isinstance(data, list) else data.get("souls", [])
+        return sorted({s.get("name", "") for s in souls if isinstance(s, dict)})
     except Exception as e:
         logger.debug("soul names fetch failed: %s", e)
     return []
 
 
 def _fetch_dataset_names() -> list[str]:
-    """Fetch dataset names from the API for tab completion."""
-    import requests
+    """Fetch dataset names for tab completion (in-process by default)."""
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/datasets", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            datasets = data if isinstance(data, list) else data.get("datasets", [])
-            return sorted({d.get("name", "") for d in datasets if isinstance(d, dict)})
+        data = _api_get("/datasets")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        datasets = data if isinstance(data, list) else data.get("datasets", [])
+        return sorted({d.get("name", "") for d in datasets if isinstance(d, dict)})
     except Exception as e:
         logger.debug("dataset names fetch failed: %s", e)
     return []
 
 
 def _fetch_checkpoint_names() -> list[str]:
-    """Fetch checkpoint names from the API for tab completion."""
-    import requests
+    """Fetch checkpoint names for tab completion (in-process by default)."""
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/auto-train/checkpoints", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            cps = data if isinstance(data, list) else data.get("checkpoints", [])
-            return sorted({c.get("name", "") for c in cps if isinstance(c, dict)})
+        data = _api_get("/auto-train/checkpoints")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        cps = data if isinstance(data, list) else data.get("checkpoints", [])
+        return sorted({c.get("name", "") for c in cps if isinstance(c, dict)})
     except Exception as e:
         logger.debug("checkpoint names fetch failed: %s", e)
     return []
@@ -293,6 +319,14 @@ class _CaptureOutput:
 # ── REPL ─────────────────────────────────────────────────────────────
 
 
+# The TUI chain (tui_repl, graphics, term_screen) is imported on demand — the
+# shell must start without it — and this name sits at module scope rather than
+# inside the method so the failure paths stay patchable: tests reach it as
+# `domain.shell._internal.repl.TuiRepl`, and the on-demand import below goes
+# through the canonical dotted path.
+TuiRepl: Any = None
+
+
 class ShellREPL(LinuxCommandsMixin):
     """Interactive REPL with built-in commands and AI-assisted mode.
 
@@ -325,7 +359,9 @@ class ShellREPL(LinuxCommandsMixin):
             except (OSError, ValueError):
                 use_tui = False
         self._use_tui = use_tui
-        self._bg_threads: dict[int, threading.Thread] = {}
+        # _BgJob handles (engine-supervised); tests may inject any
+        # Thread-shaped object with is_alive()/join().
+        self._bg_threads: dict[int, Any] = {}
         self._next_bg_id = 1
         self._piped_input: str = ""
         self._aborted = False
@@ -498,11 +534,15 @@ class ShellREPL(LinuxCommandsMixin):
 
     # ── Programmatic API (TUI / tests) ─────────────────────────────
 
-    def execute(self, line: str) -> tuple[str, int]:
+    def execute(self, line: str, *, on_write=None) -> tuple[str, int]:
         """Execute a command line, return (output, exit_code).
 
         Does NOT touch readline or the terminal — safe for TUI usage.
         Still audit-logs every execution.
+
+        ``on_write`` (optional) is forwarded to the per-run MemoryIO and
+        receives every output chunk as it is produced — the streaming
+        seam used by ``POST /shell/exec/stream``.
         """
         import time as _time
 
@@ -511,7 +551,7 @@ class ShellREPL(LinuxCommandsMixin):
         if not line.strip():
             return "", 0
 
-        mem = MemoryIO()
+        mem = MemoryIO(on_write=on_write)
         old_io = self.io
         old_console_io = self.console._io
         self.io = mem
@@ -691,14 +731,11 @@ class ShellREPL(LinuxCommandsMixin):
             if now - ts < 30.0:
                 return val
         try:
-            import requests
+            from .commands import _api_get
 
-            from .config import get_api_base
-
-            r = requests.get(f"{get_api_base()}/health", timeout=2)
-            if r.status_code == 200:
-                data = r.json()
-                model = data.get("model", data.get("model_name", ""))
+            data = _api_get("/health")
+            if isinstance(data, dict) and "error" not in data:
+                model = data.get("model", data.get("model_name", data.get("model_type", "")))
                 if model:
                     val = str(model).split("/")[-1]
                     self._completion_cache["__model__"] = (now, val)
@@ -716,13 +753,10 @@ class ShellREPL(LinuxCommandsMixin):
             if now - ts < 30.0:
                 return val
         try:
-            import requests
+            from .commands import _api_get
 
-            from .config import get_api_base
-
-            r = requests.get(f"{get_api_base()}/souls/current", timeout=2)
-            if r.status_code == 200:
-                data = r.json()
+            data = _api_get("/souls/current")
+            if isinstance(data, dict) and "error" not in data:
                 soul = data.get("name", "")
                 if soul:
                     self._completion_cache["__soul__"] = (now, soul)
@@ -1579,9 +1613,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         self._print(f"  [bg-{bg_id}] {raw}")
 
     def _execute_background_tuples(self, commands: list) -> None:
@@ -1595,9 +1629,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         cmds_str = " | ".join(c[0] for c in commands)
         self._print(f"  [bg-{bg_id}] {cmds_str}")
 
@@ -1999,6 +2033,7 @@ class ShellREPL(LinuxCommandsMixin):
                 "protect": "  protect <model>  — Protect model files",
                 "unprotect": "  unprotect <model>  — Remove protection",
                 "tui": "  tui  — Launch three-pane TUI",
+                "serve": "  serve [--watch] [--port PORT] [worktree]  — Serve a worktree's web UI on a side port",
                 "clear": "  clear  — Clear the terminal screen",
                 "note": "  note <subcmd>  — Note management (add/show/edit/delete/list)",
                 "tutorial": "  tutorial  — Interactive shell walkthrough",
@@ -2008,6 +2043,8 @@ class ShellREPL(LinuxCommandsMixin):
                 "uptime": "  uptime  — Show system uptime",
                 "lsdev": "  lsdev  — List AI device nodes",
                 "render": "  render  — Neural scene rendering (path tracer)",
+                "settings": "  settings  — RetroBIOS option rows for shell settings",
+                "options": "  options <command>  — Option rows for a command's flags (logs, ai)",
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
@@ -2403,8 +2440,6 @@ Examples:
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
         try:
-            import threading
-
             from apps.cli.src.utils.progress import ProgressBar
             from domain.infrastructure._internal.conversion_tracker import get_tracker
 
@@ -2414,12 +2449,14 @@ Examples:
             def _load():
                 result_holder[0] = self.cmds.load_model(model_name)
 
-            t = threading.Thread(target=_load, daemon=True)
-            t.start()
+            # Stage 3B: engine process, not a raw thread — is_done/join keep
+            # the progress-poll contract the bar consumes.
+            engine = get_engine()
+            proc = engine.spawn(_load, name="repl-load")
 
             bar = ProgressBar(total=100, desc=f"Loading {model_name}", width=30, show_eta=True)
 
-            while t.is_alive():
+            while not proc.is_done:
                 status = tracker.get(model_name)
                 if status:
                     pct = int(status["progress"] * 100)
@@ -2438,7 +2475,7 @@ Examples:
 
                 time.sleep(0.15)
 
-            t.join()
+            engine.wait_for(proc.id)
             bar.finish()
             _print_result(result_holder[0])
 
@@ -2545,14 +2582,102 @@ Examples:
     def _cmd_tui(self, args: str = "") -> None:
         """Launch the split-panel TUI mode — console panel + shell output + input line."""
         try:
-            from .tui_repl import TuiRepl
+            _TuiRepl = TuiRepl
+            if _TuiRepl is None:
+                from domain.shell._internal.tui_repl import TuiRepl as _TuiRepl
 
-            tui = TuiRepl(self, self._log_buffer)
+            tui = _TuiRepl(self, self._log_buffer)
             tui.run()
         except ImportError as ex:
             self._print(f"  TUI mode not available: {ex}")
         except Exception as ex:
             self._print(f"  TUI error: {ex}")
+            self._last_exit_code = 1
+
+    def _cmd_serve(self, args: str = "") -> None:
+        """Serve a worktree's web UI on a side port for inspection.
+
+        Flags:
+          --port PORT   port to serve on (default 5174)
+          --watch       resync to origin/main and restart whenever main moves
+        Positional:
+          WORKTREE      worktree to serve as-is (default: the latest-main worktree)
+        """
+        import subprocess
+
+        from domain.shared import find_repo_root
+
+        argv = args.split()
+        port = ""
+        watch = False
+        target = ""
+        i = 0
+        while i < len(argv):
+            a = argv[i]
+            if a in ("-h", "--help"):
+                self._print("  serve [--port PORT] [--watch] [worktree]")
+                return
+            if a == "--port" and i + 1 < len(argv):
+                port = argv[i + 1]
+                i += 2
+            elif a == "--watch":
+                watch = True
+                i += 1
+            elif a.startswith("--"):
+                self._print(f"  serve: unknown flag {a}")
+                self._last_exit_code = 1
+                return
+            else:
+                target = a
+                i += 1
+
+        # Thin projection: the process logic (sync, pidfile-owned kill,
+        # foreign-holder refusal, path-identity header check) lives in the
+        # script — this command only builds its argv (Command Rule: the
+        # shell describes itself to humans; it never enters the model's
+        # tool registry).
+        script = find_repo_root(Path(__file__).resolve()) / "scripts" / "run_frontend_latest.sh"
+        if not script.is_file():
+            self._print(f"  serve: missing {script}")
+            self._last_exit_code = 1
+            return
+        cmd = [str(script)]
+        if target:
+            cmd.append(target)
+        if watch:
+            cmd.append("--watch")
+        env = dict(os.environ)
+        if port:
+            env["SLO_FRONTEND_PORT"] = port
+        log_path = Path("/tmp/opencode") / "serve-cmd.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("w") as log:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                env=env,
+                start_new_session=True,
+            )
+        # Watch mode never exits; give failures (foreign holder, bad path)
+        # a moment to surface, then report either way without stalling.
+        deadline = time.time() + (3.0 if watch else 30.0)
+        while proc.poll() is None and time.time() < deadline:
+            time.sleep(0.25)
+        if proc.poll() is None:
+            state = "watching origin/main" if watch else "starting"
+            self._print(f"  serve: {state} — output: {log_path}")
+            self._print(f"  open http://localhost:{port or '5174'}/")
+            return
+        output = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+        if proc.returncode == 0:
+            for line in output.rstrip("\n").splitlines():
+                self._print(line)
+            self._last_exit_code = 0
+        else:
+            lines = output.rstrip("\n").splitlines() or [f"  serve failed (exit {proc.returncode})"]
+            for line in lines:
+                self._print(line)
             self._last_exit_code = 1
 
     def _cmd_logs(self, args: str = "") -> None:
@@ -2562,7 +2687,7 @@ Examples:
           -l, --level LEVEL   filter by level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
           -s, --source SRC    filter by source substring
           -n, --lines N       show last N entries (default 30)
-          -f, --follow        follow new entries (Ctrl+C to stop)
+          -f, --follow        follow new entries (TTY only; Ctrl+C to stop)
           -c, --clear         clear the buffer
           -e, --export FILE   save entries to a text file
               --stats         show log level distribution
@@ -2736,6 +2861,11 @@ Examples:
         self._print(sep)
 
         if follow:
+            if not getattr(self.io, "_is_tty", False):
+                self._print(
+                    f"  {_C_DIM}Not a terminal — follow skipped, entries above shown once.{_C_RESET}"
+                )
+                return
             self._print(f"  {_C_DIM}Following — press Ctrl+C to stop{_C_RESET}")
             try:
                 offset = len(self._log_buffer)
@@ -3550,7 +3680,7 @@ Examples:
             dev.call("set_samples", spp)
             self._print(f"  Rendering {w}x{h} @ {spp} spp...")
             t0 = _time.time()
-            img = dev.call("render")
+            img = dev.arena.get(dev.call("render"))
             dt = _time.time() - t0
             nz = int((img.sum(axis=-1) > 0.01).sum())
             self._print(
@@ -3774,6 +3904,24 @@ Examples:
             self._print(
                 f"  {_C_RED}\u2717 API server is not connected.{_C_RESET} Use `api start` to launch it."
             )
+            return
+
+        # Fail fast when no model is loaded -- generate would block the full
+        # 120s _api_post timeout and leave the client's 60s auto-cancel in limbo
+        # (card 20261026_123132). Covers single-shot and --loop alike.
+        if not status.get("model_loaded"):
+            from .log_buffer import LogEntry
+
+            self._print(f"  {_C_RED}\u2717 No model loaded.{_C_RESET} Load one: models load <id>")
+            self._log_buffer.append(
+                LogEntry(
+                    timestamp=time.time(),
+                    level="ERROR",
+                    source="shell.ai",
+                    message="ai blocked: no model loaded",
+                )
+            )
+            self._last_exit_code = 1
             return
 
         # Interactive agent loop mode
@@ -4265,24 +4413,109 @@ Examples:
 
         return format_error(e, cmd)
 
+    def _cmd_settings(self, args: str = "") -> None:
+        """Open the shell settings as RetroBIOS-style option rows.
+
+        Each row is an option of the command line, named by its flag on
+        the right: Enter opens, Left/Right sets, Esc applies (Ctrl+C
+        cancels), ? helps.  Without a TTY the same screen prints as
+        plain lines and changes nothing.
+        """
+        from .option_views import settings_rows
+        from .options_screen import OptionsScreen
+
+        screen = OptionsScreen(settings_rows(self), "Settings")
+        self.console.run_options_screen(screen)
+        self._apply_screen(screen, "setting")
+
+    def _cmd_options(self, args: str = "") -> None:
+        """Option rows for one command's flags — one descriptor, three projections.
+
+        Usage: options <command>    (known: logs, ai)
+
+        Prints the equivalent command line, assembled from the very rows
+        on screen, so the menu and the CLI can never spell a flag apart.
+        """
+        from .option_views import command_rows, option_commands
+
+        name = args.strip().split()[0] if args.strip() else ""
+        if not name:
+            self._print(f"  Usage: options <command>   (known: {', '.join(option_commands())})")
+            return
+        rows = command_rows(name, self)
+        if not rows:
+            self._print(f"  Unknown option view: {name!r} — known: {', '.join(option_commands())}")
+            self._last_exit_code = 1
+            return
+
+        from .options_screen import OptionsScreen
+
+        screen = OptionsScreen(rows, f"Options — {name}")
+        self.console.run_options_screen(screen)
+        self._apply_screen(screen, "option")
+        self._print(f"  Equivalent: {name} {screen.command_line_str()}".rstrip())
+
+    def _apply_screen(self, screen, noun: str) -> None:
+        """Push a submitted option screen into real state.
+
+        A non-TTY run never sets `done`, so the plain fallback prints the
+        screen and writes nothing — the DoD's "plain output unchanged".
+        Ctrl+C sets `aborted` and writes nothing either.
+        """
+        if screen.aborted:
+            self._print(f"  Cancelled — {noun} view: nothing changed.")
+            return
+        if not screen.done:
+            return
+        applied = screen.apply()
+        if applied:
+            self._print(f"  ✓ applied {len(applied)} {noun}(s)")
+
+    def _boot_api_pref(self) -> bool:
+        """Session pref behind the `--api` row — settings and boot share it."""
+        from .option_views import boot_api_pref
+
+        return boot_api_pref(self)
+
     def _cmd_boot(self, args: str = "") -> None:
         """Boot the shell — start kernel + init system + services.
 
         Automatically starts the API server if not already running.
+        Run it with no arguments on a TTY and the boot option rows open
+        first (Esc cancels the boot); --api / --no-api force the
+        auto-start for this one boot.
         """
         if self._running and self._piped_input is None:
             self._print(
                 "  Already booted. Use 'shutdown' to halt, then 'sloughgpt shell' to restart."
             )
             return
+        parts = args.split()
+        if not parts and self.console._interactive._is_tty:
+            from .option_views import boot_rows
+            from .options_screen import OptionsScreen
+
+            screen = OptionsScreen(boot_rows(self), "Boot")
+            self.console.run_options_screen(screen)
+            if screen.aborted:
+                self._print("  Boot cancelled.")
+                return
+            self._apply_screen(screen, "option")
+        auto_api = self._boot_api_pref()
+        if "--no-api" in parts:
+            auto_api = False
+        elif "--api" in parts:
+            auto_api = True
         self._running = True
         # Auto-start API if not available
         api = self.os.api
-        if not api.is_running:
-            self._print("  \u26a1 Auto-starting API server...")
+        if auto_api and not api.is_running:
+            self._print("  ⚡ Auto-starting API server...")
             result = api.start()
             if not result.get("ok"):
-                self._print(f"  \u2717 API auto-start failed: {result.get('error', 'unknown')}")
+                self._print(f"  ✗ API auto-start failed: {result.get('error', 'unknown')}")
+        elif not auto_api:
+            self._print("  Skipping API auto-start (--no-api).")
         result = self.os.boot(shell_run=self._shell_cmd if hasattr(self, "_shell_cmd") else None)
         if isinstance(result, tuple):
             log, api_status = result
@@ -4572,6 +4805,9 @@ nl: db 10
                 self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
                 self._print(f"    {'count':15s} Count 0 to 9")
                 self._print(f"    {'counter':15s} Count 0 to 4")
+                self._print(
+                    f"    {'life':15s} Conway's Game of Life (60x20, validated lives prompt)"
+                )
                 self._last_exit_code = 0
                 return
             else:
@@ -4590,10 +4826,13 @@ nl: db 10
         file_or_name = rest if rest else ""
 
         # Check built-in programs by name
+        from domain.shell._internal.vm_programs import LIFE_ASM  # noqa: PLC0415
+
         builtins = {
             "hello": ShellREPL.HELLO_X86,
             "count": ShellREPL.FIB_X86,
             "counter": ShellREPL.COLLATZ_X86,
+            "life": LIFE_ASM,
         }
         if file_or_name and file_or_name in builtins:
             source = builtins[file_or_name]
@@ -5313,6 +5552,7 @@ _command_specs = [
     ("protect", "_cmd_protect"),
     ("unprotect", "_cmd_unprotect"),
     ("tui", "_cmd_tui"),
+    ("serve", "_cmd_serve"),
     ("note", "_cmd_note"),
     ("tutorial", "_cmd_tutorial"),
     ("boot", "_cmd_boot"),
@@ -5321,6 +5561,8 @@ _command_specs = [
     ("uptime", "_cmd_uptime"),
     ("lsdev", "_cmd_lsdev"),
     ("render", "_cmd_render"),
+    ("settings", "_cmd_settings"),
+    ("options", "_cmd_options"),
 ]
 _shell_commands = {
     _cmd_name: getattr(ShellREPL, _handler_attr)

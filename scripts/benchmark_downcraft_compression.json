@@ -176,5 +176,94 @@
         "sha_ok": true
       }
     ]
+  },
+  {
+    "ts": "2026-11-08T09:40:29+0100",
+    "payload": "8 MiB synthetic download records",
+    "bytes": 8388608,
+    "tier1": [
+      {
+        "codec": "identity",
+        "raw_bytes": 8388608,
+        "wire_bytes": 8388608,
+        "ratio": 1.0,
+        "enc_mibs": 1224.1,
+        "dec_mibs": null
+      },
+      {
+        "codec": "slz4-lv1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1791931,
+        "ratio": 0.2136,
+        "enc_mibs": 219.4,
+        "dec_mibs": 391.2
+      },
+      {
+        "codec": "slz4-lv6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1568613,
+        "ratio": 0.187,
+        "enc_mibs": 94.2,
+        "dec_mibs": 390.8
+      },
+      {
+        "codec": "slz4-lv16",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1565022,
+        "ratio": 0.1866,
+        "enc_mibs": 12.6,
+        "dec_mibs": 400.1
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1090648,
+        "ratio": 0.13,
+        "enc_mibs": 101.8,
+        "dec_mibs": 438.4
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1046140,
+        "ratio": 0.1247,
+        "enc_mibs": 396.1,
+        "dec_mibs": 821.7
+      }
+    ],
+    "tier2": [
+      {
+        "scenario": "file.bin-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.037,
+        "mibs": 215.5,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.132,
+        "mibs": 60.7,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.bin-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.039,
+        "mibs": 202.8,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.167,
+        "mibs": 48.0,
+        "sha_ok": true
+      }
+    ]
   }
 ]

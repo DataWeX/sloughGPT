@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
@@ -9,6 +10,7 @@ import {
   IconRefresh,
   IconEdit,
   IconStar,
+  IconSmile,
   IconTrash,
   IconThumbUp,
   IconThumbDown,
@@ -21,7 +23,6 @@ import {
   IconCheckCircle,
 } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
@@ -96,7 +97,7 @@ function ConfettiBurst({ active }: { active: boolean }) {
             animationDelay: `${p.delay}ms`,
             animationDuration: '400ms',
             opacity: 0.7,
-            color: `hsl(${i * 45}, 70%, 55%)`,
+            color: `var(--chart-${(i % 5) + 1})`,
           }}
         >
           {p.char}
@@ -141,7 +142,7 @@ export const MessageActions = memo(function MessageActions({
       cancelled = true
     }
   }, [messageId])
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -393,7 +394,7 @@ export const MessageActions = memo(function MessageActions({
             className="p-2"
             aria-label="Add reaction"
           >
-            <span className="text-sm">😊</span>
+            <IconSmile className="h-4 w-4" aria-hidden="true" />
           </Button>
           {showEmojiPicker && (
             <div className="absolute bottom-full left-0 mb-1 flex gap-0.5 bg-popover/95 backdrop-blur-sm border border-border/40 rounded-lg p-1 shadow-xl z-50">
@@ -422,7 +423,7 @@ export const MessageActions = memo(function MessageActions({
               key={emoji}
               onClick={() => handleToggleReaction(emoji)}
               className={cn(
-                'inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors',
+                'inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full border transition-colors',
                 users.includes('user')
                   ? 'bg-primary/15 border-primary/30 text-primary'
                   : 'bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80',

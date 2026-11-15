@@ -206,6 +206,77 @@ describe('shellExecStream', () => {
     expect(onComplete).toHaveBeenCalledWith(1, 0, 0)
   })
 
+  it('omits raw from the body by default (sanitized tier stays the default)', async () => {
+    async function* mockGen() {
+      yield {
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'complete',
+        data: { exit_code: 0, lines: 0 },
+        meta: { elapsed_ms: 1 },
+        message: '',
+      } as any
+    }
+    vi.mocked(streamSSE).mockReturnValue(mockGen())
+
+    await shellExecStream('models', {})
+
+    expect(streamSSE).toHaveBeenCalledWith(
+      '/shell/exec/stream',
+      expect.objectContaining({
+        method: 'POST',
+        body: { command: 'models', timeout_ms: 30000 },
+      }),
+    )
+  })
+
+  it('includes raw: true in the body when the caller opts into verbatim output', async () => {
+    async function* mockGen() {
+      yield {
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'complete',
+        data: { exit_code: 0, lines: 0 },
+        meta: { elapsed_ms: 1 },
+        message: '',
+      } as any
+    }
+    vi.mocked(streamSSE).mockReturnValue(mockGen())
+
+    await shellExecStream('watch -c date', {}, undefined, { raw: true })
+
+    expect(streamSSE).toHaveBeenCalledWith(
+      '/shell/exec/stream',
+      expect.objectContaining({
+        method: 'POST',
+        body: { command: 'watch -c date', timeout_ms: 30000, raw: true },
+      }),
+    )
+  })
+
+  it('passes a custom timeout via options', async () => {
+    async function* mockGen() {
+      yield {
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'complete',
+        data: { exit_code: 0, lines: 0 },
+        meta: { elapsed_ms: 1 },
+        message: '',
+      } as any
+    }
+    vi.mocked(streamSSE).mockReturnValue(mockGen())
+
+    await shellExecStream('slow', {}, undefined, { timeoutMs: 5000 })
+
+    expect(streamSSE).toHaveBeenCalledWith(
+      '/shell/exec/stream',
+      expect.objectContaining({
+        body: { command: 'slow', timeout_ms: 5000 },
+      }),
+    )
+  })
+
   it('does not call onComplete when onError already fired (pre-aborted signal)', async () => {
     async function* mockGen() {
       yield { status: 'error', message: 'aborted' } as any

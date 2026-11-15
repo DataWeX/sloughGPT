@@ -8,9 +8,9 @@ import sys
 sys.path.insert(0, "..")
 
 import torch
-from domain.training.performance import get_optimal_device
 
 from domain.models import SloughGPTModel
+from domain.training.performance import get_optimal_device
 
 
 def main():

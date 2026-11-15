@@ -1,8 +1,14 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useToastStore } from '@/lib/toast-store'
-import { memoryController, type MemoryItem, type MemoryStats, type MemoryArchiveStats, type MemoryArchiveRecord } from '@/lib/memory-controller'
+import {
+  memoryController,
+  type MemoryItem,
+  type MemoryStats,
+  type MemoryArchiveStats,
+  type MemoryArchiveRecord,
+} from '@/lib/memory-controller'
 
 export interface UseMemoryDataReturn {
   stats: MemoryStats | null
@@ -21,7 +27,7 @@ export interface UseMemoryDataReturn {
 }
 
 export function useMemoryData(): UseMemoryDataReturn {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const [stats, setStats] = useState<MemoryStats | null>(null)
   const [items, setItems] = useState<MemoryItem[]>([])
   const [archiveStats, setArchiveStats] = useState<MemoryArchiveStats | null>(null)
@@ -78,36 +84,53 @@ export function useMemoryData(): UseMemoryDataReturn {
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [addToast])
 
-  const handleSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setSearchResults(null)
-      setSearched(false)
-      return
-    }
-    try {
-      const result = await memoryController.search(q)
-      setSearchResults(result.results || [])
-      setSearched(true)
-    } catch {
-      addToast('Could not memory search', 'error')
-    }
-  }, [addToast])
+  const handleSearch = useCallback(
+    async (q: string) => {
+      if (!q.trim()) {
+        setSearchResults(null)
+        setSearched(false)
+        return
+      }
+      try {
+        const result = await memoryController.search(q)
+        setSearchResults(result.results || [])
+        setSearched(true)
+      } catch {
+        addToast('Could not memory search', 'error')
+      }
+    },
+    [addToast],
+  )
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => { handleSearch(search) }, 300)
+    debounceRef.current = setTimeout(() => {
+      handleSearch(search)
+    }, 300)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [search, handleSearch])
 
   return {
-    stats, items, archiveStats, loading, searched, searchResults,
-    setSearch, search, fetchData, handleSearch,
-    setSearchResults, setSearched, setItems,
+    stats,
+    items,
+    archiveStats,
+    loading,
+    searched,
+    searchResults,
+    setSearch,
+    search,
+    fetchData,
+    handleSearch,
+    setSearchResults,
+    setSearched,
+    setItems,
   }
 }

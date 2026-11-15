@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import React, { Suspense, useEffect, useState } from 'react'
 import Link from '@/vite/next-compat/link'
 import { useRouter } from '@/vite/next-compat/navigation'
@@ -21,7 +22,6 @@ import {
 import { chatController } from '@/lib/chat-controller'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
-import { useToastStore } from '@/lib/toast-store'
 import { OnboardingCard } from '@/components/onboarding/OnboardingCard'
 import { chatDB } from '@/lib/db'
 import { useHomePageData } from '@/hooks/useHomePageData'
@@ -102,7 +102,7 @@ export default function HomePage() {
   const router = useRouter()
   const { t } = useLocale()
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const {
     modelCount,
     currentSoul,
@@ -280,7 +280,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Link
-                      href="/personality"
+                      href="/souls"
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-primary bg-primary/10 hover:bg-primary/15 transition-colors"
                     >
                       <IconModels className="h-3 w-3" />

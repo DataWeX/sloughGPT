@@ -208,6 +208,7 @@ vi.mock('@/components/training/StopTrainingButton', () => ({
     </button>
   ),
 }))
+vi.mock('@/components/training/LiveFeedStream', () => ({ LiveFeedStream: () => null }))
 
 import Page from './page'
 
@@ -325,6 +326,30 @@ describe('TrainingPage', () => {
       expect(screen.getByTestId('training-pipeline')).toBeTruthy()
     })
     expect(screen.queryByTestId('stop-training-button')).toBeNull()
+  })
+
+  it('links the hero and Active-jobs KPI to the running job live view', async () => {
+    // Journey: glance at the page → click hero/KPI → watch the job in place.
+    mockForm.allJobs = [{ id: 'job-1', status: 'running', name: 'My run' }]
+    render(<Page />)
+    await waitFor(() => {
+      expect(screen.getByTestId('stop-training-button')).toBeTruthy()
+    })
+    const links = screen.getAllByRole('link', { name: /Open live view for My run|Training live/ })
+    expect(links.length).toBeGreaterThanOrEqual(2)
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '/training/job/job-1')
+    }
+  })
+
+  it('renders the hero as plain text when no job is running', async () => {
+    mockForm.allJobs = []
+    render(<Page />)
+    await waitFor(() => {
+      expect(screen.getByTestId('training-pipeline')).toBeTruthy()
+    })
+    expect(screen.queryByRole('link', { name: /Open live view/ })).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent(/No active training/)
   })
 
   it('refreshes jobs and checkpoints when Refresh is clicked', async () => {

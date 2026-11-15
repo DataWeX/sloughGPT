@@ -149,9 +149,8 @@ class TestQuantization:
 
     def test_dynamic_quantization(self):
         """Test dynamic quantization (SloNet skips — PyTorch-specific)."""
-        from domain.training._internal.efficient_inference import Quantizer
-
         from domain.models._internal import SloughGPTModel
+        from domain.training._internal.efficient_inference import Quantizer
 
         model = SloughGPTModel(vocab_size=50, n_embed=32, n_layer=2, n_head=2, block_size=16)
 

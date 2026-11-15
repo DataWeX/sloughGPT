@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useErrorStore } from '@/lib/error-store'
+import { authFetch } from '@/lib/http-client'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useErrorStream } from '@/hooks/useErrorStream'
 import { ErrorDiagnosticsPanel } from '@/components/ErrorDiagnosticsPanel'
@@ -106,7 +107,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
     }
     const refresh = async () => {
       try {
-        const r = await fetch('/health/debug', { signal: AbortSignal.timeout(3000) })
+        const r = await authFetch('/health/debug', { signal: AbortSignal.timeout(3000) })
         if (r.ok) {
           const d = await r.json()
           setGpuBackend(d.gpu_backend || null)
@@ -452,7 +453,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
               className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
               onClick={async () => {
                 try {
-                  const r = await fetch('/health', { signal: AbortSignal.timeout(3000) })
+                  const r = await authFetch('/health', { signal: AbortSignal.timeout(3000) })
                   const d = await r.json()
                   const status = d?.data?.model_loaded ? 'Model loaded' : 'No model'
                   window.dispatchEvent(

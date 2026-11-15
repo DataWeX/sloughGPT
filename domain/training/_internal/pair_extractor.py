@@ -417,7 +417,13 @@ def count_pairs_in_sessions() -> int:
 
 
 def count_pairs_in_logs() -> int:
-    """Count total entries in response log files."""
+    """Count total response log entries (MogDB first for the canonical store)."""
+    from domain.feedback._internal.response_tracker import read_response_docs
+
+    docs = read_response_docs(_RESPONSE_LOGS_DIR)
+    if docs is not None:
+        return len(docs)
+
     if not _RESPONSE_LOGS_DIR.exists():
         return 0
 

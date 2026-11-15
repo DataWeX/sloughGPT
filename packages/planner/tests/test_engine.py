@@ -348,3 +348,19 @@ class TestBoardIntegration:
         result = engine.transition(cols, cards, "card-b", "doing")
         assert not result.ok
         assert result.wip_exceeded
+
+
+class TestNonCanonicalStates:
+    def test_illegal_from_noncanonical_column_is_result_not_exception(self):
+        """Default boards use todo/wip/review/done — not CardStates. The
+        transition contract is "raises nothing": a non-canonical from_state
+        must degrade to an illegal-transition RESULT, never ValueError."""
+        cols = [
+            {"name": "todo", "wip_limit": 0, "order": 0},
+            {"name": "done", "wip_limit": 0, "order": 1},
+        ]
+        cards = [{"id": "card-x", "column": "todo", "title": "Card X"}]
+        engine = KanbanEngine()
+        result = engine.transition(cols, cards, "card-x", "done")
+        assert result.ok is False
+        assert "Illegal transition" in result.error

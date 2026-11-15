@@ -92,15 +92,27 @@ class TokenAccount:
         from datetime import datetime
 
         now_dt = datetime.fromtimestamp(now)
-        current_day = now_dt.day
-        current_month = now_dt.month
 
         last_reset_dt = datetime.fromtimestamp(self.last_daily_reset)
-        if last_reset_dt.day != current_day:
+        # Full-date compare, not day-of-month: `last_daily_reset` defaults to
+        # epoch 1970-01-01, and the old `.day != .day` never refreshed it on
+        # the 1st of any month — the month branch below then compared that
+        # stale epoch timestamp on every call and zeroed monthly_used each
+        # time, so monthly limits went unenforced all day (2026-11-01 CI red,
+        # real billing bug). Day-of-month equality also skipped the daily
+        # reset across month boundaries (Oct 15 -> Nov 15).
+        if (last_reset_dt.year, last_reset_dt.month, last_reset_dt.day) != (
+            now_dt.year,
+            now_dt.month,
+            now_dt.day,
+        ):
             self.daily_used = 0
             self.last_daily_reset = now
 
-        if last_reset_dt.month != current_month:
+        # Month keyed to the same last_daily_reset (pre-refresh value), which
+        # the daily refresh above keeps at most one day stale — and now with
+        # the year in the compare, so same month a year later still resets.
+        if (last_reset_dt.year, last_reset_dt.month) != (now_dt.year, now_dt.month):
             self.monthly_used = 0
             self.last_monthly_reset = now
 

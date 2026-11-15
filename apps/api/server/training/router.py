@@ -1,10 +1,26 @@
 """FastAPI routes for char-level training and job orchestration.
 
 Trainer ``*.soul`` checkpoint charset maps: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+
+Descriptor-projected (card 20261104_151036): 27 ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Envelope split
+byte-parity: the 13 handlers that wrapped in ``success_response`` had their
+inner wrap stripped (group A — the projection's wrap emits identical
+``{status, data}`` bytes); the 14 bare-payload handlers keep raw wire
+(``envelope=False``) — including the ``message="loaded"`` self-wrap, the
+``FileResponse``/raw ``Response`` passthroughs and both SSE streams. The two
+``Depends(require_auth_if_enabled)`` routes carry
+``auth_scope="authenticated"``; the other 25 are public (edge 3: reproduce
+the hand-built auth chain). Descriptions are derived from the handler
+docstrings with ``inspect.cleandoc`` — the exact expression FastAPI used
+on the hand-built routes, so they match by construction; summaries are
+pinned explicitly (FastAPI derives them from ``route.name``, which for a
+projected route would be the generated endpoint's name, not the handler's).
 """
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import shutil
@@ -16,10 +32,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router
 from schemas.common import raise_error
 
+from domain.agents import ToolParam, ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 
 from .control import router as control_router
 from .controller import get_training_controller
@@ -41,12 +58,14 @@ router = APIRouter(tags=["training"])
 router.include_router(execution_router)
 router.include_router(jobs_router)
 router.include_router(control_router)
-router.include_router(feeds_router)
 
 # Include training data feed endpoints (live corpus over HTTP)
-from .feeds import router as feeds_router
-
 router.include_router(feeds_router)
+
+# Include the live feed/job observability stream (SSE)
+from .live_stream import router as live_stream_router
+
+router.include_router(live_stream_router)
 
 
 def _finetuned_dir() -> Path:
@@ -118,7 +137,6 @@ _finetuned_models_cache: tuple[float, dict] | None = None
 _FINETUNED_CACHE_TTL = 30.0
 
 
-@router.get("/training/finetuned-models")
 async def list_finetuned_models():
     """List HF fine-tuned model directories under ``models/hf-finetuned/``."""
     global _finetuned_models_cache
@@ -154,7 +172,6 @@ async def list_finetuned_models():
     return result
 
 
-@router.post("/training/finetuned-models/{name}/load")
 async def load_finetuned_model(name: str):
     """Load a fine-tuned model directory into chat (device=cpu).
 
@@ -179,7 +196,6 @@ async def load_finetuned_model(name: str):
     }
 
 
-@router.delete("/training/finetuned-models/{name}")
 async def delete_finetuned_model(name: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """Delete a fine-tuned model directory."""
     target = _resolve_finetuned(name)
@@ -193,7 +209,6 @@ async def delete_finetuned_model(name: str, auth_user: dict = Depends(require_au
 # ===== JOB RECOVERY =====
 
 
-@router.get("/recovery/check")
 async def check_crashed_jobs(timeout_seconds: int = 300):
     """
     Check for jobs that may have crashed.
@@ -211,7 +226,6 @@ async def check_crashed_jobs(timeout_seconds: int = 300):
     }
 
 
-@router.get("/recovery/recoverable")
 async def get_recoverable_jobs():
     """
     Get all jobs that can be recovered.
@@ -227,14 +241,37 @@ async def get_recoverable_jobs():
     }
 
 
-@router.post("/recovery/recover/{job_id}")
-async def recover_job(job_id: str):
+async def get_recovery_events():
+    """Process-notification snapshot for the dock (contract v1).
+
+    Boot-time events cannot ride the SSE streams — no client is connected
+    when they fire — so the frontend's initial notification state is this
+    REST projection of durable state (see training/process_events.py).
+    Live transitions after load ride the existing per-request SSE streams
+    and dedupe against these event_ids.
     """
-    Recover and restart an interrupted/failed job.
+    from training.process_events import CONTRACT_VERSION, boot_snapshot
+
+    store = get_job_store()
+    events = boot_snapshot(store)
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "count": len(events),
+        "events": events,
+    }
+
+
+def start_recovery(job_id: str) -> dict:
+    """Recover and restart an interrupted/failed job.
 
     Also accepts a 'recovering' job whose heartbeat went stale (a previous
     recovery run that died without completing). Resumes training from the last
     checkpoint if available.
+
+    This is the ONE recovery path: the HTTP endpoint delegates here, and the
+    boot-time auto-resume hook calls it too, so the validation above (fail-
+    closed against the job's CURRENT status) guards every dispatch — a stale
+    notification action and a boot race both hit the same wall.
     """
     store = get_job_store()
     job = store.get(job_id)
@@ -260,44 +297,23 @@ async def recover_job(job_id: str):
     job_name = job.get("name", "recovered_job")
 
     # Resolve the checkpoint to resume from. A job's recorded path is loaded
-    # exactly once, here in the request handler. The job explicitly points at
-    # it, so a recorded path that is missing, unsupported, or unreadable fails
-    # the recovery request loudly (422) — resuming from a different checkpoint
-    # would silently change what is being resumed. Only when the job recorded
-    # NO checkpoint path do we fall back to the newest file that actually loads
-    # (skipping partial/corrupt checkpoints — a crash mid-write can leave the
-    # newest file unreadable). The loaded bundle is handed to train() so no
-    # second load happens in the worker thread.
-    from domain.training._internal.train_pipeline import CheckpointManager
+    # exactly once, here in the request handler (via the engine, card c48aaaad).
+    # The job explicitly points at it, so a recorded path that is missing,
+    # unsupported, or unreadable fails the recovery request loudly (422) —
+    # resuming from a different checkpoint would silently change what is being
+    # resumed. Only when the job recorded NO checkpoint path do we fall back to
+    # the newest file that actually loads (skipping partial/corrupt checkpoints
+    # — a crash mid-write can leave the newest file unreadable). The loaded
+    # bundle is handed to train() so no second load happens in the worker
+    # thread.
+    from domain.training.engine import get_training_engine
 
-    manager = CheckpointManager(checkpoint_dir)
-    resume_bundle = None
-    if checkpoint_path:
-        if not CheckpointManager.is_resumable(checkpoint_path):
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-        try:
-            resume_bundle = CheckpointManager.load_from_path(checkpoint_path)
-        except Exception as exc:
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-        if resume_bundle is None:
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-    else:
-        checkpoint_path, resume_bundle = manager.load_latest_with_path()
-        checkpoint_path = checkpoint_path or ""
+    try:
+        checkpoint_path, resume_bundle = get_training_engine().resolve_resume_checkpoint(
+            checkpoint_path, checkpoint_dir
+        )
+    except ValueError as exc:
+        raise_error(str(exc), "E_VAL_REQUEST", status_code=422)
 
     # Create recovery job in training_jobs. config is spread first so the
     # explicit control fields (id, status, checkpoint_*) always win over any
@@ -353,14 +369,14 @@ async def recover_job(job_id: str):
 
     def run_recovery(job_id_: str = jid):
         try:
-            from domain.training._internal.train_pipeline import SloughGPTTrainer
+            from domain.training.engine import get_training_engine
 
             # Reuse the SAME trainer configuration builder as /training/start so
             # the recovered run continues with the original job's hyperparameters
             # (LoRA, dropout, scheduler, device, ...) instead of a fixed subset.
             trainer_config = {
                 "data_path": recovery_job.get("data_path", ""),
-                **_sloughgpt_trainer_kwds(recovery_job),
+                **_sloughgpt_trainer_kwds(recovery_job, data_path=recovery_job.get("data_path")),
             }
 
             def on_progress(info: dict):
@@ -399,16 +415,14 @@ async def recover_job(job_id: str):
                     job_id, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )
 
-            trainer = SloughGPTTrainer(**trainer_config)
-
             # Resume from checkpoint if available (bundle pre-loaded once in the
-            # request handler — no disk load happens in this thread)
-            trainer.train(
+            # request handler — no disk load happens in this thread; the engine
+            # builds the trainer, trains, and hands it back — card c48aaaad)
+            trainer = get_training_engine().run_recovery_training(
+                config=trainer_config,
                 on_progress=on_progress,
-                resume=True,
-                resume_checkpoint=resume_bundle,
-                cancel_event=cancel_event,
-                pause_event=pause_event,
+                resume=resume_bundle,
+                events={"cancel_event": cancel_event, "pause_event": pause_event},
             )
 
             # Mark as completed. The recovery job lives in-memory only; the
@@ -458,8 +472,7 @@ async def recover_job(job_id: str):
             store.mark_failed(job_id, str(e))
             controller.fail()
 
-    executor = get_training_executor()
-    executor.submit(run_recovery, jid)
+    get_training_engine().executor_submit(run_recovery, jid)
 
     return {
         "status": "recovered",
@@ -470,7 +483,12 @@ async def recover_job(job_id: str):
     }
 
 
-@router.delete("/recovery/abandon/{job_id}")
+async def recover_job(job_id: str):
+    """HTTP projection of start_recovery() — validation and execution are
+    shared with the boot-time auto-resume hook, never re-implemented."""
+    return start_recovery(job_id)
+
+
 async def abandon_recovery(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """
     Abandon a crashed job and mark it as permanently failed.
@@ -489,7 +507,6 @@ async def abandon_recovery(job_id: str, auth_user: dict = Depends(require_auth_i
     }
 
 
-@router.get("/recovery/stats")
 async def get_recovery_stats():
     """Get recovery statistics."""
     store = get_job_store()
@@ -503,104 +520,92 @@ async def get_recovery_stats():
 
 
 # ── Unified /training/* → core service + infrastructure wrapping ──────────────
-# Business logic: domain.training._internal.service (pure, no HTTP)
+# Business logic: the training service layer (domain.training.engine's
+# raw-passthrough methods reach the _internal service/state/advisor/outcome/
+# monitor modules; this file never imports them directly).
 # HTTP wrapping: success_response, error classification, audit logging (this file)
 
 
-@router.get("/training/log")
 async def training_log():
-    from schemas.common import success_response
+    from domain.training.engine import get_training_engine
 
-    from domain.training._internal.service import get_log
-
-    lines = await get_log()
-    return success_response(data={"lines": lines, "total": len(lines)})
+    lines = await get_training_engine().get_log()
+    return {"lines": lines, "total": len(lines)}
 
 
-@router.post("/training/stop")
 async def training_stop():
     """Stop all active training (auto-train, turbo, from-sessions)."""
-    from schemas.common import success_response
-
     from .sse_stream import stop_all_training
 
     result = stop_all_training()
-    return success_response(data=result)
+    return result
 
 
-@router.get("/training/checkpoints")
 async def training_list_checkpoints():
-    from schemas.common import success_response
+    from domain.training.engine import get_training_engine
 
-    from domain.training._internal.service import list_checkpoints
-
-    checkpoints = await list_checkpoints()
-    return success_response(data=checkpoints)
+    checkpoints = await get_training_engine().list_stored_checkpoints()
+    return checkpoints
 
 
-@router.delete("/training/checkpoints/{name}")
 async def training_delete_checkpoint(name: str):
-    from schemas.common import safe_audit_log, success_response
+    from schemas.common import safe_audit_log
 
-    from domain.training._internal.service import delete_checkpoint
-    from domain.training._internal.state import VALID_CKPT_NAME
+    from domain.training.engine import get_training_engine
 
-    if not VALID_CKPT_NAME.match(name):
+    engine = get_training_engine()
+    if not engine.is_valid_ckpt_name(name):
         raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
-    deleted = await delete_checkpoint(name)
+    deleted = await engine.delete_checkpoint(name)
     if deleted:
         safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
-    return success_response(data={"deleted": deleted, "name": name})
+    return {"deleted": deleted, "name": name}
 
 
-@router.post("/training/checkpoints/{name}/load")
 async def training_load_checkpoint(name: str):
     from schemas.common import classify_and_raise, success_response
 
-    from domain.training._internal.service import load_checkpoint
+    from domain.training.engine import get_training_engine
 
     try:
-        result = await load_checkpoint(name)
+        result = await get_training_engine().load_stored_checkpoint(name)
         return success_response(data=result, message="loaded")
     except Exception as e:
         classify_and_raise(e, source="training.load_checkpoint")
 
 
-@router.get("/training/checkpoints/{name}/download")
 async def training_download_checkpoint(name: str):
     from fastapi.responses import FileResponse
     from schemas.common import raise_error
 
-    from domain.training._internal.service import download_checkpoint_path
+    from domain.training.engine import get_training_engine
 
-    fp = await download_checkpoint_path(name)
+    fp = await get_training_engine().download_checkpoint_path(name)
     if fp:
         return FileResponse(fp, media_type="application/octet-stream", filename=name)
     raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
 
 
-@router.get("/training/checkpoints/{name}/info")
 async def training_checkpoint_info(name: str):
-    from schemas.common import classify_and_raise, success_response
+    from schemas.common import classify_and_raise
 
-    from domain.training._internal.service import checkpoint_info
+    from domain.training.engine import get_training_engine
 
     try:
-        info = await checkpoint_info(name)
-        return success_response(data=info)
+        info = await get_training_engine().checkpoint_info(name)
+        return info
     except Exception as e:
         classify_and_raise(e, source="training.checkpoint_info")
 
 
-@router.get("/training/metrics/export")
 async def training_metrics_export():
     import json as _json
 
     from fastapi.responses import Response
 
-    from domain.training._internal.service import get_all_checkpoint_data
+    from domain.training.engine import get_training_engine
 
-    checkpoints = await get_all_checkpoint_data()
+    checkpoints = await get_training_engine().get_all_checkpoint_data()
     export = {
         "exported_at": time.time(),
         "total_checkpoints": len(checkpoints),
@@ -614,18 +619,14 @@ async def training_metrics_export():
     )
 
 
-@router.get("/training/from-sessions/cancel")
 async def training_cancel_from_sessions():
     """Cancel session-based training."""
-    from schemas.common import success_response
-
     from .sse_stream import cancel_from_sessions
 
     result = cancel_from_sessions()
-    return success_response(data=result)
+    return result
 
 
-@router.get("/training/stream")
 async def training_stream(request: Request):
     """SSE training stream."""
     from pathlib import Path
@@ -634,9 +635,9 @@ async def training_stream(request: Request):
 
     # Get training state for config
     try:
-        from domain.training._internal.service import get_state
+        from domain.training.engine import get_training_engine
 
-        config = get_state().config or {}
+        config = get_training_engine().get_state().config or {}
         if not config:
             from schemas.common import success_response
 
@@ -671,7 +672,6 @@ async def training_stream(request: Request):
     )
 
 
-@router.get("/training/from-sessions-stream")
 async def training_from_sessions_stream(request: Request):
     """SSE stream from sessions."""
     from pathlib import Path
@@ -679,9 +679,9 @@ async def training_from_sessions_stream(request: Request):
     from .sse_stream import build_training_sse_response
 
     try:
-        from domain.training._internal.service import get_state
+        from domain.training.engine import get_training_engine
 
-        config = get_state().config or {}
+        config = get_training_engine().get_state().config or {}
         if not config or config.get("method") != "from-sessions":
             from schemas.common import success_response
 
@@ -724,22 +724,28 @@ from .webhook_endpoints import router as _webhook_router
 router.include_router(_turbo_router)
 router.include_router(_webhook_router)
 
+# Consolidated from routers/ (card 20261101_154058) — the /training row's
+# remaining router gap; descriptor-projected, byte-identical paths.
+from .cloud_training import router as _cloud_training_router
+from .lora_eval import router as _lora_eval_router
+from .self_train import router as _self_train_router
 
-@router.get("/training/recommend")
+router.include_router(_self_train_router)
+router.include_router(_lora_eval_router)
+router.include_router(_cloud_training_router)
+
+
 async def get_training_recommendation(
     dataset_path: str = "",
     method: str = "distill",
 ):
     """Get training configuration recommendations based on dataset characteristics."""
-    from schemas.common import success_response
-
     try:
         from pathlib import Path as _P
 
-        from domain.training._internal.training_advisor import (
-            get_training_tips,
-            recommend_training_config,
-        )
+        from domain.training.engine import get_training_engine
+
+        engine = get_training_engine()
 
         dataset_size = 0
         avg_quality = None
@@ -766,54 +772,49 @@ async def get_training_recommendation(
                         dataset_size = len(data_files)
 
         # Get recommendation
-        recommendation = recommend_training_config(
+        recommendation = engine.recommend_training_config(
             dataset_size=dataset_size,
             method=method,
             avg_quality=avg_quality,
         )
 
         # Get tips
-        tips = get_training_tips(dataset_size=dataset_size)
+        tips = engine.get_training_tips(dataset_size=dataset_size)
 
-        return success_response(
-            data={
-                "dataset_size": dataset_size,
-                "recommendation": {
-                    "learning_rate": recommendation.learning_rate,
-                    "batch_size": recommendation.batch_size,
-                    "epochs": recommendation.epochs,
-                    "warmup_steps": recommendation.warmup_steps,
-                    "early_stopping_patience": recommendation.early_stopping_patience,
-                    "reason": recommendation.reason,
-                    "confidence": recommendation.confidence,
-                },
-                "tips": tips,
-            }
-        )
+        return {
+            "dataset_size": dataset_size,
+            "recommendation": {
+                "learning_rate": recommendation.learning_rate,
+                "batch_size": recommendation.batch_size,
+                "epochs": recommendation.epochs,
+                "warmup_steps": recommendation.warmup_steps,
+                "early_stopping_patience": recommendation.early_stopping_patience,
+                "reason": recommendation.reason,
+                "confidence": recommendation.confidence,
+            },
+            "tips": tips,
+        }
 
     except Exception as e:
         logger.warning("Failed to generate training recommendation: %s", e)
-        return success_response(
-            data={
-                "dataset_size": 0,
-                "recommendation": {
-                    "learning_rate": 3e-4,
-                    "batch_size": 32,
-                    "epochs": 20,
-                    "warmup_steps": 50,
-                    "early_stopping_patience": 5,
-                    "reason": "Default recommendation",
-                    "confidence": 0.5,
-                },
-                "tips": ["Could not analyze dataset. Using default configuration."],
-            }
-        )
+        return {
+            "dataset_size": 0,
+            "recommendation": {
+                "learning_rate": 3e-4,
+                "batch_size": 32,
+                "epochs": 20,
+                "warmup_steps": 50,
+                "early_stopping_patience": 5,
+                "reason": "Default recommendation",
+                "confidence": 0.5,
+            },
+            "tips": ["Could not analyze dataset. Using default configuration."],
+        }
 
 
 # ── Training Trends ─────────────────────────────────────────────────────
 
 
-@router.get("/training/trends")
 async def get_training_trends(
     model: str = "",
     dataset: str = "",
@@ -824,13 +825,10 @@ async def get_training_trends(
     Returns quality-over-time data, per-model breakdowns, and summary stats
     from the outcome tracker JSONL file.
     """
-    from schemas.common import success_response
-
     try:
-        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+        from domain.training.engine import get_training_engine
 
-        tracker = TrainingOutcomeTracker()
-        outcomes = tracker.load_outcomes()
+        outcomes = get_training_engine().load_outcomes()
 
         # Filter
         if model:
@@ -846,19 +844,17 @@ async def get_training_trends(
             outcomes = outcomes[-limit:]
 
         if not outcomes:
-            return success_response(
-                data={
-                    "runs": [],
-                    "models": [],
-                    "summary": {
-                        "total_runs": 0,
-                        "avg_quality": 0,
-                        "best_quality": 0,
-                        "avg_loss": 0,
-                        "trend": "stable",
-                    },
-                }
-            )
+            return {
+                "runs": [],
+                "models": [],
+                "summary": {
+                    "total_runs": 0,
+                    "avg_quality": 0,
+                    "best_quality": 0,
+                    "avg_loss": 0,
+                    "trend": "stable",
+                },
+            }
 
         # Build run list
         runs = []
@@ -932,32 +928,27 @@ async def get_training_trends(
             "trend": trend,
         }
 
-        return success_response(
-            data={
-                "runs": runs,
-                "models": models,
-                "summary": summary,
-            }
-        )
+        return {
+            "runs": runs,
+            "models": models,
+            "summary": summary,
+        }
 
     except Exception as e:
         logger.warning("Failed to load training trends: %s", e)
-        return success_response(
-            data={
-                "runs": [],
-                "models": [],
-                "summary": {
-                    "total_runs": 0,
-                    "avg_quality": 0,
-                    "best_quality": 0,
-                    "avg_loss": 0,
-                    "trend": "stable",
-                },
-            }
-        )
+        return {
+            "runs": [],
+            "models": [],
+            "summary": {
+                "total_runs": 0,
+                "avg_quality": 0,
+                "best_quality": 0,
+                "avg_loss": 0,
+                "trend": "stable",
+            },
+        }
 
 
-@router.get("/monitor")
 async def training_monitor_status():
     """Training monitoring status and alerts.
 
@@ -965,15 +956,12 @@ async def training_monitor_status():
     Useful for detecting training issues like loss divergence,
     gradient explosion, or resource exhaustion.
     """
-    from schemas.common import success_response
+    from domain.training.engine import get_training_engine
 
-    from domain.training._internal.monitor import get_training_monitor
-
-    monitor = get_training_monitor()
-    return success_response(data=monitor.get_status())
+    monitor = get_training_engine().get_training_monitor()
+    return monitor.get_status()
 
 
-@router.get("/monitor/alerts")
 async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
     """Get training alerts.
 
@@ -981,64 +969,571 @@ async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
         severity: Filter by severity (info, warning, error, critical)
         limit: Maximum number of alerts to return
     """
-    from schemas.common import success_response
+    from domain.training.engine import get_training_engine
 
-    from domain.training._internal.monitor import AlertSeverity, get_training_monitor
-
-    monitor = get_training_monitor()
-    severity_filter = AlertSeverity(severity) if severity else None
+    engine = get_training_engine()
+    monitor = engine.get_training_monitor()
+    severity_filter = engine.alert_severity(severity) if severity else None
     alerts = monitor.get_alerts(severity=severity_filter, limit=limit)
-    return success_response(
-        data={
-            "alerts": [a.to_dict() for a in alerts],
-            "total": len(alerts),
-        }
-    )
+    return {
+        "alerts": [a.to_dict() for a in alerts],
+        "total": len(alerts),
+    }
 
 
-@router.get("/monitor/metrics")
 async def training_monitor_metrics(limit: int = 100):
     """Get training metrics history.
 
     Args:
         limit: Maximum number of metrics snapshots to return
     """
-    from schemas.common import success_response
+    from domain.training.engine import get_training_engine
 
-    from domain.training._internal.monitor import get_training_monitor
-
-    monitor = get_training_monitor()
+    monitor = get_training_engine().get_training_monitor()
     metrics = monitor.get_metrics_history(limit=limit)
-    return success_response(
-        data={
-            "metrics": [m.to_dict() for m in metrics],
-            "total": len(metrics),
-        }
-    )
+    return {
+        "metrics": [m.to_dict() for m in metrics],
+        "total": len(metrics),
+    }
 
 
-@router.post("/monitor/reset")
 async def training_monitor_reset():
     """Reset training monitor state."""
-    from schemas.common import success_response
+    from domain.training.engine import get_training_engine
 
-    from domain.training._internal.monitor import get_training_monitor
-
-    monitor = get_training_monitor()
+    monitor = get_training_engine().get_training_monitor()
     monitor.reset()
-    return success_response(data={"message": "Monitor reset"})
+    return {"message": "Monitor reset"}
 
 
-@router.get("/monitor/resources")
 async def training_monitor_resources():
     """Check system resources.
 
     Returns CPU, memory, and GPU usage with alerts if thresholds exceeded.
     """
-    from schemas.common import success_response
+    from domain.training.engine import get_training_engine
 
-    from domain.training._internal.monitor import get_training_monitor
-
-    monitor = get_training_monitor()
+    monitor = get_training_engine().get_training_monitor()
     resources = monitor.check_resources()
-    return success_response(data=resources)
+    return resources
+
+
+# ── Descriptor projection: one contract per route (card 20261104_151036) ──
+# Registration order mirrors the hand-built decorators exactly — the
+# parameterized pairs (/{name}, /{job_id}) come after their static siblings
+# where any shadowing is possible. Descriptions derive from the handler
+# docstrings (the expression FastAPI itself used); summaries are pinned to
+# the captured hand-built values.
+
+SPEC_FINETUNED_LIST = ToolSpec(
+    name="training.finetuned.list",
+    description=inspect.cleandoc(list_finetuned_models.__doc__ or ""),
+    parameters=[],
+    execute=list_finetuned_models,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_FINETUNED_LOAD = ToolSpec(
+    name="training.finetuned.load",
+    description=inspect.cleandoc(load_finetuned_model.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=load_finetuned_model,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_FINETUNED_DELETE = ToolSpec(
+    name="training.finetuned.delete",
+    description=inspect.cleandoc(delete_finetuned_model.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=delete_finetuned_model,
+    auth_scope="authenticated",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_RECOVERY_CHECK = ToolSpec(
+    name="training.recovery.check",
+    description=inspect.cleandoc(check_crashed_jobs.__doc__ or ""),
+    parameters=[ToolParam("timeout_seconds", "integer", "", False)],
+    execute=check_crashed_jobs,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_RECOVERY_RECOVERABLE = ToolSpec(
+    name="training.recovery.recoverable",
+    description=inspect.cleandoc(get_recoverable_jobs.__doc__ or ""),
+    parameters=[],
+    execute=get_recoverable_jobs,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_RECOVERY_EVENTS = ToolSpec(
+    name="training.recovery.events",
+    description=inspect.cleandoc(get_recovery_events.__doc__ or ""),
+    parameters=[],
+    execute=get_recovery_events,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_RECOVERY_RECOVER = ToolSpec(
+    name="training.recovery.recover",
+    description=inspect.cleandoc(recover_job.__doc__ or ""),
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=recover_job,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_RECOVERY_ABANDON = ToolSpec(
+    name="training.recovery.abandon",
+    description=inspect.cleandoc(abandon_recovery.__doc__ or ""),
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=abandon_recovery,
+    auth_scope="authenticated",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_RECOVERY_STATS = ToolSpec(
+    name="training.recovery.stats",
+    description=inspect.cleandoc(get_recovery_stats.__doc__ or ""),
+    parameters=[],
+    execute=get_recovery_stats,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_LOG_GET = ToolSpec(
+    name="training.log.get",
+    description=inspect.cleandoc(training_log.__doc__ or ""),
+    parameters=[],
+    execute=training_log,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_STOP_ALL = ToolSpec(
+    name="training.stop.all",
+    description=inspect.cleandoc(training_stop.__doc__ or ""),
+    parameters=[],
+    execute=training_stop,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_LIST = ToolSpec(
+    name="training.checkpoints.list",
+    description=inspect.cleandoc(training_list_checkpoints.__doc__ or ""),
+    parameters=[],
+    execute=training_list_checkpoints,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_DELETE = ToolSpec(
+    name="training.checkpoints.delete",
+    description=inspect.cleandoc(training_delete_checkpoint.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_delete_checkpoint,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_LOAD = ToolSpec(
+    name="training.checkpoints.load",
+    description=inspect.cleandoc(training_load_checkpoint.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_load_checkpoint,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_DOWNLOAD = ToolSpec(
+    name="training.checkpoints.download",
+    description=inspect.cleandoc(training_download_checkpoint.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_download_checkpoint,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_CHECKPOINTS_INFO = ToolSpec(
+    name="training.checkpoints.info",
+    description=inspect.cleandoc(training_checkpoint_info.__doc__ or ""),
+    parameters=[ToolParam("name", "string", "", True)],
+    execute=training_checkpoint_info,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_METRICS_EXPORT = ToolSpec(
+    name="training.metrics.export",
+    description=inspect.cleandoc(training_metrics_export.__doc__ or ""),
+    parameters=[],
+    execute=training_metrics_export,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_FROM_SESSIONS_CANCEL = ToolSpec(
+    name="training.from_sessions.cancel",
+    description=inspect.cleandoc(training_cancel_from_sessions.__doc__ or ""),
+    parameters=[],
+    execute=training_cancel_from_sessions,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_STREAM_LIVE = ToolSpec(
+    name="training.stream.live",
+    description=inspect.cleandoc(training_stream.__doc__ or ""),
+    parameters=[],
+    execute=training_stream,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_STREAM_FROM_SESSIONS = ToolSpec(
+    name="training.stream.from_sessions",
+    description=inspect.cleandoc(training_from_sessions_stream.__doc__ or ""),
+    parameters=[],
+    execute=training_from_sessions_stream,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_RECOMMEND_GET = ToolSpec(
+    name="training.recommend.get",
+    description=inspect.cleandoc(get_training_recommendation.__doc__ or ""),
+    parameters=[
+        ToolParam("dataset_path", "string", "", False),
+        ToolParam("method", "string", "", False),
+    ],
+    execute=get_training_recommendation,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_TRENDS_GET = ToolSpec(
+    name="training.trends.get",
+    description=inspect.cleandoc(get_training_trends.__doc__ or ""),
+    parameters=[
+        ToolParam("model", "string", "", False),
+        ToolParam("dataset", "string", "", False),
+        ToolParam("limit", "integer", "", False),
+    ],
+    execute=get_training_trends,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_STATUS = ToolSpec(
+    name="training.monitor.status",
+    description=inspect.cleandoc(training_monitor_status.__doc__ or ""),
+    parameters=[],
+    execute=training_monitor_status,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_ALERTS = ToolSpec(
+    name="training.monitor.alerts",
+    description=inspect.cleandoc(training_monitor_alerts.__doc__ or ""),
+    parameters=[
+        ToolParam("severity", "string", "", False),
+        ToolParam("limit", "integer", "", False),
+    ],
+    execute=training_monitor_alerts,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_METRICS = ToolSpec(
+    name="training.monitor.metrics",
+    description=inspect.cleandoc(training_monitor_metrics.__doc__ or ""),
+    parameters=[ToolParam("limit", "integer", "", False)],
+    execute=training_monitor_metrics,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+SPEC_MONITOR_RESET = ToolSpec(
+    name="training.monitor.reset",
+    description=inspect.cleandoc(training_monitor_reset.__doc__ or ""),
+    parameters=[],
+    execute=training_monitor_reset,
+    auth_scope="public",
+    idempotent=False,
+    version="1",
+)
+
+SPEC_MONITOR_RESOURCES = ToolSpec(
+    name="training.monitor.resources",
+    description=inspect.cleandoc(training_monitor_resources.__doc__ or ""),
+    parameters=[],
+    execute=training_monitor_resources,
+    auth_scope="public",
+    idempotent=True,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_FINETUNED_LIST,
+        RouteSpec(
+            path="/training/finetuned-models", envelope=False, summary="List Finetuned Models"
+        ),
+        list_finetuned_models,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FINETUNED_LOAD,
+        RouteSpec(
+            path="/training/finetuned-models/{name}/load",
+            envelope=False,
+            summary="Load Finetuned Model",
+        ),
+        load_finetuned_model,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FINETUNED_DELETE,
+        RouteSpec(
+            path="/training/finetuned-models/{name}",
+            method="DELETE",
+            envelope=False,
+            summary="Delete Finetuned Model",
+        ),
+        delete_finetuned_model,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_CHECK,
+        RouteSpec(path="/recovery/check", envelope=False, summary="Check Crashed Jobs"),
+        check_crashed_jobs,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_RECOVERABLE,
+        RouteSpec(path="/recovery/recoverable", envelope=False, summary="Get Recoverable Jobs"),
+        get_recoverable_jobs,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_EVENTS,
+        RouteSpec(path="/recovery/events", envelope=False, summary="Get Recovery Events"),
+        get_recovery_events,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_RECOVER,
+        RouteSpec(path="/recovery/recover/{job_id}", envelope=False, summary="Recover Job"),
+        recover_job,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_ABANDON,
+        RouteSpec(
+            path="/recovery/abandon/{job_id}",
+            method="DELETE",
+            envelope=False,
+            summary="Abandon Recovery",
+        ),
+        abandon_recovery,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOVERY_STATS,
+        RouteSpec(path="/recovery/stats", envelope=False, summary="Get Recovery Stats"),
+        get_recovery_stats,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_LOG_GET,
+        RouteSpec(path="/training/log", envelope=True, summary="Training Log"),
+        training_log,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STOP_ALL,
+        RouteSpec(path="/training/stop", envelope=True, summary="Training Stop"),
+        training_stop,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_LIST,
+        RouteSpec(path="/training/checkpoints", envelope=True, summary="Training List Checkpoints"),
+        training_list_checkpoints,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_DELETE,
+        RouteSpec(
+            path="/training/checkpoints/{name}",
+            method="DELETE",
+            envelope=True,
+            summary="Training Delete Checkpoint",
+        ),
+        training_delete_checkpoint,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_LOAD,
+        RouteSpec(
+            path="/training/checkpoints/{name}/load",
+            envelope=False,
+            summary="Training Load Checkpoint",
+        ),
+        training_load_checkpoint,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_DOWNLOAD,
+        RouteSpec(
+            path="/training/checkpoints/{name}/download",
+            envelope=False,
+            summary="Training Download Checkpoint",
+        ),
+        training_download_checkpoint,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_CHECKPOINTS_INFO,
+        RouteSpec(
+            path="/training/checkpoints/{name}/info",
+            envelope=True,
+            summary="Training Checkpoint Info",
+        ),
+        training_checkpoint_info,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_METRICS_EXPORT,
+        RouteSpec(
+            path="/training/metrics/export", envelope=False, summary="Training Metrics Export"
+        ),
+        training_metrics_export,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FROM_SESSIONS_CANCEL,
+        RouteSpec(
+            path="/training/from-sessions/cancel",
+            envelope=True,
+            summary="Training Cancel From Sessions",
+        ),
+        training_cancel_from_sessions,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STREAM_LIVE,
+        RouteSpec(path="/training/stream", envelope=False, summary="Training Stream"),
+        training_stream,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STREAM_FROM_SESSIONS,
+        RouteSpec(
+            path="/training/from-sessions-stream",
+            envelope=False,
+            summary="Training From Sessions Stream",
+        ),
+        training_from_sessions_stream,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RECOMMEND_GET,
+        RouteSpec(path="/training/recommend", envelope=True, summary="Get Training Recommendation"),
+        get_training_recommendation,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_TRENDS_GET,
+        RouteSpec(path="/training/trends", envelope=True, summary="Get Training Trends"),
+        get_training_trends,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_STATUS,
+        RouteSpec(path="/monitor", envelope=True, summary="Training Monitor Status"),
+        training_monitor_status,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_ALERTS,
+        RouteSpec(path="/monitor/alerts", envelope=True, summary="Training Monitor Alerts"),
+        training_monitor_alerts,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_METRICS,
+        RouteSpec(path="/monitor/metrics", envelope=True, summary="Training Monitor Metrics"),
+        training_monitor_metrics,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_RESET,
+        RouteSpec(path="/monitor/reset", envelope=True, summary="Training Monitor Reset"),
+        training_monitor_reset,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_MONITOR_RESOURCES,
+        RouteSpec(path="/monitor/resources", envelope=True, summary="Training Monitor Resources"),
+        training_monitor_resources,
+    )
+)

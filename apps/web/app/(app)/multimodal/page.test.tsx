@@ -18,9 +18,21 @@ vi.mock('@/lib/controllers', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: vi.fn().mockReturnValue('Error'),
@@ -66,6 +78,12 @@ vi.mock('@/components/multimodal/ImageGenerationCard', () => ({
 }))
 vi.mock('@/components/multimodal/AudioCard', () => ({
   default: () => <div data-testid="audio-card" />,
+}))
+vi.mock('@/components/multimodal/VqaSection', () => ({
+  default: () => <div data-testid="vqa-section" />,
+}))
+vi.mock('@/components/multimodal/ObjectDetectionSection', () => ({
+  default: () => <div data-testid="object-detection-section" />,
 }))
 
 import MultimodalPage from './page'
@@ -144,6 +162,18 @@ describe('MultimodalPage — other cards', () => {
     render(<MultimodalPage />)
     await act(async () => {})
     expect(screen.getByTestId('audio-card')).toBeTruthy()
+  })
+
+  it('shows VQA section', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('vqa-section')).toBeTruthy()
+  })
+
+  it('shows object detection section', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('object-detection-section')).toBeTruthy()
   })
 })
 

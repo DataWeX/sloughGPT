@@ -29,14 +29,18 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROD_ROOTS = (
-    REPO_ROOT / "domain",
-)
+PROD_ROOTS = (REPO_ROOT / "domain",)
 ROUTERS_DIR = REPO_ROOT / "apps" / "api" / "server" / "routers"
 
 # Existing pair-signal files (backward + step/clip). Shrink-only: new files
 # with a loop body are a fourth-loop violation. Removals require deleting or
 # converting the loop to an adapter over training_handler first.
+#
+# 2026-11-13 re-baseline: `_has_step` was widened from the literal
+# ``optimizer.step`` to any ``.step(``, so three pre-existing loops that a
+# renamed optimizer variable had been hiding became visible. They are added
+# here as pre-existing debt, NOT as new loops — the ratchet still rejects
+# loop #23. Converting them to `training_handler` adapters is the end state.
 _LOOP_BODY_ALLOWLIST: frozenset[str] = frozenset(
     {
         "domain/core/_internal/soul.py",
@@ -45,10 +49,12 @@ _LOOP_BODY_ALLOWLIST: frozenset[str] = frozenset(
         "domain/inference/_internal/slo_embedder.py",
         "domain/infrastructure/_internal/knowledge_weight_integrator.py",
         "domain/infrastructure/_internal/truth_maintainer.py",
+        "domain/learner/_internal/continual.py",
         "domain/multimodal/_internal/diffusion.py",
         "domain/multimodal/_internal/engine.py",
         "domain/multimodal/_internal/vae.py",
         "domain/multimodal/_internal/vision.py",
+        "domain/shell/_internal/model_brain.py",
         "domain/shell/_internal/vm_devices.py",
         "domain/training/_internal/chat_trainer.py",
         "domain/training/_internal/distill_gpt2.py",
@@ -58,6 +64,7 @@ _LOOP_BODY_ALLOWLIST: frozenset[str] = frozenset(
         "domain/training/_internal/slonet.py",
         "domain/training/_internal/train_pipeline.py",
         "domain/training/_internal/training_handler.py",
+        "domain/training/_internal/video_trainer.py",
     }
 )
 
@@ -92,7 +99,12 @@ def _has_backward(src: str) -> bool:
 
 
 def _has_step(src: str) -> bool:
-    return "optimizer.step" in src or "clip_gradients" in src
+    # Any ``.step(`` call, not just the literal ``optimizer.step``: a renamed
+    # optimizer variable (``opt.step(...)``) must not evade detection. It did —
+    # video_trainer/continual/model_brain each held a full loop while the gate
+    # stayed green. ``optimizer.step`` (no parens) and ``clip_gradients`` are
+    # kept as well so the detector can only ever widen, never drop a match.
+    return ".step(" in src or "optimizer.step" in src or "clip_gradients" in src
 
 
 def _is_loop_body(src: str) -> bool:

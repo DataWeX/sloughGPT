@@ -15,10 +15,22 @@ vi.mock('@/lib/auth', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
-    selector({ addToast: vi.fn() }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+      selector({ addToast: vi.fn() }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 import PermissionsPage from './page'
 

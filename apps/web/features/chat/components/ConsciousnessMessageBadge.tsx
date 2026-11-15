@@ -25,7 +25,7 @@ export function ConsciousnessMessageBadge({ messageId }: Props) {
 
   return (
     <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-      {mood && <span className="text-violet-400">{mood}</span>}
+      {mood && <span className="text-primary">{mood}</span>}
       {growth !== 0 && (
         <span className={cn('font-mono', growth > 0 ? 'text-success' : 'text-destructive')}>
           {growth > 0 ? '+' : ''}{growth.toFixed(3)}

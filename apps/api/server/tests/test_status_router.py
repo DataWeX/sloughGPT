@@ -60,9 +60,9 @@ class TestStatus:
 
 class TestReady:
     def test_ready_returns_true(self, monkeypatch):
-        from domain.inference._internal.native import engine as native_engine
-
-        monkeypatch.setattr(native_engine, "get_engine", lambda: object())
+        # The generation probe needs no patch: it checks the transport
+        # callables on domain.inference.generation, which hold regardless of
+        # whether the platform-native lib can load.
         resp = client.get("/ready")
         assert resp.status_code == 200
         data = _data(resp)
@@ -95,10 +95,9 @@ class TestReady:
             assert data["checks"]["database"] is False
 
     def test_ready_with_inference_down(self):
-        with patch(
-            "domain.inference._internal.native.engine.get_engine",
-            side_effect=Exception("engine missing"),
-        ):
+        # Null one transport callable so the generation probe reports
+        # unavailable — the /ready key stays "inference" for wire compat.
+        with patch("domain.inference.generation.hosted", new=None):
             resp = client.get("/ready")
             data = _data(resp)
             assert data["checks"]["inference"] is False

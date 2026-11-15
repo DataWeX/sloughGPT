@@ -18,7 +18,6 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Add project sub-packages at high priority (position 0).
 # _REPO_ROOT itself goes at the end to avoid shadowing sub-package modules.
 for _p in (
-    _REPO_ROOT / "packages" / "core-py",
     _REPO_ROOT / "packages" / "sdk-py",
     _REPO_ROOT / "apps" / "api" / "server",
     _REPO_ROOT / "apps" / "cli" / "src",
@@ -54,6 +53,55 @@ def build_test_app(*routers):
     register_all_handlers(app)
 
     return app
+
+
+@pytest.fixture(autouse=True)
+def _clear_chat_response_cache():
+    """Isolate the session-keyed chat replay cache between tests.
+
+    Module-level state (infrastructure.chat_response_cache): a completed
+    turn in one test would otherwise be replayed into the next test's
+    identical POST (card 8125c86e).
+    """
+    from infrastructure.chat_response_cache import _chat_response_cache
+
+    _chat_response_cache.clear()
+    yield
+    _chat_response_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _stop_infra_threads():
+    """L3: stop leaked infra background threads after each test (root suite).
+
+    The mirror of tests/core-py/conftest.py's fixture (aabe3dd09) — that
+    conftest never loads for `tests/`, so the root suite leaked the same
+    threads: the CI `test-root` job finished all tests in ~2.5 min, then
+    hung at interpreter exit with `feedback-scheduler`/engine threads
+    alive, holding the CI/CD concurrency group for hours (card
+    20261102_025758). Only subsystems this test imported are touched.
+    """
+    yield
+    workflow_mod = sys.modules.get("domain.feedback._internal.workflow")
+    if workflow_mod is not None:
+        stop_all = getattr(workflow_mod, "stop_all_workflows", None)
+        if stop_all is not None:
+            stop_all()
+    faf_mod = sys.modules.get("domain.infrastructure._internal.fire_and_forget")
+    if faf_mod is not None:
+        reset = getattr(faf_mod, "reset_pool", None)
+        if reset is not None:
+            reset()
+    idle_mod = sys.modules.get("domain.infrastructure._internal.idle_manager")
+    if idle_mod is not None:
+        stop_all = getattr(idle_mod, "stop_all_idle_managers", None)
+        if stop_all is not None:
+            stop_all()
+    pugqeep_mod = sys.modules.get("domain.infrastructure._internal.pugqeep.engine")
+    if pugqeep_mod is not None:
+        stop_all = getattr(pugqeep_mod, "stop_all_pugqeep", None)
+        if stop_all is not None:
+            stop_all()
 
 
 @pytest.fixture
@@ -109,3 +157,12 @@ class TestHelpers:
 @pytest.fixture
 def helpers() -> TestHelpers:
     return TestHelpers()
+
+
+def pytest_sessionstart(session):
+    try:
+        from scripts.purge_stale_pyc import purge_stale_pyc
+
+        purge_stale_pyc(apply=True)  # noqa: I001
+    except Exception:
+        pass  # bytecode purge is a guard, never a session-breaker

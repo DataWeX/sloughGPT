@@ -3,7 +3,7 @@
 import { useCallback, useRef, useEffect } from 'react'
 import { trainingFacade } from '@/lib/training-facade'
 import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { createSSEStream, type SSEEnvelope, type SSEStream } from '@/lib/sse-client'
 import { logger } from '@/lib/dev-log'
 import { formatToastError } from '@/lib/error-utils'
 
@@ -12,17 +12,21 @@ const _log = logger.child('training-stream')
 const MAX_LOSS_HISTORY = 200
 
 /**
- * Manages the SSE EventSource for distill (auto-train) training.
+ * Manages the SSE stream for distill (auto-train) training.
  * Parses the standard envelope and writes progress to the app shell.
  *
  * Returns a start function and provides cleanup on unmount.
  */
 export function useTrainingStream() {
-  const esRef = useRef<EventSource | null>(null)
+  const streamRef = useRef<SSEStream | null>(null)
+  // Separates "we called stop()" from a genuine drop, so onClose stays quiet
+  // after an intentional closeStream() (complete / error / unmount).
+  const stoppedRef = useRef(false)
 
   const closeStream = useCallback(() => {
-    esRef.current?.close()
-    esRef.current = null
+    stoppedRef.current = true
+    streamRef.current?.stop()
+    streamRef.current = null
   }, [])
 
   const startSSETraining = useCallback(
@@ -56,12 +60,12 @@ export function useTrainingStream() {
             dataQuality: null,
           })
 
-          const es = new EventSource(`${PUBLIC_API_URL}/training/stream`)
-          esRef.current = es
-
-          es.onmessage = (e) => {
+          const handleEvent = (e: unknown) => {
             try {
-              const env = JSON.parse(e.data)
+              // The transport hands us its envelope type; the SSE payload is still
+              // untyped wire data, so the fields feeding typed state are narrowed
+              // at the point of use rather than blanket-`any` here.
+              const env = e as Partial<SSEEnvelope>
               if (env.stream !== 'auto-train') return
 
               const patch: Record<string, unknown> = {}
@@ -86,12 +90,12 @@ export function useTrainingStream() {
                 let hist = current.lossHistory
                 if (env.data?.loss != null) {
                   const step = (hist[hist.length - 1]?.step ?? 0) + 1
-                  hist = [...hist, { step, loss: env.data.loss }]
+                  hist = [...hist, { step, loss: env.data.loss as number }]
                   patch.loss = env.data.loss
                 }
                 if (env.data?.eval_loss != null) {
-                  const step = env.data?.step ?? hist.length
-                  hist = [...hist, { step, loss: env.data.eval_loss, isEval: true }]
+                  const step = (env.data?.step as number | undefined) ?? hist.length
+                  hist = [...hist, { step, loss: env.data.eval_loss as number, isEval: true }]
                 }
                 patch.lossHistory =
                   hist.length > MAX_LOSS_HISTORY ? hist.slice(-MAX_LOSS_HISTORY) : hist
@@ -104,18 +108,19 @@ export function useTrainingStream() {
                 const current = readTraining()
                 writeTraining({
                   phase: 'complete',
-                  checkpoint: env.data?.checkpoint ?? null,
-                  finalLoss: env.data?.final_loss ?? null,
-                  modelPath: env.data?.model_path ?? current.modelPath,
-                  avgQuality: env.data?.avg_quality ?? current.avgQuality,
-                  dataQuality: env.data?.data_quality ?? current.dataQuality,
+                  checkpoint: (env.data?.checkpoint as string | null) ?? null,
+                  finalLoss: (env.data?.final_loss as number | null) ?? null,
+                  modelPath: (env.data?.model_path as string | null) ?? current.modelPath,
+                  avgQuality: (env.data?.avg_quality as number | null) ?? current.avgQuality,
+                  dataQuality:
+                    (env.data?.data_quality as typeof current.dataQuality) ?? current.dataQuality,
                 })
                 addToast('Training complete', 'success')
                 onCheckpointUpdate?.()
               }
               if (env.status === 'error') {
                 closeStream()
-                const errorMsg = env.message || env.data?.error || 'Training failed'
+                const errorMsg = env.message || (env.data?.error as string) || 'Training failed'
                 writeTraining({ phase: 'error', error: errorMsg })
                 addToast(errorMsg, 'error')
               }
@@ -124,19 +129,23 @@ export function useTrainingStream() {
             }
           }
 
-          let esRetries = 0
-          es.onopen = () => {
-            esRetries = 0
-          }
-          es.onerror = () => {
-            if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
-              closeStream()
+          // startSSETraining closes any previous stream first, which sets
+          // stoppedRef — a freshly opened stream is live again, so reset it
+          // before handing control to the transport.
+          stoppedRef.current = false
+          const stream = createSSEStream({
+            url: '/training/stream',
+            // Same policy the EventSource had: three strikes, then tell the UI.
+            maxReconnects: 3,
+            onEvent: (e) => handleEvent(e),
+            onClose: () => {
+              if (stoppedRef.current) return // intentional closeStream()
               writeTraining({ phase: 'error', error: 'Connection lost' })
               addToast('Connection lost during training', 'error')
-            } else {
-              esRetries++
-            }
-          }
+            },
+          })
+          streamRef.current = stream
+          stream.start()
         })
         .catch((e) => addToast(formatToastError(e, 'Could not start training'), 'error'))
     },

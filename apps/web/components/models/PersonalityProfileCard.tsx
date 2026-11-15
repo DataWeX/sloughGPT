@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -8,7 +9,6 @@ import { IconPlus } from '@sloughgpt/strui'
 import SoulVisualizer from '@/components/souls/SoulVisualizer'
 import TraitEditor from '@/components/souls/TraitEditor'
 import { soulsController } from '@/lib/souls-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { formatMonthDay } from '@/lib/time-format'
 
@@ -31,7 +31,7 @@ export default function PersonalityProfileCard({
   onTraitsSaved,
   onTraitsChanged,
 }: PersonalityProfileCardProps) {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [editingTraits, setEditingTraits] = useState(false)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [snapshotName, setSnapshotName] = useState('')

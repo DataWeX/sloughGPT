@@ -1,8 +1,9 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { cn, Button, IconChevronRight } from '@sloughgpt/strui'
@@ -16,17 +17,32 @@ import { useApiMonitor } from '@/lib/api-monitor-store'
 import { RadixToastContainer } from '@/features/chat/components/feedback/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
 import { GlobalBanner } from '@/components/GlobalBanner'
+import { NotificationDock } from '@/components/NotificationDock'
+import { loadProcessSnapshot } from '@/lib/process-notifications'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
 import { useToastStore } from '@/lib/toast-store'
+import { useAppStore, syncWithBackend } from '@/lib/store'
 import { useBannerStore } from '@/lib/banner-store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 import { ConvSidebarProvider, useConvSidebar } from '@/features/chat/contexts/ConvSidebarContext'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 import { useLocale } from '@/hooks/useLocale'
+
+/** Hold-off before a non-connected status raises the global drop banner —
+ *  one failed poll is a blip, not an outage the user should be told about.
+ *  Default only: the live value is the `bannerGraceMs` setting (see below). */
+export const OFFLINE_BANNER_GRACE_MS = 5_000
+
+/** How long the green "Backend reconnected" confirmation stays up before it
+ *  retires itself — long enough to read, short enough to be gone.
+ *  Default only: the live value is the `bannerHoldMs` setting (0 = no
+ *  confirmation). */
+export const RECOVERY_BANNER_HOLD_MS = 4_000
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -46,8 +62,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
   const toasts = useToastStore((s) => s.toasts)
-  const dismissToast = useToastStore((s) => s.dismissToast)
-  const clearToasts = useToastStore((s) => s.clearToasts)
+  const dismissToast = notify.dismissToast
+  const clearToasts = notify.clearToasts
   const apiStatus = useApiMonitor((s) => s.status)
   const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed, toggleConv } = useConvSidebar()
   useGlobalShortcuts()
@@ -56,6 +72,21 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   // Initialize live health SSE stream
   useEffect(() => {
     return initLiveStatus()
+  }, [])
+
+  // Process-notification boot snapshot — SSE cannot deliver events that
+  // fired before this client connected (boot-time auto-resume), so the
+  // dock's initial state is the REST projection of durable state.
+  // Contract-versioned and failure-tolerant inside (never blocks boot).
+  useEffect(() => {
+    void loadProcessSnapshot()
+  }, [])
+
+  // Global defaults are server truth (Phase 2): pull them once at boot so the
+  // chat dialog can resolve an effective value per conversation
+  // (conversation AppScope delta ?? this global default).
+  useEffect(() => {
+    void syncWithBackend()
   }, [])
 
   useEffect(() => {
@@ -93,7 +124,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
       if (detail?.message) {
-        useToastStore.getState().addToast(detail.message, detail.type || 'info')
+        notify.toast(detail.message, detail.type || 'info')
       }
     }
     window.addEventListener('show-toast', handler)
@@ -121,19 +152,96 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const closeMobileNav = () => setMobileNavOpen(false)
 
   // Backend health lives on ONE banner surface (GlobalBanner + useBannerStore).
-  // The restarting notice shares the boot-stall key 'backend-connection' so the
-  // two states replace each other instead of stacking two rows for one failure.
-  // Cleanup dismisses it the moment the status leaves 'reloading' — a reconnect
-  // clears the banner on its own.
+  // Lifecycle mirrors the CONNECTION, not the request:
+  //   offline/error → grace → red "unreachable" (held as long as the drop)
+  //   connected     → green "reconnected" confirmation → auto-dismiss
+  // The ref records that a drop was actually shown, so (a) booting online
+  // never flashes a green banner, and (b) recovery only confirms what the
+  // user saw. Same key 'backend-connection' throughout — red and green
+  // replace each other in the single slot instead of stacking two rows.
+  // Timings are settings-backed flags (bannerGraceMs / bannerHoldMs in
+  // lib/store): read via getState() when each timer arms, so editing a flag
+  // applies to the NEXT lifecycle event without re-running this effect and
+  // re-arming an in-flight grace/hold. Local settings — readable offline,
+  // which is exactly when this banner is up.
+  const connectionDropRef = useRef(false)
   useEffect(() => {
-    if (apiStatus !== 'reloading') return
-    const id = useBannerStore.getState().showBanner({
+    const down = apiStatus === 'offline' || apiStatus === 'error'
+    if (down) {
+      const { bannerGraceMs } = useAppStore.getState().settings
+      let id: string | null = null
+      const raise = () => {
+        id = notify.banner({
+          key: 'backend-connection',
+          tone: 'destructive',
+          title: 'Backend unreachable',
+          message: 'The connection dropped — retrying automatically.',
+          action: {
+            label: 'Retry',
+            onAction: () => {
+              // GlobalBanner retires the row on action-click, and a FAILED
+              // probe changes no status — so without this the user's Retry
+              // would silently swallow the outage notice while the backend
+              // is still down. Re-raise unless another producer took the
+              // slot meanwhile (never displace an unrelated banner).
+              void probeBackendAndRevalidate().then((ok) => {
+                if (
+                  !ok &&
+                  !useBannerStore.getState().banners.some((b) => b.key !== 'backend-connection')
+                ) {
+                  raise()
+                }
+              })
+            },
+          },
+        })
+        connectionDropRef.current = true
+      }
+      const timer = setTimeout(raise, bannerGraceMs ?? OFFLINE_BANNER_GRACE_MS)
+      return () => {
+        clearTimeout(timer)
+        // A superseded id is a no-op (single-slot store) — another producer's
+        // banner is left alone. `id` tracks the latest raise, so a re-raised
+        // banner is retired here too when the status moves on.
+        if (id) notify.dismissBanner(id)
+      }
+    }
+
+    // Recovery confirmation: only after a drop the user actually saw, and only
+    // once the connection is genuinely back — 'connecting'/'reloading' keep
+    // waiting for 'connected' before confirming.
+    if (apiStatus !== 'connected' || !connectionDropRef.current) return
+    // Never displace an unrelated banner that took the slot meanwhile.
+    const current = useBannerStore.getState().banners[0]
+    if (current && current.key !== 'backend-connection') {
+      connectionDropRef.current = false
+      return
+    }
+    const { bannerHoldMs } = useAppStore.getState().settings
+    // 0 disables the recovery confirmation — the drop ref clears silently.
+    if ((bannerHoldMs ?? RECOVERY_BANNER_HOLD_MS) <= 0) {
+      connectionDropRef.current = false
+      return
+    }
+    const greenId = notify.banner({
       key: 'backend-connection',
-      tone: 'warning',
-      title: 'Backend restarting',
-      message: 'reconnecting…',
+      tone: 'success',
+      title: 'Backend reconnected',
+      message: 'The connection is stable again.',
     })
-    return () => useBannerStore.getState().dismissBanner(id)
+    // The drop ref clears only when the hold actually completes, so a
+    // StrictMode remount (cleanup clears the timer, ref still set) re-raises
+    // the banner and re-arms the hold instead of leaving it stuck on screen.
+    const timer = setTimeout(() => {
+      notify.dismissBanner(greenId)
+      connectionDropRef.current = false
+    }, bannerHoldMs ?? RECOVERY_BANNER_HOLD_MS)
+    return () => {
+      clearTimeout(timer)
+      // Retire the green banner on re-run/unmount; the drop ref stays set so a
+      // StrictMode second pass re-shows it (single slot replaces, never stacks).
+      notify.dismissBanner(greenId)
+    }
   }, [apiStatus])
 
   return (
@@ -142,6 +250,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           "restarting" notice is raised through the store (see effect above), so
           it never stacks a second row beside the boot-stall banner. */}
       <GlobalBanner />
+
+      {/* Process notifications — THIRD tier: multi-slot, process-backed,
+          action-first. Deliberately separate from the single-slot banner
+          above (one-banner invariant) and from transient toasts. */}
+      <NotificationDock />
 
       {/* Mobile header — full-width top bar on < lg */}
       <header className="sl-app-mobile-header">
@@ -181,17 +294,20 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           data-collapsed={navCollapsed ? 'true' : undefined}
         >
           <Sidebar variant="desktop" collapsed={navCollapsed} onToggleCollapse={toggleNav} />
-          {/* 3D bookmark tab — protrudes from sidebar edge */}
+          {/* 3D bookmark tab — protrudes from sidebar edge, floats OVER the
+              conversation panel like a sticker/tray. z-40 keeps it above the
+              panel (which reserves a matching gutter via --nav-tab-protrusion)
+              so it stays hoverable/clickable at any scroll position. */}
           <button
             type="button"
             onClick={toggleNav}
             aria-label={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className={cn(
-              'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
+              'group/tab absolute top-1/2 z-40 flex h-[4.5rem] w-[var(--nav-tab-protrusion)] -translate-y-1/2 items-center justify-center',
               'rounded-r-md cursor-pointer',
               'transition-all duration-300 ease-[cubic-bezier(0.222,0.133,0,1)]',
-              'hover:w-[1.4rem]',
+              'hover:w-[calc(var(--nav-tab-protrusion)_+_0.25rem)]',
               'right-0 translate-x-[calc(100%-1px)]',
               'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
               'shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1)]',

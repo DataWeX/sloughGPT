@@ -38,6 +38,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .interactive import InteractivePrompt
+from .options_screen import OptionsScreen
 
 _COLOR_ENABLED = not os.environ.get("NO_COLOR")
 if _COLOR_ENABLED:
@@ -362,6 +363,8 @@ class Console:
         """
         if self._tui_repl is not None:
             return _TuiSpinner(self, message)
+        if not getattr(self._io, "_is_tty", False):
+            return _QuietSpinner(self, message)
         return _Spinner(self, message, rate)
 
     # ── Confirm ──────────────────────────────────────────────────────
@@ -893,6 +896,28 @@ class Console:
         """Multi-field form with validation."""
         self._emit("form", {"message": message})
         return self._interactive.form(fields, message)
+
+    def options_screen(self, rows: list[dict], message: str = "Options") -> dict[str, str]:
+        """Options screen: rows are command-line options named by their flag."""
+        self._emit("options_screen", {"message": message})
+        return self._interactive.options_screen(rows, message)
+
+    def run_options_screen(self, screen: OptionsScreen) -> dict[str, str]:
+        """Drive an already-built screen: raw loop on a TTY, plain lines otherwise.
+
+        One model, two drivers — the degradation lives here, at the
+        driver, so the fallback can never become a second hand-drawn
+        view of the same options.  The plain path writes through this
+        Console's io (the one the capture and streaming paths already
+        share) using the model's own `render()` lines, and returns the
+        current values, exactly as the non-TTY interactive prompt does.
+        """
+        self._emit("options_screen", {"message": screen.message})
+        if not self._interactive._is_tty:
+            for text, _style in screen.render():
+                self.write(text)
+            return screen.values()
+        return self._interactive._options_screen_raw(screen)
 
     def playlist_manager(self, items: list[str], message: str = "Playlist:") -> list[str]:
         """Manage ordered list with move up/down and delete."""
@@ -1654,6 +1679,35 @@ class _TuiSpinner:
 
     def fail(self, message: str = "") -> None:
         """Replace with error line."""
+        self._console.error(message or self._message)
+
+
+class _QuietSpinner:
+    """Non-TTY spinner: no animation, no residue in captured output.
+
+    Captured streams (MemoryIO, pipes, SSE) receive only the final status
+    line from ``.ok()`` / ``.fail()`` — never frames or control bytes.
+    ``_Spinner``'s cursor protocol (``\\r`` + ``\\033[K`` at 10 Hz) assumes
+    an interactive terminal; on a capture buffer every frame becomes
+    permanent garbage.  Animation is a TTY capability, not a default.
+    """
+
+    def __init__(self, console: Console, message: str) -> None:
+        self._console = console
+        self._message = message
+
+    def __enter__(self) -> _QuietSpinner:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        pass
+
+    def ok(self, message: str = "") -> None:
+        """Write the final success line (no frames)."""
+        self._console.success(message or self._message)
+
+    def fail(self, message: str = "") -> None:
+        """Write the final error line (no frames)."""
         self._console.error(message or self._message)
 
 

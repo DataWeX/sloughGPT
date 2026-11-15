@@ -38,6 +38,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
+import benchmark_results as br  # noqa: E402 — trend gate's store owner
 import site_doctor_probe as doctor  # noqa: E402
 
 
@@ -278,8 +279,11 @@ def test_the_probe_never_launches_a_browser_sweep() -> None:
     assert "playwright" not in src, "playwright import would break the read-only contract"
 
 
-def test_inference_triage_reports_a_stuck_or_error_engine(monkeypatch) -> None:
+def test_inference_triage_reports_a_stuck_or_error_engine(monkeypatch, tmp_path) -> None:
     """An erroring inference service is a defect the health surface already knows."""
+    # the trend gate reads the benchmark store — isolate it so this test
+    # asserts our triage, never the local machine's record history
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
     detailed = {
         "data": {
             "status": "degraded",
@@ -302,3 +306,184 @@ def test_inference_triage_reports_a_stuck_or_error_engine(monkeypatch) -> None:
     finding = checks["inference-engine"]
     assert finding["severity"] == "high"
     assert "engine timeout" in finding["message"]
+
+
+# ── inference trend gate over the always-record store ──────────────────────
+# (card 20261031_170120 — additive to the health-surface triage above:
+# step change vs drift; the store dir is always monkeypatched, never the
+# local machine's record history)
+
+
+def _inference_store(store: Path, rows: list[tuple[str, float, str]]) -> None:
+    """Write inference records; rows are (timestamp, decode_tok_s, source)."""
+    d = store / "inference"
+    d.mkdir(parents=True, exist_ok=True)
+    for i, (ts, value, source) in enumerate(rows):
+        rec = {
+            "kind": "inference",
+            "model": "m",
+            "commit": "sha",
+            "timestamp": ts,
+            "source": source,
+            "metrics": {"decode_tok_s": value},
+        }
+        (d / f"r{i:02d}.json").write_text(json.dumps(rec), encoding="utf-8")
+
+
+def _healthy_engine(monkeypatch) -> None:
+    detailed = {
+        "data": {
+            "status": "healthy",
+            "services": {"inference": {"status": "ok"}},
+            "model_loaded": True,
+            "device": "cpu",
+            "inference_count": 7,
+        }
+    }
+    monkeypatch.setattr(doctor, "get", lambda url, timeout=5.0: (200, detailed, 0.1))
+
+
+def _trend_checks(monkeypatch) -> dict:
+    _healthy_engine(monkeypatch)
+    return {f["check"]: f for f in doctor.check_inference("http://unused")}
+
+
+def test_trend_gate_flags_a_step_down_as_medium(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    rows = [(f"2026-11-01T00:00:{i:02d}Z", 10.0, "local") for i in range(5)]
+    rows.append(("2026-11-01T00:00:05Z", 4.0, "local"))  # newest = current
+    _inference_store(tmp_path / "benchmarks", rows)
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    assert trend["severity"] == "medium"  # regressed trips --strict
+    assert "[local]" in trend["message"]  # source tag, compact
+    assert "regression candidate" in trend["message"]
+    assert checks["inference-engine"]["severity"] == "ok"  # engine itself fine
+
+
+def test_trend_gate_ok_when_within_band(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    rows = [(f"2026-11-01T00:00:{i:02d}Z", 10.0, "local") for i in range(6)]
+    _inference_store(tmp_path / "benchmarks", rows)
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    assert trend["severity"] == "ok"
+    assert "within" in trend["message"]
+
+
+def test_trend_insufficient_on_empty_store(monkeypatch, tmp_path) -> None:
+    """Fresh store: say n=0 as ok — never a false alarm, never --strict."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    assert trend["severity"] == "ok"
+    assert "insufficient" in trend["message"]
+    assert "n=0" in trend["message"]
+
+
+def test_trend_band_is_same_source_only(monkeypatch, tmp_path) -> None:
+    """ci records never pad a local band — 4 priors exist, only 1 counts."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    rows = [
+        ("2026-11-01T00:00:00Z", 10.0, "ci"),
+        ("2026-11-01T00:00:01Z", 11.0, "ci"),
+        ("2026-11-01T00:00:02Z", 9.0, "ci"),
+        ("2026-11-01T00:00:03Z", 10.0, "local"),  # the only local prior
+        ("2026-11-01T00:00:04Z", 4.0, "local"),  # current
+    ]
+    _inference_store(tmp_path / "benchmarks", rows)
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    # mixed sources would give n=4 and a regressed verdict; same-source
+    # gives n=1 -> insufficient, reported ok
+    assert "n=1" in trend["message"]
+    assert trend["severity"] == "ok"
+    assert "[local]" in trend["message"]
+
+
+def test_trend_skipped_when_health_does_not_answer(monkeypatch, tmp_path) -> None:
+    """No /health/detailed, no triage at all — the early return skips trend."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    monkeypatch.setattr(doctor, "get", lambda url, timeout=5.0: (503, None, 0.1))
+    findings = doctor.check_inference("http://unused")
+    assert findings and findings[0]["check"] == "inference-engine"
+    assert findings[0]["severity"] == "high"
+    assert all(f["check"] != "inference-trend" for f in findings)
+
+
+def test_trend_absent_when_newest_record_lacks_headline(monkeypatch, tmp_path) -> None:
+    """Nothing to judge -> no finding, rather than a fabricated one."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    d = tmp_path / "benchmarks" / "inference"
+    d.mkdir(parents=True)
+    for i in range(3):
+        rec = {
+            "kind": "inference",
+            "model": "m",
+            "timestamp": f"2026-11-01T00:00:0{i}Z",
+            "source": "local",
+            "metrics": {"r2": 0.99},
+        }
+        (d / f"r{i}.json").write_text(json.dumps(rec), encoding="utf-8")
+    checks = _trend_checks(monkeypatch)
+    assert "inference-trend" not in checks
+
+
+# --- static gates entry (card 20261112_060632) ---------------------------
+
+
+def test_main_runs_the_gates_check() -> None:
+    """Wiring pin: the gates entry exists AND main() invokes it.
+
+    A check nobody calls is dead code — the contract is the invocation, not
+    the function's existence.
+    """
+    import inspect
+
+    src = inspect.getsource(doctor.main)
+    assert "check_gates()" in src, "gates entry defined but main() never runs it"
+
+
+def test_gates_check_names_the_three_static_gates() -> None:
+    """Each in-scope gate surfaces by name on this tree, whatever its verdict.
+
+    The name is carried by the ok/info/high line alike, so presence is
+    independent of whether the tree is green — the operator always sees
+    which gates ran.
+    """
+    checks = {f["check"] for f in doctor.check_gates()}
+    assert {"gate-command-parity", "gate-domain-baseline", "gate-router-manifest"} <= checks, checks
+
+
+def test_gates_check_ranks_new_drift_high_and_known_debt_info(monkeypatch) -> None:
+    """--strict trips on new drift only: baselined debt reads info, not defect.
+
+    Mirrors the missing-journey-report rule — known and tracked is context,
+    new drift is a defect. Seeded reports make the ranking a pure function
+    of the gate verdict, independent of the tree's real state.
+    """
+    from domain import gates as gates_mod
+
+    seeded = [
+        gates_mod.GateReport(name="command-parity", ok=False, findings=["new drift"], known=[]),
+        gates_mod.GateReport(name="domain-baseline", ok=True, findings=[], known=["baselined gap"]),
+        gates_mod.GateReport(name="router-manifest", ok=True, findings=[], known=[]),
+    ]
+    monkeypatch.setattr(gates_mod, "run_gates", lambda *a, **k: seeded)
+
+    findings = doctor.check_gates()
+    by_key = {(f["check"], f["message"]): f["severity"] for f in findings}
+    assert by_key[("gate-command-parity", "new drift")] == "high"
+    assert by_key[("gate-domain-baseline", "known: baselined gap")] == "info"
+    # report() counts critical/high/medium/low — info must not be among them,
+    # or --strict would trip on debt the baseline already tolerates.
+    assert doctor.report(findings) == 1
+
+
+def test_the_gates_check_makes_no_network_calls() -> None:
+    """Static means static: the entry must not touch HTTP or sockets."""
+    import inspect
+
+    src = inspect.getsource(doctor.check_gates)
+    for forbidden in ("get(", "urlopen", "http.client", "requests"):
+        assert forbidden not in src, f"check_gates must be offline, found {forbidden!r}"

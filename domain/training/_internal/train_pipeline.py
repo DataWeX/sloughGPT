@@ -23,13 +23,15 @@ Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import math
 import os
 import threading
 import time
 import warnings
-from collections.abc import Callable
+from collections import deque
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -43,6 +45,9 @@ try:
     from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
+from domain.infrastructure._internal.pugqeep.singleton import spawn_loop
+from domain.shared._internal.feature_flags import is_enabled
+from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
     is_experience_source,
@@ -51,6 +56,12 @@ from domain.training._internal.experience_adapter import (
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
 from domain.training._internal.slonet import load_checkpoint_npz
+from domain.training._internal.step_strategy import (
+    EwcStrategy,
+    OwnedObjectiveStrategy,
+    StepStrategy,
+)
+from domain.training._internal.trace import StepTrace, fingerprint_batch
 from domain.training._internal.trainer_protocol import TrainResult
 from domain.training._internal.training_feed import is_feed_source, load_feed_text
 from domain.training._internal.training_handler import (
@@ -199,28 +210,58 @@ def validate_conversation_data(path: str, max_errors: int = 10) -> dict:
     }
 
 
-def prepare_data(data_path, block_size=128, tokenizer=None):
-    """Prepare training data from a text file, feed, or multiple datasets with ratios.
+def _resolve_plain_file(data_path) -> Path | None:
+    """Resolve a plain-file training source to its on-disk path.
+
+    The single file/dataset-name resolution shared by ``load_corpus_text``
+    and ``prepare_data`` — the content-addressed token cache needs the
+    resolved path *before* any text is read, and both entry points must
+    raise the identical ``FileNotFoundError`` for a missing source.
+
+    Returns ``None`` for sources that load through other branches
+    (experience, training feeds, dataset lists).
+    """
+    if isinstance(data_path, str) and (
+        is_experience_source(data_path) or is_feed_source(data_path)
+    ):
+        return None
+    if isinstance(data_path, list):
+        return None
+    if data_path is None:
+        raise FileNotFoundError("No data_path provided and no default dataset found")
+    path = Path(data_path)
+    if path.is_file():
+        return path
+    # Try as a dataset name under data/
+    alt = Path("data") / data_path / "input.txt"
+    if alt.is_file():
+        return alt
+    raise FileNotFoundError(f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')")
+
+
+def load_corpus_text(data_path, block_size=128) -> str:
+    """Resolve a training source to its raw corpus text.
+
+    The single corpus-resolution path: ``prepare_data`` and the API-side
+    tokenizer seam both load through here, so a tokenizer always trains on
+    exactly the text the trainer will see.
 
     Args:
         data_path: path to a text file, a dataset name (resolved against
             ``datasets/<name>/input.txt``), a list of dataset names, a list of
             ``(name, ratio)`` tuples, or a training feed specification
             (``feed:<source>`` / ``http(s)://...`` — see training_feed).
-        block_size: context window (used for logging only).
-        tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
-            TokenTree). When provided, the corpus is tokenized with it and the
-            returned vocabulary is the tokenizer's, not the raw char set.
+        block_size: context window (used by experience loading only).
 
     Returns:
-        (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
+        The corpus text.
     """
     if isinstance(data_path, str) and is_experience_source(data_path):
         corpus = None
         feedback = None
         if isinstance(data_path, str) and data_path.startswith("experience:"):
             # experience:<corpus_path> optional single override
-            rest = data_path[len("experience:"):]
+            rest = data_path[len("experience:") :]
             if rest and rest not in ("chat", "owned"):
                 corpus = rest
         text, _pairs = load_experience_text(
@@ -284,20 +325,84 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         text = "".join(texts)
 
     else:
-        if data_path is None:
-            raise FileNotFoundError("No data_path provided and no default dataset found")
-        path = Path(data_path)
-        if not path.is_file():
-            # Try as a dataset name under data/
-            alt = Path("data") / data_path / "input.txt"
-            if alt.is_file():
-                path = alt
-            else:
-                raise FileNotFoundError(
-                    f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
-                )
+        path = _resolve_plain_file(data_path)
         with open(path, encoding="utf-8") as f:
-            text = f.read()
+            if path.suffix == ".jsonl":
+                # Canonical text corpora (e.g. tinyshakespeare's 32,777
+                # cached records) carry the corpus in each record's `text`
+                # field — extract it, never the JSON syntax around it.
+                # Only `text` is extracted: other record shapes (pair
+                # datasets like user/assistant …) keep their pre-existing
+                # raw-read behaviour. Malformed lines and records without
+                # `text` are skipped; join with newlines. When no record
+                # has a text field, fall back to the raw read.
+                raw = f.read()
+                texts = []
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict):
+                        t = rec.get("text")
+                        if isinstance(t, str) and t:
+                            texts.append(t)
+                text = "\n".join(texts) if texts else raw
+            else:
+                text = f.read()
+
+    return text
+
+
+def prepare_data(data_path, block_size=128, tokenizer=None):
+    """Prepare training data from a text file, feed, or multiple datasets with ratios.
+
+    Args:
+        data_path: path to a text file, a dataset name (resolved against
+            ``datasets/<name>/input.txt``), a list of dataset names, a list of
+            ``(name, ratio)`` tuples, or a training feed specification
+            (``feed:<source>`` / ``http(s)://...`` — see training_feed).
+        block_size: context window (used for logging only).
+        tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
+            TokenTree). When provided, the corpus is tokenized with it and the
+            returned vocabulary is the tokenizer's, not the raw char set.
+
+    Returns:
+        (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
+    """
+    # Resolve the plain-file source once: the token cache needs the path
+    # before any text is read (a hit skips the read AND the tokenize/char
+    # loop below), and a missing source must raise the identical
+    # FileNotFoundError that ``load_corpus_text`` raises.
+    cache_src: Path | None = _resolve_plain_file(data_path)
+    if cache_src is not None:
+        # Content-addressed token cache: key = sha256(file bytes) +
+        # tokenizer-state fingerprint, so an edited corpus or swapped
+        # tokenizer misses cleanly.
+        from domain.training._internal.token_cache import try_load
+
+        cached = try_load(cache_src, "bpe" if tokenizer is not None else "char", tokenizer)
+        if cached is not None:
+            data, vocab_size, stoi, itos = cached
+            if tokenizer is not None:
+                # bpe meta deliberately omits stoi/itos — store_cache's
+                # contract is "bpe mode reloads them from the tokenizer
+                # object, which is already loaded on a hit path". This is
+                # that reload: without it a warm bpe hit returns empty
+                # vocab maps and every downstream decode sees "".
+                stoi = dict(tokenizer.stoi)
+                itos = dict(tokenizer.itos)
+            logger.info(
+                "Data: %d tokens (token cache hit)",
+                len(data),
+                extra={"tag": "TRAIN"},
+            )
+            return data, vocab_size, stoi, itos
+
+    text = load_corpus_text(data_path, block_size=block_size)
 
     if tokenizer is not None:
         data = np.asarray(tokenizer.encode(text), dtype=np.int64)
@@ -305,6 +410,10 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         stoi = dict(tokenizer.stoi)
         itos = dict(tokenizer.itos)
         validate_training_data(text)
+        if cache_src is not None:
+            from domain.training._internal.token_cache import store_cache
+
+            store_cache(cache_src, data, vocab_size, stoi, itos, "bpe", tokenizer=tokenizer)
         logger.info(
             "Data: %d tokens, vocab %d (tokenized)",
             len(data),
@@ -319,6 +428,11 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
     stoi = {c: i for i, c in enumerate(chars)}
     itos = dict(enumerate(chars))
     data = np.asarray([stoi[c] for c in text], dtype=np.int64)
+
+    if cache_src is not None:
+        from domain.training._internal.token_cache import store_cache
+
+        store_cache(cache_src, data, len(chars), stoi, itos, "char")
 
     logger.info(
         "Data: %d tokens, %d chars",
@@ -385,6 +499,21 @@ class TrainerConfig:
     # never change mid-run; eval remains on the initial snapshot.
     feed_refresh_interval: float = 0.0
 
+    # Self-gen flywheel (0 = disabled). Every ``selfgen_interval`` train steps
+    # the trainer samples its own live model; gated continuations are appended
+    # to the ``selfgen`` feed source and mixed into train batches at
+    # ``selfgen_quota`` — the quota keeps the static dataset in every batch
+    # mix, which is the anti-collapse control for self-training.
+    selfgen_interval: int = 0
+    selfgen_quota: float = 0.25
+    selfgen_samples: int = 4
+    selfgen_max_tokens: int = 64
+    selfgen_temperature: float = 0.9
+    selfgen_min_quality: float = 1.0
+    selfgen_prompts: list[str] | None = None
+    selfgen_source: str = "selfgen"
+    selfgen_local_base: str | None = None  # testing hook (mirrors feed local_base)
+
     # Early stopping (0 = disabled; stop if no improvement for N evals)
     early_stopping_patience: int = 5
 
@@ -400,12 +529,26 @@ class TrainerConfig:
     owned_tool_weight: float = 0.3
     owned_memory_weight: float = 0.2
 
-    # Device — SloNet training is pure numpy and always runs on the CPU.
+    # Device — resolved by ``SloughGPTTrainer._setup_device`` (see there).
+    # ``"cpu"`` (default) pins the NumPy backend for the run; ``"auto"`` is the
+    # opt-in to whatever the accelerator probe found; ``"cuda"``/``"metal"``/
+    # ``"opencl"`` are declarations that either resolve or refuse loudly.
+    # The accepted vocabulary comes from ``gpu.known_backends()`` — one
+    # declaration, so this field cannot drift from the seam behind it.
     device: str = "cpu"
 
     def __post_init__(self):
-        if self.device == "auto":
-            self.device = "cpu"
+        # ``None``/blank come from API payloads that did not set device.
+        self.device = str(self.device).strip().lower() if self.device else "cpu"
+        # ``torch`` was removed (SloNet's NumPy engine is the only training
+        # backend); say so instead of listing it as a typo.
+        removed = removed_backend_reason(self.device)
+        if removed is not None:
+            raise ValueError(f"device={self.device!r} is not supported: {removed}")
+        if self.device != "auto" and self.device not in known_backends():
+            raise ValueError(
+                f"device must be 'auto' or one of {sorted(known_backends())}, got {self.device!r}"
+            )
 
         # Validate hyperparameters
         if self.learning_rate <= 0:
@@ -450,6 +593,16 @@ class TrainerConfig:
             raise ValueError(
                 f"feed_refresh_interval must be >= 0, got {self.feed_refresh_interval}"
             )
+        if self.selfgen_interval < 0:
+            raise ValueError(f"selfgen_interval must be >= 0, got {self.selfgen_interval}")
+        if not 0.0 <= self.selfgen_quota <= 1.0:
+            raise ValueError(f"selfgen_quota must be in [0, 1], got {self.selfgen_quota}")
+        if self.selfgen_samples < 1:
+            raise ValueError(f"selfgen_samples must be >= 1, got {self.selfgen_samples}")
+        if not 0.0 <= self.selfgen_min_quality <= 5.0:
+            raise ValueError(
+                f"selfgen_min_quality must be in [0, 5], got {self.selfgen_min_quality}"
+            )
 
 
 # =============================================================================
@@ -472,6 +625,56 @@ def _make_json_safe(obj):
     if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
         return None
     return obj
+
+
+def _remove_checkpoint_artifacts(stale: Path) -> None:
+    """Unlink a stale ``.soul`` and every sibling that shares its name.
+
+    A checkpoint is a file family: the ``.soul`` weights, its ``.meta.json`` /
+    ``.points.json`` sidecars, and the externalized optimizer state
+    (``.optimizer.dat`` / legacy ``.optimizer.json.gz`` — full-name and
+    stem-name conventions both occur). Unlinking only the ``.soul`` leaves
+    orphaned multi-MB moment blobs behind (observed after a pruned periodic
+    checkpoint in the tinyshakespeare run dir).
+
+    Both prune sites — ``_prune_stale_checkpoints`` (window) and
+    ``_enforce_disk_limit`` (byte budget) — call this so the cleanup can
+    never drift between them. All unlinks are ``OSError``-tolerant: a sibling
+    that vanished mid-scan is already handled by whoever removed it.
+    """
+    from domain.inference._internal.soul_meta_slim import STATE_SUFFIX, STATE_SUFFIX_BIN
+
+    candidates = [
+        stale,
+        Path(str(stale) + ".meta.json"),
+        stale.parent / (stale.stem + ".meta.json"),
+        stale.parent / (stale.stem + ".points.json"),
+    ]
+    for state_suffix in (STATE_SUFFIX, STATE_SUFFIX_BIN):
+        candidates.append(Path(str(stale) + state_suffix))
+        candidates.append(stale.parent / (stale.stem + state_suffix))
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                candidate.unlink()
+        except OSError:
+            pass
+
+
+def _state_dict_as_arrays(optimizer, params):
+    """``state_dict`` with moment buffers as numpy snapshots (as_arrays=True).
+
+    Slo optimizers take the kwarg so the checkpoint path gets bytes
+    end-to-end — no ``tolist()`` of millions of floats per save. Custom or
+    legacy optimizers without the kwarg fall back to their list form; the
+    manifest encoder handles both. A TypeError raised *inside* ``state_dict``
+    re-raises on the plain call, so it still surfaces as the logged
+    serialization failure instead of being swallowed here.
+    """
+    try:
+        return optimizer.state_dict(params=params, as_arrays=True)
+    except TypeError:
+        return optimizer.state_dict(params=params)
 
 
 def _load_soul_checkpoint(path: str) -> dict[str, Any] | None:
@@ -551,7 +754,7 @@ def _build_training_state_metadata(
     if optimizer is not None:
         try:
             opt_state = (
-                optimizer.state_dict(params=params)
+                _state_dict_as_arrays(optimizer, params)
                 if params is not None
                 else optimizer.state_dict()
             )
@@ -566,6 +769,14 @@ def _build_training_state_metadata(
                 hyper = opt_state.get("hyperparameters")
                 if isinstance(hyper, dict):
                     hyper["lr"] = initial_lr
+            # Moments become base64 manifests here: bytes end-to-end from the
+            # optimizer buffers to the sidecar, never Python float lists (the
+            # old _make_json_safe walk over millions of floats cost ~10 s per
+            # periodic save — training-throughput card 20261107).
+            if isinstance(opt_state, dict) and isinstance(opt_state.get("state"), dict):
+                from domain.inference._internal.soul_meta_slim import to_state_manifest
+
+                opt_state["state"] = to_state_manifest(opt_state["state"])
             state["optimizer"] = _make_json_safe(opt_state)
         except Exception as e:
             logger.warning(
@@ -592,11 +803,17 @@ def _build_training_state_metadata(
     return state
 
 
-def _parse_training_state_metadata(metadata: dict) -> dict:
+def _parse_training_state_metadata(metadata: dict, base_dir=None) -> dict:
     """Extract training state from .soul metadata (inverse of _build_...).
 
     Converts nested lists back to numpy arrays where appropriate so that
     optimizer.load_state_dict() can consume them.
+
+    ``base_dir`` (str | Path) is the directory holding the meta's gzip sibling:
+    when ``optimizer.state`` was externalized as a ``state_ref`` (slim sidecar),
+    it is resolved hash-pinned from there. Without ``base_dir`` a ref degrades
+    to an empty ``state`` — the same fresh-momentum resume semantics as
+    ``include_optimizer_state=False`` — never an error.
 
     Returns:
         Dict with keys: step, epoch, completed_epochs (optional),
@@ -620,12 +837,37 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
     if isinstance(opt_raw, dict):
         opt = dict(opt_raw)
         opt.get("hyperparameters", {})
-        state = opt.get("state", {})
-        # Convert nested lists in state back to numpy arrays
+        state = opt.get("state")
+        ref = opt.get("state_ref")
+        if (
+            (not isinstance(state, dict) or not state)
+            and isinstance(ref, dict)
+            and base_dir is not None
+        ):
+            from domain.inference._internal.soul_meta_slim import load_state_file
+
+            loaded = load_state_file(ref, base_dir)
+            if loaded is not None:
+                state = loaded
+        # Header-embedded manifests → ndarray (legacy lists pass through to
+        # _to_numpy below; a corrupt manifest degrades like a missing ref).
+        if isinstance(state, dict) and state:
+            from domain.inference._internal.soul_meta_slim import from_state_manifest
+
+            decoded = from_state_manifest(state)
+            state = decoded if isinstance(decoded, dict) else {}
+        if not isinstance(state, dict):
+            state = {}
+        # Convert nested lists in state back to numpy arrays. Flat buffers
+        # (SGD-style {name: buffer}) carry no per-moment dict — keep them flat.
         converted_state = {}
         for name, buffers in state.items():
-            converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
+            if isinstance(buffers, dict):
+                converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
+            else:
+                converted_state[name] = _to_numpy(buffers)
         opt["state"] = converted_state
+        opt.pop("state_ref", None)
         result["optimizer"] = opt
     sched_raw = raw.get("scheduler")
     if isinstance(sched_raw, dict):
@@ -887,6 +1129,30 @@ def _gc_parked_step(fn):
     return wrapper
 
 
+def _device_scoped(fn):
+    """Pin this trainer's resolved accelerator for the duration of the call.
+
+    ``slonet._get_accelerator()`` consults a thread-local pin before global
+    detection. Training runs in a worker thread, so the pin is scoped to that
+    run: ``device="cpu"`` silences the GPU for this job only and leaves
+    inference (or a second job) in the same process untouched. Reading
+    ``self._accelerator`` at call time keeps the decorator harmless for objects
+    that never ran ``_setup_device`` (``__new__`` test doubles).
+    """
+
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        from domain.slolib._internal.gpu import pop_accelerator, push_accelerator
+
+        previous = push_accelerator(getattr(self, "_accelerator", None))
+        try:
+            return fn(self, *args, **kwargs)
+        finally:
+            pop_accelerator(previous)
+
+    return wrapper
+
+
 class SloughGPTTrainer:
     """
     Unified trainer for SloughGPTModel (pure NumPy / SloNet).
@@ -952,6 +1218,7 @@ class SloughGPTTrainer:
         use_owned_objective: bool = False,
         owned_tool_weight: float = 0.3,
         owned_memory_weight: float = 0.2,
+        strategies: Sequence[StepStrategy] | None = None,
     ):
         # Handle both TrainerConfig and legacy parameters
         if config is not None:
@@ -1007,6 +1274,13 @@ class SloughGPTTrainer:
         self._early_stopped = False  # True if early stopping triggered
         self._quality_scores: list[float] = []  # rolling quality scores of training data
         self._avg_quality: float | None = None  # running average quality
+        # Per-step reduction set (see trace.py): bounded ring of the last 128
+        # StepTrace receipts + the grad norm of the current step (None until
+        # an accumulation boundary computes one).
+        self._step_traces: deque[StepTrace] = deque(maxlen=128)
+        self._last_grad_norm: float | None = None
+        self._trace_fingerprint: str = ""
+        self._trace_tokens: int = 0
 
         self.device = self._setup_device()
         self.config.device = self.device
@@ -1054,6 +1328,17 @@ class SloughGPTTrainer:
         self._owned_metadata: dict | None = None
         self._experience_sampler = self._build_experience_sampler_if_configured()
         self._owned_objective = self._build_owned_objective_if_configured()
+        # Step strategies: the single per-step seam (MetaTrainer injects here;
+        # legacy EWC/owned attrs are wrapped by _iter_strategies, not copied).
+        self.strategies: list[StepStrategy] = list(strategies or ())
+
+        # Self-gen flywheel: producer gates model-generated continuations at
+        # the corpus write boundary; the sampler mixes them into train batches
+        # at config.selfgen_quota (0 = disabled).
+        self._selfgen_producer = None
+        self._selfgen_sampler = None
+        self._selfgen_mix_rng = np.random.default_rng(42)
+        self._build_selfgen_if_configured()
 
         # Compute data quality metrics
         try:
@@ -1126,8 +1411,33 @@ class SloughGPTTrainer:
         )
 
     def _setup_device(self) -> str:
-        """SloNet training is pure numpy and always runs on the CPU."""
-        return "cpu"
+        """Resolve ``TrainerConfig.device`` to a real backend and record it.
+
+        The autograd engine is NumPy, so a device is *a compute backend*, not a
+        second model: ``"cpu"`` pins NumPy for this run (a GPU host must not
+        silently take over — that is what ``"cpu"`` already claimed and, before
+        this, did not do), ``"auto"`` takes the accelerator probe's choice, and
+        ``"cuda"``/``"metal"``/``"opencl"`` are declarations that either resolve
+        or raise. ``train/evaluate/generate`` push the resolved backend as a
+        thread-local pin, so two jobs in one process cannot fight over it.
+        """
+        from domain.slolib._internal.gpu import accelerator_for
+
+        try:
+            accelerator = accelerator_for(self.config.device)
+        except (RuntimeError, ValueError) as e:
+            raise RuntimeError(
+                f"device={self.config.device!r} cannot be used on this host: {e}"
+            ) from e
+        self._accelerator = accelerator
+        logger.info(
+            "Device: requested=%s resolved=%s (%s)",
+            self.config.device,
+            accelerator.name,
+            accelerator.device_type,
+            extra={"tag": "TRAIN"},
+        )
+        return accelerator.name
 
     def _create_model(self):
         """Create and setup the model (optionally wrapped with LoRA)."""
@@ -1248,8 +1558,14 @@ class SloughGPTTrainer:
 
         When live feed ingestion is configured, the train split streams from
         the FeedBatchSampler (fixed vocab, timer refresh); val stays on the
-        initial snapshot.
+        initial snapshot. The self-gen flywheel mixes in at most
+        ``selfgen_quota`` of train batches (anti-collapse: the static data
+        always keeps its share).
         """
+        if split == "train" and self._selfgen_sampler is not None:
+            if self._selfgen_mix_rng.random() < self.config.selfgen_quota:
+                x, y = self._selfgen_sampler.get_batch(self.config.batch_size)
+                return x.astype(np.int64), y.astype(np.int64)
         if split == "train" and self._experience_sampler is not None:
             x, y = self._experience_sampler.get_batch(self.config.batch_size)
             return x.astype(np.int64), y.astype(np.int64)
@@ -1264,7 +1580,9 @@ class SloughGPTTrainer:
         offsets = np.arange(block_size)
         x = data[idx[:, None] + offsets]
         y = data[idx[:, None] + offsets + 1]
-        return x, y
+        # Token cache serves compact uint16/uint32 memmaps; cast at the seam
+        # so model math always sees int64 regardless of storage dtype.
+        return x.astype(np.int64), y.astype(np.int64)
 
     def _build_feed_sampler_if_configured(self):
         """Build the live feed sampler, or None when not configured.
@@ -1309,6 +1627,120 @@ class SloughGPTTrainer:
             extra={"tag": "TRAIN"},
         )
         return sampler
+
+    def _build_selfgen_if_configured(self):
+        """Build the self-gen producer + sampler, or stay None when disabled.
+
+        Requires ``config.selfgen_interval > 0``. The producer resolves (and
+        creates if needed) the self-gen corpus; the FeedBatchSampler drains it
+        with unknown chars mapped to token 0, same fixed-vocab contract as the
+        live feed path. Corpus seeding happens here so a first-ever run starts
+        with prompts before the model generates anything.
+        """
+        if self.config.selfgen_interval <= 0:
+            return None
+        from domain.training._internal.selfgen import (
+            SelfGenProducer,
+            resolve_corpus_path,
+        )
+
+        prompts = list(self.config.selfgen_prompts or [])
+        if not prompts:
+            head = "".join(self.itos.get(int(i), "") for i in self.data[:2048])
+            prompts = SelfGenProducer.prompts_from_text(head, count=8)
+        if not prompts:
+            logger.warning(
+                "selfgen_interval set but no prompts derivable — self-gen disabled",
+                extra={"tag": "TRAIN"},
+            )
+            return None
+
+        corpus_path = resolve_corpus_path(
+            self.config.selfgen_source, local_base=self.config.selfgen_local_base
+        )
+        producer = SelfGenProducer(
+            corpus_path, prompts, min_quality=self.config.selfgen_min_quality
+        )
+        producer.ensure_corpus()
+        self._selfgen_producer = producer
+        self._selfgen_sampler = self._make_selfgen_sampler()
+        logger.info(
+            "Self-gen flywheel enabled (interval=%d, quota=%.2f, samples=%d, corpus=%s)",
+            self.config.selfgen_interval,
+            self.config.selfgen_quota,
+            self.config.selfgen_samples,
+            corpus_path,
+            extra={"tag": "TRAIN"},
+        )
+        return producer
+
+    def _make_selfgen_sampler(self):
+        """Build the FeedBatchSampler draining the self-gen corpus (or None)."""
+        from domain.training._internal.training_feed import FeedBatchSampler
+
+        try:
+            return FeedBatchSampler(
+                stoi=self.stoi,
+                block_size=self.config.block_size,
+                source=self.config.selfgen_source,
+                refresh_interval=0.0,  # explicit refresh after each round
+                local_base=self.config.selfgen_local_base,
+                max_pairs=1024,
+            )
+        except Exception as exc:
+            logger.warning(
+                "self-gen sampler unavailable (%s) — flywheel disabled",
+                exc,
+                extra={"tag": "TRAIN"},
+            )
+            self._selfgen_producer = None
+            return None
+
+    def _selfgen_round(self) -> dict[str, float]:
+        """Generate → gate → append → refresh for one self-gen round.
+
+        Uses the trainer's own live model (train ≡ serve via ``generate``);
+        any failure is logged and swallowed — generation must never kill the
+        training run.
+        """
+        producer = self._selfgen_producer
+        if producer is None:
+            return {}
+        accepted = 0
+        prompts = producer.next_prompts(self.config.selfgen_samples)
+        producer.rounds += 1  # count the attempt so failures don't re-log round 1
+        try:
+            for prompt in prompts:
+                text = self.generate(
+                    prompt,
+                    max_tokens=self.config.selfgen_max_tokens,
+                    temperature=self.config.selfgen_temperature,
+                )
+                continuation = text[len(prompt) :] if text.startswith(prompt) else text
+                if producer.accept(prompt, continuation):
+                    accepted += 1
+            if accepted and self._selfgen_sampler is not None:
+                self._selfgen_sampler.refresh()
+        except Exception as exc:
+            logger.warning(
+                "self-gen round %d failed (training continues): %s",
+                producer.rounds,
+                exc,
+                extra={"tag": "TRAIN"},
+            )
+        finally:
+            self.model.train()  # generate() switched to eval; restore (train_step also resets)
+        if accepted:
+            logger.info(
+                "Self-gen round %d: %d/%d accepted (written=%d, corpus=%s)",
+                producer.rounds,
+                accepted,
+                len(prompts),
+                producer.written,
+                producer.corpus_path,
+                extra={"tag": "TRAIN"},
+            )
+        return {"selfgen_accepted": float(accepted), "selfgen_written": float(producer.written)}
 
     def _build_experience_sampler_if_configured(self):
         """Build ExperienceSampler when data_path is an owned-experience source."""
@@ -1366,12 +1798,33 @@ class SloughGPTTrainer:
             yield self.get_batch("train")
 
     @_gc_parked_step
+    def _iter_strategies(self) -> list[StepStrategy]:
+        """Strategies active for this step, in composition order.
+
+        Legacy trainer attributes are wrapped as strategies so their inline
+        behavior is preserved exactly (EWC penalty first when snapshots exist,
+        then the owned objective with its ``owned_`` metric namespacing);
+        injected strategies (MetaTrainer) run after them.
+        """
+        active: list[StepStrategy] = []
+        if self._ewc is not None:
+            active.append(EwcStrategy(self._ewc))
+        if self._owned_objective is not None:
+            active.append(OwnedObjectiveStrategy(self._owned_objective))
+        active.extend(self.strategies)
+        return active
+
     def train_step(self) -> dict[str, float]:
         """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
         model.train()
+        self._last_grad_norm = None  # fresh step; set below if a boundary clips
 
         x, y = self.get_batch("train")
+        # Replay anchors for this step's StepTrace (cheap blake2b receipt —
+        # raw batches are never shipped, they are regenerable from these).
+        self._trace_fingerprint = fingerprint_batch(x)
+        self._trace_tokens = int(x.size)
         scale_factor = 1.0 / self.config.gradient_accumulation_steps
 
         logits, loss = model(x, y)
@@ -1402,17 +1855,16 @@ class SloughGPTTrainer:
         except Exception:
             pass
 
-        # Add EWC penalty if enabled (prevents forgetting previous tasks)
-        if self._ewc is not None and self._ewc.task_snapshots:
-            ewc_loss, ewc_stats = self._ewc.ewc_loss()
-            loss = loss + ewc_loss
-
-        # Owned objective (goal 13): combine with experience metadata when enabled.
-        owned_metrics: dict[str, float] = {}
-        if self._owned_objective is not None:
-            loss, owned_metrics = self._owned_objective.compute(
-                model, x, y, loss, metadata=self._owned_metadata
+        # Step strategies — the single per-step seam (StepStrategy): legacy EWC
+        # and the owned objective compose first in their historical order, then
+        # any injected strategies (MetaTrainer). Metric keys are final.
+        strategy_metrics: dict[str, float] = {}
+        for strategy in self._iter_strategies():
+            loss, step_metrics = strategy.compute(
+                model, x, y, loss, logits=logits, metadata=self._owned_metadata
             )
+            if step_metrics:
+                strategy_metrics.update(step_metrics)
 
         (loss * scale_factor).backward()
         self.accumulation_step += 1
@@ -1427,14 +1879,15 @@ class SloughGPTTrainer:
         self._ema_loss = ema
         self._last_train_loss = raw_loss
         metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
-        if owned_metrics:
-            for k, v in owned_metrics.items():
-                metrics[f"owned_{k}"] = v
+        if strategy_metrics:
+            for k, v in strategy_metrics.items():
+                metrics[k] = v
 
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
             params = [p for p in model.parameters() if p.grad is not None]
             if self.config.max_grad_norm > 0 and params:
                 total_norm = clip_gradients(params, self.config.max_grad_norm)
+                self._last_grad_norm = float(total_norm)
 
                 # Record gradient norm to training monitor
                 try:
@@ -1455,6 +1908,58 @@ class SloughGPTTrainer:
 
         return metrics
 
+    def _assemble_step_trace(
+        self,
+        metrics: dict[str, float],
+        dispatch_before: dict[str, int],
+        dispatch_after: dict[str, int],
+    ) -> StepTrace:
+        """Build one step's reduction-set receipt (see trace.py).
+
+        Counter fields are deltas across the caller's snapshot window —
+        exactly the compute between ``dispatch_before`` and ``dispatch_after``
+        — so eval/selfgen/logging between steps never pollutes a step's
+        residency numbers.
+        """
+        lr = self.scheduler.get_last_lr()[0] if self.scheduler else self.config.learning_rate
+        delta = {k: dispatch_after[k] - dispatch_before[k] for k in dispatch_before}
+        return StepTrace(
+            step=int(self.global_step),
+            batch_fingerprint=self._trace_fingerprint,
+            tokens_this_step=self._trace_tokens,
+            loss=float(metrics["loss"]),
+            raw_loss=float(metrics.get("raw_loss", metrics["loss"])),
+            lr=float(lr),
+            grad_norm=self._last_grad_norm,
+            skipped=bool(metrics.get("skipped", False)),
+            steps_per_s=round(self._steps_per_sec(), 3),
+            device=str(self.device),
+            gpu_matmuls=int(delta["gpu_matmuls"]),
+            cpu_matmuls=int(delta["cpu_matmuls"]),
+            fallbacks=int(delta["fallbacks"]),
+            h2d_bytes=int(delta["h2d_bytes"]),
+            d2h_bytes=int(delta["d2h_bytes"]),
+        )
+
+    def get_step_trace(self, step: int | None = None) -> StepTrace | None:
+        """The reduction-set receipt for ``step`` (default: the latest).
+
+        Returns None before the first step or when ``step`` has aged out of
+        the bounded ring (last 128 steps). This is the debug surface: after
+        any "why is training slow?" report, step 1's trace answers which
+        path the matmuls took.
+        """
+        traces = getattr(self, "_step_traces", None)
+        if not traces:
+            return None
+        if step is None:
+            return traces[-1]
+        for trace in reversed(traces):
+            if trace.step == step:
+                return trace
+        return None
+
+    @_device_scoped
     def evaluate(self, num_batches: int = 10) -> dict[str, float]:
         """Evaluate the model on the validation split.
 
@@ -1622,6 +2127,7 @@ class SloughGPTTrainer:
         return f"{s}s"
 
     @_gc_parked
+    @_device_scoped
     def train(
         self,
         resume: bool = False,
@@ -1736,6 +2242,18 @@ class SloughGPTTrainer:
             lr = self.scheduler.get_last_lr()[0] if self.scheduler else self.config.learning_rate
             sps = self._steps_per_sec()
             eta = None if sps <= 0 else max(0, int((denom - self.global_step) / sps))
+            last_trace = self.get_step_trace()
+            # step_trace flag gates only the trace-derived residency keys —
+            # absent (not lying zeros) when off; "device" is unconditional.
+            residency = (
+                {
+                    "gpu_matmuls": last_trace.gpu_matmuls if last_trace else 0,
+                    "cpu_matmuls": last_trace.cpu_matmuls if last_trace else 0,
+                    "fallbacks": last_trace.fallbacks if last_trace else 0,
+                }
+                if is_enabled("step_trace")
+                else {}
+            )
             try:
                 on_progress(
                     {
@@ -1754,6 +2272,10 @@ class SloughGPTTrainer:
                         "done": done,
                         "done_reason": done_reason,
                         "avg_quality": self._avg_quality,
+                        # StepTrace residency tripwires (additive): which path
+                        # did this step's eligible matmuls actually take?
+                        "device": str(self.device),
+                        **residency,
                     }
                 )
             except Exception:
@@ -1849,9 +2371,29 @@ class SloughGPTTrainer:
                         self._is_training = False
                         break
 
+                # Emission seam for the step_trace flag: the dispatch counters
+                # in slolib.gpu accumulate unconditionally — only assembling the
+                # receipt into the ring is gated (tripwire stays live when off).
+                trace_on = is_enabled("step_trace")
+                dispatch_before = dispatch_stats() if trace_on else {}
                 metrics = self.train_step()
                 train_loss += metrics["loss"]
                 self.global_step += 1
+                # Per-step reduction-set receipt: counters delta across exactly
+                # this step's compute (eval/selfgen/log work lands outside the
+                # snapshot window), plus control signals and replay anchors.
+                if trace_on:
+                    self._step_traces.append(
+                        self._assemble_step_trace(metrics, dispatch_before, dispatch_stats())
+                    )
+
+                # Self-gen flywheel: generate gated continuations with the
+                # live model on schedule; failures never stop the run.
+                if (
+                    self._selfgen_producer is not None
+                    and self.global_step % self.config.selfgen_interval == 0
+                ):
+                    self._selfgen_round()
 
                 if self.global_step % self.config.log_interval == 0:
                     lr = (
@@ -2183,6 +2725,11 @@ class SloughGPTTrainer:
         """Delete oldest checkpoints if total disk usage exceeds MAX_CHECKPOINT_DISK_MB."""
         from .state import MAX_CHECKPOINT_DISK_MB
 
+        # Every stat pass tolerates a vanished file: concurrent savers share
+        # this directory, and _prune_stale_checkpoints unlinks stale .soul
+        # files between our glob and our stat (FileNotFoundError escaped here
+        # and failed test_thread_safety — card 20261105_160000). A file that
+        # disappeared mid-scan is already accounted for by whoever removed it.
         try:
             files = sorted(
                 checkpoint_dir.glob("*.soul"),
@@ -2190,18 +2737,21 @@ class SloughGPTTrainer:
             )
         except OSError:
             return
-        total_bytes = sum(f.stat().st_size for f in files)
+        try:
+            total_bytes = sum(f.stat().st_size for f in files)
+        except OSError:
+            return
         limit_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
         while total_bytes > limit_bytes and len(files) > 1:
             oldest = files.pop(0)
-            total_bytes -= oldest.stat().st_size
             try:
-                oldest.unlink()
-                logger.info(
-                    "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
-                )
+                total_bytes -= oldest.stat().st_size
             except OSError:
-                pass
+                continue
+            _remove_checkpoint_artifacts(oldest)
+            logger.info(
+                "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
+            )
 
     def _prune_stale_checkpoints(self, keep_final: bool = False) -> None:
         """Delete stale ``.soul`` checkpoints so the directory never accumulates files.
@@ -2217,6 +2767,8 @@ class SloughGPTTrainer:
 
         Side effects:
             - unlinks stale ``.soul`` files under ``config.checkpoint_dir``
+              together with their ``.meta.json``/``.points.json`` sidecars and
+              externalized optimizer state (``.optimizer.dat``/``.optimizer.json.gz``)
             - rewires ``_best_model_path`` so it never points at a deleted file
               (on final saves it points at the final checkpoint; otherwise it is
               reset to None when the best checkpoint was pruned by the window)
@@ -2239,26 +2791,9 @@ class SloughGPTTrainer:
         keep_count = 1 if keep_final else max(1, int(getattr(self.config, "max_checkpoints", 5)))
         keep = {str(p) for p in files[:keep_count]}
         for stale in files[keep_count:]:
-            try:
-                stale.unlink()
-            except OSError:
-                pass
-            meta = Path(str(stale) + ".meta.json")
-            try:
-                if meta.exists():
-                    meta.unlink()
-            except OSError:
-                pass
-            # Sidecars use the stem name (<name>.points.json, <name>.meta.json),
-            # not the full .soul name — remove them so pruned checkpoints
-            # leave no orphaned artifacts behind.
-            for suffix in (".points.json", ".meta.json"):
-                sidecar = stale.parent / (stale.stem + suffix)
-                try:
-                    if sidecar.exists():
-                        sidecar.unlink()
-                except OSError:
-                    pass
+            # Full file family: .soul + meta/points sidecars + optimizer state
+            # (.optimizer.dat / legacy .optimizer.json.gz) — never orphan them.
+            _remove_checkpoint_artifacts(stale)
 
         if keep_final and self._last_checkpoint_path:
             # The just-written final checkpoint is the newest file (kept above);
@@ -2283,7 +2818,9 @@ class SloughGPTTrainer:
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
         Args:
-            path: Output path without the extension; ``.soul`` is appended.
+            path: Output path, with or without the ``.soul`` extension —
+                the extension is appended exactly once (callers pass both
+                bare stems and full ``..._trained.soul`` paths).
             format: DEPRECATED and ignored. Retained for backward compatibility;
                 ``SloughGPTTrainer.save()`` always writes ``.soul`` regardless of
                 this value. Passing a non-None value emits a
@@ -2418,7 +2955,12 @@ class SloughGPTTrainer:
             initial_lr=self.config.learning_rate,
         )
 
-        output_path = path + ".soul"
+        # Callers hand over both bare stems ("auto", "<ds>_<ts>") and full
+        # paths already carrying the extension ("<stem>_trained.soul" from
+        # local_api/legacy/execution/from_feedback). save() owns the
+        # extension, so append exactly once — a blind append produced
+        # ``qt_trained.soul.soul`` (+ .soul.soul.meta.json), job_cbc6162a.
+        output_path = path if path.endswith(".soul") else path + ".soul"
         save_soul(self.model, output_path, soul_profile=soul)
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})
@@ -2467,9 +3009,8 @@ class SloughGPTTrainer:
             except Exception as exc:
                 logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
 
-        thread = threading.Thread(target=_work, name="pugqeep-compress", daemon=True)
+        thread = spawn_loop(_work, name="pugqeep-compress")
         self._compress_thread = thread
-        thread.start()
 
     def wait_for_compression(self, timeout: float | None = None) -> bool:
         """Block until background checkpoint compression finishes.
@@ -2484,6 +3025,7 @@ class SloughGPTTrainer:
         thread.join(timeout=timeout)
         return not thread.is_alive()
 
+    @_device_scoped
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()

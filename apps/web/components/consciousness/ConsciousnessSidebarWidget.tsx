@@ -55,7 +55,7 @@ export function ConsciousnessSidebarWidget() {
           <span
             className={cn(
               'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
-              enabled ? 'bg-success' : 'bg-gray-400',
+              enabled ? 'bg-success' : 'bg-input',
             )}
           />
           <span
@@ -83,7 +83,7 @@ export function ConsciousnessSidebarWidget() {
             <MiniQualiaBar
               label={t('consciousness_sidebar.qualia_novelty')}
               value={novelty}
-              color="bg-violet-500"
+              color="bg-primary"
             />
           </div>
 

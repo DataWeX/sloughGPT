@@ -21,14 +21,16 @@ vi.mock('@/lib/toast-store', () => ({
 }))
 
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (_e: unknown, fallback: string) => fallback,
+  extractErrorMessage: (_e: unknown, fallback = 'Unknown error') => fallback,
 }))
 
 import { knowledgeController } from '@/lib/knowledge-controller'
 
 describe('KnowledgeIntelligenceCard', () => {
   afterEach(cleanup)
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders all sections', () => {
     render(<KnowledgeIntelligenceCard />)
@@ -42,7 +44,10 @@ describe('KnowledgeIntelligenceCard', () => {
 
   it('auto-label shows result', async () => {
     vi.mocked(knowledgeController.label).mockResolvedValue({
-      label: 'code', confidence: 0.95, reason: 'programming content', scores: { code: 0.95, science: 0.05 },
+      label: 'code',
+      confidence: 0.95,
+      reason: 'programming content',
+      scores: { code: 0.95, science: 0.05 },
     })
     render(<KnowledgeIntelligenceCard />)
     const input = screen.getByPlaceholderText('Enter text to classify...')
@@ -56,7 +61,10 @@ describe('KnowledgeIntelligenceCard', () => {
 
   it('duplicate check shows duplicate found', async () => {
     vi.mocked(knowledgeController.checkDuplicate).mockResolvedValue({
-      is_duplicate: true, best_match: 'Existing entry', score: 0.92, threshold: 0.85,
+      is_duplicate: true,
+      best_match: 'Existing entry',
+      score: 0.92,
+      threshold: 0.85,
     })
     render(<KnowledgeIntelligenceCard />)
     const input = screen.getByPlaceholderText('Enter text to check for duplicates...')
@@ -69,7 +77,10 @@ describe('KnowledgeIntelligenceCard', () => {
 
   it('duplicate check shows no duplicates', async () => {
     vi.mocked(knowledgeController.checkDuplicate).mockResolvedValue({
-      is_duplicate: false, best_match: null, score: 0.3, threshold: 0.85,
+      is_duplicate: false,
+      best_match: null,
+      score: 0.3,
+      threshold: 0.85,
     })
     render(<KnowledgeIntelligenceCard />)
     const input = screen.getByPlaceholderText('Enter text to check for duplicates...')
@@ -83,7 +94,10 @@ describe('KnowledgeIntelligenceCard', () => {
   it('categorize shows result', async () => {
     vi.mocked(knowledgeController.categorize).mockResolvedValue({
       topic: 'technology',
-      suggestions: [{ topic: 'technology', score: 0.9 }, { topic: 'science', score: 0.1 }],
+      suggestions: [
+        { topic: 'technology', score: 0.9 },
+        { topic: 'science', score: 0.1 },
+      ],
     })
     render(<KnowledgeIntelligenceCard />)
     const input = screen.getByPlaceholderText('Enter text to categorize...')
@@ -97,10 +111,11 @@ describe('KnowledgeIntelligenceCard', () => {
 
   it('embedder status shows trained state', async () => {
     vi.mocked(knowledgeController.getEmbedderStatus).mockResolvedValue({
-      trained: true, info: { embed_dim: 128, vocab_size: 5000, path: '/tmp/embed' },
+      trained: true,
+      info: { embed_dim: 128, vocab_size: 5000, path: '/tmp/embed' },
     })
     render(<KnowledgeIntelligenceCard />)
-    const refreshBtn = screen.getAllByRole('button').find(b => b.querySelector('svg'))
+    const refreshBtn = screen.getAllByRole('button').find((b) => b.querySelector('svg'))
     fireEvent.click(refreshBtn!)
     await waitFor(() => {
       expect(screen.getByText('Trained')).toBeDefined()

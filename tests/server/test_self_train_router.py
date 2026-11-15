@@ -9,7 +9,33 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
-from apps.api.server.routers.self_train import router
+from apps.api.server.training.self_train import router
+
+
+@pytest.fixture(autouse=True)
+def stop_self_train_process():
+    """Stop any real self-train subprocess after every test in this file.
+
+    Several tests (``test_starts_when_not_running``, the temperature
+    boundary tests, ``test_start_when_proc_exited``) POST /self-train/start
+    without patching ``subprocess.Popen`` and therefore leave a live process
+    in ``server_state._self_train_proc``.  A later test then observes that
+    leaked state — e.g. ``test_stop_not_running`` gets ``stopped`` instead
+    of ``not_running`` — making the suite order-dependent.  Cleanup after
+    each test keeps every test's starting state identical.
+    """
+    import state as server_state
+
+    yield
+    proc = server_state._self_train_proc
+    if proc is not None:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+        server_state._self_train_proc = None
 
 
 @pytest.fixture
@@ -84,7 +110,7 @@ class TestSelfTrainDeterministic:
         assert data["status"] == "already_running"
         assert data["pid"] == 4242
 
-    @patch("apps.api.server.routers.self_train.subprocess.Popen")
+    @patch("apps.api.server.training.self_train.subprocess.Popen")
     def test_start_builds_command(self, mock_popen, client):
         import state as server_state
 
@@ -102,7 +128,7 @@ class TestSelfTrainDeterministic:
         assert "--forever" in cmd
         assert server_state._self_train_proc is proc
 
-    @patch("apps.api.server.routers.self_train.subprocess.Popen")
+    @patch("apps.api.server.training.self_train.subprocess.Popen")
     def test_invalid_model_returns_422(self, mock_popen, client):
         resp = client.post("/self-train/start", json={"model": "bad model!"})
         assert resp.status_code == 422
@@ -260,7 +286,7 @@ class TestSelfTrainEdgePaths:
         resp = client.post("/self-train/start", json={})
         assert resp.json()["data"]["status"] == "started"
 
-    @patch("apps.api.server.routers.self_train.subprocess.Popen")
+    @patch("apps.api.server.training.self_train.subprocess.Popen")
     def test_start_popen_failure_returns_error(self, mock_popen, client):
         mock_popen.side_effect = FileNotFoundError("no python")
         resp = client.post("/self-train/start", json={})

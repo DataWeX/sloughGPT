@@ -6,7 +6,7 @@ import { ChatInputField } from './ChatInputField'
 import { ChatSendButton } from './ChatSendButton'
 import { SlashCommandMenu } from './SlashCommandMenu'
 import { MentionMenu } from './MentionMenu'
-import { cn, IconStop } from '@sloughgpt/strui'
+import { cn } from '@sloughgpt/strui'
 import { estimateTokens } from '@/lib/format-bytes'
 import type { ChatCommand } from '@/lib/chat-commands'
 
@@ -173,21 +173,15 @@ export const ChatInputRow = memo(function ChatInputRow({
             ~{estimateTokens(value)}
           </span>
         )}
-        {loading && onCancel && (
-          <button
-            type="button"
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-10 w-10 shrink-0 flex items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
-            onClick={onCancel}
-            aria-label="Cancel generation"
-          >
-            <IconStop className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
+        {/* Single stop control: ChatSendButton flips to destructive while loading.
+            The old standalone cancel button rendered a SECOND destructive stop next
+            to it. onCancel (server-side cancelStream + abort) is a superset of
+            onStop (local abort only), so it owns the stop slot. */}
         <ChatSendButton
           loading={loading}
           hasContent={hasContent}
           onSend={onSend}
-          onStop={onStop}
+          onStop={onCancel ?? onStop}
           disabled={disabled}
         />
       </div>

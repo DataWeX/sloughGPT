@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { memo, useState, useCallback } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { trainingJobsController } from '@/lib/training-controller'
 import type { TrainingJob } from '@/lib/training-controller'
 import { formatToastError } from '@/lib/error-utils'
@@ -47,7 +47,7 @@ export const TrainingHistory = memo(function TrainingHistory({
   onRecovered,
 }: TrainingHistoryProps) {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [resuming, setResuming] = useState<string | null>(null)
 
   const handleResume = useCallback(

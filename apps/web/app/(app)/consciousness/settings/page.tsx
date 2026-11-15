@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -27,7 +28,6 @@ import {
   Slider,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -95,7 +95,7 @@ interface FullStatus {
 }
 
 export default function ConsciousnessSettingsPage() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const { executeBatch, loading: batchLoading } = useConsciousnessBatch()
   const [config, setConfig] = useState<ConfigStatus | null>(null)

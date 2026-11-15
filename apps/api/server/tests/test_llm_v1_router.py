@@ -28,14 +28,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-import routers.infer as infer_mod
 import routers.llm_v1 as shim
+import routers.models as infer_mod
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.contract import REGISTRY
 from infrastructure.exception_handlers import register_app_error_handler
-from routers.infer import EmbedResponse
+from routers.models import EmbedResponse
 
 from domain.inference._internal import api_provider as api_provider_mod
 from domain.infrastructure.memory_pressure import PressureLevel
@@ -78,6 +78,7 @@ def _engine(
     provider=None,
     status: dict | None = None,
     pressure: PressureLevel = PressureLevel.NORMAL,
+    model_ready: bool = True,
     infer_info=None,
     infer_embed=None,
 ):
@@ -88,6 +89,9 @@ def _engine(
         stack.enter_context(
             patch("routers.inference._get_model_status", return_value=status or {"ready": True})
         )
+        # /v1/models reads the materialization probe directly; without this the
+        # suite's answer would depend on whatever a prior test left loaded.
+        stack.enter_context(patch("routers.inference._model_ready", return_value=model_ready))
         stack.enter_context(
             patch(
                 "domain.infrastructure.memory_pressure.get_memory_pressure_monitor",
@@ -343,6 +347,26 @@ class TestModelsList:
             {"id": "slonet-test", "object": "model", "created": 0, "owned_by": "sloughgpt"}
         ]
 
+    def test_models_is_discovery_not_a_generation_gate(self):
+        """No materialized model -> 200 with an empty list, never 503.
+
+        Clients poll /v1/models as a health probe; a 503 here (the old
+        ``_require_engine()`` gate) spammed two ERROR lines per probe while
+        telling the client nothing it could not learn from an empty list.
+        """
+        app = _build_app()
+        status = {
+            "ready": False,
+            "reason": "No local weights for Qwen/Qwen2.5-0.5B-Instruct — SLO_BOOTSTRAP_HF is off",
+            "code": "E_MODEL_LOAD_FAILED",
+            "status": 503,
+        }
+        with _engine(status=status, model_ready=False):
+            resp = TestClient(app).get("/v1/models")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"object": "list", "data": []}
+
 
 # ── /v1/embeddings ──────────────────────────────────────────────────────────
 
@@ -446,7 +470,7 @@ class TestApiProviderDogfood:
             self._patched_httpx(app),
         ):
             client = api_provider_mod.ApiProvider(
-                api_key="test-key", api_url="http://testserver", model="default"
+                api_key="", api_url="http://testserver", model="default"
             )
 
             # models: the client's own health check reads /v1/models
@@ -479,3 +503,192 @@ class TestApiProviderDogfood:
             # design — the wire shape is what the dogfood pins here)
             emb = TestClient(app).post("/v1/embeddings", json={"input": "hi"})
             assert emb.json()["data"][0]["embedding"] == _EMBEDDING
+
+
+# ── response cache: the ladder (card 20261102_021851) ───────────────────────
+
+
+class TestResponseCacheLadder:
+    """The /v1 answer tier: a repeated deterministic request is replayed.
+
+    The ladder is a total function and every ambiguous case falls to
+    "generate", because a wrong miss costs latency while a wrong hit costs
+    correctness and is invisible downstream (a replay is fluent either way).
+    These pin each rung — including the rung that is deliberately absent: rule
+    6, the paraphrase tier. Re-enabling it has to be an argument, not a flag
+    flip.
+    """
+
+    def setup_method(self):
+        from domain.inference._internal.response_cache import reset_response_cache_for_tests
+
+        reset_response_cache_for_tests()
+
+    @staticmethod
+    def _stats() -> dict:
+        from domain.inference._internal.response_cache import get_response_cache
+
+        return get_response_cache().get_stats()
+
+    def test_repeated_deterministic_request_is_replayed(self):
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            first = _post_chat(app, temperature=0.0)
+            second = _post_chat(app, temperature=0.0)
+
+        assert len(provider.calls) == 1, "second identical request reached the engine"
+        generated = first.json()
+        replay = second.json()
+        assert generated["choices"][0]["message"]["content"] == "Hello from SloNet"
+        assert replay["cached"] is True
+        assert replay["object"] == "chat.completion"
+        assert replay["choices"] == generated["choices"]
+        assert replay["usage"] == generated["usage"]
+        assert self._stats()["hits"] == 1
+
+    def test_replay_is_tagged_but_generation_is_not(self):
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            generated = _post_chat(app, temperature=0.0)
+            replay = _post_chat(app, temperature=0.0)
+
+        assert "cached" not in generated.json()
+        assert replay.json()["cached"] is True
+
+    def test_stochastic_request_always_generates(self):
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app, temperature=0.9)
+            second = _post_chat(app, temperature=0.9)
+
+        assert len(provider.calls) == 2
+        assert "cached" not in second.json()
+        assert self._stats()["bypass_stochastic"] == 2
+
+    def test_streaming_neither_reads_nor_fills_the_cache(self):
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app, temperature=0.0, stream=True)
+            nonstream = _post_chat(app, temperature=0.0)
+
+        assert len(provider.calls) == 2, "a stream must not seed the exact tier"
+        assert "cached" not in nonstream.json()
+        assert self._stats()["bypass_stream"] == 1
+
+    def test_top_p_is_in_the_key(self):
+        """Sampling params that change the output must change the key."""
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app, temperature=0.0, top_p=0.5)
+            _post_chat(app, temperature=0.0, top_p=0.9)
+
+        assert len(provider.calls) == 2
+
+    def test_top_k_is_keyed_as_sent(self):
+        """top_k=0 is mapped to the SloNet default before the engine sees it.
+
+        Keying the raw 0 would make two requests the engine cannot distinguish
+        miss each other; keying the effective value keeps the key honest.
+        """
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app, temperature=0.0, top_k=0)
+            equivalent = _post_chat(app, temperature=0.0, top_k=40)
+
+        assert len(provider.calls) == 1
+        assert equivalent.json()["cached"] is True
+
+        from domain.inference._internal.response_cache import (
+            reset_response_cache_for_tests,
+        )
+
+        reset_response_cache_for_tests()
+        reset = _fake_provider()
+        with _engine(provider=reset):
+            _post_chat(app, temperature=0.0, top_k=40)
+            _post_chat(app, temperature=0.0, top_k=20)
+
+        assert len(reset.calls) == 2
+
+    def test_session_id_is_in_the_key(self):
+        """A session selects a KV state; two sessions are not one request."""
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app, temperature=0.0, session_id="a")
+            _post_chat(app, temperature=0.0, session_id="b")
+            same = _post_chat(app, temperature=0.0, session_id="a")
+
+        assert len(provider.calls) == 2
+        assert same.json()["cached"] is True
+
+    def test_model_swap_invalidates_the_cache(self):
+        from domain.inference._internal.response_cache import bump_cache_generation
+
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app, temperature=0.0)
+            bump_cache_generation()
+            after = _post_chat(app, temperature=0.0)
+
+        assert len(provider.calls) == 2, "a model swap must not replay the old weights"
+        assert "cached" not in after.json()
+
+    def test_tool_carrying_request_is_never_replayed(self):
+        """The real input of a tool turn is the tool *result*, not the prompt."""
+        provider = _fake_provider()
+        app = _build_app()
+        tools = [{"type": "function", "function": {"name": "add", "parameters": {}}}]
+        with _engine(provider=provider):
+            body = {"temperature": 0.0, "tools": tools}
+            _post_chat(app, **body)
+            _post_chat(app, **body)
+
+        assert len(provider.calls) == 2
+
+    def test_paraphrase_is_not_promoted(self):
+        """Rule 6 is deliberately absent: similarity may propose, never decide.
+
+        Two prompts that share their content words but ask different questions
+        must both hit the engine. If this ever starts passing as a replay,
+        someone wired the semantic tier into /v1 — that needs a verifier and an
+        explicit decision, and this test is where that argument starts.
+        """
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app, temperature=0.0, messages=[{"role": "user", "content": "2+3"}])
+            second = _post_chat(
+                app, temperature=0.0, messages=[{"role": "user", "content": "4+12"}]
+            )
+
+        assert len(provider.calls) == 2
+        assert "cached" not in second.json()
+
+
+class TestCacheObservability:
+    def test_health_summary_snapshot_carries_cache_stats(self):
+        from routers.health import _response_cache_snapshot
+
+        stats = _response_cache_snapshot()
+        assert "hit_rate" in stats
+        assert "generation" in stats
+        assert "bypassed" not in stats  # the real names, not a placeholder
+        assert {"hits", "misses", "bypass_stochastic", "bypass_stream"} <= set(stats)
+
+    def test_snapshot_never_breaks_health(self):
+        """A cache that cannot report must not take the status bar down."""
+        with patch(
+            "domain.inference._internal.response_cache.get_response_cache",
+            side_effect=RuntimeError("boom"),
+        ):
+            from routers.health import _response_cache_snapshot
+
+            assert _response_cache_snapshot() == {}

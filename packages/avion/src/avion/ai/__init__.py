@@ -1,6 +1,7 @@
 """AI package — models, learning, verification, and the computer-use agent."""
 
 from avion.ai.agent import Agent, AgentConfig, AgentResult
+from avion.ai.control import Command, CommandInbox, CommandKind, ControlState
 from avion.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
 from avion.ai.models import (
     ACTION_CARDS,
@@ -27,7 +28,11 @@ __all__ = [
     "Agent",
     "AgentConfig",
     "AgentResult",
+    "Command",
+    "CommandInbox",
+    "CommandKind",
     "CompositeModel",
+    "ControlState",
     "EchoModel",
     "Experience",
     "ExperienceBuffer",

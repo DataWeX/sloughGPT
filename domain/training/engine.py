@@ -603,6 +603,172 @@ class TrainingEngine:
             logger.error("Cancel cloud job failed: %s", e)
             return TrainingResult(success=False, error=str(e))
 
+    # ── Router delegation (raw passthrough, build order #4 part 1) ──
+    #
+    # Thin delegations for apps/api/server/training/router.py. Unlike the
+    # TrainingResult-wrapped methods above, these return RAW values and let
+    # exceptions bubble: the router owns HTTP error classification and relies
+    # on the underlying exception types (HTTP semantics unchanged). Their job
+    # is to move the domain.training._internal import boundary into the engine
+    # so routers never import _internal directly (module docstring contract).
+
+    async def get_log(self) -> Any:
+        """Raw passthrough: training log lines (service.get_log)."""
+        from domain.training._internal.service import get_log
+
+        return await get_log()
+
+    async def list_stored_checkpoints(self) -> Any:
+        """Raw passthrough: stored checkpoint list (service.list_checkpoints)."""
+        from domain.training._internal.service import list_checkpoints
+
+        return await list_checkpoints()
+
+    async def delete_checkpoint(self, name: str) -> Any:
+        """Raw passthrough: delete a stored checkpoint (service.delete_checkpoint)."""
+        from domain.training._internal.service import delete_checkpoint
+
+        return await delete_checkpoint(name)
+
+    async def load_stored_checkpoint(self, name: str) -> Any:
+        """Raw passthrough: load a stored checkpoint (service.load_checkpoint)."""
+        from domain.training._internal.service import load_checkpoint
+
+        return await load_checkpoint(name)
+
+    async def download_checkpoint_path(self, name: str) -> Any:
+        """Raw passthrough: checkpoint file path or None (service.download_checkpoint_path)."""
+        from domain.training._internal.service import download_checkpoint_path
+
+        return await download_checkpoint_path(name)
+
+    async def checkpoint_info(self, name: str) -> Any:
+        """Raw passthrough: checkpoint metadata (service.checkpoint_info)."""
+        from domain.training._internal.service import checkpoint_info
+
+        return await checkpoint_info(name)
+
+    async def get_all_checkpoint_data(self) -> Any:
+        """Raw passthrough: all checkpoint data for export (service.get_all_checkpoint_data)."""
+        from domain.training._internal.service import get_all_checkpoint_data
+
+        return await get_all_checkpoint_data()
+
+    def get_state(self) -> Any:
+        """Raw passthrough: training state object with .config (service.get_state)."""
+        from domain.training._internal.service import get_state
+
+        return get_state()
+
+    def is_valid_ckpt_name(self, name: str) -> bool:
+        """Raw passthrough: VALID_CKPT_NAME regex check (state.VALID_CKPT_NAME)."""
+        from domain.training._internal.state import VALID_CKPT_NAME
+
+        return bool(VALID_CKPT_NAME.match(name))
+
+    def get_training_tips(self, **kwargs: Any) -> Any:
+        """Raw passthrough: training tips (training_advisor.get_training_tips)."""
+        from domain.training._internal.training_advisor import get_training_tips
+
+        return get_training_tips(**kwargs)
+
+    def recommend_training_config(self, **kwargs: Any) -> Any:
+        """Raw passthrough: config recommendation (training_advisor.recommend_training_config)."""
+        from domain.training._internal.training_advisor import recommend_training_config
+
+        return recommend_training_config(**kwargs)
+
+    def load_outcomes(self) -> Any:
+        """Raw passthrough: training outcome records (outcome_tracker)."""
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+
+        return TrainingOutcomeTracker().load_outcomes()
+
+    def get_training_monitor(self) -> Any:
+        """Raw passthrough: training monitor singleton (monitor.get_training_monitor)."""
+        from domain.training._internal.monitor import get_training_monitor
+
+        return get_training_monitor()
+
+    def alert_severity(self, value: str) -> Any:
+        """Raw passthrough: AlertSeverity enum member (raises ValueError on bad input)."""
+        from domain.training._internal.monitor import AlertSeverity
+
+        return AlertSeverity(value)
+
+    # ── Router delegation: recovery internals (build order #4 part 2) ──
+
+    def resolve_resume_checkpoint(
+        self, checkpoint_path: str, checkpoint_dir: str
+    ) -> tuple[str, Any]:
+        """Resolve the checkpoint a recovery run resumes from (card c48aaaad).
+
+        A recorded path is loaded exactly once here: missing, unsupported, or
+        unreadable raise ValueError (the router maps it to 422 — the one
+        sanctioned HTTP mapping). With no recorded path, fall back to the
+        newest file that actually loads in ``checkpoint_dir`` (a crash
+        mid-write can leave the newest file unreadable). Returns
+        ``(path, bundle)``; path is ``""`` when nothing is resumable.
+        """
+        from domain.training._internal.train_pipeline import CheckpointManager
+
+        if checkpoint_path:
+            if not CheckpointManager.is_resumable(checkpoint_path):
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                )
+            try:
+                bundle = CheckpointManager.load_from_path(checkpoint_path)
+            except Exception as exc:
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})"
+                ) from exc
+            if bundle is None:
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                )
+            return checkpoint_path, bundle
+        manager = CheckpointManager(checkpoint_dir)
+        path, bundle = manager.load_latest_with_path()
+        return path or "", bundle
+
+    def run_recovery_training(
+        self,
+        config: dict[str, Any],
+        on_progress: Any,
+        resume: Any,
+        events: dict[str, Any] | None = None,
+    ) -> Any:
+        """Build the recovery trainer from ``config``, train, return the trainer.
+
+        ``resume`` is the pre-loaded checkpoint bundle (or None) — recovery
+        always trains in resume mode; the bundle is handed to train() so no
+        second disk load happens in the worker thread. ``events`` carries
+        ``cancel_event``/``pause_event``. The trainer is returned so the
+        caller can read the produced checkpoint path (router closure keeps
+        all job-store/controller state).
+        """
+        from domain.training._internal.train_pipeline import SloughGPTTrainer
+
+        events = events or {}
+        trainer = SloughGPTTrainer(**config)
+        trainer.train(
+            on_progress=on_progress,
+            resume=True,
+            resume_checkpoint=resume,
+            cancel_event=events.get("cancel_event"),
+            pause_event=events.get("pause_event"),
+        )
+        return trainer
+
+    def executor_submit(self, fn: Any, *args: Any) -> Any:
+        """Raw passthrough: submit ``fn(*args)`` to the training executor."""
+        from domain.training._internal.executor import get_training_executor
+
+        return get_training_executor().submit(fn, *args)
+
 
 _engine: TrainingEngine | None = None
 

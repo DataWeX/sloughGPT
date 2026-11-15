@@ -25,16 +25,19 @@ class TrainDataSourceBody(BaseModel):
     dataset: str | None = None
     manifest_uri: str | None = None
     dataset_ref: TrainDatasetRef | None = None
+    manifests: list[str] | None = None
+    """Sealed manifest.json paths in stage order (sequential-training mode)."""
 
     @model_validator(mode="after")
     def _exactly_one_dataset_source(self) -> TrainDataSourceBody:
         has_d = self.dataset is not None and str(self.dataset).strip() != ""
         has_m = self.manifest_uri is not None and str(self.manifest_uri).strip() != ""
         has_r = self.dataset_ref is not None
-        if sum(bool(x) for x in (has_d, has_m, has_r)) != 1:
+        has_s = bool(self.manifests)
+        if sum(bool(x) for x in (has_d, has_m, has_r, has_s)) != 1:
             raise ValueError(
                 "Specify exactly one of: `dataset` (folder under datasets/), "
-                "`manifest_uri`, or `dataset_ref`."
+                "`manifest_uri`, `dataset_ref`, or `manifests` (sequential stages)."
             )
         return self
 

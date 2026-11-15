@@ -1,0 +1,16 @@
+# Timer half of the kanban sync producer (see kanban-sync.service).
+#
+# OnUnitInactiveSec=5min: next run 5 minutes after the previous one ends
+# (the flock in the script makes overlap safe regardless). Persistent=true
+# catches up after laptop sleep — CI's freshness alarm allows 120 minutes.
+[Unit]
+Description=Run kanban/notes GitHub sync every 5 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

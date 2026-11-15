@@ -1,9 +1,9 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconUpload } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { useUploadFile } from '@/lib/cache'
 
 interface DatasetDropZoneProps {
@@ -12,7 +12,7 @@ interface DatasetDropZoneProps {
 }
 
 export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZoneProps) {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const uploadFile = useUploadFile()
   const [isDragging, setIsDragging] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)

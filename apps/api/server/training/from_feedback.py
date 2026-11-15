@@ -1,6 +1,12 @@
 """Feedback training route — from-feedback.
 
 Extracted from execution.py to keep each module focused.
+
+Descriptor-projected (card 20261104_151036): one ``ToolSpec`` contract →
+one ``create_router`` projection instead of a hand-laid decorator. Raw wire —
+the handler's dict is served unwrapped (``envelope=False``), byte-identical
+to the hand-built route; the model's ge/le/gt constraints and the
+``auth_user`` scope ride the descriptor.
 """
 
 from __future__ import annotations
@@ -12,11 +18,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -43,7 +51,6 @@ class FromFeedbackRequest(BaseModel):
     lora_alpha: int = Field(default=16, ge=1, le=128, description="LoRA alpha parameter")
 
 
-@router.post("/training/from-feedback")
 async def train_from_feedback(
     req: FromFeedbackRequest,
     auth_user: dict = Depends(require_auth_if_enabled),
@@ -63,7 +70,7 @@ async def train_from_feedback(
     lora_alpha = req.lora_alpha
 
     try:
-        from domain.feedback._internal.training import FeedbackTrainer
+        from domain.feedback import FeedbackTrainer
 
         trainer = FeedbackTrainer()
 
@@ -139,7 +146,7 @@ async def train_from_feedback(
 
         def run_feedback_training(job_id_: str = jid):
             try:
-                from domain.training._internal.train_pipeline import SloughGPTTrainer
+                from domain.training import SloughGPTTrainer
 
                 trainer = SloughGPTTrainer(
                     data_path=data_path,
@@ -249,3 +256,30 @@ async def train_from_feedback(
     except Exception as e:
         logger.exception("Failed to start feedback training", extra={"tag": "TRAIN"})
         raise_error(str(e), "E_INFRA_STARTUP", status_code=500)
+
+
+# ── descriptor projection (card 20261104_151036) ────────────────────────
+#
+# One ToolSpec per capability; create_router derives verb, auth, validation,
+# envelope and OpenAPI metadata. RouteSpec.summary carries the hand-built
+# operation title (FastAPI derives it from the route name as
+# ``route.name.replace("_", " ").title()``); spec.description is the handler
+# docstring verbatim, so summary/description publish byte-identically.
+
+SPEC_FROM_FEEDBACK = ToolSpec(
+    name="training.feedback.from_feedback",
+    description="Train a model from collected feedback data.",
+    parameters=params_from_model(FromFeedbackRequest),
+    execute=train_from_feedback,
+    idempotent=False,
+    auth_scope="authenticated",
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_FROM_FEEDBACK,
+        RouteSpec(path="/training/from-feedback", envelope=False, summary="Train From Feedback"),
+        train_from_feedback,
+    )
+)

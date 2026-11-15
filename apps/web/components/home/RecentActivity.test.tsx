@@ -26,6 +26,8 @@ vi.mock('@sloughgpt/strui', () => {
     Card: passthrough,
     CardContent: passthrough,
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
+    IconStar: ({ className }: any) => <svg className={className} data-testid="icon-star" />,
+    IconPin: ({ className }: any) => <svg className={className} data-testid="icon-pin" />,
 
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
@@ -124,7 +126,8 @@ describe('RecentActivity', () => {
 
   it('shows starred icon for starred sessions', () => {
     const { container } = render(<RecentActivity {...baseProps} />)
-    expect(container.textContent).toContain('\u2605')
+    // Star is now an IconStar SVG (emoji removed in a6) — assert the icon node.
+    expect(container.querySelector('svg.text-warning')).toBeTruthy()
   })
 
   it('navigates to chat on session click', () => {

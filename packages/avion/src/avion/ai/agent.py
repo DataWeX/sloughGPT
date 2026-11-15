@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from avion.ai.control import CommandInbox, ControlState
 from avion.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
 from avion.ai.models import (
     Action,
@@ -24,6 +25,7 @@ from avion.ai.models import (
 )
 from avion.ai.tools import ToolExecutor, ToolRegistry, normalize_result
 from avion.ai.verifier import Verifier
+from avion.challenge import page_challenge
 from avion.interact.primitives import (
     Coordinate,
     Keyboard,
@@ -64,6 +66,11 @@ class AgentConfig:
     viewport_height: int = 720
     deadline_ms: float = 120_000
     no_progress_limit: int = 3  # identical actions in a row = stuck (0 disables)
+    # Challenge yield: a bot-challenge page stops the run with
+    # stop_reason="needs_human" (see avion.challenge) — the browser
+    # stays put, profile intact; the human takes over. Disable only
+    # against internal pages whose wording collides with a marker.
+    yield_on_challenge: bool = True
     output_dir: str = "arken_output/trajectories"
     # on_step callbacks failing this many times in a row are skipped
     # (degraded) for the rest of the run; totals stay visible.
@@ -76,12 +83,15 @@ class AgentResult:
 
     task: str
     trajectory: Trajectory
+    model_name: str = ""
     success: bool = False
     error: str = ""
     total_duration_ms: float = 0.0
     steps_taken: int = 0
     screenshots_captured: int = 0
-    stop_reason: str = ""  # done|fail|max_steps|deadline|no_progress|unverified|aborted
+    # done|fail|max_steps|deadline|no_progress|unverified|needs_human|aborted|stopped
+    stop_reason: str = ""
+    challenge: dict[str, Any] | None = None  # set when stop_reason == "needs_human"
     transcript_path: str = ""  # where this run's transcript landed ('' = not saved)
     transcript_failures: int = 0  # write/close errors counted, never fatal
 
@@ -97,12 +107,14 @@ class AgentResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "task": self.task,
+            "model_name": self.model_name,
             "success": self.success,
             "error": self.error,
             "steps_taken": self.steps_taken,
             "total_duration_ms": round(self.total_duration_ms, 1),
             "screenshots_captured": self.screenshots_captured,
             "stop_reason": self.stop_reason,
+            "challenge": self.challenge,
             "transcript_path": self.transcript_path,
             "transcript_failures": self.transcript_failures,
             "trajectory": self.trajectory.to_dict(),
@@ -128,6 +140,7 @@ class Agent:
         headless: bool = True,
         tools: ToolRegistry | None = None,
         executor: ToolExecutor | None = None,
+        inbox: CommandInbox | None = None,
     ):
         self._model = model or EchoModel()
         self._config = config or AgentConfig()
@@ -136,6 +149,12 @@ class Agent:
         self._headless = headless
         self._tools = tools
         self._executor = executor
+        # Control plane: commands arrive via the inbox, are drained at
+        # step boundaries, and land in _control/_control_records. Without
+        # an inbox the loop behaves exactly as before.
+        self._inbox = inbox
+        self._control = ControlState()
+        self._control_records: list[dict[str, Any]] = []
 
         self._backend = None
         self._mouse: Mouse | None = None
@@ -180,6 +199,30 @@ class Agent:
     @property
     def feedback_loop(self) -> FeedbackLoop:
         return self._feedback_loop
+
+    @property
+    def config(self) -> AgentConfig:
+        return self._config
+
+    @property
+    def inbox(self) -> CommandInbox | None:
+        """The command inbox this loop drains (None when undirected)."""
+        return self._inbox
+
+    @property
+    def control(self) -> ControlState:
+        """Live control state — written only at step boundaries by drain."""
+        return self._control
+
+    @property
+    def control_records(self) -> list[dict[str, Any]]:
+        """Applied commands, oldest first (read by consoles/logs)."""
+        return list(self._control_records)
+
+    @property
+    def step_count(self) -> int:
+        """Steps completed in the current (or last) run."""
+        return self._step_count
 
     def on_step(self, callback: Callable[[Step], None]) -> None:
         """Register a callback for each step.
@@ -266,6 +309,7 @@ class Agent:
         run_start = time.monotonic()
         start_time = time.perf_counter()
         recent_signatures: list[str] = []
+        challenge: dict[str, Any] | None = None
 
         transcript_path = ""
         transcript = None
@@ -283,6 +327,16 @@ class Agent:
                 if (time.monotonic() - run_start) * 1000 >= self._config.deadline_ms:
                     raise _DeadlineExceeded("deadline exceeded")
 
+                # CONTROL — drain operator commands at the step boundary;
+                # a pause holds here and its drift is credited back to the
+                # clock (pausing must never age the run into "deadline").
+                if self._inbox is not None:
+                    stop_requested, drift = await self._control_boundary()
+                    run_start += drift
+                    if stop_requested:
+                        stop_reason = "stopped"
+                        break
+
                 step_start = time.perf_counter()
 
                 # 1. OBSERVE — bounded; a hung capture degrades to an
@@ -292,10 +346,33 @@ class Agent:
                 if self._config.screenshot_on_each_step or step_num == 0:
                     screenshot_b64, a11y_tree = await self._observe(run_start)
 
+                # 1b. CHALLENGE YIELD — checked before DECIDE, so the
+                #     model never gets to act on a challenge page. The
+                #     a11y dump already in hand is the text checked;
+                #     title/URL always are. The browser stays exactly
+                #     where it is — profile intact — for the human.
+                if self._config.yield_on_challenge:
+                    chal = await page_challenge(
+                        self._backend,
+                        a11y_text=json.dumps(a11y_tree) if a11y_tree else "",
+                    )
+                    if chal is not None:
+                        stop_reason = "needs_human"
+                        challenge = chal.to_dict()
+                        trajectory.metadata["challenge"] = challenge
+                        trajectory.metadata["error"] = f"needs a human: {chal.evidence}"
+                        break
+
                 # 2. DECIDE — bounded + retried (predict is a pure call,
-                #    so retrying it has no side effects)
+                #    so retrying it has no side effects). The task text is
+                #    rebuilt each step so operator instructions/messages
+                #    land on the very next prediction.
                 action = await self._predict(
-                    task, screenshot_b64, a11y_tree, trajectory.steps, run_start
+                    self._control.effective_task(task),
+                    screenshot_b64,
+                    a11y_tree,
+                    trajectory.steps,
+                    run_start,
                 )
 
                 # No-progress detection: identical actions in a row.
@@ -452,12 +529,14 @@ class Agent:
         return AgentResult(
             task=task,
             trajectory=trajectory,
+            model_name=self._model.model_name,
             success=trajectory.success,
             error=trajectory.metadata.get("error", ""),
             total_duration_ms=total_ms,
             steps_taken=len(trajectory.steps),
             screenshots_captured=sum(1 for s in trajectory.steps if s.screenshot_b64),
             stop_reason=stop_reason,
+            challenge=challenge,
             transcript_path=transcript_path,
             transcript_failures=self._transcript_failures,
         )
@@ -513,6 +592,35 @@ class Agent:
         except TimeoutError as exc:
             raise _StepTimeout(f"no result within {budget:.2f}s") from exc
 
+    # ── Control-plane boundary ────────────────────────────────────────
+
+    def _drain_control(self) -> None:
+        """Apply pending commands — the loop is their only writer."""
+        for record in self._inbox.drain(self._control, self._config):
+            self._control_records.append(record)
+
+    async def _control_boundary(self) -> tuple[bool, float]:
+        """Drain at a step boundary; hold here while paused.
+
+        Returns ``(stop_requested, clock_drift_s)``. The drift is the
+        time spent paused: the caller credits it back to ``run_start``,
+        so a pause *stops* the run's deadline clock instead of
+        consuming it — an operator may stay paused for hours without
+        aging the run into ``stop_reason "deadline"``. Resume/stop
+        commands are drained inside the hold, which is what lets a
+        paused run end without ever resuming.
+        """
+        self._drain_control()
+        if self._control.stopped:
+            return True, 0.0
+        drift = 0.0
+        while self._control.paused and self._running and not self._control.stopped:
+            mark = time.monotonic()
+            await asyncio.sleep(0.05)
+            drift += time.monotonic() - mark
+            self._drain_control()
+        return self._control.stopped, drift
+
     async def _observe(self, run_start: float) -> tuple[str, dict[str, Any] | None]:
         """Bounded OBSERVE. A hung capture degrades (empty frame / no
         tree); an expired deadline still propagates."""
@@ -543,9 +651,7 @@ class Agent:
         attempt fails does the loop see a FAIL action. An exhausted
         deadline always wins — retries never outlive the run's budget.
         """
-        attempts = 1 + (
-            max(0, self._config.max_retries) if self._config.retry_on_failure else 0
-        )
+        attempts = 1 + (max(0, self._config.max_retries) if self._config.retry_on_failure else 0)
         last_error = "no attempt made"
         for _ in range(attempts):
             try:
@@ -660,9 +766,7 @@ class Agent:
                     result["reward"] = 0.0
                 else:
                     try:
-                        raw = await self._executor.run(
-                            name, params.get("args") or {}
-                        )
+                        raw = await self._executor.run(name, params.get("args") or {})
                     except Exception as e:
                         result["observation"] = f"error: {e}"
                         result["reward"] = -0.5

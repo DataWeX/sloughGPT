@@ -148,7 +148,7 @@ describe('ChatScreen', () => {
     expect(bubbles[1].textContent).toContain('Hi there')
   })
 
-  it('constrains every message row to the centered transcript column', () => {
+  it('constrains every message row to the full transcript column', () => {
     const messages = [msg('m1', 'user', 'Hello'), msg('m2', 'assistant', 'Hi there')]
     const { container } = render(
       <ChatScreen
@@ -160,7 +160,7 @@ describe('ChatScreen', () => {
       />,
     )
     const rowWrappers = [...container.querySelectorAll('div')].filter((d) =>
-      d.className.includes('mx-auto w-full max-w-4xl px-4 sm:px-6 py-1.5'),
+      d.className.includes('mx-auto w-full px-4 sm:px-6 py-1.5'),
     )
     expect(rowWrappers).toHaveLength(2)
   })
@@ -350,6 +350,47 @@ describe('ChatScreen', () => {
     expect(separators).toHaveLength(2)
     expect(separators[0]).toHaveAttribute('aria-label', 'Yesterday')
     expect(separators[1]).toHaveAttribute('aria-label', 'Today')
+  })
+
+  it('labels a sub-24h-old message from the previous calendar day as Yesterday', () => {
+    // Regression: formatDateLabel floored a ROLLING 24h window while the
+    // divider decision (isDifferentDay) compares CALENDAR days. A message from
+    // yesterday evening read within 24h therefore labelled itself "Today",
+    // producing two identical TODAY dividers in a row.
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-11-05T10:00:00'))
+      const messages = [
+        {
+          id: 'm1',
+          role: 'user' as const,
+          content: 'Old',
+          timestamp: new Date('2026-11-04T20:00:00'),
+        },
+        {
+          id: 'm2',
+          role: 'assistant' as const,
+          content: 'New',
+          timestamp: new Date('2026-11-05T09:00:00'),
+        },
+      ]
+      render(
+        <ChatScreen
+          messages={messages}
+          loading={false}
+          health={baseHealth}
+          onRefreshHealth={vi.fn()}
+          onCopy={vi.fn()}
+        />,
+      )
+      const separators = screen.getAllByRole('separator')
+      expect(separators).toHaveLength(2)
+      // 14h elapsed, but a different CALENDAR day -> Yesterday, not Today.
+      expect(separators[0]).toHaveAttribute('aria-label', 'Yesterday')
+      expect(separators[1]).toHaveAttribute('aria-label', 'Today')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('renders all messages without duplicate key issues', () => {

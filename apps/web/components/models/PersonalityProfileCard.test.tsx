@@ -3,9 +3,21 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 const mockAddToast = vi.fn()
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (s: any) => s({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (s: any) => s({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 vi.mock('@/lib/souls-controller', () => ({
   soulsController: {
     listWeightSnapshots: vi.fn().mockResolvedValue([]),

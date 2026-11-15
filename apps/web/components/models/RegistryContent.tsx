@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import {
   cn,
@@ -21,7 +22,6 @@ import {
   type RegistryStats,
 } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
-import { useToastStore } from '@/lib/toast-store'
 import { formatLocaleDate } from '@/lib/time-format'
 
 export default function RegistryContent() {
@@ -31,7 +31,7 @@ export default function RegistryContent() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const fetchData = useCallback(async () => {
     try {

@@ -14,7 +14,10 @@ export interface UsageTrainingOverviewCardProps {
   totalMinutes: number
 }
 
-export function UsageTrainingOverviewCard({ status, totalMinutes }: UsageTrainingOverviewCardProps) {
+export function UsageTrainingOverviewCard({
+  status,
+  totalMinutes,
+}: UsageTrainingOverviewCardProps) {
   const stats = [
     { label: 'Completed', value: status.completed, color: 'text-success' },
     { label: 'Running', value: status.running, color: 'text-info' },
@@ -29,9 +32,9 @@ export function UsageTrainingOverviewCard({ status, totalMinutes }: UsageTrainin
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {stats.map(s => (
+          {stats.map((s) => (
             <div key={s.label} className="text-center p-2 rounded bg-muted/30">
-              <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
+              <div className={`text-base font-bold ${s.color}`}>{s.value}</div>
               <div className="text-[10px] text-muted-foreground">{s.label}</div>
             </div>
           ))}

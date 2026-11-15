@@ -58,8 +58,6 @@ def resolve_memory_limit_mb(slnc_path: str | None, configured: float | None = No
     return max(8192.0, size_mb * 8.0)
 
 
-
-
 def _accepts_return_tensors(tokenizer: Any) -> bool:
     """True when tokenizer.__call__ accepts return_tensors= (HF-style)."""
     try:
@@ -84,6 +82,7 @@ def _decode_supports_skip(tokenizer: Any) -> bool:
         )
     except (TypeError, ValueError):
         return False
+
 
 # ── Thread-mode worker ────────────────────────────────────────────────
 
@@ -133,9 +132,7 @@ class _ThreadWorker:
 
     def start(self) -> None:
         self._started_at = time.time()
-        self._thread = threading.Thread(
-            target=self._run, daemon=True, name=f"tw-{self.worker_id}"
-        )
+        self._thread = threading.Thread(target=self._run, daemon=True, name=f"tw-{self.worker_id}")
         self._thread.start()
 
         # Wait for ready signal
@@ -150,7 +147,9 @@ class _ThreadWorker:
                     raise RuntimeError(f"ThreadWorker[{self.worker_id}]: model load failed")
             except queue.Empty:
                 if self._thread and not self._thread.is_alive():
-                    raise RuntimeError(f"ThreadWorker[{self.worker_id}]: thread died during startup")
+                    raise RuntimeError(
+                        f"ThreadWorker[{self.worker_id}]: thread died during startup"
+                    )
                 continue
         raise RuntimeError(
             f"ThreadWorker[{self.worker_id}]: failed to start within {self._startup_timeout}s"
@@ -166,10 +165,17 @@ class _ThreadWorker:
             self._thread.join(timeout=timeout)
             self._thread = None
 
-    def generate(self, prompt: str, **kwargs: Any) -> dict:
-        if not self.alive:
-            raise RuntimeError(f"ThreadWorker[{self.worker_id}] is not alive")
-        session_id = _new_session_id()
+    def _payload(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Sampling knobs for the worker, plus the caller's KV session.
+
+        Two different ids travel through this queue and they must not be
+        confused: the IPC correlation id (`_new_session_id()`, minted per
+        request by `generate`) pairs a reply with its request, while the
+        caller's `session_id` keys cross-turn KV state. Before this existed the
+        caller's id was silently dropped at the boundary, so a direct
+        `SloNetChatProvider.chat()` under a live `ProcessGuard` re-prefilled the
+        whole prompt every turn — the same silent-no-op class fixed at `/v1`.
+        """
         payload = {
             "max_new_tokens": kwargs.get("max_new_tokens", 100),
             "temperature": kwargs.get("temperature", 0.7),
@@ -177,6 +183,32 @@ class _ThreadWorker:
             "top_k": kwargs.get("top_k", 50),
             "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
         }
+        kv_session_id = kwargs.get("session_id")
+        if kv_session_id:
+            payload["kv_session_id"] = kv_session_id
+        return payload
+
+    def _session_kv(self, kv_session_id: Any) -> Any:
+        """Cross-turn KV state for *kv_session_id*, when the provider owns one.
+
+        Thread mode runs the SAME model instance as the in-process path, so the
+        provider's session→state map is the correct source: a session started
+        in-process continues in the worker and vice versa. HF mode has no
+        session map, so this returns None and generation behaves exactly as
+        before (fresh state per call).
+        """
+        if not kv_session_id:
+            return None
+        resolve = getattr(self._provider, "_resolve_session_kv", None)
+        if resolve is None:
+            return None
+        return resolve(kv_session_id)
+
+    def generate(self, prompt: str, **kwargs: Any) -> dict:
+        if not self.alive:
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}] is not alive")
+        session_id = _new_session_id()
+        payload = self._payload(kwargs)
         self._req_q.put_nowait(("generate", (session_id, prompt, payload)))
 
         deadline = time.time() + self._generate_timeout
@@ -211,13 +243,7 @@ class _ThreadWorker:
         if not self.alive:
             raise RuntimeError(f"ThreadWorker[{self.worker_id}] is not alive")
         session_id = _new_session_id()
-        payload = {
-            "max_new_tokens": kwargs.get("max_new_tokens", 100),
-            "temperature": kwargs.get("temperature", 0.7),
-            "top_p": kwargs.get("top_p", 0.9),
-            "top_k": kwargs.get("top_k", 50),
-            "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
-        }
+        payload = self._payload(kwargs)
         self._req_q.put_nowait(("generate_stream", (session_id, prompt, payload)))
 
         deadline = time.time() + self._generate_timeout
@@ -351,13 +377,9 @@ class _ThreadWorker:
         if tokenizer is None and model is not None:
             tokenizer = getattr(model, "_tokenizer", None) or getattr(model, "tokenizer", None)
         if model is None:
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: no provider or HF model loaded"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: no provider or HF model loaded")
         if tokenizer is None:
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: HF model has no tokenizer"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: HF model has no tokenizer")
         return tokenizer, model, "hf"
 
     @staticmethod
@@ -388,6 +410,7 @@ class _ThreadWorker:
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
                 eos_token=self._eos_id(tokenizer),
+                kv_state=self._session_kv(kwargs.get("kv_session_id")),
             )
             generated = result[0].tolist()
             text = tokenizer.decode(generated)
@@ -398,12 +421,12 @@ class _ThreadWorker:
             }
 
         if kind != "hf":
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: model has no generate_numpy"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: model has no generate_numpy")
         return self._hf_generate(tokenizer, model, prompt, kwargs, start)
 
-    def _hf_generate(self, tokenizer: Any, model: Any, prompt: str, kwargs: dict, start: float) -> dict:
+    def _hf_generate(
+        self, tokenizer: Any, model: Any, prompt: str, kwargs: dict, start: float
+    ) -> dict:
         """HF-style generate (callable tokenizer + model.generate)."""
         import time as _time
 
@@ -414,15 +437,15 @@ class _ThreadWorker:
         repetition_penalty = kwargs.get("repetition_penalty", 1.0)
 
         if not callable(tokenizer):
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: HF tokenizer is not callable"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: HF tokenizer is not callable")
         if not hasattr(model, "generate"):
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: HF model has no generate()"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: HF model has no generate()")
 
-        inputs = tokenizer(prompt, return_tensors="pt") if _accepts_return_tensors(tokenizer) else tokenizer(prompt)
+        inputs = (
+            tokenizer(prompt, return_tensors="pt")
+            if _accepts_return_tensors(tokenizer)
+            else tokenizer(prompt)
+        )
         if isinstance(inputs, dict) or hasattr(inputs, "keys"):
             input_ids = inputs["input_ids"]
             attention_mask = inputs.get("attention_mask") if hasattr(inputs, "get") else None
@@ -454,9 +477,11 @@ class _ThreadWorker:
         output_ids = model.generate(**gen_kwargs)
         prompt_len = int(input_ids.shape[-1]) if hasattr(input_ids, "shape") else 0
         generated = output_ids[0][prompt_len:]
-        text = tokenizer.decode(generated, skip_special_tokens=True) if _decode_supports_skip(
-            tokenizer
-        ) else tokenizer.decode(generated)
+        text = (
+            tokenizer.decode(generated, skip_special_tokens=True)
+            if _decode_supports_skip(tokenizer)
+            else tokenizer.decode(generated)
+        )
         try:
             n_tokens = len(generated)
         except TypeError:
@@ -488,6 +513,7 @@ class _ThreadWorker:
                 top_k=top_k,
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
+                kv_state=self._session_kv(kwargs.get("kv_session_id")),
             ):
                 yield tokenizer.decode([tok_id])
             return

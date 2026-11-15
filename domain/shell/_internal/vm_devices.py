@@ -13,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 from .device_ops import OpTable
+from .tensor_arena import TensorArena, resolve
 from .vm import Device, DeviceFault
 
 # ---------------------------------------------------------------------------
@@ -35,30 +36,33 @@ class TensorDevice(Device):
 
     def __init__(self, weights=None):
         self._weights = dict(weights) if weights else {}
-        self._ops = OpTable("TensorDevice", {
-            "matmul": self._matmul,
-            "relu": self._relu,
-            "softmax": self._softmax,
-            "sigmoid": self._sigmoid,
-            "tanh": self._tanh,
-            "add": self._add,
-            "mul": self._mul,
-            "sub": self._sub,
-            "neg": self._neg,
-            "abs": self._abs,
-            "sum": self._sum,
-            "mean": self._mean,
-            "max": self._max,
-            "argmax": self._argmax,
-            "norm": self._norm,
-            "load": self._load_weight,
-            "store": self._store_weight,
-            "shape": self._shape,
-            "zeros": self._zeros,
-            "randn": self._randn,
-            "forward": self._forward,
-            "info": self.info,
-        })
+        self._ops = OpTable(
+            "TensorDevice",
+            {
+                "matmul": self._matmul,
+                "relu": self._relu,
+                "softmax": self._softmax,
+                "sigmoid": self._sigmoid,
+                "tanh": self._tanh,
+                "add": self._add,
+                "mul": self._mul,
+                "sub": self._sub,
+                "neg": self._neg,
+                "abs": self._abs,
+                "sum": self._sum,
+                "mean": self._mean,
+                "max": self._max,
+                "argmax": self._argmax,
+                "norm": self._norm,
+                "load": self._load_weight,
+                "store": self._store_weight,
+                "shape": self._shape,
+                "zeros": self._zeros,
+                "randn": self._randn,
+                "forward": self._forward,
+                "info": self.info,
+            },
+        )
 
     def info(self):
         return {
@@ -303,14 +307,17 @@ class SlonetDevice(Device):
 
     def __init__(self, provider):
         self._provider = provider
-        self._ops = OpTable("SlonetDevice", {
-            "tokenize": self._tokenize,
-            "detokenize": self._detokenize,
-            "generate": self._generate,
-            "generate_stream": self._generate_stream,
-            "forward": self._forward,
-            "info": self._info,
-        })
+        self._ops = OpTable(
+            "SlonetDevice",
+            {
+                "tokenize": self._tokenize,
+                "detokenize": self._detokenize,
+                "generate": self._generate,
+                "generate_stream": self._generate_stream,
+                "forward": self._forward,
+                "info": self._info,
+            },
+        )
 
     def _tokenize(self, text):
         tokens = self._provider._tokenizer.encode(str(text))
@@ -339,7 +346,7 @@ class SlonetDevice(Device):
             top_k=int(top_k) if top_k is not None else None,
             top_p=float(top_p) if top_p is not None else None,
             repetition_penalty=float(repetition_penalty),
-            eos_token=self._provider._tokenizer.eos_token_id or 0,
+            eos_token=self._provider._tokenizer.eos_token_id,
         )
         return result[0]
 
@@ -393,18 +400,24 @@ class MultimodalDevice(Device):
         DEV_CALL   R2, R0, embed, R_img                   # R2 = feature vector
         DEV_CALL   R3, R0, info                            # R3 = model info
 
-    Image is passed as a numpy array (H×W×3, float32 [0,1]).
+    Image is passed as a numpy array (H×W×3, float32 [0,1]) or as a
+    TensorArena slot id from another device (e.g. ``cycles render``).
     """
 
-    def __init__(self, engine):
+    def __init__(self, engine, arena: TensorArena | None = None):
         self._engine = engine
-        self._ops = OpTable("MultimodalDevice", {
-            "generate": self._generate,
-            "embed": self._embed,
-            "info": self._info,
-        })
+        self._arena: TensorArena = arena if arena is not None else TensorArena()
+        self._ops = OpTable(
+            "MultimodalDevice",
+            {
+                "generate": self._generate,
+                "embed": self._embed,
+                "info": self._info,
+            },
+        )
 
     def _generate(self, image_np=None, max_len=20, temperature=1.0):
+        image_np = resolve(image_np, self._arena)
         img = np.asarray(image_np, dtype=np.float32) if image_np is not None else None
         if img is not None and img.ndim == 3:
             img = img[np.newaxis, ...]
@@ -416,6 +429,7 @@ class MultimodalDevice(Device):
         return result.text
 
     def _embed(self, image_np):
+        image_np = resolve(image_np, self._arena)
         img = np.asarray(image_np, dtype=np.float32)
         if img.ndim == 3:
             img = img[np.newaxis, ...]
@@ -449,10 +463,13 @@ class EngineDevice(Device):
     def __init__(self, engine, engine_name="engine"):
         self._engine = engine
         self._name = engine_name
-        self._ops = OpTable(f"EngineDevice({self._name})", {
-            "generate": self._generate,
-            "info": self._info,
-        })
+        self._ops = OpTable(
+            f"EngineDevice({self._name})",
+            {
+                "generate": self._generate,
+                "info": self._info,
+            },
+        )
 
     def _generate(self, prompt, max_tokens=50, temperature=1.0, **kwargs):
         return self._engine.generate(
@@ -530,18 +547,21 @@ class SlonetTrainingDevice(Device):
             "checkpoint_dir": "checkpoints",
         }
 
-        self._ops = OpTable("SlonetTrainingDevice", {
-            "train": self._train,
-            "eval": self._eval,
-            "save": self._save,
-            "load": self._load,
-            "config": self._config_op,
-            "info": self._info,
-            "tokenize": self._tokenize,
-            "detokenize": self._detokenize,
-            "generate": self._generate,
-            "forward": self._forward,
-        })
+        self._ops = OpTable(
+            "SlonetTrainingDevice",
+            {
+                "train": self._train,
+                "eval": self._eval,
+                "save": self._save,
+                "load": self._load,
+                "config": self._config_op,
+                "info": self._info,
+                "tokenize": self._tokenize,
+                "detokenize": self._detokenize,
+                "generate": self._generate,
+                "forward": self._forward,
+            },
+        )
 
     def _ensure_model(self):
         if self._model is None:
@@ -823,42 +843,52 @@ class NPUVMDevice(Device):
 
     def __init__(self, npu_device):
         self._npu = npu_device
-        self._ops = OpTable("NPUVMDevice", {
-            "load_model": self._load_model,
-            "unload_model": self._unload_model,
-            "tokenize": self._tokenize,
-            "detokenize": self._detokenize,
-            "generate": self._generate,
-            "forward": self._forward,
-            "embed": self._embed,
-            "train_step": self._train_step,
-            "profile": self._profile,
-            "checkpoint": self._checkpoint,
-            "restore": self._restore,
-            "list_checkpoints": self._list_checkpoints,
-            "delete_checkpoint": self._delete_checkpoint,
-            "save_checkpoint": self._save_checkpoint,
-            "load_checkpoint": self._load_checkpoint,
-            "quantize": self._quantize,
-            "dequantize": self._dequantize,
-            "clear_cache": self._clear_cache,
-            "health": self._health,
-            "batch": self._batch,
-            "attention_maps": self._attention_maps,
-            "compare": self._compare,
-            "layers": self._layers,
-            "benchmark": self._benchmark,
-            "info": self._info,
-        })
+        self._ops = OpTable(
+            "NPUVMDevice",
+            {
+                "load_model": self._load_model,
+                "unload_model": self._unload_model,
+                "tokenize": self._tokenize,
+                "detokenize": self._detokenize,
+                "generate": self._generate,
+                "forward": self._forward,
+                "embed": self._embed,
+                "train_step": self._train_step,
+                "profile": self._profile,
+                "checkpoint": self._checkpoint,
+                "restore": self._restore,
+                "list_checkpoints": self._list_checkpoints,
+                "delete_checkpoint": self._delete_checkpoint,
+                "save_checkpoint": self._save_checkpoint,
+                "load_checkpoint": self._load_checkpoint,
+                "quantize": self._quantize,
+                "dequantize": self._dequantize,
+                "clear_cache": self._clear_cache,
+                "health": self._health,
+                "batch": self._batch,
+                "attention_maps": self._attention_maps,
+                "compare": self._compare,
+                "layers": self._layers,
+                "benchmark": self._benchmark,
+                "info": self._info,
+            },
+        )
 
     # VM op -> (kernel NPU ioctl command, extractor from the op's own argument
     # order to the ioctl's). Only ops the kernel NPU can actually serve are
     # listed; anything else resolves by method name or fails as a DeviceFault.
+    # generate passes its max_tokens through (the docstring promises
+    # ``generate, qwen, Hello, 50`` — dropping the third arg silently ran
+    # every VM generate at the default budget).
     _IOCTL_MAP = {
         "load_model": ("LOAD", lambda a: (a[1], a[0])),
         "unload_model": ("UNLOAD", lambda a: (a[0],)),
-        "generate": ("CALL", lambda a: (a[0], a[1])),
+        "generate": ("CALL", lambda a: (a[0], a[1], a[2]) if len(a) > 2 else (a[0], a[1])),
         "batch": ("BATCH", lambda a: (a[0], a[1])),
+        "tokenize": ("TOKENIZE", lambda a: a),
+        "detokenize": ("DETOKENIZE", lambda a: a),
+        "embed": ("EMBED", lambda a: a),
+        "forward": ("FORWARD", lambda a: a),
         "quantize": ("QUANTIZE", lambda a: (a[0], a[1])),
         "save_checkpoint": ("CHECKPOINT_SAVE", lambda a: (a[0], a[1])),
         "load_checkpoint": ("CHECKPOINT_LOAD", lambda a: (a[0], a[1])),
@@ -1052,3 +1082,96 @@ class NPUVMDevice(Device):
 
     def info(self):
         return self._npu.info()
+
+
+# ---------------------------------------------------------------------------
+# WorldDevice – live world sim + frame render into the shared arena
+# ---------------------------------------------------------------------------
+
+
+class WorldDevice(Device):
+    """
+    Live world driver — steps the Simulation and renders frames into a
+    TensorArena, so assembly can move the slot onward (``cycles encode_png``)
+    without Python ever touching a register.
+
+    From assembly:
+        DEV_OPEN   R0, world
+        DEV_CALL   R1, R0, step            # R1 = tick
+        DEV_CALL   R2, R0, render          # R2 = arena slot id
+        DEV_CALL   R3, RC, encode_png, R2  # cycles shares the arena
+        DEV_CALL   R4, RS, write, R3, R1   # stream write, tag = tick
+        DEV_CALL   R5, RC, free_slot, R2
+
+    Python builds this once (kernel + driver); the frame loop itself lives
+    in the asm app (``world_stream.asm``).
+    """
+
+    def __init__(
+        self,
+        scene,
+        *,
+        config=None,
+        simulation=None,
+        bridge=None,
+        arena=None,
+        max_ticks: int = 1_000_000,
+    ):
+        from .simulation import Simulation
+        from .world_render import RenderBridge
+
+        self._scene = scene
+        self._simulation = (
+            simulation if simulation is not None else Simulation(scene, max_ticks=max_ticks)
+        )
+        self._bridge = bridge if bridge is not None else RenderBridge(config)
+        self._arena = arena if arena is not None else TensorArena()
+
+    @property
+    def arena(self) -> TensorArena:
+        """Slot arena backing render's bus values (share across devices)."""
+        return self._arena
+
+    @property
+    def scene(self):
+        return self._scene
+
+    def info(self):
+        scene = self._scene
+        cfg = self._bridge.config
+        return {
+            "type": "world",
+            "tick": int(scene.tick),
+            "alive": sum(1 for b in scene.babies if b.alive),
+            "population": len(scene.babies),
+            "resolution": [cfg.width, cfg.height],
+            "samples": cfg.samples,
+        }
+
+    def call(self, method, *args):
+        if method == "step":
+            self._simulation.step()
+            return int(self._scene.tick)
+        if method == "render":
+            scene = self._scene
+            nests = scene.nests if scene.params.structure_enabled else None
+            image = self._bridge.render_tick(
+                scene.world,
+                babies=list(scene.alive_babies),
+                nests=nests,
+            )
+            return self._arena.put(image)
+        if method == "free_slot":
+            self._arena.free(int(args[0]))
+            return 0
+        if method == "stats":
+            scene = self._scene
+            return {
+                "tick": int(scene.tick),
+                "alive": sum(1 for b in scene.babies if b.alive),
+                "population": len(scene.babies),
+                "births": int(scene.births),
+                "energy_total": float(scene.world.energy.sum())
+                + sum(b.energy for b in scene.babies),
+            }
+        return super().call(method, *args)

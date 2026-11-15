@@ -23,3 +23,18 @@ def test_training_request_device_stripped() -> None:
 
     r = TrainingRequest(name="n", model="m", dataset="d", device="  cuda  ")
     assert r.device == "cuda"
+
+
+def test_manifests_is_exactly_one_alternative() -> None:
+    import pytest
+    from pydantic import ValidationError
+    from training.schemas import TrainingRequest
+
+    ok = TrainingRequest(name="n", model="m", manifests=["data/crunched/a/v1/manifest.json"])
+    assert ok.manifests == ["data/crunched/a/v1/manifest.json"]
+
+    with pytest.raises(ValidationError):
+        TrainingRequest(name="n", model="m", dataset="d", manifests=["data/x/v1/manifest.json"])
+
+    with pytest.raises(ValidationError):
+        TrainingRequest(name="n", model="m")

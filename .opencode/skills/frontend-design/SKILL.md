@@ -31,7 +31,7 @@ You are the design lead for sloughGPT, a local-first AI training platform with a
 - **Display**: Outfit (400/500/600/700) — served locally from `/public/fonts/`
 - **Mono**: JetBrains Mono (400/500) — code, technical values
 - Body: `text-sm` (14px). Section titles: `text-base font-medium`. Page titles: `AppRouteHeaderLead`.
-- Never use `text-lg` or `text-2xl` in page body.
+- Never use `text-lg` or `text-2xl` for **body/prose or section titles**. **Exempt**: numeric stats, KPIs, scores, and single-word/icon display content (typically `font-mono`/`font-bold`) may use `text-lg`/`text-2xl`.
 
 ### Layout
 
@@ -112,6 +112,24 @@ raised anywhere survives navigation until dismissed or acted on.
 - Tones map to theme tokens via `StatusDot` (info→primary, success, warning,
   destructive). No new colors.
 
+## Chat Message Frame (design system rule — Direction B, ruling 2026-11-03)
+
+Every chat message renders through **one shared surface**: `MessageFrame`
+(`features/chat/components/messages/MessageFrame.tsx`). Renderers compose it;
+they never re-decide chrome.
+
+- **One shape, both roles**: `rounded-2xl` — never `rounded-full` pills,
+  never role-specific radii. User = right-aligned `bg-primary/10
+border-primary/20`; assistant = left-aligned `bg-card border-border`.
+- **Metadata footer lives INSIDE the frame** (`data-message-frame-footer`):
+  role label, model, tok/s metrics, timestamp. No detached right gutter, no
+  badges stacked under the content.
+- **No message index/turn numbers** — the gutter numbering was removed by
+  sub-decision; don't reintroduce it.
+- Mechanical check: tests assert `data-message-frame={role}` on both roles;
+  `MessageBubble`, `MessageContent`, and `MessageRenderer` must all compose
+  `MessageFrame`. See `docs/design/DESIGN_SYSTEM.md` → "The Log Entry".
+
 ## Anti-Patterns to Avoid
 
 | Don't                                                | Why                     | Do instead                                                |
@@ -119,11 +137,12 @@ raised anywhere survives navigation until dismissed or acted on.
 | Add more cards                                       | Card soup               | Use KpiGrid, StatCard, SectionHeader, inline content      |
 | Use `px-8 py-6` arbitrary spacing                    | Breaks spacing system   | Use `sl-page` padding, `space-y-4`, `gap-*` tokens        |
 | Add gradient backgrounds to cards                    | Visual noise            | Use subtle border + shadow depth                          |
-| Use `text-lg` in body                                | Breaks type scale       | Use `text-sm` body, `text-base` titles                    |
+| Use `text-lg` on body/titles                         | Breaks type scale       | `text-sm` body, `text-base` titles; stats/KPIs exempt     |
 | Add decorative illustrations                         | Clutters interface      | Use the training loss SVG motif, StatusDot, colored chips |
 | Create new color variables                           | Palette drift           | Use existing tokens, theme chips for accent shifts        |
 | Use hardcoded colors                                 | Unmaintainable          | Always `rgb(var(--token))`                                |
 | Add animation without `prefers-reduced-motion` check | Accessibility violation | Wrap in `@media (prefers-reduced-motion: no-preference)`  |
+| Hand-roll chat message chrome                        | Surface drift           | Compose `MessageFrame`; footer inside, `rounded-2xl`      |
 
 ## Process for New UI Work
 
@@ -139,11 +158,12 @@ Before shipping any UI change:
 
 - [ ] All colors via CSS custom properties
 - [ ] Spacing uses token system (`gap-*`, `space-y-*`, `p-*`)
-- [ ] Typography follows type scale (no `text-lg` in body)
+- [ ] Typography follows type scale (`text-lg`/`text-2xl` only on stats/KPIs/display content)
 - [ ] Interactive elements have hover/focus/active/disabled states
 - [ ] `focus-visible:ring-2 focus-visible:ring-ring` on all interactive elements
 - [ ] `aria-label` on icon-only buttons
 - [ ] Empty states explain why + provide next action
 - [ ] Loading states use skeletons or spinners (never blank)
 - [ ] `prefers-reduced-motion` respected for animations
+- [ ] Chat message surfaces compose `MessageFrame` (both roles, footer inside)
 - [ ] `npx tsc --noEmit` passes

@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.errors import ErrorsRouter
+from apps.api.server.routers.system import ErrorsRouter
 from domain.shared import utc_now_iso
 
 
@@ -302,7 +302,7 @@ class TestUnreadCount:
 class TestIngestFrontendLogs:
     """POST /errors/logs/ingest"""
 
-    @patch("apps.api.server.routers.errors.get_server_buffer")
+    @patch("apps.api.server.routers.system.get_server_buffer")
     def test_ingests_single_log(self, mock_get_buf, client):
         resp = client.post(
             "/errors/logs/ingest",
@@ -313,7 +313,7 @@ class TestIngestFrontendLogs:
         assert resp.status_code == 200
         assert resp.json()["data"]["ingested"] == 1
 
-    @patch("apps.api.server.routers.errors.get_server_buffer")
+    @patch("apps.api.server.routers.system.get_server_buffer")
     def test_ingests_multiple_logs(self, mock_get_buf, client):
         resp = client.post(
             "/errors/logs/ingest",

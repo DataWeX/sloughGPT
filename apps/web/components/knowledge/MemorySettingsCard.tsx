@@ -1,16 +1,16 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { memoryController, type MemoryConfigResult } from '@/lib/memory-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 export function MemorySettingsCard() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const [config, setConfig] = useState<MemoryConfigResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
@@ -39,7 +39,9 @@ export function MemorySettingsCard() {
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [addToast])
 
   const handleToggle = async (enabled: boolean) => {
@@ -106,14 +108,17 @@ export function MemorySettingsCard() {
             <p className="font-mono text-xs">{config.consolidation_threshold}</p>
           </div>
         </div>
-        <div className="text-xs text-muted-foreground">
-          Store: {config.store_path}
-        </div>
+        <div className="text-xs text-muted-foreground">Store: {config.store_path}</div>
         <Button
           size="sm"
           variant="outline"
           className="h-7 text-xs"
-          onClick={() => memoryController.consolidate().then(() => addToast('Consolidation triggered', 'success')).catch(e => addToast(extractErrorMessage(e, 'Could not consolidation'), 'error'))}
+          onClick={() =>
+            memoryController
+              .consolidate()
+              .then(() => addToast('Consolidation triggered', 'success'))
+              .catch((e) => addToast(extractErrorMessage(e, 'Could not consolidation'), 'error'))
+          }
         >
           Run Consolidation Now
         </Button>

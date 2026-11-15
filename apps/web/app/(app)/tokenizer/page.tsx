@@ -1,7 +1,8 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useRouter } from '@/vite/next-compat/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
   CardHeader,
@@ -29,7 +30,6 @@ import { TokenTreeMergesCard } from '@/components/tokenizer/TokenTreeMergesCard'
 import { TokenTreeVocabCard } from '@/components/tokenizer/TokenTreeVocabCard'
 import { TokenTreeTrainCard } from '@/components/tokenizer/TokenTreeTrainCard'
 import { TokenTreePersistenceCard } from '@/components/tokenizer/TokenTreePersistenceCard'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'play' | 'vocab' | 'train'
@@ -53,10 +53,10 @@ export default function TokenizerPage() {
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
-  const addToast = useToastStore((s) => s.addToast)
-  useRefreshShortcut(() => router.refresh())
-
-  useEffect(() => {
+  const addToast = notify.toast
+  const loadStats = useCallback(() => {
+    setLoading(true)
+    setLoadError(null)
     tokenizerController
       .getStats()
       .then((s) => {
@@ -68,6 +68,13 @@ export default function TokenizerPage() {
         setLoading(false)
       })
   }, [])
+
+  // 'r' refreshes the page's own data — not the whole document.
+  useRefreshShortcut(loadStats)
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
 
   const handleTokenize = async () => {
     if (!inputText.trim()) return
@@ -150,7 +157,7 @@ export default function TokenizerPage() {
       }
       loading={loading}
       error={loadError}
-      onRetry={() => window.location.reload()}
+      onRetry={loadStats}
       toolbar={toolbar}
     >
       {stats && (

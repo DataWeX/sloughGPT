@@ -120,6 +120,7 @@ class Skill:
     def to_echo_model(self):
         """Replay this skill through an Agent. Marks one use."""
         from avion.ai.models import EchoModel
+
         self.uses += 1
         return EchoModel(list(self.actions))
 
@@ -169,18 +170,23 @@ class SkillLibrary:
         of writing a second copy.
         """
         from avion.ai.models import ActionType
+
         actions = [
-            s.action for s in trajectory.steps
-            if s.action is not None
-            and not (skip_waits and s.action.action_type == ActionType.WAIT)
+            s.action
+            for s in trajectory.steps
+            if s.action is not None and not (skip_waits and s.action.action_type == ActionType.WAIT)
         ]
         digest = trajectory_hash(actions, trajectory.task)
         for existing in self._skills.values():
             if existing.source_hash and existing.source_hash == digest:
                 return existing
-        skill = Skill(name=name, description=description,
-                      actions=actions, source_task=trajectory.task,
-                      source_hash=digest)
+        skill = Skill(
+            name=name,
+            description=description,
+            actions=actions,
+            source_task=trajectory.task,
+            source_hash=digest,
+        )
         self.add(skill)
         return skill
 
