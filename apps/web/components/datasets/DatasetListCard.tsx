@@ -54,12 +54,12 @@ export function DatasetListCard({
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Datasets</CardTitle>
           <div className="flex items-center gap-1">
-            {sortButtons.map(s => (
+            {sortButtons.map((s) => (
               <Button
                 key={s.field}
                 size="sm"
                 variant={sortBy === s.field ? 'default' : 'ghost'}
-                className="text-[9px]"
+                className="text-[11px]"
                 onClick={() => onSortChange(s.field)}
               >
                 {s.label}
@@ -72,7 +72,7 @@ export function DatasetListCard({
           <Input
             placeholder="Search datasets..."
             value={search}
-            onChange={e => onSearchChange(e.target.value)}
+            onChange={(e) => onSearchChange(e.target.value)}
             className="pl-7 h-8 text-xs"
             data-testid="dataset-search"
           />
@@ -89,12 +89,12 @@ export function DatasetListCard({
           <p className="text-sm text-muted-foreground text-center py-6">No datasets found.</p>
         ) : (
           <div className="space-y-1.5 max-h-96 overflow-y-auto">
-            {datasets.map(d => (
+            {datasets.map((d) => (
               <div
                 key={d.id}
                 className={cn(
                   'group flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer',
-                  'border-border/60 hover:bg-muted/50'
+                  'border-border/60 hover:bg-muted/50',
                 )}
                 onClick={() => onSelect(d.id)}
                 data-testid="dataset-entry"
@@ -102,14 +102,21 @@ export function DatasetListCard({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{d.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-muted-foreground">{formatSize(d.size)}</span>
-                    <span className="text-[10px] text-muted-foreground">{d.row_count.toLocaleString()} rows</span>
-                    <span className="text-[10px] text-muted-foreground">{d.updated_at}</span>
+                    <span className="text-xs text-muted-foreground">{formatSize(d.size)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {d.row_count.toLocaleString()} rows
+                    </span>
+                    <span className="text-xs text-muted-foreground">{d.updated_at}</span>
                   </div>
                   {d.tags && d.tags.length > 0 && (
                     <div className="flex gap-1 mt-1">
-                      {d.tags.map(t => (
-                        <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{t}</span>
+                      {d.tags.map((t) => (
+                        <span
+                          key={t}
+                          className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                        >
+                          {t}
+                        </span>
                       ))}
                     </div>
                   )}
@@ -118,7 +125,10 @@ export function DatasetListCard({
                   size="sm"
                   variant="ghost"
                   className="opacity-0 group-hover:opacity-100 h-7 text-destructive"
-                  onClick={e => { e.stopPropagation(); onDelete(d.id) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(d.id)
+                  }}
                   aria-label={`Delete ${d.name}`}
                 >
                   <Trash2 className="h-3 w-3" />

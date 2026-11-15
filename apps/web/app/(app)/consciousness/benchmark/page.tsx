@@ -444,7 +444,7 @@ export default function ConsciousnessBenchmarkPage() {
                             y={198}
                             textAnchor="middle"
                             className="fill-muted-foreground"
-                            fontSize={10}
+                            fontSize={11}
                           >
                             {bin.start}
                           </text>
@@ -497,10 +497,10 @@ export default function ConsciousnessBenchmarkPage() {
                             stroke="rgb(var(--border))"
                             strokeWidth={0.5}
                           />
-                          <text x={5} y={12} className="fill-muted-foreground" fontSize={10}>
+                          <text x={5} y={12} className="fill-muted-foreground" fontSize={11}>
                             {maxVal}ms
                           </text>
-                          <text x={5} y={188} className="fill-muted-foreground" fontSize={10}>
+                          <text x={5} y={188} className="fill-muted-foreground" fontSize={11}>
                             {minVal}ms
                           </text>
                         </>

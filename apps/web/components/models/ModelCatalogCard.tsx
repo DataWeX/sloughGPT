@@ -220,46 +220,46 @@ export default memo(function ModelCatalogCard({
                           )}
                         </div>
                         {model.description && (
-                          <div className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
+                          <div className="text-xs text-muted-foreground/70 truncate mt-0.5">
                             {model.description}
                           </div>
                         )}
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                           {model.params && (
-                            <span className="text-[10px] text-muted-foreground font-mono">
+                            <span className="text-xs text-muted-foreground font-mono">
                               {model.params}
                             </span>
                           )}
                           {model.size_gb && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {model.size_gb.toFixed(1)} GB
                             </span>
                           )}
                           {model.source && model.source !== 'local' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                               {model.source}
                             </span>
                           )}
                           {isLoaded && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                               Loaded
                             </span>
                           )}
                           {!isLoaded && model.cached && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success font-medium">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-success/10 text-success font-medium">
                               Cached
                             </span>
                           )}
                           {model.archive_format === 'lz4' && (
                             <span
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info font-medium"
+                              className="text-xs px-1.5 py-0.5 rounded bg-info/10 text-info font-medium"
                               title="Safetensors archived as LZ4"
                             >
                               LZ4
                             </span>
                           )}
                           {loadTimes[model.id] && (
-                            <span className="text-[10px] text-muted-foreground/60">
+                            <span className="text-xs text-muted-foreground/60">
                               {(loadTimes[model.id] / 1000).toFixed(1)}s
                             </span>
                           )}
@@ -267,26 +267,26 @@ export default memo(function ModelCatalogCard({
                             model.tags.slice(0, 2).map((tag) => (
                               <span
                                 key={tag}
-                                className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium"
+                                className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium"
                               >
                                 {tag}
                               </span>
                             ))}
                         </div>
                         {isLoading && (
-                          <p className="text-[10px] text-primary mt-1">
+                          <p className="text-xs text-primary mt-1">
                             {conversionStatus && conversionStatus.stage !== 'idle'
                               ? `Converting: ${conversionStatus.stage} (${Math.round(conversionStatus.progress * 100)}%)`
                               : 'Loading model...'}
                           </p>
                         )}
                         {isWarming && (
-                          <p className="text-[10px] text-warning mt-1">Warming up model...</p>
+                          <p className="text-xs text-warning mt-1">Warming up model...</p>
                         )}
                       </div>
                       <div className="flex gap-1 shrink-0 ml-2">
                         {model.source === 'local' ? (
-                          <span className="text-[10px] text-muted-foreground">Local</span>
+                          <span className="text-xs text-muted-foreground">Local</span>
                         ) : (
                           <Button
                             size="sm"
@@ -328,7 +328,7 @@ export default memo(function ModelCatalogCard({
                             label={formatStage(conversionStatus.stage)}
                             showValue
                           />
-                          <span className="text-[9px] text-muted-foreground ml-auto">
+                          <span className="text-[11px] text-muted-foreground ml-auto">
                             {conversionStatus.elapsed_s.toFixed(0)}s
                           </span>
                         </div>

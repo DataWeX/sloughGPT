@@ -126,7 +126,7 @@ export const TokenBilling = memo(function TokenBilling({ className }: TokenBilli
           {balance && (
             <span
               className={cn(
-                'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                'text-xs px-2 py-0.5 rounded-full font-medium',
                 balance.tier === 'free' && 'bg-muted text-muted-foreground',
                 balance.tier === 'pro' && 'bg-primary/20 text-primary',
                 balance.tier === 'enterprise' && 'bg-success/20 text-success',
@@ -212,15 +212,13 @@ export const TokenBilling = memo(function TokenBilling({ className }: TokenBilli
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium truncate">{record.model}</div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {new Date(record.timestamp).toLocaleString()}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-xs">{formatTokens(record.totalTokens)}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {formatCost(record.cost)}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{formatCost(record.cost)}</div>
                   </div>
                 </div>
               ))
@@ -244,12 +242,12 @@ export const TokenBilling = memo(function TokenBilling({ className }: TokenBilli
                     {limits.price === 0 ? 'Free' : `$${limits.price}/mo`}
                   </span>
                 </div>
-                <div className="text-[10px] text-muted-foreground space-y-1">
+                <div className="text-xs text-muted-foreground space-y-1">
                   <div>Daily: {formatTokens(limits.daily)} tokens</div>
                   <div>Monthly: {formatTokens(limits.monthly)} tokens</div>
                 </div>
                 {balance?.tier === tier && (
-                  <div className="mt-2 text-[10px] text-primary">Current plan</div>
+                  <div className="mt-2 text-xs text-primary">Current plan</div>
                 )}
               </div>
             ))}
@@ -260,7 +258,7 @@ export const TokenBilling = memo(function TokenBilling({ className }: TokenBilli
                 {Object.entries(MODEL_PRICING)
                   .filter(([k]) => k !== 'default')
                   .map(([model, pricing]) => (
-                    <div key={model} className="flex justify-between text-[10px]">
+                    <div key={model} className="flex justify-between text-xs">
                       <span className="text-muted-foreground">{model}</span>
                       <span>
                         In: {formatCost(pricing.input)} / Out: {formatCost(pricing.output)}
@@ -289,7 +287,7 @@ function UsageBar({
 }) {
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-[10px]">
+      <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
         <span>
           {formatTokens(used)} / {formatTokens(limit)}
@@ -312,7 +310,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-center p-2 rounded bg-muted/30">
       <div className="text-sm font-medium">{value}</div>
-      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   )
 }

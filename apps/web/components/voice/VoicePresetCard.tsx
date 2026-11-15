@@ -1,7 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Slider, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Slider,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
 
 interface VoicePreset {
@@ -25,12 +37,18 @@ async function loadPresets(): Promise<VoicePreset[]> {
   try {
     const entry = await chatDB.getKV<VoicePreset[]>(STORAGE_KEY)
     if (entry && Array.isArray(entry) && entry.length > 0) return entry
-  } catch { /* corrupted — fall back */ }
+  } catch {
+    /* corrupted — fall back */
+  }
   return DEFAULT_PRESETS
 }
 
 async function savePresets(presets: VoicePreset[]) {
-  try { await chatDB.setKV(STORAGE_KEY, presets) } catch { /* quota exceeded */ }
+  try {
+    await chatDB.setKV(STORAGE_KEY, presets)
+  } catch {
+    /* quota exceeded */
+  }
 }
 
 interface VoicePresetCardProps {
@@ -49,7 +67,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
     loadPresets().then(setPresets)
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       const loadVoices = () => {
-        const list = window.speechSynthesis.getVoices().map(v => v.name)
+        const list = window.speechSynthesis.getVoices().map((v) => v.name)
         setVoices(list.length > 0 ? list : [])
       }
       loadVoices()
@@ -57,15 +75,18 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
     }
   }, [])
 
-  const handleApply = useCallback((preset: VoicePreset) => {
-    setActiveName(preset.name)
-    onApply?.(preset)
-  }, [onApply])
+  const handleApply = useCallback(
+    (preset: VoicePreset) => {
+      setActiveName(preset.name)
+      onApply?.(preset)
+    },
+    [onApply],
+  )
 
   const handleSaveEdit = () => {
-    setPresets(prev => {
-      const updated = prev.map(p =>
-        p.name === editing ? { ...p, rate: editRate, pitch: editPitch } : p
+    setPresets((prev) => {
+      const updated = prev.map((p) =>
+        p.name === editing ? { ...p, rate: editRate, pitch: editPitch } : p,
       )
       savePresets(updated).catch(() => {})
       return updated
@@ -85,7 +106,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
   }
 
   const handleDelete = (name: string) => {
-    const updated = presets.filter(p => p.name !== name)
+    const updated = presets.filter((p) => p.name !== name)
     setPresets(updated)
     savePresets(updated).catch(() => {})
     if (activeName === name) setActiveName(null)
@@ -99,7 +120,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
     utterance.rate = preset.rate
     utterance.pitch = preset.pitch
     if (preset.voice) {
-      const match = window.speechSynthesis.getVoices().find(v => v.name === preset.voice)
+      const match = window.speechSynthesis.getVoices().find((v) => v.name === preset.voice)
       if (match) utterance.voice = match
     }
     window.speechSynthesis.speak(utterance)
@@ -112,13 +133,18 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Voice Presets</CardTitle>
-          <Button size="sm" variant="ghost" onClick={handleAdd}>+ Add</Button>
+          <Button size="sm" variant="ghost" onClick={handleAdd}>
+            + Add
+          </Button>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-1.5">
-          {presets.map(p => (
-            <div key={p.name} className="rounded-md border border-border/60 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors">
+          {presets.map((p) => (
+            <div
+              key={p.name}
+              className="rounded-md border border-border/60 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors"
+            >
               {editing === p.name ? (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -152,7 +178,9 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                     <Select
                       value={p.voice}
                       onValueChange={(value) => {
-                        const updated = presets.map(pr => pr.name === p.name ? { ...pr, voice: value } : pr)
+                        const updated = presets.map((pr) =>
+                          pr.name === p.name ? { ...pr, voice: value } : pr,
+                        )
                         setPresets(updated)
                         savePresets(updated).catch(() => {})
                       }}
@@ -162,15 +190,21 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">Default voice</SelectItem>
-                        {voices.map(v => (
-                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        {voices.map((v) => (
+                          <SelectItem key={v} value={v}>
+                            {v}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   )}
                   <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={handleSaveEdit}>Save</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                    <Button size="sm" variant="ghost" onClick={handleSaveEdit}>
+                      Save
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -178,32 +212,43 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                   <div className="flex items-center gap-2">
                     <button
                       className={`text-left font-medium text-xs px-2 py-0.5 rounded transition-colors ${
-                        activeName === p.name
-                          ? 'bg-primary/15 text-primary'
-                          : 'hover:bg-muted'
+                        activeName === p.name ? 'bg-primary/15 text-primary' : 'hover:bg-muted'
                       }`}
                       onClick={() => handleApply(p)}
                     >
                       {p.name}
                     </button>
-                    <span className="text-[10px] text-muted-foreground font-numeric">
+                    <span className="text-xs text-muted-foreground font-numeric">
                       {p.rate.toFixed(1)}x · {p.pitch.toFixed(1)}p
                     </span>
                     {p.voice && (
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">
+                      <span className="text-xs text-muted-foreground truncate max-w-[100px]">
                         {p.voice}
                       </span>
                     )}
                   </div>
                   <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                    <Button size="sm" variant="ghost" onClick={() => { setEditing(p.name); setEditRate(p.rate); setEditPitch(p.pitch) }}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditing(p.name)
+                        setEditRate(p.rate)
+                        setEditPitch(p.pitch)
+                      }}
+                    >
                       Edit
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => handleTest(p)}>
                       Test
                     </Button>
-                    {!DEFAULT_PRESETS.some(d => d.name === p.name) && (
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(p.name)}>
+                    {!DEFAULT_PRESETS.some((d) => d.name === p.name) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={() => handleDelete(p.name)}
+                      >
                         Del
                       </Button>
                     )}

@@ -9,8 +9,14 @@ interface CompanionInsightsCardProps {
   presets: Array<{ id: string; name: string; description?: string }>
 }
 
-function traitBalance(traits: CompanionTraits): { dominant: string; weakest: string; spread: number } {
-  const entries = (Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'id' && k !== 'name')
+function traitBalance(traits: CompanionTraits): {
+  dominant: string
+  weakest: string
+  spread: number
+} {
+  const entries = (Object.entries(traits) as [string, number][]).filter(
+    ([k]) => k !== 'id' && k !== 'name',
+  )
   if (entries.length === 0) return { dominant: '—', weakest: '—', spread: 0 }
   entries.sort((a, b) => b[1] - a[1])
   return {
@@ -21,7 +27,9 @@ function traitBalance(traits: CompanionTraits): { dominant: string; weakest: str
 }
 
 function personalityType(traits: CompanionTraits): string {
-  const numericValues = (Object.values(traits) as unknown[]).filter((v): v is number => typeof v === 'number')
+  const numericValues = (Object.values(traits) as unknown[]).filter(
+    (v): v is number => typeof v === 'number',
+  )
   const avg = numericValues.reduce((s, v) => s + v, 0) / numericValues.length
   const entries = (Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name')
   const maxTrait = entries.sort((a, b) => b[1] - a[1])[0]
@@ -33,10 +41,14 @@ function personalityType(traits: CompanionTraits): string {
 }
 
 export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCardProps) {
-  const numericValues = useMemo(() => (Object.values(traits ?? {}) as unknown[]).filter((v): v is number => typeof v === 'number'), [traits])
+  const numericValues = useMemo(
+    () =>
+      (Object.values(traits ?? {}) as unknown[]).filter((v): v is number => typeof v === 'number'),
+    [traits],
+  )
 
   if (!traits) return null
-  if (numericValues.length === 0 || numericValues.every(v => v === 0)) return null
+  if (numericValues.length === 0 || numericValues.every((v) => v === 0)) return null
 
   const { dominant, weakest, spread } = traitBalance(traits)
   const type = personalityType(traits)
@@ -59,13 +71,17 @@ export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCard
       <ChipGroup
         chips={traitEntries.map(([key, value]) => ({
           children: `${key} ${(value * 100).toFixed(0)}%`,
-          className: cn(value >= 0.7 ? 'bg-primary/15 text-primary' :
-            value >= 0.4 ? 'bg-muted text-muted-foreground' :
-            'bg-muted/50 text-muted-foreground/60'),
+          className: cn(
+            value >= 0.7
+              ? 'bg-primary/15 text-primary'
+              : value >= 0.4
+                ? 'bg-muted text-muted-foreground'
+                : 'bg-muted/50 text-muted-foreground/60',
+          ),
         }))}
       />
       {presets.length > 0 && (
-        <div className="mt-2 text-[10px] text-muted-foreground">
+        <div className="mt-2 text-xs text-muted-foreground">
           {presets.length} preset{presets.length !== 1 ? 's' : ''} available
         </div>
       )}

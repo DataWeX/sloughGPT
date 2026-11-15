@@ -18,7 +18,7 @@ export function StatCard({ label, value, icon, trend, className, numeric }: Stat
     >
       <div className="flex items-center gap-1.5 mb-1">
         {icon && <span className="text-muted-foreground">{icon}</span>}
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {label}
         </span>
       </div>
@@ -32,7 +32,7 @@ export function StatCard({ label, value, icon, trend, className, numeric }: Stat
           {value}
         </span>
         {trend && (
-          <span className={cn('text-[10px]', trend.positive ? 'text-success' : 'text-destructive')}>
+          <span className={cn('text-xs', trend.positive ? 'text-success' : 'text-destructive')}>
             {trend.positive ? '+' : ''}
             {trend.value}%
           </span>

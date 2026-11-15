@@ -35,7 +35,7 @@ const GROUP_COLORS: Record<string, string> = {
 
 export function FileStatsCard({ files }: FileStatsCardProps) {
   const totalSize = useMemo(() => files.reduce((s, f) => s + (f.size ?? 0), 0), [files])
-  const indexed = useMemo(() => files.filter(f => f.ingested).length, [files])
+  const indexed = useMemo(() => files.filter((f) => f.ingested).length, [files])
   const notIndexed = files.length - indexed
 
   const sorted = useMemo(() => {
@@ -60,23 +60,38 @@ export function FileStatsCard({ files }: FileStatsCardProps) {
         <KpiGrid columns={3} className="mb-3">
           <StatCard label="Total" value={files.length} />
           <StatCard label="Size" value={formatSize(totalSize)} />
-          <StatCard label="Indexed" value={<>{indexed}<span className="text-muted-foreground">/{files.length}</span></>} />
+          <StatCard
+            label="Indexed"
+            value={
+              <>
+                {indexed}
+                <span className="text-muted-foreground">/{files.length}</span>
+              </>
+            }
+          />
         </KpiGrid>
         <div className="space-y-1.5">
           {sorted.map(([group, { count, size }]) => (
             <div key={group} className="flex items-center justify-between text-[11px] py-0.5">
               <div className="flex items-center gap-2">
-                <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', GROUP_COLORS[group] ?? GROUP_COLORS.Other)}>
+                <span
+                  className={cn(
+                    'text-[11px] px-1.5 py-0.5 rounded font-medium',
+                    GROUP_COLORS[group] ?? GROUP_COLORS.Other,
+                  )}
+                >
                   {group}
                 </span>
-                <span className="text-muted-foreground">{count} file{count !== 1 ? 's' : ''}</span>
+                <span className="text-muted-foreground">
+                  {count} file{count !== 1 ? 's' : ''}
+                </span>
               </div>
               <span className="font-mono text-muted-foreground">{formatSize(size)}</span>
             </div>
           ))}
         </div>
         {notIndexed > 0 && (
-          <div className="mt-2 text-[10px] text-warning">
+          <div className="mt-2 text-xs text-warning">
             {notIndexed} file{notIndexed !== 1 ? 's' : ''} not indexed
           </div>
         )}

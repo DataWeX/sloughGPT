@@ -474,7 +474,7 @@ export default function SystemHealthPage() {
         </span>
       )}
       <div className="flex items-center gap-1.5">
-        <label className="text-[10px] text-muted-foreground">Auto</label>
+        <label className="text-xs text-muted-foreground">Auto</label>
         <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="scale-75" />
       </div>
       <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
@@ -746,7 +746,7 @@ export default function SystemHealthPage() {
                   </span>
                   <button
                     onClick={handleExportHistory}
-                    className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
                     aria-label="Export history"
                   >
                     Export

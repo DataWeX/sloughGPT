@@ -22,14 +22,14 @@ function QualiaBar({ name, value }: { name: string; value: number }) {
   const pct = Math.round(value * 100)
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] text-muted-foreground w-14 truncate capitalize">{name}</span>
+      <span className="text-xs text-muted-foreground w-14 truncate capitalize">{name}</span>
       <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
         <div
           className="h-full rounded-full bg-primary/70 transition-all duration-500"
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-[9px] text-muted-foreground font-mono w-7 text-right">{pct}%</span>
+      <span className="text-[11px] text-muted-foreground font-mono w-7 text-right">{pct}%</span>
     </div>
   )
 }
@@ -38,8 +38,8 @@ function BeliefChip({ name, value }: { name: string; value: number }) {
   const pct = Math.round(value * 100)
   return (
     <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/30 border border-border/40">
-      <span className="text-[10px] text-muted-foreground truncate">{name}</span>
-      <span className="text-[9px] font-mono text-primary ml-2">{pct}%</span>
+      <span className="text-xs text-muted-foreground truncate">{name}</span>
+      <span className="text-[11px] font-mono text-primary ml-2">{pct}%</span>
     </div>
   )
 }
@@ -128,7 +128,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
           <IconBrain className="h-3.5 w-3.5 text-primary/70" />
           <span>{t('consciousness_chat.title')}</span>
           {event && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-mono">
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-mono">
               L{level}
             </span>
           )}
@@ -148,7 +148,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
         <section aria-label={t('consciousness_chat.current_state')}>
           <div className="flex items-center gap-1.5 mb-2">
             <IconSparkle className="h-3 w-3 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {t('consciousness_chat.current_state')}
             </span>
           </div>
@@ -164,7 +164,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
               {expanded && (
                 <>
                   <div className="border-t border-border/30 pt-2 mt-2">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
                       {t('consciousness_chat.beliefs')}
                     </span>
                     <div className="space-y-1">
@@ -175,7 +175,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                   </div>
 
                   <div className="border-t border-border/30 pt-2 mt-2">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
                       {t('consciousness_chat.growth_delta')}
                     </span>
                     <div className="flex items-center gap-2">
@@ -190,7 +190,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                       </span>
                       {selfInsight && (
                         <span
-                          className="text-[10px] text-muted-foreground truncate flex-1"
+                          className="text-xs text-muted-foreground truncate flex-1"
                           title={selfInsight}
                         >
                           {selfInsight}
@@ -202,7 +202,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
               )}
             </div>
           ) : (
-            <p className="text-[10px] text-muted-foreground text-center py-3">
+            <p className="text-xs text-muted-foreground text-center py-3">
               {t('consciousness_chat.no_data')}
             </p>
           )}
@@ -213,7 +213,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
             <section aria-label={t('consciousness_chat.episode_info')}>
               <div className="flex items-center gap-1.5 mb-2">
                 <IconBrain className="h-3 w-3 text-muted-foreground" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {t('consciousness_chat.episode_info')}
                 </span>
               </div>
@@ -225,21 +225,21 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                       className="p-2 rounded bg-muted/30 border border-border/40 space-y-1"
                     >
                       {ep.narrative && (
-                        <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-3">
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
                           {ep.narrative}
                         </p>
                       )}
                       <div className="flex items-center gap-2">
                         <span
                           className={cn(
-                            'text-[9px] font-mono',
+                            'text-[11px] font-mono',
                             ep.growth_delta >= 0 ? 'text-success' : 'text-destructive',
                           )}
                         >
                           {ep.growth_delta >= 0 ? '+' : ''}
                           {(ep.growth_delta * 100).toFixed(1)}%
                         </span>
-                        <span className="text-[9px] text-muted-foreground font-mono">
+                        <span className="text-[11px] text-muted-foreground font-mono">
                           {new Date(ep.timestamp).toLocaleTimeString()}
                         </span>
                       </div>
@@ -247,7 +247,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                   ))}
                 </div>
               ) : (
-                <p className="text-[10px] text-muted-foreground text-center py-2">
+                <p className="text-xs text-muted-foreground text-center py-2">
                   {t('consciousness_chat.no_episodes')}
                 </p>
               )}
@@ -256,7 +256,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
             <section aria-label={t('consciousness_chat.quick_actions')}>
               <div className="flex items-center gap-1.5 mb-2">
                 <IconSparkle className="h-3 w-3 text-muted-foreground" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {t('consciousness_chat.quick_actions')}
                 </span>
               </div>
@@ -264,7 +264,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full h-7 text-[10px] gap-1.5"
+                  className="w-full h-7 text-xs gap-1.5"
                   onClick={reflect}
                   disabled={reflecting}
                 >
@@ -275,7 +275,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                 </Button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground shrink-0">
+                  <span className="text-xs text-muted-foreground shrink-0">
                     {t('consciousness_chat.rate')}
                   </span>
                   <StarRating value={rating} onChange={handleRate} />
@@ -284,7 +284,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full h-7 text-[10px] gap-1.5"
+                  className="w-full h-7 text-xs gap-1.5"
                   onClick={seed}
                   disabled={seeding}
                 >
@@ -299,7 +299,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
             <section aria-label={t('consciousness_chat.history')}>
               <div className="flex items-center gap-1.5 mb-2">
                 <IconBrain className="h-3 w-3 text-muted-foreground" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {t('consciousness_chat.history')}
                 </span>
               </div>
@@ -312,24 +312,24 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                     >
                       <span
                         className={cn(
-                          'text-[9px] font-mono shrink-0',
+                          'text-[11px] font-mono shrink-0',
                           ep.growth_delta >= 0 ? 'text-success' : 'text-destructive',
                         )}
                       >
                         {ep.growth_delta >= 0 ? '+' : ''}
                         {(ep.growth_delta * 100).toFixed(1)}%
                       </span>
-                      <span className="text-[9px] text-muted-foreground truncate flex-1">
+                      <span className="text-[11px] text-muted-foreground truncate flex-1">
                         {ep.narrative || t('consciousness_chat.no_narrative')}
                       </span>
-                      <span className="text-[9px] text-muted-foreground font-mono shrink-0">
+                      <span className="text-[11px] text-muted-foreground font-mono shrink-0">
                         {new Date(ep.timestamp).toLocaleTimeString()}
                       </span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-[10px] text-muted-foreground text-center py-2">
+                <p className="text-xs text-muted-foreground text-center py-2">
                   {t('consciousness_chat.no_history')}
                 </p>
               )}

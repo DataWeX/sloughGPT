@@ -36,7 +36,7 @@ export function CompanionPresetCard({ presets, activePreset, onSelect }: Compani
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {presets.map(p => {
+          {presets.map((p) => {
             const isActive = selected === p.id
             return (
               <button
@@ -45,7 +45,7 @@ export function CompanionPresetCard({ presets, activePreset, onSelect }: Compani
                   'text-left p-2.5 rounded-lg border transition-all',
                   isActive
                     ? (PRESET_COLORS[p.id] ?? 'border-primary/50 bg-primary/5')
-                    : 'border-border hover:border-primary/30'
+                    : 'border-border hover:border-primary/30',
                 )}
                 onClick={() => {
                   setSelected(p.id)
@@ -55,10 +55,12 @@ export function CompanionPresetCard({ presets, activePreset, onSelect }: Compani
               >
                 <div className="text-xs font-medium capitalize">{p.name}</div>
                 {p.description && (
-                  <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{p.description}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                    {p.description}
+                  </div>
                 )}
                 {isActive && (
-                  <div className="text-[9px] text-primary mt-1 font-medium">Active</div>
+                  <div className="text-[11px] text-primary mt-1 font-medium">Active</div>
                 )}
               </button>
             )

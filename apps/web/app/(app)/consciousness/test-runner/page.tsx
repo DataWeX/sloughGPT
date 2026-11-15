@@ -602,7 +602,7 @@ export default function ConsciousnessTestRunnerPage() {
                     {tests.map((tc) => (
                       <tr key={tc.id} className="border-t border-border/30">
                         <td className="px-3 py-1.5">
-                          <Badge className={`text-[10px] ${statusColor(tc.status)}`}>
+                          <Badge className={`text-xs ${statusColor(tc.status)}`}>
                             {statusLabel(tc.status)}
                           </Badge>
                         </td>

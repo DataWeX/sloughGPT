@@ -184,7 +184,7 @@ export function KnowledgeIntelligenceCard() {
                     .map(([k, v]) => (
                       <span
                         key={k}
-                        className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                        className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
                       >
                         {k}: {(v * 100).toFixed(0)}%
                       </span>
@@ -274,7 +274,7 @@ export function KnowledgeIntelligenceCard() {
                   {catResult.suggestions.slice(0, 5).map((s) => (
                     <span
                       key={s.topic}
-                      className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                      className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
                     >
                       {s.topic}: {(s.score * 100).toFixed(0)}%
                     </span>

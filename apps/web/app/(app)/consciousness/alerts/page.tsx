@@ -461,7 +461,7 @@ export default function ConsciousnessAlertsPage() {
                       <p className="text-xs font-medium">{alert.message}</p>
                       <p className="text-xs opacity-70 mt-0.5">{formatTimeAgo(alert.timestamp)}</p>
                     </div>
-                    <Badge variant="outline" className="shrink-0 text-[10px] capitalize">
+                    <Badge variant="outline" className="shrink-0 text-xs capitalize">
                       {alert.severity}
                     </Badge>
                     <button

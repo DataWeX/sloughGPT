@@ -262,7 +262,7 @@ export default function FilesPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={fetchFiles}
               aria-label="Refresh files"
             >
@@ -271,7 +271,7 @@ export default function FilesPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={() => setImportOpen((o) => !o)}
               aria-label="Toggle import from URL"
               aria-expanded={importOpen}
@@ -288,7 +288,7 @@ export default function FilesPage() {
             />
             <Button
               size="sm"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
             >
@@ -342,7 +342,7 @@ export default function FilesPage() {
             </Button>
           </div>
           {filtered.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground/60">
               No files uploaded yet. Click Upload to add one.
             </p>
           ) : (
@@ -355,7 +355,7 @@ export default function FilesPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-destructive h-6 text-[10px] ml-auto"
+                    className="text-destructive h-6 text-xs ml-auto"
                     onClick={handleBatchDelete}
                     disabled={batchDeleting}
                   >
@@ -364,7 +364,7 @@ export default function FilesPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={() => setSelected(new Set())}
                   >
                     Clear
@@ -372,7 +372,7 @@ export default function FilesPage() {
                 </div>
               )}
               <div className="space-y-0.5 max-h-96 overflow-y-auto">
-                <label className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] text-muted-foreground/60 cursor-pointer hover:bg-muted/20 rounded-lg">
+                <label className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-muted-foreground/60 cursor-pointer hover:bg-muted/20 rounded-lg">
                   <Checkbox
                     checked={selected.size === filtered.length && filtered.length > 0}
                     onCheckedChange={toggleSelectAll}
@@ -400,12 +400,12 @@ export default function FilesPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium truncate">{f.filename}</span>
                           {f.ingested && (
-                            <span className="text-[9px] bg-success/10 text-success px-1.5 py-0.5 rounded-full">
+                            <span className="text-[11px] bg-success/10 text-success px-1.5 py-0.5 rounded-full">
                               indexed
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
+                        <div className="text-xs text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
                           {formatSize(f.size)} · {f.content_type ?? 'unknown'} ·{' '}
                           {f.uploaded_at ? new Date(f.uploaded_at).toLocaleDateString() : '—'}
                           {f.chunk_count != null && ` · ${f.chunk_count} chunks`}
@@ -416,7 +416,7 @@ export default function FilesPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 text-[10px]"
+                        className="h-6 text-xs"
                         onClick={() => void handlePreview(f)}
                         disabled={previewLoading && previewFile?.id !== f.id}
                       >
@@ -426,7 +426,7 @@ export default function FilesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 text-[10px]"
+                          className="h-6 text-xs"
                           onClick={() => handleIngest(f.id)}
                           disabled={ingesting === f.id}
                         >
@@ -436,7 +436,7 @@ export default function FilesPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 text-[10px] text-destructive"
+                        className="h-6 text-xs text-destructive"
                         onClick={() => handleDelete(f.id)}
                       >
                         Delete
@@ -456,7 +456,7 @@ export default function FilesPage() {
             <CardTitle className="text-[11px] font-medium truncate">
               {previewFile.filename}
             </CardTitle>
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60 shrink-0">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60 shrink-0">
               {previewFile.chars != null && (
                 <span className="font-mono tabular-nums">
                   {previewFile.chars.toLocaleString()} chars
@@ -468,7 +468,7 @@ export default function FilesPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
                 onClick={() => setPreviewFile(null)}
               >
                 Close
@@ -483,7 +483,7 @@ export default function FilesPage() {
                 {previewFile.text}
               </pre>
             ) : (
-              <p className="text-[10px] text-muted-foreground/60 text-center py-3">
+              <p className="text-xs text-muted-foreground/60 text-center py-3">
                 No text content extracted
               </p>
             )}
@@ -531,7 +531,7 @@ function ImportJobCard({
           {job.state === 'done' && `Imported ${job.filename}`}
           {job.state === 'error' && `Import failed: ${job.error ?? 'unknown error'}`}
         </span>
-        <Button size="sm" variant="ghost" className="h-5 text-[10px] shrink-0" onClick={onDismiss}>
+        <Button size="sm" variant="ghost" className="h-5 text-xs shrink-0" onClick={onDismiss}>
           Dismiss
         </Button>
       </div>
@@ -544,7 +544,7 @@ function ImportJobCard({
         showValue
       />
       {job.state === 'done' && job.wire_bytes != null && job.saved_bytes != null && (
-        <p className="text-[10px] text-muted-foreground/70" data-testid="import-savings">
+        <p className="text-xs text-muted-foreground/70" data-testid="import-savings">
           Saved {formatSize(job.saved_bytes)} on the wire ({savedPct}%) — transferred{' '}
           {formatSize(job.wire_bytes)}, file is {formatSize(job.wire_bytes + job.saved_bytes)} ·{' '}
           {job.content_encoding ?? 'identity'}

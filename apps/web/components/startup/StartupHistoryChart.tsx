@@ -80,7 +80,7 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
     >
       <div className="h-9 px-4 bg-term-header border-b border-white/[0.06] flex items-center justify-between">
         <span className="text-[11px] font-medium text-term-text-muted">Startup History</span>
-        <span className="text-[10px] text-term-text-dim font-mono">{records.length} runs</span>
+        <span className="text-xs text-term-text-dim font-mono">{records.length} runs</span>
       </div>
       <div className="p-4">
         {/* Chart */}
@@ -94,7 +94,7 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
                 className="flex-1 flex flex-col items-center gap-1 group"
               >
                 {/* Tooltip */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -mt-8 bg-term-header border border-white/[0.06] rounded px-2 py-1 text-[9px] font-mono text-term-text pointer-events-none z-10">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -mt-8 bg-term-header border border-white/[0.06] rounded px-2 py-1 text-[11px] font-mono text-term-text pointer-events-none z-10">
                   {record.total_duration.toFixed(1)}s
                 </div>
                 {/* Bar */}
@@ -120,13 +120,13 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
             className="absolute left-0 right-0 h-px border-t border-dashed border-term-blue"
             style={{ top: 0 }}
           />
-          <span className="absolute -top-3 right-0 text-[9px] text-term-blue font-mono">
+          <span className="absolute -top-3 right-0 text-[11px] text-term-blue font-mono">
             avg {avgDuration.toFixed(1)}s
           </span>
         </div>
 
         {/* Stats */}
-        <div className="flex items-center justify-between mt-4 text-[10px]">
+        <div className="flex items-center justify-between mt-4 text-xs">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-sm bg-term-zoom" />

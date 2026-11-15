@@ -34,7 +34,7 @@ export function PersonalityVoiceStyle({ wb }: { wb: PersonalityWorkbench }) {
                 onChange={(e) => handleVoiceChange(key, parseFloat(e.target.value))}
                 className="flex-1 min-w-0"
               />
-              <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">
+              <span className="text-xs sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">
                 {(value * 100).toFixed(0)}%
               </span>
             </div>
@@ -63,7 +63,7 @@ export function PersonalityVoiceStyle({ wb }: { wb: PersonalityWorkbench }) {
                 onChange={(e) => handleTraitChange(key, parseFloat(e.target.value))}
                 className="flex-1 min-w-0"
               />
-              <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">
+              <span className="text-xs sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">
                 {(value * 100).toFixed(0)}%
               </span>
             </div>

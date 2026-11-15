@@ -69,7 +69,7 @@ export const ConversationArchive = memo(function ConversationArchive({
         <div className="flex items-center gap-2">
           <IconDownload className="h-3 w-3 text-muted-foreground" />
           <span className="text-xs font-medium">Conversation Archive</span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             ({stats.active} active, {stats.archived} archived)
           </span>
         </div>
@@ -82,7 +82,7 @@ export const ConversationArchive = memo(function ConversationArchive({
             type="button"
             onClick={() => setFilter(f)}
             className={cn(
-              'text-[10px] px-2 py-1 rounded capitalize transition-colors',
+              'text-xs px-2 py-1 rounded capitalize transition-colors',
               filter === f
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50',
@@ -103,7 +103,7 @@ export const ConversationArchive = memo(function ConversationArchive({
               <div key={conv.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium truncate">{conv.title}</div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {conv.messageCount} messages ·{' '}
                     {new Date(conv.lastActivity).toLocaleDateString()}
                     {conv.archived && conv.archivedAt && (

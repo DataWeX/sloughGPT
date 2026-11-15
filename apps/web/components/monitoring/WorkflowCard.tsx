@@ -189,7 +189,7 @@ export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCa
           </div>
         </div>
 
-        <div className="text-[10px] text-muted-foreground space-y-1">
+        <div className="text-xs text-muted-foreground space-y-1">
           <div className="flex justify-between">
             <span>Background interval:</span>
             <span>{config?.background_training_interval_seconds || 300}s</span>

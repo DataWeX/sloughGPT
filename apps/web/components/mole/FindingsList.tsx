@@ -22,11 +22,11 @@ function FindingRow({ finding, severity }: { finding: MoleFinding; severity: Mol
     <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <StatusDot tone={SEVERITY_TONE[severity]} aria-hidden />
       {finding.component ? (
-        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
           {finding.component}
         </span>
       ) : null}
-      <code className="text-[10px] text-muted-foreground">{finding.check}</code>
+      <code className="text-xs text-muted-foreground">{finding.check}</code>
       <span className="min-w-0 flex-1 text-sm text-foreground">{finding.message}</span>
     </span>
   )

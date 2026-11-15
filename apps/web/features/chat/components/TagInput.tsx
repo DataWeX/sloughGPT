@@ -49,7 +49,7 @@ export const TagInput = memo(function TagInput({
       {tags.map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded border border-primary/20"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded border border-primary/20"
         >
           {tag}
           {!disabled && (
@@ -72,7 +72,7 @@ export const TagInput = memo(function TagInput({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={tags.length === 0 ? placeholder : ''}
-            className="w-16 text-[10px] bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50"
+            className="w-16 text-xs bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50"
           />
           {input.trim() && (
             <Button

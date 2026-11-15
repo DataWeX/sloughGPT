@@ -133,24 +133,24 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
       >
         <span
           className={cn(
-            'text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5',
+            'text-[11px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5',
           )}
         >
           {index + 1}
         </span>
         <span
           className={cn(
-            'shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border',
+            'shrink-0 text-[11px] font-semibold px-1 py-0.5 rounded border',
             badge.color,
           )}
         >
           {badge.label}
         </span>
         <span className="flex-1 min-w-0">
-          <span className="text-[10px] text-foreground/90 break-all leading-tight block">
+          <span className="text-xs text-foreground/90 break-all leading-tight block">
             {event.message.slice(0, 200)}
           </span>
-          <span className="text-[9px] text-muted-foreground/50 mt-0.5 block">
+          <span className="text-[11px] text-muted-foreground/50 mt-0.5 block">
             {event.httpMethod && event.httpPath && (
               <span className="font-mono mr-1.5">
                 {event.httpMethod} {event.httpPath}
@@ -180,7 +180,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
             )}
           </span>
         </span>
-        <span className="shrink-0 text-muted-foreground/30 text-[9px] pt-0.5">
+        <span className="shrink-0 text-muted-foreground/30 text-[11px] pt-0.5">
           {expanded ? '▾' : '▸'}
         </span>
       </button>
@@ -191,7 +191,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              className="h-5 px-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground"
               onClick={handleCopyAll}
             >
               Copy diagnostics
@@ -200,7 +200,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+                className="h-5 px-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground"
                 onClick={handleCopyStack}
               >
                 Copy stack
@@ -208,7 +208,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
             )}
           </div>
           {event.url && (
-            <div className="text-[9px] text-muted-foreground/50">
+            <div className="text-[11px] text-muted-foreground/50">
               at{' '}
               <span className="font-mono text-foreground/70">
                 {event.url}:{event.line ?? 0}:{event.col ?? 0}
@@ -216,7 +216,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
             </div>
           )}
           {event.fingerprint && (
-            <div className="text-[9px] text-muted-foreground/50">
+            <div className="text-[11px] text-muted-foreground/50">
               fingerprint: <span className="font-mono text-foreground/70">{event.fingerprint}</span>
               {event.count && event.count > 1 && (
                 <span className="ml-1 text-warning/70">×{event.count}</span>
@@ -224,12 +224,12 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
             </div>
           )}
           {event.context && Object.keys(event.context).length > 0 && (
-            <div className="text-[9px] font-mono text-muted-foreground/50 bg-muted/30 rounded p-1.5 max-h-24 overflow-auto">
+            <div className="text-[11px] font-mono text-muted-foreground/50 bg-muted/30 rounded p-1.5 max-h-24 overflow-auto">
               <pre className="whitespace-pre-wrap">{JSON.stringify(event.context, null, 2)}</pre>
             </div>
           )}
           {event.stack && (
-            <div className="text-[9px] font-mono text-muted-foreground/40 bg-muted/30 rounded p-1.5 max-h-32 overflow-auto">
+            <div className="text-[11px] font-mono text-muted-foreground/40 bg-muted/30 rounded p-1.5 max-h-32 overflow-auto">
               <pre className="whitespace-pre-wrap">{event.stack}</pre>
             </div>
           )}
@@ -276,24 +276,24 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
       >
         <span
           className={cn(
-            'text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5',
+            'text-[11px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5',
           )}
         >
           {index + 1}
         </span>
         <span
           className={cn(
-            'shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border',
+            'shrink-0 text-[11px] font-semibold px-1 py-0.5 rounded border',
             badge.color,
           )}
         >
           {badge.label}
         </span>
         <span className="flex-1 min-w-0">
-          <span className="text-[10px] text-foreground/90 break-all leading-tight block">
+          <span className="text-xs text-foreground/90 break-all leading-tight block">
             {group.message.slice(0, 200)}
           </span>
-          <span className="text-[9px] text-muted-foreground/50 mt-0.5 block">
+          <span className="text-[11px] text-muted-foreground/50 mt-0.5 block">
             {group.latest.httpMethod && group.latest.httpPath && (
               <span className="font-mono mr-1.5">
                 {group.latest.httpMethod} {group.latest.httpPath}
@@ -317,7 +317,7 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
             <span>{timeAgo(group.latest.timestamp)}</span>
           </span>
         </span>
-        <span className="shrink-0 text-muted-foreground/30 text-[9px] pt-0.5">
+        <span className="shrink-0 text-muted-foreground/30 text-[11px] pt-0.5">
           {expanded ? '▾' : '▸'}
         </span>
       </button>
@@ -328,29 +328,29 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
             <Button
               variant="ghost"
               size="sm"
-              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              className="h-5 px-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground"
               onClick={handleCopyAll}
             >
               Copy diagnostics
             </Button>
           </div>
-          <div className="text-[9px] text-muted-foreground/50">
+          <div className="text-[11px] text-muted-foreground/50">
             {group.count} occurrence{group.count !== 1 ? 's' : ''} — first{' '}
             {timeAgo(group.events[0].timestamp)}, latest {timeAgo(group.latest.timestamp)}
           </div>
           {group.fingerprint && (
-            <div className="text-[9px] text-muted-foreground/50">
+            <div className="text-[11px] text-muted-foreground/50">
               fingerprint: <span className="font-mono text-foreground/70">{group.fingerprint}</span>
             </div>
           )}
           {group.latest.correlationId && (
-            <div className="text-[9px] text-muted-foreground/50">
+            <div className="text-[11px] text-muted-foreground/50">
               latest correlation:{' '}
               <span className="font-mono text-foreground/70">{group.latest.correlationId}</span>
             </div>
           )}
           {group.latest.stack && (
-            <div className="text-[9px] font-mono text-muted-foreground/40 bg-muted/30 rounded p-1.5 max-h-32 overflow-auto">
+            <div className="text-[11px] font-mono text-muted-foreground/40 bg-muted/30 rounded p-1.5 max-h-32 overflow-auto">
               <pre className="whitespace-pre-wrap">{group.latest.stack}</pre>
             </div>
           )}
@@ -392,13 +392,13 @@ function StateEventsSection({ events, onClear }: { events: StateEvent[]; onClear
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+          className="text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
           aria-expanded={expanded}
         >
           State events {expanded ? '▾' : '▸'}
         </button>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-muted-foreground/40 tabular-nums">{events.length}</span>
+          <span className="text-[11px] text-muted-foreground/40 tabular-nums">{events.length}</span>
           {onClear && events.length > 0 && (
             <Button
               variant="ghost"
@@ -413,7 +413,7 @@ function StateEventsSection({ events, onClear }: { events: StateEvent[]; onClear
         </div>
       </div>
       {visible.length === 0 ? (
-        <div className="px-3 py-3 text-center text-[10px] text-muted-foreground/40">
+        <div className="px-3 py-3 text-center text-xs text-muted-foreground/40">
           No state events yet
         </div>
       ) : (
@@ -423,22 +423,22 @@ function StateEventsSection({ events, onClear }: { events: StateEvent[]; onClear
               key={e.id}
               className="px-2 py-1 flex items-start gap-2 border-b border-border/20 last:border-0"
             >
-              <span className="text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5">
+              <span className="text-[11px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5">
                 {i + 1}
               </span>
               <span
                 className={cn(
-                  'shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border',
+                  'shrink-0 text-[11px] font-semibold px-1 py-0.5 rounded border',
                   KIND_STYLES[e.kind] ?? KIND_STYLES.health,
                 )}
               >
                 {e.kind}
               </span>
               <span className="flex-1 min-w-0">
-                <span className="text-[10px] text-foreground/90 break-all leading-tight block">
+                <span className="text-xs text-foreground/90 break-all leading-tight block">
                   {stateEventHeadline(e).slice(0, 200)}
                 </span>
-                <span className="text-[9px] text-muted-foreground/50 mt-0.5 block">
+                <span className="text-[11px] text-muted-foreground/50 mt-0.5 block">
                   <span className="font-mono mr-1.5">{e.event}</span>
                   <span>{timeAgo(e.timestamp)}</span>
                 </span>
@@ -489,11 +489,11 @@ export function ErrorDiagnosticsPanel({
   return (
     <div className={cn('flex flex-col', className)}>
       <div className="flex items-center justify-between px-2 py-1 border-b border-border/30">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Error Timeline
         </span>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-muted-foreground/40 tabular-nums">
+          <span className="text-[11px] text-muted-foreground/40 tabular-nums">
             {filteredErrors.length}/{errors.length}
           </span>
           {onClear && errors.length > 0 && (
@@ -520,7 +520,7 @@ export function ErrorDiagnosticsPanel({
           placeholder="Filter errors..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-1.5 py-0.5 text-[9px] bg-muted/30 border border-border/30 rounded text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-border/50"
+          className="w-full px-1.5 py-0.5 text-[11px] bg-muted/30 border border-border/30 rounded text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-border/50"
         />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-0.5">
@@ -530,7 +530,7 @@ export function ErrorDiagnosticsPanel({
                 type="button"
                 onClick={() => setLevelFilter(level)}
                 className={cn(
-                  'px-1 py-0.5 text-[8px] rounded transition-colors',
+                  'px-1 py-0.5 text-[11px] rounded transition-colors',
                   levelFilter === level
                     ? 'bg-primary/20 text-primary'
                     : 'text-muted-foreground/50 hover:text-muted-foreground',
@@ -544,7 +544,7 @@ export function ErrorDiagnosticsPanel({
             type="button"
             onClick={() => setGrouped(!grouped)}
             className={cn(
-              'px-1 py-0.5 text-[8px] rounded transition-colors',
+              'px-1 py-0.5 text-[11px] rounded transition-colors',
               grouped
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground/50 hover:text-muted-foreground',
@@ -556,7 +556,7 @@ export function ErrorDiagnosticsPanel({
       </div>
       <div className="max-h-48 overflow-y-auto">
         {filteredErrors.length === 0 ? (
-          <div className="px-3 py-4 text-center text-[10px] text-muted-foreground/40">
+          <div className="px-3 py-4 text-center text-xs text-muted-foreground/40">
             {errors.length === 0 ? 'No errors yet' : 'No matching errors'}
           </div>
         ) : grouped ? (

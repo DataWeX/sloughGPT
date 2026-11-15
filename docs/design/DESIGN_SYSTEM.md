@@ -135,6 +135,20 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 | Label         | `text-xs font-medium uppercase tracking-wider` | 500    | Form labels                  |
 | Badge         | `text-[10px] font-medium`                      | 500    | Status badges, tags          |
 
+### Minimum Size Floor (2026-11-15)
+
+**No content text may render below 11px.** `px`-pinned utilities bypass the rem
+root scale (`html { font-size: 14px mobile / 16px desktop }`), so they can never
+be corrected from the root — they must obey the floor directly.
+
+- Content text (dialog/card/panel copy, metadata, dates, footers): **≥ 11px**.
+  Prefer the scale (`text-xs` = 12px, `text-sm` = 14px) over a `px` pin.
+- **Exempt** (deliberately dense chrome, stays as-is): status bar
+  (`.sl-status-bar*`), bottom-nav labels, badges/tags, `kbd` hints, code
+  gutters, Tufte-style margin notes.
+- Legacy `text-[8px]` / `text-[9px]` on content classes are violations; migrate
+  to `text-[11px]` or the scale on sight.
+
 ### Rules
 
 - Never use `text-lg` in page body content
@@ -142,6 +156,7 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 - Never use `text-3xl` or larger in component content
 - Body text is always `text-sm`
 - Code blocks use `font-mono text-xs`
+- Never pin content text below 11px (see Minimum Size Floor above)
 
 ## Spacing
 

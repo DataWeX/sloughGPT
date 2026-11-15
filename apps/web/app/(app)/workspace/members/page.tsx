@@ -239,7 +239,7 @@ export default function MembersPage() {
                 }`}
               >
                 {ws.name}
-                <span className="ml-1.5 text-[10px] opacity-70">({ws.member_count})</span>
+                <span className="ml-1.5 text-xs opacity-70">({ws.member_count})</span>
               </button>
             ))}
           </div>
@@ -267,12 +267,12 @@ export default function MembersPage() {
                   value={addMemberId}
                   onChange={(e) => setAddMemberId(e.target.value)}
                   placeholder="User ID"
-                  className="flex-1 h-6 text-[10px]"
+                  className="flex-1 h-6 text-xs"
                 />
                 <select
                   value={addMemberRole}
                   onChange={(e) => setAddMemberRole(e.target.value)}
-                  className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                  className="h-6 text-xs rounded-md border border-border bg-background px-2"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="member">Member</option>
@@ -280,7 +280,7 @@ export default function MembersPage() {
                 </select>
                 <Button
                   size="sm"
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                   onClick={addMember}
                   disabled={!addMemberId.trim()}
                 >
@@ -303,12 +303,12 @@ export default function MembersPage() {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="user@example.com"
-                  className="flex-1 h-6 text-[10px]"
+                  className="flex-1 h-6 text-xs"
                 />
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
-                  className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                  className="h-6 text-xs rounded-md border border-border bg-background px-2"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="user">User</option>
@@ -316,7 +316,7 @@ export default function MembersPage() {
                 </select>
                 <Button
                   size="sm"
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                   onClick={inviteMember}
                   disabled={!inviteEmail.trim() || inviting}
                 >
@@ -335,7 +335,7 @@ export default function MembersPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                   onClick={() => setShowBulkImport(!showBulkImport)}
                 >
                   <IconUpload className="h-3 w-3 mr-1" />
@@ -345,20 +345,20 @@ export default function MembersPage() {
             </CardHeader>
             {showBulkImport && (
               <CardContent className="space-y-2">
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   One user ID or email per line. Optional role after comma (default: {bulkRole}).
                 </p>
                 <textarea
                   value={bulkInput}
                   onChange={(e) => setBulkInput(e.target.value)}
                   placeholder={'user-id-1\nuser-id-2,admin\nuser@example.com,viewer'}
-                  className="w-full h-24 text-[10px] rounded-md border border-border bg-background px-2 py-1 resize-none"
+                  className="w-full h-24 text-xs rounded-md border border-border bg-background px-2 py-1 resize-none"
                 />
                 <div className="flex gap-2">
                   <select
                     value={bulkRole}
                     onChange={(e) => setBulkRole(e.target.value)}
-                    className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                    className="h-6 text-xs rounded-md border border-border bg-background px-2"
                   >
                     <option value="viewer">Default: Viewer</option>
                     <option value="user">Default: User</option>
@@ -366,7 +366,7 @@ export default function MembersPage() {
                   </select>
                   <Button
                     size="sm"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={bulkImport}
                     disabled={!bulkInput.trim() || bulkImporting}
                   >
@@ -387,7 +387,7 @@ export default function MembersPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search..."
-                  className="w-48 h-6 text-[10px]"
+                  className="w-48 h-6 text-xs"
                 />
               </div>
             </CardHeader>
@@ -395,14 +395,14 @@ export default function MembersPage() {
               {loadingMembers ? (
                 <div className="h-32 animate-pulse bg-muted/50 rounded" />
               ) : filteredMembers.length === 0 ? (
-                <p className="text-[10px] text-muted-foreground py-4 text-center">
+                <p className="text-xs text-muted-foreground py-4 text-center">
                   {searchQuery ? 'No members match search' : 'No members in this workspace'}
                 </p>
               ) : (
                 filteredMembers.map((m) => (
                   <div
                     key={m.user_id}
-                    className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
+                    className="flex items-center justify-between px-3 py-2 rounded-md text-xs hover:bg-muted/50 border border-transparent hover:border-border/40"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">{m.username}</div>
@@ -410,7 +410,7 @@ export default function MembersPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-medium ${
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
                           m.role === 'admin'
                             ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
                             : m.role === 'member'

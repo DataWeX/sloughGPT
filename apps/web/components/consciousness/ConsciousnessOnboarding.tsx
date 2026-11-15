@@ -95,13 +95,13 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
       <Card className="w-full max-w-lg mx-4 overflow-hidden">
         <CardHeader className="space-y-3 pb-4">
           <div className="flex items-center justify-between">
-            <Badge variant="secondary" className="text-[9px]">
+            <Badge variant="secondary" className="text-[11px]">
               {step}/{TOTAL_STEPS}
             </Badge>
             <button
               type="button"
               onClick={onDismiss}
-              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               {t('consciousness_onboarding.skip')}
             </button>
@@ -147,12 +147,12 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium">{opt.label}</span>
                       {selectedLevel === opt.value && (
-                        <span className="text-[9px] text-primary">
+                        <span className="text-[11px] text-primary">
                           {t('consciousness_onboarding.selected')}
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{opt.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                   </button>
                 ))}
               </div>
@@ -184,7 +184,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
               <button
                 type="button"
                 onClick={() => setSelectedPreset(null)}
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 {t('consciousness_onboarding.step3_skip')}
               </button>
@@ -219,7 +219,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
               <button
                 type="button"
                 onClick={() => setStep((s) => s + 1)}
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 {t('consciousness_onboarding.step4_skip')}
               </button>
@@ -232,7 +232,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
               <p className="text-xs text-muted-foreground">
                 {t('consciousness_onboarding.step5_desc')}
               </p>
-              <div className="space-y-1 text-[10px] text-muted-foreground/80">
+              <div className="space-y-1 text-xs text-muted-foreground/80">
                 <p>
                   {t('consciousness_onboarding.step5_level')}: {LEVEL_OPTIONS[selectedLevel].label}
                 </p>

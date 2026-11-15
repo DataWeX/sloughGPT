@@ -58,10 +58,10 @@ export function DetailRow({
 
   return (
     <div className={cn('flex items-center justify-between gap-2 text-xs', className)}>
-      <span className={cn('text-muted-foreground shrink-0', labelClassName)}>
-        {label}
-      </span>
-      <span className={cn('min-w-0 truncate text-right', mono && 'font-mono text-[10px]', valueClassName)}>
+      <span className={cn('text-muted-foreground shrink-0', labelClassName)}>{label}</span>
+      <span
+        className={cn('min-w-0 truncate text-right', mono && 'font-mono text-xs', valueClassName)}
+      >
         {valueContent}
       </span>
     </div>

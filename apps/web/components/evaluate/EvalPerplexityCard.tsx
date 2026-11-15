@@ -60,15 +60,15 @@ export function EvalPerplexityCard({ result: externalResult, onResult }: EvalPer
         {result && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
             <div className="rounded-lg bg-muted/20 p-2.5 text-center">
-              <div className="text-[10px] text-muted-foreground">Perplexity</div>
+              <div className="text-xs text-muted-foreground">Perplexity</div>
               <div className="text-[11px] font-mono font-medium">{result.perplexity}</div>
             </div>
             <div className="rounded-lg bg-muted/20 p-2.5 text-center">
-              <div className="text-[10px] text-muted-foreground">Loss</div>
+              <div className="text-xs text-muted-foreground">Loss</div>
               <div className="text-[11px] font-mono font-medium">{result.loss}</div>
             </div>
             <div className="rounded-lg bg-muted/20 p-2.5 text-center">
-              <div className="text-[10px] text-muted-foreground">Tokens</div>
+              <div className="text-xs text-muted-foreground">Tokens</div>
               <div className="text-[11px] font-mono font-medium">{result.tokens}</div>
             </div>
           </div>

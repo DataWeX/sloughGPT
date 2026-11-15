@@ -42,7 +42,7 @@ export function DocstoreBrowserCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex gap-1 flex-wrap">
-          {collections.map(col => (
+          {collections.map((col) => (
             <Button
               key={col}
               size="sm"
@@ -58,7 +58,7 @@ export function DocstoreBrowserCard({
         <Input
           placeholder="Search documents..."
           value={searchQuery}
-          onChange={e => onSearchChange(e.target.value)}
+          onChange={(e) => onSearchChange(e.target.value)}
           data-testid="doc-search"
         />
 
@@ -74,22 +74,24 @@ export function DocstoreBrowserCard({
         </div>
 
         {loading ? (
-          <div className="text-sm text-muted-foreground" data-testid="loading-indicator">Loading...</div>
+          <div className="text-sm text-muted-foreground" data-testid="loading-indicator">
+            Loading...
+          </div>
         ) : docs.length === 0 ? (
           <div className="text-sm text-muted-foreground">No documents found.</div>
         ) : (
           <div className="space-y-1" data-testid="doc-list">
-            {docs.map(doc => (
+            {docs.map((doc) => (
               <div
                 key={doc._id}
                 className={cn(
                   'flex items-center gap-2 rounded border p-2 text-sm cursor-pointer transition-colors',
-                  'border-border/60 hover:bg-muted/50'
+                  'border-border/60 hover:bg-muted/50',
                 )}
                 data-testid={`doc-item-${doc._id}`}
                 onClick={() => onSelect(doc._id)}
               >
-                <code className="text-[10px] text-muted-foreground font-mono truncate">{doc._id}</code>
+                <code className="text-xs text-muted-foreground font-mono truncate">{doc._id}</code>
               </div>
             ))}
           </div>

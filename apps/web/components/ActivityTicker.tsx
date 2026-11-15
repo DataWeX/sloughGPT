@@ -17,8 +17,8 @@ interface ActivityTickerProps {
  * Expand into full list.
  */
 export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
-  const errors = useErrorStore(s => s.errors)
-  const totalCount = useErrorStore(s => s.totalErrorCount)
+  const errors = useErrorStore((s) => s.errors)
+  const totalCount = useErrorStore((s) => s.totalErrorCount)
   const [flash, setFlash] = useState(false)
   const [tick, setTick] = useState(0)
 
@@ -32,7 +32,7 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
 
   // Tick every 10s for relative timestamps
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10_000)
+    const id = setInterval(() => setTick((t) => t + 1), 10_000)
     return () => clearInterval(id)
   }, [])
 
@@ -41,11 +41,13 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
 
   if (errorCount === 0) {
     return (
-      <div className={cn(
-        'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px]',
-        'bg-success/5 border border-success/20 text-success/70',
-        className,
-      )}>
+      <div
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs',
+          'bg-success/5 border border-success/20 text-success/70',
+          className,
+        )}
+      >
         <span className="inline-block h-1 w-1 rounded-full bg-success shrink-0" />
         <span>No errors</span>
       </div>
@@ -57,7 +59,7 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
       type="button"
       onClick={onExpand}
       className={cn(
-        'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] text-left w-full',
+        'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-left w-full',
         'border transition-colors',
         flash
           ? 'bg-destructive/15 border-destructive/40 text-destructive'
@@ -67,10 +69,12 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
       aria-label={`${errorCount} error${errorCount !== 1 ? 's' : ''}. ${latest?.title || ''}`}
       aria-live="polite"
     >
-      <span className={cn(
-        'inline-block h-1 w-1 rounded-full shrink-0',
-        flash ? 'bg-destructive animate-pulse' : 'bg-destructive/60',
-      )} />
+      <span
+        className={cn(
+          'inline-block h-1 w-1 rounded-full shrink-0',
+          flash ? 'bg-destructive animate-pulse' : 'bg-destructive/60',
+        )}
+      />
       <span className="font-medium tabular-nums font-mono">{errorCount}</span>
       {latest && (
         <>
@@ -78,7 +82,9 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
           <span className="truncate flex-1 min-w-0" title={latest.message}>
             {latest.title !== 'Error' ? latest.title : latest.message.slice(0, 40)}
           </span>
-          <span className="shrink-0 opacity-50 tabular-nums font-mono">{timeAgo(latest.timestamp)}</span>
+          <span className="shrink-0 opacity-50 tabular-nums font-mono">
+            {timeAgo(latest.timestamp)}
+          </span>
         </>
       )}
     </button>
@@ -90,13 +96,13 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
  * Deduped, compact rows with dismiss.
  */
 export function ErrorList({ className }: { className?: string }) {
-  const errors = useErrorStore(s => s.errors)
-  const dismissError = useErrorStore(s => s.dismissError)
-  const clearErrors = useErrorStore(s => s.clearErrors)
+  const errors = useErrorStore((s) => s.errors)
+  const dismissError = useErrorStore((s) => s.dismissError)
+  const clearErrors = useErrorStore((s) => s.clearErrors)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10_000)
+    const id = setInterval(() => setTick((t) => t + 1), 10_000)
     return () => clearInterval(id)
   }, [])
 
@@ -111,26 +117,36 @@ export function ErrorList({ className }: { className?: string }) {
   return (
     <div className={cn('space-y-1', className)}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">
+        <span className="text-xs text-muted-foreground/60 font-mono tabular-nums">
           {errors.length} unique error{errors.length !== 1 ? 's' : ''}
         </span>
-        <button type="button" onClick={clearErrors} className="text-[10px] text-muted-foreground/60 hover:text-foreground">
+        <button
+          type="button"
+          onClick={clearErrors}
+          className="text-xs text-muted-foreground/60 hover:text-foreground"
+        >
           Clear all
         </button>
       </div>
-      {errors.map(e => (
-        <div key={e.id} className={cn('flex items-start gap-1.5 p-1.5 rounded border text-[10px]', severityColor[e.severity] || severityColor.error)}>
+      {errors.map((e) => (
+        <div
+          key={e.id}
+          className={cn(
+            'flex items-start gap-1.5 p-1.5 rounded border text-xs',
+            severityColor[e.severity] || severityColor.error,
+          )}
+        >
           <div className="flex-1 min-w-0">
             <div className="font-medium truncate flex items-center gap-1">
               {e.title}
               {e.count > 1 && (
-                <span className="inline-flex items-center px-0.5 py-px rounded-full bg-muted text-[8px] tabular-nums font-mono">
+                <span className="inline-flex items-center px-0.5 py-px rounded-full bg-muted text-[11px] tabular-nums font-mono">
                   ×{e.count}
                 </span>
               )}
             </div>
             <div className="truncate opacity-80">{e.message}</div>
-            <div className="text-[9px] opacity-60 mt-px font-mono tabular-nums">
+            <div className="text-[11px] opacity-60 mt-px font-mono tabular-nums">
               {timeAgo(e.timestamp)}
               {e.source && <> · {e.source}</>}
             </div>
@@ -138,7 +154,7 @@ export function ErrorList({ className }: { className?: string }) {
           <button
             type="button"
             onClick={() => dismissError(e.id)}
-            className="shrink-0 opacity-50 hover:opacity-100 text-[10px] leading-none"
+            className="shrink-0 opacity-50 hover:opacity-100 text-xs leading-none"
             aria-label="Dismiss"
           >
             ×

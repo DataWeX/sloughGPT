@@ -48,7 +48,7 @@ export default memo(function ModelsCard({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter..."
               aria-label="Filter models"
-              className="h-6 w-28 rounded-md border border-border/40 bg-background px-1.5 text-[10px] placeholder:text-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="h-6 w-28 rounded-md border border-border/40 bg-background px-1.5 text-xs placeholder:text-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             />
           )}
         </div>
@@ -61,12 +61,12 @@ export default memo(function ModelsCard({
             ))}
           </div>
         ) : models.length === 0 ? (
-          <div className="text-center py-5 text-[10px] text-muted-foreground/60 space-y-1.5">
+          <div className="text-center py-5 text-xs text-muted-foreground/60 space-y-1.5">
             <div>No models available. Load one in Developer first.</div>
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={() => router.push('/developer')}
             >
               Open Models
@@ -95,17 +95,17 @@ export default memo(function ModelsCard({
                   </div>
                   <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     {m.sizeGb && (
-                      <span className="text-[9px] text-muted-foreground/60 tabular-nums">
+                      <span className="text-[11px] text-muted-foreground/60 tabular-nums">
                         {m.sizeGb.toFixed(1)} GB
                       </span>
                     )}
                     {m.source && (
-                      <span className="text-[8px] px-1 py-0.5 rounded bg-muted text-muted-foreground/60 font-medium">
+                      <span className="text-[11px] px-1 py-0.5 rounded bg-muted text-muted-foreground/60 font-medium">
                         {m.source}
                       </span>
                     )}
                     {m.type && m.type !== 'text-generation' && (
-                      <span className="text-[8px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                      <span className="text-[11px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
                         {m.type}
                       </span>
                     )}
@@ -114,7 +114,7 @@ export default memo(function ModelsCard({
                     <Button
                       size="sm"
                       variant={result ? 'outline' : 'default'}
-                      className="h-6 text-[10px] flex-1"
+                      className="h-6 text-xs flex-1"
                       onClick={() => onBenchmark(m.id)}
                       disabled={isRunning}
                     >
@@ -141,7 +141,7 @@ export default memo(function ModelsCard({
                     )}
                   </div>
                   {result?.error && (
-                    <p className="text-[9px] text-destructive mt-1">{result.error}</p>
+                    <p className="text-[11px] text-destructive mt-1">{result.error}</p>
                   )}
                 </div>
               )

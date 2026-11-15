@@ -429,12 +429,12 @@ export default function ConsciousnessVersionsPage() {
                       {version.personality?.traits && version.personality.traits.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {version.personality.traits.slice(0, 3).map((trait, i) => (
-                            <Badge key={i} variant="secondary" className="text-[10px]">
+                            <Badge key={i} variant="secondary" className="text-xs">
                               {trait}
                             </Badge>
                           ))}
                           {version.personality.traits.length > 3 && (
-                            <Badge variant="secondary" className="text-[10px]">
+                            <Badge variant="secondary" className="text-xs">
                               +{version.personality.traits.length - 3}
                             </Badge>
                           )}

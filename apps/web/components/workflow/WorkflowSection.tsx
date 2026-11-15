@@ -127,7 +127,7 @@ export function WorkflowSection() {
           {triggerMsg}
           <button
             type="button"
-            className="ml-1.5 text-[10px] underline text-primary/70 hover:text-primary"
+            className="ml-1.5 text-xs underline text-primary/70 hover:text-primary"
             onClick={() => setTriggerMsg(null)}
           >
             Dismiss
@@ -139,7 +139,7 @@ export function WorkflowSection() {
         <div className="flex items-center gap-2">
           <span
             className={cn(
-              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
+              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium',
               status?.running ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
             )}
           >
@@ -151,7 +151,7 @@ export function WorkflowSection() {
             />
             {status?.running ? 'Running' : 'Stopped'}
           </span>
-          <Button size="sm" className="h-6 text-[10px]" onClick={handleToggle} disabled={toggling}>
+          <Button size="sm" className="h-6 text-xs" onClick={handleToggle} disabled={toggling}>
             {toggling ? '...' : status?.running ? 'Stop' : 'Start'}
           </Button>
         </div>
@@ -175,7 +175,7 @@ export function WorkflowSection() {
                 { label: 'Health Check', value: `${status.config.health_check_interval_seconds}s` },
               ].map((c) => (
                 <div key={c.label} className="rounded-lg bg-muted/30 p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground/60">{c.label}</div>
+                  <div className="text-xs text-muted-foreground/60">{c.label}</div>
                   <div className="text-[11px] font-mono font-medium tabular-nums">{c.value}</div>
                 </div>
               ))}
@@ -192,25 +192,25 @@ export function WorkflowSection() {
           <CardContent>
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-lg bg-muted/30 p-2 text-center">
-                <div className="text-[10px] text-muted-foreground/60">Feedback Recorded</div>
+                <div className="text-xs text-muted-foreground/60">Feedback Recorded</div>
                 <div className="text-[13px] font-mono font-medium tabular-nums">
                   {status.stats.feedback_recorded ?? 0}
                 </div>
               </div>
               <div className="rounded-lg bg-muted/30 p-2 text-center">
-                <div className="text-[10px] text-muted-foreground/60">Auto-train Steps</div>
+                <div className="text-xs text-muted-foreground/60">Auto-train Steps</div>
                 <div className="text-[13px] font-mono font-medium tabular-nums">
                   {status.stats.auto_train_steps ?? 0}
                 </div>
               </div>
               <div className="rounded-lg bg-muted/30 p-2 text-center">
-                <div className="text-[10px] text-muted-foreground/60">Workflow Runs</div>
+                <div className="text-xs text-muted-foreground/60">Workflow Runs</div>
                 <div className="text-[13px] font-mono font-medium tabular-nums">
                   {status.stats.workflow_runs ?? 0}
                 </div>
               </div>
               <div className="rounded-lg bg-muted/30 p-2 text-center">
-                <div className="text-[10px] text-muted-foreground/60">DPO Train Steps</div>
+                <div className="text-xs text-muted-foreground/60">DPO Train Steps</div>
                 <div className="text-[13px] font-mono font-medium tabular-nums">
                   {status.stats.dpo_train_steps ?? 0}
                 </div>
@@ -231,7 +231,7 @@ export function WorkflowSection() {
                 key={action}
                 size="sm"
                 variant="outline"
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
                 onClick={() => handleTrigger(action)}
                 disabled={triggering}
               >

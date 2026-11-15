@@ -74,13 +74,13 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
         />
       </div>
       <div className="min-w-0 flex-1" role="status" aria-live="polite">
-        <div className="truncate text-[10px] font-medium">
+        <div className="truncate text-xs font-medium">
           {phase === 'complete'
             ? 'Training complete'
             : `${method === 'turbo' ? 'Turbo' : 'Training'}`}
         </div>
         {trainingRunning && (
-          <div className="flex items-center gap-0.5 text-[9px] text-muted-foreground/60 tabular-nums">
+          <div className="flex items-center gap-0.5 text-[11px] text-muted-foreground/60 tabular-nums">
             <span>{Math.round(progress ?? 0)}%</span>
             {loss != null && (
               <>

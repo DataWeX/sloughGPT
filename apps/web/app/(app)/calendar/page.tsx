@@ -245,7 +245,7 @@ export default function CalendarPage() {
                                   </p>
                                 )}
                               </div>
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                              <span className="shrink-0 text-xs text-muted-foreground">
                                 {event.start_time} - {event.end_time}
                               </span>
                             </div>

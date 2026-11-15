@@ -93,7 +93,7 @@ function StepIndicator({
               >
                 {step.label}
               </span>
-              <span className="text-[10px] text-muted-foreground/50 leading-tight hidden lg:block">
+              <span className="text-xs text-muted-foreground/50 leading-tight hidden lg:block">
                 {step.description}
               </span>
             </div>

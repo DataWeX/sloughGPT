@@ -6,18 +6,22 @@ export interface NotificationFiltersProps {
   onRefresh: () => void
 }
 
-export function NotificationFilters({ filter, onFilterChange, onRefresh }: NotificationFiltersProps) {
+export function NotificationFilters({
+  filter,
+  onFilterChange,
+  onRefresh,
+}: NotificationFiltersProps) {
   return (
     <Card className="mb-4">
       <CardContent className="py-2">
         <div className="flex gap-2">
           <Input
             value={filter}
-            onChange={e => onFilterChange(e.target.value)}
+            onChange={(e) => onFilterChange(e.target.value)}
             placeholder="Filter notifications..."
-            className="flex-1 h-6 text-[10px]"
+            className="flex-1 h-6 text-xs"
           />
-          <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={onRefresh}>
+          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={onRefresh}>
             Refresh
           </Button>
         </div>

@@ -25,13 +25,13 @@ export function PersonalityConflictWarnings({ conflicts }: PersonalityConflictWa
           <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5">
             <Badge
               variant={c.severity === 'medium' ? 'destructive' : 'outline'}
-              className="text-[10px] mt-0.5"
+              className="text-xs mt-0.5"
             >
               {c.severity}
             </Badge>
             <div>
               <div>{c.message}</div>
-              <div className="text-[10px] text-muted-foreground">{c.fields.join(' + ')}</div>
+              <div className="text-xs text-muted-foreground">{c.fields.join(' + ')}</div>
             </div>
           </div>
         ))}

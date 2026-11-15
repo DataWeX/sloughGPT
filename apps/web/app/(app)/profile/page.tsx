@@ -149,33 +149,29 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Username</label>
-            <Input
-              value={profile?.username ?? ''}
-              disabled
-              className="h-6 text-[10px] opacity-60"
-            />
+            <label className="text-xs text-muted-foreground">Username</label>
+            <Input value={profile?.username ?? ''} disabled className="h-6 text-xs opacity-60" />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Display Name</label>
+            <label className="text-xs text-muted-foreground">Display Name</label>
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your display name"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Email</label>
+            <label className="text-xs text-muted-foreground">Email</label>
             <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               placeholder="your@email.com"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
-          <Button size="sm" className="h-6 text-[10px]" onClick={updateProfile} disabled={saving}>
+          <Button size="sm" className="h-6 text-xs" onClick={updateProfile} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </CardContent>
@@ -188,38 +184,38 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Current Password</label>
+            <label className="text-xs text-muted-foreground">Current Password</label>
             <Input
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               type="password"
               placeholder="Current password"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">New Password</label>
+            <label className="text-xs text-muted-foreground">New Password</label>
             <Input
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               type="password"
               placeholder="New password (min 8 characters)"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Confirm New Password</label>
+            <label className="text-xs text-muted-foreground">Confirm New Password</label>
             <Input
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               type="password"
               placeholder="Confirm new password"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <Button
             size="sm"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={changePassword}
             disabled={changingPassword || !currentPassword || !newPassword}
           >
@@ -234,7 +230,7 @@ export default function ProfilePage() {
           <CardTitle className="text-xs">Account Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
               <span className="text-muted-foreground">User ID: </span>
               <span className="font-mono">{profile?.id}</span>

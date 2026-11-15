@@ -159,7 +159,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
         <Button
           variant="outline"
           size="sm"
-          className="h-6 text-[10px] px-2"
+          className="h-6 text-xs px-2"
           onClick={() => setShowAddKnowledge(true)}
         >
           + Add
@@ -174,7 +174,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
             onChange={(e) => setKnowledgeSearch(e.target.value)}
             placeholder="Search snippets..."
             aria-label="Search knowledge snippets"
-            className="h-6 w-full rounded border border-border/60 bg-background pl-6 pr-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="h-6 w-full rounded border border-border/60 bg-background pl-6 pr-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           />
           {knowledgeSearch && (
             <button
@@ -200,13 +200,13 @@ export const KnowledgeTab = memo(function KnowledgeTab({
             aria-label="New knowledge fact"
           />
           <div className="flex gap-1">
-            <Button size="sm" className="h-6 text-[10px] flex-1" onClick={addKnowledge}>
+            <Button size="sm" className="h-6 text-xs flex-1" onClick={addKnowledge}>
               Save
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={() => {
                 setShowAddKnowledge(false)
                 setNewKnowledge('')
@@ -244,7 +244,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
                   <div className="flex gap-1">
                     <Button
                       size="sm"
-                      className="h-5 text-[10px] px-2 flex-1"
+                      className="h-5 text-xs px-2 flex-1"
                       onClick={async () => {
                         await saveKnowledge(
                           knowledge.map((k) =>
@@ -259,7 +259,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-5 text-[10px] px-2"
+                      className="h-5 text-xs px-2"
                       onClick={() => setEditingId(null)}
                     >
                       Cancel
@@ -274,7 +274,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
                   <div className="flex items-center gap-1.5 mt-1">
                     <span
                       className={cn(
-                        'text-[9px] px-1.5 py-0.5 rounded font-medium',
+                        'text-[11px] px-1.5 py-0.5 rounded font-medium',
                         backendContentIds.has(item.content)
                           ? 'bg-success/10 text-success'
                           : 'bg-muted text-muted-foreground',
@@ -283,7 +283,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
                       {backendContentIds.has(item.content) ? 'Synced' : 'Local'}
                     </span>
                     {item.timestamp && (
-                      <span className="text-[9px] text-muted-foreground/50">
+                      <span className="text-[11px] text-muted-foreground/50">
                         {new Date(item.timestamp).toLocaleDateString(undefined, {
                           month: 'short',
                           day: 'numeric',
@@ -324,7 +324,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
           <button
             type="button"
             onClick={() => saveKnowledge([])}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-muted-foreground hover:text-destructive transition-colors"
           >
             Clear all
           </button>
@@ -333,7 +333,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
           href="/datasets"
           prefetch={false}
           className={cn(
-            'text-[10px] text-muted-foreground hover:text-foreground transition-colors',
+            'text-xs text-muted-foreground hover:text-foreground transition-colors',
             knowledge.length === 0 && 'ml-auto',
           )}
         >

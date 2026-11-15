@@ -15,11 +15,17 @@ export function ListSection({ title, description, children, className }: ListSec
     <div className={cn('space-y-1', className)}>
       {(title || description) && (
         <div className="px-3 pb-1">
-          {title && <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>}
+          {title && (
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {title}
+            </p>
+          )}
           {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
         </div>
       )}
-      <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">{children}</div>
+      <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
+        {children}
+      </div>
     </div>
   )
 }

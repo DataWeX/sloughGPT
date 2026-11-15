@@ -65,7 +65,12 @@ export function DevApiPlaygroundCard() {
       if (authHeader.trim()) {
         headers['Authorization'] = authHeader.trim()
       }
-      const res = await authFetch(`${baseUrl}${path}`, { method, headers, body: body && method !== 'GET' ? body : undefined, noAuth: true })
+      const res = await authFetch(`${baseUrl}${path}`, {
+        method,
+        headers,
+        body: body && method !== 'GET' ? body : undefined,
+        noAuth: true,
+      })
       const elapsed = Date.now() - start
       setResponseStatus(res.status)
       setResponseTime(elapsed)
@@ -118,22 +123,28 @@ export function DevApiPlaygroundCard() {
           <div className="flex gap-2">
             <select
               value={method}
-              onChange={e => setMethod(e.target.value)}
+              onChange={(e) => setMethod(e.target.value)}
               className={cn(
                 'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-term-surface-raised outline-none',
                 METHOD_COLORS[method] ?? 'border-white/[0.06] text-term-text',
               )}
               aria-label="HTTP method"
             >
-              {METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+              {METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
             </select>
             <input
               value={path}
-              onChange={e => setPath(e.target.value)}
+              onChange={(e) => setPath(e.target.value)}
               placeholder="/endpoint"
               className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-term-surface-raised px-3 text-[12px] font-mono text-term-text placeholder:text-term-text-faint outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request path"
-              onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSend()
+              }}
             />
             <button
               type="button"
@@ -152,7 +163,7 @@ export function DevApiPlaygroundCard() {
 
           <input
             value={authHeader}
-            onChange={e => setAuthHeader(e.target.value)}
+            onChange={(e) => setAuthHeader(e.target.value)}
             placeholder="Authorization: Bearer <token>"
             className="w-full h-8 rounded-lg border border-white/[0.06] bg-term-surface-raised px-3 text-[11px] font-mono text-term-text placeholder:text-term-text-faint outline-none focus:border-white/[0.12] transition-colors"
             aria-label="Authorization header"
@@ -161,7 +172,7 @@ export function DevApiPlaygroundCard() {
           {method !== 'GET' && (
             <textarea
               value={body}
-              onChange={e => setBody(e.target.value)}
+              onChange={(e) => setBody(e.target.value)}
               placeholder='{"key": "value"}'
               className="w-full h-24 rounded-lg border border-white/[0.06] bg-term-surface-raised px-3 py-2 text-[11px] font-mono text-term-text placeholder:text-term-text-faint resize-none outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request body"
@@ -171,11 +182,16 @@ export function DevApiPlaygroundCard() {
           {response !== null && (
             <div className="space-y-2">
               <div className="flex items-center gap-3 text-[11px]">
-                <span className={cn(
-                  'font-mono font-medium',
-                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-term-zoom' :
-                  responseStatus && responseStatus >= 400 ? 'text-term-close' : 'text-term-text-dim',
-                )}>
+                <span
+                  className={cn(
+                    'font-mono font-medium',
+                    responseStatus && responseStatus >= 200 && responseStatus < 300
+                      ? 'text-term-zoom'
+                      : responseStatus && responseStatus >= 400
+                        ? 'text-term-close'
+                        : 'text-term-text-dim',
+                  )}
+                >
                   {responseStatus}
                 </span>
                 {responseTime != null && (
@@ -197,7 +213,7 @@ export function DevApiPlaygroundCard() {
             <button
               type="button"
               onClick={clearHistory}
-              className="text-[10px] text-term-close/60 hover:text-term-close transition-colors"
+              className="text-xs text-term-close/60 hover:text-term-close transition-colors"
             >
               Clear
             </button>
@@ -213,11 +229,16 @@ export function DevApiPlaygroundCard() {
                   i > 0 && 'border-t border-white/[0.03]',
                 )}
               >
-                <span className={cn(
-                  'font-mono font-medium w-10 shrink-0',
-                  entry.status >= 200 && entry.status < 300 ? 'text-term-zoom' :
-                  entry.status >= 400 ? 'text-term-close' : 'text-term-text-dim',
-                )}>
+                <span
+                  className={cn(
+                    'font-mono font-medium w-10 shrink-0',
+                    entry.status >= 200 && entry.status < 300
+                      ? 'text-term-zoom'
+                      : entry.status >= 400
+                        ? 'text-term-close'
+                        : 'text-term-text-dim',
+                  )}
+                >
                   {entry.status || 'ERR'}
                 </span>
                 <span className="font-mono text-term-text-faint w-12 shrink-0">{entry.method}</span>

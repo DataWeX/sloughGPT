@@ -75,7 +75,7 @@ export const ConversationBranching = memo(function ConversationBranching({
         variant="ghost"
         size="sm"
         className={cn(
-          'text-[10px] h-5 text-muted-foreground/50 hover:text-muted-foreground',
+          'text-xs h-5 text-muted-foreground/50 hover:text-muted-foreground',
           className,
         )}
         onClick={handleOpen}
@@ -88,7 +88,7 @@ export const ConversationBranching = memo(function ConversationBranching({
   return (
     <div className={cn('mt-1 rounded border bg-muted/30 p-2 space-y-2', className)}>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium text-muted-foreground">
+        <span className="text-xs font-medium text-muted-foreground">
           Branch from message {currentIndex + 1} of {messages.length}
         </span>
         <Button
@@ -106,10 +106,10 @@ export const ConversationBranching = memo(function ConversationBranching({
         <div className="max-h-[120px] overflow-y-auto space-y-1">
           {previewMessages.map((msg, i) => (
             <div key={msg.id} className="flex items-start gap-1">
-              <span className="text-[10px] text-muted-foreground shrink-0 w-12">
+              <span className="text-xs text-muted-foreground shrink-0 w-12">
                 {msg.role === 'user' ? 'You' : 'AI'}
               </span>
-              <span className="text-[10px] text-muted-foreground/70 truncate flex-1">
+              <span className="text-xs text-muted-foreground/70 truncate flex-1">
                 {msg.content}
               </span>
             </div>
@@ -130,14 +130,14 @@ export const ConversationBranching = memo(function ConversationBranching({
         <Button
           variant="ghost"
           size="sm"
-          className="text-[10px] h-5"
+          className="text-xs h-5"
           onClick={handleBranch}
           disabled={!editContent.trim()}
         >
           <IconCheck className="h-3 w-3 mr-1" />
           Create Branch
         </Button>
-        <Button variant="ghost" size="sm" className="text-[10px] h-5" onClick={handleCancel}>
+        <Button variant="ghost" size="sm" className="text-xs h-5" onClick={handleCancel}>
           Cancel
         </Button>
       </div>

@@ -272,9 +272,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_enable')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">
-                  PATCH /consciousness/config
-                </span>
+                <span className="text-xs text-muted-foreground">PATCH /consciousness/config</span>
               </Button>
               <Button
                 variant="outline"
@@ -285,7 +283,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_personality')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   POST /consciousness/personality/presets/apply
                 </span>
               </Button>
@@ -300,7 +298,7 @@ export default function ConsciousnessQuickstartPage() {
                     ? t('consciousness_quickstart.seeding')
                     : t('consciousness_quickstart.action_seed')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   POST /consciousness/seed?count=10
                 </span>
               </Button>
@@ -312,7 +310,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_chat')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">/chat</span>
+                <span className="text-xs text-muted-foreground">/chat</span>
               </Button>
               <Button
                 variant="outline"
@@ -322,7 +320,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_dashboard')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">/consciousness/dashboard</span>
+                <span className="text-xs text-muted-foreground">/consciousness/dashboard</span>
               </Button>
             </div>
           </CardContent>
@@ -366,7 +364,7 @@ export default function ConsciousnessQuickstartPage() {
                   className="rounded-md border p-3 text-left text-sm hover:bg-muted transition-colors"
                 >
                   <p className="font-medium">{t(link.labelKey)}</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">{link.path}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{link.path}</p>
                 </button>
               ))}
             </div>

@@ -9,7 +9,11 @@ interface AutoTrainConfigCardProps {
   onSave?: (threshold: number, intervalS: number) => Promise<void>
 }
 
-export function AutoTrainConfigCard({ threshold: initThreshold = 10, intervalS: initInterval = 120, onSave }: AutoTrainConfigCardProps) {
+export function AutoTrainConfigCard({
+  threshold: initThreshold = 10,
+  intervalS: initInterval = 120,
+  onSave,
+}: AutoTrainConfigCardProps) {
   const [threshold, setThreshold] = useState(initThreshold)
   const [interval, setInterval] = useState(initInterval)
   const [saving, setSaving] = useState(false)
@@ -17,7 +21,11 @@ export function AutoTrainConfigCard({ threshold: initThreshold = 10, intervalS: 
   const handleSave = async () => {
     if (!onSave) return
     setSaving(true)
-    try { await onSave(threshold, interval) } finally { setSaving(false) }
+    try {
+      await onSave(threshold, interval)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -28,28 +36,36 @@ export function AutoTrainConfigCard({ threshold: initThreshold = 10, intervalS: 
       <CardContent>
         <div className="space-y-3">
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Pair Threshold</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+              Pair Threshold
+            </div>
             <Input
               type="number"
               min={10}
               max={10000}
               value={threshold}
-              onChange={e => setThreshold(parseInt(e.target.value) || 10)}
+              onChange={(e) => setThreshold(parseInt(e.target.value) || 10)}
               data-testid="threshold-input"
             />
-            <div className="text-[10px] text-muted-foreground mt-0.5">Min pairs before auto-training triggers</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Min pairs before auto-training triggers
+            </div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Check Interval (seconds)</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+              Check Interval (seconds)
+            </div>
             <Input
               type="number"
               min={30}
               max={3600}
               value={interval}
-              onChange={e => setInterval(parseInt(e.target.value) || 120)}
+              onChange={(e) => setInterval(parseInt(e.target.value) || 120)}
               data-testid="interval-input"
             />
-            <div className="text-[10px] text-muted-foreground mt-0.5">How often to check for new training data</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              How often to check for new training data
+            </div>
           </div>
           {onSave && (
             <Button size="sm" onClick={handleSave} disabled={saving}>

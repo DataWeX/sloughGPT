@@ -62,10 +62,10 @@ export function SettingsAppearance({ wb }: { wb: SettingsWorkbench }) {
               <div className="h-2 w-3/4 rounded bg-muted/50" />
             </div>
             <div className="flex gap-1.5 mt-2">
-              <div className="h-5 px-2 rounded bg-primary text-[8px] text-primary-foreground flex items-center justify-center">
+              <div className="h-5 px-2 rounded bg-primary text-[11px] text-primary-foreground flex items-center justify-center">
                 Button
               </div>
-              <div className="h-5 px-2 rounded bg-muted text-[8px] text-muted-foreground flex items-center justify-center">
+              <div className="h-5 px-2 rounded bg-muted text-[11px] text-muted-foreground flex items-center justify-center">
                 Secondary
               </div>
             </div>
@@ -108,10 +108,10 @@ export function SettingsAppearance({ wb }: { wb: SettingsWorkbench }) {
               <div className="h-2 w-3/4 rounded bg-muted/50" />
             </div>
             <div className="flex gap-1.5 mt-2">
-              <div className="h-5 px-2 rounded bg-primary text-[8px] text-primary-foreground flex items-center justify-center">
+              <div className="h-5 px-2 rounded bg-primary text-[11px] text-primary-foreground flex items-center justify-center">
                 Primary
               </div>
-              <div className="h-5 px-2 rounded bg-accent text-[8px] text-accent-foreground flex items-center justify-center">
+              <div className="h-5 px-2 rounded bg-accent text-[11px] text-accent-foreground flex items-center justify-center">
                 Accent
               </div>
             </div>

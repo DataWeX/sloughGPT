@@ -58,12 +58,12 @@ export function DashboardCharts({ beliefsData, qualiaData, growthData }: Dashboa
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
                   dataKey="time"
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 11 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
                 <YAxis
                   domain={[0, 1]}
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 11 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
                 <Tooltip
@@ -108,12 +108,12 @@ export function DashboardCharts({ beliefsData, qualiaData, growthData }: Dashboa
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
                   dataKey="time"
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 11 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
                 <YAxis
                   domain={[-1, 1]}
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 11 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
                 <Tooltip
@@ -158,10 +158,10 @@ export function DashboardCharts({ beliefsData, qualiaData, growthData }: Dashboa
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
                   dataKey="time"
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 11 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
-                <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 11 }} stroke="rgb(var(--muted-foreground))" />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'rgb(var(--card))',

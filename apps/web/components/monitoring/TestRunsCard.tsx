@@ -63,24 +63,24 @@ export const TestRunsCard = memo(function TestRunsCard() {
 
   return (
     <Card className="p-2.5">
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
         Test runs
       </span>
       <CardContent className="p-0 space-y-1.5">
         {loading && (
-          <p className="text-[10px] text-muted-foreground/60 text-center py-3" role="status">
+          <p className="text-xs text-muted-foreground/60 text-center py-3" role="status">
             <Spinner />
           </p>
         )}
 
         {!loading && error && (
-          <p className="text-[10px] text-destructive text-center py-3" role="alert">
+          <p className="text-xs text-destructive text-center py-3" role="alert">
             Could not load test runs
           </p>
         )}
 
         {!loading && !error && files?.length === 0 && (
-          <p className="text-[10px] text-muted-foreground/60 text-center py-3">
+          <p className="text-xs text-muted-foreground/60 text-center py-3">
             No test runs recorded yet
           </p>
         )}
@@ -92,12 +92,12 @@ export const TestRunsCard = memo(function TestRunsCard() {
               key={f.file}
               heading={
                 <span className="flex items-center justify-between gap-2 w-full min-w-0">
-                  <span className="text-[10px] font-mono truncate min-w-0" title={f.file}>
+                  <span className="text-xs font-mono truncate min-w-0" title={f.file}>
                     {f.file}
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     <span
-                      className={`text-[8px] px-1 py-0.5 rounded font-medium tabular-nums ${
+                      className={`text-[11px] px-1 py-0.5 rounded font-medium tabular-nums ${
                         f.status === 'failed'
                           ? 'bg-destructive/10 text-destructive'
                           : 'bg-muted text-muted-foreground'
@@ -105,10 +105,10 @@ export const TestRunsCard = memo(function TestRunsCard() {
                     >
                       {f.status}
                     </span>
-                    <span className="text-[9px] text-muted-foreground tabular-nums">
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
                       {f.passed}/{f.total}
                     </span>
-                    <span className="text-[8px] text-muted-foreground/60 tabular-nums">
+                    <span className="text-[11px] text-muted-foreground/60 tabular-nums">
                       {timeAgo(f.mtime)}
                     </span>
                   </span>
@@ -117,7 +117,7 @@ export const TestRunsCard = memo(function TestRunsCard() {
             >
               <ul className="space-y-1" aria-label={`Raw entries for ${f.file}`}>
                 {f.entries.map((e, i) => (
-                  <li key={`${e.test}-${i}`} className="flex items-start gap-1.5 text-[9px]">
+                  <li key={`${e.test}-${i}`} className="flex items-start gap-1.5 text-[11px]">
                     <span
                       className={`shrink-0 font-medium ${
                         e.passed ? 'text-muted-foreground' : 'text-destructive'

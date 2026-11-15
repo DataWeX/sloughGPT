@@ -176,14 +176,14 @@ export default function AgentDetailPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 text-[10px]"
+                        className="h-6 text-xs"
                         onClick={() => setEditing(false)}
                       >
                         Cancel
                       </Button>
                       <Button
                         size="sm"
-                        className="h-6 text-[10px]"
+                        className="h-6 text-xs"
                         onClick={handleSave}
                         disabled={saving}
                       >
@@ -194,7 +194,7 @@ export default function AgentDetailPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 text-[10px]"
+                      className="h-6 text-xs"
                       onClick={() => {
                         setEditing(true)
                         setEditName(agent.name)

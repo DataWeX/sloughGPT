@@ -33,7 +33,7 @@ export function CompanionChatCard({ onSend }: CompanionChatCardProps) {
       content: input.trim(),
       timestamp: Date.now(),
     }
-    setMessages(prev => [...prev, userMsg])
+    setMessages((prev) => [...prev, userMsg])
     setInput('')
     setLoading(true)
     try {
@@ -44,7 +44,7 @@ export function CompanionChatCard({ onSend }: CompanionChatCardProps) {
         content: response,
         timestamp: Date.now(),
       }
-      setMessages(prev => [...prev, aiMsg])
+      setMessages((prev) => [...prev, aiMsg])
     } catch {
       const errMsg: ChatMessage = {
         id: `msg-${Date.now()}-e`,
@@ -52,7 +52,7 @@ export function CompanionChatCard({ onSend }: CompanionChatCardProps) {
         content: 'Sorry, I encountered an error. Please try again.',
         timestamp: Date.now(),
       }
-      setMessages(prev => [...prev, errMsg])
+      setMessages((prev) => [...prev, errMsg])
     } finally {
       setLoading(false)
     }
@@ -67,7 +67,7 @@ export function CompanionChatCard({ onSend }: CompanionChatCardProps) {
             <Button
               size="sm"
               variant="ghost"
-              className="text-destructive text-[10px]"
+              className="text-destructive text-xs"
               onClick={() => setMessages([])}
             >
               Clear
@@ -76,20 +76,26 @@ export function CompanionChatCard({ onSend }: CompanionChatCardProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-64 overflow-y-auto space-y-2 mb-3 p-2 rounded bg-muted/30" data-testid="chat-messages">
+        <div
+          className="h-64 overflow-y-auto space-y-2 mb-3 p-2 rounded bg-muted/30"
+          data-testid="chat-messages"
+        >
           {messages.length === 0 && (
             <div className="text-xs text-muted-foreground text-center py-8">
               Start a conversation with your companion.
             </div>
           )}
-          {messages.map(msg => (
-            <div key={msg.id} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
+            >
               <div
                 className={cn(
                   'max-w-[80%] px-3 py-1.5 rounded-lg text-xs',
                   msg.role === 'user'
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-foreground'
+                    : 'bg-muted text-foreground',
                 )}
                 data-testid={`message-${msg.role}`}
               >
@@ -109,9 +115,9 @@ export function CompanionChatCard({ onSend }: CompanionChatCardProps) {
         <div className="flex gap-2">
           <Input
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="Say something..."
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             disabled={loading}
             data-testid="chat-input"
           />

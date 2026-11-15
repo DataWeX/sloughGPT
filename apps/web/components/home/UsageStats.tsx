@@ -67,13 +67,13 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                   Conversations
                 </p>
                 <p className="text-sm font-semibold tabular-nums">{convStats.totalConversations}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                   Messages
                 </p>
                 <p className="text-sm font-semibold tabular-nums">
@@ -81,7 +81,7 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                   Words
                 </p>
                 <p className="text-sm font-semibold tabular-nums">
@@ -89,14 +89,14 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                   Active days
                 </p>
                 <p className="text-sm font-semibold tabular-nums">{convStats.activeDays}</p>
               </div>
             </div>
             {convStats.mostActiveHour !== null && (
-              <p className="text-[10px] text-muted-foreground/60 mt-2">
+              <p className="text-xs text-muted-foreground/60 mt-2">
                 Most active at {convStats.mostActiveHour}:00
               </p>
             )}
@@ -113,20 +113,20 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
               <Link
                 href="/datasets"
                 prefetch={false}
-                className="text-[10px] text-primary hover:text-primary/80 ml-auto"
+                className="text-xs text-primary hover:text-primary/80 ml-auto"
               >
                 View all →
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                   Datasets
                 </p>
                 <p className="text-sm font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                   Total size
                 </p>
                 <p className="text-sm font-semibold tabular-nums">
@@ -135,7 +135,7 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
               </div>
             </div>
             <div className="mt-2 pt-2 border-t border-border/30">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                 Samples
               </p>
               <p className="text-sm font-semibold tabular-nums">

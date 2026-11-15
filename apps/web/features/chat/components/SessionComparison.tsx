@@ -56,8 +56,8 @@ export const SessionComparison = memo(function SessionComparison({
   const [rightId, setRightId] = useState<string>(sessions[1]?.id || '')
   const [showUnchanged, setShowUnchanged] = useState(true)
 
-  const leftSession = useMemo(() => sessions.find(s => s.id === leftId), [sessions, leftId])
-  const rightSession = useMemo(() => sessions.find(s => s.id === rightId), [sessions, rightId])
+  const leftSession = useMemo(() => sessions.find((s) => s.id === leftId), [sessions, leftId])
+  const rightSession = useMemo(() => sessions.find((s) => s.id === rightId), [sessions, rightId])
 
   const diff = useMemo(() => {
     if (!leftSession || !rightSession) return []
@@ -66,14 +66,14 @@ export const SessionComparison = memo(function SessionComparison({
 
   const filteredDiff = useMemo(() => {
     if (showUnchanged) return diff
-    return diff.filter(d => d.type !== 'unchanged')
+    return diff.filter((d) => d.type !== 'unchanged')
   }, [diff, showUnchanged])
 
   const stats = useMemo(() => {
-    const added = diff.filter(d => d.type === 'added').length
-    const removed = diff.filter(d => d.type === 'removed').length
-    const modified = diff.filter(d => d.type === 'modified').length
-    const unchanged = diff.filter(d => d.type === 'unchanged').length
+    const added = diff.filter((d) => d.type === 'added').length
+    const removed = diff.filter((d) => d.type === 'removed').length
+    const modified = diff.filter((d) => d.type === 'modified').length
+    const unchanged = diff.filter((d) => d.type === 'unchanged').length
     return { added, removed, modified, unchanged, total: diff.length }
   }, [diff])
 
@@ -91,7 +91,13 @@ export const SessionComparison = memo(function SessionComparison({
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
         <span className="text-xs font-medium">Session Comparison</span>
-        <Button variant="ghost" size="icon-sm" className="h-5 w-5" onClick={onClose} aria-label="Close comparison">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-5 w-5"
+          onClick={onClose}
+          aria-label="Close comparison"
+        >
           <IconX className="h-3 w-3" />
         </Button>
       </div>
@@ -103,8 +109,10 @@ export const SessionComparison = memo(function SessionComparison({
           className="flex-1 text-xs bg-transparent border rounded px-2 py-1"
           aria-label="Left session"
         >
-          {sessions.map(s => (
-            <option key={s.id} value={s.id}>{s.title}</option>
+          {sessions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.title}
+            </option>
           ))}
         </select>
         <span className="text-xs text-muted-foreground self-center">vs</span>
@@ -114,13 +122,15 @@ export const SessionComparison = memo(function SessionComparison({
           className="flex-1 text-xs bg-transparent border rounded px-2 py-1"
           aria-label="Right session"
         >
-          {sessions.map(s => (
-            <option key={s.id} value={s.id}>{s.title}</option>
+          {sessions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.title}
+            </option>
           ))}
         </select>
       </div>
 
-      <div className="flex items-center gap-3 px-3 py-2 border-b text-[10px]">
+      <div className="flex items-center gap-3 px-3 py-2 border-b text-xs">
         <label className="flex items-center gap-1 cursor-pointer">
           <Checkbox
             checked={showUnchanged}
@@ -167,11 +177,12 @@ const DiffRow = memo(function DiffRow({ item, index }: { item: DiffResult; index
       <div className="w-1/2 border-r p-2 min-h-[40px]">
         {item.left ? (
           <div>
-            <span className="text-[10px] text-muted-foreground mr-1">
+            <span className="text-xs text-muted-foreground mr-1">
               {item.left.role === 'user' ? 'You' : 'AI'}:
             </span>
             <span className={cn(item.type === 'removed' && 'line-through opacity-60')}>
-              {item.left.content.slice(0, 100)}{item.left.content.length > 100 ? '…' : ''}
+              {item.left.content.slice(0, 100)}
+              {item.left.content.length > 100 ? '…' : ''}
             </span>
           </div>
         ) : (
@@ -181,11 +192,12 @@ const DiffRow = memo(function DiffRow({ item, index }: { item: DiffResult; index
       <div className="w-1/2 p-2 min-h-[40px]">
         {item.right ? (
           <div>
-            <span className="text-[10px] text-muted-foreground mr-1">
+            <span className="text-xs text-muted-foreground mr-1">
               {item.right.role === 'user' ? 'You' : 'AI'}:
             </span>
             <span className={cn(item.type === 'added' && 'font-medium')}>
-              {item.right.content.slice(0, 100)}{item.right.content.length > 100 ? '…' : ''}
+              {item.right.content.slice(0, 100)}
+              {item.right.content.length > 100 ? '…' : ''}
             </span>
           </div>
         ) : (

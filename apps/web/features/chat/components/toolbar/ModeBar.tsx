@@ -174,14 +174,14 @@ function SubOptions({
     return (
       <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-muted-foreground/40 font-medium">Tone</span>
+          <span className="text-xs text-muted-foreground/40 font-medium">Tone</span>
           {TONES.map((t) => (
             <SubOptionPill key={t} active={tone === t} label={t} onClick={() => onToneChange(t)} />
           ))}
         </div>
         <div className="w-px h-3 bg-border/15" />
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-muted-foreground/40 font-medium">Type</span>
+          <span className="text-xs text-muted-foreground/40 font-medium">Type</span>
           {TYPES.map((t) => (
             <SubOptionPill key={t} active={type === t} label={t} onClick={() => onTypeChange(t)} />
           ))}
@@ -194,7 +194,7 @@ function SubOptions({
     return (
       <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-muted-foreground/40 font-medium">Action</span>
+          <span className="text-xs text-muted-foreground/40 font-medium">Action</span>
           {REWRITE_OPTIONS.map((o) => (
             <SubOptionPill
               key={o}
@@ -253,7 +253,7 @@ function SubOptions({
       {groups.map((g, i) => (
         <div key={g.label} className="flex items-center gap-1">
           {i > 0 && <div className="w-px h-3 bg-border/15 mr-2" />}
-          <span className="text-[10px] text-muted-foreground/40 font-medium">{g.label}</span>
+          <span className="text-xs text-muted-foreground/40 font-medium">{g.label}</span>
           {g.options.map((opt) => (
             <SubOptionPill
               key={opt}

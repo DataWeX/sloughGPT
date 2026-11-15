@@ -41,7 +41,7 @@ export default function DeveloperPage() {
           {startupStage && startupStage !== 'ready' && startupStage !== 'background' && (
             <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/[0.06] px-3 py-1.5">
               <StatusDot tone="warning" pulse />
-              <span className="text-[10px] font-medium text-warning uppercase tracking-wider">
+              <span className="text-xs font-medium text-warning uppercase tracking-wider">
                 {startupStage} {startupElapsed > 0 && `· ${startupElapsed.toFixed(0)}s`}
               </span>
             </div>
@@ -49,7 +49,7 @@ export default function DeveloperPage() {
           {startupStage === 'ready' && (
             <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/[0.06] px-3 py-1.5">
               <StatusDot tone="success" />
-              <span className="text-[10px] font-medium text-success uppercase tracking-wider">
+              <span className="text-xs font-medium text-success uppercase tracking-wider">
                 Ready
               </span>
             </div>

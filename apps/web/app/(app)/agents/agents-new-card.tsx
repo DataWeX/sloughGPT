@@ -46,9 +46,7 @@ export function NewAgentCard({
         </CardHeader>
         <CardContent className="px-2.5 pb-2.5 space-y-3">
           <div>
-            <p className="text-[10px] font-medium text-muted-foreground mb-2">
-              Start from a template
-            </p>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Start from a template</p>
             <div className="flex flex-wrap gap-1.5">
               {AGENT_TEMPLATES.map((t) => (
                 <button
@@ -60,7 +58,7 @@ export function NewAgentCard({
                     setNewInstructions(t.instructions)
                     setNewTools([...t.tools])
                   }}
-                  className="rounded-full px-3 py-1 text-[10px] font-medium border border-border/40 bg-muted/20 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset transition-colors"
+                  className="rounded-full px-3 py-1 text-xs font-medium border border-border/40 bg-muted/20 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset transition-colors"
                 >
                   {t.name}
                 </button>
@@ -82,7 +80,7 @@ export function NewAgentCard({
               aria-describedby={createErrors.name ? 'create-name-error' : undefined}
             />
             {createErrors.name && (
-              <p id="create-name-error" className="text-[10px] text-destructive mt-1" role="alert">
+              <p id="create-name-error" className="text-xs text-destructive mt-1" role="alert">
                 {createErrors.name}
               </p>
             )}
@@ -107,7 +105,7 @@ export function NewAgentCard({
                 onClick={() => toggleTool(t, newTools, setNewTools)}
                 aria-pressed={newTools.includes(t)}
                 className={cn(
-                  'rounded-full px-3 py-1 text-[10px] font-medium border transition-colors',
+                  'rounded-full px-3 py-1 text-xs font-medium border transition-colors',
                   newTools.includes(t)
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-border hover:border-primary/50',

@@ -72,7 +72,7 @@ function ImageGrid({ images }: { images: ImageAttachment[] }) {
             className="w-full h-auto max-h-[180px] object-cover"
             loading="lazy"
           />
-          <span className="absolute bottom-0 left-0 right-0 text-[9px] text-muted-foreground bg-background/80 px-1.5 py-0.5 truncate">
+          <span className="absolute bottom-0 left-0 right-0 text-[11px] text-muted-foreground bg-background/80 px-1.5 py-0.5 truncate">
             {img.name}
           </span>
         </div>

@@ -38,7 +38,7 @@ export default function AgentsPage() {
       <Button
         variant="outline"
         size="sm"
-        className="h-6 text-[10px]"
+        className="h-6 text-xs"
         onClick={handleExport}
         disabled={agents.length === 0}
       >
@@ -47,7 +47,7 @@ export default function AgentsPage() {
       <Button
         variant="outline"
         size="sm"
-        className="h-6 text-[10px]"
+        className="h-6 text-xs"
         onClick={() => importInputRef.current?.click()}
       >
         Import

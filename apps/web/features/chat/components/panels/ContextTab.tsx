@@ -129,7 +129,7 @@ export function ContextTab() {
       </div>
 
       {loading ? (
-        <p className="text-[10px] text-muted-foreground text-center py-3" aria-busy="true">
+        <p className="text-xs text-muted-foreground text-center py-3" aria-busy="true">
           Loading context…
         </p>
       ) : !hasAnything ? (
@@ -140,7 +140,7 @@ export function ContextTab() {
         <>
           {activeModes.length > 0 && (
             <div className="space-y-1.5">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Steering modes
               </span>
               {MODE_ORDER.map(({ key, label, hint }) => {
@@ -148,7 +148,7 @@ export function ContextTab() {
                 if (!mode) return null
                 return (
                   <div key={key} className="flex items-center gap-2">
-                    <span className="w-16 shrink-0 text-[10px] text-muted-foreground">{label}</span>
+                    <span className="w-16 shrink-0 text-xs text-muted-foreground">{label}</span>
                     <span className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                       <span
                         className="block h-full rounded-full bg-primary/70 transition-all"
@@ -156,7 +156,7 @@ export function ContextTab() {
                       />
                     </span>
                     <span
-                      className="w-16 shrink-0 text-right text-[10px] text-muted-foreground truncate"
+                      className="w-16 shrink-0 text-right text-xs text-muted-foreground truncate"
                       title={`${label} — ${hint}`}
                     >
                       {mode.label}
@@ -169,7 +169,7 @@ export function ContextTab() {
 
           {traitWeights && Object.keys(traitWeights).length > 0 && (
             <div className="space-y-1.5">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Trait weights
               </span>
               {TRAIT_GROUPS.map(({ key, label }) => {
@@ -178,10 +178,10 @@ export function ContextTab() {
                 const traits = Object.entries(group).slice(0, 3)
                 return (
                   <div key={key} className="space-y-0.5">
-                    <span className="text-[9px] text-muted-foreground/70 uppercase">{label}</span>
+                    <span className="text-[11px] text-muted-foreground/70 uppercase">{label}</span>
                     {traits.map(([trait, value]) => (
                       <div key={trait} className="flex items-center gap-2">
-                        <span className="w-16 shrink-0 text-[10px] text-muted-foreground truncate capitalize">
+                        <span className="w-16 shrink-0 text-xs text-muted-foreground truncate capitalize">
                           {trait}
                         </span>
                         <span className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
@@ -190,7 +190,7 @@ export function ContextTab() {
                             style={{ width: `${confidencePct(value)}%` }}
                           />
                         </span>
-                        <span className="w-6 shrink-0 text-right text-[10px] text-muted-foreground">
+                        <span className="w-6 shrink-0 text-right text-xs text-muted-foreground">
                           {confidencePct(value)}%
                         </span>
                       </div>
@@ -203,7 +203,7 @@ export function ContextTab() {
 
           {inspector && (
             <div className="space-y-1.5">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Workspace memory
               </span>
               <div className="grid grid-cols-2 gap-1">
@@ -212,13 +212,13 @@ export function ContextTab() {
                     key={label}
                     className="flex items-center justify-between px-2 py-1 rounded bg-muted/30 border border-border/40"
                   >
-                    <span className="text-[10px] text-muted-foreground">{label}</span>
-                    <span className="text-[10px] font-medium">{value}</span>
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <span className="text-xs font-medium">{value}</span>
                   </div>
                 ))}
               </div>
               {inspector.frame_history_size != null && (
-                <p className="text-[9px] text-muted-foreground/60">
+                <p className="text-[11px] text-muted-foreground/60">
                   Context frames: {inspector.frame_history_size}
                 </p>
               )}
@@ -227,13 +227,13 @@ export function ContextTab() {
                   <button
                     type="button"
                     onClick={() => setShowPrompt((s) => !s)}
-                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-muted-foreground hover:text-foreground transition-colors"
                     aria-expanded={showPrompt}
                   >
                     {showPrompt ? 'Hide' : 'Show'} system prompt
                   </button>
                   {showPrompt && (
-                    <p className="mt-1 text-[10px] text-muted-foreground/80 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto">
+                    <p className="mt-1 text-xs text-muted-foreground/80 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto">
                       {inspector.system_prompt}
                     </p>
                   )}
@@ -244,14 +244,14 @@ export function ContextTab() {
 
           {(knowledgeCount != null || feedback) && (
             <div className="space-y-1.5">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Inputs
               </span>
               <div className="grid grid-cols-2 gap-1">
                 {knowledgeCount != null && (
                   <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/30 border border-border/40">
-                    <span className="text-[10px] text-muted-foreground">Knowledge</span>
-                    <span className="text-[10px] font-medium">
+                    <span className="text-xs text-muted-foreground">Knowledge</span>
+                    <span className="text-xs font-medium">
                       {knowledgeCount} snippet{knowledgeCount !== 1 ? 's' : ''}
                     </span>
                   </div>
@@ -261,8 +261,8 @@ export function ContextTab() {
                     className="flex items-center justify-between px-2 py-1 rounded bg-muted/30 border border-border/40"
                     title="Feedback recorded on your responses"
                   >
-                    <span className="text-[10px] text-muted-foreground">Feedback</span>
-                    <span className="text-[10px] font-medium">
+                    <span className="text-xs text-muted-foreground">Feedback</span>
+                    <span className="text-xs font-medium">
                       {feedback.up} up · {feedback.down} down
                     </span>
                   </div>

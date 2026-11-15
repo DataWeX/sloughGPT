@@ -138,7 +138,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
 
             {presets.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Presets
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -194,7 +194,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
                     />
                     <Button
                       size="sm"
-                      className="h-7 text-[10px] px-2"
+                      className="h-7 text-xs px-2"
                       onClick={handleSaveAsPreset}
                       disabled={!presetName.trim() || !draft.trim()}
                     >
@@ -203,7 +203,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-[10px] px-1"
+                      className="h-7 text-xs px-1"
                       onClick={() => {
                         setShowSaveInput(false)
                         setPresetName('')

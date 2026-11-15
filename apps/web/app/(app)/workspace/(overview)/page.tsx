@@ -262,7 +262,7 @@ export default function WorkspaceDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Completed</span>
                 <span className="font-medium text-success">{trainingByStatus.completed}</span>
               </div>
@@ -275,7 +275,7 @@ export default function WorkspaceDashboardPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Running</span>
                 <span className="font-medium text-info">{trainingByStatus.running}</span>
               </div>
@@ -288,7 +288,7 @@ export default function WorkspaceDashboardPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Failed</span>
                 <span className="font-medium text-destructive">{trainingByStatus.failed}</span>
               </div>
@@ -301,7 +301,7 @@ export default function WorkspaceDashboardPage() {
                 />
               </div>
 
-              <div className="pt-2 border-t text-[10px] text-muted-foreground">
+              <div className="pt-2 border-t text-xs text-muted-foreground">
                 Total training time: {usage?.training?.total_minutes ?? 0} min
               </div>
             </div>
@@ -318,10 +318,10 @@ export default function WorkspaceDashboardPage() {
               {Object.entries(activityByType)
                 .sort(([, a], [, b]) => b - a)
                 .map(([type, count]) => (
-                  <div key={type} className="flex items-center justify-between text-[10px]">
+                  <div key={type} className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
                           type === 'training'
                             ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
                             : type === 'audit'
@@ -352,9 +352,7 @@ export default function WorkspaceDashboardPage() {
                   </div>
                 ))}
               {Object.keys(activityByType).length === 0 && (
-                <p className="text-[10px] text-muted-foreground text-center py-4">
-                  No activity data
-                </p>
+                <p className="text-xs text-muted-foreground text-center py-4">No activity data</p>
               )}
             </div>
           </CardContent>
@@ -382,7 +380,7 @@ export default function WorkspaceDashboardPage() {
               <button
                 onClick={runHealthCheck}
                 disabled={checkingHealth}
-                className="text-[10px] text-muted-foreground hover:text-foreground"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 {checkingHealth ? 'Checking...' : 'Re-check'}
               </button>
@@ -419,7 +417,7 @@ export default function WorkspaceDashboardPage() {
                   <Wrapper
                     key={i}
                     {...(link ? { href: link } : {})}
-                    className={`flex items-center justify-between px-2 py-1.5 rounded text-[10px] ${
+                    className={`flex items-center justify-between px-2 py-1.5 rounded text-xs ${
                       link ? 'hover:bg-muted/50 cursor-pointer' : ''
                     }`}
                   >
@@ -433,7 +431,7 @@ export default function WorkspaceDashboardPage() {
                       {a.user && <span className="text-muted-foreground">{a.user}</span>}
                       {a.status && (
                         <span
-                          className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                          className={`px-1.5 py-0.5 rounded-full text-[11px] ${
                             a.status === 'completed' || a.status === 'success'
                               ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success'
                               : a.status === 'failed' || a.status === 'failure'
@@ -457,7 +455,7 @@ export default function WorkspaceDashboardPage() {
               {activities.length > 10 && (
                 <button
                   onClick={() => setShowAllActivities(!showAllActivities)}
-                  className="w-full text-center text-[10px] text-muted-foreground hover:text-foreground py-2"
+                  className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-2"
                 >
                   {showAllActivities ? 'Show less' : `Show all ${activities.length} activities`}
                 </button>

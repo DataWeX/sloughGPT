@@ -215,9 +215,7 @@ export function VoiceRecordingCard() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate">{rec.label}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {formatDuration(rec.duration)}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{formatDuration(rec.duration)}</p>
                 </div>
                 <Button
                   size="sm"

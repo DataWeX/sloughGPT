@@ -63,7 +63,7 @@ export const ChatSessionCloning = memo(function ChatSessionCloning({
       </div>
 
       <div className="p-2 space-y-2">
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Select a session to clone with all its messages.
         </p>
 
@@ -84,7 +84,7 @@ export const ChatSessionCloning = memo(function ChatSessionCloning({
                 )}
               >
                 <div className="font-medium truncate">{session.title}</div>
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {session.messages.length} messages
                 </div>
               </button>
@@ -110,14 +110,14 @@ export const ChatSessionCloning = memo(function ChatSessionCloning({
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-[10px] h-6"
+                className="text-xs h-6"
                 onClick={handleClone}
                 disabled={!newTitle.trim()}
               >
                 <IconCheck className="h-3 w-3 mr-1" />
                 Clone
               </Button>
-              <Button variant="ghost" size="sm" className="text-[10px] h-6" onClick={handleCancel}>
+              <Button variant="ghost" size="sm" className="text-xs h-6" onClick={handleCancel}>
                 Cancel
               </Button>
             </div>

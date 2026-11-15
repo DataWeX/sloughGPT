@@ -30,9 +30,7 @@ export function StatTileGrid({ tiles, className }: { tiles: StatTile[]; classNam
           key={tile.key}
           className="min-w-0 grow basis-[calc(50%_-_4px)] rounded-lg bg-muted/30 px-3 py-2 sm:basis-[calc(25%_-_6px)]"
         >
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-            {tile.label}
-          </p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground/60">{tile.label}</p>
           <p className="text-sm font-semibold tabular-nums">
             {tile.value}
             {tile.hint !== undefined && (

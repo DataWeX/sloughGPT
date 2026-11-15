@@ -54,11 +54,11 @@ export function MemoryAddForm({ onAdded, highlightItem, items }: MemoryAddFormPr
           onChange={(e) => setTopic(e.target.value)}
           placeholder="topic"
           aria-label="Memory fact topic"
-          className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:border-primary/50"
+          className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:border-primary/50"
         />
         <Button
           size="sm"
-          className="h-6 text-[10px] px-2"
+          className="h-6 text-xs px-2"
           disabled={!content.trim() || adding}
           onClick={handleAdd}
         >

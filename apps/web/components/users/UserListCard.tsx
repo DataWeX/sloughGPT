@@ -28,23 +28,39 @@ export function UserListCard({ users, onEdit, onDelete }: UserListCardProps) {
         {users.length === 0 ? (
           <p className="text-xs text-muted-foreground py-4 text-center">No users yet</p>
         ) : (
-          users.map(u => (
+          users.map((u) => (
             <div key={u.id} className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-xs">{u.username}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{u.role}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                      u.status === 'active' ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive'
-                    }`}>{u.status}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      {u.role}
+                    </span>
+                    <span
+                      className={`text-xs px-1.5 py-0.5 rounded-full ${
+                        u.status === 'active'
+                          ? 'bg-success/15 text-success'
+                          : 'bg-destructive/15 text-destructive'
+                      }`}
+                    >
+                      {u.status}
+                    </span>
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    {u.email} · Last login: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {u.email} · Last login:{' '}
+                    {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => onEdit(u)}>Edit</Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 text-xs"
+                    onClick={() => onEdit(u)}
+                  >
+                    Edit
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"

@@ -153,7 +153,7 @@ export default function ConsciousnessHelpPage() {
                   className="rounded-md border p-3 text-left text-sm hover:bg-muted transition-colors"
                 >
                   <p className="font-medium">{t(link.labelKey)}</p>
-                  <p className="text-[10px] text-muted-foreground">{t(link.descKey)}</p>
+                  <p className="text-xs text-muted-foreground">{t(link.descKey)}</p>
                 </button>
               ))}
             </div>

@@ -15,7 +15,10 @@ export function VectorInitCard({ provider, loading, onInit }: VectorInitCardProp
         <CardTitle className="text-[11px] font-medium">Initialize</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 px-2.5 pb-2.5">
-        <p className="text-[10px] text-muted-foreground/60">Choose a vector store backend. ChromaDB persists to disk; in-memory is faster but does not survive restarts.</p>
+        <p className="text-xs text-muted-foreground/60">
+          Choose a vector store backend. ChromaDB persists to disk; in-memory is faster but does not
+          survive restarts.
+        </p>
         <div className="flex gap-1">
           <Button
             size="sm"

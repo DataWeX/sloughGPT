@@ -44,7 +44,13 @@ export function DashboardActivityFeed({
         <div className="flex items-center justify-between">
           <CardTitle className="text-xs">Recent Activity</CardTitle>
           {onRefresh && (
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onRefresh} title="Refresh">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={onRefresh}
+              title="Refresh"
+            >
               <RefreshCw className="h-3 w-3" />
             </Button>
           )}
@@ -60,19 +66,21 @@ export function DashboardActivityFeed({
               return (
                 <div
                   key={i}
-                  className={`flex items-center justify-between px-2 py-1.5 rounded text-[10px] ${
+                  className={`flex items-center justify-between px-2 py-1.5 rounded text-xs ${
                     link ? 'hover:bg-muted/50 cursor-pointer' : ''
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <span className="font-medium">{a.action}</span>
-                    {a.detail && <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>}
+                    {a.detail && (
+                      <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {a.user && <span className="text-muted-foreground">{a.user}</span>}
                     {a.status && (
                       <span
-                        className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                        className={`px-1.5 py-0.5 rounded-full text-[11px] ${
                           a.status === 'completed' || a.status === 'success'
                             ? 'bg-success/15 text-success'
                             : a.status === 'failed'
@@ -83,7 +91,9 @@ export function DashboardActivityFeed({
                         {a.status}
                       </span>
                     )}
-                    <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                    <span className="text-muted-foreground whitespace-nowrap">
+                      {formatTime(a.timestamp)}
+                    </span>
                     {link && <ExternalLink className="h-2.5 w-2.5 text-muted-foreground" />}
                   </div>
                 </div>
@@ -92,7 +102,7 @@ export function DashboardActivityFeed({
             {activities.length > maxVisible && (
               <button
                 onClick={() => setShowAll(!showAll)}
-                className="w-full text-center text-[10px] text-muted-foreground hover:text-foreground py-2"
+                className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-2"
               >
                 {showAll ? 'Show less' : `Show all ${activities.length} activities`}
               </button>

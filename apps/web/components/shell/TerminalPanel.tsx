@@ -181,7 +181,7 @@ export function TerminalPanel({
         {state.isRunning && (
           <div className="flex items-center gap-2 text-term-minimize" data-testid="shell-running">
             <span className="w-1.5 h-1.5 rounded-full bg-term-minimize animate-pulse" />
-            <span className="text-[10px]">executing...</span>
+            <span className="text-xs">executing...</span>
           </div>
         )}
         {state.error && (
@@ -189,7 +189,7 @@ export function TerminalPanel({
             className="mt-2 flex items-start gap-2 text-term-close bg-term-close/[0.08] rounded-md px-3 py-2"
             data-testid="shell-error"
           >
-            <span className="shrink-0 text-[10px] font-bold">!</span>
+            <span className="shrink-0 text-xs font-bold">!</span>
             <span>{state.error}</span>
           </div>
         )}
@@ -219,7 +219,7 @@ export function TerminalPanel({
           <button
             type="button"
             onClick={() => cancel()}
-            className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium bg-term-close/10 text-term-close hover:bg-term-close/20 transition-colors"
+            className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-term-close/10 text-term-close hover:bg-term-close/20 transition-colors"
             data-testid="shell-cancel"
           >
             Cancel
@@ -229,7 +229,7 @@ export function TerminalPanel({
           <span
             data-testid="shell-exit-code"
             className={cn(
-              'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+              'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
               state.exitCode === 0
                 ? 'bg-term-zoom/10 text-term-zoom'
                 : 'bg-term-close/10 text-term-close',

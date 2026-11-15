@@ -333,7 +333,7 @@ export default function ConsciousnessPlaygroundPage() {
                   return (
                     <div key={realIndex} className="rounded-lg border p-3 text-sm">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className="text-[10px] font-mono text-muted-foreground">
+                        <span className="text-xs font-mono text-muted-foreground">
                           #{realIndex} — {formatTimeAgo(ep.timestamp)}
                         </span>
                         <div className="flex items-center gap-1">
@@ -342,7 +342,7 @@ export default function ConsciousnessPlaygroundPage() {
                               key={r}
                               size="sm"
                               variant={r === (ep as any).rating ? 'default' : 'outline'}
-                              className="h-6 px-2 text-[10px]"
+                              className="h-6 px-2 text-xs"
                               onClick={() => handleFeedback(realIndex, r)}
                               disabled={ratingEpisode === realIndex}
                             >
@@ -365,7 +365,7 @@ export default function ConsciousnessPlaygroundPage() {
                       <div className="flex items-center gap-2 mt-1">
                         <Badge
                           variant={ep.growth_delta >= 0 ? 'default' : 'destructive'}
-                          className="text-[10px]"
+                          className="text-xs"
                         >
                           {ep.growth_delta >= 0 ? '+' : ''}
                           {(ep.growth_delta * 100).toFixed(1)}%
@@ -374,7 +374,7 @@ export default function ConsciousnessPlaygroundPage() {
                           Object.entries(ep.qualia)
                             .slice(0, 3)
                             .map(([k, v]) => (
-                              <span key={k} className="text-[10px] text-muted-foreground">
+                              <span key={k} className="text-xs text-muted-foreground">
                                 {k}: {(v as number).toFixed(2)}
                               </span>
                             ))}

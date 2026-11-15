@@ -20,11 +20,17 @@ function loadJobs(): ExportJob[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 function saveJobs(jobs: ExportJob[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs.slice(0, 20))) } catch { /* quota */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs.slice(0, 20)))
+  } catch {
+    /* quota */
+  }
 }
 
 export function startExportJob(type: string): string {
@@ -41,9 +47,12 @@ export function startExportJob(type: string): string {
   return id
 }
 
-export function updateExportJob(id: string, updates: Partial<Pick<ExportJob, 'progress' | 'status' | 'message' | 'error'>>) {
+export function updateExportJob(
+  id: string,
+  updates: Partial<Pick<ExportJob, 'progress' | 'status' | 'message' | 'error'>>,
+) {
   const jobs = loadJobs()
-  const idx = jobs.findIndex(j => j.id === id)
+  const idx = jobs.findIndex((j) => j.id === id)
   if (idx >= 0) {
     jobs[idx] = { ...jobs[idx], ...updates }
     if (updates.status === 'completed' || updates.status === 'failed') {
@@ -79,18 +88,20 @@ export function ExportProgressCard() {
   useEffect(() => {
     refresh()
     intervalRef.current = setInterval(refresh, 2000)
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [refresh])
 
   const clearCompleted = useCallback(() => {
-    const active = jobs.filter(j => j.status === 'running' || j.status === 'pending')
+    const active = jobs.filter((j) => j.status === 'running' || j.status === 'pending')
     setJobs(active)
     saveJobs(active)
   }, [jobs])
 
   if (jobs.length === 0) return null
 
-  const running = jobs.filter(j => j.status === 'running')
+  const running = jobs.filter((j) => j.status === 'running')
   const displayJobs = expanded ? jobs : jobs.slice(0, 5)
 
   return (
@@ -100,27 +111,32 @@ export function ExportProgressCard() {
           <CardTitle className="text-base">Export Progress</CardTitle>
           <div className="flex items-center gap-1">
             {running.length > 0 && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium animate-pulse">
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium animate-pulse">
                 {running.length} active
               </span>
             )}
-            <Button size="sm" variant="ghost" className="h-5 text-[9px]" onClick={clearCompleted}>
+            <Button size="sm" variant="ghost" className="h-5 text-[11px]" onClick={clearCompleted}>
               Clear done
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-1.5">
-        {displayJobs.map(job => (
+        {displayJobs.map((job) => (
           <div key={job.id} className="rounded-md border border-border/40 px-2.5 py-2 text-[11px]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', STATUS_STYLE[job.status])}>
+                <span
+                  className={cn(
+                    'text-[11px] px-1.5 py-0.5 rounded font-medium',
+                    STATUS_STYLE[job.status],
+                  )}
+                >
                   {job.status}
                 </span>
                 <span className="font-medium">{job.type}</span>
               </div>
-              <span className="text-[9px] text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 {formatDuration((job.completedAt ?? Date.now()) - job.startedAt)}
               </span>
             </div>
@@ -134,20 +150,27 @@ export function ExportProgressCard() {
                   />
                 </div>
                 <div className="flex justify-between mt-0.5">
-                  <span className="text-[9px] text-muted-foreground">{job.progress}%</span>
-                  {job.message && <span className="text-[9px] text-muted-foreground">{job.message}</span>}
+                  <span className="text-[11px] text-muted-foreground">{job.progress}%</span>
+                  {job.message && (
+                    <span className="text-[11px] text-muted-foreground">{job.message}</span>
+                  )}
                 </div>
               </div>
             )}
 
             {job.status === 'failed' && job.error && (
-              <p className="mt-1 text-[9px] text-destructive">{job.error}</p>
+              <p className="mt-1 text-[11px] text-destructive">{job.error}</p>
             )}
           </div>
         ))}
 
         {jobs.length > 5 && (
-          <Button size="sm" variant="ghost" className="h-5 text-[9px] w-full" onClick={() => setExpanded(!expanded)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-5 text-[11px] w-full"
+            onClick={() => setExpanded(!expanded)}
+          >
             {expanded ? 'Show less' : `Show all ${jobs.length}`}
           </Button>
         )}

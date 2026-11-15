@@ -45,18 +45,18 @@ export function WorkspaceMembersCard({
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             placeholder="User ID"
-            className="flex-1 h-6 text-[10px]"
+            className="flex-1 h-6 text-xs"
           />
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+            className="h-6 text-xs rounded-md border border-border bg-background px-2"
           >
             <option value="viewer">Viewer</option>
             <option value="member">Member</option>
             <option value="admin">Admin</option>
           </select>
-          <Button size="sm" className="h-6 text-[10px]" onClick={handleAdd} disabled={!userId.trim()}>
+          <Button size="sm" className="h-6 text-xs" onClick={handleAdd} disabled={!userId.trim()}>
             Add
           </Button>
         </div>
@@ -64,11 +64,14 @@ export function WorkspaceMembersCard({
         {loading ? (
           <div className="h-16 animate-pulse bg-muted/50 rounded" />
         ) : members.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground py-2 text-center">No members</p>
+          <p className="text-xs text-muted-foreground py-2 text-center">No members</p>
         ) : (
           <div className="space-y-0.5">
             {members.map((m) => (
-              <div key={m.user_id} className="flex items-center justify-between px-2 py-1.5 rounded text-[10px] hover:bg-muted/50">
+              <div
+                key={m.user_id}
+                className="flex items-center justify-between px-2 py-1.5 rounded text-xs hover:bg-muted/50"
+              >
                 <div className="min-w-0 flex-1">
                   <span className="font-medium">{m.username}</span>
                   <span className="text-muted-foreground ml-1.5">{m.email}</span>

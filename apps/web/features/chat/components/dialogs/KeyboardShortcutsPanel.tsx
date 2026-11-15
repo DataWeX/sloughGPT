@@ -85,7 +85,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({
                     <span key={j}>
                       <kbd
                         className={cn(
-                          'px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border',
+                          'px-1.5 py-0.5 text-xs font-mono font-medium rounded border',
                           'bg-muted/50 text-muted-foreground border-border/60',
                         )}
                       >

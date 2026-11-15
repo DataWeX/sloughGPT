@@ -120,7 +120,7 @@ export const MessagePinning = memo(function MessagePinning({
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium">Pinned Messages</span>
-          <span className="text-[10px] text-muted-foreground">({pinned.length})</span>
+          <span className="text-xs text-muted-foreground">({pinned.length})</span>
         </div>
         {pinned.length > 0 && (
           <Button
@@ -152,16 +152,16 @@ export const MessagePinning = memo(function MessagePinning({
                     onClick={() => onJumpToMessage(pin.messageId)}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                         {pin.role === 'user' ? 'You' : 'AI'}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {new Date(pin.pinnedAt).toLocaleDateString()}
                       </span>
                     </div>
                     <p className="text-xs truncate">{pin.content.slice(0, 80)}</p>
                     {pin.note && (
-                      <p className="text-[10px] text-muted-foreground mt-1 italic">{pin.note}</p>
+                      <p className="text-xs text-muted-foreground mt-1 italic">{pin.note}</p>
                     )}
                   </button>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
@@ -206,7 +206,7 @@ export const MessagePinning = memo(function MessagePinning({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-[10px] h-5"
+                        className="text-xs h-5"
                         onClick={handleSaveNote}
                       >
                         Save
@@ -214,7 +214,7 @@ export const MessagePinning = memo(function MessagePinning({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-[10px] h-5"
+                        className="text-xs h-5"
                         onClick={handleCancelNote}
                       >
                         Cancel
@@ -228,7 +228,7 @@ export const MessagePinning = memo(function MessagePinning({
         )}
       </div>
 
-      <div className="px-3 py-2 border-t text-[10px] text-muted-foreground">
+      <div className="px-3 py-2 border-t text-xs text-muted-foreground">
         {messages.filter((m) => isPinned(m.id)).length} of {messages.length} messages pinned
       </div>
     </div>

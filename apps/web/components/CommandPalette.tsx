@@ -349,7 +349,7 @@ export function CommandPalette() {
               placeholder="Search pages, models, actions..."
               className="flex-1 bg-transparent py-3 text-sm outline-none focus:ring-2 focus:ring-ring/30 rounded placeholder:text-muted-foreground/50"
             />
-            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -373,7 +373,7 @@ export function CommandPalette() {
                 return (
                   <div key={action.id}>
                     {showHeader && (
-                      <p className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                      <p className="px-3 pt-2 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
                         {catLabel}
                       </p>
                     )}
@@ -402,10 +402,7 @@ export function CommandPalette() {
             )}
           </div>
           {dataPartial.length > 0 && (
-            <p
-              className="border-t border-border/30 px-4 py-1.5 text-[10px] text-warning"
-              role="status"
-            >
+            <p className="border-t border-border/30 px-4 py-1.5 text-xs text-warning" role="status">
               Partial results — some sources are unavailable: {dataPartial.join(', ')}
             </p>
           )}

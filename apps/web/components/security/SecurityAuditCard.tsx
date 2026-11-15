@@ -46,7 +46,7 @@ const SEVERITY_ICON: Record<Severity, string> = {
 
 function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
   const findings: Finding[] = []
-  const activeKeys = keys.filter(k => !k.revoked)
+  const activeKeys = keys.filter((k) => !k.revoked)
 
   if (activeKeys.length === 0) {
     findings.push({
@@ -56,12 +56,12 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
     })
   }
 
-  const wildcardKeys = activeKeys.filter(k => k.scopes.includes('*'))
+  const wildcardKeys = activeKeys.filter((k) => k.scopes.includes('*'))
   if (wildcardKeys.length > 0) {
     findings.push({
       severity: 'critical',
       title: `${wildcardKeys.length} key(s) have wildcard scope`,
-      detail: `Keys [${wildcardKeys.map(k => k.name).join(', ')}] have full access. Restrict scopes to least privilege.`,
+      detail: `Keys [${wildcardKeys.map((k) => k.name).join(', ')}] have full access. Restrict scopes to least privilege.`,
     })
   }
 
@@ -74,7 +74,7 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
   }
 
   const now = Date.now() / 1000
-  const oldKeys = activeKeys.filter(k => (now - k.created_at) > 90 * 24 * 60 * 60)
+  const oldKeys = activeKeys.filter((k) => now - k.created_at > 90 * 24 * 60 * 60)
   if (oldKeys.length > 0) {
     findings.push({
       severity: 'warning',
@@ -83,7 +83,7 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
     })
   }
 
-  const expiredKeys = activeKeys.filter(k => k.expires_at && k.expires_at < now)
+  const expiredKeys = activeKeys.filter((k) => k.expires_at && k.expires_at < now)
   if (expiredKeys.length > 0) {
     findings.push({
       severity: 'critical',
@@ -92,7 +92,10 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
     })
   }
 
-  const authFails = logs.filter(l => l.event_type.toLowerCase().includes('auth') && l.event_type.toLowerCase().includes('fail'))
+  const authFails = logs.filter(
+    (l) =>
+      l.event_type.toLowerCase().includes('auth') && l.event_type.toLowerCase().includes('fail'),
+  )
   if (authFails.length >= 5) {
     findings.push({
       severity: 'critical',
@@ -107,7 +110,7 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
     })
   }
 
-  const deletes = logs.filter(l => l.event_type.toLowerCase().includes('delete'))
+  const deletes = logs.filter((l) => l.event_type.toLowerCase().includes('delete'))
   if (deletes.length >= 10) {
     findings.push({
       severity: 'critical',
@@ -116,7 +119,7 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
     })
   }
 
-  const uniqueIps = new Set(logs.filter(l => l.ip).map(l => l.ip))
+  const uniqueIps = new Set(logs.filter((l) => l.ip).map((l) => l.ip))
   if (uniqueIps.size > 10) {
     findings.push({
       severity: 'warning',
@@ -125,7 +128,7 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
     })
   }
 
-  const uniqueUsers = new Set(logs.filter(l => l.user).map(l => l.user))
+  const uniqueUsers = new Set(logs.filter((l) => l.user).map((l) => l.user))
   if (uniqueUsers.size > 5) {
     findings.push({
       severity: 'warning',
@@ -135,7 +138,7 @@ function generateFindings(logs: AuditLog[], keys: ApiKey[]): Finding[] {
   }
 
   const now24h = Date.now() / 1000 - 24 * 60 * 60
-  const recentLogs = logs.filter(l => new Date(l.timestamp).getTime() / 1000 > now24h)
+  const recentLogs = logs.filter((l) => new Date(l.timestamp).getTime() / 1000 > now24h)
   if (recentLogs.length > 100) {
     findings.push({
       severity: 'info',
@@ -168,11 +171,12 @@ export function SecurityAuditCard({ logs, keys }: SecurityAuditCardProps) {
   const findings = useMemo(() => generateFindings(logs, keys), [logs, keys])
   const score = useMemo(() => calculateScore(findings), [findings])
 
-  const scoreColor = score >= 80 ? 'text-success' : score >= 50 ? 'text-warning' : 'text-destructive'
+  const scoreColor =
+    score >= 80 ? 'text-success' : score >= 50 ? 'text-warning' : 'text-destructive'
   const scoreLabel = score >= 80 ? 'Good' : score >= 50 ? 'Fair' : 'Poor'
 
-  const criticals = findings.filter(f => f.severity === 'critical').length
-  const warnings = findings.filter(f => f.severity === 'warning').length
+  const criticals = findings.filter((f) => f.severity === 'critical').length
+  const warnings = findings.filter((f) => f.severity === 'warning').length
 
   return (
     <Card data-testid="security-audit">
@@ -180,24 +184,33 @@ export function SecurityAuditCard({ logs, keys }: SecurityAuditCardProps) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Security Audit</CardTitle>
           <div className="flex items-center gap-2">
-            {criticals > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">{criticals} critical</span>}
-            {warnings > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">{warnings} warning{warnings !== 1 ? 's' : ''}</span>}
+            {criticals > 0 && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
+                {criticals} critical
+              </span>
+            )}
+            {warnings > 0 && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
+                {warnings} warning{warnings !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-          <div className={cn('text-2xl font-bold font-mono', scoreColor)}>
-            {score}
-          </div>
+          <div className={cn('text-2xl font-bold font-mono', scoreColor)}>{score}</div>
           <div>
             <p className={cn('text-sm font-medium', scoreColor)}>{scoreLabel}</p>
-            <p className="text-[9px] text-muted-foreground">Security score</p>
+            <p className="text-[11px] text-muted-foreground">Security score</p>
           </div>
           <div className="flex-1">
             <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
               <div
-                className={cn('h-full rounded-full transition-all duration-500', score >= 80 ? 'bg-success' : score >= 50 ? 'bg-warning' : 'bg-destructive')}
+                className={cn(
+                  'h-full rounded-full transition-all duration-500',
+                  score >= 80 ? 'bg-success' : score >= 50 ? 'bg-warning' : 'bg-destructive',
+                )}
                 style={{ width: `${score}%` }}
               />
             </div>
@@ -206,11 +219,17 @@ export function SecurityAuditCard({ logs, keys }: SecurityAuditCardProps) {
 
         <div className="space-y-1.5 max-h-64 overflow-y-auto">
           {findings.map((f, i) => (
-            <div key={i} className={cn('flex items-start gap-2 rounded-md border px-2 py-1.5 text-[10px]', SEVERITY_STYLE[f.severity])}>
+            <div
+              key={i}
+              className={cn(
+                'flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs',
+                SEVERITY_STYLE[f.severity],
+              )}
+            >
               <span className="font-bold text-xs shrink-0 mt-px">{SEVERITY_ICON[f.severity]}</span>
               <div className="min-w-0">
                 <p className="font-medium">{f.title}</p>
-                <p className="text-[9px] text-muted-foreground/70 mt-0.5">{f.detail}</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">{f.detail}</p>
               </div>
             </div>
           ))}

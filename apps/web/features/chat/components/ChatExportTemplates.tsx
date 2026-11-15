@@ -77,7 +77,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-6"
+              className="text-xs h-6"
               onClick={handleSaveCustom}
               disabled={!customName.trim()}
             >
@@ -87,7 +87,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-6"
+              className="text-xs h-6"
               onClick={() => setShowCustom(false)}
             >
               Cancel
@@ -115,7 +115,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
                   onClick={() => setSelectedId(template.id)}
                 >
                   <div className="text-xs font-medium">{template.name}</div>
-                  <div className="text-[10px] text-muted-foreground uppercase">
+                  <div className="text-xs text-muted-foreground uppercase">
                     {template.format} · {template.messageFilter}
                   </div>
                 </button>
@@ -141,7 +141,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
         <Button
           variant="ghost"
           size="sm"
-          className="text-[10px] h-6 flex-1"
+          className="text-xs h-6 flex-1"
           onClick={handleExport}
           disabled={!selectedTemplate || messages.length === 0}
         >
@@ -151,7 +151,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
         <Button
           variant="ghost"
           size="sm"
-          className="text-[10px] h-6 flex-1"
+          className="text-xs h-6 flex-1"
           onClick={handleCopy}
           disabled={!selectedTemplate || messages.length === 0}
         >

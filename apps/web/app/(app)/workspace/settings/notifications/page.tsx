@@ -146,12 +146,12 @@ export default function NotificationsPage() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter notifications..."
-              className="flex-1 h-6 text-[10px]"
+              className="flex-1 h-6 text-xs"
             />
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={fetchNotifications}
             >
               <IconRefresh className="h-3 w-3 mr-1" />
@@ -174,12 +174,12 @@ export default function NotificationsPage() {
             filtered.map((n, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
+                className="flex items-center justify-between px-3 py-2 rounded-md text-xs hover:bg-muted/50 border border-transparent hover:border-border/40"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                      className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
                         n.type === 'training'
                           ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
                           : n.type === 'member'
@@ -196,7 +196,7 @@ export default function NotificationsPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   {n.status && (
                     <span
-                      className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                      className={`px-1.5 py-0.5 rounded-full text-[11px] ${
                         n.status === 'completed'
                           ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success'
                           : n.status === 'failed'

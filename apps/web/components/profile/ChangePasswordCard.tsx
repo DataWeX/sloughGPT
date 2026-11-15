@@ -31,38 +31,38 @@ export function ChangePasswordCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-1">
-          <label className="text-[10px] text-muted-foreground">Current Password</label>
+          <label className="text-xs text-muted-foreground">Current Password</label>
           <Input
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             type="password"
             placeholder="Current password"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] text-muted-foreground">New Password</label>
+          <label className="text-xs text-muted-foreground">New Password</label>
           <Input
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             type="password"
             placeholder="New password (min 8 characters)"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] text-muted-foreground">Confirm New Password</label>
+          <label className="text-xs text-muted-foreground">Confirm New Password</label>
           <Input
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             type="password"
             placeholder="Confirm new password"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
         </div>
         <Button
           size="sm"
-          className="h-6 text-[10px]"
+          className="h-6 text-xs"
           onClick={handleChange}
           disabled={changingPassword || !currentPassword || !newPassword}
         >

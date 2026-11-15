@@ -120,7 +120,7 @@ export function OutputCard({
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 text-[10px]"
+        className="h-7 text-xs"
         onClick={togglePause}
         aria-label={paused ? 'Resume output' : 'Pause output'}
       >
@@ -131,7 +131,7 @@ export function OutputCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-5 text-[10px]"
+            className="h-5 text-xs"
             onClick={() => exportLines('text')}
             aria-label="Export as log file"
           >
@@ -140,7 +140,7 @@ export function OutputCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-5 text-[10px]"
+            className="h-5 text-xs"
             onClick={clear}
             aria-label="Clear output"
           >

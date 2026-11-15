@@ -24,21 +24,30 @@ export function SessionLoadCard({
       </CardHeader>
       <CardContent className="space-y-2">
         <div className="space-y-1">
-          <Label className="text-[10px]">Session ID</Label>
+          <Label className="text-xs">Session ID</Label>
           <Input
             data-testid="input"
             value={sessionId}
-            onChange={e => onSessionIdChange(e.target.value)}
+            onChange={(e) => onSessionIdChange(e.target.value)}
             placeholder="Enter session ID..."
-            className="h-6 text-[10px] font-mono"
-            onKeyDown={e => e.key === 'Enter' && onInspect()}
+            className="h-6 text-xs font-mono"
+            onKeyDown={(e) => e.key === 'Enter' && onInspect()}
           />
         </div>
         <div className="flex gap-1.5">
-          <Button onClick={onInspect} disabled={loading || !sessionId.trim()} className="flex-1 h-6 text-[10px]">
+          <Button
+            onClick={onInspect}
+            disabled={loading || !sessionId.trim()}
+            className="flex-1 h-6 text-xs"
+          >
             {loading ? 'Loading...' : 'Inspect'}
           </Button>
-          <Button onClick={onRegenerate} disabled={regenerating || !sessionId.trim()} variant="outline" className="flex-1 h-6 text-[10px]">
+          <Button
+            onClick={onRegenerate}
+            disabled={regenerating || !sessionId.trim()}
+            variant="outline"
+            className="flex-1 h-6 text-xs"
+          >
             {regenerating ? 'Regenerating...' : 'Regenerate Last Response'}
           </Button>
         </div>

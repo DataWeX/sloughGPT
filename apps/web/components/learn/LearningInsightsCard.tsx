@@ -47,13 +47,16 @@ export function LearningInsightsCard({ facts }: LearningInsightsCardProps) {
         <KpiGrid columns={4} className="mb-3">
           <StatCard label="Facts" value={facts.length} />
           <StatCard label="Avg Importance" value={avgImportance} />
-          <StatCard label="High Priority" value={<span className="text-success">{highImportance}</span>} />
+          <StatCard
+            label="High Priority"
+            value={<span className="text-success">{highImportance}</span>}
+          />
           <StatCard label="Avg Length" value={`${avgContentLen}ch`} />
         </KpiGrid>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] text-muted-foreground mb-1">By Topic</div>
+            <div className="text-xs text-muted-foreground mb-1">By Topic</div>
             <div className="space-y-1">
               {sortedTopics.slice(0, 5).map(([topic, count]) => (
                 <div key={topic} className="flex items-center justify-between text-[11px]">
@@ -62,12 +65,14 @@ export function LearningInsightsCard({ facts }: LearningInsightsCardProps) {
                 </div>
               ))}
               {sortedTopics.length > 5 && (
-                <div className="text-[9px] text-muted-foreground">+{sortedTopics.length - 5} more</div>
+                <div className="text-[11px] text-muted-foreground">
+                  +{sortedTopics.length - 5} more
+                </div>
               )}
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground mb-1">By Source</div>
+            <div className="text-xs text-muted-foreground mb-1">By Source</div>
             <div className="space-y-1">
               {sortedSources.slice(0, 5).map(([source, count]) => (
                 <div key={source} className="flex items-center justify-between text-[11px]">
@@ -76,7 +81,9 @@ export function LearningInsightsCard({ facts }: LearningInsightsCardProps) {
                 </div>
               ))}
               {sortedSources.length > 5 && (
-                <div className="text-[9px] text-muted-foreground">+{sortedSources.length - 5} more</div>
+                <div className="text-[11px] text-muted-foreground">
+                  +{sortedSources.length - 5} more
+                </div>
               )}
             </div>
           </div>

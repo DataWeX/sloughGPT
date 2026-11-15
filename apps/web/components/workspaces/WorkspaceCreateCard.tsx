@@ -30,17 +30,17 @@ export function WorkspaceCreateCard({
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder="Workspace name"
-            className="flex-1 h-6 text-[10px]"
+            className="flex-1 h-6 text-xs"
           />
           <Input
             value={description}
             onChange={(e) => onDescriptionChange(e.target.value)}
             placeholder="Description (optional)"
-            className="flex-1 h-6 text-[10px]"
+            className="flex-1 h-6 text-xs"
           />
           <Button
             size="sm"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={onCreate}
             disabled={creating || !name.trim()}
           >

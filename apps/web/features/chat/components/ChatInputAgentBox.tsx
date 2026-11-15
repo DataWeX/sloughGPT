@@ -163,18 +163,16 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
                   : 'bg-success',
             )}
           />
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             Context: {contextUsage.percentage.toFixed(0)}% used
           </span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             ({contextUsage.remaining.toLocaleString()} tokens left)
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-            {model}
-          </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">{model}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
             {tier}
           </span>
         </div>
@@ -198,10 +196,10 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
         <div className="flex items-center justify-between px-3 py-1.5 border-t bg-muted/20">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">Tokens:</span>
+              <span className="text-xs text-muted-foreground">Tokens:</span>
               <span
                 className={cn(
-                  'text-[10px] font-medium',
+                  'text-xs font-medium',
                   stats.tokens > 4000
                     ? 'text-destructive'
                     : stats.tokens > 2000
@@ -213,21 +211,21 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">Words:</span>
-              <span className="text-[10px] font-medium">{stats.words.toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">Words:</span>
+              <span className="text-xs font-medium">{stats.words.toLocaleString()}</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">Chars:</span>
-              <span className="text-[10px] font-medium">{stats.chars.toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">Chars:</span>
+              <span className="text-xs font-medium">{stats.chars.toLocaleString()}</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">Lines:</span>
-              <span className="text-[10px] font-medium">{stats.lines}</span>
+              <span className="text-xs text-muted-foreground">Lines:</span>
+              <span className="text-xs font-medium">{stats.lines}</span>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-muted-foreground">Est. cost:</span>
-            <span className="text-[10px] font-medium text-primary">
+            <span className="text-xs text-muted-foreground">Est. cost:</span>
+            <span className="text-xs font-medium text-primary">
               {formatCost(stats.estimatedCost)}
             </span>
           </div>
@@ -240,7 +238,7 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
           <Button
             variant="ghost"
             size="sm"
-            className="text-[10px] h-6"
+            className="text-xs h-6"
             onClick={() => setShowActions(!showActions)}
           >
             {showActions ? 'Hide' : '⚡ Quick'}
@@ -248,16 +246,16 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
           <Button
             variant="ghost"
             size="sm"
-            className="text-[10px] h-6"
+            className="text-xs h-6"
             onClick={() => setShowStats(!showStats)}
           >
             {showStats ? 'Hide Stats' : 'Stats'}
           </Button>
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
-          <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">⌘</kbd>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground/40">
+          <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[11px]">⌘</kbd>
           <span>+</span>
-          <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Enter</kbd>
+          <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[11px]">Enter</kbd>
           <span>send</span>
         </div>
       </div>
@@ -270,7 +268,7 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
               type="button"
               onClick={() => setActionCategory(null)}
               className={cn(
-                'text-[10px] px-2 py-0.5 rounded transition-colors',
+                'text-xs px-2 py-0.5 rounded transition-colors',
                 actionCategory === null
                   ? 'bg-primary/20 text-primary'
                   : 'text-muted-foreground hover:bg-muted/50',
@@ -285,7 +283,7 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
                 type="button"
                 onClick={() => setActionCategory(cat)}
                 className={cn(
-                  'text-[10px] px-2 py-0.5 rounded capitalize transition-colors',
+                  'text-xs px-2 py-0.5 rounded capitalize transition-colors',
                   actionCategory === cat
                     ? 'bg-primary/20 text-primary'
                     : 'text-muted-foreground hover:bg-muted/50',
@@ -306,7 +304,7 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
                 title={action.label}
               >
                 <span className="text-sm text-muted-foreground">{action.icon}</span>
-                <span className="text-[9px] text-muted-foreground truncate w-full text-center">
+                <span className="text-[11px] text-muted-foreground truncate w-full text-center">
                   {action.label}
                 </span>
               </button>

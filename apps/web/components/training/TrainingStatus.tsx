@@ -28,7 +28,7 @@ export function TrainingErrorBanner({
       {onStop && (
         <button
           type="button"
-          className="underline text-destructive opacity-80 hover:opacity-100 text-[10px] shrink-0"
+          className="underline text-destructive opacity-80 hover:opacity-100 text-xs shrink-0"
           onClick={onStop}
           aria-label="Stop"
         >

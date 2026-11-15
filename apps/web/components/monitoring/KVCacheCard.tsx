@@ -15,8 +15,10 @@ export const KVCacheCard = memo(function KVCacheCard({ kvSessions }: KVCacheCard
   return (
     <Card className="p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">KV cache sessions</span>
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          KV cache sessions
+        </span>
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-xs font-medium">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
           cross-turn reuse
         </span>
@@ -25,14 +27,29 @@ export const KVCacheCard = memo(function KVCacheCard({ kvSessions }: KVCacheCard
         <KpiGrid columns={4}>
           <StatCard
             label="Active"
-            value={kvSessions.active_sessions ?? 0} numeric
-            icon={<span className={cn('inline-block w-2 h-2 rounded-full', (kvSessions.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
+            value={kvSessions.active_sessions ?? 0}
+            numeric
+            icon={
+              <span
+                className={cn(
+                  'inline-block w-2 h-2 rounded-full',
+                  (kvSessions.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50',
+                )}
+              />
+            }
           />
           <StatCard label="Cached tokens" value={kvSessions.cached_tokens ?? 0} numeric />
-          <StatCard label="TTL" value={(kvSessions.ttl_seconds ?? 0) / 60 + "m"} numeric />
+          <StatCard label="TTL" value={(kvSessions.ttl_seconds ?? 0) / 60 + 'm'} numeric />
           <StatCard
             label="Oldest"
-            value={kvSessions.oldest_session_age != null ? `${kvSessions.oldest_session_age.toFixed(0)}s` : <Skeleton className="h-5 w-10" />} numeric
+            value={
+              kvSessions.oldest_session_age != null ? (
+                `${kvSessions.oldest_session_age.toFixed(0)}s`
+              ) : (
+                <Skeleton className="h-5 w-10" />
+              )
+            }
+            numeric
           />
         </KpiGrid>
         {kvSessions.max_sessions != null && (

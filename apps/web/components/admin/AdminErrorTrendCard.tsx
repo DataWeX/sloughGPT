@@ -33,25 +33,25 @@ export function AdminErrorTrendCard({
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-md bg-muted/30 px-3 py-2">
-            <p className="text-[9px] text-muted-foreground">Total Errors</p>
+            <p className="text-[11px] text-muted-foreground">Total Errors</p>
             <p className="text-base font-bold font-mono" data-testid="total-errors">
               {total}
             </p>
           </div>
           <div className="rounded-md bg-muted/30 px-3 py-2">
-            <p className="text-[9px] text-muted-foreground">Grouped</p>
+            <p className="text-[11px] text-muted-foreground">Grouped</p>
             <p className="text-base font-bold font-mono" data-testid="grouped-count">
               {groupedCount}
             </p>
           </div>
           <div className="rounded-md bg-muted/30 px-3 py-2">
-            <p className="text-[9px] text-muted-foreground">Last Hour</p>
+            <p className="text-[11px] text-muted-foreground">Last Hour</p>
             <p className="text-base font-bold font-mono" data-testid="last-hour-count">
               {lastHourCount}
             </p>
           </div>
           <div className="rounded-md bg-muted/30 px-3 py-2">
-            <p className="text-[9px] text-muted-foreground">Top Error</p>
+            <p className="text-[11px] text-muted-foreground">Top Error</p>
             <p className="text-sm font-medium truncate" data-testid="top-error">
               {topError ?? '—'}
             </p>
@@ -70,7 +70,7 @@ export function AdminErrorTrendCard({
                   style={{ height: `${Math.max(2, (t.count / maxCount) * 100)}%` }}
                   title={`${t.hour}: ${t.count}`}
                 />
-                <span className="text-[7px] text-muted-foreground leading-none">{t.hour}</span>
+                <span className="text-[11px] text-muted-foreground leading-none">{t.hour}</span>
               </div>
             ))}
           </div>

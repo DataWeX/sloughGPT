@@ -263,14 +263,14 @@ export const ChatInput = memo(function ChatInput({
             <div className="flex items-center gap-1.5 pb-1.5">
               <span
                 className={cn(
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors',
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border transition-colors',
                   MODE_ACCENT,
                 )}
               >
                 {modeConfig.icon}
                 {modeConfig.label}
               </span>
-              <span className="text-[10px] text-muted-foreground/30">·</span>
+              <span className="text-xs text-muted-foreground/30">·</span>
             </div>
           )}
           <ChatInputRow
@@ -298,23 +298,23 @@ export const ChatInput = memo(function ChatInput({
 
         {!loading && !value && hasModel && (
           <div
-            className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/40 pt-1"
+            className="flex items-center justify-center gap-3 text-xs text-muted-foreground/40 pt-1"
             aria-hidden="true"
           >
             <span className="flex items-center gap-1">
-              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Enter</kbd>
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[11px]">Enter</kbd>
               <span>send</span>
             </span>
             <span className="text-muted-foreground/20">·</span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[11px]">
                 Shift+Enter
               </kbd>
               <span>newline</span>
             </span>
             <span className="text-muted-foreground/20">·</span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">/</kbd>
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[11px]">/</kbd>
               <span>commands</span>
             </span>
             {consciousnessStatus && consciousnessStatus.enabled && (
@@ -336,7 +336,7 @@ export const ChatInput = memo(function ChatInput({
                   value={activePersona ?? ''}
                   onChange={(e) => handlePersonaChange(e.target.value)}
                   title={t('chat.switchPersona')}
-                  className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary/70 outline-none cursor-pointer hover:bg-primary/20 transition-colors"
+                  className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-xs text-primary/70 outline-none cursor-pointer hover:bg-primary/20 transition-colors"
                 >
                   <option value="">{t('chat.defaultPersona')}</option>
                   {personas.map((p) => (
