@@ -11,8 +11,8 @@
  *
  * SLO_Q is the ONLY target-specific token (empty on CPU, __device__ on
  * GPU) — same pattern as trace_core.c/scene_build.c, proven on this
- * toolchain (gcc 13 + NVRTC). No #include <math.h>: gcc and NVRTC both
- * builtin exp/tanh/sqrt with correct double signatures.
+ * toolchain (gcc 13 + NVRTC). math.h goes to gcc only (guarded below):
+ * NVRTC has no libc headers — it keeps its builtin exp/tanh/sqrt.
  *
  * Why these ops: scripts/benchmark_tensor_kernels.py measured the
  * numpy multi-pass + temporaries pattern (softmax/layernorm/rmsnorm/
@@ -37,6 +37,11 @@
  * file doesn't take (0-d, strided views beyond the guard, f32, 3-D
  * softmax) goes down the numpy path untouched.
  */
+/* gcc declares the math builtins (runner gcc on ubuntu-26.04+ errors on
+ * implicit declarations); NVRTC predefines __CUDACC__ and keeps its own. */
+#ifndef __CUDACC__
+#include <math.h>
+#endif
 
 #ifdef __CUDACC__
 #define SLO_Q __device__

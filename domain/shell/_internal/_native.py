@@ -177,7 +177,9 @@ class NativeTrace:
         native engine for this device — the caller uses the numpy oracle.
         """
         eng = _load_engines()
-        if eng is None:
+        if not eng:
+            # None = off/first failure, False = cached failure — both mean
+            # "no native engine"; the caller uses the numpy oracle.
             return None
 
         use_gpu = xp is not np

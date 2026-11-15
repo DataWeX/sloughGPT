@@ -3,7 +3,6 @@
   "measuredOn": "2026-10-23",
   "rawEgressCeiling": 12,
   "knownRawEgress": [
-    "app/(app)/calendar/page.tsx",
     "app/(app)/consciousness/api-explorer/page.tsx",
     "app/(app)/consciousness/docs/docs-endpoint-list.tsx",
     "features/chat/components/panels/useVisionStudio.ts",
@@ -16,7 +15,6 @@
     "lib/soulnet-webgpu/worker.ts"
   ],
   "allowListReasons": {
-    "app/(app)/calendar/page.tsx": "Calls the web origin's own Next route (/api/calendar/*) — app to app, a different boundary from app to backend (API_SCOPES covers exactly planner|calendar). _resolveUrl already keeps it same-origin.",
     "app/(app)/consciousness/api-explorer/page.tsx": "The page exists to send arbitrary requests chosen by the operator; raw fetch is the feature (same clause as DevApiPlaygroundCard).",
     "app/(app)/consciousness/docs/docs-endpoint-list.tsx": "No live egress: the only fetch( sits inside a template literal — a copy-pasteable snippet rendered for readers. The scanner strips comments but not template literals, so the row must stay for set-equality to remain honest. (Row relocated 2026-11-02 from docs/page.tsx by the page split; same snippet, ceiling unchanged at 12.)",
     "features/chat/components/panels/useVisionStudio.ts": "Local preview URLs (blob:/object URLs) for vision inference — not server communication.",

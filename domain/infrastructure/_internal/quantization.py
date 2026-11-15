@@ -39,6 +39,21 @@ from typing import Any
 
 import numpy as np
 
+from domain.infrastructure._internal.quant_core.numeric import (
+    dequant_zp,
+    encode_round_div,
+    encode_round_div_zp,
+    pack_int4_rows,
+    symmetric_scale,
+    symmetric_scale_rows,
+)
+from domain.infrastructure._internal.quant_core.numeric import (
+    pack_int4 as _pack_int4,
+)
+from domain.infrastructure._internal.quant_core.numeric import (
+    unpack_int4 as _unpack_int4,
+)
+
 
 def walk_slo_linears(model) -> dict:
     """Find all SloLinear layers in a SloTransformer model.
@@ -561,20 +576,15 @@ class Quantine:
         # drop 0.9999 -> 0.67 on Qwen FFN down-projections).
         qmax = (2 ** (self._bits - 1)) - 1  # 127 for int8, 7 for int4
         qmin = -qmax - 1  # -128 for int8, -8 for int4
-        max_abs = np.maximum(np.max(np.abs(arr), axis=1, keepdims=True), 1e-10)
-        scale = (max_abs / qmax).astype(np.float32)  # (N, 1)
+        scale = symmetric_scale_rows(arr, qmax)  # (N, 1)
 
-        quantized = np.clip(np.round(arr / scale), qmin, qmax).astype(np.int8)
+        quantized = encode_round_div(arr, scale, qmin, qmax).astype(np.int8)
         if self._bits == 4:
-            # Pack per row: two signed int4 values per byte. This preserves the
-            # low-nibble-even / high-nibble-odd layout that int4_matmul and the
-            # C kernel expect, so per-channel int4 stays fused-path compatible.
-            if arr.shape[1] % 2 != 0:
-                quantized = np.pad(quantized, ((0, 0), (0, 1)))
-            packed = (quantized[:, 1::2].astype(np.uint8) << 4) | (
-                quantized[:, ::2].astype(np.uint8) & 0x0F
-            )
-            quantized = packed.astype(np.int8)
+            # Pack per row: two signed int4 values per byte (pack_int4_rows
+            # preserves the low-nibble-even / high-nibble-odd layout that
+            # int4_matmul and the C kernel expect, so per-channel int4 stays
+            # fused-path compatible).
+            quantized = pack_int4_rows(quantized)
             dequantized = _dequantize(
                 quantized,
                 scale,
@@ -713,9 +723,8 @@ class Quantine:
 
     def _compute_symmetric(self, flat: np.ndarray) -> tuple[float, int]:
         """Symmetric quantization: scale = max_abs / (2^(bits-1) - 1), zero_point = 0."""
-        max_abs = max(np.max(np.abs(flat)), 1e-10)
         qmax = (2 ** (self._bits - 1)) - 1  # 127 for int8, 7 for int4
-        scale = max_abs / qmax
+        scale = symmetric_scale(np.max(np.abs(flat)), qmax)
         return float(scale), 0
 
     def _compute_asymmetric(self, flat: np.ndarray) -> tuple[float, int]:
@@ -764,21 +773,19 @@ class Quantine:
             if self._bits == 8:
                 if isinstance(scale, np.ndarray):
                     s = scale.reshape(-1, 1)
-                    return np.clip(np.round(data / s), -128, 127).astype(np.int8)
-                return np.clip(np.round(data / scale), -128, 127).astype(np.int8)
+                    return encode_round_div(data, s, -128, 127).astype(np.int8)
+                return encode_round_div(data, scale, -128, 127).astype(np.int8)
             else:
                 # int4 symmetric: range [-8, 7]
-                q = np.clip(np.round(data / scale), -8, 7).astype(np.int8)
+                q = encode_round_div(data, scale, -8, 7).astype(np.int8)
                 return _pack_int4(q)
         else:
             # Asymmetric
             if self._bits == 8:
-                quantized = np.clip(np.round(data / scale) + zero_point, -128, 127).astype(np.int8)
-                return quantized
-            else:
-                # int4 asymmetric: range [0, 15]
-                q = np.clip(np.round(data / scale) + zero_point, 0, 15).astype(np.int8)
-                return _pack_int4(q)
+                return encode_round_div_zp(data, scale, zero_point, -128, 127).astype(np.int8)
+            # int4 asymmetric: range [0, 15]
+            q = encode_round_div_zp(data, scale, zero_point, 0, 15).astype(np.int8)
+            return _pack_int4(q)
 
     def save_metadata(self, path: str):
         """Save quantization metadata to JSON file."""
@@ -984,7 +991,7 @@ class Quantine:
         flat = w.flatten()
         max_abs = max(np.max(np.abs(flat)), 1e-10)
         scale_i8 = max_abs / 127.0
-        w_i8 = np.clip(np.round(w / scale_i8), -128, 127).astype(np.int8)
+        w_i8 = encode_round_div(w, scale_i8, -128, 127).astype(np.int8)
         w_i8_fp32 = w_i8.astype(np.float32) * scale_i8
         t_i8 = _bench(w_i8_fp32)
         cos8 = float(_cosine_similarity(flat, w_i8_fp32.flatten()))
@@ -996,10 +1003,10 @@ class Quantine:
         }
 
         # int4: quantize → dequantize → matmul
-        flat_scaled = flat / (max(np.max(np.abs(flat)), 1e-10) / 7.0)
-        q_i4 = np.clip(np.round(flat_scaled), -8, 7).astype(np.int8)
+        scale_i4 = max_abs / 7.0
+        q_i4 = encode_round_div(flat, scale_i4, -8, 7).astype(np.int8)
         packed = _pack_int4(q_i4)
-        w_i4_fp32 = _dequantize(packed, max_abs / 7.0, 0, 4, w.shape, signed=True)
+        w_i4_fp32 = _dequantize(packed, scale_i4, 0, 4, w.shape, signed=True)
         t_i4 = _bench(w_i4_fp32)
         cos4 = float(_cosine_similarity(flat, w_i4_fp32.flatten()))
         results["int4"] = {
@@ -1038,51 +1045,9 @@ class Quantine:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# int4 packing / unpacking
+# int4 packing / unpacking — implemented in quant_core.numeric, re-exported
+# above as _pack_int4 / _unpack_int4 (tests + slonet/wrapper import them here)
 # ══════════════════════════════════════════════════════════════════════════════
-
-
-def _pack_int4(arr: np.ndarray) -> np.ndarray:
-    """Pack two int4 values into each int8 byte.
-
-    Args:
-        arr: 1D int8 array where each element is in range [-8, 7] or [0, 15]
-
-    Returns:
-        Packed int8 array with half the length.
-        Each byte: low_nibble = arr[2*i] & 0x0F, high_nibble = arr[2*i+1] & 0x0F
-    """
-    assert arr.ndim == 1, f"_pack_int4 expects 1D, got {arr.ndim}D"
-    # Pad to even length
-    if len(arr) % 2 != 0:
-        arr = np.append(arr, np.int8(0))
-    packed = (arr[1::2].astype(np.uint8) << 4) | (arr[::2].astype(np.uint8) & 0x0F)
-    return packed.astype(np.int8)
-
-
-def _unpack_int4(packed: np.ndarray, original_length: int, signed: bool = True) -> np.ndarray:
-    """Unpack int4 values from packed int8 bytes.
-
-    Args:
-        packed: int8 array where each byte contains two int4 values
-        original_length: number of elements before packing
-        signed: if True, interpret as signed int4 (range [-8, 7], symmetric)
-                if False, interpret as unsigned int4 (range [0, 15], asymmetric)
-
-    Returns:
-        int8 array of original_length
-    """
-    assert packed.ndim == 1, f"_unpack_int4 expects 1D, got {packed.ndim}D"
-    packed_u8 = packed.astype(np.uint8)
-    low = (packed_u8 & 0x0F).astype(np.int8)
-    high = ((packed_u8 >> 4) & 0x0F).astype(np.int8)
-    result = np.empty(len(packed) * 2, dtype=np.int8)
-    result[0::2] = low
-    result[1::2] = high
-    if signed:
-        # Sign extension for symmetric int4 (values 8-15 → negative)
-        result[result > 7] = result[result > 7] - 16
-    return result[:original_length]
 
 
 def _dequantize(
@@ -1125,18 +1090,12 @@ def _dequantize(
         else:
             grid = quantized if quantized.ndim >= 2 else quantized.reshape(original_shape)
             grid = grid.astype(np.float32)
-        if zero_point != 0:
-            return (grid - zero_point) * s
-        return grid * s
+        return dequant_zp(grid, s, zero_point)
 
-    if zero_point == 0:
-        # Symmetric
-        result = flat.astype(np.float32) * scale
-    else:
-        # Asymmetric: (q - zero_point) * scale
-        result = (flat.astype(np.float32) - zero_point) * scale
-
-    return result.reshape(original_shape)
+    # Symmetric (zero_point == 0) and asymmetric share one decode — subtracting
+    # an exact 0 never changes float bits, so this is bit-identical to the old
+    # `flat.astype(np.float32) * scale` fast path.
+    return dequant_zp(flat, scale, zero_point).reshape(original_shape)
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -1221,9 +1180,9 @@ def quantize_activation(
         int8 array with same shape
     """
     if zero_point == 0:
-        return np.clip(np.round(x / scale), -128, 127).astype(np.int8)
+        return encode_round_div(x, scale, -128, 127).astype(np.int8)
     else:
-        return np.clip(np.round(x / scale) + zero_point, -128, 127).astype(np.int8)
+        return encode_round_div_zp(x, scale, zero_point, -128, 127).astype(np.int8)
 
 
 # ── KV-cache quantize/dequantize fast path ─────────────────────────────────
@@ -1320,7 +1279,7 @@ def quantize_kv_tensor(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     max_abs = np.max(np.abs(x), axis=-1, keepdims=True)
     safe_max = np.where(max_abs > 0.0, max_abs, np.float32(1.0))
     scale = (safe_max / np.float32(127.0)).astype(np.float32)
-    x_int8 = np.clip(np.round(x / scale), -128, 127).astype(np.int8)
+    x_int8 = encode_round_div(x, scale, -128, 127).astype(np.int8)
     return x_int8, scale
 
 
@@ -1347,7 +1306,7 @@ def dequantize_kv_tensor(x_int8: np.ndarray, scale: np.ndarray) -> np.ndarray:
         _, dq = _get_nb_kv_kernels()
         if dq is not None:
             return dq(x_int8, scale)
-    return x_int8.astype(np.float32) * scale
+    return dequant_zp(x_int8, scale, 0)
 
 
 def _ensure_2d_packed(b_packed: np.ndarray, orig_k: int) -> np.ndarray:
