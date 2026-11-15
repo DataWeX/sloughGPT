@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
+from domain.infrastructure._internal.quant_core.numeric import encode_round_div
 from domain.infrastructure._internal.slnc.spec import (
     FLAG_QUANTIZED_INT8,
     MAGIC,
@@ -338,7 +339,7 @@ class SLNCCompiler:
                 arr = tensor.astype(np.float32, copy=False)
                 max_abs = float(np.max(np.abs(arr))) if arr.size else 0.0
                 scale = max_abs / 127.0 if max_abs > 0 else 1.0
-                q = np.clip(np.round(arr / scale), -127, 127).astype(np.int8)
+                q = encode_round_div(arr, scale, -127, 127).astype(np.int8)
                 tensor_bytes = q.tobytes()
                 stor_dtype = np.dtype(np.int8)
                 crc = _crc32(tensor_bytes)
