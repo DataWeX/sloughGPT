@@ -52,10 +52,9 @@ describe('Sidebar', () => {
     expect(screen.getByText('nav.chat')).toBeDefined()
     expect(screen.getByText('nav.training')).toBeDefined()
     expect(screen.getByText('nav.datasets')).toBeDefined()
-    expect(screen.getByText('nav.personality')).toBeDefined()
+    expect(screen.getByText('nav.knowledge')).toBeDefined()
     expect(screen.getByText('nav.souls')).toBeDefined()
     expect(screen.getByText('nav.agents')).toBeDefined()
-    expect(screen.getByText('nav.knowledge')).toBeDefined()
     expect(screen.getByText('nav.settings')).toBeDefined()
   })
 
@@ -93,7 +92,6 @@ describe('Sidebar', () => {
   it('hides nav labels and section labels when collapsed', () => {
     render(<Sidebar collapsed />)
     expect(screen.queryByText('nav.chat')).toBeNull()
-    expect(screen.queryByText('nav.personality')).toBeNull()
     expect(screen.queryByText('nav.section.core')).toBeNull()
   })
 

@@ -23,11 +23,6 @@ import {
 } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
 import { formatLocaleDate } from '@/lib/time-format'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export default function RegistryContent() {
   const [models, setModels] = useState<RegisteredModel[]>([])

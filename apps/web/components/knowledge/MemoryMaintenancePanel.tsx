@@ -10,11 +10,6 @@ import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { parseMemoryImport } from '@/lib/memory-card-utils'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface MemoryMaintenancePanelProps {
   itemCount: number

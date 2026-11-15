@@ -77,7 +77,7 @@ export default function ObjectDetectionSection({
                 <div
                   key={`${obj.label}-${i}`}
                   data-testid="detection-box"
-                  className="absolute border-2 border-violet-400/90 bg-violet-400/10"
+                  className="absolute border-2 border-chart-1 bg-chart-1/10"
                   style={{
                     left: `${x1 * 100}%`,
                     top: `${y1 * 100}%`,
@@ -85,7 +85,7 @@ export default function ObjectDetectionSection({
                     height: `${(y2 - y1) * 100}%`,
                   }}
                 >
-                  <span className="absolute -top-4 left-0 text-[9px] leading-none px-1 rounded bg-violet-500 text-white whitespace-nowrap">
+                  <span className="absolute -top-4 left-0 text-[9px] leading-none px-1 rounded bg-chart-1 text-white whitespace-nowrap">
                     {obj.label} {(obj.confidence * 100).toFixed(0)}%
                   </span>
                 </div>

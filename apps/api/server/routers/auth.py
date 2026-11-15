@@ -195,7 +195,7 @@ class AuthRouter:
         if api_key in env_keys:
             return True
         try:
-            from routers.api_keys import ApiKeyManager
+            from routers.settings import ApiKeyManager
 
             mgr = ApiKeyManager()
             return mgr.validate(api_key)

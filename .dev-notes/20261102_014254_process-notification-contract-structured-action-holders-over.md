@@ -1,0 +1,13 @@
+---
+id: 20261102_014254_process-notification-contract-structured-action-holders-over
+status: wip
+board: 20261102_014254_process-notification-contract-structured-action-holders-over
+title: "Process-notification contract — structured action-holders over the training event stream (projector store + NotificationDock + auto-resume producer)"
+tags: ["area:api"]
+sprint: ""
+gh: null
+---
+
+# Process-notification contract — structured action-holders over the training event stream (projector store + NotificationDock + auto-resume producer)
+
+Third notification tier: multi-slot, process-backed, action-first — DISTINCT from the single-slot GlobalBanner (journey blockers, one-banner rule untouched) and toast-store (transient confirmations). Expert-reviewed 2026-11-02, user-approved. CONTRACT: ProcessEvent {event_id, kind:'training', process_id, event: auto_train_started|interrupted|recovered|..., state, actions:[{id,label,intent}], process_link} — action list = the process's REAL command surface resolved from current state, never decorative; dedupe by event_id (fixes toast's fragile type:message dedupe). FRONTEND: apps/web/lib/process-notifications.ts projector store + NotificationDock mounted in AppLayout (multi-slot, never via GlobalBanner); actions dispatch through controllers/http-client only. BACKEND AUTHORITY: dispatch re-validates the requested action against the process's CURRENT state, fail-closed (approval-seam discipline) — stale UI action degrades to 'no longer available', never a wrong action against a live job. PRODUCER #1 = boot auto-resume per ruling on 20261102_001425: flag-gated (config auto_resume), max 1 concurrent resume, skip when no loadable checkpoint; emits auto_train_started (actions Cancel, View logs) / interrupted (actions Recover now, Dismiss). MECHANISM NOTE: boot-time events happen while no client is connected — initial state derives from the durable JobStore via existing GET /recovery/recoverable (REST snapshot on load), live transitions ride the existing SSE streams (live_stream.py / sse_stream.py); SSE alone cannot deliver boot events. V1 scope: training flow only; contract shaped so site-doctor / model-load / memory-pressure adopt later. DEFERRED (own card when capability exists): 'schedule for later' — no delayed-start scheduler exists; per user rule actions must exist in the system, no dead buttons. TDD: contract shape, projector, dispatch-revalidation (server refuses stale action), journey test (boot with interrupted job -> notification -> Recover -> job resumes). Gates: tsc, eslint warning-delta, vitest, live walkthrough. benchmark n/a.

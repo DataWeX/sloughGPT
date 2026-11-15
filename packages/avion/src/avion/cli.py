@@ -8,7 +8,8 @@ Usage::
 
     avion open http://localhost:3000/chat
     avion snapshot
-    avion click "#send"            # --by css|text|testid|label|role|xpath
+    avion click "#send"            # --by css|text|testid|label|role|xpath [--nth N]
+                                   # multi-match: identify the set, click every rendered match
     avion fill "input[name=q]" "hello"
     avion wait "Start Training" --timeout 15
     avion shot page.png
@@ -219,22 +220,135 @@ def _snapshot_lines(tree: dict[str, Any], indent: str = "  ") -> list[str]:
         lines.extend(_snapshot_lines(child, indent + "  "))
     return lines
 
+async def _fail_missing(b, value: str, by: str) -> int:
+    """Not-found path: the failure line, then the near-miss report.
 
-async def _cmd_click(b, value: str, by: str) -> int:
-    element = await b.find_element(_locator(value, by))
-    if element is None:
-        return _fail(f"element not found ({by}): {value}")
-    await b.click(element)
-    print(f"clicked {by}: {value}")
-    return 0
+    Best-effort by construction: a backend without ``near_miss`` (or a
+    page that errors while probing) degrades to the plain line — the
+    report must never turn a clean miss into a crash.
+    """
+    code = _fail(f"element not found ({by}): {value}")
+    near = getattr(b, "near_miss", None)
+    if near is None:
+        return code
+    try:
+        lines = await near(_locator(value, by))
+    except Exception:
+        return code
+    if lines:
+        print("near-miss:", file=sys.stderr)
+        for line in lines:
+            print(f"  {line}", file=sys.stderr)
+    return code
+
+
+async def _resolve_matches(b, loc) -> list:
+    """Every match for ``loc`` — the identify-first input of ``click``.
+
+    Degrades to the single-match path for backends that only implement
+    ``find_element`` (pre-multi fakes), so a 1-element result is exactly
+    what the old code saw. ``find_elements`` is authoritative when the
+    backend has it — every real backend defines ``find_element`` as its
+    first match, so calling both would only double the probes.
+    """
+    find_all = getattr(b, "find_elements", None)
+    if find_all is not None:
+        found = await find_all(loc)
+        if isinstance(found, list):
+            return found
+    el = await b.find_element(loc)
+    return [el] if el is not None else []
+
+
+def _rendered(el) -> bool:
+    """Whether a resolved match is visible enough to be worth clicking.
+
+    Only an explicit ``False`` skips: a backend that never populated the
+    flag (fakes, degraded descriptors) gets the benefit of the doubt —
+    absence of evidence is not evidence of hiding.
+    """
+    return getattr(el, "is_visible", True) is not False
+
+
+async def _cmd_click(b, value: str, by: str, nth: int | None = None) -> tuple[int, list]:
+    """Click the resolved match set — identify first, then act.
+
+    Every match is resolved and reported BEFORE the first click (the
+    identify block, printed only when there is more than one); each
+    RENDERED match is then clicked, hidden ones skipped with a stderr
+    report; ``nth`` picks exactly one (1-based, matching the printed
+    ordinals, regardless of visibility — an explicit pick is the user's
+    call).
+
+    The multi loop runs BACKWARD over the original indices, and each hit
+    is re-resolved at click time (CDP re-evaluates ``(all)[i]`` against
+    the live DOM), so a hit that removes elements can never shift a
+    target not yet clicked — worst case a stale index degrades to a
+    no-op, never to a different element. Log lines are stamped with the
+    ORIGINAL set ordinals (what was identified), not re-numbered ones.
+    When nothing is rendered, fall back to the first match (what the
+    pre-multi click did) and say so on stderr.
+
+    Returns ``(exit code, elements actually clicked)`` — the hit list
+    feeds per-hit recording in ``_dispatch``; empty on failure. A unique
+    match keeps the pre-multi output byte for byte.
+    """
+    loc = _locator(value, by)
+    elements = await _resolve_matches(b, loc)
+    if not elements:
+        return await _fail_missing(b, value, by), []
+    total = len(elements)
+
+    if total > 1:
+        # Identify the whole set BEFORE touching the page.
+        print(f"{total} matches for {by}: {value}:")
+        for el in elements:
+            print(f"  {el.provenance()}")
+
+    if nth is not None:
+        if not 1 <= nth <= total:
+            return _fail(f"--nth {nth} out of range: {value!r} matched {total}"), []
+        picked = [elements[nth - 1]]
+        await b.click(picked[0])
+        print(f"clicked {by}: {value} → {picked[0].provenance()}")
+        return 0, picked
+
+    if total == 1:
+        # Unique match: pre-multi behaviour, byte for byte.
+        await b.click(elements[0])
+        print(f"clicked {by}: {value} → {elements[0].provenance()}")
+        return 0, elements
+
+    rendered = [i for i, el in enumerate(elements) if _rendered(el)]
+    if not rendered:
+        print(
+            f"note: all {total} matches are hidden — clicking the first match anyway",
+            file=sys.stderr,
+        )
+        await b.click(elements[0])
+        print(f"clicked {by}: {value} → {elements[0].provenance()}")
+        return 0, [elements[0]]
+
+    rendered_set = set(rendered)
+    for i, el in enumerate(elements):
+        if i not in rendered_set:
+            print(f"skipping hidden match {i + 1}/{total}: {el.provenance()}", file=sys.stderr)
+
+    hits: list = []
+    for i in sorted(rendered, reverse=True):  # backward: mutation safety
+        el = elements[i]
+        await b.click(el)
+        hits.append(el)
+        print(f"clicked {by}: {value} → {el.provenance()}")
+    return 0, hits
 
 
 async def _cmd_fill(b, value: str, text: str, by: str) -> int:
     element = await b.find_element(_locator(value, by))
     if element is None:
-        return _fail(f"element not found ({by}): {value}")
+        return await _fail_missing(b, value, by)
     await b.fill(element, text)
-    print(f"filled {by}: {value}")
+    print(f"filled {by}: {value} → {element.provenance()}")
     return 0
 
 
@@ -362,6 +476,28 @@ async def _event_rect(session, backend, locator) -> dict[str, Any] | None:
         return None  # rect is overlay sugar — never fail a verb over it
 
 
+def _hit_rect(session, el) -> dict[str, Any] | None:
+    """Identify-time rect of a clicked hit — geometry of what was targeted.
+
+    Per-hit (the element's own cached box), unlike the locator-level
+    ``_event_rect`` which always resolves the FIRST match: with several
+    hits every event needs its own box, and the pre-click box is the
+    honest one — a click that removes its target would otherwise resolve
+    no rect at all, or worse, the NEXT match's. Session-gated like
+    ``_event_rect``; anything unresolvable degrades to None, never raises.
+    """
+    if session is None:
+        return None
+    bb = getattr(el, "bounding_box", None)
+    if not isinstance(bb, dict):
+        return None
+    try:
+        rect = {k: float(bb.get(k, 0.0) or 0.0) for k in ("x", "y", "width", "height")}
+    except (TypeError, ValueError):
+        return None
+    return rect if rect["width"] > 0 else None
+
+
 async def _dispatch(
     backend, argv: list[str], in_session: bool = False, recorder=None, session=None
 ) -> int:
@@ -382,7 +518,8 @@ async def _dispatch(
         return await _cmd_snapshot(backend)
     if verb == "click" and len(rest) >= 1:
         by, rest = _pop_by(rest)
-        code = await _cmd_click(backend, rest[0], by)
+        nth, rest = _pop_nth(rest)
+        code, hits = await _cmd_click(backend, rest[0], by, nth)
         rec = _replayable(recorder, code)
         if rec is not None:
             loc = _locator(rest[0], by)
@@ -390,17 +527,23 @@ async def _dispatch(
             # evidence barrier first, exactly like session-driven
             # recordings, so replay settles after submits instead of
             # racing them. Unparseable (xpath) names are skipped as
-            # noise by replay itself.
+            # noise by replay itself. ONE barrier for the whole set: the
+            # locator resolved, however many hits follow.
             rec.record(EventType.ELEMENT_FOUND, name=loc.describe(), data=_stamp(session))
-            click_rect = await _event_rect(session, backend, loc)
-            click_data: dict[str, Any] = {}
-            if click_rect is not None:
-                click_data["rect"] = click_rect
-            rec.record(
-                EventType.CLICK,
-                name=loc.describe(),
-                data=_stamp(session, click_data),
-            )
+            # One CLICK per hit (execution order), each carrying ITS OWN
+            # identify-time rect — a locator-level rect would describe the
+            # first match for every event. Replay re-drives each event by
+            # locator, so multi-hit recordings stay replayable.
+            for el in hits:
+                click_data: dict[str, Any] = {}
+                rect = _hit_rect(session, el)
+                if rect is not None:
+                    click_data["rect"] = rect
+                rec.record(
+                    EventType.CLICK,
+                    name=loc.describe(),
+                    data=_stamp(session, click_data),
+                )
         return code
     if verb == "fill" and len(rest) >= 2:
         by, rest = _pop_by(rest)
@@ -466,6 +609,29 @@ def _pop_by(rest: list[str]) -> tuple[str, list[str]]:
         by = rest[i + 1]
         rest = rest[:i] + rest[i + 2 :]
     return by, rest
+
+
+def _pop_nth(rest: list[str]) -> tuple[int | None, list[str]]:
+    """Strip optional ``--nth <n>``; return the 1-based pick + remaining args.
+
+    Mirrors ``_pop_by`` (one flag, stripped from anywhere in the arg
+    list). A malformed value fails loudly — same class as an unknown
+    ``--by`` — instead of silently clicking the wrong match; the range
+    check against the actual match count lives in ``_cmd_click``.
+    """
+    nth = None
+    if "--nth" in rest:
+        i = rest.index("--nth")
+        if i + 1 >= len(rest):
+            raise SystemExit(_fail("--nth requires a match number (1-based)"))
+        try:
+            nth = int(rest[i + 1])
+        except ValueError:
+            raise SystemExit(
+                _fail(f"--nth requires an integer, got {rest[i + 1]!r}")
+            ) from None
+        rest = rest[:i] + rest[i + 2 :]
+    return nth, rest
 
 
 def _load_flow_events(path: str) -> list[Event]:
@@ -635,6 +801,135 @@ async def _cmd_agent(args: argparse.Namespace) -> int:
             )
     if result.stop_reason == "needs_human":
         return 3  # distinct from 1 (failed): a human must take over
+    return 0 if result.success else 1
+
+
+async def _cmd_cockpit(args: argparse.Namespace) -> int:
+    """Live agent console window — direct a running agent while it works.
+
+    Serves the four-pane console (log/work/message/terminal) and drains
+    its commands at step boundaries; --window opens it as its own
+    browser window, --pin keeps that window on top (wmctrl, best-effort).
+    Model: --soul, --http, or the AVION_SOUL env (same as `avion agent`).
+    Browser: --profile owns a launch; otherwise the global --cdp flag
+    (before the subcommand) or AVION_CDP_URL attaches.
+    """
+    from avion.ai.agent import Agent, AgentConfig
+    from avion.ai.control import CommandInbox
+    from avion.backends.cdp import CdpBackend
+    from avion.cockpit import Cockpit, EventStream
+    from avion.launch import Profile, launch_chromium
+
+    model = _build_agent_model(args)
+    if model is None:
+        return _fail("cockpit needs a model: --soul PATH, --http URL, or AVION_SOUL set")
+
+    launched = None
+    if args.profile:
+        launched = launch_chromium(
+            Profile(args.profile), headless=not args.headed, extra_args=args.arg
+        )
+        backend: Any = launched.backend
+        print(f"cockpit on profile={args.profile} model={model.model_name}", file=sys.stderr)
+    else:
+        backend = CdpBackend(cdp_url=args.cdp)
+        print(f"cockpit on {args.cdp} model={model.model_name}", file=sys.stderr)
+
+    inbox = CommandInbox()
+    agent = Agent(model=model, config=AgentConfig(max_steps=args.max_steps), inbox=inbox)
+    events = EventStream()
+    agent.on_step(
+        lambda step: events.emit(
+            "step",
+            {
+                "step": step.step_number,
+                "action": step.action.action_type.value if step.action else "",
+                "observation": (step.observation or "")[:200],
+                "reward": step.reward,
+            },
+        )
+    )
+    result_box: dict[str, Any] = {"result": None}
+
+    def state() -> dict[str, Any]:
+        result = result_box["result"]
+        control = agent.control
+        cfg = agent.config
+        return {
+            "task": args.task,
+            "model": model.model_name,
+            "running": result is None,
+            "done": result is not None,
+            "paused": control.paused,
+            "stopped": control.stopped,
+            "steps": agent.step_count,
+            "instructions": control.instructions,
+            "messages": list(control.messages),
+            "params": {
+                "max_steps": cfg.max_steps,
+                "deadline_ms": cfg.deadline_ms,
+                "action_delay_ms": cfg.action_delay_ms,
+                "step_timeout": cfg.step_timeout,
+            },
+            "stop_reason": result.stop_reason if result else "",
+            "transcript": result.transcript_path if result else "",
+        }
+
+    cockpit = Cockpit(
+        inbox=inbox,
+        events=events,
+        state=state,
+        records=lambda: agent.control_records,
+        host=args.host,
+        port=args.port,
+    )
+    result = None
+    try:
+        await agent.start(backend=backend)
+        url = await cockpit.start()
+        print(f"console: {url}", file=sys.stderr)
+        if args.window:
+            if not cockpit.open_window(url, pin=args.pin, extra_args=args.arg):
+                print(f"could not open a window — open {url} in a browser instead", file=sys.stderr)
+        elif args.pin:
+            print("--pin only applies to --window (ignored)", file=sys.stderr)
+        result = await agent.run(args.task)
+        result_box["result"] = result
+        # one beat so the console can fetch final state/events before shutdown
+        await asyncio.sleep(0.3)
+    except Exception as exc:
+        return _fail(f"cockpit run failed: {exc}")
+    finally:
+        await cockpit.stop()
+        await agent.stop()
+        # the console window stays open for the operator — it is the handoff
+        if launched is not None and not (
+            result is not None and result.stop_reason == "needs_human"
+        ):
+            launched.stop()
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        # Summarize, don't dump: one status line + why it stopped, then errors.
+        if result.success:
+            mark = "done"
+        elif result.stop_reason == "stopped":
+            mark = "stopped"
+        else:
+            mark = "FAILED"
+        print(f"{mark}: {result.steps_taken} steps — stop: {result.stop_reason}")
+        for line in (result.error or "").splitlines()[:5]:
+            print(f"  {line}")
+        if result.stop_reason == "needs_human":
+            ch = result.challenge or {}
+            print(
+                f"needs a human: {ch.get('evidence', 'challenge page')} —"
+                " close the browser when you're done with it"
+            )
+    if result.stop_reason == "needs_human":
+        return 3  # distinct from 1 (failed): a human must take over
+    if result.stop_reason == "stopped":
+        return 0  # operator-initiated stop is a clean end, not a failure
     return 0 if result.success else 1
 
 
@@ -808,6 +1103,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument(
         "--by", default="css", choices=["css", "text", "testid", "label", "role", "xpath"]
     )
+    sp.add_argument(
+        "--nth",
+        type=int,
+        default=None,
+        help="click only the Nth match, 1-based (default: every rendered match)",
+    )
 
     sp = sub.add_parser("fill", help="fill an input")
     sp.add_argument("selector")
@@ -971,6 +1272,65 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CHROMIUM_ARG",
         help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
     )
+
+    sp = sub.add_parser(
+        "cockpit",
+        help="live agent console — four-pane web window to direct a running agent",
+        description=(
+            "Serves the console (log / work / message / terminal) and streams a "
+            "running agent loop: send pause/resume/stop, instructions, messages "
+            "and params (set_params) while it works; commands apply at step "
+            "boundaries. Model: --soul (local .soul checkpoint), --http (a running "
+            "inference server), or the AVION_SOUL env var. Browser: --profile owns "
+            "a launch; otherwise the global --cdp flag (before the subcommand) or "
+            "AVION_CDP_URL attaches. --window opens the console as its own browser "
+            "window; --pin keeps it always on top (X11, needs wmctrl)."
+        ),
+    )
+    sp.add_argument("task", nargs="?", default="describe what you see on the current page")
+    sp.add_argument("--soul", default=None, help="local .soul checkpoint for our own engine")
+    sp.add_argument("--http", default=None, help="base URL of a running inference server")
+    sp.add_argument(
+        "--api-key",
+        default=None,
+        help=(
+            "API key for --http: switches it to the hosted chat-completions "
+            "wire shape (Authorization: Bearer). Prefer the AVION_API_KEY "
+            "env so the key stays out of shell history and process lists."
+        ),
+    )
+    sp.add_argument(
+        "--model",
+        default=None,
+        help="model id for hosted chat-completions providers that require one",
+    )
+    sp.add_argument("--profile", default=None, help="launch and own this profile's browser")
+    sp.add_argument("--max-steps", type=int, default=50, help="step cap (AgentConfig default: 50)")
+    sp.add_argument(
+        "--headed", action="store_true", help="show the window when launching (default: headless)"
+    )
+    sp.add_argument(
+        "--port", type=int, default=0, help="console port (0 = ephemeral, printed on start)"
+    )
+    sp.add_argument("--host", default="127.0.0.1", help="console bind address")
+    sp.add_argument(
+        "--window",
+        action="store_true",
+        help="open the console as its own browser window (not a tab)",
+    )
+    sp.add_argument(
+        "--pin",
+        action="store_true",
+        help="keep the console window always on top (X11, needs wmctrl; with --window)",
+    )
+    sp.add_argument("--json", action="store_true", help="print the final trajectory as JSON")
+    sp.add_argument(
+        "--arg",
+        action="append",
+        default=[],
+        metavar="CHROMIUM_ARG",
+        help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
+    )
     return p
 
 
@@ -995,6 +1355,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_cmd_run(args))
     if args.cmd == "agent":
         return asyncio.run(_cmd_agent(args))
+    if args.cmd == "cockpit":
+        return asyncio.run(_cmd_cockpit(args))
 
     async def run(b) -> int:
         if args.cmd == "open":
@@ -1002,7 +1364,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "snapshot":
             return await _cmd_snapshot(b)
         if args.cmd == "click":
-            return await _cmd_click(b, args.selector, args.by)
+            code, _hits = await _cmd_click(b, args.selector, args.by, nth=args.nth)
+            return code
         if args.cmd == "fill":
             return await _cmd_fill(b, args.selector, args.text, args.by)
         if args.cmd == "wait":

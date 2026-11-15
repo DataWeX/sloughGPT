@@ -26,15 +26,16 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
+from infrastructure.contract import REGISTRY, RouteEntry
 from infrastructure.sse_fallback import sse_error, sse_event, sse_token
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents import get_agent_system, get_tool_registry
+from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
 from domain.cognition import get_rag_service
-from domain.feedback import get_response_tracker
+from domain.feedback import SAFE_BAND, get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
@@ -43,6 +44,7 @@ from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
 from domain.models import ConsciousnessProcessor, apply_processors, get_provider
+from domain.settings import get_settings
 
 logger = logging.getLogger("slo.inference")
 
@@ -318,6 +320,31 @@ class CreateSessionRequest(BaseModel):
     model: str | None = None
 
 
+class AppScopeDelta(BaseModel):
+    """Per-conversation configuration delta — the mini-app's own settings.
+
+    Pydantic twin of ``domain.inference.app_scope.AppScope`` (the frozen
+    domain value object; ``tests/test_app_scope.py`` pins field parity
+    between the two). Persisted wholesale on the session record under
+    ``scope`` via ``PUT /chat/sessions/{id}``; ``None`` on any field means
+    "unset — inherit the layer below" (presence-based, never value-based).
+    Bounds mirror ``ChatRequest`` so a delta can never hold a value the wire
+    would reject.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_k: int | None = Field(default=None, ge=0, le=500)
+    repetition_penalty: float | None = Field(default=None, ge=0.5, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=2048)
+    system_prompt: str | None = Field(default=None, max_length=100000)
+    knowledge: list[str] | None = Field(default=None, max_length=100)
+    use_context_core: bool | None = None
+    use_rag: bool | None = None
+
+
 class UpsertSessionRequest(BaseModel):
     """Schema for updating session metadata."""
 
@@ -325,6 +352,8 @@ class UpsertSessionRequest(BaseModel):
     archived: bool | None = None
     starred: bool | None = None
     pinned: bool | None = None
+    scope: AppScopeDelta | None = None
+    """Conversation AppScope delta — replaces the stored delta wholesale."""
 
 
 class BranchSessionRequest(BaseModel):
@@ -338,6 +367,29 @@ class BranchSessionRequest(BaseModel):
     name: str | None = Field(None, max_length=200)
 
 
+class SessionModel(BaseModel):
+    """One row of GET /chat/sessions — the session-metadata index contract.
+
+    Single source of truth for the wire shape of a session row: the
+    ``chat.sessions.list`` descriptor's ``result`` schema and the generated TS
+    ``SessionMeta`` interface both derive from this model
+    (``scripts/gen_ts_contracts.py``). Mirrors
+    ``InferenceRouter._build_session_metadata_index`` output — exactly these
+    keys, always present. ``extra="allow"`` so indexed rows may grow
+    without breaking consumers.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+    message_count: int
+    scope: AppScopeDelta | None = None
+    """This conversation's AppScope delta (``None`` = inherits global only)."""
+
+
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
 # chat router no longer imports this router. Re-exported here for backwards
 # compatibility with existing importers (mobile BFF, tests).
@@ -348,6 +400,10 @@ from schemas.chat import (  # noqa: E402
     Message,
 )
 
+from domain.inference.app_scope import (  # noqa: E402
+    apply_scope,
+    resolve_scope,
+)
 from domain.inference.engine import (  # noqa: E402
     TurnRequest,
     TurnResult,
@@ -362,11 +418,14 @@ _CHAT_CONTROL_TTL = 300  # 5 minutes
 
 
 async def _apply_consciousness_reflection(messages: list, corr_id: str) -> list:
-    """CONSCIOUSNESS_PROC — prepend the reflection narrative (build order #6).
+    """CONSCIOUSNESS_PROC — attach the reflection narrative as tail context.
 
     Pulls ``engine.reflect(apply=False)`` (propose-only: never commits belief
-    deltas) and prepends its narrative as a system message via
-    ConsciousnessProcessor. Advisory by design: a disabled engine, an empty
+    deltas) and hands the narrative to ConsciousnessProcessor, which attaches
+    it to the LAST user turn — after the question, framed as context. It used
+    to prepend as a system message, where it outranked the question and the
+    0.5B model answered the narrative instead of the user (card
+    20261114_092948). Advisory by design: a disabled engine, an empty
     narrative, or ANY failure skips injection and returns messages unchanged
     (try/except skip — chat never errors on reflection).
     """
@@ -487,12 +546,19 @@ _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
 
-# Bounds mirroring GenerateRequest's Field constraints (:temperature ge=0 le=2,
-# :top_p ge=0 le=1, :top_k ge=0 le=500, :repetition_penalty ge=0.5 le=2). Nudged
-# values are clamped here so a feedback-derived adjustment can never push a
-# defaulted param outside the schema the request itself is validated against
-# (drift-gated by tests/test_meta_weights_clamp.py).
-_META_WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
+# SCHEMA bounds only — what the wire accepts (GenerateRequest Field
+# constraints: :temperature ge=0 le=2, :top_p ge=0 le=1, :top_k ge=0 le=500,
+# :repetition_penalty ge=0.5 le=2). Nudged values are clamped here so a
+# feedback-derived adjustment can never push a defaulted param outside the
+# schema the request itself is validated against (drift-gated by
+# tests/test_meta_weights_clamp.py).
+#
+# This is NOT the generation-safety bound (card 20261101_182428): schema
+# validity and generation safety are different facts written twice at one
+# seam. rep 0.5 is schema-valid and actively REWARDS repetition — safety
+# lives in ONE place, ``domain.feedback.SAFE_BAND``, applied to every
+# feedback-moved value in the merge loop below (cache hit or not).
+_SCHEMA_BOUNDS: dict[str, tuple[float, float]] = {
     "temperature": (0.0, 2.0),
     "top_p": (0.0, 1.0),
     "top_k": (0.0, 500.0),
@@ -544,7 +610,11 @@ def _apply_meta_weights(
     default, because an explicitly-set value is user intent and outranks a
     derived one.
 
-    Returns a dict of parameters to pass to the provider.
+    Returns a dict of parameters to pass to the provider. Non-explicit
+    params that feedback moved are clamped into ``domain.feedback.SAFE_BAND``
+    (the one generation-safe bounds authority, card 20261101_182428) before
+    the schema clamp — so a cache-hit or unbanded nudge can never restore
+    the repetition-loop hazard the band exists to prevent.
 
     Disabled by default: ``SLO_META_WEIGHT_NUDGE=0`` returns the caller's
     parameters untouched. Feedback steering belongs to the context stack
@@ -633,8 +703,22 @@ def _apply_meta_weights(
             # request schema — pass through verbatim.
             merged[param] = value
             continue
-        nudged = value + nudge.get(param, 0)
-        lo, hi = _META_WEIGHT_BOUNDS[param]
+        n = nudge.get(param, 0)
+        nudged = value + n
+        if n:
+            # Generation safety at the USE seam (card 20261101_182428): the
+            # band must hold for every path a nudge can arrive on — a cache
+            # hit, a mock, an unbanded producer — not just inside
+            # get_adjustment(). Two rules:
+            #   base inside the band  -> the merged value is clamped into it;
+            #   base outside the band -> the caller (scope/global config)
+            #     chose a value feedback may not touch: feedback ABSTAINS
+            #     rather than dragging a user-configured value around.
+            # n == 0 (no feedback signal) never bands: a silent feedback
+            # layer must not clamp user configuration at all.
+            lo_b, hi_b = SAFE_BAND[param]
+            nudged = min(max(nudged, lo_b), hi_b) if lo_b <= value <= hi_b else value
+        lo, hi = _SCHEMA_BOUNDS[param]
         nudged = min(max(nudged, lo), hi)
         if param == "top_k":
             nudged = int(round(nudged))
@@ -901,7 +985,11 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("Entity extraction failed: %s", e)
 
-    # Consciousness post-processing (narrative surfaced by the caller)
+    # Consciousness post-processing (narrative surfaced by the caller).
+    # Same use_consciousness gate as the pre-gen narrative: a bare probe must
+    # not ingest its exchange into the episode store nor surface a reflection.
+    if not req.use_consciousness:
+        return {"narrative": "", "level": 0}
     return _consciousness_post_process(user_msg, full_response)
 
 
@@ -1161,9 +1249,10 @@ class InferenceRouter:
                         {
                             "id": sid,
                             "name": name,
-                            "created_at": data.get("created_at", ""),
+                            "created_at": data.get("created_at") or "",
                             "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
                             "message_count": msg_count,
+                            "scope": data.get("scope"),
                         }
                     )
                 except (json.JSONDecodeError, OSError):
@@ -1623,7 +1712,7 @@ class InferenceRouter:
                 await websocket.close()
                 return
         else:
-            from routers.security import ApiKeyManager
+            from routers.settings import ApiKeyManager
 
             try:
                 _key_mgr = ApiKeyManager()
@@ -1966,6 +2055,47 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
 
+    def _resolve_turn_scope(self, session_id: str, req: TurnRequest) -> frozenset[str]:
+        """Resolve this conversation's AppScope over global settings; apply to ``req``.
+
+        The turn seam: the below-turn layers are loaded here (conversation
+        delta from the session record, global defaults from
+        ``domain.settings``), while resolution itself stays the pure
+        ``resolve_scope``. Applied in place on ``req`` — transport fields only
+        where the wire left them unset (``apply_scope``), plus the additive
+        ``system_prompt``/``knowledge`` composition.
+
+        Returns the conversation-won field names: the caller passes them to
+        ``_apply_meta_weights`` alongside ``model_fields_set`` so a
+        server-side heuristic may not move a value the user deliberately
+        scoped to this conversation.
+        """
+        session = self._get_session(session_id)
+        raw = session.get("scope")
+        delta: dict[str, Any] | None = None
+        if isinstance(raw, dict):
+            try:
+                # Re-validate on read: the session file is a trust boundary
+                # (hand-edited / foreign-version data). Corrupt or out-of-
+                # bounds deltas fail safe — inherit the layers below.
+                delta = AppScopeDelta.model_validate(raw).model_dump(exclude_none=True)
+            except ValidationError:
+                logger.debug("Dropping invalid scope delta on session %s", session_id)
+        scope = resolve_scope(
+            conversation=delta,
+            global_settings=get_settings().settings.generation,
+        )
+        applied = apply_scope(req, scope, conversation=delta)
+        if scope.system_prompt:
+            req.system_prompt = (
+                f"{req.system_prompt}\n\n{scope.system_prompt}"
+                if req.system_prompt
+                else scope.system_prompt
+            )
+        if scope.knowledge:
+            req.knowledge = [*scope.knowledge, *(req.knowledge or [])]
+        return applied
+
     async def stream_turn(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]:
         """The single inference method: yield raw tokens, then the final ``TurnResult``.
 
@@ -2018,6 +2148,11 @@ class InferenceRouter:
         if not user_msg:
             raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
+        # Instance seam: resolve this conversation's AppScope (delta over
+        # global defaults) once, before anything reads the transport fields.
+        session_id = req.session_id or "default"
+        scope_applied = self._resolve_turn_scope(session_id, req)
+
         system_prompt = req.system_prompt or ""
 
         if req.images:
@@ -2044,18 +2179,19 @@ class InferenceRouter:
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
 
-        session_id = req.session_id or "default"
-
-        # Context frame — memory/rag layers via ContextCore, gated on the memory
-        # service holding at least one fact (the gate travels with the frame
-        # builder: empty memory means skip the frame entirely).
+        # Context frame — memory/rag layers via ContextCore, gated on the wire
+        # flag first (use_context_core was previously honored only by the
+        # non-streaming chat(); stream_turn ignored it — card 20261112_140010),
+        # then on the memory service holding at least one fact (the gate travels
+        # with the frame builder: empty memory means skip the frame entirely).
         frame = None
-        try:
-            frame, _context_info = await _build_context_frame(
-                self._get_context_core(), session_id, user_msg, corr_id="stream"
-            )
-        except Exception as e:
-            logger.debug("Context frame build failed: %s", e)
+        if req.use_context_core:
+            try:
+                frame, _context_info = await _build_context_frame(
+                    self._get_context_core(), session_id, user_msg, corr_id="stream"
+                )
+            except Exception as e:
+                logger.debug("Context frame build failed: %s", e)
 
         frame_context = []
         if frame:
@@ -2074,9 +2210,11 @@ class InferenceRouter:
             )
 
         # Knowledge enrichment — only when the frame carried no memory/rag
-        # layer content; facts learned live feed the prompt otherwise.
+        # layer content; facts learned live feed the prompt otherwise. Shares
+        # the use_context_core gate: with context off there is no frame to
+        # fall back from, and a bare probe must not pull learned facts either.
         knowledge_retrieved = []
-        if not frame_context:
+        if req.use_context_core and not frame_context:
             try:
                 enrichment = await asyncio.wait_for(
                     asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
@@ -2123,7 +2261,15 @@ class InferenceRouter:
 
         # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
         # main's chat-pipeline wiring onto the stream_turn restructure).
-        messages = await _apply_consciousness_reflection(messages, "-")
+        # Gated on the wire flag: a bare probe (QuickActions "Test model",
+        # use_consciousness=false) must not receive the reflection narrative
+        # at all (card 20261112_140010). When ON it rides the volatile tail —
+        # ConsciousnessProcessor attaches it to the last user turn, framed as
+        # context, the same placement class as the RAG/knowledge blocks below
+        # — never the system head, where the 0.5B model answered it instead
+        # of the user (card 20261114_092948).
+        if req.use_consciousness:
+            messages = await _apply_consciousness_reflection(messages, "-")
 
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
@@ -2132,7 +2278,7 @@ class InferenceRouter:
             repetition_penalty=req.repetition_penalty,
             user_message=user_msg,
             user_id=req.user_id or "default",
-            explicit=req.model_fields_set,
+            explicit=req.model_fields_set | scope_applied,
         )
         # Attach per-turn context to the last user turn BEFORE the budget trim,
         # so the trimmer counts those tokens instead of the block arriving
@@ -2193,7 +2339,12 @@ class InferenceRouter:
                 session_id,
                 _chat_start_dt,
                 req,
-                self._get_context_core(),
+                # Resolve only when the turn opted into the context stack:
+                # first resolution wires ContextCore (incl. its consciousness
+                # engine) — a bare probe must not drag that in (quick-test
+                # card). None changes nothing downstream: add_response is
+                # gated on req.use_context_core anyway.
+                self._get_context_core() if req.use_context_core else None,
                 self._bg_tasks_lock,
                 self._BG_TASKS,
                 self._bg_tasks_lock_discard,
@@ -2922,6 +3073,114 @@ class InferenceRouter:
 
 _instance = InferenceRouter()
 router = _instance.router
+
+
+# ── Descriptor for GET /chat/sessions ───────────────────────────────────────
+# The route above is grandfathered (hand-built, counted in the hand-built
+# baseline); this descriptor is its contract declaration — the single source of
+# truth for the session-metadata index wire shape. The frontend derives its
+# ``Conversation``/``SessionMeta`` types from the generated artifact of this
+# descriptor (scripts/gen_ts_contracts.py), not from hand-written interfaces.
+
+SESSIONS_SPEC = ToolSpec(
+    name="chat.sessions.list",
+    description=(
+        "Session-metadata index for the chat sidebar: one row per session with "
+        "id/name/timestamps/message_count (SessionModel wire shape)."
+    ),
+    parameters=[
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Include archived sessions (default excludes them)",
+        ),
+    ],
+    execute=_instance.list_sessions,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={"type": "array", "items": SessionModel.model_json_schema()},
+    version="1",
+)
+
+
+def _register_sessions_spec(spec: ToolSpec, method: str, path: str) -> None:
+    operation_id = REGISTRY.claim_operation_id(f"{spec.name}.{method.lower()}", method, path)
+    REGISTRY.register(
+        RouteEntry(
+            name=spec.name,
+            version=spec.version,
+            auth_scope=spec.auth_scope,
+            idempotent=spec.idempotent,
+            description=spec.description,
+            method=method,
+            path=path,
+            operation_id=operation_id,
+            module=__name__,
+            params=spec.params,
+            result=spec.result,
+        )
+    )
+
+
+_register_sessions_spec(SESSIONS_SPEC, "GET", "/chat/sessions")
+
+
+# ── Descriptor for PUT /chat/sessions/{session_id} ──────────────────────────
+# Same grandfathering as above: the route is hand-built (baseline untouched);
+# this descriptor declares its contract, including the ``scope`` field that
+# persists a conversation's AppScope delta — the mini-app instance config
+# resolved at the turn seam (``InferenceRouter._resolve_turn_scope``).
+
+SESSIONS_UPDATE_SPEC = ToolSpec(
+    name="chat.sessions.update",
+    description=(
+        "Update session metadata (name/archived/starred/pinned) and/or replace "
+        "the conversation's AppScope delta (scope: model settings, system "
+        "prompt, knowledge, context toggles) — the per-conversation config "
+        "resolved over global defaults on each turn."
+    ),
+    parameters=[
+        ToolParam(
+            name="name",
+            type="string",
+            description="New session name",
+        ),
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Archive/unarchive the session",
+        ),
+        ToolParam(
+            name="starred",
+            type="boolean",
+            description="Star/unstar the session",
+        ),
+        ToolParam(
+            name="pinned",
+            type="boolean",
+            description="Pin/unpin the session",
+        ),
+        ToolParam(
+            name="scope",
+            type="object",
+            description=(
+                "AppScope delta for this conversation — replaces the stored "
+                "delta wholesale (omit to leave it unchanged)"
+            ),
+        ),
+    ],
+    execute=_instance.upsert_session,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": ["session_id"],
+    },
+    version="1",
+)
+
+_register_sessions_spec(SESSIONS_UPDATE_SPEC, "PUT", "/chat/sessions/{session_id}")
 
 
 class _GenerationEngine:

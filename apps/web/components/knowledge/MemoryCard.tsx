@@ -41,11 +41,6 @@ import { MemoryStatsGrid } from './MemoryStatsGrid'
 import { MemoryItemList } from './MemoryItemList'
 import { MemoryMaintenancePanel } from './MemoryMaintenancePanel'
 import { ArchiveDialog } from './ArchiveDialog'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 /**
  * Self-contained card exposing the auto-memory layer on the Knowledge page.
@@ -458,7 +453,7 @@ export const MemoryCard = memo(function MemoryCard() {
         {showAdd && (
           <div className="rounded-lg border border-border/60 p-3 mb-3 space-y-2">
             <textarea
-              className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 border-input"
+              className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset border-input"
               placeholder="Type a fact the AI should remember..."
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
@@ -492,7 +487,7 @@ export const MemoryCard = memo(function MemoryCard() {
                 Edit memory fact
               </p>
               <textarea
-                className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 border-input"
+                className="w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset border-input"
                 placeholder="Fact text..."
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}

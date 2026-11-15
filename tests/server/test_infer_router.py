@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
-from apps.api.server.routers.infer import router
+from apps.api.server.routers.models import router
 
 
 @pytest.fixture
@@ -199,7 +199,7 @@ class TestInferHealth:
             },
         )()
         with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            "apps.api.server.routers.models.InferRouter._get_model_interface",
             return_value=mock_model,
         ):
             resp = client.get("/infer/health")
@@ -225,7 +225,7 @@ class TestInferHealth:
             },
         )()
         with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            "apps.api.server.routers.models.InferRouter._get_model_interface",
             return_value=mock_model,
         ):
             resp = client.get("/infer/health")
@@ -261,12 +261,15 @@ class TestInferInfo:
                 "info": lambda self: mock_info,
             },
         )()
-        with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
-            return_value=mock_model,
-        ), patch(
-            "routers.inference._get_model_status",
-            return_value={"ready": True},
+        with (
+            patch(
+                "apps.api.server.routers.models.InferRouter._get_model_interface",
+                return_value=mock_model,
+            ),
+            patch(
+                "routers.inference._get_model_status",
+                return_value={"ready": True},
+            ),
         ):
             resp = client.get("/infer/info")
             assert resp.status_code == 200
@@ -319,7 +322,7 @@ class TestInferEmbed:
             },
         )()
         with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            "apps.api.server.routers.models.InferRouter._get_model_interface",
             return_value=mock_model,
         ):
             resp = client.post("/infer/embed", json={"text": "hi"})
@@ -337,7 +340,7 @@ class TestInferEmbed:
             },
         )()
         with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            "apps.api.server.routers.models.InferRouter._get_model_interface",
             return_value=mock_model,
         ):
             resp = client.post("/infer/embed", json={"text": "hi"})
@@ -353,7 +356,7 @@ class TestInferEmbed:
             },
         )()
         with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            "apps.api.server.routers.models.InferRouter._get_model_interface",
             return_value=mock_model,
         ):
             resp = client.post("/infer/embed", json={"text": "hi"})
@@ -375,7 +378,7 @@ class TestInferModelTokenize:
         )()
         mock_model = type("M", (), {"_tokenizer": tokenizer})()
         with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            "apps.api.server.routers.models.InferRouter._get_model_interface",
             return_value=mock_model,
         ):
             resp = client.post("/infer/tokenize", json={"text": "abc"})
@@ -388,7 +391,7 @@ class TestInferModelTokenize:
         tokenizer = type("Tok", (), {"decode": lambda self, ids: "decoded"})()
         mock_model = type("M", (), {"_tokenizer": tokenizer})()
         with patch(
-            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            "apps.api.server.routers.models.InferRouter._get_model_interface",
             return_value=mock_model,
         ):
             resp = client.post("/infer/detokenize", json={"ids": [1, 2, 3]})

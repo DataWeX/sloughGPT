@@ -17,11 +17,6 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { vectorController, type VectorSearchResult } from '@/lib/vector-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export default function VectorPage() {
   const [provider, setProvider] = useState('in_memory')

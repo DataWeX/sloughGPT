@@ -936,11 +936,17 @@ def fused_attention_multi(q, k, v, scale, H, E_head):
             # Absolute query positions, so the causal mask stays correct across
             # chunk boundaries (query s0+i sees keys n <= s0+i).
             rows = np.arange(s0, s1, dtype=np.int64)[:, None]
-            scores = np.einsum("she,hne->hsn", q[s0:s1], k) * scale  # (H, blk, new_len)
+            scores = (
+                np.einsum("she,hne->hsn", q[s0:s1], k, optimize=True) * scale
+            )  # (H, blk, new_len)
             scores += np.where(cols > rows, _CAUSAL_MASK, np.float32(0.0))
             attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
             attn = attn / attn.sum(axis=-1, keepdims=True)
-            out[s0:s1] = np.einsum("hsn,hne->she", attn, v)
+            # optimize=True dispatches to BLAS; the default optimize=False takes
+            # a generic contraction loop. Measured 3.4-5.9x faster at prefill
+            # sizes (H=14, kv=2, E=128; interleaved arms, min-of-7) with
+            # identical output (allclose at every size tested).
+            out[s0:s1] = np.einsum("hsn,hne->she", attn, v, optimize=True)
     return out
 
 

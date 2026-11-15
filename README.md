@@ -151,7 +151,7 @@ Core endpoints:
 
 ```bash
 # Python tests (parallel)
-cd packages/core-py && python -m pytest -n auto -x -q
+python -m pytest -n auto -x -q
 
 # Frontend tests
 cd apps/web && npm run test

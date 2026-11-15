@@ -2,7 +2,7 @@
 
 import { useRouter } from '@/vite/next-compat/navigation'
 import Link from '@/vite/next-compat/link'
-import { Card, CardContent, cn } from '@sloughgpt/strui'
+import { Card, CardContent, cn, IconStar, IconPin } from '@sloughgpt/strui'
 import { timeAgo } from '@/lib/time-ago'
 
 interface RecentActivityProps {
@@ -75,9 +75,13 @@ export function RecentActivity({
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0 group-hover:bg-primary transition-colors" />
                 <span className="text-xs truncate flex-1 font-medium">{s.name}</span>
-                {s.starred && <span className="text-xs shrink-0 text-warning">★</span>}
-                {s.pinned && <span className="text-xs shrink-0 text-primary">📌</span>}
-                <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">
+                {s.starred && (
+                  <IconStar filled className="h-3 w-3 shrink-0 text-warning" aria-hidden="true" />
+                )}
+                {s.pinned && (
+                  <IconPin className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
+                )}
+                <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
                   {s.message_count != null && <span>{s.message_count}m · </span>}
                   {timeAgo(s.updated_at)}
                 </span>
@@ -144,7 +148,7 @@ export function RecentActivity({
                   <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0 group-hover:bg-accent transition-colors" />
                   <span className="text-xs truncate flex-1 font-medium">{ds.name}</span>
                   {ds.samples != null && (
-                    <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">
+                    <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
                       {ds.samples.toLocaleString()} samples
                     </span>
                   )}

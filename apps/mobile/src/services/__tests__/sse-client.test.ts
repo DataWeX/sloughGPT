@@ -228,6 +228,54 @@ describe('streamSSE', () => {
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Content-Type': 'application/json',
-    })
-  })
-})
+    });
+  });
+});
+
+describe('streamSSE Authorization header', () => {
+  it('attaches Bearer token when a token is stored', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+      Promise.resolve(key === '@sloughgpt/auth_token' ? 'jwt-abc' : null),
+    );
+    (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
+
+    // drain the stream so the fetch call is registered; body is empty
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {
+      // intentionally empty — we only need the fetch side effect
+    }
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer jwt-abc',
+      Accept: 'text/event-stream',
+    });
+  });
+
+  it('omits Authorization when no token is stored', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+    (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
+
+    // drain the stream so the fetch call is registered; body is empty
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {
+      // intentionally empty — we only need the fetch side effect
+    }
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(init.headers.Authorization).toBeUndefined();
+  });
+});
+
+describe('streamSSE permanent failures', () => {
+  it('does not reconnect when the response has no body', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+    } as unknown as Response);
+
+    const gen = streamSSE('/empty', {});
+    await expect(gen.next()).rejects.toThrow('No response body');
+    // A permanent condition must not enter the 5-attempt backoff loop.
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
+  });
+});

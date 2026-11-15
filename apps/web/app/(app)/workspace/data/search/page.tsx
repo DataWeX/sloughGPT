@@ -13,11 +13,6 @@ import { SearchEmptyState } from '@/components/workspace-search/SearchEmptyState
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { SEARCH_STORES } from '@/lib/search-stores'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface SearchHit {
   id: string

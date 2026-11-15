@@ -382,7 +382,7 @@ class AgentsRouter:
                         async def run_and_yield(tid: str) -> dict:
                             """run_and_yield."""
                             task = task_map[tid]
-                            task.status = "in_progress"
+                            task.status = "live"
                             dep_context = orch._build_dep_context(task, task_map, results_ctx)
                             try:
                                 result = await orch._async_run_agent(task, req.goal, dep_context)

@@ -23,6 +23,8 @@ from typing import Any
 
 from domain.shared import find_repo_root
 
+from .engine_seam import run_on_engine
+
 logger = logging.getLogger("slo.training_queue")
 
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
@@ -188,16 +190,19 @@ async def training_handler(task) -> dict:
         # Constructor runs prepare_data() which can raise on a bad data_path —
         # keep it inside the try so the error surfaces as a failed result.
         trainer = SloughGPTTrainer(data_path=data_path, config=config)
-        # train() is synchronous and long-running — run it in a worker thread
-        # so the bridge coroutines keep the event loop alive and can propagate
-        # cancel/pause from the task queue while training is in flight.
-        result = await asyncio.to_thread(
+        # train() is synchronous and long-running — run it on the shared
+        # engine (stage-4 seam) so the bridge coroutines keep the event
+        # loop alive and can propagate cancel/pause from the task queue
+        # while training is in flight; the seam re-raises InterruptedError
+        # from _on_progress with its type intact.
+        result = await run_on_engine(
             trainer.train,
             on_progress=_on_progress,
             cancel_event=cancel_event,
             pause_event=pause_event,
             resume=payload.get("resume", False),
             resume_path=payload.get("resume_path", ""),
+            name="auto-train",
         )
         if cancel_event.is_set():
             from domain.api._internal.sse_envelope import sse_complete
@@ -359,11 +364,12 @@ async def training_sessions_handler(task) -> dict:
             )
         )
 
-        model, metadata = await asyncio.to_thread(
+        model, metadata = await run_on_engine(
             train_from_sessions,
             config=config,
             on_step=_on_step,
             cancel_event=cancel_event,
+            name="auto-train-sessions",
         )
         if cancel_event.is_set():
             from domain.api._internal.sse_envelope import sse_complete

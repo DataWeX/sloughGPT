@@ -1,0 +1,29 @@
+# Report-only pruner for idle worktrees (installed to ~/.config/systemd/user/).
+#
+#   cp infra/systemd-user/worktree-prune.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now worktree-prune.timer
+#
+# Adjust ExecStart if your clone lives elsewhere (quote it — the path has a space).
+#
+# REPORT-ONLY, deliberately. `--report` pins dry-run, so this unit structurally
+# cannot delete anything even if the script's default ever changes. The reaper
+# question (should anything ever auto-`--apply`?) is a separate ruling: a
+# background job that removes worktrees is the failure class behind the
+# 2026-10-21 incident (~60 live trees wiped by a name-pattern sweep).
+#
+# The script itself fails closed: if no /proc/<pid>/cwd can be read it exits 3
+# rather than reporting live=0, so a degraded environment produces a red unit
+# instead of a green one that judged every tree dead.
+[Unit]
+Description=Report on idle git worktrees (dry run, never removes)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart="/home/mana/Documents/Default Project/sloughGPT/scripts/prune-worktrees.sh" --report
+Nice=10
+# Mandatory, not belt-and-braces: the systemd *user* manager defaults
+# TimeoutStartSec to infinity (same reasoning as kanban-sync.service), so a
+# `find`/`du` that never returns would hang forever. A dry run over ~30 trees
+# measures in seconds; 300s is generous and kills the whole cgroup on expiry.
+TimeoutStartSec=300

@@ -173,10 +173,10 @@ class TestTrainerConfig:
         assert cfg.n_layer == 4
         assert cfg.n_head == 8
 
-    def test_auto_device_resolves_to_cpu(self):
+    def test_auto_device_is_preserved_for_setup_device(self):
         cfg = TrainerConfig(device="auto")
         cfg.__post_init__()
-        assert cfg.device == "cpu"
+        assert cfg.device == "auto"
 
     def test_lora_defaults(self):
         cfg = TrainerConfig()
@@ -877,4 +877,4 @@ class TestTrainerConfigExtra:
     def test_device_auto_to_cpu(self):
         cfg = TrainerConfig(device="auto")
         cfg.__post_init__()
-        assert cfg.device == "cpu"
+        assert cfg.device == "auto"

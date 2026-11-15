@@ -121,7 +121,7 @@ export const TemplateDialog = memo(function TemplateDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="Template name"
               aria-label="Template name"
-              className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/50"
+              className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             />
             <textarea
               value={content}
@@ -129,7 +129,7 @@ export const TemplateDialog = memo(function TemplateDialog({
               placeholder="Template content (prompt, system message, etc.)"
               aria-label="Template content"
               rows={3}
-              className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+              className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset resize-none"
             />
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">

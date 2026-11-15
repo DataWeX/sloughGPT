@@ -335,9 +335,13 @@ class SoulCheckpointSaver:
         export_to_sou(model, str(path), metadata=metadata)
         self._rotate()
         try:
-            from domain.infrastructure._internal.artifact_registry import try_register
+            from domain.infrastructure._internal.artifact_registry import (
+                stamp_export,
+                try_register,
+            )
 
             try_register("checkpoint", path, name=name)
+            stamp_export(path, "checkpoint", metadata)
         except Exception:
             logger.debug("Checkpoint registry update skipped", exc_info=True)
         logger.info("Saved checkpoint: %s", path)
@@ -381,10 +385,18 @@ class SoulCheckpointSaver:
             reverse=True,
         )
         for stale in souls[self.max_keep :]:
-            try:
-                stale.unlink()
-            except OSError:
-                pass
+            # The artifact earns removal; its sidecars describe a file that
+            # no longer exists — ghost sidecars (same defect class as the
+            # crash window documented in slo_format).
+            sidecars = (
+                stale.with_name(stale.name + ".meta.json"),
+                stale.with_name(stale.name + ".prov.json"),
+            )
+            for victim in (stale, *sidecars):
+                try:
+                    victim.unlink()
+                except OSError:
+                    pass
 
 
 class NpzCheckpointSaver:
@@ -408,9 +420,13 @@ class NpzCheckpointSaver:
         if state:
             np.savez(str(path), **state)
             try:
-                from domain.infrastructure._internal.artifact_registry import try_register
+                from domain.infrastructure._internal.artifact_registry import (
+                    stamp_export,
+                    try_register,
+                )
 
                 try_register("checkpoint", path, name=name)
+                stamp_export(path, "checkpoint", metadata)
             except Exception:
                 logger.debug("Checkpoint registry update skipped", exc_info=True)
             logger.info("Saved checkpoint: %s (%d tensors)", path, len(state))

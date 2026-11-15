@@ -261,3 +261,127 @@ class TestByteFallbackDecodeStreaming:
         ids = [10, 11]
         streamed = "".join(tok.decode([i]) for i in ids)
         assert streamed.lstrip(" ") == tok.decode(ids)
+
+
+class TestBPEMergeComplexity:
+    """`_bpe_encode` must be O(n log n), not O(n²) (card 20261102_001616).
+
+    The pre-fix merge loop rescanned EVERY adjacent pair and rebuilt the whole
+    list on each merge. Measured: 1024 chars -> 172ms, 3120 -> 1.65s,
+    6000 -> 6.18s (fitted exponent 2.02), which is a large slice of /chat's
+    time-to-first-token for any non-trivial prompt.
+    """
+
+    @pytest.fixture
+    def tok(self):
+        if not _is_cached(QWEN2_ID):
+            pytest.skip(f"{QWEN2_ID} not cached locally")
+        return MorphTokenizer.from_pretrained(QWEN2_ID)
+
+    @staticmethod
+    def _reference_bpe(bpe_ranks, tokens):
+        """The pre-fix algorithm, copied verbatim — differential oracle.
+
+        Kept here (not in production code) so the optimized merge can be
+        proved byte-identical to the behaviour the shipped tokenizer had.
+        """
+        tokens = list(tokens)
+        while len(tokens) > 1:
+            best_pair = None
+            best_rank = float("inf")
+            for i in range(len(tokens) - 1):
+                pair = (tokens[i], tokens[i + 1])
+                rank = bpe_ranks.get(pair, float("inf"))
+                if rank < best_rank:
+                    best_rank = rank
+                    best_pair = (i, pair)
+            if best_pair is None or best_rank == float("inf"):
+                break
+            i, (a, b) = best_pair
+            tokens = tokens[:i] + [a + b] + tokens[i + 2 :]
+        return tokens
+
+    def test_merge_is_byte_identical_to_reference(self, tok):
+        """Randomised differential test: optimized == pre-fix, exactly."""
+        import random
+
+        assert hasattr(tok, "_bpe_merge"), "MorphTokenizer._bpe_merge missing"
+        rng = random.Random(20261109)
+        symbols = sorted({t for pair in tok.bpe_ranks for t in pair})
+        assert symbols, "tokenizer declares no merges"
+
+        for trial in range(80):
+            n = rng.randint(2, 90)
+            init = [rng.choice(symbols) for _ in range(n)]
+            got = tok._bpe_merge(list(init))
+            want = self._reference_bpe(tok.bpe_ranks, init)
+            assert got == want, f"trial {trial} n={n}: {got!r} != {want!r}"
+
+    def test_merge_handles_no_mergeable_pairs(self, tok):
+        """Pairs absent from bpe_ranks must be returned untouched."""
+        assert hasattr(tok, "_bpe_merge"), "MorphTokenizer._bpe_merge missing"
+        sentinel = ["__no_such_pair_a__", "__no_such_pair_b__", "__no_such_pair_c__"]
+        assert tok._bpe_merge(list(sentinel)) == sentinel
+        assert tok._bpe_merge([]) == []
+        assert tok._bpe_merge(["only"]) == ["only"]
+
+    @pytest.mark.parametrize("n", [2, 3, 4, 5, 6])
+    def test_merge_small_inputs_byte_identical(self, tok, n):
+        """Lock the crossover region (n=2..6) explicitly.
+
+        The randomised oracle draws n from randint(2, 90), so at 80 trials it
+        may never land on the smallest sizes — yet that is precisely where the
+        heap + linked-list setup costs more than the O(n²) scan it replaces
+        (measured 1.62x slower at n=2, break-even by n=5). Correctness there
+        must not rest on a dice roll.
+        """
+        import random
+
+        rng = random.Random(20261109 + n)
+        symbols = sorted({t for pair in tok.bpe_ranks for t in pair})
+        for _ in range(25):
+            init = [rng.choice(symbols) for _ in range(n)]
+            got = tok._bpe_merge(list(init))
+            want = self._reference_bpe(tok.bpe_ranks, init)
+            assert got == want, f"n={n}: {got!r} != {want!r}"
+
+    def test_encode_scales_subquadratically(self, tok):
+        """4x the input must not cost ~16x the time (O(n²) signature).
+
+        A ratio threshold (rather than a wall-clock budget) keeps this honest
+        across machines: O(n²) -> ~16x, O(n log n) -> ~5x.
+        """
+        import time
+
+        base = "The quick brown fox jumps over the lazy dog. "
+        small = (base * 36)[:1500]
+        large = (base * 140)[:6000]
+
+        tok.encode(small)  # warm numba / flatten weights
+        tok.encode(large)
+
+        def best(fn, reps=3):
+            """Minimum of ``reps`` runs, not a single shot.
+
+            A lone scheduler stall must not decide this gate: one run taken
+            while four concurrent vitest workers pushed load to 10 inflated
+            the 1500-char sample enough to breach the threshold, while 6 of 7
+            runs passed and every run passes on an idle box. Min-statistics
+            discard stalls; the ratio threshold below is unchanged.
+            """
+            times = []
+            for _ in range(reps):
+                t0 = time.perf_counter()
+                fn()
+                times.append(time.perf_counter() - t0)
+            return min(times)
+
+        t_small = best(lambda: tok.encode(small))
+        t_large = best(lambda: tok.encode(large))
+
+        ratio = t_large / max(t_small, 1e-9)
+        assert ratio < 8, (
+            f"encode took {t_large * 1000:.0f}ms for 6000 chars vs "
+            f"{t_small * 1000:.0f}ms for 1500 = {ratio:.1f}x for 4x input "
+            "(quadratic signature)"
+        )

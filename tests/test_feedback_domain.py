@@ -747,13 +747,13 @@ class TestOnlineLoRAUpdater:
         updater.add_feedback("hello", "hi there", "thumbs_up")
         assert len(updater._feedback_buffer) == 1
 
-    @patch("threading.Thread.start")
-    def test_add_feedback_triggers_update_at_threshold(self, mock_start):
+    @patch("domain.infrastructure._internal.fire_and_forget.get_pool")
+    def test_add_feedback_triggers_update_at_threshold(self, mock_pool):
         updater = OnlineLoRAUpdater(update_interval=2)
         updater.add_feedback("a", "b", "thumbs_up")
-        assert mock_start.call_count == 0
+        assert mock_pool.return_value.submit.call_count == 0
         updater.add_feedback("c", "d", "thumbs_down")
-        assert mock_start.call_count == 1
+        assert mock_pool.return_value.submit.call_count == 1
 
     def test_compute_gradients_all_positive(self):
         updater = OnlineLoRAUpdater(learning_rate=0.01, engine=_StubEngine())
@@ -1104,6 +1104,90 @@ class TestWorkflowConfig:
         assert config.aggregate_interval_minutes == 60
         assert config.prune_interval_minutes == 120
         assert config.export_interval_hours == 24
+
+
+class TestMetaWeightSaturation:
+    """Saturated feedback history must not drive generation into a loop.
+
+    Reproduces the production /chat bug: user 'default' accumulated
+    temperature_boost +9.26, top_k_boost -450, repetition_boost -9.26 over
+    473 thumbs_up. The old straight-to-hard-clamp pinned temperature 1.5 /
+    top_k 5 / repetition_penalty 0.80 — and repetition_penalty below 1.0
+    actively *rewards* repeating tokens, so sampling degenerated into an
+    infinite repeat until max_new_tokens cut it off.
+    """
+
+    def test_saturated_history_lands_in_safe_band(self):
+        import domain.feedback._internal.database as db_mod
+        from domain.feedback._internal.meta_weights import MetaWeightManager
+
+        db_mod._feedback_db = None  # reset singleton (path-keyed cache)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
+                mwm.db._meta_weights.insert_one(
+                    {
+                        "_id": "default",
+                        "user_id": "default",
+                        "temperature_boost": 9.26,
+                        "repetition_boost": -9.26,
+                        "top_p_boost": 5.0,
+                        "top_k_boost": -450.0,
+                        "style_bias": 5.0,
+                        "confidence_boost": 5.0,
+                        "thumbs_up_count": 473,
+                        "thumbs_down_count": 10,
+                    }
+                )
+                mwm.use_simple_search = False
+                with patch.object(mwm.db, "find_similar_messages", return_value=[]):
+                    w = mwm.get_adjustment("quantum computing", k=5)
+
+                # Inside the tight safe band, not the hard-range corner.
+                assert 0.3 <= w.temperature <= 1.1, w.temperature
+                # Never below 1.0 — history must not make repetition rewarding.
+                assert w.repetition_penalty >= 1.0, w.repetition_penalty
+                # Keep a real candidate pool — never the degenerate top_k=5.
+                assert w.top_k >= 10, w.top_k
+        finally:
+            db_mod._feedback_db = None
+
+    def test_empty_db_still_returns_defaults(self):
+        """The neutral path must be untouched: empty history = exact defaults."""
+        import domain.feedback._internal.database as db_mod
+        from domain.feedback._internal.meta_weights import MetaWeightManager, MetaWeights
+
+        db_mod._feedback_db = None
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
+                mwm.use_simple_search = False
+                with patch.object(mwm.db, "find_similar_messages", return_value=[]):
+                    w = mwm.get_adjustment("hi", k=5)
+                d = MetaWeights()
+                assert (
+                    w.temperature,
+                    w.repetition_penalty,
+                    w.top_p,
+                    w.top_k,
+                ) == (d.temperature, d.repetition_penalty, d.top_p, d.top_k)
+        finally:
+            db_mod._feedback_db = None
+
+    def test_positive_feedback_still_nudges_up(self):
+        """Banding must not flatten a legitimate single thumbs_up signal."""
+        import domain.feedback._internal.database as db_mod
+        from domain.feedback._internal.meta_weights import MetaWeightManager, MetaWeights
+
+        db_mod._feedback_db = None
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
+                mwm.record_feedback("hi", "hello", "thumbs_up", user_id="user1")
+                w = mwm.get_adjustment("test", user_id="user1")
+                assert w.temperature > MetaWeights().temperature, w.temperature
+        finally:
+            db_mod._feedback_db = None
 
 
 class TestFeedbackWorkflowManager:

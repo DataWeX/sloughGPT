@@ -38,26 +38,6 @@ vi.mock('@/components/files/FileStatsCard', () => ({
   FileStatsCard: () => <div data-testid="file-stats-card" />,
 }))
 
-vi.mock('@/lib/cache/api-hooks', () => ({
-  useModels: () => ({ data: [], isLoading: false, refetch: vi.fn() }),
-}))
-
-vi.mock('@/components/models/ModelCatalogCard', () => ({
-  default: () => <div data-testid="model-catalog-card" />,
-}))
-
-vi.mock('@/components/models/QuantizationCard', () => ({
-  default: () => <div data-testid="quantization-card" />,
-}))
-
-vi.mock('@/components/models/DownloadsCard', () => ({
-  default: () => <div data-testid="downloads-card" />,
-}))
-
-vi.mock('@/components/models/EngineStatusCard', () => ({
-  default: () => <div data-testid="engine-status-card" />,
-}))
-
 import DeveloperPage from './page'
 import { filesController } from '@/lib/files-controller'
 import { voiceController } from '@/lib/voice-controller'
@@ -90,6 +70,13 @@ describe('DeveloperPage', () => {
     expect(screen.getByRole('tab', { name: /files/i })).toBeTruthy()
     expect(screen.getByRole('tab', { name: /voice/i })).toBeTruthy()
     expect(screen.getByRole('tab', { name: /api/i })).toBeTruthy()
+  })
+
+  it('exposes the VM console tab — /vm folded in here (card 20261101_154057)', () => {
+    // Composition assertion: the VM journey itself is exercised end-to-end
+    // in developer/vm/vm-tab.test.tsx (68 tests against the same VmTab).
+    render(<DeveloperPage />)
+    expect(screen.getByRole('tab', { name: 'VM' })).toBeTruthy()
   })
 
   it('defaults to shell tab', () => {
@@ -139,17 +126,9 @@ describe('DeveloperPage', () => {
     expect(screen.getByLabelText(/authorization header/i)).toBeTruthy()
   })
 
-  it('renders Models tab with catalog cards', async () => {
-    const user = userEvent.setup()
+  it('no longer hosts the Models tab — the surface moved to /models (card 20261101_154054)', () => {
     render(<DeveloperPage />)
-    expect(screen.getByRole('tab', { name: /models/i })).toBeTruthy()
-    await user.click(screen.getByRole('tab', { name: /models/i }))
-    await waitFor(() => {
-      expect(screen.getByTestId('model-catalog-card')).toBeTruthy()
-    })
-    expect(screen.getByTestId('quantization-card')).toBeTruthy()
-    expect(screen.getByTestId('downloads-card')).toBeTruthy()
-    expect(screen.getByTestId('engine-status-card')).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: /models/i })).toBeNull()
   })
 
   it('refresh (`r`) re-reads voice status in place and never remounts the tab', async () => {

@@ -67,7 +67,7 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
         onKeyDown={handleKeyDown}
         placeholder="Add context..."
         aria-label="Add context"
-        className="flex-1 text-xs bg-muted/50 border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+        className="flex-1 text-xs bg-muted/50 border border-border rounded-lg px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         autoFocus
       />
       <button

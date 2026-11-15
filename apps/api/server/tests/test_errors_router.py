@@ -1,7 +1,9 @@
 """Tests for errors router endpoints."""
 
+import importlib.util
+
 import pytest
-from routers.errors import _dedup_map, _error_buffer
+from routers.system import _dedup_map, _error_buffer
 
 from apps.api.server.tests.test_support import get_test_client
 
@@ -190,3 +192,30 @@ class TestOpenCodeLog:
         data = body.get("data", body)
         assert "entries" in data
         assert isinstance(data["entries"], list)
+
+
+class TestSystemFacadeAbsorbsErrorsSession:
+    """The system router serves the merged /errors + /session routes (card 20261101_154058).
+
+    errors.py and session.py are folded into system.py: one module-level
+    router exposes /system/*, /errors/* and /session/* paths, and
+    routers.errors / routers.session no longer exist.
+    """
+
+    def test_system_router_serves_all_three_prefixes(self):
+        from fastapi import FastAPI
+        from routers.system import router as system_router
+
+        app = FastAPI()
+        app.include_router(system_router)
+        paths = set(app.openapi()["paths"])
+        # system routes keep working
+        assert {"/system/metrics", "/system/info", "/system/executor"} <= paths
+        # merged error routes
+        assert {"/errors/recent", "/errors/grouped", "/errors/stream"} <= paths
+        # merged session routes
+        assert {"/session/{session_id}/context", "/session/{session_id}/messages"} <= paths
+
+    def test_errors_and_session_modules_are_gone(self):
+        assert importlib.util.find_spec("routers.errors") is None
+        assert importlib.util.find_spec("routers.session") is None

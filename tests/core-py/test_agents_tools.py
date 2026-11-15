@@ -138,7 +138,7 @@ class TestToolSpec:
 class TestTaskStatus:
     def test_values(self):
         assert TaskStatus.PENDING == "pending"
-        assert TaskStatus.IN_PROGRESS == "in_progress"
+        assert TaskStatus.LIVE == "live"
         assert TaskStatus.COMPLETED == "completed"
         assert TaskStatus.FAILED == "failed"
 
@@ -147,11 +147,11 @@ class TestTaskStatus:
         assert isinstance(TaskStatus.COMPLETED, str)
 
     def test_distinct_values(self):
-        vals = {TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.FAILED}
+        vals = {TaskStatus.PENDING, TaskStatus.LIVE, TaskStatus.COMPLETED, TaskStatus.FAILED}
         assert len(vals) == 4
 
     def test_comparison(self):
-        assert TaskStatus.PENDING != TaskStatus.IN_PROGRESS
+        assert TaskStatus.PENDING != TaskStatus.LIVE
 
     def test_identity(self):
         assert TaskStatus.PENDING == "pending"
@@ -197,8 +197,8 @@ class TestAgentTask:
 
     def test_status_set(self):
         at = AgentTask(id="t1", description="d", assigned_agent="r")
-        at.status = TaskStatus.IN_PROGRESS
-        assert at.status == "in_progress"
+        at.status = TaskStatus.LIVE
+        assert at.status == "live"
 
     def test_error_field(self):
         at = AgentTask(id="t1", description="d", assigned_agent="r", error="fail")

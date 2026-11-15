@@ -81,7 +81,7 @@ const RGB_BASELINE = ['app/(app)/magazine/magazine-tokens.ts']
  * See design-system-enforcement skill (§ Stock Tailwind Palette).
  */
 const STOCK_PALETTE_RE =
-  /\b(?:bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(?:indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/g
+  /\b(?:bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(?:indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple|violet)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/g
 
 /** Per-file grandfather list — empty: every stock-palette utility is now an offender. */
 const STOCK_PALETTE_BASELINE: Record<string, number> = {}
@@ -145,17 +145,9 @@ const TEXT_2XL_BASELINE: Record<string, number> = {
   'app/(app)/consciousness/analytics/page.tsx': 4,
   'app/(app)/consciousness/history/page.tsx': 4,
   'app/(app)/consciousness/master/page.tsx': 4,
-  'components/phoneme/ProgressSummary.tsx': 4,
-  'components/phoneme/PhonemeComparison.tsx': 3,
-  'components/phoneme/ScoringCard.tsx': 3,
-  'components/phoneme/MultipleChoiceQuiz.tsx': 2,
-  'components/phoneme/ChallengeCard.tsx': 2,
   'app/(app)/consciousness/training/page.tsx': 1,
   'app/(app)/consciousness/insights/page.tsx': 1,
   'components/security/SecurityAuditCard.tsx': 1,
-  'components/phoneme/PronunciationGame.tsx': 1,
-  'components/phoneme/PronunciationRecording.tsx': 1,
-  'components/phoneme/FlashcardCard.tsx': 1,
   'features/chat/components/dialogs/ReadFileSection.tsx': 1,
   'app/(app)/magazine/magazine-hero.tsx': 1,
   'app/(app)/magazine/magazine-tokens.ts': 1,

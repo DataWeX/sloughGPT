@@ -48,6 +48,10 @@ logger = logging.getLogger("slo.tokenizer")
 _GPT2_SPLIT = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?[^\W\d_]+| ?\d+| ?[^\s\w]+|\s+(?!\S)|\s+""")
 
 
+BYTE_LEVEL_MARKER = "\u0120"  # 'Ġ' — how GPT-2/Qwen-class vocabs encode ' '
+WORD_END = "</w>"  # how SloBPE's own trained vocabs mark a word end
+
+
 def gpt2_pretokenize(text: str) -> list[str]:
     """Split text into pretokens using the GPT-2 regex pattern.
 
@@ -262,7 +266,10 @@ class SloBPE:
             ids.append(self.bos_id)
 
         for word in self._pretokenize(text, lowercase=True):
-            word_ids = self._encode_word(word + self._word_suffix)
+            if self._byte_level:
+                word_ids = self._encode_byte_level_word(word)
+            else:
+                word_ids = self._encode_word(word + self._word_suffix)
             ids.extend(word_ids)
 
         if add_eos:
@@ -306,6 +313,36 @@ class SloBPE:
                     encoded[i] = ids + [self.pad_id] * (target - len(ids))
 
         return encoded
+
+    @property
+    def _byte_level(self) -> bool:
+        """True when the vocabulary spells the inter-word space as ``"Ġ"``.
+
+        GPT-2/Qwen-class vocabularies have neither a literal ``" "`` token nor
+        a ``"</w>"`` word-end token: the space between two words is carried by
+        the ``"Ġ"`` prefix that starts the following word. A vocabulary that
+        carries ``"</w>"`` is SloBPE's own trained convention and stays on the
+        original path untouched.
+        """
+        return WORD_END not in self.stoi and BYTE_LEVEL_MARKER in self.stoi
+
+    def _encode_byte_level_word(self, word: str) -> list[int]:
+        """Encode a pretoken whose word boundary lives in its leading space.
+
+        The leading space of a gpt2 pretoken *is* the boundary. Emitted as a
+        character it has no entry in a byte-level vocabulary, so it degrades to
+        ``<UNK>`` — which ``decode`` then drops as a special token, taking the
+        word boundary with it. Emitted as the ``"Ġ"`` marker it survives.
+        """
+        lead = len(word) - len(word.lstrip(" "))
+        ids: list[int] = []
+        if lead:
+            marker_id = self.stoi.get(BYTE_LEVEL_MARKER, self.unk_id)
+            ids.extend([marker_id] * lead)
+        rest = word[lead:]
+        if rest:
+            ids.extend(self._encode_word(rest))
+        return ids
 
     def _encode_word(self, word: str) -> list[int]:
         """Encode a single word (with </w> suffix) by iteratively applying BPE merges."""
@@ -397,7 +434,13 @@ class SloBPE:
             tokens.append(t)
 
         raw = "".join(tokens)
-        if self._pretokenizer == "gpt2":
+        if self._byte_level:
+            # Byte-level vocabulary: "Ġ" *is* the leading space of the next
+            # word. Restore it before the fast paths below, or every boundary
+            # is dropped while the words — which carry their own trailing
+            # punctuation — decode cleanly.
+            raw = raw.replace(BYTE_LEVEL_MARKER, " ")
+        elif self._pretokenizer == "gpt2":
             # GPT-2: leading-space in pre-tokens handles word separation
             raw = raw.replace(self._word_suffix, "")
         else:
@@ -407,7 +450,9 @@ class SloBPE:
         # whitespace survives chunk concatenation; only full sequences strip.
         if len(tokens) <= 1:
             return raw
-        return raw.strip()
+        # A byte-level round-trip is space-faithful exactly as emitted:
+        # stripping here would delete the boundary that was just restored.
+        return raw if self._byte_level else raw.strip()
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -1122,6 +1167,13 @@ class SloUnigram:
         for pretok in self._pretokenize(text, True):
             if not pretok.strip():
                 continue  # pragma: no cover (unreachable — pretokenize never yields empty strings)
+            if self._byte_level:
+                # The leading space of a gpt2 pretoken *is* the word
+                # boundary; spelled as a character it has no entry here and
+                # degrades to <UNK>, which decode then drops.
+                lead = len(pretok) - len(pretok.lstrip(" "))
+                if lead:
+                    pretok = BYTE_LEVEL_MARKER * lead + pretok[lead:]
             path = self._viterbi(pretok)
             ids.extend(self.stoi.get(t, self.unk_id) for t in path)
 
@@ -1288,6 +1340,16 @@ class SloUnigram:
     # Decoding
     # ------------------------------------------------------------------
 
+    @property
+    def _byte_level(self) -> bool:
+        """True when the vocabulary spells the inter-word space as ``"Ġ"``.
+
+        See ``SloBPE._byte_level``: a byte-level vocabulary carries the word
+        boundary in the ``"Ġ"`` prefix of the following word, not in a literal
+        space and not in a ``"</w>"`` suffix.
+        """
+        return WORD_END not in self.stoi and BYTE_LEVEL_MARKER in self.stoi
+
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """Decode token IDs back to text.
 
@@ -1309,11 +1371,16 @@ class SloUnigram:
             tokens.append(t)
 
         raw = "".join(tokens)
+        # Byte-level vocabulary: "Ġ" is the literal leading space of the next
+        # word, and there is no "</w>" here to substitute — so without this
+        # the words concatenate and every inter-word space is lost.
+        if self._byte_level:
+            raw = raw.replace(BYTE_LEVEL_MARKER, " ")
         # Single-token decodes (streaming) must be lossless so inter-token
         # whitespace survives chunk concatenation; only full sequences strip.
         if len(tokens) <= 1:
             return raw
-        return raw.strip()
+        return raw if self._byte_level else raw.strip()
 
     # ------------------------------------------------------------------
     # Serialization

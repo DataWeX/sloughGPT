@@ -60,7 +60,7 @@ export function NewAgentCard({
                     setNewInstructions(t.instructions)
                     setNewTools([...t.tools])
                   }}
-                  className="rounded-full px-3 py-1 text-[10px] font-medium border border-border/40 bg-muted/20 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 focus:ring-2 focus:ring-primary/30 transition-colors"
+                  className="rounded-full px-3 py-1 text-[10px] font-medium border border-border/40 bg-muted/20 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset transition-colors"
                 >
                   {t.name}
                 </button>

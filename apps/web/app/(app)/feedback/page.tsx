@@ -31,11 +31,6 @@ import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
 import { logger } from '@/lib/dev-log'
 import { formatLocaleDate } from '@/lib/time-format'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 type Tab = 'stats' | 'conversations' | 'training'
 

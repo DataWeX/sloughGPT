@@ -17,11 +17,6 @@ import {
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { IconSparkle, IconRefresh, IconDownload } from '@/components/icons/NavIcons'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Insight {
   id: string
@@ -38,6 +33,18 @@ const BELIEF_DIMS = ['competence', 'helpfulness', 'creativity', 'accuracy', 'emp
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v))
+}
+
+/**
+ * Join per-insight suggestions into the Recommendation card's single line.
+ * Every source suggestion is a complete sentence ending in '.', so the
+ * terminator is stripped before the '; ' join — otherwise the aggregate
+ * renders as "…objectives.; Introduce varied topics…".
+ */
+export function joinSuggestions(suggestions: string[]): string {
+  const parts = suggestions.map(s => s.trim().replace(/\.$/, '')).filter(Boolean)
+  if (parts.length === 0) return ''
+  return `${parts.join('; ')}.`
 }
 
 export default function ConsciousnessInsightsPage() {
@@ -252,7 +259,7 @@ export default function ConsciousnessInsightsPage() {
         title: t('consciousness_insights.recommendation'),
         severity: lowScoreInsights.length > 2 ? 'warning' : 'info',
         description: t('consciousness_insights.recommendation_desc'),
-        suggestion: lowScoreInsights.map((i) => i.suggestion).join('; '),
+        suggestion: joinSuggestions(lowScoreInsights.map((i) => i.suggestion)),
         detail: lowScoreInsights.map((i) => `${i.title}: ${i.score}/100`).join(' | '),
         score: Math.max(...lowScoreInsights.map((i) => i.score)),
       })

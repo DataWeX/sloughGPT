@@ -60,6 +60,7 @@ End-to-end user flows driven by the **avion** computer-use library (`packages/av
 | Old Route      | Redirects To |
 | -------------- | ------------ |
 | `/companion`   | `/souls`     |
+| `/personality` | `/souls`     |
 | `/evaluate`    | `/benchmark` |
 | `/memory`      | `/knowledge` |
 | `/collections` | `/datasets`  |
@@ -72,7 +73,7 @@ End-to-end user flows driven by the **avion** computer-use library (`packages/av
 
 The following routes have `page.tsx` files but are not covered by journey tests:
 
-**Core**: `/dataset/[id]`, `/model/[id]`
+**Core**: `/dataset/[id]`
 **Agents/Souls**: `/agents`, `/souls`
 **Tools**: `/tokenizer`, `/benchmark`, `/compare`, `/shell`, `/errors`, `/monitoring`
 **Supporting**: `/feedback`, `/files`, `/security`, `/developer`, `/magazine`, `/learn`

@@ -2,6 +2,7 @@
 
 Public API:
     TestFramework, TestResult, TestSuite, BenchmarkRunner, test_decorator
+    FeatureFlags — feature-flag registry (list_all) for runtime-config surfaces
     find_available_port, find_repo_root, find_server_python
     utc_now_iso, to_iso, parse_iso, normalize_iso, is_valid_iso, get_timestamp,
     repair_iso — read-path repair for broken "+00:00Z" values
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 from domain.shared._internal.concurrency import Cache, RateLimiter, Timer, retry
 from domain.shared._internal.dims import FF_ALIGN, align_dim_ff
+from domain.shared._internal.feature_flags import FeatureFlags
 from domain.shared._internal.formatting import format_size, format_time
 from domain.shared._internal.hashing import hash_string
 from domain.shared._internal.ids import generate_id
@@ -44,6 +46,7 @@ __all__ = [
     "FF_ALIGN",
     "BenchmarkRunner",
     "Cache",
+    "FeatureFlags",
     "RateLimiter",
     "TestFramework",
     "TestResult",

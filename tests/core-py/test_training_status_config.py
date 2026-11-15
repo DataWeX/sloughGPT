@@ -26,7 +26,7 @@ class TestCompletionStatus:
         assert len(CompletionStatus) == 5
 
     def test_values(self):
-        assert CompletionStatus.IN_PROGRESS.value == "in_progress"
+        assert CompletionStatus.LIVE.value == "live"
         assert CompletionStatus.COMPLETED.value == "completed"
         assert CompletionStatus.FAILED.value == "failed"
 

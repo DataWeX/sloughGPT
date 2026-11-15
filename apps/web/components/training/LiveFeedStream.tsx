@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Badge, StatusDot, getComponentFeature } from '@sloughgpt/strui'
+import Link from '@/vite/next-compat/link'
 import { createSSEStream, type SSEEnvelope, type SSEStream } from '@/lib/sse-client'
 
 // Feature version this surface belongs to — single source of truth is the
@@ -194,18 +195,36 @@ export const LiveFeedStream = memo(function LiveFeedStream() {
         ) : null}
       </ul>
 
-      {/* Active jobs — status at a glance */}
+      {/* Active jobs — status at a glance; each chip opens the job's live view */}
       {(snapshot?.jobs.active ?? []).length > 0 ? (
         <ul className="mb-3 flex flex-wrap gap-2" aria-label="Active jobs">
           {snapshot?.jobs.active.map((job) => (
             <li key={job.id}>
-              <Badge variant="outline" className="gap-1.5 text-xs font-normal">
-                <span className="max-w-40 truncate">{job.name || job.id}</span>
-                <span className="text-muted-foreground">
-                  {job.status}
-                  {typeof job.progress === 'number' ? ` ${Math.round(job.progress)}%` : ''}
-                </span>
-              </Badge>
+              {job.id.startsWith('pending-') ? (
+                <Badge variant="outline" className="gap-1.5 text-xs font-normal">
+                  <span className="max-w-40 truncate">{job.name || job.id}</span>
+                  <span className="text-muted-foreground">
+                    {job.status}
+                    {typeof job.progress === 'number' ? ` ${Math.round(job.progress)}%` : ''}
+                  </span>
+                </Badge>
+              ) : (
+                <Link
+                  href={`/training/job/${job.id}`}
+                  aria-label={`Open live view for ${job.name || job.id}`}
+                >
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 text-xs font-normal cursor-pointer hover:border-primary/60 hover:bg-muted/40 transition-colors"
+                  >
+                    <span className="max-w-40 truncate">{job.name || job.id}</span>
+                    <span className="text-muted-foreground">
+                      {job.status}
+                      {typeof job.progress === 'number' ? ` ${Math.round(job.progress)}%` : ''}
+                    </span>
+                  </Badge>
+                </Link>
+              )}
             </li>
           ))}
         </ul>

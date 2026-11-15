@@ -1,4 +1,10 @@
-"""Training control endpoints — status, start, pause, resume, stop, reset, is-running."""
+"""Training control endpoints — status, start, pause, resume, stop, reset, is-running.
+
+Descriptor-projected (card 20261104_151036): seven ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Raw wire — the
+handlers' dicts are served unwrapped (``envelope=False``), byte-identical to
+the hand-built routes, which published 200 only (no parameters → no 422).
+"""
 
 from __future__ import annotations
 
@@ -6,6 +12,9 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter
+from infrastructure.contract import RouteSpec, create_router
+
+from domain.agents import ToolSpec
 
 from .controller import get_training_controller
 from .jobs import training_jobs
@@ -48,7 +57,6 @@ def _signal_current_job(pause: bool | None = None, cancel: bool = False) -> dict
     return signaled
 
 
-@router.get("/training/status")
 async def get_training_status():
     """Get comprehensive training system status."""
     controller = get_training_controller()
@@ -66,7 +74,6 @@ async def get_training_status():
     return status
 
 
-@router.post("/training/control/start")
 async def control_start_training():
     """Request to start training."""
     controller = get_training_controller()
@@ -92,7 +99,6 @@ async def control_start_training():
     }
 
 
-@router.post("/training/control/pause")
 async def control_pause_training():
     """Pause current training."""
     controller = get_training_controller()
@@ -107,7 +113,6 @@ async def control_pause_training():
     return result
 
 
-@router.post("/training/control/resume")
 async def control_resume_training():
     """Resume paused training."""
     controller = get_training_controller()
@@ -120,7 +125,6 @@ async def control_resume_training():
     return result
 
 
-@router.post("/training/control/stop")
 async def control_stop_training():
     """Stop current training."""
     controller = get_training_controller()
@@ -138,14 +142,12 @@ async def control_stop_training():
     return result
 
 
-@router.post("/training/control/reset")
 async def control_reset_training():
     """Reset training controller to idle state."""
     controller = get_training_controller()
     return controller.reset()
 
 
-@router.get("/training/is-running")
 async def is_training_running():
     """Quick check if training is currently running."""
     controller = get_training_controller()
@@ -156,3 +158,121 @@ async def is_training_running():
         "state": controller.state.value,
         "current_job": controller.current_job_id,
     }
+
+
+# ── Descriptor projections (card 20261104_151036) ──────────────────────
+# One ToolSpec per capability; the module router keeps the tags the hand-built
+# decorators rode, so the served tag list stays byte-identical.
+
+SPEC_STATUS = ToolSpec(
+    name="training.control.status",
+    description="Get comprehensive training system status.",
+    parameters=[],
+    execute=get_training_status,
+    idempotent=True,
+    version="1",
+)
+
+SPEC_START = ToolSpec(
+    name="training.control.start",
+    description="Request to start training.",
+    parameters=[],
+    execute=control_start_training,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_PAUSE = ToolSpec(
+    name="training.control.pause",
+    description="Pause current training.",
+    parameters=[],
+    execute=control_pause_training,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_RESUME = ToolSpec(
+    name="training.control.resume",
+    description="Resume paused training.",
+    parameters=[],
+    execute=control_resume_training,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_STOP = ToolSpec(
+    name="training.control.stop",
+    description="Stop current training.",
+    parameters=[],
+    execute=control_stop_training,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_RESET = ToolSpec(
+    name="training.control.reset",
+    description="Reset training controller to idle state.",
+    parameters=[],
+    execute=control_reset_training,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_IS_RUNNING = ToolSpec(
+    name="training.control.is_running",
+    description="Quick check if training is currently running.",
+    parameters=[],
+    execute=is_training_running,
+    idempotent=True,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_STATUS,
+        RouteSpec(path="/training/status", envelope=False),
+        get_training_status,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_START,
+        RouteSpec(path="/training/control/start", envelope=False),
+        control_start_training,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_PAUSE,
+        RouteSpec(path="/training/control/pause", envelope=False),
+        control_pause_training,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RESUME,
+        RouteSpec(path="/training/control/resume", envelope=False),
+        control_resume_training,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STOP,
+        RouteSpec(path="/training/control/stop", envelope=False),
+        control_stop_training,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_RESET,
+        RouteSpec(path="/training/control/reset", envelope=False),
+        control_reset_training,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_IS_RUNNING,
+        RouteSpec(path="/training/is-running", envelope=False),
+        is_training_running,
+    )
+)

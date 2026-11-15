@@ -191,6 +191,7 @@ export {
   IconChat,
   IconStar,
   IconPin,
+  IconSmile,
   IconClock,
   IconSettings,
   IconCopy,

@@ -58,8 +58,7 @@ const ITEMS: WhatsNewItem[] = [
   {
     id: 'dark-mode-fixes',
     title: 'Dark mode & startup fixes',
-    description:
-      'Fixed the theme crash on launch and dark-mode colors across screens.',
+    description: 'Fixed the theme crash on launch and dark-mode colors across screens.',
     icon: 'moon',
     date: '2026-09-06',
     tags: ['Theme', 'Stability'],

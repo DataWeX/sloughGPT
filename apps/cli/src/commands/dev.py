@@ -16,6 +16,7 @@ from pathlib import Path
 
 from utils.formatting import format_time
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
 from domain.logging import get_global
 from domain.shared import find_server_python
 
@@ -594,7 +595,12 @@ def cmd_dev(args):
     npm_cmd = _web_dev_cmd(web_port)
 
     python = Path(find_server_python(root))
-    api_proc = subprocess.Popen(
+    # Process kind: both servers run as engine-supervised commands —
+    # live status via engine.list_processes(), and Engine.stop()/atexit
+    # reaps them if the finally below never runs (docs/plans/
+    # 2026-09-20-execution-consolidation.md, routing kind "process").
+    engine = get_engine()
+    api_proc = engine.spawn_command(
         [
             str(python),
             "-m",
@@ -606,11 +612,11 @@ def cmd_dev(args):
             str(api_port),
             "--reload",
         ],
+        name="dev-api",
         cwd=str(root),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
     )
 
     stop_event = threading.Event()
@@ -624,7 +630,7 @@ def cmd_dev(args):
     _ensure_web_node_modules(root)
 
     if watch_web:
-        web_proc = subprocess.Popen(
+        web_proc = engine.spawn_command(
             [
                 "npx",
                 "nodemon",
@@ -640,20 +646,20 @@ def cmd_dev(args):
                 "ts,tsx,js,jsx",
                 *npm_cmd,
             ],
+            name="dev-web",
             cwd=str(web_cwd),
             env=web_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            text=True,
         )
     else:
-        web_proc = subprocess.Popen(
+        web_proc = engine.spawn_command(
             npm_cmd,
+            name="dev-web",
             cwd=str(web_cwd),
             env=web_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            text=True,
         )
 
     web_thread = threading.Thread(

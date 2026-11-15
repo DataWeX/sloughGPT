@@ -19,11 +19,6 @@ import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTab
 import { settingsTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-// Module scope: `addToast` must keep a stable identity — it sits in
-// useCallback/useEffect dependency arrays, and a per-render arrow would
-// re-fire those effects on every render.
-const addToast = (message: string, type?: string) =>
-  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 interface Notification {
   type: string

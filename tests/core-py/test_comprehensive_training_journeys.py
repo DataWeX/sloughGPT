@@ -34,6 +34,11 @@ pytest.importorskip(
     reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
 )
 
+# Shared env gate (card 20261104_085623): skip honestly when the served tree
+# is foreign/stale or playwright's chromium build is missing, instead of
+# failing content asserts against the wrong checkout.
+from tests.skip_gate_identity import environment_gate
+
 # Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
 # stale :3000 default). Override with SLO_WEB_URL / SLO_API_URL for
 # non-standard setups.
@@ -180,6 +185,9 @@ def ensure_servers_ready():
             f"Web UI at {BASE} not ready — journey tests need the full stack "
             "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
         )
+    # After the waits (a booting stack gets its chance to come up), verify
+    # identity: foreign/stale tree or missing chromium build → honest skip.
+    environment_gate(BASE)
     time.sleep(3)
 
 

@@ -32,7 +32,7 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
     if (phase !== 'error') {
       const store = useBannerStore.getState()
       const stale = store.banners.find((b) => b.key === 'training-failed')
-      if (stale) store.dismissBanner(stale.id)
+      if (stale) notify.dismissBanner(stale.id)
       return
     }
     notify.banner({

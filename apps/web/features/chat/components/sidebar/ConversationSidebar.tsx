@@ -308,7 +308,7 @@ function SidebarContent({
               onClick={() => setSortOpen(!sortOpen)}
               className={cn(
                 'h-6 w-6 flex items-center justify-center rounded hover:bg-muted/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                sortMode !== 'updated' ? 'text-primary' : 'text-muted-foreground/60',
+                sortMode !== 'updated' ? 'text-primary' : 'text-muted-foreground',
                 'active:bg-muted',
               )}
               aria-label="Sort conversations"
@@ -391,13 +391,13 @@ function SidebarContent({
 
       {conversations.length > 0 && (
         <div className="relative px-2 pt-1.5 pb-1">
-          <IconSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
+          <IconSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations…"
-            className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
+            className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground focus:bg-muted/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset transition-colors"
             aria-label="Search conversations"
           />
         </div>
@@ -405,8 +405,8 @@ function SidebarContent({
       <div className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-1 pb-4">
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-6 px-3 gap-2">
-            <IconChat className="h-5 w-5 text-muted-foreground/30" />
-            <p className="text-xs text-muted-foreground/60 text-center leading-relaxed">
+            <IconChat className="h-5 w-5 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
               No conversations yet
             </p>
             <Button
@@ -439,9 +439,9 @@ function SidebarContent({
           <>
             {starred.length > 0 && (
               <div className="mb-1">
-                <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
                   Starred
-                  <span className="text-muted-foreground/30 font-mono">{starred.length}</span>
+                  <span className="text-muted-foreground font-mono">{starred.length}</span>
                 </p>
                 <div className="space-y-0.5">
                   {starred.map((c) => (
@@ -467,9 +467,9 @@ function SidebarContent({
 
             {pinned.length > 0 && (
               <div className="mb-1">
-                <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
                   Pinned
-                  <span className="text-muted-foreground/30 font-mono">{pinned.length}</span>
+                  <span className="text-muted-foreground font-mono">{pinned.length}</span>
                 </p>
                 <div className="space-y-0.5">
                   {pinned.map((c) => (
@@ -495,9 +495,9 @@ function SidebarContent({
 
             {recencyGroups.map((group) => (
               <div key={group.label}>
-                <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
                   {group.label}
-                  <span className="text-muted-foreground/30 font-mono">
+                  <span className="text-muted-foreground font-mono">
                     {group.conversations.length}
                   </span>
                 </p>
@@ -563,16 +563,16 @@ function SidebarContent({
               <IconFolder
                 className={cn(
                   'h-4 w-4 transition-colors',
-                  archivedExpanded ? 'text-primary' : 'text-muted-foreground/60',
+                  archivedExpanded ? 'text-primary' : 'text-muted-foreground',
                 )}
               />
-              <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider flex-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex-1">
                 Archived
               </span>
-              <span className="text-xs text-muted-foreground/40 font-mono">{archivedCount}</span>
+              <span className="text-xs text-muted-foreground font-mono">{archivedCount}</span>
               <IconChevronRight
                 className={cn(
-                  'h-4 w-4 text-muted-foreground/40 transition-transform',
+                  'h-4 w-4 text-muted-foreground transition-transform',
                   archivedExpanded && 'rotate-90',
                 )}
               />
@@ -589,7 +589,7 @@ function SidebarContent({
                     <div className="h-11 rounded-md bg-muted animate-pulse motion-reduce:animate-none opacity-70" />
                   </div>
                 ) : archivedConversations.length === 0 ? (
-                  <div className="text-xs text-muted-foreground/50 px-2 py-2">
+                  <div className="text-xs text-muted-foreground px-2 py-2">
                     No archived conversations
                   </div>
                 ) : (

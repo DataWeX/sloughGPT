@@ -613,6 +613,50 @@ def test_times():
     assert _hex("times 0 nop") == ""
 
 
+def test_times_insn_with_operands_emits_repeats():
+    # Card 20261108_140706: `times N <insn-with-operands>` must unroll to N
+    # copies of the instruction encoding — the old else-branch parsed the
+    # whole operand string as an immediate and emitted N 0x00 bytes.
+    assert _hex("times 5 mov eax, 42", 32) == "b82a000000" * 5
+    assert _hex("times 5 mov eax, 42", 32) == _hex("mov eax, 42", 32) * 5
+    assert _hex("times 5 add eax, 1", 32) == _hex("add eax, 1", 32) * 5
+    assert _hex("times 5 sub eax, 1", 32) == _hex("sub eax, 1", 32) * 5
+    assert _hex("times 5 push eax", 32) == _hex("push eax", 32) * 5
+    assert _hex("times 5 push eax", 32) == "50" * 5
+    # count forms: arithmetic expression and zero
+    assert _hex("times 2+3 add eax, 1", 32) == _hex("add eax, 1", 32) * 5
+    assert _hex("times 0 mov eax, 42", 32) == ""
+    # mnemonic case: the single-byte fast path was case-sensitive, the
+    # instruction emitter lowercases its op
+    assert _hex("times 4 NOP", 32) == "90" * 4
+
+
+def test_times_rel_jump_unrolls_with_per_copy_displacement():
+    # Each repetition must recompute the rel displacement from its own
+    # position: slicing one already-encoded jump N times would pin the first
+    # copy's displacement onto every copy.
+    unrolled = "jz lbl\njz lbl\njz lbl\nlbl: nop"
+    repeated = "times 3 jz lbl\nlbl: nop"
+    assert _hex(repeated, 32) == _hex(unrolled, 32)
+
+
+def test_times_runtime_equivalence_with_unrolled():
+    # The times form must reach the same state and halt at the same step
+    # count as the hand-unrolled program (the old 0x00 stream executed
+    # garbage and could swallow the hlt, flying to max_steps).
+    unrolled = "[BITS 32]\nmov eax, 10\nadd eax, 5\nadd eax, 5\nadd eax, 5\nhlt"
+    repeated = "[BITS 32]\nmov eax, 10\ntimes 3 add eax, 5\nhlt"
+    results = []
+    for src in (unrolled, repeated):
+        cpu = X86CPU()
+        cpu.load(X86Assembler().assemble(src), org=0)
+        results.append((cpu.run(max_steps=1000), cpu.eax))
+    (steps_u, eax_u), (steps_r, eax_r) = results
+    assert eax_u == eax_r == 25
+    assert steps_u == steps_r
+    assert steps_r <= 10  # clean halt, not a max_steps fly-by
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Directives and immediate parsing
 # ══════════════════════════════════════════════════════════════════════════════

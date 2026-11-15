@@ -71,7 +71,6 @@ describe('training-service', () => {
     await training.loadCheckpoint('cp1')
     expect(mockApi.post).toHaveBeenCalledWith('/training/checkpoints/cp1/load')
   })
-
   it('listDatasets calls GET /datasets', async () => {
     mockApi.get.mockResolvedValueOnce([])
     await training.listDatasets()

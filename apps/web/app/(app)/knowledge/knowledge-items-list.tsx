@@ -106,7 +106,7 @@ export function KnowledgeItemsList({ wb }: { wb: KnowledgeWorkbench }) {
                       ? 'bg-primary/[0.04] border-primary/30'
                       : 'bg-card border-border/40 hover:bg-muted/30',
                 )}
-                onClick={() => router.push(`/knowledge/${item.id}`)}
+                onClick={() => router.push(`/knowledge?id=${encodeURIComponent(item.id)}`)}
               >
                 <div className="flex items-start gap-2">
                   <Checkbox
@@ -122,7 +122,7 @@ export function KnowledgeItemsList({ wb }: { wb: KnowledgeWorkbench }) {
                         <div>
                           <textarea
                             className={cn(
-                              'w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40',
+                              'w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                               editErrors.content
                                 ? 'border-destructive ring-destructive/20'
                                 : 'border-input',

@@ -1,7 +1,7 @@
 'use client'
 
 /** API connection card with test/status, plus external provider URL. */
-import { SettingsSlider, VersionBadge, WEB_VERSION } from './settings-ui'
+import { VersionBadge, WEB_VERSION } from './settings-ui'
 import { SettingsExternalProviderCard } from '@/components/settings/SettingsExternalProviderCard'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { settingsSchema } from '@/lib/validation-schemas'
@@ -125,44 +125,9 @@ export function SettingsConnection({ wb }: { wb: SettingsWorkbench }) {
         </CardFooter>
       </Card>
 
-      {/* Connection banner — the one banner that shows when the backend is
-          unreachable, so its timings are LOCAL settings (readable offline) */}
-      <Card data-testid="settings-connection-banner">
-        <CardHeader>
-          <div>
-            <CardTitle className="text-base">Connection banner</CardTitle>
-            <CardDescription>Backend drop and reconnection notice timing</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <SettingsSlider
-            label="Drop notice delay"
-            value={settings.bannerGraceMs ?? 5_000}
-            onChange={(v) => updateSettings({ bannerGraceMs: v })}
-            min={0}
-            max={30_000}
-            step={500}
-            formatValue={(v) => (v === 0 ? 'Immediate' : `${(v / 1000).toFixed(1)}s`)}
-          />
-          <SettingsSlider
-            label="Reconnected confirmation"
-            value={settings.bannerHoldMs ?? 4_000}
-            onChange={(v) => updateSettings({ bannerHoldMs: v })}
-            min={0}
-            max={30_000}
-            step={500}
-            formatValue={(v) => (v === 0 ? 'Off' : `${(v / 1000).toFixed(1)}s`)}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            The red “Backend unreachable” notice waits this long before appearing (blips are never
-            shown), then the green confirmation stays this long after the connection recovers.
-            Stored locally so they work while the service is down.
-          </p>
-        </CardContent>
-        <CardFooter className="justify-end">
-          <VersionBadge label="v" version={WEB_VERSION} />
-        </CardFooter>
-      </Card>
+      {/* Connection banner timing card hidden 2026-11-15 (user ruling: unnecessary
+          for now — git history has the full block). The runtime banner itself
+          keeps working on store defaults (bannerGraceMs 5_000 / bannerHoldMs 4_000). */}
 
       {/* External model provider (OpenRouter / OpenAI-compatible) — separate from service API URL + HF token */}
       <SettingsExternalProviderCard version={WEB_VERSION} />

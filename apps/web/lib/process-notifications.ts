@@ -61,48 +61,44 @@ interface ProcessNotificationStore {
   clear: () => void
 }
 
-const processNotificationStore = createStore<ProcessNotificationStore>(
-  (set) => ({
-    notifications: [],
+const processNotificationStore = createStore<ProcessNotificationStore>((set) => ({
+  notifications: [],
 
-    ingest: (events) => {
-      if (!events?.length) return
-      // Settled guard: a projection with no actions carries no command
-      // surface — the process is done and renders nothing.
-      const settledIds = new Set(
-        events.filter((e) => e.actions.length === 0).map((e) => e.event_id),
+  ingest: (events) => {
+    if (!events?.length) return
+    // Settled guard: a projection with no actions carries no command
+    // surface — the process is done and renders nothing.
+    const settledIds = new Set(events.filter((e) => e.actions.length === 0).map((e) => e.event_id))
+    set((prev) => {
+      // Start from existing minus anything this batch settles or
+      // re-projects with a fresh action surface.
+      const incoming = new Map(events.map((e) => [e.event_id, e]))
+      const kept = prev.notifications.filter(
+        (n) => !incoming.has(n.event_id) && !settledIds.has(n.event_id),
       )
-      set((prev) => {
-        // Start from existing minus anything this batch settles or
-        // re-projects with a fresh action surface.
-        const incoming = new Map(events.map((e) => [e.event_id, e]))
-        const kept = prev.notifications.filter(
-          (n) => !incoming.has(n.event_id) && !settledIds.has(n.event_id),
-        )
-        const updated = events
-          .filter((e) => e.actions.length > 0)
-          .map((e) => {
-            const existing = prev.notifications.find((n) => n.event_id === e.event_id)
-            // A re-projection is fresh server truth: drop stale/dispatched
-            // marks so the action surface reflects CURRENT state.
-            return { ...existing, ...e, dispatched: false, stale: false }
-          })
-        return { notifications: [...kept, ...updated] }
-      })
-    },
+      const updated = events
+        .filter((e) => e.actions.length > 0)
+        .map((e) => {
+          const existing = prev.notifications.find((n) => n.event_id === e.event_id)
+          // A re-projection is fresh server truth: drop stale/dispatched
+          // marks so the action surface reflects CURRENT state.
+          return { ...existing, ...e, dispatched: false, stale: false }
+        })
+      return { notifications: [...kept, ...updated] }
+    })
+  },
 
-    dismiss: (eventId) => {
-      set((prev) => ({
-        notifications: prev.notifications.filter((n) => n.event_id !== eventId),
-      }))
-    },
+  dismiss: (eventId) => {
+    set((prev) => ({
+      notifications: prev.notifications.filter((n) => n.event_id !== eventId),
+    }))
+  },
 
-    clear: () => set({ notifications: [] }),
-  }),
-)
+  clear: () => set({ notifications: [] }),
+}))
 
 export const useProcessNotifications = Object.assign(
-  <T,>(selector: (state: ProcessNotificationStore) => T): T =>
+  <T>(selector: (state: ProcessNotificationStore) => T): T =>
     useStore(processNotificationStore, selector),
   {
     getState: processNotificationStore.getState,
@@ -150,10 +146,7 @@ export async function loadProcessSnapshot(): Promise<void> {
  *   the SERVER re-validates against current state and may refuse; that
  *   refusal degrades the entry to `stale` instead of pretending success.
  */
-export async function dispatchAction(
-  eventId: string,
-  actionId: string,
-): Promise<void> {
+export async function dispatchAction(eventId: string, actionId: string): Promise<void> {
   const state = processNotificationStore.getState()
   const note = state.notifications.find((n) => n.event_id === eventId)
   if (!note) return

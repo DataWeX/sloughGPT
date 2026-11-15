@@ -15,10 +15,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-sys.path.insert(0, str(REPO_ROOT / "packages" / "app-planner" / "src"))
+sys.path.insert(0, str(REPO_ROOT / "packages" / "grib" / "src"))
 
 import check_board_chain as gate  # noqa: E402
-from app_planner.store import PlannerStore  # noqa: E402
+from grib.store import PlannerStore  # noqa: E402
 
 
 def _write(board_file: Path, lines: list[str]) -> Path:
@@ -85,10 +85,14 @@ class TestCorruptionSymptoms:
 
     def test_unsealed_card_breaks_chain(self, tmp_path: Path):
         """A card appended without compute_chains() (chain_index=-1) must
-        fail — sealing before landing is the whole point of the gate."""
+        fail — sealing before landing is the whole point of the gate.
+
+        add_card auto-seals since card 20261109_112756, so the unsealed
+        state is produced the way a hand-edit would: a raw append."""
         board = _sealed(tmp_path, ["a", "b"])
         store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
-        store.add_card("never sealed")  # add_card does NOT auto-seal
+        with store._board_file.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"id": "raw-unsealed", "title": "never sealed"}) + "\n")
         findings = gate.check_board(board)
         assert any("hash chain broken" in f for f in findings), findings
 

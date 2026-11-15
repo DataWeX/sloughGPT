@@ -22,12 +22,10 @@ RUN pip install --no-cache-dir -r /tmp/requirements-api.txt \
     && pip install --no-cache-dir psutil
 
 COPY apps/api/server /build/apps/api/server
-COPY packages/core-py /build/packages/core-py
 COPY packages/sdk-py /build/packages/sdk-py
 COPY pyproject.toml README.md LICENSE /build/
 
 RUN pip install --no-cache-dir -e . \
-    && pip install --no-cache-dir -e packages/core-py \
     && pip install --no-cache-dir -e packages/sdk-py/sloughgpt_sdk
 
 # ─── Runtime stage (no build tools) ─────────────────────────────
@@ -48,7 +46,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy app code
 COPY apps/api/server /app/apps/api/server
-COPY packages/core-py /app/packages/core-py
 COPY packages/sdk-py /app/packages/sdk-py
 COPY pyproject.toml README.md LICENSE /app/
 

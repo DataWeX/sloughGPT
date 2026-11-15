@@ -12,22 +12,22 @@ jest.mock('react-native-safe-area-context', () => {
   }
 })
 
-const mockSetConfig = jest.fn()
-const mockSetHfOpts = jest.fn()
-const mockSetMethod = jest.fn()
-const mockStart = jest.fn()
-const mockStop = jest.fn()
-const mockRefresh = jest.fn()
-const mockRefreshFinetunedModels = jest.fn()
-const mockLoadCheckpoint = jest.fn()
-const mockDeleteCheckpoint = jest.fn()
-const mockDeleteJob = jest.fn()
-const mockStopJob = jest.fn()
-const mockLoadFinetunedModel = jest.fn()
-const mockDeleteFinetunedModel = jest.fn()
-const mockImportDataset = jest.fn()
-const mockClearError = jest.fn()
-
+const mockSetConfig = jest.fn();
+const mockSetHfOpts = jest.fn();
+const mockSetMethod = jest.fn();
+const mockStart = jest.fn();
+const mockStop = jest.fn();
+const mockRefresh = jest.fn();
+const mockRefreshFinetunedModels = jest.fn();
+const mockLoadCheckpoint = jest.fn();
+const mockDeleteCheckpoint = jest.fn();
+const mockDeleteJob = jest.fn();
+const mockStopJob = jest.fn();
+const mockLoadFinetunedModel = jest.fn();
+const mockDeleteFinetunedModel = jest.fn();
+const mockImportDataset = jest.fn();
+const mockClearError = jest.fn();
+const mockRehydrate = jest.fn();
 const defaultTrainState: any = {
   phase: 'idle',
   running: false,
@@ -71,9 +71,8 @@ const defaultTrainState: any = {
   deleteFinetunedModel: mockDeleteFinetunedModel,
   importDataset: mockImportDataset,
   clearError: mockClearError,
-  rehydrate: jest.fn(),
-}
-
+  rehydrate: mockRehydrate,
+};
 let mockTrainState = { ...defaultTrainState }
 
 const mockModelRefresh = jest.fn()

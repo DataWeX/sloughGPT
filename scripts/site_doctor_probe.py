@@ -5,7 +5,7 @@ consumer** and emit a severity-ranked worklist. It orders tests; it does not
 operate. Every request here is a GET with no body, so a probe can never change
 what it is measuring.
 
-Five things are checked, in the order they matter:
+Six things are checked, in the order they matter:
 
 1. **Self-consistency of the health surface.** `/health` and `/health/detailed`
    are two views of one process. If they disagree about whether the site is
@@ -34,6 +34,12 @@ Five things are checked, in the order they matter:
    inference engine from `/health/detailed`'s service status and residency
    counters. A missing journey report is `info`, not a defect, so `--strict`
    still only trips on real problems.
+6. **Static repo gates.** The three invariant gates (command parity, domain
+   baseline, router manifest) run as pure functions over the checkout — no
+   network, no writes — so this phase can order repo work alongside site
+   work. New drift reads `high`; debt the baseline already tolerates reads
+   `info` for the same reason a missing journey report does: known and
+   tracked is context, not a defect.
 
 Findings are ranked critical > high > medium > low, and the run exits non-zero
 only under `--strict`, so it can gate CI once the baseline is clean.
@@ -757,6 +763,46 @@ def _trend_findings() -> list[dict[str, Any]]:
     ]
 
 
+def check_gates() -> list[dict[str, Any]]:
+    """Run the three static repo gates — pure functions, no network, no writes.
+
+    Command parity, domain baseline and router manifest are this repo's own
+    invariants; running them here lets one command order repo work beside
+    site work. New drift reads ``high`` (a defect the baseline does not
+    tolerate), baselined debt reads ``info`` — known and tracked is context,
+    the same rule a missing journey report follows, so ``--strict`` trips
+    only on real problems. The repo root is put on ``sys.path`` first so the
+    entry also works when the probe is run as a bare script; if ``domain``
+    still cannot be imported the skip is ``info``, because a probe pointed at
+    a partial checkout must report, not crash.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    try:
+        from domain.gates import run_gates  # noqa: PLC0415 — call-time bind for patching
+
+        gates = run_gates()
+    except (Exception, SystemExit) as exc:
+        return [
+            {
+                "severity": "info",
+                "check": "gates",
+                "message": f"static gates unavailable ({type(exc).__name__}) — skipped",
+            }
+        ]
+    findings: list[dict[str, Any]] = []
+    for gate in gates:
+        name = f"gate-{gate.name}"
+        for finding in gate.findings:
+            findings.append({"severity": "high", "check": name, "message": finding})
+        for known in gate.known:
+            findings.append({"severity": "info", "check": name, "message": f"known: {known}"})
+        if gate.ok and not gate.known:
+            findings.append({"severity": "ok", "check": name, "message": "no drift"})
+    return findings
+
+
 def report(findings: list[dict[str, Any]], out: Any = sys.stdout) -> int:
     ordered = sorted(findings, key=lambda f: SEVERITY_ORDER.get(f["severity"], 9))
     counts: dict[str, int] = {}
@@ -797,6 +843,9 @@ def main() -> int:
     # a sweep) and triage the inference engine off the health surface.
     findings += check_journeys()
     findings += check_inference(args.api)
+    # Static repo gates — no network, no writes; runs last so an unavailable
+    # domain/ (partial checkout) never displaces the site findings above.
+    findings += check_gates()
 
     problems = report(findings)
     if args.strict and problems:

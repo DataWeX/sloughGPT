@@ -5,6 +5,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
+import { apiGet } from '@/lib/http-client'
 
 interface CalendarEvent {
   id: string
@@ -94,8 +95,12 @@ export default function CalendarPage() {
     setLoading(true)
     try {
       const dateStr = formatDate(currentDate)
-      const res = await fetch(`/api/calendar/events?date=${dateStr}`)
-      const data = await res.json()
+      // Through the http-client facade (single source of truth): _resolveUrl
+      // already whitelists /api/calendar as same-origin, so this stays on the
+      // web origin — no raw fetch() bypass (card 20261113_153000).
+      const data = await apiGet<{ events: CalendarEvent[] }>('/api/calendar/events', {
+        date: dateStr,
+      })
       setEvents(data.events || [])
     } catch (err) {
       addGlobalError(err, 'Calendar')

@@ -15,7 +15,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from routers.models import ModelsRouter
-from routers.models import _instance as _models_instance
 from routers.models import router as models_router
 
 app = FastAPI()
@@ -75,7 +74,8 @@ def mock_controller():
     }
 
     with patch("routers.models.get_models_controller", return_value=ctrl):
-        _models_instance._cache.clear()
+        # No QueryCache anymore (PR #91): GET /models is a live view, so
+        # there is no per-test cache to clear.
         yield ctrl
 
 
@@ -646,3 +646,29 @@ class TestDownloadHistory:
         for entry in data["history"]:
             assert "detail" in entry
             assert "status" in entry
+
+
+class TestModelsFacadeAbsorbsInferRegistry:
+    """The models router serves the merged /infer + /registry routes (card 20261101_154054).
+
+    infer.py and registry.py are folded into models.py: one module-level
+    router exposes /models/*, /infer/* and /registry/* paths, and
+    routers.infer / routers.registry no longer exist.
+    """
+
+    def test_models_router_serves_all_three_prefixes(self):
+        facade = FastAPI()
+        facade.include_router(models_router)
+        paths = set(facade.openapi()["paths"])
+        # models routes keep working
+        assert {"/models", "/models/hf"} <= paths
+        # merged infer routes
+        assert {"/infer", "/infer/stream", "/infer/health"} <= paths
+        # merged registry routes
+        assert {"/registry/models", "/registry/best"} <= paths
+
+    def test_infer_and_registry_modules_are_gone(self):
+        import importlib.util
+
+        assert importlib.util.find_spec("routers.infer") is None
+        assert importlib.util.find_spec("routers.registry") is None

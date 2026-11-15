@@ -16,7 +16,15 @@ import { MS_PER_DAY } from '@/lib/format-bytes'
 function formatDateLabel(date: Date): string {
   const now = new Date()
   const input = new Date(date)
-  const diffDays = Math.floor((now.getTime() - input.getTime()) / MS_PER_DAY)
+  // Calendar-day difference, NOT a rolling 24h window. The divider decision
+  // below (isDifferentDay) compares Y/M/D, so the label must use the same
+  // basis: flooring elapsed time labelled a message from yesterday evening
+  // "Today" whenever it was read within 24h, producing two identical TODAY
+  // dividers in a row. Round (not floor) so a 23h/25h DST day still counts
+  // as one day.
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfInput = new Date(input.getFullYear(), input.getMonth(), input.getDate()).getTime()
+  const diffDays = Math.round((startOfToday - startOfInput) / MS_PER_DAY)
   if (diffDays === 0) return 'Today'
   if (diffDays === 1) return 'Yesterday'
   if (diffDays < 7) return input.toLocaleDateString(undefined, { weekday: 'long' })
@@ -368,7 +376,6 @@ export const ChatScreen = memo(function ChatScreen({
             showTimestamp={true}
             model={model}
             images={message.images}
-            turnNumber={index + 1}
             metrics={message.metrics}
             onCopy={onCopy}
             onThumbsUp={onThumbsUp}

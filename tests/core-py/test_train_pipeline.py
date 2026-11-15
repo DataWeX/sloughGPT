@@ -223,6 +223,103 @@ class TestPrepareData:
 
 
 # =============================================================================
+# prepare_data — JSONL datasets (train-on-dataset, card 20261104_165743)
+# =============================================================================
+
+
+class TestPrepareDataJsonl:
+    """A ``.jsonl`` corpus yields its records' ``text`` joined by newlines.
+
+    Cached datasets (e.g. tinyshakespeare, 32,777 records) are JSONL with a
+    ``text`` field per record — the trainer must read the text, never the
+    JSON syntax around it.
+    """
+
+    TEXT_A = (
+        "the quick brown fox jumps over the lazy dog and runs across the meadow "
+        "again and again while the dog sleeps soundly in the warm sun all day long. "
+    )
+    TEXT_B = (
+        "pack my box with five dozen liquor jugs sphinx of black quartz judge my vow "
+        "how vexingly quick daft zebras jump over the lazy dwarf and the sun sets. "
+    )
+
+    def _write_jsonl(self, tmp_path, lines):
+        p = tmp_path / "corpus.jsonl"
+        p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return str(p)
+
+    def test_jsonl_reads_text_fields_not_json_syntax(self, tmp_path):
+        path = self._write_jsonl(
+            tmp_path,
+            [json.dumps({"text": self.TEXT_A}), json.dumps({"text": self.TEXT_B})],
+        )
+        data, n_chars, stoi, itos = prepare_data(path, block_size=8)
+        joined = self.TEXT_A + "\n" + self.TEXT_B
+        assert len(data) == len(joined)
+        assert n_chars == len(set(joined))
+        assert stoi == {c: i for i, c in enumerate(sorted(set(joined)))}
+        # JSON syntax must not leak into the vocabulary
+        for syntax in ("{", "}", '"', ":"):
+            assert syntax not in stoi
+
+    def test_jsonl_skips_malformed_lines(self, tmp_path):
+        path = self._write_jsonl(
+            tmp_path,
+            [
+                json.dumps({"text": self.TEXT_A}),
+                "{not valid json",
+                json.dumps({"text": self.TEXT_B}),
+            ],
+        )
+        data, *_ = prepare_data(path, block_size=8)
+        joined = self.TEXT_A + "\n" + self.TEXT_B
+        assert len(data) == len(joined)
+
+    def test_jsonl_skips_records_without_text_field(self, tmp_path):
+        path = self._write_jsonl(
+            tmp_path,
+            [
+                json.dumps({"text": self.TEXT_A}),
+                json.dumps({"role": "user", "content": "no text field here"}),
+                json.dumps({"text": self.TEXT_B}),
+            ],
+        )
+        data, *_ = prepare_data(path, block_size=8)
+        joined = self.TEXT_A + "\n" + self.TEXT_B
+        assert len(data) == len(joined)
+
+    def test_jsonl_without_text_fields_reads_raw(self, tmp_path):
+        """Grandfathered shapes (pair datasets) keep the pre-existing raw read.
+
+        Only records with a ``text`` field are extracted; a jsonl without
+        any trains exactly as it did before this branch existed.
+        """
+        pairs = [
+            json.dumps({"user": "What is AI?", "assistant": "AI is artificial intelligence."})
+        ] * 15
+        path = self._write_jsonl(tmp_path, pairs)
+        raw = "\n".join(pairs) + "\n"
+        assert len(raw) >= 200  # passes validate_training_data on the raw read
+        data, *_ = prepare_data(path, block_size=8)
+        assert len(data) == len(raw)
+
+    def test_empty_jsonl_raises_empty(self, tmp_path):
+        p = tmp_path / "corpus.jsonl"
+        p.write_text("", encoding="utf-8")
+        with pytest.raises(ValueError, match="empty"):
+            prepare_data(str(p), block_size=8)
+
+    def test_txt_path_still_read_raw(self, tmp_path):
+        """Regression: plain-text files keep their byte-exact raw read."""
+        p = tmp_path / "corpus.txt"
+        p.write_text(DATA_TEXT, encoding="utf-8")
+        data, n_chars, *_ = prepare_data(str(p), block_size=8)
+        assert len(data) == len(DATA_TEXT)
+        assert n_chars == len(set(DATA_TEXT))
+
+
+# =============================================================================
 # TrainerConfig
 # =============================================================================
 
@@ -1412,6 +1509,19 @@ class TestSaveCheckpoint:
         assert (tmp_path / "ck" / "model.soul.meta.json").is_file()
         assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
 
+    def test_save_with_soul_suffix_does_not_double_extend(self, data_path, tmp_path):
+        """Four callers pass an already-suffixed path (local_api, legacy.py,
+        execution.py, from_feedback.py: ``models/<stem>_trained.soul``) — a
+        second append produced ``qt_trained.soul.soul`` + ``.soul.soul.meta.json``
+        (job_cbc6162a). save() owns the extension: exactly one ``.soul``."""
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        target = str(tmp_path / "qt_trained.soul")
+        t.save(target)
+        assert (tmp_path / "qt_trained.soul").is_file()
+        assert (tmp_path / "qt_trained.soul.meta.json").is_file()
+        assert not (tmp_path / "qt_trained.soul.soul").exists(), "double extension written"
+        assert not (tmp_path / "qt_trained.soul.soul.meta.json").exists()
+
     def test_save_soul_meta_failure_raises_and_leaves_no_sidecar(
         self, data_path, tmp_path, monkeypatch
     ):
@@ -1886,3 +1996,72 @@ class TestMain:
         )
         with pytest.raises(SystemExit):
             tp.main()
+
+
+# =============================================================================
+# load_corpus_text — single corpus-resolution path (tokenizer seam)
+# =============================================================================
+
+
+class TestLoadCorpusText:
+    def test_plain_file(self, tmp_path):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        p = tmp_path / "corpus.txt"
+        p.write_text(DATA_TEXT, encoding="utf-8")
+        assert load_corpus_text(str(p)) == DATA_TEXT
+
+    def test_jsonl_text_extraction(self, tmp_path):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        text_a = "alpha beta gamma delta epsilon zeta eta theta iota kappa. "
+        text_b = "lambda mu nu xi omicron pi rho sigma tau upsilon phi. "
+        p = tmp_path / "corpus.jsonl"
+        p.write_text(
+            json.dumps({"text": text_a}) + "\n" + json.dumps({"text": text_b}) + "\n",
+            encoding="utf-8",
+        )
+        assert load_corpus_text(str(p)) == text_a + "\n" + text_b
+
+    def test_dataset_name_resolution(self, tmp_path, monkeypatch):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        monkeypatch.chdir(tmp_path)
+        d = tmp_path / "data" / "corpus2"
+        d.mkdir(parents=True)
+        (d / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
+        assert load_corpus_text("corpus2") == DATA_TEXT
+
+    def test_missing_source_error_parity(self, tmp_path):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        missing = str(tmp_path / "missing.txt")
+        with pytest.raises(FileNotFoundError) as exc_load:
+            load_corpus_text(missing)
+        with pytest.raises(FileNotFoundError) as exc_prepare:
+            prepare_data(missing, block_size=8)
+        assert str(exc_load.value) == str(exc_prepare.value)
+
+    @pytest.mark.parametrize("source_kind", ["file", "dataset_name", "list", "ratio_list"])
+    def test_parity_with_prepare_data(self, tmp_path, monkeypatch, source_kind):
+        """prepare_data's char vocabulary is exactly the chars of load_corpus_text."""
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        monkeypatch.chdir(tmp_path)
+        d = tmp_path / "data" / "corpus2"
+        d.mkdir(parents=True)
+        (d / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
+        f = tmp_path / "direct.txt"
+        f.write_text(DATA_TEXT, encoding="utf-8")
+
+        sources = {
+            "file": str(f),
+            "dataset_name": "corpus2",
+            "list": ["corpus2"],
+            "ratio_list": [("corpus2", 1.0)],
+        }
+        source = sources[source_kind]
+        data, _n, stoi, _itos = prepare_data(source, block_size=8)
+        text = load_corpus_text(source)
+        assert sorted(stoi) == sorted(set(text))
+        assert len(data) == len(text)

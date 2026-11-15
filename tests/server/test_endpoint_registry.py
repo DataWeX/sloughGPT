@@ -250,6 +250,14 @@ class TestEndpointRegistry:
         r = client.get("/registry/stats")
         assert r.status_code == 200
 
+    def test_registry_artifacts(self):
+        r = client.get("/registry/artifacts")
+        assert r.status_code == 200
+
+    def test_registry_artifacts_lineage(self):
+        r = client.get("/registry/artifacts", params={"lineage": "true"})
+        assert r.status_code == 200
+
     # ── benchmark ───────────────────────────────────────────────────
     def test_benchmark_metrics(self):
         r = client.get("/benchmark/metrics")

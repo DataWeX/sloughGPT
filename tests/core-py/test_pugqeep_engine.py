@@ -672,6 +672,43 @@ class TestProcessMonitor:
         mon = ProcessMonitor()
         mon.untrack("nope")
 
+    def test_loop_untracks_completed(self):
+        mon = ProcessMonitor(poll_interval=0.01)
+        p = Process(fn=_noop)
+        p.running()
+        p.complete()
+        mon.track(p)
+        mon.start()
+        time.sleep(0.05)
+        mon.stop()
+        assert mon.active_count == 0
+
+    def test_loop_keeps_failed_while_restarts_remain(self):
+        policy = RestartPolicy(max_restarts=1000)
+        mon = ProcessMonitor(restart_policy=policy, poll_interval=0.01)
+        p = Process(fn=_noop)
+        p.running()
+        p.fail("err")
+        mon.track(p)
+        mon.start()
+        time.sleep(0.05)
+        mon.stop()
+        # restart budget not yet exhausted: the failure stays visible
+        assert mon.active_count == 1
+        assert mon.stats()["failed"] == 1
+
+    def test_loop_untracks_failed_after_restarts_exhausted(self):
+        mon = ProcessMonitor(restart_policy=RestartPolicy(max_restarts=1), poll_interval=0.01)
+        p = Process(fn=_noop)
+        p.running()
+        p.fail("err")
+        mon.track(p)
+        mon.start()
+        time.sleep(0.1)
+        mon.stop()
+        # the single restart was consumed on the first tick: forgotten after
+        assert mon.active_count == 0
+
     def test_on_stall_callback(self):
         mon = ProcessMonitor(stall_timeout=0.01)
         stalled = []
@@ -1077,6 +1114,47 @@ class TestEngineDispatch:
         assert child in engine._pending
         engine.stop()
 
+    def test_dispatch_preserves_proc_spawned_during_dispatch(self):
+        """A proc appended between dispatch()'s read and its commit must survive.
+
+        dispatch() used to rebind ``_pending = held`` only after
+        ``tree.branch()`` had returned, so a spawn() landing in that window was
+        discarded: the proc stayed registered in ``_processes`` but was never
+        branched, sat at CREATED forever, and ``ThreadHandle.is_alive()``
+        (= ``not is_done``) then reported a doomed proc as alive — which is
+        what made ``test_shutdown_joins_live_thread`` flake.
+        """
+        engine = Engine("test")
+        engine.tree("t")
+        engine.spawn(_noop, name="work", tree="t")
+
+        tree = engine._trees["t"]
+        orig_branch = tree.branch
+
+        def branch_then_spawn(procs):
+            stem = orig_branch(procs)
+            # A concurrent spawn_loop() landing between dispatch()'s snapshot
+            # of _pending and its commit — the exact window the rebind lost.
+            engine.spawn(_noop, name="late", tree="t")
+            return stem
+
+        tree.branch = branch_then_spawn
+        try:
+            engine.dispatch()
+        finally:
+            tree.branch = orig_branch
+
+        pending_names = [p.name for p in engine._pending]
+        assert "late" in pending_names, (
+            f"proc spawned during dispatch was silently dropped from _pending "
+            f"(pending={pending_names}) — it can never reach a terminal state"
+        )
+
+        # ...and it must still be dispatchable on the next pass, not stranded.
+        engine.dispatch()
+        assert engine._pending == []
+        engine.stop()
+
     def test_dispatch_when_deps_met(self):
         engine = Engine("test")
         engine.tree("t")
@@ -1227,6 +1305,21 @@ class TestEngineRun:
         assert completed[0].id == p.id
         engine.stop()
 
+    def test_get_completed_drain_does_not_refire(self):
+        engine = Engine("test")
+        engine.tree("t")
+        engine.route("work", "t")
+        fired = []
+        engine.on_complete(lambda p: fired.append(p.id))
+        p = engine.spawn(_sleep_and_return, 0.01, "x", name="work")
+        engine.run_background(poll_interval=0.01)
+        engine.wait(timeout=5)
+        assert len(engine.get_completed()) == 1
+        time.sleep(0.1)  # several scan ticks with an empty _completed buffer
+        engine.stop()
+        assert fired.count(p.id) == 1
+        assert engine.metrics.snapshot()["completed"] == 1
+
     def test_wait_for(self):
         engine = Engine("test")
         engine.tree("t")
@@ -1343,6 +1436,21 @@ class TestEngineCancellation:
         p = engine.spawn(_noop)
         engine.stop()
         assert p.is_cancelled
+
+    def test_cancelled_before_dispatch_never_runs(self):
+        """Terminal state is honored at dispatch: a proc cancelled while
+        queued must not execute when the dispatcher later picks it up,
+        and ready()/running() must not clobber CANCELLED."""
+        engine = Engine("test")
+        engine.tree("t")
+        ran = threading.Event()
+        p = engine.spawn(ran.set, tree="t")
+        assert engine.cancel_process(p.id) == 1  # before any dispatch
+        engine.dispatch()
+        p._future.result(timeout=5)  # _execute ran (and skipped the fn)
+        assert not ran.is_set()
+        assert p.is_cancelled
+        engine.stop()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1538,6 +1646,52 @@ class TestEngineSaveState:
 
 
 # ══════════════════════════════════════════════════════════════════
+# Engine: bounded retention (registry must not grow without bound)
+# ══════════════════════════════════════════════════════════════════
+
+
+class TestEngineRetention:
+    def test_done_processes_evicted_beyond_retention_limit(self):
+        cfg = EngineConfig(name="test", retention_limit=2)
+        engine = Engine(config=cfg)
+        engine.tree("t")
+        engine.route("work", "t")
+        procs = [engine.spawn(_sleep_and_return, 0.01, i, name="work") for i in range(6)]
+        release = threading.Event()
+        live = engine.spawn(release.wait, 5.0, name="work")
+        engine.run_background(poll_interval=0.01)
+        deadline = time.time() + 10
+        while not all(p.is_done for p in procs) and time.time() < deadline:
+            time.sleep(0.02)
+        assert all(p.is_done for p in procs)
+        time.sleep(0.05)  # let eviction ticks run
+        done_left = [p for p in engine.list_processes() if p.is_done]
+        assert len(done_left) <= 2
+        # the newest results survive; the live proc is never evicted
+        remaining_ids = {p.id for p in engine.list_processes()}
+        assert procs[-1].id in remaining_ids
+        assert engine.get_process(live.id) is live
+        release.set()
+        engine.stop()
+
+    def test_retention_spares_pending_dependency_anchor(self):
+        cfg = EngineConfig(name="test", retention_limit=0)
+        engine = Engine(config=cfg)
+        dep = engine.spawn(_noop, name="a")
+        child = engine.spawn(_noop, name="b", depends_on=[dep.id])
+        dep.complete()  # done; child still pending (no dispatch ran)
+        engine._evict_completed()
+        # anchored by the pending child's depends_on: evicting would strand it
+        assert engine.get_process(dep.id) is dep
+        assert engine.get_process(child.id) is child
+        # once the dependent leaves _pending the anchor no longer applies
+        engine._pending = [p for p in engine._pending if p.id != child.id]
+        engine._evict_completed()
+        assert engine.get_process(dep.id) is None
+        engine.stop()
+
+
+# ══════════════════════════════════════════════════════════════════
 # Engine: config integration
 # ══════════════════════════════════════════════════════════════════
 
@@ -1696,3 +1850,96 @@ class TestProcessTimeout:
         assert p.status == ProcessStatus.COMPLETED
         assert p.result == "ok"
         tree.shutdown()
+
+
+# ── Concurrency ───────────────────────────────────────────────────
+
+
+class TestEngineConcurrency:
+    """Engine._processes is mutated by spawn() from arbitrary threads while
+    the run loop and every query method iterate it.
+
+    Iteration must snapshot (list(self._processes.values())): a bare .values()
+    over a dict being resized raises RuntimeError: dictionary changed size
+    during iteration. In CI this killed the run loop at the all-done check
+    (engine.py run -> all(p.is_done for p in self._processes.values())), so
+    spawned processes were never dispatched again and any ThreadHandle join
+    stranded until its timeout (test_learner_continual shutdown flake)."""
+
+    def test_query_methods_survive_concurrent_spawns(self):
+        engine = Engine("race-reads")
+        n_procs = 60_000
+        spawner_done = threading.Event()
+        errors: list[BaseException] = []
+
+        def hammer():
+            try:
+                for i in range(n_procs):
+                    engine.spawn(_noop, name=f"w{i}")
+            except BaseException as e:  # spawn itself must not fail either
+                errors.append(e)
+            finally:
+                spawner_done.set()
+
+        def reader():
+            # health() also exercises ProcessMonitor.stats() via
+            # monitor.track() being called from the spawning thread.
+            reads = (
+                engine.health,
+                engine.dependency_graph,
+                engine.orphan_processes,
+                engine.critical_path,
+                lambda: engine.cancel_tree("__absent__"),
+            )
+            while not spawner_done.is_set():
+                for read in reads:
+                    try:
+                        read()
+                    except RuntimeError as e:
+                        errors.append(e)
+
+        hammer_t = threading.Thread(target=hammer, name="race-hammer")
+        reader_t = threading.Thread(target=reader, name="race-reader")
+        reader_t.start()
+        hammer_t.start()
+        hammer_t.join(timeout=120)
+        spawner_done.set()
+        reader_t.join(timeout=60)
+
+        assert not hammer_t.is_alive(), "spawner did not finish"
+        assert not reader_t.is_alive(), "reader did not finish"
+        assert errors == [], f"{len(errors)} concurrent reads raised; first: {errors[0]!r}"
+
+    def test_run_loop_survives_concurrent_spawns(self):
+        engine = Engine("race-run")
+        engine.tree("t")
+        engine.route("w", "t")
+        stop = threading.Event()
+        errors: list[BaseException] = []
+
+        def hammer():
+            i = 0
+            while not stop.is_set():
+                try:
+                    engine.spawn(_noop, name=f"w{i}")
+                    i += 1
+                except BaseException as e:
+                    errors.append(e)
+
+        thread = engine.run_background(poll_interval=0.001)
+        hammer_t = threading.Thread(target=hammer, name="race-run-hammer")
+        hammer_t.start()
+        time.sleep(3.0)
+        alive_during = thread.is_alive()
+
+        stop.set()
+        hammer_t.join(timeout=60)
+        engine.stop()
+        thread.join(timeout=5)
+
+        assert not hammer_t.is_alive()
+        assert errors == []
+        assert alive_during, (
+            "engine run loop died under concurrent spawn — bare "
+            "_processes iteration raced a dict resize (CI flake root cause)"
+        )

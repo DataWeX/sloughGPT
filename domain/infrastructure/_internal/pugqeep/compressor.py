@@ -17,6 +17,16 @@ from collections import Counter
 
 import numpy as np
 
+from domain.infrastructure._internal.quant_core.numeric import (
+    block_scale,
+    dequant_offset,
+    dequant_zp,
+    encode_offset,
+    encode_round_add_zp,
+    pack_int4,
+    unpack_int4,
+)
+
 from .config import CompressorConfig
 from .point import Point, accuracy_from_error
 
@@ -323,10 +333,10 @@ class PointCompressor:
             if crange > 1e-12:
                 c_scale = crange / 255.0
                 c_zero_point = -cmin / c_scale
-                q_centroids = np.clip(np.round(centroids / c_scale + c_zero_point), 0, 255).astype(
+                q_centroids = encode_round_add_zp(centroids, c_scale, c_zero_point, 0, 255).astype(
                     np.uint8
                 )
-                recon_centroids = (q_centroids.astype(np.float32) - c_zero_point) * c_scale
+                recon_centroids = dequant_zp(q_centroids, c_scale, c_zero_point)
                 recon_via_q = recon_centroids[assignments]
                 q_cos = float(
                     np.dot(flat, recon_via_q)
@@ -344,7 +354,7 @@ class PointCompressor:
 
         # Compute accuracy
         if centroid_quantized:
-            reconstructed = (centroids.astype(np.float32) - centroid_zero_point) * centroid_scale
+            reconstructed = dequant_zp(centroids, centroid_scale, centroid_zero_point)
             reconstructed = reconstructed[assignments]
         else:
             reconstructed = centroids[assignments]
@@ -551,13 +561,11 @@ class PointCompressor:
         blocks = flat.reshape(n_blocks, bs)
         bmin = blocks.min(axis=1)
         bmax = blocks.max(axis=1)
-        brange = np.maximum(bmax - bmin, 1e-10)
-        scale = brange / 15.0
-        q = (blocks - bmin[:, None]) / scale[:, None]
-        q = np.clip(np.round(q), 0, 15).astype(np.uint8)
+        scale = block_scale(bmax - bmin, 15.0)
+        q = encode_offset(blocks, bmin[:, None], scale[:, None], 0, 15).astype(np.uint8)
         q_flat = q.ravel()
-        packed = q_flat[0::2].astype(np.uint8) | (q_flat[1::2].astype(np.uint8) << 4)
-        deq = q.astype(np.float32) * scale[:, None] + bmin[:, None]
+        packed = pack_int4(q_flat).astype(np.uint8)
+        deq = dequant_offset(q, scale[:, None], bmin[:, None])
         reconstructed = deq.ravel()[:n]
         mse = np.mean((flat[:n] - reconstructed) ** 2)
         var = np.var(flat[:n])
@@ -586,11 +594,12 @@ class PointCompressor:
         n = point.params["n_elements"]
         n_blocks = point.params["n_blocks"]
         bs = point.params["block_size"]
-        unpacked = np.zeros(n_blocks * bs, dtype=np.uint8)
-        unpacked[0::2] = packed & 0x0F
-        unpacked[1::2] = (packed >> 4) & 0x0F
-        q = unpacked.reshape(n_blocks, bs).astype(np.float32)
-        return (q * scales[:, None] + mins[:, None]).ravel()[:n]
+        q = (
+            unpack_int4(packed, n_blocks * bs, signed=False)
+            .reshape(n_blocks, bs)
+            .astype(np.float32)
+        )
+        return dequant_offset(q, scales[:, None], mins[:, None]).ravel()[:n]
 
     def compress_block_q8(self, weights: np.ndarray, identity: str = "unknown") -> Point:
         """Block-wise 8-bit quantization."""
@@ -604,11 +613,9 @@ class PointCompressor:
         blocks = flat.reshape(n_blocks, bs)
         bmin = blocks.min(axis=1)
         bmax = blocks.max(axis=1)
-        brange = np.maximum(bmax - bmin, 1e-10)
-        scale = brange / 255.0
-        q = (blocks - bmin[:, None]) / scale[:, None]
-        q = np.clip(np.round(q), 0, 255).astype(np.uint8)
-        deq = q.astype(np.float32) * scale[:, None] + bmin[:, None]
+        scale = block_scale(bmax - bmin, 255.0)
+        q = encode_offset(blocks, bmin[:, None], scale[:, None], 0, 255).astype(np.uint8)
+        deq = dequant_offset(q, scale[:, None], bmin[:, None])
         reconstructed = deq.ravel()[:n]
         mse = np.mean((flat[:n] - reconstructed) ** 2)
         var = np.var(flat[:n])
@@ -638,4 +645,4 @@ class PointCompressor:
         n_blocks = point.params["n_blocks"]
         bs = point.params["block_size"]
         q = values.reshape(n_blocks, bs).astype(np.float32)
-        return (q * scales[:, None] + mins[:, None]).ravel()[:n]
+        return dequant_offset(q, scales[:, None], mins[:, None]).ravel()[:n]

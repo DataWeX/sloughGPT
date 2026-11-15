@@ -4,7 +4,7 @@
  */
 
 import {Platform, Alert, Linking} from 'react-native';
-import {api, getApiUrl} from './api-client';
+import {api, getApiUrl, getAuthHeaders} from './api-client';
 
 let _ImagePicker: any = null;
 function getImagePicker(): any {
@@ -126,7 +126,7 @@ export async function analyzeImage(image: ImageResult): Promise<ImageAnalysis> {
     const res = await fetch(`${baseUrl}/multimodal/analyze-image`, {
       method: 'POST',
       body: formData,
-      headers: {'Content-Type': 'multipart/form-data'},
+      headers: {'Content-Type': 'multipart/form-data', ...(await getAuthHeaders())},
     });
 
     if (res.ok) {

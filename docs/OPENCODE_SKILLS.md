@@ -244,10 +244,10 @@ user = await auth.authenticate({"username": username, "password": password})
 **Fix:** Use correct relative import level.
 
 ```python
-# In domain/cognitive/_internal/base.py (one level deep)
-from ..__init__ import BaseDomain  # Correct - two levels up from cognitive
+# In domain/cognition/_internal/base.py (one level deep)
+from ..__init__ import BaseDomain  # Correct - two levels up from cognition
 
-# In domain/cognitive/memory/__init__.py (two levels deep)
+# In domain/cognition/_internal/reasoning/__init__.py (two levels deep)
 from ...__init__ import IMemoryManager  # Correct - three levels up
 ```
 

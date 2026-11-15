@@ -1,4 +1,4 @@
-"""Tests for the lora-eval API router (routers/lora_eval.py).
+"""Tests for the lora-eval API router (training/lora_eval.py).
 
 Covers: LoraEvalRouter run, history, aggregate.
 All domain calls are mocked; only HTTP-level behavior is tested.
@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.lora_eval import router  # noqa: E402
+from training.lora_eval import router  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -85,7 +85,7 @@ class _PathExists:
     Real ``resolve()`` (so the ``_ADAPTER_BASE`` confinement check sees a
     path genuinely under the base) but ``exists() == True`` so the
     with-adapter branch runs. Patching ``pathlib.Path`` never reached the
-    router: ``routers.lora_eval`` did ``from pathlib import Path`` at
+    router: ``training.lora_eval`` did ``from pathlib import Path`` at
     import, so the module-local name kept the real class.
     """
 
@@ -134,7 +134,7 @@ class TestRunEval:
         assert data["status"] == "baseline_only"
         assert "baseline" in data
 
-    @patch("routers.lora_eval.Path", _PathExists)
+    @patch("training.lora_eval.Path", _PathExists)
     @patch(PATCH_EVALUATOR)
     def test_with_adapter_comparison(self, mock_get):
         evaluator = _make_evaluator()

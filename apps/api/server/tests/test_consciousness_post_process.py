@@ -93,3 +93,43 @@ class TestRunPostGenTasksReturnsConsciousness:
         assert isinstance(result, dict)
         assert result["level"] == 1
         assert result["narrative"]
+
+    def test_use_consciousness_false_skips_ingest(self, tmp_path, monkeypatch):
+        """Bare probe (quick-test card): use_consciousness=False → no ingest.
+
+        The gate mirrors the pre-gen narrative gate in ``stream_turn``: a
+        ``Hello!`` health check must neither increment the episode store nor
+        surface a reflection narrative. Same stubs as the sibling test above.
+        """
+        import apps.api.server.routers.inference as inference_mod
+
+        ce = _ce(1, tmp_path)
+        before = ce.get_status()["episodes"]
+        monkeypatch.setattr(inference_mod, "capture", lambda *a, **k: None)
+        monkeypatch.setattr(inference_mod, "extract_and_store", lambda *a, **k: None)
+        monkeypatch.setattr(inference_mod, "get_learner", lambda: MagicMock())
+        monkeypatch.setattr(inference_mod, "get_response_tracker", lambda: MagicMock())
+        monkeypatch.setattr(inference_mod, "get_server_state", lambda: MagicMock())
+        req = MagicMock()
+        req.use_rag = False
+        req.use_context_core = False
+        req.use_consciousness = False
+        req.model = "test-model"
+        req.temperature = 0.7
+        req.max_tokens = 16
+        req.user_id = "u"
+        req.images = None
+        result = _run_post_gen_tasks(
+            full_response="the reply",
+            user_msg="Hello!",
+            session_id="quick-test",
+            start_time=datetime.datetime.now(),
+            req=req,
+            ctx_core=None,
+            bg_tasks_lock=threading.Lock(),
+            bg_tasks=set(),
+            bg_tasks_discard=lambda f: None,
+            corr_id="corr",
+        )
+        assert result == {"narrative": "", "level": 0}
+        assert ce.get_status()["episodes"] == before, "probe must not ingest episodes"

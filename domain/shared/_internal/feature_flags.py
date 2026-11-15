@@ -437,6 +437,16 @@ def _register_defaults():
         description="Wave F: from_slnc (plain + quantized), chat/chat_stream coverage",
         status=FlagStatus.ENABLED,
     )
+    FeatureFlags.register(
+        "step_trace",
+        description=(
+            "Per-step StepTrace reduction set + dispatch residency fields in "
+            "on_progress (PR #261). Gates emission only — the dispatch counters "
+            "in slolib.gpu are always-on so the step-1 CPU-fallback tripwire "
+            "survives the flag being switched off"
+        ),
+        status=FlagStatus.ENABLED,
+    )
 
 
 _register_defaults()

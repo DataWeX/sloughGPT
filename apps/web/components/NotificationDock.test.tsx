@@ -60,17 +60,16 @@ describe('NotificationDock', () => {
     ingestProcessEvents([event()])
     render(<NotificationDock />)
     expect(screen.getByText('Training interrupted')).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: /view job/i }),
-    ).toHaveAttribute('href', '/training/job/j1')
+    expect(screen.getByRole('link', { name: /view job/i })).toHaveAttribute(
+      'href',
+      '/training/job/j1',
+    )
   })
 
   it('renders every action from the contract as a control', () => {
     ingestProcessEvents([event()])
     render(<NotificationDock />)
-    expect(
-      screen.getByRole('button', { name: 'Recover now' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recover now' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument()
   })
 
@@ -104,9 +103,7 @@ describe('NotificationDock', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Recover now' }))
 
-    await waitFor(() =>
-      expect(screen.getByText(/dispatched/i)).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.getByText(/dispatched/i)).toBeInTheDocument())
   })
 
   it('degrades to "no longer available" when the server refuses (stale action)', async () => {
@@ -117,13 +114,9 @@ describe('NotificationDock', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Recover now' }))
 
-    await waitFor(() =>
-      expect(screen.getByText(/no longer available/i)).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.getByText(/no longer available/i)).toBeInTheDocument())
     // The refused action is no longer offered as clickable.
-    expect(
-      screen.queryByRole('button', { name: 'Recover now' }),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Recover now' })).not.toBeInTheDocument()
   })
 
   it('renders the skip reason when the contract carries one', () => {
@@ -144,9 +137,7 @@ describe('NotificationDock', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
 
-    await waitFor(() =>
-      expect(screen.queryByText('Training interrupted')).not.toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.queryByText('Training interrupted')).not.toBeInTheDocument())
     expect(mockRecover).not.toHaveBeenCalled()
   })
 })

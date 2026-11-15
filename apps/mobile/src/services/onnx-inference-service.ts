@@ -14,8 +14,8 @@
  *   RMSNorm → LM_head → logits
  */
 
-import { getApiUrl } from './api-client'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import {getApiUrl, getAuthHeaders} from './api-client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   MobileExportResponse,
   MobileExportConfig,
@@ -462,12 +462,13 @@ export async function loadCheckpoint(name: string): Promise<void> {
   }
 
   // Download from server
-  const baseUrl = await getApiUrl()
+  const baseUrl = await getApiUrl();
   const res = await fetch(
     `${baseUrl}/training/checkpoints/${encodeURIComponent(name)}/export-mobile`,
-  )
-  if (!res.ok) throw new Error(`Failed to load checkpoint: ${res.status}`)
-  const data: MobileExportResponse = await res.json()
+    {headers: await getAuthHeaders()},
+  );
+  if (!res.ok) throw new Error(`Failed to load checkpoint: ${res.status}`);
+  const data: MobileExportResponse = await res.json();
 
   // Cache
   await AsyncStorage.setItem(cacheKey, JSON.stringify(data))

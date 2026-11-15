@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
-from apps.api.server.routers.lora_eval import router
+from apps.api.server.training.lora_eval import router
 
 app = FastAPI()
 register_all_handlers(app)
@@ -34,8 +34,8 @@ def _mock_eval_result():
 class TestRunEval:
     """POST /lora-eval/run"""
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
     @patch("domain.feedback.get_lora_evaluator")
     def test_baseline_only_no_adapter(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -53,8 +53,8 @@ class TestRunEval:
         assert "baseline" in data
         assert data["baseline"]["perplexity"] == 12.5
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
     @patch("domain.feedback.get_lora_evaluator")
     def test_compared_with_adapter(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -106,8 +106,8 @@ class TestRunEval:
         resp = client.post("/lora-eval/run")
         assert resp.status_code == 500
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
     @patch("domain.feedback.get_lora_evaluator")
     def test_adapter_path_not_found_falls_back(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -124,8 +124,8 @@ class TestRunEval:
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
     @patch("domain.feedback.get_lora_evaluator")
     def test_soul_param_passed_to_run(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -140,8 +140,8 @@ class TestRunEval:
         for call in evaluator.run.call_args_list:
             assert call.kwargs.get("soul_name") == "friendly"
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
     @patch("domain.feedback.get_lora_evaluator")
     def test_default_adapter_path_used(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -326,8 +326,8 @@ class TestAggregate:
 class TestRunEvalCompareFailure:
     """POST /lora-eval/run — comparison failure falls back to baseline_only"""
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
     @patch("domain.feedback.get_lora_evaluator")
     def test_adapter_exists_but_compare_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -344,8 +344,8 @@ class TestRunEvalCompareFailure:
         assert data["status"] == "baseline_only"
         assert "note" in data
 
-    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
-    @patch("apps.api.server.routers.lora_eval.Path")
+    @patch("apps.api.server.training.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.training.lora_eval.Path")
     @patch("domain.feedback.get_lora_evaluator")
     def test_adapter_exists_but_second_run_raises_returns_baseline(
         self, mock_get_eval, mock_path_cls

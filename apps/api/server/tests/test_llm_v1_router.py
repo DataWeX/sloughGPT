@@ -28,14 +28,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-import routers.infer as infer_mod
 import routers.llm_v1 as shim
+import routers.models as infer_mod
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.contract import REGISTRY
 from infrastructure.exception_handlers import register_app_error_handler
-from routers.infer import EmbedResponse
+from routers.models import EmbedResponse
 
 from domain.inference._internal import api_provider as api_provider_mod
 from domain.infrastructure.memory_pressure import PressureLevel

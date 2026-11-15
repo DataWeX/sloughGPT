@@ -85,6 +85,14 @@ export function QuickActions({
                 try {
                   for await (const token of chatController.stream('Hello!', {
                     waitForModel: true,
+                    // Bare probe: no consciousness reflection, ContextCore
+                    // frame or RAG narrative — and its own session so the
+                    // probe stops polluting the shared 'default' history,
+                    // KV and caches (card 20261112_140010).
+                    session_id: 'quick-test',
+                    use_consciousness: false,
+                    use_context_core: false,
+                    use_rag: false,
                   })) {
                     if (!streamingRef.current) break
                     accumulated += token
@@ -139,7 +147,7 @@ export function QuickActions({
               type="text"
               placeholder="e.g., I prefer Python over JavaScript"
               aria-label="Quick add knowledge"
-              className="flex-1 h-9 rounded-md border border-border/60 bg-background px-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="flex-1 h-9 rounded-md border border-border/60 bg-background px-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             />
             <Button size="sm" type="submit" className="h-8 text-xs shrink-0">
               Save

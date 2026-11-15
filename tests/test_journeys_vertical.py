@@ -29,7 +29,7 @@ from apps.api.server.routers.inference import (
 from apps.api.server.routers.inference import (
     get_chat_control,
 )
-from apps.api.server.routers.session import router as session_router
+from apps.api.server.routers.system import router as session_router
 
 
 @pytest.fixture(scope="module")

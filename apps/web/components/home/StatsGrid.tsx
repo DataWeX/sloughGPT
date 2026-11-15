@@ -13,18 +13,25 @@ interface StatsGridProps {
   t: (key: string) => string
 }
 
-export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inferenceCount, t }: StatsGridProps) {
+export function StatsGrid({
+  apiStatus,
+  modelCount,
+  currentSoul,
+  modelStatus,
+  inferenceCount,
+  t,
+}: StatsGridProps) {
   const loading = apiStatus === 'loading'
-  
+
   return (
     <KpiGrid columns={4}>
       <StatCard
         label={t('home.stats.status')}
-        value={loading ? '—' : 'Online'}
+        value={loading ? '—' : apiStatus === 'offline' ? 'Offline' : 'Online'}
         icon={
-          <StatusDot 
-            tone={loading ? 'muted' : 'success'} 
-            pulse={!loading} 
+          <StatusDot
+            tone={loading ? 'muted' : apiStatus === 'offline' ? 'destructive' : 'success'}
+            pulse={!loading && apiStatus !== 'offline'}
           />
         }
         loading={loading}
@@ -48,7 +55,7 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
       />
       <StatCard
         label="Active"
-        value={loading ? '—' : (modelStatus.loaded ? 'Loaded' : 'Not loaded')}
+        value={loading ? '—' : modelStatus.loaded ? 'Loaded' : 'Not loaded'}
         icon={<IconActivity className="h-4 w-4" />}
         loading={loading}
         description={

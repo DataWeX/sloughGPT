@@ -38,8 +38,5 @@
   },
   "vitest.configPath": "apps/web/vitest.config.ts",
   "vitest.rootPath": "apps/web",
-  "vitest.nodeEnv": "test",
-  "terminal.integrated.env.osx": {
-    "PYTHONPATH": "${workspaceFolder}/packages/core-py"
-  }
+  "vitest.nodeEnv": "test"
 }

@@ -33,6 +33,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
@@ -41,6 +43,28 @@ from .state import ShellState
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
+
+
+class _BgJob:
+    """Background-job handle over an engine process (routing kind: process).
+
+    Keeps the ``threading.Thread`` surface (``is_alive``/``join``) that
+    ``_cmd_bg``/``_cmd_fg``/``_cmd_wait`` consume, so job bookkeeping is
+    unchanged while the work itself runs on the shared pugqeep engine
+    instead of a raw thread at the call site.
+    """
+
+    __slots__ = ("_engine", "_proc")
+
+    def __init__(self, engine: Any, proc: Any) -> None:
+        self._engine = engine
+        self._proc = proc
+
+    def is_alive(self) -> bool:
+        return not self._proc.is_done
+
+    def join(self, timeout: float | None = None) -> None:
+        self._engine.wait_for(self._proc.id, timeout=timeout)
 
 
 # ── Optional cmds extension — dynamic load ─────────────────────────────────
@@ -295,6 +319,14 @@ class _CaptureOutput:
 # ── REPL ─────────────────────────────────────────────────────────────
 
 
+# The TUI chain (tui_repl, graphics, term_screen) is imported on demand — the
+# shell must start without it — and this name sits at module scope rather than
+# inside the method so the failure paths stay patchable: tests reach it as
+# `domain.shell._internal.repl.TuiRepl`, and the on-demand import below goes
+# through the canonical dotted path.
+TuiRepl: Any = None
+
+
 class ShellREPL(LinuxCommandsMixin):
     """Interactive REPL with built-in commands and AI-assisted mode.
 
@@ -327,7 +359,9 @@ class ShellREPL(LinuxCommandsMixin):
             except (OSError, ValueError):
                 use_tui = False
         self._use_tui = use_tui
-        self._bg_threads: dict[int, threading.Thread] = {}
+        # _BgJob handles (engine-supervised); tests may inject any
+        # Thread-shaped object with is_alive()/join().
+        self._bg_threads: dict[int, Any] = {}
         self._next_bg_id = 1
         self._piped_input: str = ""
         self._aborted = False
@@ -1579,9 +1613,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         self._print(f"  [bg-{bg_id}] {raw}")
 
     def _execute_background_tuples(self, commands: list) -> None:
@@ -1595,9 +1629,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         cmds_str = " | ".join(c[0] for c in commands)
         self._print(f"  [bg-{bg_id}] {cmds_str}")
 
@@ -1999,6 +2033,7 @@ class ShellREPL(LinuxCommandsMixin):
                 "protect": "  protect <model>  — Protect model files",
                 "unprotect": "  unprotect <model>  — Remove protection",
                 "tui": "  tui  — Launch three-pane TUI",
+                "serve": "  serve [--watch] [--port PORT] [worktree]  — Serve a worktree's web UI on a side port",
                 "clear": "  clear  — Clear the terminal screen",
                 "note": "  note <subcmd>  — Note management (add/show/edit/delete/list)",
                 "tutorial": "  tutorial  — Interactive shell walkthrough",
@@ -2405,8 +2440,6 @@ Examples:
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
         try:
-            import threading
-
             from apps.cli.src.utils.progress import ProgressBar
             from domain.infrastructure._internal.conversion_tracker import get_tracker
 
@@ -2416,12 +2449,14 @@ Examples:
             def _load():
                 result_holder[0] = self.cmds.load_model(model_name)
 
-            t = threading.Thread(target=_load, daemon=True)
-            t.start()
+            # Stage 3B: engine process, not a raw thread — is_done/join keep
+            # the progress-poll contract the bar consumes.
+            engine = get_engine()
+            proc = engine.spawn(_load, name="repl-load")
 
             bar = ProgressBar(total=100, desc=f"Loading {model_name}", width=30, show_eta=True)
 
-            while t.is_alive():
+            while not proc.is_done:
                 status = tracker.get(model_name)
                 if status:
                     pct = int(status["progress"] * 100)
@@ -2440,7 +2475,7 @@ Examples:
 
                 time.sleep(0.15)
 
-            t.join()
+            engine.wait_for(proc.id)
             bar.finish()
             _print_result(result_holder[0])
 
@@ -2547,14 +2582,102 @@ Examples:
     def _cmd_tui(self, args: str = "") -> None:
         """Launch the split-panel TUI mode — console panel + shell output + input line."""
         try:
-            from .tui_repl import TuiRepl
+            _TuiRepl = TuiRepl
+            if _TuiRepl is None:
+                from domain.shell._internal.tui_repl import TuiRepl as _TuiRepl
 
-            tui = TuiRepl(self, self._log_buffer)
+            tui = _TuiRepl(self, self._log_buffer)
             tui.run()
         except ImportError as ex:
             self._print(f"  TUI mode not available: {ex}")
         except Exception as ex:
             self._print(f"  TUI error: {ex}")
+            self._last_exit_code = 1
+
+    def _cmd_serve(self, args: str = "") -> None:
+        """Serve a worktree's web UI on a side port for inspection.
+
+        Flags:
+          --port PORT   port to serve on (default 5174)
+          --watch       resync to origin/main and restart whenever main moves
+        Positional:
+          WORKTREE      worktree to serve as-is (default: the latest-main worktree)
+        """
+        import subprocess
+
+        from domain.shared import find_repo_root
+
+        argv = args.split()
+        port = ""
+        watch = False
+        target = ""
+        i = 0
+        while i < len(argv):
+            a = argv[i]
+            if a in ("-h", "--help"):
+                self._print("  serve [--port PORT] [--watch] [worktree]")
+                return
+            if a == "--port" and i + 1 < len(argv):
+                port = argv[i + 1]
+                i += 2
+            elif a == "--watch":
+                watch = True
+                i += 1
+            elif a.startswith("--"):
+                self._print(f"  serve: unknown flag {a}")
+                self._last_exit_code = 1
+                return
+            else:
+                target = a
+                i += 1
+
+        # Thin projection: the process logic (sync, pidfile-owned kill,
+        # foreign-holder refusal, path-identity header check) lives in the
+        # script — this command only builds its argv (Command Rule: the
+        # shell describes itself to humans; it never enters the model's
+        # tool registry).
+        script = find_repo_root(Path(__file__).resolve()) / "scripts" / "run_frontend_latest.sh"
+        if not script.is_file():
+            self._print(f"  serve: missing {script}")
+            self._last_exit_code = 1
+            return
+        cmd = [str(script)]
+        if target:
+            cmd.append(target)
+        if watch:
+            cmd.append("--watch")
+        env = dict(os.environ)
+        if port:
+            env["SLO_FRONTEND_PORT"] = port
+        log_path = Path("/tmp/opencode") / "serve-cmd.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("w") as log:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                env=env,
+                start_new_session=True,
+            )
+        # Watch mode never exits; give failures (foreign holder, bad path)
+        # a moment to surface, then report either way without stalling.
+        deadline = time.time() + (3.0 if watch else 30.0)
+        while proc.poll() is None and time.time() < deadline:
+            time.sleep(0.25)
+        if proc.poll() is None:
+            state = "watching origin/main" if watch else "starting"
+            self._print(f"  serve: {state} — output: {log_path}")
+            self._print(f"  open http://localhost:{port or '5174'}/")
+            return
+        output = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+        if proc.returncode == 0:
+            for line in output.rstrip("\n").splitlines():
+                self._print(line)
+            self._last_exit_code = 0
+        else:
+            lines = output.rstrip("\n").splitlines() or [f"  serve failed (exit {proc.returncode})"]
+            for line in lines:
+                self._print(line)
             self._last_exit_code = 1
 
     def _cmd_logs(self, args: str = "") -> None:
@@ -3557,7 +3680,7 @@ Examples:
             dev.call("set_samples", spp)
             self._print(f"  Rendering {w}x{h} @ {spp} spp...")
             t0 = _time.time()
-            img = dev.call("render")
+            img = dev.arena.get(dev.call("render"))
             dt = _time.time() - t0
             nz = int((img.sum(axis=-1) > 0.01).sum())
             self._print(
@@ -4682,6 +4805,9 @@ nl: db 10
                 self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
                 self._print(f"    {'count':15s} Count 0 to 9")
                 self._print(f"    {'counter':15s} Count 0 to 4")
+                self._print(
+                    f"    {'life':15s} Conway's Game of Life (60x20, validated lives prompt)"
+                )
                 self._last_exit_code = 0
                 return
             else:
@@ -4700,10 +4826,13 @@ nl: db 10
         file_or_name = rest if rest else ""
 
         # Check built-in programs by name
+        from domain.shell._internal.vm_programs import LIFE_ASM  # noqa: PLC0415
+
         builtins = {
             "hello": ShellREPL.HELLO_X86,
             "count": ShellREPL.FIB_X86,
             "counter": ShellREPL.COLLATZ_X86,
+            "life": LIFE_ASM,
         }
         if file_or_name and file_or_name in builtins:
             source = builtins[file_or_name]
@@ -5423,6 +5552,7 @@ _command_specs = [
     ("protect", "_cmd_protect"),
     ("unprotect", "_cmd_unprotect"),
     ("tui", "_cmd_tui"),
+    ("serve", "_cmd_serve"),
     ("note", "_cmd_note"),
     ("tutorial", "_cmd_tutorial"),
     ("boot", "_cmd_boot"),

@@ -23,6 +23,7 @@ from schemas.common import (
     success_response,
 )
 
+from domain.infrastructure.engine_seam import run_on_engine
 from domain.multimodal import get_multimodal_manager
 
 logger = logging.getLogger("slo.routers.multimodal")
@@ -279,7 +280,7 @@ class MultimodalRouter:
         from PIL import Image
 
         img = Image.open(io.BytesIO(contents)).convert("RGB")
-        caption = await asyncio.to_thread(mgr.caption_image, img, ground_truth=label)
+        caption = await run_on_engine(mgr.caption_image, img, ground_truth=label)
         safe_audit_log(
             "multimodal.train",
             resource="image",
@@ -379,7 +380,6 @@ class MultimodalRouter:
         import time as _time
 
         _batch_t0 = _time.monotonic()
-        loop = asyncio.get_event_loop()
         for src in image_sources:
             with self._bg_lock:
                 if not self._background_job["running"]:
@@ -394,10 +394,10 @@ class MultimodalRouter:
 
                     img = Image.open(io.BytesIO(contents)).convert("RGB")
                     name = src[1].filename or "upload"
-                    caption = await loop.run_in_executor(None, mgr.caption_image, img)
+                    caption = await run_on_engine(mgr.caption_image, img)
                 else:
                     name = src.split("/")[-1]
-                    caption = await loop.run_in_executor(None, mgr.train_on_path, src)
+                    caption = await run_on_engine(mgr.train_on_path, src)
                 with self._bg_lock:
                     self._background_job["current_image"] = name
                     self._background_job["current_caption"] = caption.text
@@ -510,9 +510,9 @@ class MultimodalRouter:
             )
         latest = checkpoints[0]
         trainer = VideoCaptionTrainer()
-        await asyncio.to_thread(trainer.load_checkpoint, latest["path"])
+        await run_on_engine(trainer.load_checkpoint, latest["path"])
         t0 = time.time()
-        text = await asyncio.to_thread(
+        text = await run_on_engine(
             trainer.generate,
             video_path=req.video_path,
             max_len=req.max_len,
@@ -595,7 +595,7 @@ class MultimodalRouter:
         from PIL import Image
 
         img = Image.open(io.BytesIO(contents)).convert("RGB")
-        cap = await asyncio.to_thread(mgr.caption_image, img)
+        cap = await run_on_engine(mgr.caption_image, img)
         learning = getattr(mgr, "_learning_count", 0)
         engine = getattr(mgr, "_multimodal_engine", None)
         buf = getattr(mgr, "_replay_buffer", None)
@@ -662,7 +662,7 @@ class MultimodalRouter:
         from PIL import Image
 
         img = Image.open(io.BytesIO(contents)).convert("RGB")
-        answer = await asyncio.to_thread(mgr.ask_question, img, question)
+        answer = await run_on_engine(mgr.ask_question, img, question)
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         return success_response(
             data={
@@ -692,7 +692,7 @@ class MultimodalRouter:
         try:
             processor = PDFVLMProcessor(max_pages=10)
             if per_page:
-                results = await asyncio.to_thread(
+                results = await run_on_engine(
                     processor.analyze_pages,
                     tmp_path,
                     question=question,
@@ -700,7 +700,7 @@ class MultimodalRouter:
                 )
                 text = "\n\n".join(f"--- Page {r['page']} ---\n{r['text']}" for r in results)
             else:
-                text = await asyncio.to_thread(
+                text = await run_on_engine(
                     processor.analyze, tmp_path, question=question, max_new_tokens=max_new_tokens
                 )
             return success_response(
@@ -731,16 +731,14 @@ class MultimodalRouter:
             tmp_path = tmp.name
         try:
             processor = VideoProcessor(max_frames=num_frames)
-            frames = await asyncio.to_thread(processor.extract_frames, tmp_path, num_frames)
+            frames = await run_on_engine(processor.extract_frames, tmp_path, num_frames)
             mgr = get_multimodal_manager()
             engine = getattr(mgr, "_multimodal_engine", None)
             if engine is None:
                 raise_error("Multimodal engine not initialized", "E_INTERNAL", status_code=500)
-            video_embedding = await asyncio.to_thread(processor.encode_video, frames, engine.vision)
+            video_embedding = await run_on_engine(processor.encode_video, frames, engine.vision)
             first_frame = frames[0].reshape(1, 224, 224, 3)
-            caption = await asyncio.to_thread(
-                engine.generate, first_frame, max_len=20, temperature=0.7
-            )
+            caption = await run_on_engine(engine.generate, first_frame, max_len=20, temperature=0.7)
             return success_response(
                 data={
                     "caption": caption.text,
@@ -773,7 +771,7 @@ class MultimodalRouter:
             self._voice_engine = get_voice_engine()
 
         audio_data = await file.read()
-        result = await asyncio.to_thread(self._voice_engine.recognize, audio_data, language)
+        result = await run_on_engine(self._voice_engine.recognize, audio_data, language)
         if not result.success:
             raise_error(result.error or "Transcription failed", "E_ASR_FAILED", status_code=500)
 
@@ -806,7 +804,7 @@ class MultimodalRouter:
 
             self._voice_engine = get_voice_engine()
 
-        result = await asyncio.to_thread(self._voice_engine.synthesize, text)
+        result = await run_on_engine(self._voice_engine.synthesize, text)
         if not result.success:
             raise_error(result.error or "TTS failed", "E_TTS_FAILED", status_code=500)
 
@@ -852,14 +850,14 @@ class MultimodalRouter:
             self._vae = SloVAE(latent_dim=64)
             self._diffusion = LatentDiffusionModel(latent_dim=64)
             self._text_encoder = TextEncoder(vocab_size=4096, embed_dim=256)
-        text_embeddings = await asyncio.to_thread(self._text_encoder.encode_text, [prompt])
-        latents = await asyncio.to_thread(
+        text_embeddings = await run_on_engine(self._text_encoder.encode_text, [prompt])
+        latents = await run_on_engine(
             self._diffusion.sample,
             text_embeddings,
             num_steps=steps,
             guidance_scale=guidance_scale,
         )
-        image_np = await asyncio.to_thread(self._vae.decode, latents)
+        image_np = await run_on_engine(self._vae.decode, latents)
         image_np = np.clip(image_np[0].transpose(1, 2, 0), 0, 1)
         image_np = (image_np * 255).astype(np.uint8)
         img = Image.fromarray(image_np)
@@ -935,7 +933,7 @@ class MultimodalRouter:
                     entries += 1
             return entries
 
-        entries = await asyncio.to_thread(_build_dataset)
+        entries = await run_on_engine(_build_dataset)
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         safe_audit_log(
             "multimodal.visual_dataset",
@@ -1001,7 +999,7 @@ class MultimodalRouter:
         if not match:
             raise_error(f"Checkpoint '{name}' not found", "E_NOT_FOUND")
         trainer = VideoCaptionTrainer()
-        await asyncio.to_thread(trainer.load_checkpoint, match[0]["path"])
+        await run_on_engine(trainer.load_checkpoint, match[0]["path"])
         safe_audit_log("multimodal.checkpoint.load", resource=name)
         return success_response(data={"status": "loaded", "checkpoint": name})
 
