@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "43fc0a182de04173df14e6d4f76c25f1a7df35d5",
+    "recorded_commit": "edd7c6ecb892c0fa1f9bc637ac855e19e8613608",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "b716182feacf3766b3dc5831eb2c9cff9fd23943"
+      "tree_hash": "d3b6eac621e45a68840f0bc03e2851b4ad6da36f"
     },
     "voice": {
       "class": "core-capability",
