@@ -241,9 +241,7 @@ def test_dispatch_frame_carries_recording_state(capsys):
     b2, _ = _three_matches()
     w2 = WidgetBridge(b2)
     rec = _Recorder()
-    code = asyncio.run(
-        _dispatch(b2, ["click", "--by", "text", "Go"], recorder=rec, widget=w2)
-    )
+    code = asyncio.run(_dispatch(b2, ["click", "--by", "text", "Go"], recorder=rec, widget=w2))
     assert code == 0
     frame = _frame(b2.exprs[0])
     assert frame["recording"] is True
@@ -337,8 +335,7 @@ def test_shot_roundtrip_leaves_panel_visible(chromium_ws, tmp_path, capsys):
 
     page = tmp_path / "shot.html"
     page.write_text(
-        "<!doctype html><title>S</title><body>"
-        "<button id='a' onclick='void 0'>Go</button></body>"
+        "<!doctype html><title>S</title><body><button id='a' onclick='void 0'>Go</button></body>"
     )
     assert main(["--widget", "--cdp", chromium_ws, "open", page.as_uri()]) == 0
     capsys.readouterr()

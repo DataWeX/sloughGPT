@@ -78,7 +78,9 @@ def _first_token_ms(provider) -> float:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--json", type=Path, default=None, help="write metrics JSON for benchmark_results.py")
+    ap.add_argument(
+        "--json", type=Path, default=None, help="write metrics JSON for benchmark_results.py"
+    )
     ap.add_argument("--soul", type=Path, default=None, help="reuse an existing .soul")
     args = ap.parse_args()
 

@@ -101,8 +101,10 @@ def _run_config(name: str, workdir: Path, cfg: dict) -> dict:
     from domain.training._internal.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
 
     print(f"\n{'=' * 60}")
-    print(f"  Config: {name}  ({cfg['n_embed']}d / {cfg['n_layer']}L)"
-          f"  steps~{cfg['max_steps']}  target <{cfg['loss_target']})")
+    print(
+        f"  Config: {name}  ({cfg['n_embed']}d / {cfg['n_layer']}L)"
+        f"  steps~{cfg['max_steps']}  target <{cfg['loss_target']})"
+    )
     print(f"{'=' * 60}")
 
     model_path = _build_model(workdir, cfg["n_embed"], cfg["n_layer"], cfg["vocab"])
@@ -172,7 +174,11 @@ def _run_config(name: str, workdir: Path, cfg: dict) -> dict:
         "lora_params": result.metrics.get("n_lora_params", 0) if result.metrics else 0,
         "adapter_bytes": adapter_bytes,
         "peak_memory_mb": round(peak_mem / 1024 / 1024, 1),
-        "loss_curve": [{"step": p.get("step", 0), "loss": p["loss"]} for p in progress if p.get("loss") is not None],
+        "loss_curve": [
+            {"step": p.get("step", 0), "loss": p["loss"]}
+            for p in progress
+            if p.get("loss") is not None
+        ],
     }
 
     print(
@@ -182,15 +188,18 @@ def _run_config(name: str, workdir: Path, cfg: dict) -> dict:
         f"adapter {record['adapter_bytes']} B"
     )
     status = "PASS" if converged else "FAIL"
-    print(f"  [GATE goal-17] {status}  final={final_loss:.4f} < {cfg['loss_target']} && "
-          f"< {cfg['loss_ratio']}x of initial={initial_loss:.4f}")
+    print(
+        f"  [GATE goal-17] {status}  final={final_loss:.4f} < {cfg['loss_target']} && "
+        f"< {cfg['loss_ratio']}x of initial={initial_loss:.4f}"
+    )
     return record
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.strip())
-    parser.add_argument("--json", default="/tmp/lorabench-results.json",
-                        help="Output path for JSON results")
+    parser.add_argument(
+        "--json", default="/tmp/lorabench-results.json", help="Output path for JSON results"
+    )
     args = parser.parse_args()
 
     workdir = Path("/tmp/lorabench-g17")
@@ -240,13 +249,17 @@ def main() -> int:
         cfg["name"] = name
 
     print(f"\n{'=' * 72}")
-    print(f"  {'Config':<8} {'Steps':>6} {'Time':>7} {'s/s':>7} {'Loss->':>8} {'Conv':>6} {'Mem':>7}")
+    print(
+        f"  {'Config':<8} {'Steps':>6} {'Time':>7} {'s/s':>7} {'Loss->':>8} {'Conv':>6} {'Mem':>7}"
+    )
     print(f"  {'-' * 8} {'-' * 6} {'-' * 7} {'-' * 7} {'-' * 8} {'-' * 6} {'-' * 7}")
     for r in results:
         conv = "PASS" if r["converged"] else "FAIL"
-        print(f"  {r['config']:<8} {r['total_steps']:>6} {r['elapsed_s']:>6.1f}s "
-              f"{r['steps_per_sec']:>7.2f} {r['initial_loss']:>7.2f}->{r['final_loss']:<7.4f} "
-              f"{conv:>6} {r['peak_memory_mb']:>6.1f}M")
+        print(
+            f"  {r['config']:<8} {r['total_steps']:>6} {r['elapsed_s']:>6.1f}s "
+            f"{r['steps_per_sec']:>7.2f} {r['initial_loss']:>7.2f}->{r['final_loss']:<7.4f} "
+            f"{conv:>6} {r['peak_memory_mb']:>6.1f}M"
+        )
     print(f"{'=' * 72}")
 
     out = Path(args.json)

@@ -85,9 +85,7 @@ HISTORY = ROOT / "scripts" / "benchmark_files_import.json"
 ENCODINGS = ("identity", "gzip")
 # Our own repo via raw.githubusercontent (Fastly) — polite default: we control
 # the bytes, it answers gzip, and no third party takes load from a benchmark.
-DEFAULT_WAN_URL = (
-    "https://raw.githubusercontent.com/DataWeX/sloughGPT/main/docs/AGENT_SYNC.md"
-)
+DEFAULT_WAN_URL = "https://raw.githubusercontent.com/DataWeX/sloughGPT/main/docs/AGENT_SYNC.md"
 
 
 def make_payload(mib: float) -> bytes:
@@ -100,10 +98,7 @@ def make_payload(mib: float) -> bytes:
     target = int(mib * 1024 * 1024)
     out = bytearray()
     while len(out) < target:
-        out += (
-            f"line {len(out):09d} tok {rng.getrandbits(96):024x} "
-            f"note import-bench\n"
-        ).encode()
+        out += (f"line {len(out):09d} tok {rng.getrandbits(96):024x} note import-bench\n").encode()
     return bytes(out[:target])
 
 
@@ -205,8 +200,8 @@ def run_pipe(url: str, workdir: Path, tag: str, payload_sha: str | None) -> dict
     wall = time.perf_counter() - t0
     job = files_mod._IMPORT_JOBS[job_id]
     stored = stored_blobs(router.UPLOADS_DIR)
-    ok_sha = None if payload_sha is None else (
-        bool(stored) and sha256_file(stored[0]) == payload_sha
+    ok_sha = (
+        None if payload_sha is None else (bool(stored) and sha256_file(stored[0]) == payload_sha)
     )
     return {
         "wall_s": wall,
@@ -328,10 +323,10 @@ def main() -> int:
     poll_out: dict[str, float] = {}
     overhead: dict[str, str] = {}
 
-    print(
-        f"files import benchmark — {args.mib:g} MiB payload × {args.repeat} repeat(s)"
+    print(f"files import benchmark — {args.mib:g} MiB payload × {args.repeat} repeat(s)")
+    header = (
+        f"{'row':<18} {'wall_s':>8} {'dec MiB/s':>10} {'wire MiB/s':>11} {'saved%':>7} {'reqs':>5}"
     )
-    header = f"{'row':<18} {'wall_s':>8} {'dec MiB/s':>10} {'wire MiB/s':>11} {'saved%':>7} {'reqs':>5}"
     print(header)
     print("-" * len(header))
 
@@ -390,9 +385,7 @@ def main() -> int:
                         )
                     )
                     if row_name.startswith("e2e"):
-                        poll_out[f"{encoding}_mean_us"] = round(
-                            last["poll_us_mean"], 1
-                        )
+                        poll_out[f"{encoding}_mean_us"] = round(last["poll_us_mean"], 1)
                         poll_out[f"{encoding}_p95_us"] = round(last["poll_us_p95"], 1)
                         checks.append(
                             (
@@ -402,9 +395,7 @@ def main() -> int:
                             )
                         )
                     if encoding == "gzip":
-                        ok = (last.get("saved_bytes") or 0) > 0 or (
-                            last.get("saved_pct") or 0
-                        ) > 0
+                        ok = (last.get("saved_bytes") or 0) > 0 or (last.get("saved_pct") or 0) > 0
                         checks.append(
                             (f"{row_name} gzip savings", ok, f"saved={last.get('saved_bytes')}")
                         )
@@ -418,9 +409,7 @@ def main() -> int:
                     else:
                         sv = last.get("saved_bytes")
                         ok = sv == 0 if sv is not None else (last.get("saved_pct") or 0) == 0
-                        checks.append(
-                            (f"{row_name} identity saved==0", ok, f"saved={sv}")
-                        )
+                        checks.append((f"{row_name} identity saved==0", ok, f"saved={sv}"))
 
                 floor_w = agg[f"floor-{encoding}"]["wall_s"]
                 pipe_w = agg[f"pipe-{encoding}"]["wall_s"]
@@ -474,9 +463,7 @@ def main() -> int:
 
         # Invariants (state/pct/integrity/savings — one-request is NOT
         # observable from the client side; it stays pinned by loopback rows).
-        checks.append(
-            ("wan state==done", last["state"] == "done", f"state={last['state']}")
-        )
+        checks.append(("wan state==done", last["state"] == "done", f"state={last['state']}"))
         checks.append(("wan pct==100", last["pct"] == 100.0, f"pct={last['pct']}"))
         checks.append(
             (
@@ -504,14 +491,11 @@ def main() -> int:
             checks.append(("wan identity saved==0", ok, f"saved={sv}"))
         else:
             ok = (last.get("saved_bytes") or 0) > 0 or (saved_pct or 0) > 0
-            checks.append(
-                (f"wan {enc} savings", ok, f"saved={last.get('saved_bytes')}")
-            )
+            checks.append((f"wan {enc} savings", ok, f"saved={last.get('saved_bytes')}"))
 
         saved = "-" if saved_pct is None else f"{saved_pct:.1f}"
         print(
-            f"{'wan-e2e':<18} {wall:>8.4f} {dec_mibs:>10.1f} "
-            f"{wire_mibs:>11.1f} {saved:>7} {'-':>5}"
+            f"{'wan-e2e':<18} {wall:>8.4f} {dec_mibs:>10.1f} {wire_mibs:>11.1f} {saved:>7} {'-':>5}"
         )
         wan_out = {
             "url": wan_url,
@@ -535,10 +519,7 @@ def main() -> int:
     for enc in ENCODINGS:
         print(f"overhead vs floor ({enc}): {overhead[enc]}")
     if poll_out:
-        print(
-            "status poll cost: "
-            + ", ".join(f"{k}={v} µs" for k, v in sorted(poll_out.items()))
-        )
+        print("status poll cost: " + ", ".join(f"{k}={v} µs" for k, v in sorted(poll_out.items())))
 
     failed = [c for c in checks if not c[1]]
     print(f"checks: {len(checks) - len(failed)}/{len(checks)} ok")

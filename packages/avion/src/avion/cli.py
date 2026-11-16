@@ -232,6 +232,7 @@ def _snapshot_lines(tree: dict[str, Any], indent: str = "  ") -> list[str]:
         lines.extend(_snapshot_lines(child, indent + "  "))
     return lines
 
+
 async def _fail_missing(b, value: str, by: str) -> int:
     """Not-found path: the failure line, then the near-miss report.
 
@@ -597,7 +598,9 @@ async def _repl_loop(backend, recorder=None, session=None, widget=None) -> None:
             print(f"(exit {code})")
 
 
-async def _cmd_repl(cdp_url: str, record_path: str | None = None, widget_enabled: bool = False) -> int:
+async def _cmd_repl(
+    cdp_url: str, record_path: str | None = None, widget_enabled: bool = False
+) -> int:
     """Persistent session: read verb-args lines until quit."""
     from avion.backends.cdp import CdpBackend
 
@@ -806,9 +809,7 @@ def _pop_nth(rest: list[str]) -> tuple[int | None, list[str]]:
         try:
             nth = int(rest[i + 1])
         except ValueError:
-            raise SystemExit(
-                _fail(f"--nth requires an integer, got {rest[i + 1]!r}")
-            ) from None
+            raise SystemExit(_fail(f"--nth requires an integer, got {rest[i + 1]!r}")) from None
         rest = rest[:i] + rest[i + 2 :]
     return nth, rest
 

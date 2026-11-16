@@ -70,15 +70,11 @@ MiB = 1024 * 1024
 #
 # ALU: 2001 dispatch-bound instructions (dec+jnz loop; no memory traffic
 # beyond instruction fetch).
-ALU_SOURCE = (
-    "[BITS 32]\n[ORG 0x100000]\n"
-    "mov ecx, 1000\n.loop:\ndec ecx\njnz .loop\nhlt"
-)
+ALU_SOURCE = "[BITS 32]\n[ORG 0x100000]\nmov ecx, 1000\n.loop:\ndec ecx\njnz .loop\nhlt"
 # MEM: 1001 instructions with balanced push/pop pairs — real stack writes at
 # the top of memory (250 iterations × push+pop+dec+jnz).
 MEM_SOURCE = (
-    "[BITS 32]\n[ORG 0x100000]\n"
-    "mov ecx, 250\n.loop:\npush eax\npop ebx\ndec ecx\njnz .loop\nhlt"
+    "[BITS 32]\n[ORG 0x100000]\nmov ecx, 250\n.loop:\npush eax\npop ebx\ndec ecx\njnz .loop\nhlt"
 )
 
 MAX_STEPS = 100_000
@@ -138,9 +134,7 @@ def sweep_cpu(iterations: int, crepeat: int) -> list[dict]:
     for size in CPU_SIZES:
         row = {
             "size": size,
-            "construct_ms": round(
-                timed_construct(lambda: X86CPU(memory_size=size), crepeat), 4
-            ),
+            "construct_ms": round(timed_construct(lambda: X86CPU(memory_size=size), crepeat), 4),
             "footprint_b": live_footprint(lambda: X86CPU(memory_size=size)),
         }
         for name, binary in binaries.items():
@@ -167,9 +161,7 @@ def sweep_system(iterations: int, crepeat: int) -> list[dict]:
                 timed_construct(lambda: X86VirtualSystem(memory_size=size), crepeat),
                 4,
             ),
-            "footprint_b": live_footprint(
-                lambda: X86VirtualSystem(memory_size=size)
-            ),
+            "footprint_b": live_footprint(lambda: X86VirtualSystem(memory_size=size)),
             "spawn_ok": True,
         }
         spawn_ms, run_ms, steps = [], [], 0
@@ -245,9 +237,7 @@ def delta_block(rows: list[dict], keys: list[str]) -> str:
     return "current vs 2×: " + " | ".join(parts)
 
 
-def check_linearity(
-    rows: list[dict], name: str, checks: list[tuple[str, bool, str]]
-) -> None:
+def check_linearity(rows: list[dict], name: str, checks: list[tuple[str, bool, str]]) -> None:
     """fp(2×) − fp(1×) must equal the added buffer within 10%."""
     base, two = rows[1], rows[2]
     delta = two["footprint_b"] - base["footprint_b"]
@@ -279,9 +269,7 @@ def git_short() -> str | None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--repeat", type=int, default=20, help="run iterations (median)")
-    ap.add_argument(
-        "--construct-repeat", type=int, default=5, help="construct iterations (median)"
-    )
+    ap.add_argument("--construct-repeat", type=int, default=5, help="construct iterations (median)")
     args = ap.parse_args()
 
     checks: list[tuple[str, bool, str]] = []
