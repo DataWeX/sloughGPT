@@ -391,6 +391,9 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
         onRemove={handleRemoveReadFile}
       />
 
+      {/* ChatStore is the single write path for input since card
+          20261116_124020: the controller's setInput IS the store action, so
+          one write here reaches every reader (composer, drafts, send). */}
       <ImageDropZone
         onImageDropped={handleImageDropped}
         onTextDropped={handleTextDropped}
@@ -431,14 +434,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           streamingToolName={pendingToolApproval?.toolName}
           ragVerification={ragVerification}
           value={input}
-          // Dual-write: ChatInput displays store state, but every send path
-          // (handleWriteSend, useChatMode, drafts) still reads hook state.
-          // The bridge syncs hook → store; without this, typed text never
-          // reaches send and messages silently fail to send.
-          onChange={(v: string) => {
-            storeSetInput(v)
-            chat.setInput(v)
-          }}
+          onChange={(v: string) => storeSetInput(v)}
           onSend={handleWriteSend}
           onStop={handleStop}
           onCancel={handleCancel}

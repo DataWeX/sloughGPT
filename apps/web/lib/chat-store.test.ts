@@ -44,6 +44,16 @@ vi.mock('@/lib/multimodal-controller', () => ({
   },
 }))
 
+// loadSession merges via chat-merge → sessionController.fetchMessages.
+// Unmocked, that would issue a real HTTP request from the node test env.
+vi.mock('@/lib/session-controller', () => ({
+  sessionController: {
+    fetchMessages: vi.fn(async () => []),
+    list: vi.fn(async () => []),
+    saveContext: vi.fn(async () => {}),
+  },
+}))
+
 vi.mock('@/lib/db', () => ({
   chatDB: {
     getKV: vi.fn(async () => null),

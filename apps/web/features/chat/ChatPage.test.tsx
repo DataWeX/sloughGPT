@@ -78,7 +78,6 @@ const {
   mockRemoveBookmark,
   mockIsBookmarked,
   mockClipboardWrite,
-  mockChatSetInput,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockReplace: vi.fn(),
@@ -100,7 +99,6 @@ const {
   mockRemoveBookmark: vi.fn(),
   mockIsBookmarked: vi.fn(),
   mockClipboardWrite: vi.fn(),
-  mockChatSetInput: vi.fn(),
 }))
 
 const state = vi.hoisted(() => ({
@@ -287,10 +285,12 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
   const { useChatStore } = await import('@/lib/chat-store')
   return {
     useChatMessages: () => {
-      const [messages, setMessages] = React.useState(state.chat.messages)
-      // Production wires the input through useChatStore (ChatPageSections
-      // passes store input into ChatInput) — mirror that here so typed text
-      // reaches handleWriteSend instead of a disconnected local state.
+      // Production useChatMessages declares ALL of this state as ChatStore
+      // selectors (card 20261116_124020 store authority) — mirror that here so
+      // ChatPageSections' store reads (messages) and the controller's writes
+      // (setMessages) hit the same state instead of a disconnected local copy.
+      const messages = useChatStore((s: any) => s.messages)
+      const setMessages = useChatStore((s: any) => s.setMessages)
       const storeInput = useChatStore((s: any) => s.input)
       const storeSetInput = useChatStore((s: any) => s.setInput)
       const [loading, setLoading] = React.useState(false)
@@ -300,12 +300,8 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
         messages,
         setMessages,
         input: storeInput,
-        // Record hook-side writes separately so tests can assert the
-        // dual-write contract (store for display, hook for send paths).
-        setInput: (...args: [string]) => {
-          ;(storeSetInput as (...a: [string]) => void)(...args)
-          mockChatSetInput(...args)
-        },
+        // Single write path: the controller's setInput IS the store action.
+        setInput: storeSetInput,
         loading,
         setLoading,
         images,
@@ -466,6 +462,9 @@ afterEach(() => {
 beforeEach(() => {
   vi.clearAllMocks()
   useChatStore.getState().setInput('')
+  // ChatStore is the single state authority — clear messages too so a prior
+  // test's transcript doesn't leak into the next render's store selectors.
+  useChatStore.setState({ messages: [] })
   state.health = { model_loaded: true, model_type: 'gpt2' }
   state.chat.messages = []
   state.chat.newChat = mockNewChat
@@ -485,6 +484,10 @@ beforeEach(() => {
 })
 
 async function renderChat() {
+  // Tests seed fixtures via state.chat.messages (the controller-facing shape);
+  // production useChatMessages reads messages from the store, so push the
+  // fixture into the store before mounting.
+  useChatStore.setState({ messages: state.chat.messages as any })
   render(
     <LocaleProvider>
       <ChatPage />
@@ -629,16 +632,18 @@ describe('ChatPage', () => {
     expect(mockSendMessage).toHaveBeenCalled()
   })
 
-  it('writes typed text to both the store (display) and hook (send paths)', async () => {
-    // Regression: ChatInput displays store state while every send path reads
-    // hook state — typing must update both or messages silently never send.
+  it('writes typed text through the ChatStore (single write path)', async () => {
+    // Card 20261116_124020: the old dual-write (store for display, hook for
+    // send paths) was replaced — the controller's setInput IS the store
+    // action, so one write reaches composer, drafts, and every send path.
     await renderChat()
     const textarea = screen.getByLabelText('Chat input')
     await act(async () => {
       fireEvent.change(textarea, { target: { value: 'hello' } })
     })
     expect(useChatStore.getState().input).toBe('hello')
-    expect(mockChatSetInput).toHaveBeenCalledWith('hello')
+    // Send paths read the same store state (covered end-to-end by
+    // 'sends a message from the chat input' above).
   })
 
   it('deletes a message and toasts', async () => {

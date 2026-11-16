@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect, startTransition } from 'react'
-import { streamChatResponse, type ToolCallEvent } from '@/lib/stream-chat-response'
+import { useCallback, useRef, useEffect, startTransition } from 'react'
+import { streamChatResponse } from '@/lib/stream-chat-response'
 import {
   cleanStreamedContent,
   stripAssistantPrefix,
@@ -30,6 +30,7 @@ import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { publishMemoryEvent } from '@/lib/memory-events'
 import { useConversationScope, effectiveGeneration } from '@/lib/conversation-scope-store'
 import { useChatSessions } from './useChatSessions'
+import { useChatStore } from '@/lib/chat-store'
 
 const _log = logger.child('chat-messages')
 
@@ -81,38 +82,38 @@ export function useChatMessages(config: ChatMessagesConfig) {
     customSystemPrompt,
   } = config
 
-  // ── Core state ───────────────────────────────────────────────────────────
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [sessionLoading, setSessionLoading] = useState(false)
-  const [images, setImages] = useState<ImageAttachment[]>([])
-  const [sessionSaved, setSessionSaved] = useState(false)
-  const [currentError, setCurrentError] = useState<ReturnType<typeof getErrorInfo> | null>(null)
-  const [contextLayers, setContextLayers] = useState<
-    Array<{
-      type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'
-      label: string
-      detail?: string
-    }>
-  >([])
-  const [toolEvents, setToolEvents] = useState<ToolCallEvent[]>([])
-  const [ragVerification, setRagVerification] = useState<{
-    confidence: number
-    is_verified: boolean
-    hallucination_rate: number
-    citations: string
-    grounded_claims: number
-    hallucinated_claims: number
-  } | null>(null)
-  const [pendingToolApproval, setPendingToolApproval] = useState<{
-    toolName: string
-    args?: Record<string, unknown>
-  } | null>(null)
+  // ── Core state — ChatStore is the single authority (card 20261116_124020) ──
+  // These used to be local useState copies mirrored one-way into the store by
+  // useChatStoreBridge — readers on the store and writers on this hook could
+  // desync (stale panes, scrambled load order). The hook now reads/writes the
+  // store directly: one state, both APIs, no mirror.
+  const messages = useChatStore((s) => s.messages)
+  const input = useChatStore((s) => s.input)
+  const loading = useChatStore((s) => s.loading)
+  const sessionLoading = useChatStore((s) => s.sessionLoading)
+  const images = useChatStore((s) => s.images)
+  const sessionSaved = useChatStore((s) => s.sessionSaved)
+  const currentError = useChatStore((s) => s.currentError)
+  const contextLayers = useChatStore((s) => s.contextLayers)
+  const toolEvents = useChatStore((s) => s.toolEvents)
+  const ragVerification = useChatStore((s) => s.ragVerification)
+  const pendingToolApproval = useChatStore((s) => s.pendingToolApproval)
+  const selectedMessageIds = useChatStore((s) => s.selectedMessageIds)
+  const selectionMode = useChatStore((s) => s.selectionMode)
 
-  // ── Message selection for bulk operations ──────────────────────────────────
-  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
-  const [selectionMode, setSelectionMode] = useState(false)
+  const setMessages = useChatStore((s) => s.setMessages)
+  const setInput = useChatStore((s) => s.setInput)
+  const setLoading = useChatStore((s) => s.setLoading)
+  const setCurrentError = useChatStore((s) => s.setCurrentError)
+  const setSessionSaved = useChatStore((s) => s.setSessionSaved)
+  const setSessionLoading = useChatStore((s) => s.setSessionLoading)
+  const setImages = useChatStore((s) => s.setImages)
+  const setToolEvents = useChatStore((s) => s.setToolEvents)
+  const setContextLayers = useChatStore((s) => s.setContextLayers)
+  const setRagVerification = useChatStore((s) => s.setRagVerification)
+  const setPendingToolApproval = useChatStore((s) => s.setPendingToolApproval)
+  const setSelectedMessageIds = useChatStore((s) => s.setSelectedMessageIds)
+  const setSelectionMode = useChatStore((s) => s.setSelectionMode)
 
   // ── Refs for callback access (read-only, never mutated inside setState) ──
   const messagesRef = useRef<ChatMessage[]>([])
@@ -230,6 +231,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setSessionSaved(false)
     const newId = generateSessionId()
     sessionIdRef.current = newId
+    // Mirror the claim into the store — it supersedes in-flight loads there.
+    useChatStore.setState({ sessionId: newId })
     chatDB.setKV(CURRENT_SESSION_KEY, newId)
     chatDB.deleteDraft(newId)
     showToast('New chat started')
@@ -961,9 +964,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
     chatDB.getKV<string>(CURRENT_SESSION_KEY).then((existing) => {
       if (existing) {
         sessionIdRef.current = existing
+        useChatStore.setState({ sessionId: existing })
       } else {
         const fresh = generateSessionId()
         sessionIdRef.current = fresh
+        useChatStore.setState({ sessionId: fresh })
         chatDB.setKV(CURRENT_SESSION_KEY, fresh)
       }
     })

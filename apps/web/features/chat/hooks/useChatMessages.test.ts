@@ -4,14 +4,17 @@ import { chatDB } from '@/lib/db'
 import { sessionController } from '@/lib/session-controller'
 
 // ── Set up hoisted mocks first ──────────────────────────────────────────────
-const { mockGetErrorInfo, mockGenerateSessionId, mockGetOrCreateUserId, mockStreamChatResponse } = vi.hoisted(() => ({
-  mockGetErrorInfo: vi.fn((): any => null),
-  mockGenerateSessionId: vi.fn(() => 'test-session-id'),
-  mockGetOrCreateUserId: vi.fn(async () => 'test-user'),
-  mockStreamChatResponse: vi.fn(),
-}))
+const { mockGetErrorInfo, mockGenerateSessionId, mockGetOrCreateUserId, mockStreamChatResponse } =
+  vi.hoisted(() => ({
+    mockGetErrorInfo: vi.fn((): any => null),
+    mockGenerateSessionId: vi.fn(() => 'test-session-id'),
+    mockGetOrCreateUserId: vi.fn(async () => 'test-user'),
+    mockStreamChatResponse: vi.fn(),
+  }))
 
-vi.mock('@/features/chat/components/feedback/ErrorBanner', () => ({ getErrorInfo: mockGetErrorInfo }))
+vi.mock('@/features/chat/components/feedback/ErrorBanner', () => ({
+  getErrorInfo: mockGetErrorInfo,
+}))
 
 vi.mock('@/lib/chat-utils', () => ({
   cleanStreamedContent: (s: string) => s,
@@ -37,10 +40,17 @@ vi.mock('@/lib/knowledge-controller', () => ({
 }))
 
 vi.mock('@/lib/multimodal-controller', () => ({
-  multimodalController: { trainImage: vi.fn().mockResolvedValue({ caption: 'test' }), getCapabilities: vi.fn().mockResolvedValue({}), getTrainingReport: vi.fn().mockResolvedValue({}) },
+  multimodalController: {
+    trainImage: vi.fn().mockResolvedValue({ caption: 'test' }),
+    getCapabilities: vi.fn().mockResolvedValue({}),
+    getTrainingReport: vi.fn().mockResolvedValue({}),
+  },
 }))
 
-vi.mock('@/lib/error-store', () => ({ useErrorStore: { getState: vi.fn(() => ({ addError: vi.fn() })) }, addGlobalError: vi.fn() }))
+vi.mock('@/lib/error-store', () => ({
+  useErrorStore: { getState: vi.fn(() => ({ addError: vi.fn() })) },
+  addGlobalError: vi.fn(),
+}))
 
 vi.mock('@/lib/dev-log', () => ({
   devDebug: vi.fn(),
@@ -51,18 +61,27 @@ vi.mock('@/lib/dev-log', () => ({
     warning: vi.fn(),
     error: vi.fn(),
     critical: vi.fn(),
-    child: vi.fn(() => ({ debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn(), critical: vi.fn() })),
+    child: vi.fn(() => ({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+      error: vi.fn(),
+      critical: vi.fn(),
+    })),
   },
 }))
 
-
-
 import { useChatMessages } from './useChatMessages'
+// Imported after the vi.mock block so it sees the mocked collaborators.
+import { useChatStore } from '@/lib/chat-store'
 
 function makeConfig(overrides = {}) {
   return {
-    model: 'gpt2', temperature: 0.8, maxTokens: 200,
-    currentSoul: null, currentAgent: null,
+    model: 'gpt2',
+    temperature: 0.8,
+    maxTokens: 200,
+    currentSoul: null,
+    currentAgent: null,
     useLocalEngine: false,
     engineRef: { current: null },
     engineLoadingRef: { current: false },
@@ -89,11 +108,34 @@ describe('useChatMessages', () => {
     spies.push(vi.spyOn(db, 'setKV').mockResolvedValue(undefined))
     spies.push(vi.spyOn(db, 'getDraft').mockResolvedValue(''))
     spies.push(vi.spyOn(db, 'loadSessions').mockResolvedValue([]))
+    // Store-backed setInput auto-saves a draft on every write — keep the real
+    // docstore API out of jsdom (card 20261116_124020 state rewiring).
+    spies.push(vi.spyOn(db, 'saveDraft').mockResolvedValue(undefined))
     spies.push(vi.spyOn(sessionController, 'list').mockResolvedValue([]))
+    // loadSession merges via chat-merge → fetchMessages; keep it out of jsdom.
+    spies.push(vi.spyOn(sessionController, 'fetchMessages').mockResolvedValue([]))
+    // ChatStore is the single state authority now — reset it between tests so
+    // one test's messages/input don't leak into the next render's selectors.
+    useChatStore.setState({
+      messages: [],
+      input: '',
+      loading: false,
+      sessionLoading: false,
+      images: [],
+      sessionSaved: false,
+      currentError: null,
+      contextLayers: [],
+      toolEvents: [],
+      ragVerification: null,
+      pendingToolApproval: null,
+      selectedMessageIds: new Set(),
+      selectionMode: false,
+      sessionId: '',
+    })
   })
 
   afterEach(() => {
-    spies.forEach(s => s.mockRestore())
+    spies.forEach((s) => s.mockRestore())
     spies.length = 0
   })
 
@@ -112,23 +154,33 @@ describe('useChatMessages', () => {
   it('initializes session ID from chatDB', async () => {
     const spy = vi.spyOn(chatDB as any, 'getKV').mockResolvedValueOnce('existing-session')
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    await act(async () => { await new Promise(r => setTimeout(r, 10)) })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
     expect(result.current.sessionIdRef.current).toBe('existing-session')
     spy.mockRestore()
   })
 
   it('generates new session ID when none exists', async () => {
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    await act(async () => { await new Promise(r => setTimeout(r, 10)) })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
     expect(result.current.sessionIdRef.current).toBe('test-session-id')
     expect(chatDB.setKV).toHaveBeenCalledWith('man_current_conversation', 'test-session-id')
   })
 
   it('newChat resets state', () => {
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    act(() => { result.current.setMessages([{ id: '1', role: 'user', content: 'hi', timestamp: new Date() }]) })
-    act(() => { result.current.setInput('hello') })
-    act(() => { result.current.newChat() })
+    act(() => {
+      result.current.setMessages([{ id: '1', role: 'user', content: 'hi', timestamp: new Date() }])
+    })
+    act(() => {
+      result.current.setInput('hello')
+    })
+    act(() => {
+      result.current.newChat()
+    })
     expect(result.current.messages).toEqual([])
     expect(result.current.input).toBe('')
   })
@@ -136,13 +188,17 @@ describe('useChatMessages', () => {
   it('handleCopy shows toast', async () => {
     const showToast = vi.fn()
     const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
-    act(() => { result.current.handleCopy() })
+    act(() => {
+      result.current.handleCopy()
+    })
     expect(showToast).toHaveBeenCalledWith('Copied to clipboard')
   })
 
   it('sendMessage does nothing when no text and no images', async () => {
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    await act(async () => { await result.current.sendMessage() })
+    await act(async () => {
+      await result.current.sendMessage()
+    })
     expect(result.current.messages).toEqual([])
   })
 
@@ -152,8 +208,12 @@ describe('useChatMessages', () => {
       onComplete?.()
     })
     const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
-    act(() => { result.current.setInput('Hello') })
-    await act(async () => { await result.current.sendMessage() })
+    act(() => {
+      result.current.setInput('Hello')
+    })
+    await act(async () => {
+      await result.current.sendMessage()
+    })
     expect(result.current.messages.length).toBe(2)
     expect(result.current.messages[0].role).toBe('user')
     expect(result.current.messages[0].content).toBe('Hello')
@@ -161,34 +221,50 @@ describe('useChatMessages', () => {
   })
 
   it('handleSuggestionClick sends suggestion', async () => {
-    mockStreamChatResponse.mockImplementation(({ onComplete }) => { onComplete?.() })
+    mockStreamChatResponse.mockImplementation(({ onComplete }) => {
+      onComplete?.()
+    })
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    await act(async () => { result.current.handleSuggestionClick('Tell me a joke') })
+    await act(async () => {
+      result.current.handleSuggestionClick('Tell me a joke')
+    })
     expect(result.current.messages.length).toBe(2)
     expect(result.current.messages[0].content).toBe('Tell me a joke')
   })
 
   it('handleRetry resends last user message', async () => {
-    mockStreamChatResponse.mockImplementation(({ onComplete }) => { onComplete?.() })
+    mockStreamChatResponse.mockImplementation(({ onComplete }) => {
+      onComplete?.()
+    })
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    act(() => { result.current.setMessages([
-      { id: '1', role: 'user', content: 'Hi', timestamp: new Date() },
-      { id: '2', role: 'assistant', content: 'Hello!', timestamp: new Date() },
-    ])})
-    await act(async () => { result.current.handleRetry() })
+    act(() => {
+      result.current.setMessages([
+        { id: '1', role: 'user', content: 'Hi', timestamp: new Date() },
+        { id: '2', role: 'assistant', content: 'Hello!', timestamp: new Date() },
+      ])
+    })
+    await act(async () => {
+      result.current.handleRetry()
+    })
     expect(result.current.messages.length).toBe(4)
     expect(result.current.messages[2].content).toBe('Hi')
   })
 
   it('handleEditMessage replaces content from that point', async () => {
-    mockStreamChatResponse.mockImplementation(({ onComplete }) => { onComplete?.() })
+    mockStreamChatResponse.mockImplementation(({ onComplete }) => {
+      onComplete?.()
+    })
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    act(() => { result.current.setMessages([
-      { id: '1', role: 'user', content: 'Hi', timestamp: new Date() },
-      { id: '2', role: 'assistant', content: 'Hello', timestamp: new Date() },
-    ])})
-    await act(async () => { result.current.handleEditMessage('2', 'Edited') })
-    await new Promise(r => setTimeout(r, 50))
+    act(() => {
+      result.current.setMessages([
+        { id: '1', role: 'user', content: 'Hi', timestamp: new Date() },
+        { id: '2', role: 'assistant', content: 'Hello', timestamp: new Date() },
+      ])
+    })
+    await act(async () => {
+      result.current.handleEditMessage('2', 'Edited')
+    })
+    await new Promise((r) => setTimeout(r, 50))
     expect(result.current.messages.length).toBeLessThan(4)
     expect(result.current.messages[0].content).toBe('Hi')
   })
@@ -197,12 +273,22 @@ describe('useChatMessages', () => {
     const recordFeedback = vi.fn().mockResolvedValue(true)
     const showToast = vi.fn()
     const { result } = renderHook(() => useChatMessages(makeConfig({ recordFeedback, showToast })))
-    act(() => { result.current.setMessages([
-      { id: '1', role: 'user', content: 'Hi', timestamp: new Date() },
-      { id: '2', role: 'assistant', content: 'Hello', timestamp: new Date() },
-    ])})
-    await act(async () => { result.current.handleThumbsUp('2') })
-    expect(recordFeedback).toHaveBeenCalledWith(expect.objectContaining({ rating: 'thumbs_up', userMessage: 'Hi', assistantResponse: 'Hello' }))
+    act(() => {
+      result.current.setMessages([
+        { id: '1', role: 'user', content: 'Hi', timestamp: new Date() },
+        { id: '2', role: 'assistant', content: 'Hello', timestamp: new Date() },
+      ])
+    })
+    await act(async () => {
+      result.current.handleThumbsUp('2')
+    })
+    expect(recordFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rating: 'thumbs_up',
+        userMessage: 'Hi',
+        assistantResponse: 'Hello',
+      }),
+    )
     expect(showToast).toHaveBeenCalledWith('Thanks for the feedback!', 'success')
   })
 
@@ -210,34 +296,56 @@ describe('useChatMessages', () => {
     const recordFeedback = vi.fn().mockResolvedValue(true)
     const showToast = vi.fn()
     const { result } = renderHook(() => useChatMessages(makeConfig({ recordFeedback, showToast })))
-    act(() => { result.current.setMessages([
-      { id: '1', role: 'user', content: 'Bad', timestamp: new Date() },
-      { id: '2', role: 'assistant', content: 'Sorry', timestamp: new Date() },
-    ])})
-    await act(async () => { result.current.handleThumbsDown('2') })
-    expect(recordFeedback).toHaveBeenCalledWith(expect.objectContaining({ rating: 'thumbs_down', userMessage: 'Bad', assistantResponse: 'Sorry' }))
+    act(() => {
+      result.current.setMessages([
+        { id: '1', role: 'user', content: 'Bad', timestamp: new Date() },
+        { id: '2', role: 'assistant', content: 'Sorry', timestamp: new Date() },
+      ])
+    })
+    await act(async () => {
+      result.current.handleThumbsDown('2')
+    })
+    expect(recordFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rating: 'thumbs_down',
+        userMessage: 'Bad',
+        assistantResponse: 'Sorry',
+      }),
+    )
   })
 
   it('handleAddImage calls multimodalController', async () => {
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    await act(async () => { result.current.handleAddImage('data:image/png;base64,abc') })
+    await act(async () => {
+      result.current.handleAddImage('data:image/png;base64,abc')
+    })
     expect(result.current.images).toHaveLength(1)
   })
 
   it('handleRemoveImage removes by id', async () => {
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    await act(async () => { result.current.handleAddImage('data:image/png;base64,abc') })
+    await act(async () => {
+      result.current.handleAddImage('data:image/png;base64,abc')
+    })
     expect(result.current.images).toHaveLength(1)
-    act(() => { result.current.handleRemoveImage(result.current.images[0].id) })
+    act(() => {
+      result.current.handleRemoveImage(result.current.images[0].id)
+    })
     expect(result.current.images).toEqual([])
   })
 
   it('handles stream error', async () => {
     mockGetErrorInfo.mockReturnValue({ type: 'error', message: 'Server error' })
-    mockStreamChatResponse.mockImplementation(({ onError }) => { onError?.(500, 'Server error') })
+    mockStreamChatResponse.mockImplementation(({ onError }) => {
+      onError?.(500, 'Server error')
+    })
     const { result } = renderHook(() => useChatMessages(makeConfig()))
-    act(() => { result.current.setInput('Hi') })
-    await act(async () => { await result.current.sendMessage() })
+    act(() => {
+      result.current.setInput('Hi')
+    })
+    await act(async () => {
+      await result.current.sendMessage()
+    })
     expect(result.current.currentError).toBeTruthy()
   })
 
@@ -247,8 +355,12 @@ describe('useChatMessages', () => {
       onMemory?.({ stored: true, fact: 'The capital of France is Paris.' })
     })
     const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
-    act(() => { result.current.setInput('What is the capital?') })
-    await act(async () => { await result.current.sendMessage() })
+    act(() => {
+      result.current.setInput('What is the capital?')
+    })
+    await act(async () => {
+      await result.current.sendMessage()
+    })
     expect(showToast).toHaveBeenCalledWith('Remembered: The capital of France is Paris.', 'success')
   })
 
@@ -258,19 +370,31 @@ describe('useChatMessages', () => {
       onMemory?.({ stored: true })
     })
     const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
-    act(() => { result.current.setInput('What is the capital?') })
-    await act(async () => { await result.current.sendMessage() })
+    act(() => {
+      result.current.setInput('What is the capital?')
+    })
+    await act(async () => {
+      await result.current.sendMessage()
+    })
     expect(showToast).toHaveBeenCalledWith('New fact saved to memory', 'success')
   })
 
   it('shows the count of additional stored facts in the memory toast', async () => {
     const showToast = vi.fn()
     mockStreamChatResponse.mockImplementation(({ onMemory }) => {
-      onMemory?.({ stored: true, fact: 'Paris is the capital.', facts: ['Paris is the capital.', 'The Seine flows through it.', 'Louvre is a museum.'] })
+      onMemory?.({
+        stored: true,
+        fact: 'Paris is the capital.',
+        facts: ['Paris is the capital.', 'The Seine flows through it.', 'Louvre is a museum.'],
+      })
     })
     const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
-    act(() => { result.current.setInput('Tell me about Paris') })
-    await act(async () => { await result.current.sendMessage() })
+    act(() => {
+      result.current.setInput('Tell me about Paris')
+    })
+    await act(async () => {
+      await result.current.sendMessage()
+    })
     expect(showToast).toHaveBeenCalledWith('Remembered: Paris is the capital. +2 more', 'success')
   })
 
@@ -280,8 +404,12 @@ describe('useChatMessages', () => {
       onMemory?.({ stored: false })
     })
     const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
-    act(() => { result.current.setInput('What is the capital?') })
-    await act(async () => { await result.current.sendMessage() })
+    act(() => {
+      result.current.setInput('What is the capital?')
+    })
+    await act(async () => {
+      await result.current.sendMessage()
+    })
     expect(showToast).not.toHaveBeenCalled()
   })
 })

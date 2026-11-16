@@ -1,11 +1,13 @@
 'use client'
 
 /**
- * ChatStore — Zustand-based state management for the chat interface.
+ * ChatStore — the SINGLE state authority for the chat interface.
  *
- * Replaces the monolithic useChatMessages hook with a composable store.
- * The token accumulator and streaming pipeline operate on this store
- * directly via getState()/setState().
+ * Since card 20261116_124020 every message/input/loading read AND write goes
+ * through this store: the useChatMessages hook keeps its action surface but
+ * declares its state here (selectors + these actions), and the old one-way
+ * useChatStoreBridge mirror is gone. The token accumulator and streaming
+ * pipeline operate on this store directly via getState()/setState().
  */
 
 import { create } from 'zustand'
@@ -32,11 +34,15 @@ import { chatDB } from '@/lib/db'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { publishMemoryEvent } from '@/lib/memory-events'
 import { effectiveGeneration } from '@/lib/conversation-scope-store'
+import { loadMergedMessages } from '@/lib/chat-merge'
 import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
 
 const _log = logger.child('chat-store')
+
+/** In-flight store-side loadSession count — see loadSession's finally block. */
+let _sessionLoadsInFlight = 0
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -144,6 +150,24 @@ export interface ChatActions {
   setMessages: (updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
   setLoading: (loading: boolean) => void
   setCurrentError: (error: ErrorInfo | null) => void
+
+  // Session flags — parity setters the controller-era hook needs now that
+  // its useState copies were replaced with store selectors (card 20261116_124020)
+  setSessionSaved: (saved: boolean) => void
+  setSessionLoading: (loading: boolean) => void
+
+  // Stream/media meta
+  setImages: (updater: ImageAttachment[] | ((prev: ImageAttachment[]) => ImageAttachment[])) => void
+  setToolEvents: (updater: ToolCallEvent[] | ((prev: ToolCallEvent[]) => ToolCallEvent[])) => void
+  setContextLayers: (updater: ContextLayer[] | ((prev: ContextLayer[]) => ContextLayer[])) => void
+  setRagVerification: (info: RagVerificationInfo | null) => void
+  setPendingToolApproval: (
+    approval: { toolName: string; args?: Record<string, unknown> } | null,
+  ) => void
+
+  // Selection
+  setSelectedMessageIds: (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => void
+  setSelectionMode: (mode: boolean | ((prev: boolean) => boolean)) => void
 
   // Images
   handleAddImage: (dataUrl: string) => void
@@ -324,6 +348,30 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
 
   // ── Set Error ──
   setCurrentError: (error) => set({ currentError: error }),
+
+  // ── Session flags ──
+  setSessionSaved: (saved) => set({ sessionSaved: saved }),
+  setSessionLoading: (loading) => set({ sessionLoading: loading }),
+
+  // ── Stream/media meta ──
+  setImages: (updater) =>
+    set((s) => ({ images: typeof updater === 'function' ? updater(s.images) : updater })),
+  setToolEvents: (updater) =>
+    set((s) => ({ toolEvents: typeof updater === 'function' ? updater(s.toolEvents) : updater })),
+  setContextLayers: (updater) =>
+    set((s) => ({
+      contextLayers: typeof updater === 'function' ? updater(s.contextLayers) : updater,
+    })),
+  setRagVerification: (info) => set({ ragVerification: info }),
+  setPendingToolApproval: (approval) => set({ pendingToolApproval: approval }),
+
+  // ── Selection ──
+  setSelectedMessageIds: (updater) =>
+    set((s) => ({
+      selectedMessageIds: typeof updater === 'function' ? updater(s.selectedMessageIds) : updater,
+    })),
+  setSelectionMode: (mode) =>
+    set((s) => ({ selectionMode: typeof mode === 'function' ? mode(s.selectionMode) : mode })),
 
   // ── Send Message ──
   sendMessage: async (overrideText) => {
@@ -941,24 +989,43 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
 
   // ── Session Operations ──
   loadSession: async (id) => {
-    set({ sessionLoading: true })
+    // Claim the id up front (controller parity): a later load or newChat
+    // moves the claim, which supersedes this in-flight load.
+    set({ sessionLoading: true, sessionId: id })
+    _sessionLoadsInFlight++
     try {
       const sessions = await chatDB.loadSessions()
       const session = sessions.find((s) => s.id === id)
-      if (session) {
+      // Superseded while awaiting? A newer claim (load/newChat) owns the pane now.
+      if (session && get().sessionId === id) {
+        const merged = await loadMergedMessages(id, session.messages || [])
+        if (get().sessionId !== id) return
         startTransition(() => {
           set({
-            messages: session.messages || [],
+            messages: merged,
             sessionId: id,
-            sessionSaved: true,
+            // Mirrors useChatSessions: a thread is "saved" when it ends on a
+            // complete assistant reply (otherwise it's a resume/draft state).
+            sessionSaved: merged.length > 0 && merged[merged.length - 1].role === 'assistant',
           })
         })
-        chatDB.setKV(CURRENT_SESSION_KEY, id)
+        await chatDB.setKV(CURRENT_SESSION_KEY, id)
+        if (get().sessionId !== id) return
+        const draft = await chatDB.getDraft(id)
+        if (get().sessionId !== id) return
+        // Direct state write, not setInput: restoring a draft must not
+        // re-save it as a fresh edit.
+        set({ input: draft || '' })
+        if (merged.length > 0) get()._config?.showToast(`Loaded: ${session.name}`)
       }
     } catch (err) {
       _log.error('Failed to load session', { error: String(err) })
     } finally {
-      set({ sessionLoading: false })
+      _sessionLoadsInFlight--
+      // Only the LAST in-flight load releases the skeleton — a superseded
+      // load finishing early must not blank the pane under a newer one
+      // (same semantics as useChatSessions' inFlightLoadsRef).
+      if (_sessionLoadsInFlight <= 0) set({ sessionLoading: false })
     }
   },
 

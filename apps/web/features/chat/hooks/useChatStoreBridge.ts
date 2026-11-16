@@ -1,13 +1,15 @@
 'use client'
 
 /**
- * useChatStoreBridge — syncs existing controller state into the Zustand store.
+ * useChatStoreBridge — store config initialization only.
  *
- * This is a migration bridge: it reads from the existing useChatPageController
- * and pushes state into useChatStore so that components can gradually switch
- * from controller props to Zustand selectors.
- *
- * Call this once in ChatPage. It runs an effect that keeps the store in sync.
+ * Since card 20261116_124020 the ChatStore is the single state authority:
+ * useChatMessages declares its state as store selectors and writes through
+ * store actions, so the old one-way controller → store message mirror that
+ * lived here is gone (it could only ever lag behind — readers on the store,
+ * writers on the hook, no reverse path). What remains is `init`, which hands
+ * the store its ChatConfig (model, prompts, showToast, local-engine refs) —
+ * the store's send/stop/regenerate actions need it via getState().
  */
 
 import { useEffect, useRef } from 'react'
@@ -15,7 +17,7 @@ import { useChatStore, type ChatConfig } from '@/lib/chat-store'
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
 
 export function useChatStoreBridge(controller: ChatPageController) {
-  const { chat, model, health, ui, showToast } = controller
+  const { model, showToast } = controller
   const initRef = useRef(false)
 
   // Initialize store config once
@@ -41,47 +43,4 @@ export function useChatStoreBridge(controller: ChatPageController) {
     }
     useChatStore.getState().init(config)
   }, [controller, model, showToast])
-
-  // Sync messages from controller → store (one-way bridge)
-  useEffect(() => {
-    const unsubscribe = useChatStore.subscribe((state, prevState) => {
-      // If store messages diverge from controller, the store is the source of truth
-      // (during migration, controller is still primary — sync controller → store)
-    })
-
-    // Push controller state into store on every change
-    useChatStore.setState({
-      messages: chat.messages,
-      loading: chat.loading,
-      sessionLoading: chat.sessionLoading,
-      input: chat.input,
-      images: chat.images,
-      sessionId: chat.sessionIdRef.current,
-      toolEvents: chat.toolEvents,
-      ragVerification: chat.ragVerification,
-      contextLayers: chat.contextLayers,
-      pendingToolApproval: chat.pendingToolApproval,
-      currentError: chat.currentError,
-      sidebarConversations: chat.sidebarConversations as any,
-      selectedMessageIds: chat.selectedMessageIds,
-      selectionMode: chat.selectionMode,
-    })
-
-    return unsubscribe
-  }, [
-    chat.messages,
-    chat.loading,
-    chat.sessionLoading,
-    chat.input,
-    chat.images,
-    chat.toolEvents,
-    chat.ragVerification,
-    chat.contextLayers,
-    chat.pendingToolApproval,
-    chat.currentError,
-    chat.sidebarConversations,
-    chat.selectedMessageIds,
-    chat.selectionMode,
-    chat.sessionIdRef,
-  ])
 }
