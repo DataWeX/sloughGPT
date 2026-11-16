@@ -3,19 +3,13 @@ import { renderHook, act } from '@testing-library/react'
 import { useChatMode } from './useChatMode'
 import type { ChatMessage } from '@/lib/chat-utils'
 
-const { mockAddToast, mockGenerate } = vi.hoisted(() => ({
+const { mockAddToast } = vi.hoisted(() => ({
   mockAddToast: vi.fn(),
-  mockGenerate: vi.fn().mockResolvedValue({ image: 'data:image/png;base64,abc' }),
 }))
 
 vi.mock('@/lib/notify', () => ({
   notify: { toast: mockAddToast, banner: vi.fn() },
-
   useToastStore: { getState: () => ({ addToast: mockAddToast }) },
-}))
-
-vi.mock('@/lib/images-controller', () => ({
-  imagesController: { generate: mockGenerate },
 }))
 
 function makeChat(overrides?: {
@@ -41,293 +35,71 @@ function makeChat(overrides?: {
 }
 
 describe('useChatMode', () => {
-  it('returns chat mode by default', () => {
+  it('exposes only handleSend — no mode state leaks into the composer', () => {
     const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-    expect(result.current.chatMode).toBe('chat')
-    expect(result.current.placeholder).toBe('Type a message...')
+    expect(Object.keys(result.current)).toEqual(['handleSend'])
   })
 
-  it('setChatMode updates mode and placeholder', () => {
-    const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-    act(() => {
-      result.current.setChatMode('write')
-    })
-    expect(result.current.chatMode).toBe('write')
-    expect(result.current.placeholder).toBe('What do you want to write about?')
-  })
-
-  it('each mode has correct placeholder', () => {
-    const modes: [string, string][] = [
-      ['chat', 'Type a message...'],
-      ['write', 'What do you want to write about?'],
-      ['rewrite', 'Paste text to rewrite...'],
-      ['decide', 'What do you need help deciding?'],
-      ['explain', 'What do you want explained?'],
-      ['translate', 'Text to translate...'],
-      ['brainstorm', 'What should we brainstorm?'],
-      ['wellness', 'How can I help you feel calm?'],
-      ['create', 'Describe the image...'],
-      ['read', 'Ask about your file...'],
-      ['talk', 'Speak to me...'],
-    ]
-    for (const [mode, expected] of modes) {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setChatMode(mode as any)
-      })
-      expect(result.current.placeholder).toBe(expected)
-    }
-  })
-
-  describe('buildModePrompt', () => {
-    it('chat mode returns null (no transform)', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      // chat mode default
-      expect(result.current.handleSend).toBeDefined()
-      // We can't call buildModePrompt directly, but handleSend in chat mode
-      // calls sendMessage() with no args — meaning no transform
-    })
-
-    it('write mode builds prompt with tone and type', () => {
+  describe('handleSend (plain)', () => {
+    it('sends the raw input with no prompt transform', async () => {
       const chat = makeChat()
+      chat.input = 'Write a sonnet about the sea'
       const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('write')
+      await act(async () => {
+        await result.current.handleSend()
       })
-      act(() => {
-        result.current.setWriteTone('Professional')
-      })
-      act(() => {
-        result.current.setWriteType('Report')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(chat.sendMessage).toHaveBeenCalledWith(
-        expect.stringContaining('professional report about:'),
-      )
-      expect(chat.setInput).toHaveBeenCalledWith('')
-    })
-
-    it('decide mode builds pros/cons prompt', () => {
-      const chat = makeChat()
-      chat.input = 'Should I switch jobs?'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('decide')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('pros & cons'))
-      expect(chat.sendMessage).toHaveBeenCalledWith(
-        expect.stringContaining('Should I switch jobs?'),
-      )
-    })
-
-    it('explain mode builds difficulty-level prompt', () => {
-      const chat = makeChat()
-      chat.input = 'Quantum computing'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('explain')
-      })
-      act(() => {
-        result.current.setExplainDifficulty('Expert')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('expert level'))
-    })
-
-    it('translate mode builds language pair prompt', () => {
-      const chat = makeChat()
-      chat.input = 'Hello world'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('translate')
-      })
-      act(() => {
-        result.current.setTranslateLangPair('EN→FR')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(chat.sendMessage).toHaveBeenCalledWith(
-        expect.stringContaining('Translate this from EN to FR'),
-      )
-    })
-
-    it('brainstorm mode builds topic prompt', () => {
-      const chat = makeChat()
-      chat.input = 'Give me ideas'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('brainstorm')
-      })
-      act(() => {
-        result.current.setBrainstormTopic('Startup Ideas')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('startup ideas'))
-    })
-
-    it('wellness mode maps type to prompt', () => {
-      const chat = makeChat()
-      chat.input = 'Help me relax'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('wellness')
-      })
-      act(() => {
-        result.current.setWellnessType('Meditation')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(chat.sendMessage).toHaveBeenCalledWith(
-        expect.stringContaining('Guide me through a short meditation'),
-      )
-    })
-  })
-
-  describe('handleSend', () => {
-    it('chat mode sends without transform', () => {
-      const chat = makeChat()
-      chat.input = 'Hello'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.handleSend()
-      })
+      // No mode decoration: sendMessage() reads input as-is.
       expect(chat.sendMessage).toHaveBeenCalledWith()
       expect(chat.setInput).not.toHaveBeenCalled()
     })
 
-    it('read mode without file shows toast', () => {
+    it('never rewrites the text into a decorated prompt', async () => {
       const chat = makeChat()
-      chat.input = 'What is this about?'
+      chat.input = 'hello'
       const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('read')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(mockAddToast).toHaveBeenCalledWith('Upload a file first, then ask your question', {
-        type: 'info',
-      })
-      expect(chat.sendMessage).not.toHaveBeenCalled()
-    })
-
-    it('read mode with file sends context message', () => {
-      const chat = makeChat()
-      chat.input = 'Summarize this'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('read')
-      })
-      act(() => {
-        result.current.handleSend({ text: 'File content here', filename: 'doc.txt' })
-      })
-      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('doc.txt'))
-      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('File content here'))
-      expect(chat.setInput).toHaveBeenCalledWith('')
-    })
-
-    it('talk mode is a no-op', () => {
-      const chat = makeChat()
-      chat.input = 'Hello'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('talk')
-      })
-      act(() => {
-        result.current.handleSend()
-      })
-      expect(chat.sendMessage).not.toHaveBeenCalled()
-    })
-
-    it('create mode sends image generation prompt', async () => {
-      const chat = makeChat()
-      chat.input = 'A sunset over mountains'
-      const { result } = renderHook(() => useChatMode({ chat }))
-      act(() => {
-        result.current.setChatMode('create')
-      })
       await act(async () => {
         await result.current.handleSend()
       })
-      expect(mockGenerate).toHaveBeenCalled()
-      expect(chat.setLoading).toHaveBeenCalledWith(true)
+      const arg = chat.sendMessage.mock.calls[0][0]
+      expect(arg).toBeUndefined()
     })
   })
 
-  describe('mode state setters', () => {
-    it('setWriteTone updates tone', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setWriteTone('Formal')
+  describe('handleSend (file attach)', () => {
+    it('injects file content with the question when a file is attached', async () => {
+      const chat = makeChat()
+      chat.input = 'Summarize this'
+      const { result } = renderHook(() => useChatMode({ chat }))
+      await act(async () => {
+        await result.current.handleSend({ text: 'File content here', filename: 'doc.txt' })
       })
-      expect(result.current.writeTone).toBe('Formal')
+      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('doc.txt'))
+      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('File content here'))
+      expect(chat.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Summarize this'))
+      expect(chat.setInput).toHaveBeenCalledWith('')
     })
 
-    it('setWriteType updates type', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setWriteType('Essay')
+    it('truncates large files to 12000 chars', async () => {
+      const chat = makeChat()
+      chat.input = 'q'
+      const { result } = renderHook(() => useChatMode({ chat }))
+      await act(async () => {
+        await result.current.handleSend({ text: 'x'.repeat(50000), filename: 'big.txt' })
       })
-      expect(result.current.writeType).toBe('Essay')
+      const sent = chat.sendMessage.mock.calls[0][0] as string
+      expect(sent).toContain('x'.repeat(12000))
+      expect(sent).not.toContain('x'.repeat(12001))
     })
 
-    it('setDecideStructure updates structure', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setDecideStructure('SWOT Analysis')
+    it('toasts when a file is attached but no question was typed', async () => {
+      const chat = makeChat()
+      chat.input = '   '
+      const { result } = renderHook(() => useChatMode({ chat }))
+      await act(async () => {
+        await result.current.handleSend({ text: 'content', filename: 'doc.txt' })
       })
-      expect(result.current.decideStructure).toBe('SWOT Analysis')
-    })
-
-    it('setExplainDifficulty updates difficulty', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setExplainDifficulty('Advanced')
-      })
-      expect(result.current.explainDifficulty).toBe('Advanced')
-    })
-
-    it('setTranslateLangPair updates pair', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setTranslateLangPair('DE→JP')
-      })
-      expect(result.current.translateLangPair).toBe('DE→JP')
-    })
-
-    it('setBrainstormTopic updates topic', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setBrainstormTopic('Marketing')
-      })
-      expect(result.current.brainstormTopic).toBe('Marketing')
-    })
-
-    it('setWellnessType updates type', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setWellnessType('Breathing')
-      })
-      expect(result.current.wellnessType).toBe('Breathing')
-    })
-
-    it('setCreateStyle updates style', () => {
-      const { result } = renderHook(() => useChatMode({ chat: makeChat() }))
-      act(() => {
-        result.current.setCreateStyle('Anime')
-      })
-      expect(result.current.createStyle).toBe('Anime')
+      expect(mockAddToast).toHaveBeenCalledWith('Ask a question about your file', { type: 'info' })
+      expect(chat.sendMessage).not.toHaveBeenCalled()
     })
   })
 })

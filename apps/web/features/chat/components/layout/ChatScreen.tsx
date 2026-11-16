@@ -64,7 +64,6 @@ interface ChatScreenProps {
   onEdit?: (messageId: string, newContent: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
-  onModeSelect?: (mode: string) => void
   className?: string
   model?: string
   isBookmarked?: (id: string) => boolean
@@ -105,7 +104,6 @@ export const ChatScreen = memo(function ChatScreen({
   onEdit,
   searchQuery,
   onSuggestionClick,
-  onModeSelect,
   className,
   model,
   isBookmarked,
@@ -249,7 +247,6 @@ export const ChatScreen = memo(function ChatScreen({
               hasModel={hasModel}
               suggestions={suggestions}
               onSuggestionClick={onSuggestionClick}
-              onModeSelect={onModeSelect}
             />
           </div>
         )}
@@ -307,7 +304,6 @@ export const ChatScreen = memo(function ChatScreen({
       hasModel,
       suggestions,
       onSuggestionClick,
-      onModeSelect,
       onRefreshHealth,
       toolEvents,
       ragVerification,

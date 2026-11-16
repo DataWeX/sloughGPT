@@ -27,10 +27,6 @@ vi.mock('@/features/chat/components/toolbar/ChatToolbar', () => ({
   ChatToolbar: () => <div data-testid="chat-toolbar" />,
 }))
 
-vi.mock('@/features/chat/components/toolbar/ModeBar', () => ({
-  ModeBar: () => <div data-testid="mode-bar" />,
-}))
-
 vi.mock('@/features/chat/components', () => ({
   ChatArea: () => <div data-testid="chat-area" />,
   ErrorBanner: () => <div data-testid="error-banner" />,
@@ -118,26 +114,6 @@ function makeController(overrides?: Partial<ChatPageController>): ChatPageContro
     refreshHealth: vi.fn(),
     showToast: vi.fn(),
     clearChat: vi.fn(),
-    chatMode: 'chat',
-    setChatMode: vi.fn(),
-    writeTone: '',
-    setWriteTone: vi.fn(),
-    writeType: '',
-    setWriteType: vi.fn(),
-    rewriteStyle: '',
-    setRewriteStyle: vi.fn(),
-    decideStructure: '',
-    setDecideStructure: vi.fn(),
-    explainDifficulty: '',
-    setExplainDifficulty: vi.fn(),
-    translateLangPair: '',
-    setTranslateLangPair: vi.fn(),
-    brainstormTopic: '',
-    setBrainstormTopic: vi.fn(),
-    wellnessType: '',
-    setWellnessType: vi.fn(),
-    createStyle: '',
-    setCreateStyle: vi.fn(),
     readFileData: null,
     setReadFileData: vi.fn(),
     readLoading: false,

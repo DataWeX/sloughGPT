@@ -1,122 +1,16 @@
 'use client'
 
-import { useEffect, useState, memo, useCallback } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { useLocale } from '@/hooks/useLocale'
-import {
-  IconChat,
-  IconEdit,
-  IconBrain,
-  IconBolt,
-  IconSearch,
-  IconVision,
-  IconSparkle,
-  IconDocument,
-  cn,
-} from '@sloughgpt/strui'
+import { IconChat, IconEdit, IconBrain, IconBolt, cn } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { Waves, Lightbulb, Mic } from 'lucide-react'
+import { Lightbulb } from 'lucide-react'
 
 interface EmptyStateProps {
   hasModel: boolean
   suggestions?: { text: string; icon: React.ReactNode }[]
   onSuggestionClick?: (text: string) => void
-  onModeSelect?: (mode: string) => void
 }
-
-interface ToolModeCardProps {
-  mode: string
-  label: string
-  description: string
-  icon: React.ReactNode
-  color: string
-  onClick: () => void
-}
-
-function ToolModeCard({ mode, label, description, icon, color, onClick }: ToolModeCardProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'group relative flex flex-col items-start gap-1.5 p-3 rounded-xl border border-border/30 bg-card/30',
-        'hover:border-primary/30 hover:bg-primary/[0.03] hover:shadow-sm hover:shadow-primary/5',
-        'hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 cursor-pointer text-left',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <div
-          className={cn(
-            'flex items-center justify-center h-7 w-7 rounded-lg transition-colors duration-200',
-            color,
-          )}
-        >
-          {icon}
-        </div>
-        <span className="text-xs font-medium text-foreground/90 group-hover:text-foreground transition-colors">
-          {label}
-        </span>
-      </div>
-      <p className="text-[11px] text-muted-foreground leading-snug group-hover:text-muted-foreground transition-colors">
-        {description}
-      </p>
-    </button>
-  )
-}
-
-// Single-accent tiles — same MODE_ACCENT hue language as the tab bar and
-// composer chip (this icon-tile composition just drops the border).
-const TOOL_MODES = [
-  {
-    mode: 'write',
-    label: 'Write',
-    description: 'Emails, stories, posts',
-    icon: <IconEdit className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'translate',
-    label: 'Translate',
-    description: 'Across languages',
-    icon: <IconVision className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'rewrite',
-    label: 'Rewrite',
-    description: 'Polish your text',
-    icon: <IconSparkle className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'brainstorm',
-    label: 'Brainstorm',
-    description: 'Generate ideas',
-    icon: <IconBolt className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'decide',
-    label: 'Decide',
-    description: 'Compare options',
-    icon: <IconBrain className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'explain',
-    label: 'Explain',
-    description: 'Simplify topics',
-    icon: <IconSearch className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'wellness',
-    label: 'Wellness',
-    description: 'Calm your mind',
-    icon: <Waves className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-]
 
 const QUICK_STARTERS = [
   { text: 'Explain quantum computing simply', icon: <Lightbulb className="h-3.5 w-3.5" /> },
@@ -129,7 +23,6 @@ export const EmptyState = memo(function EmptyState({
   hasModel,
   suggestions,
   onSuggestionClick,
-  onModeSelect,
 }: EmptyStateProps) {
   const { t } = useLocale()
   const [greeting, setGreeting] = useState('')
@@ -140,13 +33,6 @@ export const EmptyState = memo(function EmptyState({
     else if (h < 18) setGreeting('Good afternoon')
     else setGreeting('Good evening')
   }, [])
-
-  const handleModeClick = useCallback(
-    (mode: string) => {
-      onModeSelect?.(mode)
-    },
-    [onModeSelect],
-  )
 
   const displayStarters = hasModel
     ? suggestions && suggestions.length > 0
@@ -175,32 +61,10 @@ export const EmptyState = memo(function EmptyState({
         </p>
         <p className="text-xs text-muted-foreground max-w-[280px] leading-relaxed">
           {hasModel
-            ? 'Chat, write, translate, or brainstorm — pick a tool or just ask.'
+            ? 'Just ask — writing, translation, ideas, explanations, or a plain chat.'
             : t('common.starting_sub')}
         </p>
       </div>
-
-      {/* Tool Mode Cards */}
-      {hasModel && (
-        <div className="w-full max-w-lg space-y-3">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.12em]">
-            Quick tools
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {TOOL_MODES.map((tool) => (
-              <ToolModeCard
-                key={tool.mode}
-                mode={tool.mode}
-                label={tool.label}
-                description={tool.description}
-                icon={tool.icon}
-                color={tool.color}
-                onClick={() => handleModeClick(tool.mode)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Quick Starters */}
       {displayStarters && (

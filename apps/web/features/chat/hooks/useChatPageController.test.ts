@@ -156,26 +156,7 @@ vi.mock('@/features/chat/hooks/useChatMessages', () => ({
 
 vi.mock('@/features/chat/hooks/useChatMode', () => ({
   useChatMode: () => ({
-    chatMode: 'chat',
-    setChatMode: vi.fn(),
-    writeTone: 'Friendly',
-    setWriteTone: vi.fn(),
-    writeType: 'Email',
-    setWriteType: vi.fn(),
-    rewriteStyle: 'Fix Grammar',
-    setRewriteStyle: vi.fn(),
-    decideStructure: 'Pros & Cons',
-    setDecideStructure: vi.fn(),
-    explainDifficulty: 'Beginner',
-    setExplainDifficulty: vi.fn(),
-    translateLangPair: 'English→Spanish',
-    setTranslateLangPair: vi.fn(),
-    brainstormTopic: 'Ideas',
-    setBrainstormTopic: vi.fn(),
-    wellnessType: 'Meditation',
-    setWellnessType: vi.fn(),
-    createStyle: 'Photorealistic',
-    setCreateStyle: vi.fn(),
+    handleSend: vi.fn().mockResolvedValue(undefined),
   }),
 }))
 
@@ -263,17 +244,11 @@ describe('useChatPageController', () => {
     expect(result.current).toHaveProperty('agents')
     expect(result.current).toHaveProperty('vision')
     expect(result.current).toHaveProperty('engine')
-    expect(result.current).toHaveProperty('chatMode')
     expect(result.current).toHaveProperty('clearChat')
     expect(result.current).toHaveProperty('toolbarValue')
     expect(result.current).toHaveProperty('healthValue')
     expect(result.current).toHaveProperty('modelValue')
     expect(result.current).toHaveProperty('uiValue')
-  })
-
-  it('returns initial chatMode as chat', () => {
-    const { result } = renderController()
-    expect(result.current.chatMode).toBe('chat')
   })
 
   it('returns initial suggestions as empty', () => {

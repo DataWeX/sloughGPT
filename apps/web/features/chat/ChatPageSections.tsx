@@ -8,7 +8,6 @@ import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ToolApprovalDialog } from '@/features/chat/components/ToolApprovalDialog'
 import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
-import { ModeBar } from '@/features/chat/components/toolbar/ModeBar'
 import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
 import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
@@ -231,26 +230,6 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     suggestions,
     refreshHealth,
     showToast,
-    chatMode,
-    setChatMode,
-    writeTone,
-    setWriteTone,
-    writeType,
-    setWriteType,
-    rewriteStyle,
-    setRewriteStyle,
-    decideStructure,
-    setDecideStructure,
-    explainDifficulty,
-    setExplainDifficulty,
-    translateLangPair,
-    setTranslateLangPair,
-    brainstormTopic,
-    setBrainstormTopic,
-    wellnessType,
-    setWellnessType,
-    createStyle,
-    setCreateStyle,
     readFileData,
     setReadFileData,
     readLoading,
@@ -394,13 +373,6 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     [storeHandleToolApproval],
   )
 
-  const handleModeSelect = useCallback(
-    (mode: string) => {
-      setChatMode(mode as any)
-    },
-    [setChatMode],
-  )
-
   return (
     <>
       {currentError && (
@@ -411,37 +383,13 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
         />
       )}
 
-      <ModeBar
-        mode={chatMode}
-        tone={writeTone}
-        type={writeType}
-        rewriteStyle={rewriteStyle}
-        decideStructure={decideStructure}
-        difficulty={explainDifficulty}
-        langPair={translateLangPair}
-        brainstormTopic={brainstormTopic}
-        wellnessType={wellnessType}
-        createStyle={createStyle}
-        onModeChange={setChatMode}
-        onToneChange={setWriteTone}
-        onTypeChange={setWriteType}
-        onRewriteStyleChange={setRewriteStyle}
-        onDecideStructureChange={setDecideStructure}
-        onDifficultyChange={setExplainDifficulty}
-        onLangPairChange={setTranslateLangPair}
-        onBrainstormTopicChange={setBrainstormTopic}
-        onWellnessTypeChange={setWellnessType}
-        onCreateStyleChange={setCreateStyle}
+      {/* File-QA attach flow — always available, never mode-gated. */}
+      <ReadFileSection
+        readLoading={readLoading}
+        readFileData={readFileData}
+        onFileSelected={handleReadFile}
+        onRemove={handleRemoveReadFile}
       />
-
-      {chatMode === 'read' && (
-        <ReadFileSection
-          readLoading={readLoading}
-          readFileData={readFileData}
-          onFileSelected={handleReadFile}
-          onRemove={handleRemoveReadFile}
-        />
-      )}
 
       <ImageDropZone
         onImageDropped={handleImageDropped}
@@ -468,7 +416,6 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           sessionLoading={sessionLoading}
           model={model.model}
           health={health}
-          chatMode={chatMode}
           suggestions={suggestions}
           onRefreshHealth={refreshHealth}
           onCopy={controller.chat.handleCopy}
@@ -479,7 +426,6 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           onEdit={controller.chat.handleEditMessage}
           searchQuery={ui.searchQuery}
           onSuggestionClick={controller.chat.handleSuggestionClick}
-          onModeSelect={handleModeSelect}
           toolEvents={toolEvents}
           streamingStatus={pendingToolApproval ? 'tool_call' : 'generating'}
           streamingToolName={pendingToolApproval?.toolName}
@@ -592,7 +538,6 @@ export const ChatDialogSection = memo(function ChatDialogSection({
     setSystemPromptOpen,
     customSystemPrompt,
     handleSaveSystemPrompt,
-    setChatMode,
     noteDialogOpen,
     setNoteDialogOpen,
     noteDialogNote,
@@ -635,7 +580,6 @@ export const ChatDialogSection = memo(function ChatDialogSection({
           }}
           onClose={() => {
             ui.setVoiceMode(false)
-            setChatMode('chat')
           }}
         />
       )}
