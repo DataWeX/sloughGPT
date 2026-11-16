@@ -74,7 +74,6 @@ const {
   mockSetConvSidebarOpen,
   mockAddToast,
   mockKnowledgeAdd,
-  mockImageGenerate,
   mockAddBookmark,
   mockRemoveBookmark,
   mockIsBookmarked,
@@ -97,7 +96,6 @@ const {
   mockSetConvSidebarOpen: vi.fn(),
   mockAddToast: vi.fn(),
   mockKnowledgeAdd: vi.fn(),
-  mockImageGenerate: vi.fn(),
   mockAddBookmark: vi.fn(),
   mockRemoveBookmark: vi.fn(),
   mockIsBookmarked: vi.fn(),
@@ -112,7 +110,7 @@ const state = vi.hoisted(() => ({
     newChat: null as null | (() => void),
     sidebarConversations: [] as unknown[],
   },
-  mode: { chatMode: 'chat' },
+  mode: {} as Record<string, never>,
   ui: { showSettings: false, toolPanelOpen: false },
 }))
 
@@ -143,7 +141,6 @@ vi.mock('@/lib/feedback-store', () => ({
     fetchAdapterStats: mockFetchAdapterStats,
   }),
 }))
-vi.mock('@/lib/images-controller', () => ({ imagesController: { generate: mockImageGenerate } }))
 vi.mock('@/lib/files-controller', () => ({ filesController: { extract: vi.fn() } }))
 vi.mock('@/lib/knowledge-controller', () => ({ knowledgeController: { add: mockKnowledgeAdd } }))
 vi.mock('@/lib/store', () => ({
@@ -198,7 +195,6 @@ vi.mock('@/features/chat/hooks/useChatContextValue', () => ({
 vi.mock('@/features/chat/components/toolbar/ChatToolbar', () => ({
   ChatToolbar: () => <div data-testid="chat-toolbar" />,
 }))
-vi.mock('@/features/chat/components/toolbar/ModeBar', () => ({ ModeBar: () => null }))
 vi.mock('@/features/chat/components/layout/ImageDropZone', () => ({
   ImageDropZone: ({ children }: any) => <div>{children}</div>,
 }))
@@ -277,51 +273,14 @@ vi.mock('@/features/chat/hooks/useChatUI', async () => {
   }
 })
 
-vi.mock('@/features/chat/hooks/useChatMode', async () => {
-  const React = await import('react')
-  return {
-    useChatMode: () => {
-      const [chatMode, setChatMode] = React.useState(state.mode.chatMode)
-      return {
-        chatMode,
-        setChatMode,
-        writeTone: 'Friendly',
-        setWriteTone: vi.fn(),
-        writeType: 'Email',
-        setWriteType: vi.fn(),
-        rewriteStyle: 'Fix Grammar',
-        setRewriteStyle: vi.fn(),
-        decideStructure: 'Pro/Con',
-        setDecideStructure: vi.fn(),
-        explainDifficulty: 'Beginner',
-        setExplainDifficulty: vi.fn(),
-        translateLangPair: 'English→Spanish',
-        setTranslateLangPair: vi.fn(),
-        brainstormTopic: 'Ideas',
-        setBrainstormTopic: vi.fn(),
-        wellnessType: 'Meditation',
-        setWellnessType: vi.fn(),
-        createStyle: 'Watercolor',
-        setCreateStyle: vi.fn(),
-        placeholder: 'Type...',
-        handleSend: async (readFileData?: { text: string; filename: string } | null) => {
-          if (chatMode === 'read' && !readFileData) {
-            mockAddToast('Upload a file first, then ask your question', 'info')
-            return
-          }
-          if (chatMode === 'create') {
-            const input =
-              (document.querySelector('[aria-label="Chat input"]') as HTMLTextAreaElement)?.value ||
-              ''
-            if (input) await mockImageGenerate(input, 'watercolor')
-            return
-          }
-          mockSendMessage()
-        },
-      }
+vi.mock('@/features/chat/hooks/useChatMode', () => ({
+  useChatMode: () => ({
+    handleSend: () => {
+      mockSendMessage()
+      return Promise.resolve()
     },
-  }
-})
+  }),
+}))
 
 vi.mock('@/features/chat/hooks/useChatMessages', async () => {
   const React = await import('react')
@@ -511,14 +470,12 @@ beforeEach(() => {
   state.chat.messages = []
   state.chat.newChat = mockNewChat
   state.chat.sidebarConversations = []
-  state.mode.chatMode = 'chat'
   state.ui.showSettings = false
   state.ui.toolPanelOpen = false
   mockSearchParamsGet.mockReturnValue(null)
   mockModelList.mockResolvedValue([{ id: 'gpt2', description: 'A small model' }])
   mockGetSuggestions.mockResolvedValue([{ text: 'Tell me a story', icon: '🧠' }])
   mockIsBookmarked.mockReturnValue(false)
-  mockImageGenerate.mockResolvedValue({ image: 'data:image/png;base64,AAAA' })
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText: mockClipboardWrite },
     configurable: true,
@@ -543,7 +500,8 @@ describe('ChatPage', () => {
     expect(screen.getByLabelText('Chat')).toBeTruthy()
     expect(screen.getByTestId('chat-toolbar')).toBeTruthy()
     expect(screen.getByTestId('chat-provider')).toBeTruthy()
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    // 7 base dynamics + the always-mounted ReadFileSection attach flow.
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 
   it('opens the sidebar and fetches initial data on mount', async () => {
@@ -618,13 +576,13 @@ describe('ChatPage', () => {
   it('renders ChatSettings when showSettings is enabled', async () => {
     state.ui.showSettings = true
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(8)
+    expect(screen.getAllByTestId('dynamic').length).toBe(9)
   })
 
   it('renders the tool panel when toolPanelOpen is enabled', async () => {
     state.ui.toolPanelOpen = true
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 
   it('opens the conversation search panel on the search-conversations window event', async () => {
@@ -632,7 +590,7 @@ describe('ChatPage', () => {
     await act(async () => {
       window.dispatchEvent(new Event('search-conversations'))
     })
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 
   it('starts a new chat on the new-chat window event', async () => {
@@ -683,31 +641,6 @@ describe('ChatPage', () => {
     expect(mockChatSetInput).toHaveBeenCalledWith('hello')
   })
 
-  it('toasts an upload prompt when sending in read mode without a file', async () => {
-    state.mode.chatMode = 'read'
-    await renderChat()
-    await act(async () => {
-      screen.getByTestId('send-btn').click()
-    })
-    expect(mockAddToast).toHaveBeenCalledWith('Upload a file first, then ask your question', 'info')
-    expect(mockSendMessage).not.toHaveBeenCalled()
-  })
-
-  it('generates an image in create mode', async () => {
-    state.mode.chatMode = 'create'
-    await renderChat()
-    const textarea = screen.getByLabelText('Chat input')
-    await act(async () => {
-      fireEvent.change(textarea, { target: { value: 'a sunset' } })
-    })
-    await act(async () => {
-      screen.getByTestId('send-btn').click()
-    })
-    await waitFor(() => {
-      expect(mockImageGenerate).toHaveBeenCalledWith('a sunset', 'watercolor')
-    })
-  })
-
   it('deletes a message and toasts', async () => {
     state.chat.messages = [{ id: 'm1', role: 'user', content: 'hi', timestamp: new Date() }]
     await renderChat()
@@ -745,8 +678,14 @@ describe('ChatPage', () => {
     expect(mockAddToast).toHaveBeenCalledWith('Saved to knowledge', { type: 'success' })
   })
 
-  it('enables the voice overlay in talk mode', async () => {
-    state.mode.chatMode = 'talk'
+  it('opens the voice overlay from a ?mode=talk deep link', async () => {
+    mockSearchParamsGet.mockImplementation((key: string) => (key === 'mode' ? 'talk' : null))
+    await renderChat()
+    expect(screen.getAllByTestId('dynamic').length).toBe(9)
+  })
+
+  it('ignores legacy non-talk mode params (no mode UI to drive)', async () => {
+    mockSearchParamsGet.mockImplementation((key: string) => (key === 'mode' ? 'write' : null))
     await renderChat()
     expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })

@@ -256,20 +256,7 @@ describe('ChatToolbar', () => {
     expect(screen.getByTestId('chat-more-menu')).toBeDefined()
   })
 
-  it('shows the active behavior-protocol chip from ctx.mode', () => {
-    renderToolbar(createContextValue({ mode: { current: 'rewrite' } }))
-    const chip = screen.getByLabelText('Active mode: Rewrite')
-    expect(chip).toBeDefined()
-    expect(chip.textContent).toBe('Rewrite')
-  })
-
-  it('chip tracks the current mode (decide, not the stale session title)', () => {
-    renderToolbar(createContextValue({ mode: { current: 'decide' } }))
-    expect(screen.getByLabelText('Active mode: Decide')).toBeDefined()
-    expect(screen.queryByLabelText('Active mode: Rewrite')).toBeNull()
-  })
-
-  it('renders no chip when mode is absent (legacy context)', () => {
+  it('renders no mode chip — modes are not selectable UI', () => {
     renderToolbar()
     expect(screen.queryByLabelText(/^Active mode/)).toBeNull()
   })

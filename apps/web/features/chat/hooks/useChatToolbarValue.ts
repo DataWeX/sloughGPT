@@ -12,7 +12,6 @@ import type { useChatMessages } from './useChatMessages'
 import type { ApiHealthSnapshot } from './../../../hooks/useApiHealth'
 import { datasetController } from '@/lib/dataset-controller'
 import { todayDateString } from '@/lib/format-bytes'
-import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
 type HealthStatus = 'loading' | 'offline' | 'ok' | 'loading' | 'degraded'
 
@@ -49,9 +48,6 @@ interface UseChatToolbarValueConfig {
   onSystemPrompt: () => void
   onSearchConversations: () => void
   bookmarkCount: number
-  /** Active behavior-protocol mode — surfaced as a header chip so the toolbar
-   *  identity matches the protocol actually in effect (not the session title). */
-  chatMode: ChatMode
 }
 
 export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatToolbarContextValue {
@@ -182,7 +178,6 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
         modelLoaded: health !== null && health !== 'offline' && health.model_loaded,
         modelType: health !== null && health !== 'offline' ? health.model_type : '',
       },
-      mode: { current: config.chatMode },
       sidebar: {
         open: ui.sidebarOpen,
         onToggle: () => ui.setSidebarOpen((prev) => !prev),
@@ -204,7 +199,6 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       modelDescriptions,
       showToast,
       config.onSearchConversations,
-      config.chatMode,
     ],
   )
 }
