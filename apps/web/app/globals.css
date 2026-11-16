@@ -67,14 +67,18 @@
   --input: 228 224 242;
   --radius: 6px;
   --success: 52 176 125;
-  --warning: 236 168 60;
+  /* Scheme-derived: amber dot from the reference render (hue-shifted golden
+     → true amber, slightly deeper for contrast). */
+  --warning: 245 158 11;
   --destructive: 220 80 90;
   --destructive-foreground: 250 248 255;
-  --info: 90 150 220;
+  /* Periwinkle from the reference render — azure pulled toward violet;
+     contrast kept ≥ the old azure (3.2:1 vs 3.1:1 on white). */
+  --info: 104 142 226;
   --chart-1: 124 82 196;
   --chart-2: 52 176 125;
   --chart-3: 236 145 95;
-  --chart-4: 90 150 220;
+  --chart-4: 104 142 226;
   --chart-5: 220 80 90;
   /*
    * Session-group identity colours — deliberately THEME-CONSTANT (like the
@@ -152,14 +156,17 @@ html.dark {
   --border: 52 46 72;
   --input: 52 46 72;
   --success: 72 192 140;
-  --warning: 240 192 80;
+  /* Same scheme, dark-adapted: amber-400 pops on the charcoal canvas. */
+  --warning: 251 191 36;
   --destructive: 235 100 110;
   --destructive-foreground: 25 22 36;
-  --info: 100 165 240;
+  /* Periwinkle dark counterpart — sky→periwinkle to match the light hue,
+     lightened for the dark canvas; pairs with the lilac primary. */
+  --info: 138 166 242;
   --chart-1: 192 170 244;
   --chart-2: 72 192 140;
   --chart-3: 240 176 130;
-  --chart-4: 100 165 240;
+  --chart-4: 138 166 242;
   --chart-5: 235 100 110;
 }
 
