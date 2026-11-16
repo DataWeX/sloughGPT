@@ -328,6 +328,8 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
         archivedCount: 0,
         renameSession: vi.fn(),
         duplicateSession: vi.fn(),
+        // Stage 3 seam: the store's send/auto-save calls back through this.
+        saveSessionToStorage: vi.fn(async () => {}),
         handleRegenerate: vi.fn(),
         handleThumbsUp: vi.fn(),
         handleThumbsDown: vi.fn(),
