@@ -10,6 +10,8 @@ stay app-import-free:
 - **no ``fastapi``** — ``StreamingResponse``, ``Depends``, ``Request`` are
   transport. Streaming is a *contract* the core honours by yielding tokens; how
   they are framed into SSE is the edge's job.
+- **no ``uvicorn``** — the ASGI server that hosts the core is a host, never a
+  core dependency (embeddable-instance rule, card 20261116_095706).
 - **no ``routers`` / ``apps`` / ``schemas``** — the core never reaches upward.
   Consumers depend on the core, never the reverse.
 
@@ -30,11 +32,14 @@ from pathlib import Path
 
 DOMAIN_DIR = Path(__file__).resolve().parents[2] / "domain"
 
-# Wire types, HTTP framework, and the app layer — the core must not bind these.
-FORBIDDEN_ROOTS: frozenset[str] = frozenset({"pydantic", "fastapi", "routers", "apps", "schemas"})
+# Wire types, HTTP frameworks, and the app layer — the core must not bind these.
+FORBIDDEN_ROOTS: frozenset[str] = frozenset(
+    {"pydantic", "fastapi", "uvicorn", "routers", "apps", "schemas"}
+)
 
 # Existing couplings, measured before this gate (2026-10-20): 1 pydantic, 0
-# fastapi, 3 app-layer, out of 623 domain modules. Shrink-only — do not add.
+# fastapi, 0 uvicorn (added 2026-11-16 — measured 0 before widening), 3
+# app-layer, out of 623 domain modules. Shrink-only — do not add.
 # (``domain/infrastructure/_internal/errors.py`` looks like a 4th hit to grep,
 # but its ``from schemas.common import raise_error`` is a usage example inside
 # the module docstring — AST sees no real import, which is why this gate is

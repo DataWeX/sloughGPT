@@ -915,13 +915,9 @@ class StartupOrchestrator:
         STARTUP_PHASE.update(
             phase="model_registry", step=7, total=9, message="Initializing model registry..."
         )
-        try:
-            from domain.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure._internal.instance_wiring import wire_model_registry
 
-            self._registry = get_model_registry()
-            logger.info("Phase: model registry initialized", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Phase: model registry failed: %s", e, extra={"tag": "START"})
+        self._registry = wire_model_registry(log=logger)
 
     async def _phase6_routers(self):
         """Register all feature routers.
@@ -1109,37 +1105,11 @@ class StartupOrchestrator:
         STARTUP_PHASE.update(
             phase="task_queue", step=2, total=9, message="Initializing task queue..."
         )
-        try:
-            from domain.infrastructure.task_queue import get_task_queue
+        # Wiring sequence lives in domain (instance_wiring) — shared with the
+        # embeddable SloughInstance facade so the two boot orders cannot drift.
+        from domain.infrastructure._internal.instance_wiring import wire_task_queue
 
-            self._task_queue = get_task_queue()
-            await self._task_queue.start()
-            logger.info("Task queue initialized and started", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
-        try:
-            from domain.infrastructure.training_queue import register_training_handlers
-
-            register_training_handlers()
-            logger.info("Training handlers registered with task queue", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Training handler registration failed: %s", e, extra={"tag": "START"})
-        try:
-            from domain.memory import register_memory_handlers
-
-            register_memory_handlers()
-            logger.info("Memory handlers registered with task queue", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Memory handler registration failed: %s", e, extra={"tag": "START"})
-        try:
-            from domain.memory._internal.maintenance import start_memory_maintenance
-
-            start_memory_maintenance()
-            logger.info("Memory maintenance scheduler started", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning(
-                "Memory maintenance scheduler start failed: %s", e, extra={"tag": "START"}
-            )
+        self._task_queue = await wire_task_queue(log=logger)
 
     async def _phase_agent_routines(self):
         """Register the routine handler and start the background ticker.
@@ -1147,47 +1117,16 @@ class StartupOrchestrator:
         Non-critical: the server is fully usable without it, so a failure
         here only means no scheduled runs (manual execute still works).
         """
-        try:
-            from domain.agents import get_routine_runner
+        from domain.infrastructure._internal.instance_wiring import wire_agent_routines
 
-            runner = get_routine_runner()
-            runner.register_handlers()
-            runner.start()
-            logger.info(
-                "Agent routine runner started (interval=%.1fs)",
-                runner.tick_interval,
-                extra={"tag": "START"},
-            )
-        except Exception as e:
-            logger.warning("Agent routine runner start failed: %s", e, extra={"tag": "START"})
+        wire_agent_routines(log=logger)
 
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
         STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
-        try:
-            from domain.infrastructure._internal.config import get_config
+        from domain.infrastructure._internal.instance_wiring import wire_config
 
-            cfg = get_config()
-            _ = cfg.model.name
-            logger.info("Config system validated", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Config system init: %s", e, extra={"tag": "START"})
-        # Init ResourceManager — applies BLAS env vars before numpy loads
-        try:
-            from domain.infrastructure.resource_manager import get_resource_manager
-
-            rm = get_resource_manager()
-            rm.apply_blas_env()
-            rm.apply_compute_limits()
-            rm.apply_environment()
-            logger.info(
-                "ResourceManager initialised: mode=%s %s",
-                rm.mode,
-                rm.summary(),
-                extra={"tag": "START"},
-            )
-        except Exception as e:
-            logger.warning("ResourceManager init: %s", e, extra={"tag": "START"})
+        wire_config(log=logger)
 
         # Warn if auth is disabled
         import os
@@ -1226,17 +1165,9 @@ class StartupOrchestrator:
     async def _shutdown_task_queue(self):
         """Gracefully stop the background task queue."""
         if self._task_queue is not None:
-            try:
-                from domain.memory._internal.maintenance import stop_memory_maintenance
+            from domain.infrastructure._internal.instance_wiring import unwire_task_queue
 
-                await stop_memory_maintenance()
-            except Exception as e:
-                logger.warning("Memory maintenance shutdown: %s", e, extra={"tag": "START"})
-            try:
-                await self._task_queue.stop()
-                logger.info("Task queue stopped", extra={"tag": "START"})
-            except Exception as e:
-                logger.warning("Task queue shutdown: %s", e, extra={"tag": "START"})
+            await unwire_task_queue(self._task_queue, log=logger)
 
     async def _shutdown_agent_routines(self):
         """Stop the routine ticker only — in-flight runs belong to the queue.
@@ -1245,13 +1176,9 @@ class StartupOrchestrator:
         drains them on its own shutdown, and killing a model⇄tool loop
         mid-step would strand its run record.
         """
-        try:
-            from domain.agents import get_routine_runner
+        from domain.infrastructure._internal.instance_wiring import unwire_agent_routines
 
-            get_routine_runner().stop()
-            logger.info("Agent routine runner stopped", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Agent routine runner shutdown: %s", e, extra={"tag": "START"})
+        unwire_agent_routines(log=logger)
 
     async def _shutdown_jobs(self):
         """Mark running training jobs as crashed on shutdown."""
@@ -1278,12 +1205,9 @@ class StartupOrchestrator:
 
     async def _shutdown_registry(self):
         """Reset model registry metrics."""
-        try:
-            from domain.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure._internal.instance_wiring import unwire_registry
 
-            get_model_registry().reset_metrics()
-        except Exception as e:
-            logger.debug("Registry reset failed during shutdown: %s", e)
+        unwire_registry(log=logger)
 
     async def _shutdown_inference_engine(self):
         """Terminate the inference engine subprocess if running."""
@@ -1331,14 +1255,9 @@ class StartupOrchestrator:
 
     async def _shutdown_executor(self):
         """Gracefully shut down the TrainingExecutor thread pool."""
-        try:
-            from domain.training._internal.executor import _instance
+        from domain.infrastructure._internal.instance_wiring import shutdown_executor
 
-            if _instance is not None:
-                _instance.shutdown(wait=True)
-                logger.info("TrainingExecutor shut down", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("TrainingExecutor shutdown: %s", e, extra={"tag": "START"})
+        shutdown_executor(log=logger)
 
     async def shutdown(self):
         """Clean up on server shutdown — uses lifecycle drain if available."""
