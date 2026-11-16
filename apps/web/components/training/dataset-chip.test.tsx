@@ -54,26 +54,30 @@ describe('DatasetTooltipContent — empty import honesty', () => {
 })
 
 describe('DatasetChip', () => {
-  it('shows a warning dot on empty datasets', () => {
-    render(
+  it('shows a warning dot on empty datasets — via testid, never a native title', () => {
+    const { container } = render(
       <DatasetChip
         dataset={ds({ name: 'stub', size: 0, has_corpus: false })}
         selected={false}
         onSelect={vi.fn()}
       />,
     )
-    expect(screen.getByTitle('Empty — no training text')).toBeDefined()
+    expect(screen.getByTestId('dataset-empty-dot')).toBeDefined()
+    // Regression: a native title fired alongside the custom tooltip on the
+    // same hover (double tooltip, raw id in the browser box).
+    expect(container.querySelector('[title]')).toBeNull()
   })
 
   it('shows sample count instead of the dot when healthy', () => {
-    render(
+    const { container } = render(
       <DatasetChip
         dataset={ds({ name: 'ok', size: 4096, samples: 7 })}
         selected={false}
         onSelect={vi.fn()}
       />,
     )
-    expect(screen.queryByTitle('Empty — no training text')).toBeNull()
+    expect(screen.queryByTestId('dataset-empty-dot')).toBeNull()
+    expect(container.querySelector('[title]')).toBeNull()
     // Chip badge + tooltip row both render "7" in this flattened mock.
     expect(screen.getAllByText('7').length).toBeGreaterThan(0)
   })
