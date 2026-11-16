@@ -1,11 +1,11 @@
 ---
 id: 20261115_081635_uxdatasets-failedempty-imports-must-not-render-as-100-ready
-status: wip
+status: done
 board: 20261115_081635_uxdatasets-failedempty-imports-must-not-render-as-100-ready
 title: "ux(datasets): failed/empty imports must not render as 100% ready (221 B stubs)"
 tags: ["frontend", "datasets", "ux"]
 sprint: ""
-gh: null
+gh: 339
 ---
 
 # ux(datasets): failed/empty imports must not render as 100% ready (221 B stubs)
