@@ -265,14 +265,9 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     storeStop()
   }, [chat, storeStop])
 
-  const handleCancel = useCallback(async () => {
-    const sessionId = chat.sessionIdRef.current
-    if (sessionId) {
-      const { chatController } = await import('@/lib/chat-controller')
-      chatController.cancelStream(sessionId).catch(() => {})
-    }
-    handleStop()
-  }, [chat, handleStop])
+  // No separate handleCancel: store.stop() is already the superset ChatInputRow
+  // documents for onCancel (backend cancelStream + abort + state reset) — a
+  // second chatController.cancelStream here cancelled the same session twice.
 
   const handleAudioRecorded = useCallback(
     async (blob: Blob) => {
@@ -438,7 +433,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           onChange={(v: string) => storeSetInput(v)}
           onSend={handleWriteSend}
           onStop={handleStop}
-          onCancel={handleCancel}
+          onCancel={handleStop}
           images={images}
           onAddImage={controller.chat.handleAddImage}
           onRemoveImage={controller.chat.handleRemoveImage}

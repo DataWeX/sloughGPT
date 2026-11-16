@@ -317,13 +317,14 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
       })
     }
 
-    // NOTE: Do not load the session here. The controller (useChatMessages) is the
-    // single source of truth for messages and loads the session on mount; the
-    // one-way bridge (useChatStoreBridge) mirrors controller → store. An
-    // independent store-side loadSession raced the bridge, resolving later with a
-    // stale/persisted read and clobbering live messages — blanking the pane while
-    // the toolbar (controller) still showed the real count. Session hydration is
-    // the controller's job, not the store's.
+    // NOTE: Do not load the session here. Session hydration belongs to
+    // useChatSessions.loadSession — called from useChatMessages' mount effect —
+    // whose guarded transcript swap (claim id up front, supersede if the claim
+    // moves) is the only loader (stage 3 deleted the store's duplicate). A
+    // second load scheduled from init races that mount load: resolving later
+    // with a stale/persisted read clobbers live messages, blanking the pane
+    // while the toolbar still shows the real count (the stage-2 split-brain
+    // bug). init hydrates config + ids only — never messages.
   },
 
   // ── Set Input ──
