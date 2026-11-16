@@ -15,7 +15,7 @@ export function formatSize(bytes: number | undefined | null): string {
 function TooltipStat({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
     <div className="rounded-md bg-muted/40 px-2 py-1.5">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
         {label}
       </p>
       <p
@@ -58,7 +58,7 @@ export function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
             {label}
           </div>
           {dataset.name !== label && (
-            <div className="truncate font-mono text-[10px] leading-tight text-muted-foreground/50">
+            <div className="truncate font-mono text-xs leading-tight text-muted-foreground/50">
               {dataset.id || dataset.name}
             </div>
           )}
