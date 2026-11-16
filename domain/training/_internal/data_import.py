@@ -1260,13 +1260,22 @@ class ISBNImporter:
         info_path = output_dir / f"{name}_info.txt"
         info_path.write_text(book_info, encoding="utf-8")
 
+        # Honesty (card 20261115_081635_ux…): no training text was retrieved,
+        # so this must NOT report success — a metadata-only stub used to come
+        # back green and render as a ready dataset. Metadata stays on disk
+        # (informative), but files_imported/total_chars describe *training*
+        # content: there is none.
         return ImportResult(
-            success=True,
+            success=False,
             name=name,
             source=f"isbn:{clean_isbn}",
-            files_imported=1,
-            total_chars=len(book_info),
+            files_imported=0,
+            total_chars=0,
             output_path=str(output_dir),
+            error=(
+                "Full text not available on Project Gutenberg — "
+                "only metadata was saved (no training text)"
+            ),
         )
 
     def _fetch_gutenberg_text(self, title: str, author: str, isbn: str) -> str | None:

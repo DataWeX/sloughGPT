@@ -84,6 +84,13 @@ describe('datasetLabel', () => {
   it('includes size when present', () => {
     expect(datasetLabel(ds({ name: 'ds', size: 2048 }))).toContain('2.0 KB')
   })
+
+  it('marks metadata-only stubs as empty instead of ready', () => {
+    // card 20261115_081635_ux…: a 221 B _info.txt stub must not read as ready
+    const label = datasetLabel(ds({ name: 'hobbit', size: 0, samples: 0, has_corpus: false }))
+    expect(label).toContain('empty — no text')
+    expect(label).not.toContain('KB')
+  })
 })
 
 describe('DatasetSelector', () => {

@@ -106,6 +106,23 @@ def test_find_corpus_file_jsonl_fallback(tmp_path: Path) -> None:
     assert find_corpus_file(d) == d / "input.jsonl"
 
 
+def test_find_corpus_file_skips_info_sidecar(tmp_path: Path) -> None:
+    """``*_info.txt`` is a bibliographic stub, never training text.
+
+    Regression guard (card 20261115_081635_ux…): metadata-only Gutenberg
+    imports wrote ``<name>_info.txt`` (221 B) and the ``*.txt`` glob picked
+    it up as the corpus, so empty imports rendered as ready datasets.
+    """
+    from domain.training._internal.cache_tags import find_corpus_file
+
+    d = tmp_path / "stub"
+    d.mkdir()
+    (d / "hobbit_info.txt").write_text("Title: The hobbit\n\nFull text not available.")
+    assert find_corpus_file(d) is None  # sidecar alone is not a corpus
+    (d / "hobbit.txt").write_text("real training text")
+    assert find_corpus_file(d) == d / "hobbit.txt"  # real text wins, sidecar skipped
+
+
 def test_find_corpus_file_memo_invalidates_when_dir_changes(tmp_path: Path) -> None:
     """The mtime-keyed memo must see files added after a miss.
 
