@@ -73,7 +73,7 @@ vi.mock('@/lib/dev-log', () => ({
 
 import { useChatMessages } from './useChatMessages'
 // Imported after the vi.mock block so it sees the mocked collaborators.
-import { useChatStore } from '@/lib/chat-store'
+import { useChatStore, streamAbortRef, type ChatConfig } from '@/lib/chat-store'
 
 function makeConfig(overrides = {}) {
   return {
@@ -96,6 +96,37 @@ function makeConfig(overrides = {}) {
   }
 }
 
+/**
+ * Stage 3: the facade's actions ARE the store's — they read their inputs
+ * (showToast, recordFeedback, save seam) from the store's ChatConfig, which
+ * useChatStoreBridge normally syncs. Tests init it directly here.
+ */
+function makeStoreConfig(overrides: Partial<ChatConfig> = {}): ChatConfig {
+  return {
+    model: 'gpt2',
+    temperature: 0.8,
+    maxTokens: 200,
+    currentSoul: null,
+    currentAgent: null,
+    useLocalEngine: false,
+    engineRef: { current: null } as unknown as ChatConfig['engineRef'],
+    engineLoadingRef: { current: false },
+    initLocalEngine: vi.fn().mockResolvedValue(false),
+    customSystemPrompt: '',
+    showToast: vi.fn(),
+    recordFeedback: vi.fn(async () => true),
+    onVisionUpdate: vi.fn(),
+    onKnowledgeUpdate: vi.fn(),
+    saveSessionToStorage: vi.fn(async () => {}),
+    renameSession: vi.fn(async () => {}),
+    ...overrides,
+  }
+}
+
+function initStoreConfig(overrides: Partial<ChatConfig> = {}) {
+  useChatStore.setState({ _config: makeStoreConfig(overrides) })
+}
+
 describe('useChatMessages', () => {
   const spies: MockInstance[] = []
 
@@ -116,7 +147,9 @@ describe('useChatMessages', () => {
     spies.push(vi.spyOn(sessionController, 'fetchMessages').mockResolvedValue([]))
     // ChatStore is the single state authority now — reset it between tests so
     // one test's messages/input don't leak into the next render's selectors.
+    // _config is the stage-3 send seam: actions run against it directly.
     useChatStore.setState({
+      _config: makeStoreConfig(),
       messages: [],
       input: '',
       loading: false,
@@ -187,7 +220,8 @@ describe('useChatMessages', () => {
 
   it('handleCopy shows toast', async () => {
     const showToast = vi.fn()
-    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    initStoreConfig({ showToast })
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
     act(() => {
       result.current.handleCopy()
     })
@@ -272,7 +306,8 @@ describe('useChatMessages', () => {
   it('handleThumbsUp records feedback', async () => {
     const recordFeedback = vi.fn().mockResolvedValue(true)
     const showToast = vi.fn()
-    const { result } = renderHook(() => useChatMessages(makeConfig({ recordFeedback, showToast })))
+    initStoreConfig({ recordFeedback, showToast })
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
     act(() => {
       result.current.setMessages([
         { id: '1', role: 'user', content: 'Hi', timestamp: new Date() },
@@ -295,7 +330,8 @@ describe('useChatMessages', () => {
   it('handleThumbsDown records feedback', async () => {
     const recordFeedback = vi.fn().mockResolvedValue(true)
     const showToast = vi.fn()
-    const { result } = renderHook(() => useChatMessages(makeConfig({ recordFeedback, showToast })))
+    initStoreConfig({ recordFeedback, showToast })
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
     act(() => {
       result.current.setMessages([
         { id: '1', role: 'user', content: 'Bad', timestamp: new Date() },
@@ -354,7 +390,8 @@ describe('useChatMessages', () => {
     mockStreamChatResponse.mockImplementation(({ onMemory }) => {
       onMemory?.({ stored: true, fact: 'The capital of France is Paris.' })
     })
-    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    initStoreConfig({ showToast })
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
     act(() => {
       result.current.setInput('What is the capital?')
     })
@@ -369,7 +406,8 @@ describe('useChatMessages', () => {
     mockStreamChatResponse.mockImplementation(({ onMemory }) => {
       onMemory?.({ stored: true })
     })
-    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    initStoreConfig({ showToast })
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
     act(() => {
       result.current.setInput('What is the capital?')
     })
@@ -388,7 +426,8 @@ describe('useChatMessages', () => {
         facts: ['Paris is the capital.', 'The Seine flows through it.', 'Louvre is a museum.'],
       })
     })
-    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    initStoreConfig({ showToast })
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
     act(() => {
       result.current.setInput('Tell me about Paris')
     })
@@ -403,7 +442,8 @@ describe('useChatMessages', () => {
     mockStreamChatResponse.mockImplementation(({ onMemory }) => {
       onMemory?.({ stored: false })
     })
-    const { result } = renderHook(() => useChatMessages(makeConfig({ showToast })))
+    initStoreConfig({ showToast })
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
     act(() => {
       result.current.setInput('What is the capital?')
     })
@@ -411,5 +451,49 @@ describe('useChatMessages', () => {
       await result.current.sendMessage()
     })
     expect(showToast).not.toHaveBeenCalled()
+  })
+
+  // ── Stage 3: the facade IS a projection of the store ──────────────────────
+
+  it('facade send/regenerate actions are the store actions (one pipeline)', () => {
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
+    expect(result.current.sendMessage).toBe(useChatStore.getState().sendMessage)
+    expect(result.current.handleRegenerate).toBe(useChatStore.getState().regenerate)
+    expect(result.current.handleRegenerateWithOptions).toBe(
+      useChatStore.getState().regenerateWithOptions,
+    )
+    expect(result.current.handleRetry).toBe(useChatStore.getState().handleRetry)
+    // The ONE AbortController — stop/Escape/stop-button all hit it.
+    expect(result.current.loadingRef).toBe(streamAbortRef)
+  })
+
+  it('session list CRUD stays hook-owned (store has no session actions)', () => {
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
+    const store = useChatStore.getState() as unknown as Record<string, unknown>
+    expect(typeof result.current.loadSession).toBe('function')
+    expect(typeof result.current.deleteSession).toBe('function')
+    expect(typeof result.current.saveSessionToStorage).toBe('function')
+    expect(store.loadSession).toBeUndefined()
+    expect(store.deleteSession).toBeUndefined()
+    expect(store.saveSessionToStorage).toBeUndefined()
+  })
+
+  it('sessionIdRef mirrors store state live (newChat/loadSession move the claim)', async () => {
+    const { result } = renderHook(() => useChatMessages(makeConfig()))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+
+    // Store moves the claim → the ref readers see it immediately.
+    act(() => {
+      useChatStore.setState({ sessionId: 'store-claimed' })
+    })
+    expect(result.current.sessionIdRef.current).toBe('store-claimed')
+
+    // The ref writer (mount bootstrap) lands in the store.
+    act(() => {
+      result.current.sessionIdRef.current = 'ref-written'
+    })
+    expect(useChatStore.getState().sessionId).toBe('ref-written')
   })
 })

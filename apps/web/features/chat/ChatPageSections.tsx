@@ -151,6 +151,7 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
   controller,
 }: ChatPageSectionProps) {
   const { ui, model, chat, clearChat } = controller
+  const messages = useChatStore((s) => s.messages)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   // Effective value for THIS conversation: its AppScope delta over the global
@@ -201,7 +202,7 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
       onMaxTokensChange={handleMaxTokensChange}
       onAutoApproveToolsChange={handleAutoApproveToolsChange}
       onClear={clearChat}
-      hasMessages={chat.messages.length > 0}
+      hasMessages={messages.length > 0}
     />
   )
 })
@@ -474,16 +475,17 @@ export const ChatSearchSection = memo(function ChatSearchSection({
   controller,
 }: ChatPageSectionProps) {
   const { chat, ui } = controller
+  const messages = useChatStore((s) => s.messages)
   const viewerMessages = useMemo(
     () =>
-      chat.messages.map((m) => ({
+      messages.map((m) => ({
         id: m.id,
         role: m.role,
         content: m.content,
         timestamp:
           typeof m.timestamp === 'number' ? m.timestamp : m.timestamp?.getTime() || Date.now(),
       })),
-    [chat.messages],
+    [messages],
   )
   return (
     <>
@@ -507,6 +509,7 @@ export const ChatToolPanelInline = memo(function ChatToolPanelInline({
   controller,
 }: ChatPageSectionProps) {
   const { ui, chat, bookmarks, removeBookmark, clearAll } = controller
+  const messages = useChatStore((s) => s.messages)
   return (
     <ChatToolPanel
       open={ui.toolPanelOpen}
@@ -515,7 +518,7 @@ export const ChatToolPanelInline = memo(function ChatToolPanelInline({
       bookmarks={bookmarks}
       onRemoveBookmark={removeBookmark}
       onClearBookmarks={clearAll}
-      messages={chat.messages}
+      messages={messages}
     />
   )
 })
@@ -523,6 +526,7 @@ export const ChatToolPanelInline = memo(function ChatToolPanelInline({
 export const ChatDialogSection = memo(function ChatDialogSection({
   controller,
 }: ChatPageSectionProps) {
+  const messages = useChatStore((s) => s.messages)
   const {
     ui,
     chat,
@@ -601,7 +605,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
 
       {activeThreadMessageId && activeThread && (
         <ThreadPanel
-          parentMessage={chat.messages.find((m) => m.id === activeThreadMessageId)!}
+          parentMessage={messages.find((m) => m.id === activeThreadMessageId)!}
           threadMessages={activeThreadMessages}
           onSend={(content) => onReplyInThread(activeThread.id, content)}
           onClose={onCloseThread}
@@ -620,11 +624,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
         }}
       />
 
-      <ChatStatsPanel
-        open={statsOpen}
-        onClose={() => setStatsOpen(false)}
-        messages={chat.messages}
-      />
+      <ChatStatsPanel open={statsOpen} onClose={() => setStatsOpen(false)} messages={messages} />
     </>
   )
 })
