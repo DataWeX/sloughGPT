@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "4910a19bcfead1a87823372ea297ec151c6f097e",
+    "recorded_commit": "7691c23daad188b2c521245f9bbab2cb51fa3c9c",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "b5385ae3347f66589e7448463b228a0b896066d2"
+      "tree_hash": "6588bf393620fec2e4bf19c05eddda67acb995d5"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "13cc2337ff893333ba6b569083a703127e0f8d19"
+      "tree_hash": "1a70b56aa46c37b7c9a6714aa9437fd4e68f981f"
     },
     "voice": {
       "class": "core-capability",
