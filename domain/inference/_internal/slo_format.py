@@ -714,6 +714,90 @@ def save_soul(
     return output_path
 
 
+def update_soul_identity_fields(
+    path: str,
+    changes: dict[str, Any],
+    *,
+    metadata_changes: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """Surgically update top-level identity fields in an existing ``.soul``.
+
+    The back-fill write path (card 20261117_111044): repairs a soul saved
+    before the producer half (card 20261104_081626) started recording
+    ``dataset_signature``, without re-running an export. Only the JSON header
+    is rewritten — magic, version, and the entire weight table are copied
+    through byte-for-byte, so a patch can never corrupt the artifact it
+    describes.
+
+    ``integrity_hash`` is recomputed the way :func:`save_soul` does it: over
+    the header dict as it stands (carrying the OLD hash), with the new value
+    inserted afterwards — so a patched file is indistinguishable from a
+    re-saved one to anything that compares hashes.
+
+    The readable sidecar (``<path>.meta.json``) is mirrored with the same
+    fields when present, so the two never disagree; a sidecar failure is
+    logged, never raised (the artifact itself is already durable).
+
+    Args:
+        path: the ``.soul`` file to patch.
+        changes: top-level header fields to set (e.g. ``dataset_signature``).
+        metadata_changes: keys merged into the header's ``metadata`` dict.
+
+    Returns:
+        ``{"path", "integrity_hash", "previous_integrity_hash"}``.
+
+    Raises:
+        ValueError: the file is not a well-formed ``.soul``.
+    """
+    raw = Path(path).read_bytes()
+    if raw[:4] != SOU_MAGIC or len(raw) < 12:
+        raise ValueError(f"Not a well-formed .soul file: {path}")
+    version = struct.unpack("<I", raw[4:8])[0]
+    header_len = struct.unpack("<I", raw[8:12])[0]
+    if 12 + header_len > len(raw):
+        raise ValueError(f"Truncated .soul header: {path}")
+    header = json.loads(raw[12 : 12 + header_len].decode("utf-8"))
+    weights = raw[12 + header_len :]
+
+    previous_hash = str(header.get("integrity_hash") or "")
+    for key, value in changes.items():
+        header[key] = value
+    if metadata_changes:
+        md = header.get("metadata")
+        if not isinstance(md, dict):
+            md = {}
+            header["metadata"] = md
+        md.update(metadata_changes)
+
+    # save_soul's convention: hash the dict as it stands (old hash included),
+    # then insert the new one.
+    new_hash = _soul_profile_hash(header)
+    header["integrity_hash"] = new_hash
+
+    payload = json.dumps(header, default=str, allow_nan=False).encode("utf-8")
+    with atomic_writer(path, binary=True, durable=True) as f:
+        f.write(SOU_MAGIC)
+        f.write(struct.pack("<I", version))
+        f.write(struct.pack("<I", len(payload)))
+        f.write(payload)
+        f.write(weights)
+
+    sidecar = Path(str(path) + ".meta.json")
+    if sidecar.is_file():
+        try:
+            doc = json.loads(sidecar.read_text(encoding="utf-8"))
+            for key, value in changes.items():
+                doc[key] = value
+            if metadata_changes and isinstance(doc.get("metadata"), dict):
+                doc["metadata"].update(metadata_changes)
+            doc["integrity_hash"] = new_hash
+            atomic_write(sidecar, json.dumps(doc, indent=2, default=str, allow_nan=False))
+        except (OSError, ValueError) as exc:  # noqa: BLE001 — sidecar is re-derivable
+            logger.warning("Sidecar identity mirror skipped for %s: %s", path, exc)
+
+    return {"path": path, "integrity_hash": new_hash, "previous_integrity_hash": previous_hash}
+
+
 #: Top-level header fields that describe *which artifact this is* rather than
 #: its payload. All of them are written before ``metadata``, which can carry
 #: tens of megabytes of training/optimizer state.

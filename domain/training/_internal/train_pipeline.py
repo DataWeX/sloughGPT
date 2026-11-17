@@ -251,6 +251,68 @@ def _dataset_identity(data_path, data) -> tuple[str, str, str]:
     return fingerprint_array(np.asarray(data, dtype=np.int64)), "", recipe
 
 
+def backfill_soul_dataset_signature(soul_path, *, data_path=None, block_size=128):
+    """Record a missing ``dataset_signature`` on an existing ``.soul``.
+
+    The producer half (card 20261104_081626) signs every soul it writes;
+    souls saved before that land carry ``""``, and the loader refuses them
+    for ``dataset:<sig>`` / family-alias lookups. This repairs ONE such soul
+    honestly (card 20261117_111044):
+
+    - Recomputes the signature from the soul's own recorded
+      ``training_dataset`` (or *data_path*) with the SAME recipe the trainer
+      uses, so the back-filled value equals what a fresh retrain records —
+      the loader then compares like with like.
+    - Copies the original aside (``<path>.bak-YYYYMMDD``) BEFORE writing:
+      this rewrites an identity file, and the file-safety rule wants a
+      byte-identical restore point.
+    - Refuses (``ValueError``, file untouched) when a signature already
+      exists — never overwrite an identity — and refuses live sources
+      (``feed:``/``http(s)``/``experience``), which have no reproducible
+      signature to back-fill.
+
+    Returns:
+        ``{"path", "dataset_signature", "backup_path", "integrity_hash"}``.
+    """
+    from domain.inference._internal.slo_format import (
+        read_soul_identity,
+        update_soul_identity_fields,
+    )
+
+    identity = read_soul_identity(soul_path)
+    if identity.get("dataset_signature"):
+        raise ValueError(f"{soul_path} already records a dataset_signature — refusing to overwrite")
+    source = data_path or identity.get("training_dataset")
+    if not source:
+        raise ValueError(f"{soul_path} records no training_dataset — pass data_path explicitly")
+    if isinstance(source, str) and (is_feed_source(source) or is_experience_source(source)):
+        raise ValueError(
+            f"live source ({source}) has no reproducible signature — refusing to back-fill"
+        )
+
+    data, *_ = prepare_data(source, block_size)
+    signature, reason, recipe = _dataset_identity(source, data)
+    if not signature:
+        raise ValueError(f"no signature derivable for {source} ({reason}) — refusing to back-fill")
+
+    import shutil
+
+    backup_path = f"{soul_path}.bak-{time.strftime('%Y%m%d')}"
+    shutil.copy2(soul_path, backup_path)
+
+    result = update_soul_identity_fields(
+        soul_path,
+        {"dataset_signature": signature},
+        metadata_changes={"dataset_signature_recipe": recipe},
+    )
+    return {
+        "path": soul_path,
+        "dataset_signature": signature,
+        "backup_path": backup_path,
+        "integrity_hash": result["integrity_hash"],
+    }
+
+
 def load_corpus_text(data_path, block_size=128) -> str:
     """Resolve a training source to its raw corpus text.
 

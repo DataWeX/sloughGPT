@@ -618,3 +618,85 @@ class TestSharedSoulWriter:
             json_len = struct.unpack("<I", raw[8:12])[0]
             # weights-only: magic + version + json and nothing after the payload
             assert len(raw) == 12 + json_len
+
+
+# ---------------------------------------------------------------------------
+# update_soul_identity_fields — surgical identity back-fill (card 20261117_111044)
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateSoulIdentityFields:
+    """Patch top-level identity fields without touching the weight table.
+
+    The back-fill path rewrites an EXISTING artifact, so the safety bar is
+    byte-identity everywhere except the fields being set — and an
+    ``integrity_hash`` that follows save_soul's own convention.
+    """
+
+    @staticmethod
+    def _legacy_soul(tmp_path, *, signature: str = "", dataset: str = "") -> str:
+        profile = create_soul_profile(
+            name="legacy",
+            base_model="sloughgpt",
+            training_dataset=dataset,
+            dataset_signature=signature,
+        )
+        path = str(tmp_path / "legacy.soul")
+        save_soul(FakeModel(), path, soul_profile=profile)
+        return path
+
+    def test_patch_sets_signature_and_recomputes_hash(self, tmp_path):
+        from domain.inference._internal.slo_format import (
+            read_soul_identity,
+            update_soul_identity_fields,
+        )
+
+        path = self._legacy_soul(tmp_path)
+        before = read_soul_identity(path)
+        assert before.get("dataset_signature") == ""
+
+        result = update_soul_identity_fields(
+            path,
+            {"dataset_signature": "a" * 64},
+            metadata_changes={"dataset_signature_recipe": "blake2b256/tokens/v1"},
+        )
+        after = read_soul_identity(path)
+        assert after["dataset_signature"] == "a" * 64
+        assert after["name"] == before["name"]  # untouched identity survives
+        assert after["integrity_hash"] != before["integrity_hash"]
+        assert len(after["integrity_hash"]) == 16
+        assert result["previous_integrity_hash"] == before["integrity_hash"]
+
+    def test_weight_table_bytes_untouched(self, tmp_path):
+        from pathlib import Path
+
+        from domain.inference._internal.slo_format import update_soul_identity_fields
+
+        path = self._legacy_soul(tmp_path)
+        raw_before = Path(path).read_bytes()
+        header_len = struct.unpack("<I", raw_before[8:12])[0]
+        weights_before = raw_before[12 + header_len :]
+
+        update_soul_identity_fields(path, {"dataset_signature": "b" * 64})
+
+        raw_after = Path(path).read_bytes()
+        assert raw_after[:4] == SOU_MAGIC
+        new_header_len = struct.unpack("<I", raw_after[8:12])[0]
+        assert raw_after[12 + new_header_len :] == weights_before
+
+    def test_sidecar_mirrors_the_patch(self, tmp_path):
+        from pathlib import Path
+
+        from domain.inference._internal.slo_format import (
+            read_soul_identity,
+            update_soul_identity_fields,
+        )
+
+        path = self._legacy_soul(tmp_path)
+        sidecar = Path(path + ".meta.json")
+        assert sidecar.is_file()
+
+        update_soul_identity_fields(path, {"dataset_signature": "c" * 64})
+        doc = json.loads(sidecar.read_text(encoding="utf-8"))
+        assert doc.get("dataset_signature") == "c" * 64
+        assert doc.get("integrity_hash") == read_soul_identity(path)["integrity_hash"]
