@@ -314,7 +314,7 @@ describe('MessageBubble', () => {
         isStreaming
       />,
     )
-    expect(container.textContent).toContain('▊')
+    expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
 
   it('applies polite aria-live when streaming', () => {
