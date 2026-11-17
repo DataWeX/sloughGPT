@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "1bcc13c5ad6594983f0ef78084e82dc4a2aab005",
+    "recorded_commit": "4910a19bcfead1a87823372ea297ec151c6f097e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "4bcd48502864a5028a297d9d9e5770094694b2c2"
+      "tree_hash": "b5385ae3347f66589e7448463b228a0b896066d2"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "4dfe60cb44aef0ae97c06ac6d39f27d062868312"
+      "tree_hash": "b3be47f87e2bd4db4e353448e669a52017576679"
     },
     "knowledge": {
       "class": "core-capability",
@@ -223,7 +223,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "e12800497932236cf65be2b58e12608a9f139435"
+      "tree_hash": "1a364e002c15fe7ffcc043784db1c2d85e4fa496"
     },
     "multimodal": {
       "class": "core-capability",
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "b716182feacf3766b3dc5831eb2c9cff9fd23943"
+      "tree_hash": "13cc2337ff893333ba6b569083a703127e0f8d19"
     },
     "voice": {
       "class": "core-capability",
