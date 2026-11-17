@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react'
-import { IconCpu, IconDownload, IconRefresh, IconSettings, IconAlert } from '../ui/icons'
+import { IconDownload, IconRefresh, IconSettings } from '../ui/icons'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
@@ -18,15 +18,9 @@ import { StatCard } from './stat-card'
 import { Toolbar } from './toolbar'
 import { ActionCard } from './action-card'
 import { ChipGroup } from './chip-group'
-import { DetailRow } from './detail-row'
-import { InfoCard } from './info-card'
 import { InsightsCard } from './insights-card'
 import { MetricsCard } from './metrics-card'
-import { SortDropdown } from './sort-dropdown'
-import { TabGroup } from './tab-group'
 import { StatusBadge } from './status-badge'
-import { DetailList } from './detail-list'
-import { LoadingCard } from './loading-card'
 import { Chip } from './chip'
 import { Breadcrumbs } from './breadcrumbs'
 import { FoldSection } from './fold-section'
@@ -64,7 +58,9 @@ export const DashboardShell: StoryObj = {
     return (
       <AppShell
         sidebar={
-          <NavRail header={<span className="px-3 text-xs font-bold uppercase tracking-wider">Acme</span>}>
+          <NavRail
+            header={<span className="px-3 text-xs font-bold uppercase tracking-wider">Acme</span>}
+          >
             <NavRailLink href="#" active>
               Home
             </NavRailLink>
@@ -99,15 +95,27 @@ export const DashboardShell: StoryObj = {
             action={<Button size="sm">Upgrade</Button>}
           />
           <KpiGrid>
-            <StatCard label="Requests" value="12.4k" icon="📈" trend={{ value: 3, positive: true }} />
+            <StatCard
+              label="Requests"
+              value="12.4k"
+              icon="📈"
+              trend={{ value: 3, positive: true }}
+            />
             <StatCard label="Latency p95" value="420ms" />
             <StatCard label="Errors" value="0.02%" />
             <StatCard label="Cost" value="$48" />
           </KpiGrid>
           <div className="grid gap-6 lg:grid-cols-2">
-            <EmptyCard message="No experiments" action={<Button className="str-touch-target w-full sm:w-auto">Create experiment</Button>} />
+            <EmptyCard
+              message="No experiments"
+              action={
+                <Button className="str-touch-target w-full sm:w-auto">Create experiment</Button>
+              }
+            />
             <div className="space-y-3">
-              <p className="text-xs font-medium uppercase text-muted-foreground">Loading skeleton</p>
+              <p className="text-xs font-medium uppercase text-muted-foreground">
+                Loading skeleton
+              </p>
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-[75%]" />
               <Skeleton className="h-24 w-full" />
@@ -138,15 +146,6 @@ export const FullDashboard: StoryObj = {
           <p className="text-xs text-muted-foreground">Manage and monitor your training jobs</p>
         </div>
         <div className="flex items-center gap-2">
-          <SortDropdown
-            value="newest"
-            options={[
-              { value: 'newest', label: 'Newest' },
-              { value: 'oldest', label: 'Oldest' },
-              { value: 'status', label: 'Status' },
-            ]}
-            onChange={() => {}}
-          />
           <Button size="sm">
             <IconDownload className="h-3 w-3 mr-1" />
             New Job
@@ -162,33 +161,6 @@ export const FullDashboard: StoryObj = {
       </MetricsCard>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ActionCard
-          title="System Health"
-          subtitle="Real-time metrics"
-          actions={
-            <Button size="sm" variant="ghost">
-              <IconRefresh className="h-3 w-3" />
-            </Button>
-          }
-        >
-          <KpiGrid columns={2}>
-            <InfoCard
-              icon={<IconCpu className="h-4 w-4" />}
-              title="GPU"
-              description="NVIDIA RTX 4090"
-              tone="success"
-              size="sm"
-            />
-            <InfoCard
-              icon={<IconAlert className="h-4 w-4" />}
-              title="Memory"
-              description="16 / 32 GB"
-              tone="warning"
-              size="sm"
-            />
-          </KpiGrid>
-        </ActionCard>
-
         <InsightsCard
           title="Training Insights"
           kpis={[
@@ -202,40 +174,6 @@ export const FullDashboard: StoryObj = {
           ]}
         />
       </div>
-
-      <TabGroup
-        defaultValue="logs"
-        tabs={[
-          {
-            value: 'logs',
-            label: 'Training Logs',
-            content: (
-              <div className="font-mono text-xs space-y-1 py-2">
-                <div className="text-muted-foreground">[00:12:34] Epoch 1/10 — loss: 0.45</div>
-                <div className="text-muted-foreground">[00:12:45] Epoch 2/10 — loss: 0.38</div>
-                <div className="text-muted-foreground">[00:12:56] Epoch 3/10 — loss: 0.31</div>
-                <div className="text-green-500">[00:13:07] Epoch 4/10 — loss: 0.23 ✓</div>
-              </div>
-            ),
-          },
-          {
-            value: 'config',
-            label: 'Configuration',
-            content: (
-              <div className="py-2 space-y-2">
-                <DetailRow label="Learning Rate" value="2e-4" />
-                <DetailRow label="Batch Size" value="32" />
-                <DetailRow label="Epochs" value="10" />
-              </div>
-            ),
-          },
-          {
-            value: 'metrics',
-            label: 'Metrics',
-            content: <p className="text-sm py-2">Metrics visualization coming soon.</p>,
-          },
-        ]}
-      />
     </div>
   ),
 }
@@ -318,30 +256,6 @@ export const InsightsCardDemo: StoryObj = {
   ),
 }
 
-// ── InfoCard ───────────────────────────────────────────────────────
-
-export const InfoCardDemo: StoryObj = {
-  render: () => (
-    <div className="max-w-md p-4 space-y-3">
-      <InfoCard
-        icon={<IconCpu className="h-5 w-5" />}
-        title="GPU Acceleration"
-        description="CUDA cores available"
-        tone="success"
-      >
-        <p className="text-xs text-muted-foreground">Device: NVIDIA RTX 4090</p>
-      </InfoCard>
-      <InfoCard
-        icon={<IconDownload className="h-5 w-5" />}
-        title="Model Download"
-        description="GPT-2 (500 MB)"
-        tone="primary"
-      />
-      <InfoCard title="No description" tone="muted" />
-    </div>
-  ),
-}
-
 // ── ChipGroup ──────────────────────────────────────────────────────
 
 export const ChipGroupDemo: StoryObj = {
@@ -356,91 +270,8 @@ export const ChipGroupDemo: StoryObj = {
         ]}
       />
       <ChipGroup
-        chips={[
-          { label: 'Filter: active' },
-          { label: 'Status: running', tone: 'success' },
-        ]}
+        chips={[{ label: 'Filter: active' }, { label: 'Status: running', tone: 'success' }]}
         gap={2}
-      />
-    </div>
-  ),
-}
-
-// ── DetailRow ──────────────────────────────────────────────────────
-
-export const DetailRowDemo: StoryObj = {
-  render: () => (
-    <div className="max-w-sm p-4 space-y-3">
-      <DetailRow label="Model" value="GPT-2" />
-      <DetailRow label="Path" value="/models/gpt2" mono />
-      <DetailRow label="Size" value="500 MB" valueClassName="text-muted-foreground" />
-      <DetailRow label="Docs" value="View" href="https://example.com" />
-    </div>
-  ),
-}
-
-// ── SortDropdown ───────────────────────────────────────────────────
-
-export const SortDropdownDemo: StoryObj = {
-  render: () => (
-    <div className="p-4">
-      <SortDropdown
-        value="newest"
-        options={[
-          { value: 'newest', label: 'Newest' },
-          { value: 'oldest', label: 'Oldest' },
-          { value: 'importance', label: 'Importance' },
-        ]}
-        onChange={() => {}}
-      />
-    </div>
-  ),
-}
-
-// ── TabGroup ───────────────────────────────────────────────────────
-
-export const TabGroupDemo: StoryObj = {
-  render: () => (
-    <div className="max-w-lg p-4">
-      <TabGroup
-        defaultValue="overview"
-        tabs={[
-          { value: 'overview', label: 'Overview', content: <p className="text-sm">Overview content here.</p> },
-          { value: 'details', label: 'Details', content: <p className="text-sm">Details content here.</p> },
-          { value: 'logs', label: 'Logs', content: <p className="text-sm">Logs content here.</p> },
-        ]}
-      />
-    </div>
-  ),
-}
-
-export const TabGroupPills: StoryObj = {
-  render: () => (
-    <div className="max-w-lg p-4">
-      <TabGroup
-        defaultValue="all"
-        layout="pills"
-        tabs={[
-          { value: 'all', label: 'All', content: <p className="text-sm">All items.</p> },
-          { value: 'active', label: 'Active', content: <p className="text-sm">Active items.</p> },
-          { value: 'archived', label: 'Archived', content: <p className="text-sm">Archived items.</p> },
-        ]}
-      />
-    </div>
-  ),
-}
-
-export const TabGroupBoxed: StoryObj = {
-  render: () => (
-    <div className="max-w-lg p-4">
-      <TabGroup
-        defaultValue="train"
-        layout="boxed"
-        tabs={[
-          { value: 'train', label: 'Train', content: <p className="text-sm">Training config.</p> },
-          { value: 'eval', label: 'Eval', content: <p className="text-sm">Evaluation config.</p> },
-          { value: 'export', label: 'Export', content: <p className="text-sm">Export config.</p> },
-        ]}
       />
     </div>
   ),
@@ -456,33 +287,6 @@ export const StatusBadgeDemo: StoryObj = {
       <StatusBadge tone="destructive">Failed</StatusBadge>
       <StatusBadge tone="primary">Active</StatusBadge>
       <StatusBadge tone="muted">Idle</StatusBadge>
-    </div>
-  ),
-}
-
-// ── DetailList ─────────────────────────────────────────────────────
-
-export const DetailListDemo: StoryObj = {
-  render: () => (
-    <div className="max-w-md p-4">
-      <DetailList
-        items={[
-          { label: 'Model', value: 'GPT-2' },
-          { label: 'Path', value: '/models/gpt2', mono: true },
-          { label: 'Size', value: '500 MB' },
-          { label: 'Docs', value: 'View', href: 'https://example.com' },
-        ]}
-      />
-    </div>
-  ),
-}
-
-// ── LoadingCard ────────────────────────────────────────────────────
-
-export const LoadingCardDemo: StoryObj = {
-  render: () => (
-    <div className="max-w-md p-4">
-      <LoadingCard title="Loading data..." rows={3} />
     </div>
   ),
 }
