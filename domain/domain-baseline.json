@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "7691c23daad188b2c521245f9bbab2cb51fa3c9c",
+    "recorded_commit": "bebc225afc1456d85fb01daf1fd60cc0955ee7aa",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -21,7 +21,7 @@
       "consumers": ["tests/", "apps/api/", "domain/shell/"],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "3a074455f2562779340ba2458a1c3c913741afc1"
+      "tree_hash": "6986d33ee26859eed915333cd853f1024108bd5c"
     },
     "ai_personality": {
       "class": "feature",
@@ -45,7 +45,7 @@
       "consumers": ["apps/api/", "domain/search/"],
       "note": "session/token checks at the edge (apps/api)",
       "debt": null,
-      "tree_hash": "3a707067d6b52ad80ad635999bd56bb63624b16b"
+      "tree_hash": "9ff927a2d5b602807ceecc18ce21e6490671bd92"
     },
     "benchmark": {
       "class": "feature",
