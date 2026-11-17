@@ -2065,3 +2065,141 @@ class TestLoadCorpusText:
         text = load_corpus_text(source)
         assert sorted(stoi) == sorted(set(text))
         assert len(data) == len(text)
+
+
+# =============================================================================
+# dataset_signature — content-addressed dataset identity (card 20261104_081626)
+# =============================================================================
+
+
+class TestDatasetSignature:
+    """The trainer records *what it trained on*, not *where the file was*.
+
+    ``ModelLoader`` already implements the consumer half: family aliases
+    (``sloughgpt``/``slonet``/…) require the same ``base_model`` AND the same
+    non-empty ``dataset_signature``. These tests pin the missing producer half.
+    """
+
+    def test_static_file_records_nonempty_signature(self, data_path, tmp_path):
+        """A static corpus yields a signature in the written identity."""
+        from domain.inference._internal.slo_format import read_soul_identity
+
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        assert t.dataset_signature, "signature must be computed at init, not at save"
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        identity = read_soul_identity(out + ".soul")
+        assert identity.get("dataset_signature") == t.dataset_signature
+        assert len(identity["dataset_signature"]) == 64
+
+    def test_signature_ignores_path(self, tmp_path):
+        """Same bytes at two paths → same signature; the path is never hashed."""
+        a = tmp_path / "one" / "corpus.txt"
+        b = tmp_path / "two" / "renamed_corpus.txt"
+        a.parent.mkdir()
+        b.parent.mkdir()
+        a.write_text(DATA_TEXT, encoding="utf-8")
+        b.write_text(DATA_TEXT, encoding="utf-8")
+
+        ta = make_trainer(str(a), tiny_config(tmp_path))
+        tb = make_trainer(str(b), tiny_config(tmp_path))
+        assert ta.dataset_signature == tb.dataset_signature
+
+    def test_signature_discriminates_content(self, tmp_path):
+        """Different bytes → different signature (no false interchangeability)."""
+        a = tmp_path / "a.txt"
+        b = tmp_path / "b.txt"
+        a.write_text(DATA_TEXT, encoding="utf-8")
+        b.write_text(DATA_TEXT + " and distinctly more text", encoding="utf-8")
+
+        ta = make_trainer(str(a), tiny_config(tmp_path))
+        tb = make_trainer(str(b), tiny_config(tmp_path))
+        assert ta.dataset_signature != tb.dataset_signature
+
+    def test_signature_stable_across_runs(self, data_path, tmp_path):
+        """Two trainers over the same file agree — retraining proves equivalence."""
+        t1 = make_trainer(data_path, tiny_config(tmp_path))
+        t2 = make_trainer(data_path, tiny_config(tmp_path))
+        assert t1.dataset_signature == t2.dataset_signature
+
+    def test_integrity_hash_covers_signature(self, data_path, tmp_path):
+        """The artifact hash must include the signature, or identity lies."""
+        from domain.inference._internal.slo_format import read_soul_identity
+
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        identity = read_soul_identity(out + ".soul")
+        assert identity.get("integrity_hash"), "integrity_hash must be recorded"
+
+        # A profile WITHOUT the signature must hash differently.
+        from domain.inference import create_soul_profile
+
+        with_sig = create_soul_profile(name="x", dataset_signature=t.dataset_signature)
+        without = create_soul_profile(name="x", dataset_signature="")
+        assert with_sig.compute_hash() != without.compute_hash()
+
+    def test_recipe_recorded_in_metadata(self, data_path, tmp_path):
+        """The hashing recipe is stamped so a future change can't silently
+        invalidate every recorded signature."""
+        from domain.inference._internal.slo_format import load_soul
+
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        profile, _ = load_soul(out + ".soul")
+        assert profile.metadata.get("dataset_signature_recipe") == "blake2b256/tokens/v1"
+
+    def test_live_feed_source_records_no_signature(self, tmp_path, monkeypatch):
+        """A live stream can't be proven equivalent — refuse, don't guess.
+
+        Two runs over the same feed URL ingest different records, so a
+        signature would claim interchangeability that doesn't hold. The
+        loader already treats ``""`` as *refuse*, which is the honest answer.
+        """
+        from domain.inference._internal.slo_format import load_soul
+        from domain.training._internal import training_feed as tf
+
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        # validate_training_data enforces a 200-char floor, so the seed record
+        # has to be a real conversation rather than "ping"/"pong".
+        corpus.write_text(
+            json.dumps(
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": (
+                                "Can the training flow read from a live feed and keep "
+                                "ingesting records while the run is still going?"
+                            ),
+                        },
+                        {
+                            "role": "assistant",
+                            "content": (
+                                "Yes — the feed sampler refreshes on a timer and pulls "
+                                "new records in, so the corpus can grow mid-training "
+                                "without restarting the job."
+                            ),
+                        },
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+
+        t = make_trainer("feed:api-conversations", tiny_config(tmp_path))
+        assert t.dataset_signature == "", "live source must not claim an identity"
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        profile, _ = load_soul(out + ".soul")
+        assert profile.dataset_signature == ""
+        assert profile.metadata.get("dataset_signature_reason") == ("live-source-not-reproducible")
+
+    def test_signature_recipe_is_versioned(self, data_path, tmp_path):
+        """The recipe string carries a version so a bump is a visible event."""
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        assert "/v1" in t.dataset_signature_recipe
