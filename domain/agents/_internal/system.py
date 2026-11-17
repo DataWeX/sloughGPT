@@ -11,10 +11,11 @@ from typing import Any
 
 from domain.agents._internal.agents import Agent, AgentConfig, ToolCapability, get_agent
 from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.agents")
 
-AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agents")
+AGENTS_DIR = os.path.join(find_repo_root(__file__), "data", "agents")
 
 _agent_repo = FileRepository[dict](
     directory=AGENTS_DIR,

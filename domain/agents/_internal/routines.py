@@ -32,13 +32,14 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.agents.routines")
 
-# Mirrors ``AGENTS_DIR`` (data/agents) exactly — same four ``..`` hops, so
-# agents and their routines share one ``data/`` root outside the checkout.
-# One JSON file per routine.
-ROUTINES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "routines")
+# Mirrors ``AGENTS_DIR`` (data/agents): both resolve the repo root by marker
+# walk instead of hand-counted ``..`` hops, so agents and their routines share
+# one ``data/`` root inside the checkout. One JSON file per routine.
+ROUTINES_DIR = os.path.join(find_repo_root(__file__), "data", "routines")
 
 DEFAULT_TICK_INTERVAL = 5.0
 MAX_RECORDED_EVENTS = 500

@@ -11,10 +11,11 @@ from domain.auth._internal.models import (
     Workspace,
     WorkspaceMember,
 )
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.auth.repo")
 
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+_REPO_ROOT = find_repo_root(__file__)
 
 
 def _get_mogdb(db_path: str | None = None):
