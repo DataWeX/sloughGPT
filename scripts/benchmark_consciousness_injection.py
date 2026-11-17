@@ -288,26 +288,57 @@ def aggregate(cells: list[dict]) -> dict[str, dict]:
         rows = [c for c in cells if c["config"] == config]
         if not rows:
             continue
-        n = len(rows)
+        # A transport-errored cell produced no answer: absence of evidence,
+        # not a measured negative. Rates run over answered cells only; a
+        # config whose cells ALL errored is omitted so the caller's
+        # ``summary.get("off", {})`` default (unclean) applies.
+        answered = [c for c in rows if not c.get("error")]
+        if not answered:
+            continue
+        n = len(answered)
         out[config] = {
-            "cells": n,
-            "latch_rate": round(sum(c["latch"] for c in rows) / n, 3),
-            "on_topic_rate": round(sum(c["on_topic"] for c in rows) / n, 3),
-            "parrot_rate": round(sum(c["parrot"] for c in rows) / n, 3),
-            "avg_injected_tokens": round(sum(c["injected_tokens"] for c in rows) / n, 1),
+            "cells": len(rows),
+            "errors": len(rows) - n,
+            "latch_rate": round(sum(c["latch"] for c in answered) / n, 3),
+            "on_topic_rate": round(sum(c["on_topic"] for c in answered) / n, 3),
+            "parrot_rate": round(sum(c["parrot"] for c in answered) / n, 3),
+            "avg_injected_tokens": round(sum(c["injected_tokens"] for c in answered) / n, 1),
             "avg_token_delta_vs_off": (
                 round(
                     sum(
-                        c["token_delta_vs_off"] for c in rows if c["token_delta_vs_off"] is not None
+                        c["token_delta_vs_off"]
+                        for c in answered
+                        if c["token_delta_vs_off"] is not None
                     )
-                    / max(1, sum(1 for c in rows if c["token_delta_vs_off"] is not None)),
+                    / max(
+                        1,
+                        sum(1 for c in answered if c["token_delta_vs_off"] is not None),
+                    ),
                     1,
                 )
-                if any(c["token_delta_vs_off"] is not None for c in rows)
+                if any(c["token_delta_vs_off"] is not None for c in answered)
                 else None
             ),
         }
     return out
+
+
+def verdict(cells: list[dict]) -> tuple[bool, float, bool]:
+    """``(passed, score, baseline_clean)`` for a finished matrix.
+
+    A run carrying transport errors is INCOMPLETE, not green: the always-
+    measure rule wants measurement, and a cell that never reached the model
+    proves nothing about the flag. Fail closed — even when the answered
+    baseline cells look clean, and always when the baseline itself is gone
+    (aggregate omits an all-errored config → the 1.0 default → unclean).
+    """
+    summary = aggregate(cells)
+    off = summary.get("off", {})
+    baseline_clean = off.get("latch_rate", 1.0) == 0.0
+    score = round(100 * off.get("on_topic_rate", 0.0) * (1 - off.get("latch_rate", 1.0)), 1)
+    errors_total = sum(1 for c in cells if c.get("error"))
+    passed = bool(baseline_clean) and errors_total == 0
+    return passed, score, baseline_clean
 
 
 def print_matrix(cells: list[dict], summary: dict[str, dict]) -> None:
@@ -349,9 +380,21 @@ def run_matrix(base_url: str, narrative: str, narrative_source: str, timeout: fl
                 kwargs["use_consciousness"] = True
             elif config == "system-head":
                 kwargs["system_prompt"] = narrative
-            result = chat_turn(
-                base_url, [{"role": "user", "content": text}], timeout=timeout, **kwargs
-            )
+            try:
+                result = chat_turn(
+                    base_url, [{"role": "user", "content": text}], timeout=timeout, **kwargs
+                )
+            except requests.RequestException as exc:
+                # The server died mid-stream on the first live run (cell 7/15,
+                # ChunkedEncodingError) and took the other 14 cells with it.
+                # An always-measure gate must outlive what it measures: record
+                # this cell as errored, score it as "no answer", keep going.
+                result = {
+                    "text": "",
+                    "latency_ms": None,
+                    "response_tokens": None,
+                    "error": f"transport: {exc}",
+                }
             cell = score_cell(
                 config,
                 probe,
@@ -472,13 +515,18 @@ def main() -> int:
     summary = aggregate(cells)
     print_matrix(cells, summary)
 
-    off = summary.get("off", {})
-    baseline_clean = off.get("latch_rate", 1.0) == 0.0
-    score = round(100 * off.get("on_topic_rate", 0.0) * (1 - off.get("latch_rate", 1.0)), 1)
+    passed, score, baseline_clean = verdict(cells)
+    errors_total = sum(1 for c in cells if c.get("error"))
+    if errors_total:
+        print(
+            f"\n[warn] {errors_total}/{len(cells)} cells errored — "
+            "run incomplete (recorded as passed=false)"
+        )
     payload = {
         "model": "qwen2.5-0.5b-instruct",
         "runs": len(cells),
-        "passed": bool(baseline_clean),
+        "errors": errors_total,
+        "passed": passed,
         "score": score,
         "elapsed_s": round(time.time() - started, 2),
         "smoke": smoke,
@@ -490,7 +538,7 @@ def main() -> int:
     }
     out = Path(args.json)
     out.write_text(json.dumps(payload, indent=2))
-    print(f"\n[JSON] {out}  (score={score}, baseline_clean={baseline_clean})")
+    print(f"\n[JSON] {out}  (score={score}, baseline_clean={baseline_clean}, passed={passed})")
 
     if args.record:
         if smoke:
