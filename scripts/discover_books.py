@@ -15,7 +15,9 @@ Pipeline: discover -> rank/filter -> acquire -> validate -> atomic write -> repo
              no second download implementation
   validate : min-chars + printable-ratio gate BEFORE anything touches data/
   write    : tmp dir -> os.replace, so a killed run never leaves a half
-             dataset behind (the 0-B frankenstein abort proved the need)
+             dataset behind (the 0-B frankenstein abort proved the need);
+             emits the canonical v1 layout — input.txt + manifest.json +
+             metadata.json — that every resolver accepts (see build_manifest)
   report   : concise accept/reject table — for data acquisition the report
              IS the measurement (the standing benchmark rule covers
              injection/curriculum changes, not sourcing)
@@ -23,6 +25,7 @@ Pipeline: discover -> rank/filter -> acquire -> validate -> atomic write -> repo
 Usage:
   scripts/discover_books.py -q "philosophy" -q "science" --dry-run
   scripts/discover_books.py -q "philosophy science" --max-books 5
+  scripts/discover_books.py --standardize   # existing book dirs -> v1 layout
 """
 
 from __future__ import annotations
@@ -46,6 +49,10 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from domain.training import ISBNImporter  # noqa: E402
+from domain.training._internal.dataset_manifest import (  # noqa: E402
+    ManifestError,
+    load_manifest,
+)
 
 GUTENDEX_SEARCH = "https://gutendex.com/books/?search={query}&page={page}"
 PG_SEARCH = "https://www.gutenberg.org/ebooks/search/?query={query}{start}"
@@ -294,23 +301,159 @@ def validate_text(text: str, *, min_chars: int, min_printable: float) -> str | N
     return None
 
 
+def build_manifest(slug: str, meta: dict) -> dict:
+    """SloughGPT Standard v1 manifest for an acquired book.
+
+    Contract: ``dataset_manifest.load_manifest`` requires schema_version
+    '1.0' plus dataset_id/version/domain/pii_policy/sources (non-empty);
+    ``splits.train`` resolves to the sibling input.txt. Provenance rides
+    alongside for audit — the bibliographic metadata.json sidecar is a
+    separate file and is never touched by this builder.
+    """
+    sources = [u for u in (meta.get("text_url"),) if u] or [str(meta.get("source") or "unknown")]
+    return {
+        "schema_version": "1.0",
+        "dataset_id": slug,
+        "version": "1",
+        "domain": "general",
+        "pii_policy": "free-download-no-pii",
+        "sources": sources,
+        "splits": {"train": "input.txt"},
+        "provenance": {
+            "title": meta.get("title"),
+            "authors": meta.get("authors") or [],
+            "subjects": meta.get("subjects") or [],
+            "languages": meta.get("languages") or [],
+            "gutenberg_id": meta.get("gutenberg_id"),
+            "source": meta.get("source"),
+            "source_type": meta.get("source_type"),
+            "query": meta.get("query"),
+            "text_chars": meta.get("text_chars"),
+        },
+    }
+
+
 def write_dataset(data_dir: Path, slug: str, text: str, meta: dict) -> Path:
-    """Atomic dataset write: build in a hidden tmp dir, then os.replace."""
+    """Atomic dataset write: build in a hidden tmp dir, then os.replace.
+
+    Emits the canonical v1 layout every resolver accepts: ``input.txt``
+    (load_corpus_text's ``data/<name>/input.txt`` name path AND
+    _find_corpus's first-priority candidate), ``manifest.json``
+    (dataset_manifest contract), ``metadata.json`` (bibliographic sidecar).
+    """
     target = data_dir / slug
     if target.exists():
         raise FileExistsError(f"data/{slug} already exists")
     tmp = data_dir / f".{slug}.tmp"
     try:
         tmp.mkdir(parents=True, exist_ok=True)
-        (tmp / f"{slug}.txt").write_text(text, encoding="utf-8")
+        (tmp / "input.txt").write_text(text, encoding="utf-8")
         (tmp / "metadata.json").write_text(
             json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        (tmp / "manifest.json").write_text(
+            json.dumps(build_manifest(slug, meta), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
         )
         os.replace(tmp, target)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
     return target
+
+
+def _is_our_dataset(target: Path) -> dict | None:
+    """Return metadata.json if this dir was written by this tool, else None.
+
+    The guard for --standardize: our sidecar carries both ``source`` and
+    ``source_type``; foreign data/ dirs (sessions, eval outputs, other
+    importers' sidecars) must never be renamed or gain a manifest.
+    """
+    mp = target / "metadata.json"
+    if not mp.is_file():
+        return None
+    try:
+        meta = json.loads(mp.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if isinstance(meta, dict) and meta.get("source") and meta.get("source_type"):
+        return meta
+    return None
+
+
+def _manifest_valid(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        load_manifest(path)
+        return True
+    except (ManifestError, OSError):
+        return False
+
+
+def standardize_dir(target: Path) -> str:
+    """Bring one acquired book dir to the canonical v1 layout. Idempotent.
+
+    Renames ``<slug>.txt`` -> ``input.txt`` (same dir, atomic) and writes a
+    valid v1 ``manifest.json`` when missing/invalid. Never deletes or
+    alters corpus bytes or the metadata.json sidecar. Returns the report
+    action for this dir.
+    """
+    meta = _is_our_dataset(target)
+    if meta is None:
+        return "skipped (not acquired by this tool)"
+    renamed = False
+    input_txt = target / "input.txt"
+    legacy_txt = target / f"{target.name}.txt"
+    if not input_txt.is_file():
+        if not legacy_txt.is_file():
+            return "skipped (no corpus file)"
+        os.replace(legacy_txt, input_txt)
+        renamed = True
+    manifest = target / "manifest.json"
+    wrote_manifest = False
+    if not _manifest_valid(manifest):
+        manifest.write_text(
+            json.dumps(build_manifest(target.name, meta), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        wrote_manifest = True
+    if renamed and wrote_manifest:
+        return "renamed + manifest written"
+    if renamed:
+        return "renamed"
+    if wrote_manifest:
+        return "manifest written"
+    return "already conformant"
+
+
+def run_standardize(args: argparse.Namespace) -> int:
+    """--standardize: walk the data dir, fix acquired book dirs, report."""
+    data_dir = Path(args.data_dir)
+    if not data_dir.is_dir():
+        print(f"error: {data_dir} is not a directory", file=sys.stderr)
+        return 2
+    ours: list[tuple[str, str]] = []
+    foreign = 0
+    for target in sorted(
+        p for p in data_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
+    ):
+        action = standardize_dir(target)
+        if action.startswith("skipped (not"):
+            foreign += 1
+        else:
+            ours.append((target.name, action))
+    print(f"standardize: {data_dir}")
+    for name, action in ours:
+        print(f"  + {name:<56} {action}")
+    if not ours:
+        print("  none — no acquired datasets found")
+    conformant = sum(1 for _, action in ours if action == "already conformant")
+    print(
+        f"total     : {len(ours)} acquired dataset(s) "
+        f"({conformant} already conformant), {foreign} foreign dir(s) untouched"
+    )
+    return 0
 
 
 def run(args: argparse.Namespace) -> int:
@@ -413,7 +556,6 @@ def main(argv: list[str] | None = None) -> int:
         "-q",
         "--query",
         action="append",
-        required=True,
         help="Search query (repeatable), e.g. -q philosophy -q science",
     )
     parser.add_argument("--max-pages", type=int, default=3, help="Search pages per query")
@@ -439,7 +581,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--dry-run", action="store_true", help="Discover + rank only, no writes")
     parser.add_argument("--max-rejects", type=int, default=15, help="Rejection lines to print")
+    parser.add_argument(
+        "--standardize",
+        action="store_true",
+        help="Fix existing acquired book dirs to the canonical v1 layout "
+        "(rename <slug>.txt to input.txt + write manifest.json); idempotent, "
+        "no deletes; takes no --query",
+    )
     args = parser.parse_args(argv)
+    if args.standardize:
+        if args.query:
+            parser.error("--standardize does not take --query")
+        return run_standardize(args)
+    if not args.query:
+        parser.error("at least one -q/--query is required (or use --standardize)")
     return run(args)
 
 
