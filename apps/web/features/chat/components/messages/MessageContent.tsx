@@ -2,6 +2,7 @@
 
 import { memo, useState, useMemo } from 'react'
 import { Button, Textarea, cn } from '@sloughgpt/strui'
+import { StreamingCursor } from '@/components/StreamingCursor'
 import { Markdown } from './Markdown'
 import { MessageFrame } from './MessageFrame'
 import { MessageImages } from './MessageImages'
@@ -104,14 +105,7 @@ export const MessageContent = memo(function MessageContent({
           {isCollapsible && isCollapsed && (
             <span className="text-muted-foreground/40 select-none">…</span>
           )}
-          {isStreaming && (
-            <span
-              className="inline-block ml-0.5 animate-pulse motion-reduce:animate-none text-primary"
-              aria-hidden="true"
-            >
-              ▊
-            </span>
-          )}
+          {isStreaming && <StreamingCursor />}
           {isCollapsible && (
             <button
               type="button"

@@ -3,6 +3,7 @@ import { notify } from '@/lib/notify'
 
 import { useState, useRef } from 'react'
 import { Card, CardContent, Button } from '@sloughgpt/strui'
+import { StreamingCursor } from '@/components/StreamingCursor'
 import { chatController } from '@/lib/chat-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -113,9 +114,7 @@ export function QuickActions({
           {testResponse && (
             <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono leading-relaxed">
               {testResponse}
-              {streaming && (
-                <span className="inline-block w-1.5 h-3 bg-primary/70 animate-pulse ml-0.5" />
-              )}
+              {streaming && <StreamingCursor />}
             </div>
           )}
         </CardContent>
