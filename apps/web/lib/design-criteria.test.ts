@@ -172,8 +172,15 @@ const TEXT_2XL_TOTAL_CEILING = 41
  */
 const TEXT_FLOOR_RE = /\btext-\[(?:[1-9]|10)px\]/g
 
-/** Inline `fontSize: 9|10` / `fontSize={9|10}` — chart axis ticks, SVG text. */
-const INLINE_FLOOR_RE = /\bfontSize: *'?([1-9]|10)(?:px)?'?(?=[,}\s])|\bfontSize=\{([1-9]|10)\}/g
+/**
+ * Inline `fontSize: 9|10` (object literal) / `fontSize={9|10}` (JSX
+ * expression) / `fontSize="9|10"` (SVG string attribute) — chart axis ticks,
+ * SVG text. The string-attribute form was the gate's blind spot (card
+ * 20261116_120600: 34 instances across 5 consciousness pages shipped under
+ * a green gate after the 2026-11-15 sweep).
+ */
+const INLINE_FLOOR_RE =
+  /\bfontSize: *'?([1-9]|10)(?:px)?'?(?=[,}\s])|\bfontSize=\{([1-9]|10)\}|\bfontSize=(?:"(?:[1-9]|10)"|'(?:[1-9]|10)')/g
 
 const TEXT_FLOOR_EXEMPT = [
   'components/StatusBar.tsx',

@@ -255,6 +255,11 @@ class TestSetupProvidersWiring:
 
         fake_mod = MagicMock()
         fake_mod.get_config = MagicMock(return_value=mock_cfg)
+        # Keep the real module: deleting it here (the old `finally`) made the
+        # next call-time import re-execute config.py as a SECOND module object
+        # with its own config-manager cache, poisoning later tests (card
+        # 20261116_144837 — vision seam order-dependency).
+        orig_mod = sys.modules.get("domain.infrastructure._internal.config")
         sys.modules["domain.infrastructure._internal.config"] = fake_mod
 
         mock_provider = MagicMock()
@@ -278,7 +283,11 @@ class TestSetupProvidersWiring:
             assert isinstance(router, ProviderRouter)
             assert router._text_name == "slonet-native"
         finally:
-            if "domain.infrastructure._internal.config" in sys.modules:
+            # Restore the real module — never leave the fake behind, never
+            # delete the entry (see note at the injection site above).
+            if orig_mod is not None:
+                sys.modules["domain.infrastructure._internal.config"] = orig_mod
+            else:  # pragma: no cover - real module is always imported first
                 del sys.modules["domain.infrastructure._internal.config"]
 
 

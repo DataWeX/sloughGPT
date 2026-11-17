@@ -11,7 +11,7 @@ import { useChatUI } from '@/features/chat/hooks/useChatUI'
 import { useChatVision } from '@/features/chat/hooks/useChatVision'
 import { useChatAgents } from '@/features/chat/hooks/useChatAgents'
 import type { AgentDef } from '@/lib/agents'
-import { extractErrorMessage, formatToastError } from '@/lib/error-utils'
+import { formatToastError } from '@/lib/error-utils'
 import { PDF_ANALYSIS_MAX_TOKENS } from '@/lib/format-bytes'
 import { useChatLocalEngine } from '@/features/chat/hooks/useChatLocalEngine'
 import { useChatModelSettings } from '@/features/chat/hooks/useChatModelSettings'
@@ -19,7 +19,6 @@ import { useChatKeyboard } from '@/features/chat/hooks/useChatKeyboard'
 import { useChatBookmarks } from '@/features/chat/hooks/useChatBookmarks'
 import { useChatMessages } from '@/features/chat/hooks/useChatMessages'
 import { useChatMode } from '@/features/chat/hooks/useChatMode'
-import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 import { useMessageNotes } from '@/features/chat/hooks/useMessageNotes'
 import { useMessageThreads } from '@/features/chat/hooks/useMessageThreads'
 import { computeSearchMatches } from '@/lib/chat-utils'
@@ -27,8 +26,6 @@ import type { ChatMessage } from '@/lib/chat-utils'
 import { chatController } from '@/lib/chat-controller'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useSettings } from '@/lib/store'
-import { imagesController } from '@/lib/images-controller'
-import type { ImageStyle } from '@/lib/images-controller'
 import { chatDB } from '@/lib/db'
 
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -72,9 +69,11 @@ export function useChatPageController(
       if (v) setCustomSystemPrompt(v)
     })
   }, [])
+  // Legacy deep links: /voice → /chat?mode=talk opens the voice overlay.
+  // Other historic mode params are ignored — intent comes from the text.
   const modeValue = searchParams.get('mode')
   useEffect(() => {
-    if (modeValue) setChatMode(modeValue as ChatMode)
+    if (modeValue === 'talk') ui.setVoiceMode(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modeValue])
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
@@ -97,59 +96,17 @@ export function useChatPageController(
     }
   }, [setConvSidebarOpen])
 
-  const chat = useChatMessages({
-    model: model.model,
-    temperature: model.temperature,
-    maxTokens: model.maxTokens,
-    currentSoul: model.currentSoul,
-    currentAgent: agents.currentAgent,
-    useLocalEngine: engine.useLocalEngine,
-    engineRef: engine.engineRef,
-    engineLoadingRef: engine.engineLoadingRef,
-    initLocalEngine: engine.initLocalEngine,
-    showToast,
-    recordFeedback,
-    fetchStats,
-    fetchAdapterStats,
-    customSystemPrompt,
-    onVisionUpdate: (caps, history, vocab) => {
-      vision.setVisionCaps(caps)
-      vision.setVisionCaptionHistory(history)
-      vision.setVisionVocabSize(vocab)
-    },
-    onKnowledgeUpdate: (ctx) => {
-      agents.setKnowledgeCtx((prev) => ({ ...prev, ...ctx }))
-    },
-  })
+  // ChatConfig (model/engine/prompts/feedback/vision/knowledge) reaches the
+  // store through useChatStoreBridge's config-sync seam — since stage 3 this
+  // hook only needs the toast (its action surface is the store's).
+  const chat = useChatMessages({ showToast })
 
   const messageNotes = useMessageNotes({ sessionId: chat.sessionIdRef.current })
 
   const threads = useMessageThreads({ messages: chat.messages })
   const [activeThreadMessageId, setActiveThreadMessageId] = useState<string | null>(null)
 
-  const {
-    chatMode,
-    setChatMode,
-    writeTone,
-    setWriteTone,
-    writeType,
-    setWriteType,
-    rewriteStyle,
-    setRewriteStyle,
-    decideStructure,
-    setDecideStructure,
-    explainDifficulty,
-    setExplainDifficulty,
-    translateLangPair,
-    setTranslateLangPair,
-    brainstormTopic,
-    setBrainstormTopic,
-    wellnessType,
-    setWellnessType,
-    createStyle,
-    setCreateStyle,
-    handleSend: handleModeSend,
-  } = useChatMode({
+  const { handleSend: handleModeSend } = useChatMode({
     chat: {
       input: chat.input,
       setInput: chat.setInput,
@@ -405,7 +362,6 @@ export function useChatPageController(
     onSystemPrompt: () => setSystemPromptOpen(true),
     onSearchConversations: () => ui.setShowConversationSearch(true),
     bookmarkCount: bookmarks.length,
-    chatMode,
   })
 
   const healthValue = useChatHealthValue({ health, refreshHealth })
@@ -417,64 +373,9 @@ export function useChatPageController(
     chatDB.setKV('chat:customSystemPrompt', value)
   }, [])
 
-  const handleCreateImage = useCallback(
-    async (prompt: string) => {
-      const userMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: prompt,
-        timestamp: new Date(),
-      }
-      const pendingId = crypto.randomUUID()
-      const pendingMsg: ChatMessage = {
-        id: pendingId,
-        role: 'assistant',
-        content: '✨ **Creating your image...**',
-        timestamp: new Date(),
-      }
-      chat.setMessages((prev) => [...prev, userMsg, pendingMsg])
-      chat.setLoading(true)
-      try {
-        const result = await imagesController.generate(
-          prompt,
-          createStyle.toLowerCase() as ImageStyle,
-        )
-        chat.setMessages((prev) =>
-          prev.map((m) =>
-            m.id === pendingId
-              ? {
-                  ...m,
-                  content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${prompt}](${result.image})`,
-                }
-              : m,
-          ),
-        )
-      } catch (err: unknown) {
-        chat.setMessages((prev) =>
-          prev.map((m) =>
-            m.id === pendingId
-              ? {
-                  ...m,
-                  content: `❌ Sorry, I couldn't create that image. ${extractErrorMessage(err, 'Please try again.')}`,
-                }
-              : m,
-          ),
-        )
-      } finally {
-        chat.setLoading(false)
-      }
-    },
-    [chat, createStyle],
-  )
-
   const handleWriteSend = useCallback(async () => {
-    const input = chat.input.trim()
-    if (!input && chatMode !== 'read') {
-      chat.sendMessage()
-      return
-    }
     await handleModeSend(readFileData)
-  }, [chatMode, readFileData, chat, handleModeSend])
+  }, [readFileData, handleModeSend])
 
   const handleToggleBookmark = useCallback(
     (messageId: string) => {
@@ -614,13 +515,6 @@ export function useChatPageController(
     [chat, showToast],
   )
 
-  // Open voice overlay when Talk mode is selected
-  useEffect(() => {
-    if (chatMode === 'talk') {
-      ui.setVoiceMode(true)
-    }
-  }, [chatMode, ui])
-
   const onSaveNote = useCallback(
     (note: string) => {
       if (noteDialogMessageId) {
@@ -679,26 +573,6 @@ export function useChatPageController(
     agents,
     vision,
     engine,
-    chatMode,
-    setChatMode,
-    writeTone,
-    setWriteTone,
-    writeType,
-    setWriteType,
-    rewriteStyle,
-    setRewriteStyle,
-    decideStructure,
-    setDecideStructure,
-    explainDifficulty,
-    setExplainDifficulty,
-    translateLangPair,
-    setTranslateLangPair,
-    brainstormTopic,
-    setBrainstormTopic,
-    wellnessType,
-    setWellnessType,
-    createStyle,
-    setCreateStyle,
     bookmarks,
     removeBookmark,
     clearAll,

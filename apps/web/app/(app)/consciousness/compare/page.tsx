@@ -356,7 +356,7 @@ export default function ConsciousnessComparePage() {
                         y="58"
                         textAnchor="middle"
                         className="fill-muted-foreground"
-                        fontSize="6"
+                        fontSize="11"
                       >
                         {t('consciousness_compare.out_of_100')}
                       </text>
@@ -483,7 +483,7 @@ export default function ConsciousnessComparePage() {
                       x={x + barWidth + 2}
                       y={155}
                       textAnchor="middle"
-                      fontSize="7"
+                      fontSize="11"
                       className="fill-muted-foreground"
                     >
                       {m.label.length > 10 ? m.label.slice(0, 10) + '…' : m.label}
@@ -492,7 +492,7 @@ export default function ConsciousnessComparePage() {
                       x={x + barWidth / 2}
                       y={138 - hA}
                       textAnchor="middle"
-                      fontSize="7"
+                      fontSize="11"
                       className="fill-foreground"
                     >
                       {m.valueA.toFixed(1)}
@@ -501,7 +501,7 @@ export default function ConsciousnessComparePage() {
                       x={x + barWidth + 4 + barWidth / 2}
                       y={138 - hB}
                       textAnchor="middle"
-                      fontSize="7"
+                      fontSize="11"
                       className="fill-foreground"
                     >
                       {m.valueB.toFixed(1)}
@@ -601,7 +601,7 @@ export default function ConsciousnessComparePage() {
                       textAnchor="middle"
                       dominantBaseline="middle"
                       className="fill-muted-foreground"
-                      fontSize="7"
+                      fontSize="11"
                     >
                       {dim.slice(0, 3).toUpperCase()}
                     </text>

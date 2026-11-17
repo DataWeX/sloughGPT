@@ -21,6 +21,7 @@ No fake fields.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import fields as dc_fields
 
 import numpy as np
@@ -31,6 +32,7 @@ from domain.training._internal.trace import (
     STEP_TRACE_FIELDS,
     STEP_TRACE_VERSION,
     StepTrace,
+    fingerprint_array,
     fingerprint_batch,
 )
 
@@ -101,6 +103,53 @@ class TestFingerprintBatch:
 
     def test_digest_length(self):
         assert len(fingerprint_batch(np.zeros(4, dtype=np.float32))) == 16
+
+
+class TestFingerprintArray:
+    """``fingerprint_array`` is the dataset-identity hash (card 20261104_081626).
+
+    Same contract as ``fingerprint_batch`` — deterministic, content-addressed,
+    layout-normalised — but sized as a long-lived identity (64 hex chars) and
+    chunked so hashing a whole corpus never copies it.
+    """
+
+    def test_deterministic_for_identical_input(self):
+        a = np.arange(4096, dtype=np.int64)
+        assert fingerprint_array(a) == fingerprint_array(a.copy())
+
+    def test_discriminates_changed_content(self):
+        a = np.arange(4096, dtype=np.int64)
+        b = a.copy()
+        b[2000] = -1
+        assert fingerprint_array(a) != fingerprint_array(b)
+
+    def test_noncontiguous_input_matches_contiguous(self):
+        a = np.arange(48, dtype=np.int64).reshape(6, 8)
+        assert fingerprint_array(a.T) == fingerprint_array(np.ascontiguousarray(a.T))
+
+    def test_digest_length_is_64_hex(self):
+        assert len(fingerprint_array(np.zeros(4, dtype=np.int64))) == 64
+
+    def test_empty_array_still_hashes(self):
+        assert len(fingerprint_array(np.array([], dtype=np.int64))) == 64
+
+    def test_chunked_matches_unchunked_reference(self):
+        """The chunk loop must not change the digest — same bytes, same hash.
+
+        ``fingerprint_batch`` hashes with a single ``tobytes()`` copy; the
+        dataset hash cannot afford that on a large corpus, so it streams. If
+        the stream ever disagrees with the one-shot digest, every recorded
+        signature silently changes and equivalence lookups break.
+        """
+        a = np.arange(300_000, dtype=np.int64)  # 2.4 MB — crosses the chunk size
+        expected = hashlib.blake2b(np.ascontiguousarray(a).tobytes(), digest_size=32).hexdigest()
+        assert fingerprint_array(a) == expected
+
+    def test_dtype_matters(self):
+        """int64 token ids and the same values as int32 are different bytes."""
+        a = np.arange(64, dtype=np.int64)
+        b = np.arange(64, dtype=np.int32)
+        assert fingerprint_array(a) != fingerprint_array(b)
 
 
 # ---------------------------------------------------------------------------

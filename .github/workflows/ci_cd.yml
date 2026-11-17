@@ -49,15 +49,21 @@ jobs:
       # first-party classification probing a machine-local domain symlink.
       # Fixed declaratively: known-first-party = ["domain"] in pyproject.toml.
       - run: pip install ruff==0.16.8 mypy
+      # Ruff lint covers the WHOLE tree (card 20261102_031702): pre-commit
+      # formats only staged files, so anything outside these trees silently
+      # fell behind (a real I001 in scripts/finetune_gpt2.py survived the old
+      # 2-tree gate). Fresh measurement at the widening (ruff 0.16.8): check 1
+      # error, format 46 files — both cleared in the same commit.
       - name: Ruff lint
         run: |
           ruff --version
-          ruff check domain/ apps/api/server/ --exclude '__pycache__'
+          ruff check domain journeys packages apps scripts tests --exclude '__pycache__'
       # domain/ + cli.py joined the format gate with card 20261106_071811
       # (their 23 drifted files are formatted in the same commit); the check
       # line already covered domain/, only the format verdict lagged.
+      # Card 20261102_031702 widened the remaining trees the same way.
       - name: Ruff format check
-        run: ruff format --check domain/ cli.py apps/api/server/ --exclude '__pycache__'
+        run: ruff format --check domain journeys packages apps scripts tests cli.py --exclude '__pycache__'
       - name: Mypy type check
         run: mypy domain/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
       # Build-context rot: a COPY source that is missing, or excluded by

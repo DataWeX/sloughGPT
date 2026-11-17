@@ -745,13 +745,7 @@ def seeded_peer_cache(tmp_path, monkeypatch):
     import os as _os
 
     hf_home = tmp_path / "hf"
-    snap = (
-        hf_home
-        / "hub"
-        / f"models--{_PEER_MODEL.replace('/', '--')}"
-        / "snapshots"
-        / _COMMIT
-    )
+    snap = hf_home / "hub" / f"models--{_PEER_MODEL.replace('/', '--')}" / "snapshots" / _COMMIT
     snap.mkdir(parents=True)
     refs = snap.parent.parent / "refs"
     refs.mkdir()

@@ -7,15 +7,27 @@ import type { ChatInputProps } from './../input/ChatInput'
 import type { ChatMessage } from './../types'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
-import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 import { cn } from '@sloughgpt/strui'
 
-export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onCancel' | 'onAudioRecorded' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
+export interface ChatAreaProps extends Pick<
+  ChatInputProps,
+  | 'value'
+  | 'onChange'
+  | 'onSend'
+  | 'images'
+  | 'onStop'
+  | 'onCancel'
+  | 'onAudioRecorded'
+  | 'onAudioTranscript'
+  | 'onGeneratedImage'
+  | 'onPDFAnalysis'
+  | 'onPDFError'
+  | 'onExecuteCommand'
+> {
   messages: ChatMessage[]
   loading: boolean
   sessionLoading?: boolean
   health: ApiHealthSnapshot
-  chatMode?: ChatMode
   suggestions?: { text: string; icon: string }[]
   toolEvents?: ToolCallEvent[]
   streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
@@ -31,14 +43,16 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: (fromMessageId?: string) => void
-  onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
+  onRegenerateWithOptions?: (
+    messageId: string,
+    options: { temperature?: number; maxTokens?: number },
+  ) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
   onReact?: (messageId: string, emoji: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
-  onModeSelect?: (mode: string) => void
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
   className?: string
@@ -49,7 +63,11 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
   temperature?: number
-  contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
+  contextLayers?: Array<{
+    type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'
+    label: string
+    detail?: string
+  }>
   noteMap?: Record<string, string>
   onAddNote?: (messageId: string) => void
   onPin?: (messageId: string) => void
@@ -65,66 +83,71 @@ export interface ChatAreaRef {
   scrollToBottom: () => void
 }
 
-export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
-  function ChatArea({
-    messages,
-    loading,
-    sessionLoading,
-    health,
-    chatMode,
-    suggestions,
-    toolEvents,
-    ragVerification,
-    onRefreshHealth,
-    onCopy,
-    onRegenerate,
-    onRegenerateWithOptions,
-    onThumbsUp,
-    onThumbsDown,
-    onEdit,
-    onReact,
-    searchQuery,
-    onSuggestionClick,
-    onModeSelect,
-    images,
-    onAddImage,
-    onRemoveImage,
-    onAudioRecorded,
-    onAudioTranscript,
-    onGeneratedImage,
-    className,
-    model,
-    isBookmarked,
-    onBookmark,
-    onDelete,
-    onSaveToKnowledge,
-    collapsibleLength,
-    temperature,
-    contextLayers,
-    noteMap,
-    onAddNote,
-    onPin,
-    selectionMode,
-    selectedMessageIds,
-    onToggleSelection,
-    hasThread,
-    onThread,
-    streamingStatus,
-    streamingToolName,
-    ...inputProps
-  }, ref) {
-    const filteredMessages = useMemo(() => searchQuery
-      ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-      : messages, [messages, searchQuery])
+export const ChatArea = memo(
+  forwardRef<ChatAreaRef, ChatAreaProps>(function ChatArea(
+    {
+      messages,
+      loading,
+      sessionLoading,
+      health,
+      suggestions,
+      toolEvents,
+      ragVerification,
+      onRefreshHealth,
+      onCopy,
+      onRegenerate,
+      onRegenerateWithOptions,
+      onThumbsUp,
+      onThumbsDown,
+      onEdit,
+      onReact,
+      searchQuery,
+      onSuggestionClick,
+      images,
+      onAddImage,
+      onRemoveImage,
+      onAudioRecorded,
+      onAudioTranscript,
+      onGeneratedImage,
+      className,
+      model,
+      isBookmarked,
+      onBookmark,
+      onDelete,
+      onSaveToKnowledge,
+      collapsibleLength,
+      temperature,
+      contextLayers,
+      noteMap,
+      onAddNote,
+      onPin,
+      selectionMode,
+      selectedMessageIds,
+      onToggleSelection,
+      hasThread,
+      onThread,
+      streamingStatus,
+      streamingToolName,
+      ...inputProps
+    },
+    ref,
+  ) {
+    const filteredMessages = useMemo(
+      () =>
+        searchQuery
+          ? messages.filter((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+          : messages,
+      [messages, searchQuery],
+    )
 
     // Virtuoso handles scroll via followOutput="smooth" — no manual scroll management needed.
     // Expose a no-op scrollToBottom for backward compatibility.
     useImperativeHandle(ref, () => ({
-      scrollToBottom: () => {}
+      scrollToBottom: () => {},
     }))
 
     return (
-      <div className={cn("flex flex-col flex-1 min-h-0", className)}>
+      <div className={cn('flex flex-col flex-1 min-h-0', className)}>
         <ChatScreen
           messages={filteredMessages}
           loading={loading}
@@ -142,7 +165,6 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
           onPin={onPin}
           searchQuery={searchQuery}
           onSuggestionClick={onSuggestionClick}
-          onModeSelect={onModeSelect}
           toolEvents={toolEvents}
           ragVerification={ragVerification}
           isBookmarked={isBookmarked}
@@ -167,7 +189,6 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
           streamingStatus={streamingStatus}
           streamingToolName={streamingToolName}
           health={health}
-          chatMode={chatMode}
           images={images}
           onAddImage={onAddImage}
           onRemoveImage={onRemoveImage}
@@ -177,5 +198,5 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
         />
       </div>
     )
-  }
-))
+  }),
+)

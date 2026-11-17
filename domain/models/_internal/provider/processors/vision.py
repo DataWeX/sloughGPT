@@ -7,6 +7,8 @@ import io
 import logging
 import re
 
+from ..vision import MULTIMODAL, get_vision_model_name, get_vision_provider
+
 # module-level imports (was inside _caption)
 try:
     from PIL import Image
@@ -20,12 +22,19 @@ logger = logging.getLogger("slo.models.provider")
 
 
 class VisionProcessor:
-    """Extracts images, captions via vision provider, injects as text."""
+    """Extracts images, captions via vision provider, injects as text.
+
+    The provider name defaults to the configured vision model
+    (``config.vision.model``, env ``SLO_VISION__MODEL``) at construction;
+    an explicit name always wins.
+    """
 
     __slots__ = ("_provider_name",)
 
-    def __init__(self, provider_name: str = "multimodal"):
-        self._provider_name = provider_name
+    def __init__(self, provider_name: str | None = None):
+        self._provider_name = (
+            provider_name if provider_name is not None else get_vision_model_name()
+        )
 
     def _extract_images(self, messages: list) -> list:
         images = []
@@ -42,29 +51,12 @@ class VisionProcessor:
         return images
 
     def _ensure_provider(self) -> bool:
-        from ..registry import get_provider
-
-        if get_provider(self._provider_name) is not None:
-            return True
-        try:
-            from domain.multimodal._internal.manager import (
-                get_multimodal_manager,
-                initialize_multimodal,
-            )
-
-            initialize_multimodal()
-            mgr = get_multimodal_manager()
-            if hasattr(mgr, "initialize"):
-                mgr.initialize(vision_model="slonet")
-            return get_provider(self._provider_name) is not None
-        except Exception as e:
-            logger.warning("Failed to init multimodal: %s", e, extra={"tag": "MODEL"})
-            return False
+        # Resolver: registry lookup for the configured name; the lazy
+        # multimodal init happens only for the built-in backend itself.
+        return get_vision_provider(name=self._provider_name, init=True) is not None
 
     async def _caption(self, img_data: str) -> str:
-        from ..registry import get_provider
-
-        vision = get_provider(self._provider_name)
+        vision = get_vision_provider(name=self._provider_name)
         if vision is not None:
             try:
                 msg = [
@@ -80,6 +72,15 @@ class VisionProcessor:
                     return text.strip()
             except Exception as e:
                 logger.debug("Vision chat_stream caption failed: %s", e)
+        if self._provider_name != MULTIMODAL:
+            # A non-multimodal provider never silently borrows the built-in
+            # backend — honest placeholder instead of the wrong model's words.
+            logger.warning(
+                "Vision provider %r unavailable, image not captioned",
+                self._provider_name,
+                extra={"tag": "MODEL"},
+            )
+            return "[image]"
         try:
             clean = img_data.split(",")[1] if "," in img_data else img_data
             if not _has_pil:

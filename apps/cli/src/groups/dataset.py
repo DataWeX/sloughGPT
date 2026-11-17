@@ -18,6 +18,7 @@ def register(cli):
     @click.pass_context
     def dataset_list(ctx):
         from commands.data import cmd_datasets
+
         cmd_datasets(_ns(json_output=ctx.obj.get("json")))
 
     @dataset.command("stats", help="Show dataset statistics")
@@ -25,6 +26,7 @@ def register(cli):
     @click.pass_context
     def dataset_stats(ctx, name):
         from commands.data import cmd_dataset_stats
+
         args = _ns(name=name, json_output=ctx.obj.get("json"))
         cmd_dataset_stats(args)
 
@@ -35,6 +37,7 @@ def register(cli):
     @click.pass_context
     def dataset_search(ctx, query, limit, source):
         from commands.data import cmd_dataset_search
+
         args = _ns(query=query, limit=limit, source=source, json_output=ctx.obj.get("json"))
         cmd_dataset_search(args)
 
@@ -44,7 +47,11 @@ def register(cli):
     @click.argument("name", required=False)
     def dataset_import(source, identifier, name):
         from commands.data import cmd_dataset_import
-        args = _ns(**({"url": identifier} if source in ("github", "url") else {"dataset_id": identifier}), name=name)
+
+        args = _ns(
+            **({"url": identifier} if source in ("github", "url") else {"dataset_id": identifier}),
+            name=name,
+        )
         cmd_dataset_import(args, source)
 
     @dataset.command("export", help="Export dataset to zip")
@@ -52,6 +59,7 @@ def register(cli):
     @click.option("--output", "-o", help="Output zip file")
     def dataset_export(name, output):
         from commands.data import cmd_dataset_export
+
         args = _ns(name=name, output=output)
         cmd_dataset_export(args)
 
@@ -59,12 +67,14 @@ def register(cli):
     @click.argument("path")
     def dataset_validate(path):
         from commands.data import cmd_data_tool
+
         cmd_data_tool(_ns(path=path), "validate")
 
     @dataset.command("info", help="Show file or directory statistics")
     @click.argument("path")
     def dataset_info(path):
         from commands.data import cmd_data_tool
+
         cmd_data_tool(_ns(path=path), "stats")
 
     return dataset

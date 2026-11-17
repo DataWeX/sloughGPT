@@ -3,23 +3,25 @@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { DatasetImportDialog } from '@/components/DatasetImportDialog'
-import { isTrainingCorpus } from '@/lib/dataset-controller'
+import { isTrainingCorpus, isDatasetEmpty } from '@/lib/dataset-controller'
 import type { Dataset } from '@/lib/dataset-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 
 export function datasetLabel(ds: Dataset): string {
   const hasSize = ds.size != null && Number.isFinite(ds.size) && ds.size > 0
-  const size = hasSize ? `${(ds.size / 1024).toFixed(1)} KB` : ''
+  const empty = isDatasetEmpty(ds)
   const parts: string[] = [ds.name]
 
-  if (ds.type === 'vlm' && ds.vlm_metadata) {
+  if (empty) {
+    parts.push('empty — no text')
+  } else if (ds.type === 'vlm' && ds.vlm_metadata) {
     parts.push('VLM', `${ds.vlm_metadata.image_count} images`)
   } else if (ds.samples && ds.samples > 0) {
     parts.push(`${ds.samples.toLocaleString()} samples`)
   }
 
   if (ds.source) parts.push(ds.source)
-  if (size) parts.push(size)
+  if (!empty && hasSize) parts.push(`${(ds.size / 1024).toFixed(1)} KB`)
 
   return parts.join(' · ')
 }

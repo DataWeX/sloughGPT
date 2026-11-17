@@ -5,6 +5,7 @@ Public API:
     EventBus, get_event_bus
     LifecycleManager, LifecyclePhase
     AppError, ErrorCode
+    SloughInstance (lazy — embeddable core facade, card 20261116_095706)
 """
 
 from __future__ import annotations
@@ -58,6 +59,11 @@ _LAZY_IMPORTS = {
     # routers/souls.py, …) bypass this entry; AppError is already eager here.
     "get_model_registry": ("._internal.model_registry", "get_model_registry"),
     "get_server_state": ("._internal.server_state", "get_server_state"),
+    # Embeddable core facade (card 20261116_095706) — lazy so importing the
+    # barrel for route-surface reads never pulls the instance/lifecycle
+    # machinery onto the cold-start path.
+    "SloughInstance": ("._internal.instance", "SloughInstance"),
+    "create_instance": ("._internal.instance", "create_instance"),
 }
 
 
@@ -100,4 +106,7 @@ __all__ = [
     # Route-surface reads (card 20261101_140447)
     "get_model_registry",
     "get_server_state",
+    # Embeddable core facade (card 20261116_095706)
+    "SloughInstance",
+    "create_instance",
 ]

@@ -344,7 +344,9 @@ def bench_upload(port: int, size_mib: float = 10.0, rounds: int = 5) -> dict:
     chunk fails the row instead of skewing it.
     """
     payload = b"u" * int(size_mib * 1024 * 1024)
-    head = f"POST /upload HTTP/1.1\r\nHost: bench\r\nContent-Length: {len(payload)}\r\n\r\n".encode()
+    head = (
+        f"POST /upload HTTP/1.1\r\nHost: bench\r\nContent-Length: {len(payload)}\r\n\r\n".encode()
+    )
     lat: list[float] = []
     for _ in range(rounds):
         conn = socket.create_connection(("127.0.0.1", port), timeout=30)

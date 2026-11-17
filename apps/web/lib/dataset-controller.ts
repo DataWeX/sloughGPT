@@ -78,6 +78,22 @@ export function isTrainingCorpus(ds: Pick<Dataset, 'kind'>): boolean {
   return ds.kind == null || ds.kind === 'dataset'
 }
 
+/**
+ * Empty import: no training text inside (metadata-only Gutenberg stub,
+ * weights-only dir). Card 20261115_081635_ux…: a 221 B `_info.txt` sidecar
+ * must surface as "empty", never as a ready dataset. VLM/visual entries
+ * hold images rather than text — emptiness here is about training text,
+ * so they never count as empty.
+ */
+export function isDatasetEmpty(
+  ds: Pick<Dataset, 'size' | 'samples' | 'has_corpus' | 'type'>,
+): boolean {
+  if (ds.type === 'vlm' || ds.type === 'visual') return false
+  if (ds.samples != null && ds.samples > 0) return false
+  if (ds.has_corpus === false) return true
+  return !(ds.size != null && Number.isFinite(ds.size) && ds.size > 0)
+}
+
 /** Chip/select label: normalize separators, strip storage-backend suffixes, title-case. */
 export function humanizeDatasetName(name: string): string {
   const normalized = name

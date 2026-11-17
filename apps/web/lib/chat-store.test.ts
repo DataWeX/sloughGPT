@@ -15,11 +15,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { streamChatResponse } from '@/lib/stream-chat-response'
 import { chatController } from '@/lib/chat-controller'
 import { chatDB } from '@/lib/db'
-import { useChatStore, type ChatConfig } from './chat-store'
+import { useChatStore, streamAbortRef, type ChatConfig } from './chat-store'
+import { exportConversationAsMarkdown, copyConversationAsMarkdown } from '@/lib/chat-utils'
 
 vi.mock('@/lib/stream-chat-response', () => ({
   streamChatResponse: vi.fn(),
 }))
+
+// Export/copy markdown touch the DOM — spy on them, keep the real pure helpers
+// (cleanStreamedContent, buildLocalPrompt, …) that the store also imports.
+vi.mock('@/lib/chat-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/chat-utils')>()
+  return {
+    ...actual,
+    exportConversationAsMarkdown: vi.fn(),
+    copyConversationAsMarkdown: vi.fn(async () => true),
+  }
+})
 
 vi.mock('@/lib/chat-controller', () => ({
   chatController: {
@@ -41,6 +53,16 @@ vi.mock('@/lib/multimodal-controller', () => ({
     trainImage: vi.fn(async () => ({})),
     getCapabilities: vi.fn(async () => ({})),
     getTrainingReport: vi.fn(async () => ({ caption_history: [], vocab_size: 0 })),
+  },
+}))
+
+// loadSession merges via chat-merge → sessionController.fetchMessages.
+// Unmocked, that would issue a real HTTP request from the node test env.
+vi.mock('@/lib/session-controller', () => ({
+  sessionController: {
+    fetchMessages: vi.fn(async () => []),
+    list: vi.fn(async () => []),
+    saveContext: vi.fn(async () => {}),
   },
 }))
 
@@ -105,6 +127,8 @@ const makeConfig = (): ChatConfig => ({
   recordFeedback: vi.fn(async () => true),
   onVisionUpdate: vi.fn(),
   onKnowledgeUpdate: vi.fn(),
+  saveSessionToStorage: vi.fn(async () => {}),
+  renameSession: vi.fn(async () => {}),
 })
 
 const saveSessionContext = vi.mocked(chatController.saveSessionContext)
@@ -242,5 +266,91 @@ describe('init() does not race the controller bridge (split-brain)', () => {
 
     expect(useChatStore.getState().sessionId).toBe('sess-9')
     expect(useChatStore.getState().messages).toEqual([])
+  })
+})
+
+/**
+ * Stage 3 — ONE send pipeline (card 20261116_130540).
+ *
+ * The controller-era duplicate lived in useChatMessages; the store now owns
+ * send/regenerate end to end. These tests pin the parity that made the flip
+ * safe: hook-owned session-list writes go through the config seam, the single
+ * stream AbortController is wired, and onMeta/export/copy landed with the move.
+ */
+describe('stage 3 — send pipeline parity', () => {
+  it('send persists via the hook-owned saveSessionToStorage seam and auto-names via renameSession', async () => {
+    await useChatStore.getState().sendMessage('a brand new conversation')
+    const config = useChatStore.getState()._config!
+
+    expect(config.saveSessionToStorage).toHaveBeenCalled()
+    const [msgs, sid] = vi.mocked(config.saveSessionToStorage).mock.calls[0]
+    expect(sid).toBe('sess-1')
+    expect(msgs).toHaveLength(2)
+    expect(msgs[0]).toMatchObject({ role: 'user', content: 'a brand new conversation' })
+    expect(msgs[1]).toMatchObject({ role: 'assistant' })
+
+    // First message in an empty thread → auto-name through the SAME seam
+    // (the hook refreshes its sidebar list from renameSession).
+    expect(config.renameSession).toHaveBeenCalledWith('sess-1', 'a brand new conversation')
+
+    // The raw name-wiping writer must never come back: no chatDB.saveSession
+    // with `name: ''` from the send path.
+    const rawSaves = vi
+      .mocked(chatDB.saveSession)
+      .mock.calls.filter(([session]) => session?.name === '')
+    expect(rawSaves).toHaveLength(0)
+  })
+
+  it('stop() aborts the live stream controller — the one streamAbortRef', () => {
+    const controller = new AbortController()
+    streamAbortRef.current = controller
+
+    useChatStore.getState().stop()
+
+    expect(controller.signal.aborted).toBe(true)
+    expect(streamAbortRef.current).toBeNull()
+  })
+
+  it('sendMessage wires streamAbortRef and clears it when the stream settles', async () => {
+    streamAbortRef.current = null
+    await useChatStore.getState().sendMessage('abort wiring')
+    expect(streamAbortRef.current).toBeNull()
+  })
+
+  it('applies onMeta metrics to the streamed message', async () => {
+    vi.mocked(streamChatResponse).mockImplementation(async (params) => {
+      params.onToken('hi')
+      params.onMeta?.({ tokens: 2, latency_ms: 10 } as never)
+      params.onComplete()
+    })
+    await useChatStore.getState().sendMessage('meta please')
+    const live = useChatStore.getState().messages
+    expect(live).toHaveLength(2)
+    expect(live[1].metrics).toEqual({ tokens: 2, latency_ms: 10 })
+  })
+
+  it('handleCopy / handleExportMarkdown / handleCopyMarkdown act on live store messages', async () => {
+    useChatStore.setState({
+      messages: [{ id: 'm1', role: 'user', content: 'hello', timestamp: new Date() }],
+    })
+    const config = useChatStore.getState()._config!
+
+    useChatStore.getState().handleCopy()
+    expect(config.showToast).toHaveBeenCalledWith('Copied to clipboard')
+
+    useChatStore.getState().handleExportMarkdown()
+    expect(exportConversationAsMarkdown).toHaveBeenCalledWith(useChatStore.getState().messages)
+
+    await useChatStore.getState().handleCopyMarkdown()
+    expect(copyConversationAsMarkdown).toHaveBeenCalledWith(useChatStore.getState().messages)
+    expect(config.showToast).toHaveBeenCalledWith('Copied to clipboard', 'success')
+  })
+
+  it('stop() is a no-op-safe reset even without a live controller', () => {
+    streamAbortRef.current = null
+    useChatStore.setState({ loading: true, streamingMessageId: 'x', pendingToolApproval: null })
+    useChatStore.getState().stop()
+    expect(useChatStore.getState().loading).toBe(false)
+    expect(useChatStore.getState().streamingMessageId).toBeNull()
   })
 })

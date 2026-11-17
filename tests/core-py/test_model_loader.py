@@ -586,3 +586,171 @@ class TestModelLoaderSoulResolution:
         assert result.metrics["soul_path"].endswith("sloughgpt.soul")
         assert result.metrics["matched_by"] == "name"
         assert len(calls) == 1
+
+
+class TestDatasetSignatureJourney:
+    """The card's actual journey: train → save → ``dataset:<sig>`` resolves.
+
+    Everything else in this file feeds ``_write_identity_soul`` synthetic
+    signatures. This is the only test that produces a signature through the
+    REAL trainer and then asks the loader to find that artifact by it — the
+    round trip the producer half (train_pipeline) and consumer half
+    (``_same_model``) must agree on.
+    """
+
+    JOURNEY_TEXT = (
+        "the quick brown fox jumps over the lazy dog and runs across the meadow "
+        "again and again while the dog sleeps soundly in the warm sun all day long. "
+        "pack my box with five dozen liquor jugs sphinx of black quartz judge my vow "
+    ) * 3
+
+    @staticmethod
+    def _train_and_save(tmp_path: Path) -> tuple[str, Path]:
+        """Train a tiny model for real, save it, return (signature, path)."""
+        from domain.inference._internal.slo_format import read_soul_identity
+        from domain.training._internal.train_pipeline import (
+            SloughGPTTrainer,
+            TrainerConfig,
+        )
+
+        corpus = tmp_path / "journey.txt"
+        corpus.parent.mkdir(parents=True, exist_ok=True)
+        corpus.write_text(TestDatasetSignatureJourney.JOURNEY_TEXT, encoding="utf-8")
+
+        cfg = TrainerConfig(
+            vocab_size=0,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=8,
+            dropout=0.0,
+            batch_size=2,
+            epochs=1,
+            max_steps=3,  # a real (tiny) training run, not just a save
+            gradient_accumulation_steps=1,
+            checkpoint_dir=str(tmp_path / "ckpts"),
+            log_interval=1,
+            eval_interval=1000,
+            checkpoint_interval=1000,
+            warmup_steps=1,
+            min_lr=1e-5,
+            max_checkpoints=5,
+            scheduler_type="cosine",
+        )
+        trainer = SloughGPTTrainer(str(corpus), config=cfg)
+        trainer.train()
+
+        out = tmp_path / "ckpts" / "journey"
+        trainer.save(str(out))
+        soul = Path(str(out) + ".soul")
+
+        identity = read_soul_identity(str(soul))
+        signature = identity.get("dataset_signature", "")
+        assert signature, "trainer must have recorded a signature"
+        assert len(signature) == 64
+        assert identity.get("base_model") == "sloughgpt"
+        return signature, soul
+
+    def test_trained_artifact_resolves_by_dataset_signature(self, tmp_path, monkeypatch):
+        signature, soul = self._train_and_save(tmp_path)
+
+        # Place the REAL artifact where the loader scans.
+        native = TestModelLoaderSoulResolution._native(tmp_path)
+        native.joinpath(soul.name).write_bytes(soul.read_bytes())
+
+        loader, calls = TestModelLoaderSoulResolution._loader(tmp_path, monkeypatch)
+        result = loader.load(f"dataset:{signature}", verify=False)
+
+        assert result.success, result.error
+        assert result.metrics["matched_by"] == "dataset"
+        assert result.metrics["dataset_signature"] == signature
+        assert len(calls) == 1
+
+    def test_family_alias_resolves_for_equivalent_retrains(self, tmp_path, monkeypatch):
+        """Two runs over one corpus are interchangeable — alias must accept.
+
+        This is the journey the card says is broken today: family aliases
+        refuse because every recorded signature is ``""``.
+        """
+        sig_a, soul_a = self._train_and_save(tmp_path / "run-a")
+        sig_b, soul_b = self._train_and_save(tmp_path / "run-b")
+        assert sig_a == sig_b, "same corpus must yield the same signature"
+
+        native = TestModelLoaderSoulResolution._native(tmp_path)
+        native.joinpath("run-a.soul").write_bytes(soul_a.read_bytes())
+        native.joinpath("run-b.soul").write_bytes(soul_b.read_bytes())
+
+        loader, calls = TestModelLoaderSoulResolution._loader(tmp_path, monkeypatch)
+        result = loader.load("sloughgpt", verify=False)
+
+        assert result.success, result.error
+        assert result.metrics["candidate_count"] == 2
+        assert len(calls) == 1
+
+    def test_signature_is_not_the_path(self, tmp_path, monkeypatch):
+        """The same corpus under a different filename keeps its signature."""
+        sig_a, _ = self._train_and_save(tmp_path / "first")
+
+        other = tmp_path / "second"
+        other.mkdir(parents=True)
+        (other / "journey.txt").write_text(self.JOURNEY_TEXT, encoding="utf-8")
+
+        from domain.training._internal.train_pipeline import (
+            SloughGPTTrainer,
+            TrainerConfig,
+        )
+
+        cfg = TrainerConfig(
+            vocab_size=0,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=8,
+            dropout=0.0,
+            batch_size=2,
+            epochs=1,
+            max_steps=None,
+            checkpoint_dir=str(other / "ckpts"),
+            log_interval=1,
+            eval_interval=1000,
+            checkpoint_interval=1000,
+            warmup_steps=1,
+            min_lr=1e-5,
+            max_checkpoints=5,
+            scheduler_type="cosine",
+        )
+        trainer = SloughGPTTrainer(str(other / "journey.txt"), config=cfg)
+        assert trainer.dataset_signature == sig_a, "signature must follow content, not location"
+
+    def test_backfilled_legacy_soul_resolves_by_dataset(self, tmp_path, monkeypatch):
+        """A pre-card soul (no signature) → back-fill → loader resolves it.
+
+        The repair journey end to end: strip the signature to simulate a soul
+        saved before card 20261104_081626, back-fill it from its recorded
+        training_dataset, then prove the loader finds the artifact by
+        ``dataset:<sig>`` — the lookup the gap was blocking.
+        """
+        signature, soul = self._train_and_save(tmp_path)
+
+        from domain.inference._internal.slo_format import (
+            read_soul_identity,
+            update_soul_identity_fields,
+        )
+        from domain.training._internal.train_pipeline import (
+            backfill_soul_dataset_signature,
+        )
+
+        update_soul_identity_fields(str(soul), {"dataset_signature": ""})
+        assert read_soul_identity(str(soul)).get("dataset_signature") == ""
+
+        result = backfill_soul_dataset_signature(str(soul))
+        assert result["dataset_signature"] == signature  # back to the producer value
+
+        native = TestModelLoaderSoulResolution._native(tmp_path)
+        native.joinpath(soul.name).write_bytes(soul.read_bytes())
+
+        loader, calls = TestModelLoaderSoulResolution._loader(tmp_path, monkeypatch)
+        res = loader.load(f"dataset:{signature}", verify=False)
+        assert res.success, res.error
+        assert res.metrics["matched_by"] == "dataset"
+        assert len(calls) == 1

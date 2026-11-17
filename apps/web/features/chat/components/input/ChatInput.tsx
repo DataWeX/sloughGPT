@@ -11,36 +11,8 @@ import {
 } from '@/hooks/useConsciousnessStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import {
-  IconChat,
-  IconEdit,
-  IconBrain,
-  IconVision,
-  IconSearch,
-  IconBolt,
-  IconDocument,
-  IconMic,
-  IconSparkle,
-  cn,
-} from '@sloughgpt/strui'
-import { Waves } from 'lucide-react'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
-import { MODE_ACCENT, type ChatMode } from '@/features/chat/components/toolbar/ModeBar'
-
-const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
-  chat: { label: 'Chat', icon: <IconChat className="h-3 w-3" /> },
-  write: { label: 'Write', icon: <IconEdit className="h-3 w-3" /> },
-  rewrite: { label: 'Rewrite', icon: <IconSparkle className="h-3 w-3" /> },
-  translate: { label: 'Translate', icon: <IconVision className="h-3 w-3" /> },
-  brainstorm: { label: 'Brainstorm', icon: <IconBolt className="h-3 w-3" /> },
-  decide: { label: 'Decide', icon: <IconBrain className="h-3 w-3" /> },
-  explain: { label: 'Explain', icon: <IconSearch className="h-3 w-3" /> },
-  wellness: { label: 'Wellness', icon: <Waves className="h-3 w-3" /> },
-  create: { label: 'Create', icon: <IconVision className="h-3 w-3" /> },
-  read: { label: 'Read', icon: <IconDocument className="h-3 w-3" /> },
-  talk: { label: 'Talk', icon: <IconMic className="h-3 w-3" /> },
-}
 
 const HISTORY_KEY = 'chat-input-history'
 const MAX_HISTORY = 50
@@ -69,7 +41,6 @@ export interface ChatInputProps {
   streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
   streamingToolName?: string
   health: ApiHealthSnapshot
-  chatMode?: ChatMode
   images?: ImageAttachment[]
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
@@ -91,7 +62,6 @@ export const ChatInput = memo(function ChatInput({
   streamingStatus = 'generating',
   streamingToolName,
   health,
-  chatMode = 'chat',
   images = [],
   onAddImage,
   onRemoveImage,
@@ -232,9 +202,6 @@ export const ChatInput = memo(function ChatInput({
         : 'Loading model...'
   const hasContent = value.trim().length > 0 || images.length > 0
 
-  const modeConfig = MODE_CONFIG[chatMode] || MODE_CONFIG.chat
-  const isNonChatMode = chatMode !== 'chat'
-
   return (
     <section
       aria-label="Chat input"
@@ -259,20 +226,6 @@ export const ChatInput = memo(function ChatInput({
         )}
 
         <div className="relative">
-          {isNonChatMode && (
-            <div className="flex items-center gap-1.5 pb-1.5">
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border transition-colors',
-                  MODE_ACCENT,
-                )}
-              >
-                {modeConfig.icon}
-                {modeConfig.label}
-              </span>
-              <span className="text-xs text-muted-foreground/30">·</span>
-            </div>
-          )}
           <ChatInputRow
             value={value}
             onChange={onChange}
