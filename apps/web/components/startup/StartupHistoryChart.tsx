@@ -91,7 +91,13 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
             return (
               <div
                 key={`${record.timestamp}-${i}`}
-                className="flex-1 flex flex-col items-center gap-1 group"
+                // `h-full` gives the column a definite height so the bar's
+                // percentage below has a containing block to resolve against —
+                // without it the column is content-sized, the bar's `%` of an
+                // indefinite height collapses to 0, and the chart renders empty.
+                // `justify-end` restores the baseline the row's `items-end`
+                // previously provided once the column stops shrink-wrapping.
+                className="flex-1 h-full flex flex-col items-center justify-end gap-1 group"
               >
                 {/* Tooltip */}
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -mt-8 bg-term-header border border-white/[0.06] rounded px-2 py-1 text-[11px] font-mono text-term-text pointer-events-none z-10">
