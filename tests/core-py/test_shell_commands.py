@@ -381,6 +381,14 @@ class TestShellCommands:
         ShellCommands.train_quick("ds")
         assert calls["post"][0] == ("/training/quick", {"dataset": "ds", "name": None})
 
+    def test_train_curriculum(self, monkeypatch):
+        calls = _stub_api(monkeypatch, post_res={"job": "j"})
+        ShellCommands.train_curriculum("recipes/curriculum.json")
+        assert calls["post"][0] == (
+            "/training/curriculum",
+            {"curriculum": "recipes/curriculum.json"},
+        )
+
     def test_train_auto(self, monkeypatch):
         calls = _stub_api(monkeypatch, post_res={})
         ShellCommands.train_auto("soul", "gpt2", 10, "text", "d1")

@@ -2679,6 +2679,85 @@ class TestTrainCommands:
         out = capture_cmd(repl, repl._cmd_train, "hf gpt2")
         assert "Usage" in out
 
+    def test_train_curriculum_starts_job(self, repl):
+        from unittest.mock import MagicMock, PropertyMock, patch
+
+        repl.cmds = MagicMock()
+        repl.cmds.train_curriculum.return_value = {"id": "j1", "stages": 4}
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress") as stream,
+        ):
+            out = capture_cmd(repl, repl._cmd_train, "--curriculum recipes/curriculum.json")
+        repl.cmds.train_curriculum.assert_called_once_with("recipes/curriculum.json")
+        stream.assert_called_once_with("j1")
+        assert "Curriculum started" in out
+        assert "4 stages" in out
+        assert repl._last_exit_code == 0
+
+    def test_train_curriculum_missing_file_arg(self, repl):
+        from unittest.mock import MagicMock, PropertyMock, patch
+
+        repl.cmds = MagicMock()
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress"),
+        ):
+            out = capture_cmd(repl, repl._cmd_train, "--curriculum")
+        repl.cmds.train_curriculum.assert_not_called()
+        assert "Usage" in out
+
+    def test_train_curriculum_rejects_extra_args(self, repl):
+        """`train --curriculum <file> <dataset>` is a usage error, not a
+        silently-ignored dataset argument."""
+        from unittest.mock import MagicMock, PropertyMock, patch
+
+        repl.cmds = MagicMock()
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress"),
+        ):
+            out = capture_cmd(repl, repl._cmd_train, "--curriculum c.json shakespeare")
+        repl.cmds.train_curriculum.assert_not_called()
+        assert "Usage" in out
+
+    def test_train_curriculum_propagates_error(self, repl):
+        from unittest.mock import MagicMock, PropertyMock, patch
+
+        repl.cmds = MagicMock()
+        repl.cmds.train_curriculum.return_value = {"error": "bad curriculum"}
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress") as stream,
+        ):
+            out = capture_cmd(repl, repl._cmd_train, "--curriculum bad.json")
+        stream.assert_not_called()
+        assert "Error" in out and "bad curriculum" in out
+
 
 # ── logs export ──────────────────────────────────────────────────────
 

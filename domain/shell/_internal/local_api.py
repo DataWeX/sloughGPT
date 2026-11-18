@@ -28,10 +28,13 @@ import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs
 
 from domain.shared import find_repo_root
+
+if TYPE_CHECKING:
+    from domain.training._internal.train_pipeline import TrainerConfig
 
 logger = logging.getLogger("slo.shell.local_api")
 
@@ -700,6 +703,8 @@ def _job_summary(rec: dict[str, Any]) -> dict[str, Any]:
         "status": rec.get("status", "unknown"),
         "model": rec.get("model", "slonet"),
         "dataset": rec.get("dataset", ""),
+        "stage": rec.get("stage"),
+        "stages": rec.get("stages"),
         "progress": rec.get("progress", 0),
         "current_epoch": rec.get("current_epoch", 0),
         "epochs": rec.get("epochs", 0),
@@ -822,6 +827,92 @@ def _run_quick_training(job_id: str) -> None:
         _finish_job(job_id, "failed", error=str(e))
 
 
+def _curriculum_config() -> TrainerConfig:
+    """The local quick-train shape (``_TRAINER_DEFAULTS``) as a TrainerConfig.
+
+    Every key maps to a real ``TrainerConfig`` field (``lr`` →
+    ``learning_rate``); ``vocab_size=0`` keeps the corpus-derived vocab the
+    legacy quick path got by passing no config at all. A drift between the
+    two raises ``TypeError`` here rather than silently defaulting.
+    """
+    from domain.training._internal.train_pipeline import TrainerConfig
+
+    legacy = dict(_TRAINER_DEFAULTS)
+    legacy["learning_rate"] = legacy.pop("lr")
+    legacy["vocab_size"] = 0
+    return TrainerConfig(**legacy)
+
+
+def _run_curriculum_training(job_id: str) -> None:
+    """Executor target: run a staged curriculum over ONE trainer instance."""
+    from domain.training._internal.curriculum import (
+        StageGateError,
+        load_curriculum,
+        run_curriculum,
+    )
+
+    with _JOBS_LOCK:
+        rec = dict(_LOCAL_JOBS.get(job_id) or {})
+    cancel_event = rec.get("_cancel_event") or threading.Event()
+    pause_event = rec.get("_pause_event") or threading.Event()
+    curriculum_path = str(rec.get("curriculum") or "")
+
+    def on_progress(info: dict[str, Any]) -> None:
+        with _JOBS_LOCK:
+            r = _LOCAL_JOBS.get(job_id)
+            if r is None:
+                return
+            r["progress"] = int(float(info.get("progress_percent", r.get("progress", 0)) or 0))
+            if info.get("stage") is not None:
+                r["stage"] = info["stage"]
+            if info.get("stage_index") is not None:
+                r["current_epoch"] = int(info["stage_index"])
+            if info.get("stages_total") is not None:
+                r["epochs"] = int(info["stages_total"])
+            if info.get("global_step") is not None:
+                r["global_step"] = int(info["global_step"])
+            if info.get("train_loss") is not None:
+                r["train_loss"] = float(info["train_loss"])
+            if info.get("eval_loss") is not None:
+                r["eval_loss"] = float(info["eval_loss"])
+                r["loss"] = r["eval_loss"]
+            r["updated_at"] = time.time()
+
+    try:
+        curriculum = load_curriculum(curriculum_path)
+        report = run_curriculum(
+            curriculum,
+            config=_curriculum_config(),
+            on_progress=on_progress,
+            cancel_event=cancel_event,
+            pause_event=pause_event,
+        )
+        if cancel_event.is_set() or report.cancelled:
+            _finish_job(job_id, "cancelled")
+            return
+        with _JOBS_LOCK:
+            r = _LOCAL_JOBS.get(job_id)
+            if r is not None:
+                r["progress"] = 100
+                r["checkpoint"] = report.final_checkpoint
+                r["stages"] = [
+                    {
+                        "name": s.name,
+                        "passed": s.passed,
+                        "provisional": s.provisional,
+                        "gate_reason": s.gate_reason,
+                    }
+                    for s in report.stages
+                ]
+        _finish_job(job_id, "completed")
+    except StageGateError as e:
+        logger.warning("curriculum stage gate aborted %s: %s", job_id, e)
+        _finish_job(job_id, "failed", error=str(e))
+    except Exception as e:
+        logger.warning("local curriculum training failed for %s: %s", job_id, e)
+        _finish_job(job_id, "failed", error=str(e))
+
+
 @_route("POST", "/training/quick")
 def _post_training_quick(params, query, data):
     payload = data or {}
@@ -875,6 +966,76 @@ def _post_training_quick(params, query, data):
         "status": "running",
         "dataset": dataset,
         "data_path": str(dpath),
+    }
+
+
+@_route("POST", "/training/curriculum")
+def _post_training_curriculum(params, query, data):
+    """Start a staged curriculum run (one trainer, N stages, stage gates)."""
+    payload = data or {}
+    curriculum_path = str(payload.get("curriculum") or "").strip()
+    if not curriculum_path:
+        return {"error": "curriculum path is required", "error_type": "BadRequest"}
+
+    # Fail fast on a bad schema — before a job slot or a thread is spent.
+    try:
+        from domain.training._internal.curriculum import load_curriculum
+
+        curriculum = load_curriculum(curriculum_path)
+    except Exception as exc:
+        return {"error": str(exc), "error_type": "BadRequest"}
+
+    jid = f"job_{uuid.uuid4().hex[:8]}"
+    now = time.time()
+    rec: dict[str, Any] = {
+        "id": jid,
+        "name": f"curriculum-{Path(curriculum_path).stem}",
+        "model": "slonet",
+        "dataset": curriculum_path,
+        "curriculum": curriculum_path,
+        "data_path": "",
+        "status": "running",
+        "progress": 0,
+        "current_epoch": 0,
+        "epochs": len(curriculum.stages),
+        "stage": curriculum.stages[0].name,
+        "global_step": 0,
+        "train_loss": None,
+        "eval_loss": None,
+        "loss": None,
+        "started_at": now,
+        "updated_at": now,
+        "save_stem": (
+            re.sub(r"[^A-Za-z0-9._-]", "_", Path(curriculum_path).stem)[:120] or "curriculum"
+        ),
+        "_cancel_event": threading.Event(),
+        "_pause_event": threading.Event(),
+    }
+    with _JOBS_LOCK:
+        _LOCAL_JOBS[jid] = rec
+    try:
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+
+        mgr = get_cancel_manager()
+        mgr.register(
+            op_type=OpType.TRAINING,
+            label=rec["name"],
+            cancel_fn=rec["_cancel_event"].set,
+            meta={"job_id": jid, "source": "shell-local"},
+            op_id=jid,
+        )
+        mgr.start(jid)
+    except Exception as exc:
+        logger.debug("cancel_manager register failed: %s", exc)
+    from domain.training._internal.executor import get_training_executor
+
+    get_training_executor().submit(_run_curriculum_training, jid)
+    return {
+        "id": jid,
+        "job_id": jid,
+        "status": "running",
+        "curriculum": curriculum_path,
+        "stages": len(curriculum.stages),
     }
 
 
