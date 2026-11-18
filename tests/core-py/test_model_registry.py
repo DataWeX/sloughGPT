@@ -137,7 +137,6 @@ class TestGet:
 
 
 class TestDefaultId:
-
     def test_default_id_setter(self):
         reg = ModelRegistry()
         reg.register("m1", MagicMock(), MagicMock())

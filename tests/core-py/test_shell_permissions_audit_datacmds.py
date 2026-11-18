@@ -161,7 +161,6 @@ class TestShellPermissions:
         p = ShellPermissions()
         assert p.classify("chmod", "777 file") == Risk.CRITICAL
 
-
     def test_list_granted(self):
         p = ShellPermissions()
         p.grant("rm")

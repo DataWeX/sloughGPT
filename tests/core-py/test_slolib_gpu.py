@@ -1466,7 +1466,6 @@ class TestMetalBackendNumpy:
         backend = slib._MetalBackend()
         assert backend.is_available() is (sys.platform == "darwin")
 
-
     def test_metal_unavailable_when_mps_absent(self, monkeypatch):
         monkeypatch.setattr(
             "domain.infrastructure._internal.ml_types._mps_available", lambda: False
@@ -1493,7 +1492,6 @@ class TestMetalBackendNumpy:
         assert np.array_equal(backend.from_device(arr), arr)
         assert backend.from_device(arr) is not arr
         assert np.array_equal(backend.to_device([1, 2, 3]), np.asarray([1, 2, 3], dtype=np.float32))
-
 
     def test_metal_matmul(self):
         backend = slib._MetalBackend()

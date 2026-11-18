@@ -370,7 +370,6 @@ class TestSloVAE:
         assert decoded.min() >= 0.0
         assert decoded.max() <= 1.0
 
-
     def test_train_step_multiple_steps(self):
         vae = SloVAE(latent_dim=8)
         images = np.random.randn(1, 3, 32, 32).astype(np.float32) * 0.5 + 0.5
@@ -575,7 +574,6 @@ class TestSloVAEExtended:
         images = np.random.randn(1, 3, 32, 32).astype(np.float32) * 0.5 + 0.5
         result = vae.forward(images)
         assert len(result) == 3
-
 
     def test_loss_recon_part(self):
         vae = SloVAE(latent_dim=8)

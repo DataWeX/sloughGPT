@@ -379,7 +379,6 @@ class TestIdleManager:
         assert info["remaining_s"] <= 100.0
         assert info["remaining_s"] >= 0.0
 
-
     def test_register_preserves_existing_entry(self):
         im = IdleManager()
         im.register("m1", unload_fn=lambda: None)

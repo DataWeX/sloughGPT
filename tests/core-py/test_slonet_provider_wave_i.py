@@ -322,7 +322,6 @@ class TestWaitTimeout:
 
 
 class TestNoServerDelegation:
-
     def test_provider_has_no_server_by_default(self):
         provider = _make_provider(_StreamingModel(iter([])))
         assert provider.get_server() is None

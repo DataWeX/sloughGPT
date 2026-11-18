@@ -1083,7 +1083,6 @@ class TestBenchmarkStructureExtended:
         assert "alive_count" in result
         assert result["alive_count"] >= 0
 
-
     def test_conservation_sweep_returns_float_totals(self):
         params = _all_on_params(generate_world=True, world_seed=7)
         genomes = _sweep_genomes(params, 4, 7)

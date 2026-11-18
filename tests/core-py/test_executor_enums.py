@@ -639,8 +639,6 @@ class TestTrainingExecutor:
         time.sleep(0.1)
         exec_.shutdown(wait=True)
 
-
-
     def test_job_status_lookup(self):
         assert JobStatus("queued") == JobStatus.QUEUED
         assert JobStatus("completed") == JobStatus.COMPLETED
@@ -711,4 +709,3 @@ class TestTrainingExecutor:
             assert summary is None
         finally:
             exec_.shutdown(wait=True)
-

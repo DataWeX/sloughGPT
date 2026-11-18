@@ -754,3 +754,86 @@ class TestDatasetSignatureJourney:
         assert res.success, res.error
         assert res.metrics["matched_by"] == "dataset"
         assert len(calls) == 1
+
+
+class TestResolveBootArtifact:
+    """One soul-first artifact decision shared by loader and boot (fixboot).
+
+    startup.py re-derived a ``.slnc``-only rule at six sites, divergent from
+    ``ModelLoader._load_inner``'s documented ``.soul``-first priority: a
+    directory holding both formats would boot ``.slnc`` on the fast paths while
+    the eager loader served ``.soul`` (wrong-artifact class).
+    """
+
+    @staticmethod
+    def _native(tmp_path) -> Path:
+        native = tmp_path / "models" / "slonet-native"
+        native.mkdir(parents=True)
+        return native
+
+    @staticmethod
+    def _cache(tmp_path) -> Path:
+        cache = tmp_path / "hf-cache"
+        cache.mkdir(exist_ok=True)
+        return cache
+
+    @staticmethod
+    def _resolve(model_id: str, native_dir: Path):
+        from domain.infrastructure._internal.model_resolver import resolve_boot_artifact
+
+        return resolve_boot_artifact(model_id, native_dir=native_dir)
+
+    @staticmethod
+    def _patch_cache(monkeypatch, cache: Path) -> None:
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
+            lambda model_id: cache,
+        )
+
+    def test_soul_only_model_resolves_to_soul(self, tmp_path, monkeypatch):
+        """A soul-only id boots the soul — the eager loader's own decision."""
+        native = self._native(tmp_path)
+        soul = native / "run-a.soul"
+        _write_identity_soul(soul, dataset_signature="a" * 64)
+        self._patch_cache(monkeypatch, tmp_path / "missing-cache")
+
+        artifact = self._resolve("run-a", native)
+
+        assert artifact is not None
+        assert artifact.format == "soul"
+        assert Path(artifact.path) == soul
+
+    def test_slnc_only_model_resolves_to_slnc(self, tmp_path, monkeypatch):
+        """An id with no soul keeps the pre-existing .slnc fast-path decision."""
+        native = self._native(tmp_path)  # empty: no .soul
+        cache = self._cache(tmp_path)
+        (cache / "model.slnc").write_bytes(b"")
+        self._patch_cache(monkeypatch, cache)
+
+        artifact = self._resolve("gpt2", native)
+
+        assert artifact is not None
+        assert artifact.format == "slnc"
+        assert Path(artifact.path) == cache / "model.slnc"
+
+    def test_soul_wins_when_directory_holds_both_formats(self, tmp_path, monkeypatch):
+        """The split-brain case: boot must pick the same artifact as the loader."""
+        native = self._native(tmp_path)
+        soul = native / "run-a.soul"
+        _write_identity_soul(soul, dataset_signature="a" * 64)
+        cache = self._cache(tmp_path)
+        (cache / "model.slnc").write_bytes(b"")
+        self._patch_cache(monkeypatch, cache)
+
+        artifact = self._resolve("run-a", native)
+
+        assert artifact is not None
+        assert artifact.format == "soul"
+        assert Path(artifact.path) == soul
+
+    def test_no_artifact_resolves_to_none(self, tmp_path, monkeypatch):
+        """Neither format → None: the eager autoload still owns the refusal."""
+        native = self._native(tmp_path)
+        self._patch_cache(monkeypatch, tmp_path / "missing-cache")
+
+        assert self._resolve("gpt2", native) is None

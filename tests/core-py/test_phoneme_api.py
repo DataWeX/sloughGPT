@@ -345,7 +345,6 @@ class TestTrainingAPI:
         assert len(phonemes) > 0
         assert ids.shape[0] == 1
 
-
     def test_training_feedback_german(self):
         enc = UnifiedPhonemeEncoder()
         ids = enc.encode("hallo", language="de")

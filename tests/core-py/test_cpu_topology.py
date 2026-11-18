@@ -139,7 +139,6 @@ class TestTopologyEdgeCases:
         t = CpuTopology(physical_cores=1, logical_cores=1)
         assert t.effective_cores == 1
 
-
     def test_large_topology(self):
         t = CpuTopology(physical_cores=64, logical_cores=128)
         assert t.effective_cores <= t.logical_cores

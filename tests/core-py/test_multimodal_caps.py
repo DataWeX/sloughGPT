@@ -318,7 +318,6 @@ class TestMultimodalCapabilitiesEdgeCases:
         a.speech_to_text = False
         assert b.speech_to_text is False
 
-
     def test_string_models_are_exact(self):
         mc = MultimodalCapabilities(speech_model="a", vision_model="b")
         assert mc.speech_model == "a"

@@ -386,7 +386,6 @@ class TestSessionKVState:
         assert result == "new"
         assert prefix == 2
 
-
     def test_many_sessions_fill_and_evict(self):
         skc = SessionKVState(max_sessions=3)
         for i in range(10):

@@ -432,7 +432,10 @@ class StartupHistory:
 
             # Check for slow startups
             slow_threshold = p95 * 1.5
-            for r in self._records[-5:]:  # Check last 5
+            # `_records` is a deque, and deques do not support slicing — materialize
+            # once (the same idiom `get_records` uses at `list(self._records)[-limit:]`).
+            recent = list(self._records)[-5:]  # Check last 5
+            for r in recent:
                 if r.total_duration > slow_threshold:
                     alerts.append(
                         {
@@ -445,7 +448,7 @@ class StartupHistory:
                     )
 
             # Check for failed startups
-            for r in self._records[-5:]:
+            for r in recent:
                 if not r.success:
                     alerts.append(
                         {

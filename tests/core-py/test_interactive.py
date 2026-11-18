@@ -328,7 +328,6 @@ class TestConfirmMultiFallback:
 
 
 class TestEdgeCases:
-
     def test_select_two_options(self):
         p, io = _make_prompt(feeds=["2"])
         result = p.select("Pick:", ["first", "second"])
@@ -341,7 +340,6 @@ class TestEdgeCases:
     def test_confirm_default_false_eof(self):
         p, io = _make_prompt()
         assert p.confirm("Go?", default=False) is False
-
 
     def test_ask_empty_default_returns_empty(self):
         p, io = _make_prompt(feeds=[""])

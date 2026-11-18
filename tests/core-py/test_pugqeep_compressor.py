@@ -899,7 +899,6 @@ class TestPointCompressorClusterExtended:
         p = c.compress_cluster(weights)
         assert p.dtype == "float32"
 
-
     def test_multidimensional_input_flattened(self):
         c = PointCompressor()
         weights = np.random.randn(4, 8)
@@ -981,7 +980,6 @@ class TestPointCompressorFunctionExtended:
         p = c.compress_function(weights)
         assert p.dtype == "float64"
 
-
     def test_residual_stored_when_low_accuracy(self):
         c = PointCompressor(residual_threshold=0.99)
         np.random.seed(42)
@@ -1014,8 +1012,6 @@ class TestCompressDecompressExtended:
         p = c.compress_function(weights)
         recovered = c.decompress(p, n=100)
         assert len(recovered) == 100
-
-
 
     def test_compress_with_default_method(self):
         c = PointCompressor()

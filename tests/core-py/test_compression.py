@@ -592,7 +592,6 @@ class TestLRUCache:
             t.join()
         assert len(lru._cache) <= 50
 
-
     def test_lru_cache_put_same_key_preserves_value(self):
         lru = LRUCache(max_size=2)
         lru.put("x", np.array([10]))
@@ -654,7 +653,6 @@ class TestLRUCache:
         lru = LRUCache(max_size=3)
         lru.put("a", None)
         assert lru.get("a") is None
-
 
     def test_many_gets_same_key(self):
         lru = LRUCache(max_size=2)

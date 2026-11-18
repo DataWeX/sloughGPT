@@ -528,6 +528,3 @@ class TestLogLevelComparisonChained:
 
     def test_error_lt_critical(self):
         assert LogLevel.ERROR < LogLevel.CRITICAL
-
-
-

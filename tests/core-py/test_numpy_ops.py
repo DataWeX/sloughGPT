@@ -556,7 +556,6 @@ class TestSoftmaxExtended:
 
 
 class TestRmsnormExtended:
-
     def test_different_weights_scale(self):
         x = np.array([1.0, 2.0, 3.0])
         w1 = np.ones(3)
@@ -607,7 +606,6 @@ class TestLayerNormExtended:
         b = np.array([10.0, 10.0, 10.0])
         result = layer_norm(x, w, b)
         np.testing.assert_allclose(result.mean(), 10.0, atol=1e-5)
-
 
     def test_1d_input(self):
         x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
@@ -680,7 +678,6 @@ class TestGeluExtended:
 
 
 class TestSiluExtended:
-
     def test_large_positive_approaches_identity(self):
         x = np.array([50.0, 100.0])
         result = silu(x)
@@ -732,7 +729,6 @@ class TestRopeExtended:
         x = np.ones((3, 1, 4))
         result = rope(x, pos=0, dim=4)
         assert result.shape == x.shape
-
 
     def test_odd_dim_handled(self):
         # Even if dim is odd, rope should handle the split

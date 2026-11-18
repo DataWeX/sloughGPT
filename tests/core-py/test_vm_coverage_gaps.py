@@ -5826,7 +5826,6 @@ class TestFinalCoveragePush:
         code = self._asm(["[BITS 32]", "ADD AX, 0x1234"])
         assert 0x66 in code
 
-
     def test_irq_device_tick(self):
         from domain.shell._internal.vm import IRQDevice
 
@@ -5953,4 +5952,3 @@ class TestFinalCoveragePush:
             assert result == 0
         finally:
             bridge_mod._bridge = original
-

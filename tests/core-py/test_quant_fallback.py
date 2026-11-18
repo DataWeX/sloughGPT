@@ -117,7 +117,6 @@ class TestFallback:
         expected = np.matmul(A.astype(np.int32), B.astype(np.int32).T)
         np.testing.assert_array_equal(result, expected)
 
-
     def test_non_contiguous_input(self):
         A_full = np.random.randint(-5, 5, (4, 8)).astype(np.int8)
         A = A_full[:, ::2]

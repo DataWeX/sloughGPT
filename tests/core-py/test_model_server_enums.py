@@ -608,8 +608,6 @@ class TestModelMetricsExtended:
         mm.record_success(10.0, 5)
         assert mm.requests_total == 0
 
-
-
     def test_record_failure_does_not_reset_consecutive_on_success(self):
         mm = ModelMetrics()
         mm.record_failure("e1")
@@ -806,7 +804,6 @@ class TestIdleManagerExtended:
         mgr = IdleManager()
         assert mgr._check_interval_s == 30.0
 
-
     def test_unregister_multiple(self):
         mgr = IdleManager(check_interval_s=100)
         mgr.register("m1")
@@ -941,5 +938,3 @@ class TestCircuitBreakerStateExtended:
             raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
-
-

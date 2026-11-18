@@ -270,7 +270,6 @@ class TestHealthSummary:
         assert h["has_errors"] is False
         assert h["models"] == []
 
-
     def test_health_degraded_model(self):
         reg = ModelRegistry()
         p = _FakeProvider()
@@ -554,7 +553,6 @@ class TestHealthSummaryExtra:
 
 
 class TestGenerateExtra:
-
     def test_generate_error_includes_model_id(self):
         reg = ModelRegistry()
         with pytest.raises(RuntimeError, match="requested 'x'"):

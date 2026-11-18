@@ -735,7 +735,6 @@ class TestChromaDBExtended:
         results = await store.query([1.0])
         assert results[0].metadata == meta
 
-
     @pytest.mark.asyncio
     async def test_connect_custom_path(self):
         store = ChromaDBVectorStore(persist_directory="/custom/path", collection_name="custom")

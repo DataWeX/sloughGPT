@@ -532,7 +532,6 @@ class TestTextSurface:
         lines = ts.capture
         assert len(lines) >= 2
 
-
     def test_capture_after_newline_flushes(self):
         ts = TextSurface()
         ts.write("hello\n")
@@ -1123,7 +1122,6 @@ class TestPersonalityProcessor:
         msgs = [{"role": "user", "content": "hi"}]
         result = asyncio.run(proc.process(msgs))
         assert len(result[0]["content"]) > 50
-
 
     def test_humor_high(self):
         proc = PersonalityProcessor(traits={"humor": 0.9})
