@@ -3775,9 +3775,6 @@ class TestRenderMoreInternals:
 
 
 class TestSourceInternals:
-    @pytest.mark.skip(
-        reason="product bug: _cmd_set/_cmd_export are orphaned -- defined (repl.py:1656/1904) but never registered in COMMANDS, so `set VAR=x` falls through to shutil.which() and dies 'Unknown command' (exit 127); _cmd_set works when called directly"
-    )
     def test_source_executes_commands(self, repl, tmp_path):
         rc = tmp_path / "test_rc_exec"
         rc.write_text("echo from_source\nset SRCVAR=sourced_val\n")
@@ -3785,9 +3782,6 @@ class TestSourceInternals:
         assert repl._last_exit_code == 0
         assert repl._env.get("SRCVAR") == "sourced_val"
 
-    @pytest.mark.skip(
-        reason="product bug: same root cause as test_source_executes_commands -- `set`/`export` never reach _cmd_set/_cmd_export because they are missing from COMMANDS, so sourcing a script cannot populate the environment"
-    )
     def test_source_with_env_vars(self, repl, tmp_path):
         rc = tmp_path / "test_rc_env"
         rc.write_text("export EXPORTED=yes\nset PERSISTED=true\n")
