@@ -9,17 +9,20 @@ from pathlib import Path
 from core.framework import click, echo
 
 from domain.logging import get_global
+from domain.shared import find_repo_root
 
 log = get_global()
 
 
 def _db_default_dir() -> str:
-    return str(Path.cwd().parent.parent.parent / "data" / "mogdb")
+    # Repo-anchored, not cwd-anchored: Path.cwd().parent^3 escaped the repo
+    # whenever the CLI was invoked from its root (card 20261115_112756).
+    return str(find_repo_root(Path(__file__)) / "data" / "mogdb")
 
 
 def _import_mogdb():
     """Import mogdb, adding its src dir to sys.path for this session."""
-    _src = Path(__file__).resolve().parents[3] / "packages" / "mogdb" / "src"
+    _src = find_repo_root(Path(__file__)) / "packages" / "mogdb" / "src"
     if str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
     from mogdb import MogDB
