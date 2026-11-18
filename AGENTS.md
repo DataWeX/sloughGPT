@@ -147,6 +147,20 @@ The endpoint rule governs the API half of surface area and the page rule the UI 
 5. **Grandfather clause** — no retroactive purge of the existing methods. A command migrates to `CommandSpec` only when it is next touched, and positionals/subcommands stay hand-written until that descriptor exists (deferral decided 2026-10-28). Migration means: delete the hand-written parser, keep behaviour byte-identical, and let this gate prove it.
 6. **The baseline may only shrink** — known documentation gaps live in `packages/core-py/tests/command_parity_baseline.json` as strict xfails: fix a gap and the node passes, strict-xfail turns that pass into a failure, and the entry must be deleted. Adding an entry is an explicit, reviewed edit — the same ratchet as `page-baseline.json`. Policy lives here; the gate keeps sessions honest at 2am.
 
+## Surface Rule (one change unit spans one shipping surface)
+
+**A PR/branch touches exactly one shipping surface — a branch's conflict surface is the product of the cadences it spans, not the sum.**
+
+The endpoint rule governs which API artifact may exist, the page rule which UI page, the command rule which CLI flag — none of them governs how many surfaces one *change unit* may touch. This is the missing fourth rule, same recurring-cost framing: surfaces ship on different cadences (web deploys per merge, mobile only gets Dependabot, domain runs on its own test closure), so a branch spanning N surfaces accumulates drift from all N simultaneously.
+
+**Evidence — PR 258 (`fix/audit-a11y-design-tokens`, audited 2026-11-18):** 28 commits, **341 files** across apps/web + apps/mobile + domain/ + apps/api + docs/ + meta stores; after main moved (Next removal, page pruning, route consolidation) **187/341 files conflicted** — closed, never merged. The follow-up audit cost a full multi-hour pass to conclude **0 of 165 conflict candidates were worth porting** (4 already landed, 3 superseded by main refactors, 1 cosmetic, 1 canonical-store). Scope — not conflict difficulty — made it unlandable.
+
+1. **One surface per change unit.** A PR/branch spans exactly one of: `apps/web` | `apps/mobile` | `apps/api` | `domain` | `packages/*`. Split the rest into follow-up PRs — one per surface — even when they feel like "the same change": each surface lands on its own cadence with its own test closure.
+2. **Meta files are not surfaces.** `docs/`, `scripts/`, `.github/`, tests belonging to the touched code, and the planner stores are travel companions of the change, not a second surface.
+3. **Exception — one identity across surfaces.** A genuinely mechanical change expressing ONE identity (a rename, a shared token/dependency bump, a contract regen) may span surfaces; it says so in its title (e.g. "rename X across surfaces") and never mixes in a behaviour change. Only a human can tell this from scope creep — which is why the gate is advisory.
+4. **Advisory first, ratchet later** — `scripts/check_surface_scope.py` prints a diff's surface span (exit 0; `--strict` exits 1). Wiring it as a required check is a later card, once it has caught real spans. Policy lives here; the gate keeps sessions honest at 2am.
+5. **Grandfather clause** — no retroactive split of open branches; the rule applies at each branch's next rebase or slice.
+
 ## Test Rule (change-scoped execution, owned-code coverage)
 
 **A test verifies code we own; a change runs the tests it affects; nothing is verified twice.**
