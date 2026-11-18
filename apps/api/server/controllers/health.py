@@ -60,30 +60,54 @@ def _get_mps_monitor_info() -> dict[str, Any] | None:
         return None
 
 
+def _get_model_state() -> str:
+    """Explicit model lifecycle state for the health surfaces.
+
+    Precedence: resident model → holder (``degraded``/``materialising``) →
+    serving provider → ``absent``. The holder only ever contributes its two
+    *in-flight* values: ``loaded`` is implied by an actual handle and
+    ``absent`` is what an unload falls back to, so a stale holder value can
+    never outlive the thing it describes.
+
+    Registry entries are deliberately not consulted: models on disk are not a
+    serving handle, and treating them as one is how a restart reported
+    ready-with-no-provider (card 20261104_053224).
+    """
+    try:
+        import state as server_state
+
+        if server_state.model is not None:
+            return "loaded"
+        from infrastructure.model_state import get_model_state as _read_holder
+
+        holder = _read_holder()
+        if holder in ("degraded", "materialising"):
+            return holder
+        if server_state.provider is not None:
+            return "loaded"
+        return "absent"
+    except Exception:
+        logger.debug("Model state check failed", exc_info=True)
+        return "absent"
+
+
 def _is_model_loading() -> bool:
     """Check if the server is currently loading a model in the background.
 
     Returns True when:
-    1. ModelLoader reports a load in progress, OR
-    2. Model isn't loaded yet but the server has been running for less than 90s
-       (the typical model load window).
+    1. ModelLoader reports a load in progress (eager/manual loads), OR
+    2. the lifecycle holder says weights are ``materialising`` (the lazy
+       preload window).
+
+    Uptime is no longer part of this decision (card 20261104_053224): it is
+    reported as a diagnostic in ``/health/detailed`` and decides nothing.
     """
     try:
-        # Check if ModelLoader has a load in progress
         from domain.infrastructure.model_loader import ModelLoader
 
         if ModelLoader.is_loading():
             return True
-
-        # Fallback: time-based heuristic
-        import state as server_state
-
-        if server_state.model is not None:
-            return False
-        if server_state.provider is not None:
-            return False
-        uptime = (datetime.now() - _health_start_time).total_seconds()
-        return uptime < 90
+        return _get_model_state() == "materialising"
     except Exception:
         logger.debug("Model loading check failed", exc_info=True)
         return False
@@ -356,15 +380,19 @@ def _build_status_message(
     if not lifecycle.get("is_running", False):
         return f"Starting — phase={phase}, profile={profile}."
 
-    if model_loaded:
+    if model_loading:
+        # Checked before model_loaded: during the preload window a provider
+        # makes model_loaded True while weights are still landing, and
+        # "Ready — model loaded" for a model that is not loaded yet is the
+        # exact lie this ordering prevents.
+        msg = "Loading model weights — this takes about a minute on first start."
+    elif model_loaded:
         msg = (
             f"Ready — {model_type or 'model'} loaded"
             + (f" with {current_soul} personality" if current_soul else "")
             + f". Served {request_count} requests."
             + (f" {error_count} errors." if error_count > 0 else "")
         )
-    elif model_loading:
-        msg = "Loading model weights — this takes about a minute on first start."
     else:
         msg = f"Server running, no model loaded. Profile: {profile}."
     return msg
@@ -536,7 +564,8 @@ class HealthController:
         model_loaded, model_type = _get_model_info()
         inference_stats = _get_inference_stats()
         lifecycle = _get_lifecycle_info()
-        model_loading = not model_loaded and _is_model_loading()
+        model_state = _get_model_state()
+        model_loading = _is_model_loading()
         # Derived, never seeded: this used to be the literal "healthy", which
         # made the operator-facing endpoint green on a process that had never
         # reported itself running. It now comes from the same function
@@ -548,6 +577,7 @@ class HealthController:
             "timestamp": datetime.now().isoformat(),
             "model_loaded": model_loaded,
             "model_loading": model_loading,
+            "model_state": model_state,
             "model_type": model_type,
             "device": _get_model_device(),
             "is_inferencing": inference_stats.get("is_inferencing", False),
@@ -630,7 +660,8 @@ class HealthController:
         mem = psutil.virtual_memory()
         model_loaded, model_type, registry_health = _get_model_info_with_registry()
         inference_stats = _get_inference_stats()
-        model_loading = not model_loaded and _is_model_loading()
+        model_state = _get_model_state()
+        model_loading = _is_model_loading()
         uptime = (datetime.now() - _health_start_time).total_seconds()
 
         gpu_info: dict[str, Any] = {}
@@ -754,6 +785,7 @@ class HealthController:
             "mps_monitor": _get_mps_monitor_info(),
             "model_loaded": model_loaded,
             "model_loading": model_loading,
+            "model_state": model_state,
             "model_type": model_type,
             "device": _get_model_device(),
             "soul": current_soul,
@@ -787,7 +819,14 @@ class HealthController:
         return {"status": "alive"}
 
     def get_readiness(self) -> dict[str, Any]:
-        """Kubernetes readiness probe — verifies subsystems are ready to serve."""
+        """Kubernetes readiness probe — keyed off explicit lifecycle state.
+
+        Card 20261104_053224: uptime and registry entries never decide here.
+        The lazy path installs a serving provider before weights land, so
+        ``materialising`` is ready (and says so); a process with no model, no
+        provider and nothing in flight is ``no_provider`` and never ready,
+        however healthy its registry looks.
+        """
         checks = {}
         ready = True
 
@@ -797,18 +836,30 @@ class HealthController:
         if not app_ready:
             ready = False
 
-        # 2. Model must be loaded (or server in no-model mode)
-        model_loaded, model_type = _get_model_info()
-        checks["model"] = "loaded" if model_loaded else "not_loaded"
-        if not model_loaded:
+        # 2. Model lifecycle state (never uptime, never registry-only)
+        model_state = _get_model_state()
+        if model_state == "loaded":
+            checks["model"] = "loaded"
+        elif model_state == "materialising":
+            # Provider installed, weights landing: the guard serves while the
+            # parent materialises — ready, with the real state on the record.
+            checks["model"] = "materialising"
+        elif model_state == "degraded":
+            # The scheduled preload failed; materialise-on-first-request may
+            # still rescue it, but right now this process cannot serve.
+            checks["model"] = "degraded"
+            ready = False
+        else:  # absent
+            try:
+                from domain.infrastructure.model_loader import ModelLoader
+
+                loading = ModelLoader.is_loading()
+            except Exception:
+                loading = False
+            checks["model"] = "loading" if loading else "no_provider"
             ready = False
 
-        # 3. Model loading in progress = not ready yet
-        if _is_model_loading():
-            checks["model"] = "loading"
-            ready = False
-
-        # 4. MogDB storage must be writable
+        # 3. MogDB storage must be writable
         mogdb_health = _get_mogdb_health()
         if mogdb_health:
             checks["mogdb"] = mogdb_health.get("status", "unknown")
