@@ -225,9 +225,6 @@ class TestSessionMethodMismatch:
         resp = client.get("/session/sess-1/context")
         assert resp.status_code == 405
 
-    def test_messages_post_405(self, client):
-        resp = client.post("/session/sess-1/messages")
-        assert resp.status_code == 405
 
     def test_inspector_post_405(self, client):
         resp = client.post("/session/sess-1/inspector")

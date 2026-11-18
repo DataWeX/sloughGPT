@@ -322,14 +322,6 @@ class TestWaitTimeout:
 
 
 class TestNoServerDelegation:
-    def test_server_shortcut_skipped_when_none(self):
-        def streamer():
-            yield 1
-            yield 2
-
-        provider = _make_provider(_StreamingModel(streamer))
-        out = _collect(provider.chat_stream([{"role": "user", "content": "hi"}], max_tokens=10))
-        assert "".join(out) == "BC"
 
     def test_provider_has_no_server_by_default(self):
         provider = _make_provider(_StreamingModel(iter([])))

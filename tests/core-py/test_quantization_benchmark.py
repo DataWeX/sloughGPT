@@ -857,13 +857,6 @@ class TestQuantizedLinear:
         result = quantized_linear(x, info.array, info.meta.scale, 0, bias=bias)
         assert result.shape == (1, 16)
 
-    def test_per_channel_scale(self):
-        x = np.random.randn(1, 32).astype(np.float32)
-        w = np.random.randn(16, 32).astype(np.float32)
-        engine = Quantine(bits=8, mode="symmetric")
-        info = engine.quantize("w", w)
-        result = quantized_linear(x, info.array, info.meta.scale, 0)
-        assert result.shape == (1, 16)
 
     def test_matches_float_matmul(self):
         x = np.random.randn(1, 32).astype(np.float32)

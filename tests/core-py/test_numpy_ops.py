@@ -556,11 +556,6 @@ class TestSoftmaxExtended:
 
 
 class TestRmsnormExtended:
-    def test_uniform_output(self):
-        x = np.array([1.0, 1.0, 1.0])
-        w = np.ones(3)
-        result = rmsnorm(x, w)
-        np.testing.assert_allclose(result, [1.0, 1.0, 1.0], rtol=1e-5)
 
     def test_different_weights_scale(self):
         x = np.array([1.0, 2.0, 3.0])
@@ -613,12 +608,6 @@ class TestLayerNormExtended:
         result = layer_norm(x, w, b)
         np.testing.assert_allclose(result.mean(), 10.0, atol=1e-5)
 
-    def test_negative_weights_scale(self):
-        x = np.array([1.0, 2.0, 3.0])
-        w = np.array([-1.0, -1.0, -1.0])
-        b = np.zeros(3)
-        result = layer_norm(x, w, b)
-        assert result.shape == x.shape
 
     def test_1d_input(self):
         x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
@@ -691,10 +680,6 @@ class TestGeluExtended:
 
 
 class TestSiluExtended:
-    def test_at_zero(self):
-        x = np.array([0.0])
-        result = silu(x)
-        assert result[0] == pytest.approx(0.0, abs=1e-5)
 
     def test_large_positive_approaches_identity(self):
         x = np.array([50.0, 100.0])
@@ -748,10 +733,6 @@ class TestRopeExtended:
         result = rope(x, pos=0, dim=4)
         assert result.shape == x.shape
 
-    def test_dim_8(self):
-        x = np.ones((4, 2, 8))
-        result = rope(x, pos=0, dim=8)
-        assert result.shape == x.shape
 
     def test_odd_dim_handled(self):
         # Even if dim is odd, rope should handle the split

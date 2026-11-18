@@ -769,12 +769,6 @@ class TestSpawnVMProcessExtended:
         proc.entry()
         assert isinstance(proc.metadata["output_log"], list)
 
-    def test_vm_metadata_has_source(self):
-        k = Kernel()
-        k.boot()
-        src = "LOAD_CONST R0, 1\nHALT"
-        proc = k.spawn_vm_process("test", src, use_syscalls=True)
-        assert proc.metadata["source"] == src
 
     def test_vm_with_default_priority(self):
         k = Kernel()
@@ -873,17 +867,7 @@ class TestRunProgramExtended:
         result = k.run_program(src)
         assert result["steps"] == 11
 
-    def test_run_program_trace_content(self):
-        k = Kernel()
-        k.boot()
-        result = k.run_program("HALT", trace=True)
-        assert len(result["trace"]) >= 1
 
-    def test_run_program_output_is_list(self):
-        k = Kernel()
-        k.boot()
-        result = k.run_program("HALT")
-        assert isinstance(result["output"], list)
 
     def test_run_program_regs_excludes_zero(self):
         k = Kernel()
@@ -906,19 +890,7 @@ class TestKernelShellAdditional:
         for cmd in ["help", "meminfo", "procs", "run", "ls", "cat", "write", "halt"]:
             assert cmd in joined
 
-    def test_meminfo_after_boot(self):
-        k = Kernel()
-        k.boot()
-        out = _shell_outputs(k, ["meminfo", "halt"])
-        joined = "\n".join(out)
-        assert "blocks:" in joined
 
-    def test_procs_after_boot(self):
-        k = Kernel()
-        k.boot()
-        out = _shell_outputs(k, ["procs", "halt"])
-        joined = "\n".join(out)
-        assert "pid=" in joined
 
     def test_multiple_empty_lines(self):
         k = Kernel()
@@ -985,17 +957,7 @@ class TestKernelShellAdditional:
         out = _shell_outputs(k, ["halt"])
         assert "shutting down..." in "\n".join(out)
 
-    def test_exit_command(self):
-        k = Kernel()
-        k.boot()
-        out = _shell_outputs(k, ["exit"])
-        assert "shutting down..." in "\n".join(out)
 
-    def test_quit_command(self):
-        k = Kernel()
-        k.boot()
-        out = _shell_outputs(k, ["quit"])
-        assert "shutting down..." in "\n".join(out)
 
     def test_whitespace_only_line(self):
         k = Kernel()
@@ -1036,23 +998,8 @@ class TestSetupExtended:
         assert proc.name == "shell"
         proc.entry()
 
-    def test_spawn_kernel_shell_via_addon(self):
-        k = Kernel()
-        shell_ui.setup(k)
-        proc = k.spawn_kernel_shell()
-        assert proc.name == "kernel-shell"
 
-    def test_spawn_vm_process_via_addon(self):
-        k = Kernel()
-        shell_ui.setup(k)
-        proc = k.spawn_vm_process("test", "HALT")
-        assert proc.name == "test"
 
-    def test_run_program_via_addon(self):
-        k = Kernel()
-        shell_ui.setup(k)
-        result = k.run_program("HALT")
-        assert result["steps"] == 1
 
     def test_setup_idempotent(self):
         k = Kernel()

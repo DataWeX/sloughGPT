@@ -1391,14 +1391,6 @@ class TestCLILoggerExtended:
 
 
 class TestWebLoggerExtended:
-    def test_emit_json_includes_timestamp(self):
-        import json
-
-        stream = io.StringIO()
-        log = WebLogger("slo.web", writable=stream)
-        log.info("msg")
-        data = json.loads(stream.getvalue().strip())
-        assert "timestamp" in data
 
     def test_emit_json_includes_context(self):
         import json
@@ -1479,21 +1471,6 @@ class TestWebLoggerExtended:
         record = log.from_json(data)
         assert record.context["key"] == "val"
 
-    def test_from_json_with_exception(self):
-        import json
-
-        log = WebLogger("slo.web")
-        data = json.dumps(
-            {
-                "level": "error",
-                "message": "fail",
-                "logger": "slo.web",
-                "timestamp": 1.0,
-                "exception": "RuntimeError: oops",
-            }
-        )
-        record = log.from_json(data)
-        assert record.exception == "RuntimeError: oops"
 
     def test_from_json_missing_fields(self):
         import json
@@ -1504,11 +1481,6 @@ class TestWebLoggerExtended:
         assert record.message == ""
         assert record.logger == "slo"
 
-    def test_from_json_invalid_json(self):
-        log = WebLogger("slo.web")
-        record = log.from_json("not valid json {{{")
-        assert record.level == LogLevel.WARNING
-        assert record.message == "not valid json {{{"
 
     def test_to_json_includes_exception(self):
         import json

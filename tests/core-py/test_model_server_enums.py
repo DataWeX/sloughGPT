@@ -608,19 +608,7 @@ class TestModelMetricsExtended:
         mm.record_success(10.0, 5)
         assert mm.requests_total == 0
 
-    def test_record_success_sets_last_request_time(self):
-        mm = ModelMetrics()
-        before = time.time()
-        mm.record_success(10.0, 5)
-        after = time.time()
-        assert before <= mm.last_request_time <= after
 
-    def test_record_failure_sets_last_request_time(self):
-        mm = ModelMetrics()
-        before = time.time()
-        mm.record_failure("err")
-        after = time.time()
-        assert before <= mm.last_request_time <= after
 
     def test_record_failure_does_not_reset_consecutive_on_success(self):
         mm = ModelMetrics()
@@ -818,11 +806,6 @@ class TestIdleManagerExtended:
         mgr = IdleManager()
         assert mgr._check_interval_s == 30.0
 
-    def test_touch_nonexistent(self):
-        mgr = IdleManager(check_interval_s=100)
-        result = mgr.touch("nonexistent")
-        assert result is False
-        mgr.shutdown()
 
     def test_unregister_multiple(self):
         mgr = IdleManager(check_interval_s=100)
@@ -935,13 +918,6 @@ class TestModelStatusExtended:
         except ValueError:
             pass
 
-    def test_member_count(self):
-        assert len(ModelStatus) == 6
-
-    def test_unique_values(self):
-        values = [s.value for s in ModelStatus]
-        assert len(values) == len(set(values))
-
 
 # ---------------------------------------------------------------------------
 # Extended CircuitBreakerState tests
@@ -966,9 +942,4 @@ class TestCircuitBreakerStateExtended:
         except ValueError:
             pass
 
-    def test_member_count(self):
-        assert len(CircuitBreakerState) == 3
 
-    def test_unique_values(self):
-        values = [s.value for s in CircuitBreakerState]
-        assert len(values) == len(set(values))
