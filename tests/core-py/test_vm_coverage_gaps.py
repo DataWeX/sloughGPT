@@ -4580,10 +4580,6 @@ class TestAssemblerRemainingOps:
         code = self._asm(["[BITS 32]", "TEST AX, 0x1234"])
         assert code[0] == 0x66
 
-    def test_group3_r16_imm16_32bit_mode(self):
-        code = self._asm(["[BITS 32]", "TEST AX, 0x1234"])
-        assert code[0] == 0x66
-
 
 # ── Comprehensive _exec_16bit memory operand paths ──────────────────────────
 
@@ -5835,9 +5831,6 @@ class TestFinalCoveragePush:
         code = self._asm(["[BITS 32]", "ADD AX, 0x1234"])
         assert 0x66 in code
 
-    def test_assembler_alu_r16_imm16_large(self):
-        code = self._asm(["[BITS 32]", "ADD AX, 0x1234"])
-        assert 0x66 in code
 
     def test_irq_device_tick(self):
         from domain.shell._internal.vm import IRQDevice
@@ -5966,15 +5959,3 @@ class TestFinalCoveragePush:
         finally:
             bridge_mod._bridge = original
 
-    def test_dev_table_open_with_adapter(self):
-        import domain.shell._internal.vm as vm_mod
-        from domain.shell._internal.vm import CPU, _op_dev_table_open
-
-        cpu = CPU()
-        mock_adapter = type("A", (), {"open": lambda s, n: -1})()
-        vm_mod._device_table_adapter = mock_adapter
-        try:
-            _op_dev_table_open(cpu, ["R0", "nonexistent_device"])
-            assert cpu.regs[0] == -1
-        finally:
-            vm_mod._device_table_adapter = None

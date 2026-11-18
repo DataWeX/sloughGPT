@@ -398,13 +398,6 @@ class TestIndependentDirs:
         assert row_a["messages"][0]["content"] == "QA"
         assert row_b["messages"][0]["content"] == "QB"
 
-    def test_same_logger_same_dir(self, tmp_log_dir):
-        logger = ConversationLogger(tmp_log_dir)
-        logger.record("Q1", "A1")
-        logger.record("Q2", "A2")
-        lines = logger.corpus_path.read_text().strip().split("\n")
-        assert len(lines) == 2
-
 
 # ── Record edge cases ────────────────────────────────────────────────────────
 

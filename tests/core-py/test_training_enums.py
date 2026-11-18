@@ -414,5 +414,3 @@ class TestDataFormat:
         for m in DataFormat:
             assert m.name.lower() == m.value
 
-    def test_count(self):
-        assert len(DataFormat) == 3

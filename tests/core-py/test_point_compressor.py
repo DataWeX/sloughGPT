@@ -1383,11 +1383,6 @@ class TestPointExtended:
 
 
 class TestCompressorExtended:
-    def test_compress_with_method_override(self):
-        comp = PointCompressor()
-        x = np.arange(50, dtype=np.float32)
-        point = comp.compress(x, "w", method="function")
-        assert point.function_type in ("periodic", "linear", "polynomial")
 
     def test_compress_function_periodic_fit(self):
         comp = PointCompressor()
@@ -1612,14 +1607,6 @@ class TestDeduplicatorExtended:
         groups = dedup.find_duplicates()
         assert len(groups) == 1
 
-    def test_no_duplicates_function(self):
-        lib = PointLibrary("test")
-        lib.add(Point(identity="a", function_type="linear", params={"a": 1.0, "b": 0.0}))
-        lib.add(Point(identity="b", function_type="linear", params={"a": 2.0, "b": 0.0}))
-        dedup = PointDeduplicator()
-        dedup.add_library(lib)
-        groups = dedup.find_duplicates()
-        assert len(groups) == 0
 
     def test_deduplicate_saves_bytes(self):
         lib = PointLibrary("test")

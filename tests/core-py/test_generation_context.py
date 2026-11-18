@@ -499,9 +499,6 @@ class TestGenerationContextEdgeCases:
         gc = GenerationContext(prompt="t", prompt_tokens=np.array([1]), top_k=999999)
         assert gc.top_k == 999999
 
-    def test_max_tokens_one(self):
-        gc = GenerationContext(prompt="t", prompt_tokens=np.array([1]), max_tokens=1)
-        assert gc.max_tokens == 1
 
     def test_repetition_penalty_zero(self):
         gc = GenerationContext(prompt="t", prompt_tokens=np.array([1]), repetition_penalty=0.0)

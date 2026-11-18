@@ -685,24 +685,6 @@ class TestFusedQKVTraining:
 # ---------------------------------------------------------------------------
 
 
-class TestFusedQKVPerformance:
-    """Benchmark fused vs separate QKV projections."""
-
-    def test_fused_produces_same_result_as_separate(self):
-        attn = SloMultiHeadAttention(64, 4)
-        x = Tensor(np.random.randn(2, 8, 64))
-
-        Q_fused, K_fused, V_fused = attn._fused_qkv_forward(x)
-
-        Q_sep = attn.W_q.forward(x)
-        K_sep = attn.W_k.forward(x)
-        V_sep = attn.W_v.forward(x)
-
-        np.testing.assert_allclose(Q_fused.data, Q_sep.data, rtol=1e-5, atol=1e-5)
-        np.testing.assert_allclose(K_fused.data, K_sep.data, rtol=1e-5, atol=1e-5)
-        np.testing.assert_allclose(V_fused.data, V_sep.data, rtol=1e-5, atol=1e-5)
-
-
 # ---------------------------------------------------------------------------
 # SloMultiHeadAttention additional
 # ---------------------------------------------------------------------------

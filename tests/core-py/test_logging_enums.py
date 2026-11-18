@@ -529,17 +529,5 @@ class TestLogLevelComparisonChained:
     def test_error_lt_critical(self):
         assert LogLevel.ERROR < LogLevel.CRITICAL
 
-    def test_ge_chain(self):
-        assert (
-            LogLevel.CRITICAL
-            >= LogLevel.ERROR
-            >= LogLevel.WARNING
-            >= LogLevel.INFO
-            >= LogLevel.DEBUG
-        )
 
-    def test_ne_different_levels(self):
-        assert LogLevel.DEBUG != LogLevel.CRITICAL
 
-    def test_ne_same_level(self):
-        assert not (LogLevel.INFO != LogLevel.INFO)

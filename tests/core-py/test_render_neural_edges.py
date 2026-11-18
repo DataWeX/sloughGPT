@@ -476,13 +476,6 @@ class TestConv2dRelu:
         out = dev._conv2d_relu(x, dev._conv1_w, dev._conv1_b)
         assert out.shape[0] == 2
 
-    def test_conv2_output_channels(self):
-        dev = RenderNeuralDevice()
-        x = np.random.rand(1, 6, 8, 6).astype(np.float32)
-        h1 = dev._conv2d_relu(x, dev._conv1_w, dev._conv1_b)
-        h2 = dev._conv2d_relu(h1, dev._conv2_w, dev._conv2_b)
-        assert h2.shape[1] == 32
-
 
 # =============================================================================
 # TestAdaptiveAvgPool

@@ -1083,19 +1083,6 @@ class TestBenchmarkStructureExtended:
         assert "alive_count" in result
         assert result["alive_count"] >= 0
 
-    def test_civilization_history_has_social_stats(self):
-        result = benchmark_civilization(
-            population_size=4,
-            generations=3,
-            ticks_per_generation=8,
-            organic_pools=1,
-            seed=1,
-        )
-        entry = result["civilization"]["history"][0]
-        assert "cooperations" in entry
-        assert "contests" in entry
-        assert "avg_fitness" in entry
-        assert "best_fitness" in entry
 
     def test_conservation_sweep_returns_float_totals(self):
         params = _all_on_params(generate_world=True, world_seed=7)

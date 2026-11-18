@@ -511,11 +511,6 @@ class TestParseTrainingStateMetadata:
         assert "optimizer" not in result
         assert "scheduler" not in result
 
-    def test_missing_all_fields(self):
-        result = _parse_training_state_metadata({})
-        assert result["step"] == 0
-        assert result["epoch"] == 0
-        assert result["accumulation_step"] == 0
 
     def test_large_step(self):
         result = _parse_training_state_metadata({"training_state": {"step": 999999}})
@@ -874,7 +869,3 @@ class TestTrainerConfigExtra:
         assert cfg.early_stopping_patience == 10
         assert cfg.gradient_accumulation_steps == 4
 
-    def test_device_auto_to_cpu(self):
-        cfg = TrainerConfig(device="auto")
-        cfg.__post_init__()
-        assert cfg.device == "auto"

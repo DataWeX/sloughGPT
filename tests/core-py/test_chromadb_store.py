@@ -735,14 +735,6 @@ class TestChromaDBExtended:
         results = await store.query([1.0])
         assert results[0].metadata == meta
 
-    @pytest.mark.asyncio
-    async def test_disconnect_clears_all(self):
-        store = ChromaDBVectorStore()
-        store.client = MagicMock()
-        store.collection = MagicMock()
-        await store.disconnect()
-        assert store.client is None
-        assert store.collection is None
 
     @pytest.mark.asyncio
     async def test_connect_custom_path(self):

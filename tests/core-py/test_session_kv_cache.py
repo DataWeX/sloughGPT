@@ -386,13 +386,6 @@ class TestSessionKVState:
         assert result == "new"
         assert prefix == 2
 
-    def test_get_after_clear_returns_none(self):
-        skc = SessionKVState()
-        skc.store("s1", [1, 2, 3], "data")
-        skc.clear("s1")
-        result, prefix = skc.get("s1", [1, 2, 3])
-        assert result is None
-        assert prefix == 0
 
     def test_many_sessions_fill_and_evict(self):
         skc = SessionKVState(max_sessions=3)

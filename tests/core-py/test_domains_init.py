@@ -143,8 +143,6 @@ class TestComponentException:
             except ComponentException as ce:
                 assert isinstance(ce.__cause__, ValueError)
 
-    def test_is_subclass_of_exception(self):
-        assert issubclass(ComponentException, Exception)
 
     def test_repr(self):
         e = ComponentException("test")

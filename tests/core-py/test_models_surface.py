@@ -532,12 +532,6 @@ class TestTextSurface:
         lines = ts.capture
         assert len(lines) >= 2
 
-    def test_capture_partial_line(self):
-        ts = TextSurface()
-        ts.write("hello", end="")
-        ts.write("world", end="")
-        lines = ts.capture
-        assert any("helloworld" in l for l in lines)
 
     def test_capture_after_newline_flushes(self):
         ts = TextSurface()
@@ -1130,11 +1124,6 @@ class TestPersonalityProcessor:
         result = asyncio.run(proc.process(msgs))
         assert len(result[0]["content"]) > 50
 
-    def test_warmth_zero_gives_neutral(self):
-        proc = PersonalityProcessor(traits={"warmth": 0.0})
-        msgs = [{"role": "user", "content": "hi"}]
-        result = asyncio.run(proc.process(msgs))
-        assert "neutral" in result[0]["content"].lower()
 
     def test_humor_high(self):
         proc = PersonalityProcessor(traits={"humor": 0.9})

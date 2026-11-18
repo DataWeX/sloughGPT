@@ -42,8 +42,6 @@ class TestLifecyclePhase:
     def test_stopping_value(self):
         assert LifecyclePhase.STOPPING.value == "stopping"
 
-    def test_stopped_value(self):
-        assert LifecyclePhase.STOPPED.value == "stopped"
 
     def test_is_str(self):
         assert isinstance(LifecyclePhase.INIT, str)

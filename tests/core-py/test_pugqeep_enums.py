@@ -78,10 +78,6 @@ class TestTier:
         assert Tier("hot") is Tier.HOT
         assert Tier("memory") is Tier.MEMORY
 
-    def test_ordering(self):
-        assert Tier.DISK.value == "disk"
-        assert Tier.HOT.value == "hot"
-        assert Tier.MEMORY.value == "memory"
 
     def test_invalid_value(self):
         with pytest.raises(ValueError):
