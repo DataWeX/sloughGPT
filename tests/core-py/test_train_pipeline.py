@@ -2413,3 +2413,40 @@ class TestDatasetSignatureBackfill:
         with pytest.raises(ValueError, match="already"):
             backfill_soul_dataset_signature(soul)
         assert Path(soul).read_bytes() == before  # refusal leaves the file alone
+
+
+class TestSaveCheckpointMixDataPath:
+    """``save_checkpoint`` must accept the curriculum's mix spec.
+
+    A stage mix is ``[(path, ratio), ...]`` (what ``compute_stage_mix``
+    hands the trainer); checkpoint naming assumed ``str`` and raised
+    ``TypeError: argument should be a str ... not 'list'`` — found by the
+    calibration run, which uses the real trainer end-to-end
+    (card 20261115_081635).
+    """
+
+    def test_mix_list_produces_checkpoint_named_after_first_corpus(self, tmp_path):
+        corpus = tmp_path / "mixdir" / "corpus.txt"
+        corpus.parent.mkdir()
+        corpus.write_text(DATA_TEXT, encoding="utf-8")
+        t = make_trainer(str(corpus), tiny_config(tmp_path))
+        # exactly what compute_stage_mix / run_curriculum pass as data_path
+        t.data_path = [(str(corpus), 1.0)]
+
+        t.save_checkpoint({}, is_final=True)
+
+        saved = list((tmp_path / "ckpts").glob("*.soul"))
+        assert saved, "mix data_path must still produce a .soul checkpoint"
+        assert saved[0].name.startswith("mixdir_")  # named after first corpus dir
+
+    def test_str_data_path_naming_unchanged(self, tmp_path):
+        """The str path is the historical behaviour — byte-identical."""
+        corpus = tmp_path / "singledir" / "corpus.txt"
+        corpus.parent.mkdir()
+        corpus.write_text(DATA_TEXT, encoding="utf-8")
+        t = make_trainer(str(corpus), tiny_config(tmp_path))
+
+        t.save_checkpoint({}, is_final=True)
+
+        saved = list((tmp_path / "ckpts").glob("*.soul"))
+        assert saved and saved[0].name.startswith("singledir_")

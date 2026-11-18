@@ -944,3 +944,50 @@ class TestExampleCurriculum:
         assert sum(1 for s in example.stages if s.ewc) >= 2
         names = [s.name for s in example.stages]
         assert len(set(names)) == len(names)  # stage names unique
+
+
+# ── Real-trainer end-to-end (the seam fake trainers never reach) ─────────
+
+
+class TestRealTrainerEndToEnd:
+    """Drive the REAL ``SloughGPTTrainer`` through two stages.
+
+    Fake trainers never call ``save_checkpoint`` — which is exactly where
+    the calibration run crashed: a stage mix is a ``[(path, ratio), ...]``
+    list and checkpoint naming assumed ``str`` (card 20261115_081635).
+    """
+
+    def test_two_stages_train_swap_and_checkpoint(self, tmp_path):
+        a = tmp_path / "alpha.txt"
+        a.write_text(DATA_TEXT, encoding="utf-8")
+        b = tmp_path / "beta.txt"
+        b.write_text(
+            "dogs sleep while foxes run across warm meadows again. " * 16, encoding="utf-8"
+        )
+        cur = load_curriculum(
+            _write(
+                tmp_path,
+                {
+                    "version": 1,
+                    "stages": [
+                        _stage("s1", datasets=[{"path": str(a), "ratio": 1.0}]),
+                        _stage(
+                            "s2",
+                            datasets=[{"path": str(b), "ratio": 1.0}],
+                            replay=0.25,
+                        ),
+                    ],
+                },
+            )
+        )
+        # this test exercises staging mechanics, not data-quality gates
+        cfg = _tiny_config(tmp_path, min_data_quality=0.0, max_toxicity_rate=1.0)
+
+        report = run_curriculum(cur, config=cfg)
+
+        assert report.completed_all
+        assert all(r.passed and not r.provisional for r in report.stages)
+        souls = list((tmp_path / "ckpts").glob("*.soul"))
+        assert souls, "each stage must save a checkpoint through the mix path"
+        # the blend must not leak into artifact names as a python repr
+        assert not any(p.name.startswith("[") for p in souls)
