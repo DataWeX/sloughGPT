@@ -1,5 +1,6 @@
 """Tests for domain.learner._internal.continual.py — ContinualLearner."""
 
+import threading
 import time
 from pathlib import Path
 
@@ -524,8 +525,17 @@ def test_background_loop_polls_feed_articles(monkeypatch, state_paths):
         lambda topic: [{"source": "rss", "content": "Feed snippet for training"}],
     )
     calls = {"n": 0}
+    main_thread = threading.current_thread()
+    real_sleep = time.sleep  # captured before the module-global patch below
 
     def fake_sleep(secs):
+        # continual.time is the shared stdlib module: without this gate a
+        # foreign thread's time.sleep inflates the counter and flips
+        # _running=False before this loop's 6th iteration (the %6==0
+        # feed-ingest) — the load-induced empty-buffer flake.
+        if threading.current_thread() is not main_thread:
+            real_sleep(secs)
+            return
         calls["n"] += 1
         if calls["n"] >= 7:
             inst._running = False
@@ -550,8 +560,17 @@ def test_background_loop_trains_and_catches_errors(monkeypatch, state_paths):
 
     monkeypatch.setattr(inst, "_train_step", boom)
     calls = {"n": 0}
+    main_thread = threading.current_thread()
+    real_sleep = time.sleep  # captured before the module-global patch below
 
     def fake_sleep(secs):
+        # Same foreign-sleep gate as test_background_loop_polls_feed_articles:
+        # only this loop's own sleeps may drive the counter (otherwise a
+        # foreign thread can stop the loop before _train_step ever runs and
+        # the calls assertion passes vacuously).
+        if threading.current_thread() is not main_thread:
+            real_sleep(secs)
+            return
         calls["n"] += 1
         if calls["n"] >= 3:
             inst._running = False
