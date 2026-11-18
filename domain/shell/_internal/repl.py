@@ -909,8 +909,9 @@ class ShellREPL(LinuxCommandsMixin):
             fetcher = _COMMAND_CACHE_FETCHERS.get(cmd)
             if fetcher:
                 return self._completion_cache_obj.get(cmd, fetcher)
-            # No API fetcher — fall through to path completion
-            return self._complete_path("")
+            # No API fetcher — static candidates (train/permit/note/…) first;
+            # _complete_args_for_uncached falls back to path completion itself.
+            return self._complete_args_for_uncached(cmd)
 
         # Fallback: local dict cache with 30s TTL
         now = time.monotonic()
@@ -2926,8 +2927,16 @@ Examples:
             self._print(self._format_error(e, "unprotect"))
 
     def _cmd_train(self, args: str = "") -> None:
-        """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset> | train load-adapter <path> | train unload-adapter"""
+        """Train: train [dataset] | train --curriculum <file> | train status | train follow <id> | train stop <id> | train distill <dataset> | train load-adapter <path> | train unload-adapter"""
         parts = args.strip().split()
+        curriculum_path = None
+        if "--curriculum" in parts:
+            i = parts.index("--curriculum")
+            if i + 1 >= len(parts):
+                self._print("  Usage: train --curriculum <curriculum.json>")
+                return
+            curriculum_path = parts[i + 1]
+            parts = parts[:i] + parts[i + 2 :]
         sub = parts[0] if parts else ""
 
         if not sub or sub in (
@@ -2942,6 +2951,23 @@ Examples:
         ):
             if not self._require_api("train"):
                 return
+
+        if curriculum_path is not None:
+            if sub:
+                self._print("  Usage: train --curriculum <curriculum.json> (no dataset argument)")
+                return
+            r = self._spinner_call(
+                "Starting curriculum",
+                lambda: self.cmds.train_curriculum(curriculum_path),
+            )
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                job_id = r.get("id", "")
+                self._print(f"  Curriculum started ({r.get('stages', '?')} stages)")
+                if job_id:
+                    self._stream_train_progress(job_id)
+            return
 
         if sub == "status":
             jobs = self.cmds.train_status()
@@ -3210,7 +3236,11 @@ Examples:
                 else:
                     bar += EMPTY * (bar_width - filled)
 
-                line = f"  [{bar}] {progress:3d}%  epoch {epoch}/{epochs}  loss={loss or 0:.4f}  [{status}]"
+                stage = result.get("stage", "")
+                label = (
+                    f"stage {epoch + 1}/{epochs} {stage}" if stage else f"epoch {epoch}/{epochs}"
+                )
+                line = f"  [{bar}] {progress:3d}%  {label}  loss={loss or 0:.4f}  [{status}]"
 
                 # In-place update using stdio
                 if hasattr(self, "_stdio") and self._stdio:
@@ -3225,7 +3255,23 @@ Examples:
                 if status in ("completed", "failed", "error"):
                     if status == "completed":
                         ckpt = result.get("checkpoint", "")
-                        self._print("\n  Training complete" + (f" — {ckpt}" if ckpt else ""))
+                        stages = result.get("stages") or []
+                        if stages:
+                            self._print("\n  Curriculum complete" + (f" — {ckpt}" if ckpt else ""))
+                            for s in stages:
+                                if s.get("passed"):
+                                    verdict = "gate passed"
+                                elif s.get("provisional"):
+                                    verdict = "PROVISIONAL — gate failed, advanced anyway"
+                                else:
+                                    verdict = "gate failed"
+                                reason = s.get("gate_reason") or ""
+                                self._print(
+                                    f"    {s.get('name', '?')}: {verdict}"
+                                    + (f" — {reason}" if reason else "")
+                                )
+                        else:
+                            self._print("\n  Training complete" + (f" — {ckpt}" if ckpt else ""))
                     else:
                         err = result.get("error", "unknown error")
                         self._print(f"\n  Training {status}: {err}")

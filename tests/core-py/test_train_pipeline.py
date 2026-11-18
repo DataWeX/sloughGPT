@@ -154,6 +154,61 @@ class TestPrepareData:
         with pytest.raises(ValueError, match="No valid datasets found"):
             prepare_data([("missing", 1.0)], block_size=8)
 
+    def test_list_with_ratios_accepts_explicit_file_paths(self, tmp_path, monkeypatch):
+        """Curriculum mixes carry file paths, not dataset names (card 20261115_081635).
+
+        The tuple branch used to resolve only ``data/<name>/input.txt``, so
+        every explicit path warned "not found" and a real curriculum run died
+        with "No valid datasets found". Explicit path wins, dataset-dir
+        fallback second — same precedence as the str branch.
+        """
+        monkeypatch.chdir(tmp_path)
+        a = tmp_path / "corpus_a.txt"
+        b = tmp_path / "corpus_b.txt"
+        a_text = "".join(chr(65 + i) for i in range(12)) * 40
+        b_text = "".join(chr(75 + i) for i in range(12)) * 40
+        a.write_text(a_text, encoding="utf-8")
+        b.write_text(b_text, encoding="utf-8")
+        data, n_chars, stoi, itos = prepare_data(
+            [("corpus_a.txt", 0.5), ("corpus_b.txt", 1.0)], block_size=8
+        )
+        assert len(data) == int(len(a_text) * 0.5) + len(b_text)
+        assert n_chars == len(set(a_text + b_text))
+
+    def test_list_with_ratios_mixes_dataset_dir_and_file_path(self, tmp_path, monkeypatch):
+        """Replay mixes join completed-stage file paths with dataset names."""
+        monkeypatch.chdir(tmp_path)
+        d = tmp_path / "data" / "a"
+        d.mkdir(parents=True)
+        a_text = DATA_TEXT
+        (d / "input.txt").write_text(a_text, encoding="utf-8")
+        f = tmp_path / "stage1.txt"
+        b_text = DATA_TEXT[:256]
+        f.write_text(b_text, encoding="utf-8")
+        data, _n, _stoi, _itos = prepare_data([("a", 0.5), ("stage1.txt", 0.5)], block_size=8)
+        assert len(data) == int(len(a_text) * 0.5) + int(len(b_text) * 0.5)
+
+    def test_list_with_ratios_jsonl_extracts_text_field(self, tmp_path, monkeypatch):
+        """A .jsonl member of a mix contributes its records' text, not JSON."""
+        import json as _json
+
+        monkeypatch.chdir(tmp_path)
+        recs = [{"text": "hello world " * 20}, {"other": "skip"}, {"text": "tail"}]
+        f = tmp_path / "corpus.jsonl"
+        f.write_text("\n".join(_json.dumps(r) for r in recs) + "\n", encoding="utf-8")
+        data, n_chars, stoi, _itos = prepare_data([("corpus.jsonl", 1.0)], block_size=8)
+        chars = set(stoi)
+        assert {"h", "e", "l", "o", " ", "w", "r", "d", "t", "a", "i"} <= chars
+        assert "{" not in chars and '"' not in chars  # never the JSON syntax
+        assert len(data) == len("hello world " * 20 + "\n" + "tail")
+
+    def test_plain_list_accepts_explicit_file_paths(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        f = tmp_path / "direct_list.txt"
+        f.write_text(DATA_TEXT, encoding="utf-8")
+        data, n_chars, stoi, itos = prepare_data(["direct_list.txt"], block_size=8)
+        assert len(data) == len(DATA_TEXT)
+
     def test_plain_list(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         a = tmp_path / "data" / "a"

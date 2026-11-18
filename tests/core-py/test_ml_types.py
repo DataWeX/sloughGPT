@@ -352,7 +352,11 @@ class TestPlatform:
         assert mt.cuda.empty_cache() is None
 
     def test_cuda_unavailable_without_torch(self, monkeypatch):
+        # _cuda_available() probes cupy (no torch import) — simulating only
+        # torch's absence left the real cupy probe free to answer True on a
+        # GPU host. None in sys.modules halts the import (ImportError).
         monkeypatch.setitem(sys.modules, "torch", None)
+        monkeypatch.setitem(sys.modules, "cupy", None)
         assert mt._cuda_available() is False
 
     def test_cuda_available_with_fake_cupy(self, monkeypatch):

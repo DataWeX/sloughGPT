@@ -327,6 +327,11 @@ class ShellCommands:
         return _api_post("/training/quick", {"dataset": dataset, "name": name or None})
 
     @staticmethod
+    def train_curriculum(path: str) -> dict[str, Any]:
+        """Start a staged curriculum run (curriculum.json → one trainer, N stages)."""
+        return _api_post("/training/curriculum", {"curriculum": path})
+
+    @staticmethod
     def train_auto(
         soul_name: str = "",
         teacher: str = "gpt2",
