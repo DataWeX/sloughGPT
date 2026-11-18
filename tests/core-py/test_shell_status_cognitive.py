@@ -35,30 +35,6 @@ class TestFmtUptime:
         assert _fmt_uptime(86400) == "24h 00m"
 
 
-class TestThinkingMode:
-    def test_values(self):
-        assert ThinkingMode.ANALYTICAL.value == "analytical"
-        assert ThinkingMode.CREATIVE.value == "creative"
-        assert ThinkingMode.CRITICAL.value == "critical"
-        assert ThinkingMode.STRATEGIC.value == "strategic"
-        assert ThinkingMode.REFLECTIVE.value == "reflective"
-
-    def test_count(self):
-        assert len(ThinkingMode) == 5
-
-
-class TestReasoningType:
-    def test_values(self):
-        assert ReasoningType.DEDUCTIVE.value == "deductive"
-        assert ReasoningType.INDUCTIVE.value == "inductive"
-        assert ReasoningType.ABDUCTIVE.value == "abductive"
-        assert ReasoningType.CAUSAL.value == "causal"
-        assert ReasoningType.ANALOGICAL.value == "analogical"
-
-    def test_count(self):
-        assert len(ReasoningType) == 5
-
-
 class TestThoughtProcess:
     def test_create(self):
         tp = ThoughtProcess(

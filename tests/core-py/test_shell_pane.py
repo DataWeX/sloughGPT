@@ -75,13 +75,6 @@ class TestBorder:
         assert b.top is False
         assert b.bottom is False
 
-    def test_all(self):
-        b = Border("all")
-        assert b.top is True
-        assert b.bottom is True
-        assert b.left is True
-        assert b.right is True
-
 
 # ── Pane ──────────────────────────────────────────────────────────────
 

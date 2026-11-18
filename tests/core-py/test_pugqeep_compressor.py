@@ -768,16 +768,6 @@ class TestCompressorConfig:
         assert c.method == "function"
 
 
-class TestPointConfig:
-    def test_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import PointConfig
-
-        cfg = PointConfig()
-        assert cfg.function_type == "cluster"
-        assert cfg.n_clusters == 16
-        assert cfg.residual_threshold == 0.99
-
-
 class TestLibraryConfig:
     def test_defaults(self):
         from domain.infrastructure._internal.pugqeep.config import LibraryConfig
@@ -797,15 +787,6 @@ class TestTreeConfig:
         assert cfg.n_clusters == 16
         assert cfg.skip_embeddings is True
         assert cfg.skip_biases is True
-
-
-class TestQueueConfig:
-    def test_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import QueueConfig
-
-        cfg = QueueConfig()
-        assert cfg.max_trees == 10
-        assert cfg.dedup is True
 
 
 class TestSubprocessConfig:

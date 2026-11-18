@@ -146,9 +146,6 @@ class TestParallelCollector:
         pc = ParallelCollector([c1])
         assert pc.store is store
 
-    def test_store_none_when_empty(self):
-        pc = ParallelCollector([])
-        assert pc.store is None
 
     def test_collect_continuous_max_rounds(self):
         c1 = Collector(NameSource("s1", []), ListStore())

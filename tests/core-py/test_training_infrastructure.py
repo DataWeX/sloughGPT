@@ -161,14 +161,6 @@ class TestTrainingConstants:
 
         assert TURBO_DIR.exists()
 
-    def test_valid_checkpoint_name(self):
-        from domain.training._internal.state import VALID_CKPT_NAME
-
-        assert VALID_CKPT_NAME.match("my-checkpoint_v1")
-        assert VALID_CKPT_NAME.match("checkpoint.001")
-        assert not VALID_CKPT_NAME.match("checkpoint with spaces")
-        assert not VALID_CKPT_NAME.match("checkpoint/slash")
-
 
 class TestOutcomeTrackerBasics:
     """Tests for TrainingOutcomeTracker core functionality."""

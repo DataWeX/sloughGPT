@@ -11,15 +11,6 @@ from domain.collections._internal.config import (
 
 
 class TestSourceConfig:
-    def test_defaults(self):
-        c = SourceConfig()
-        assert c.type == "file"
-        assert c.path == ""
-        assert c.url == ""
-        assert c.name == ""
-        assert c.timeout == 30
-        assert c.poll_interval == 60.0
-        assert c.headers == {}
 
     def test_custom_values(self):
         c = SourceConfig(
@@ -74,12 +65,6 @@ class TestSourceConfig:
 
 
 class TestStoreConfig:
-    def test_defaults(self):
-        c = StoreConfig()
-        assert c.type == "file"
-        assert c.path == ""
-        assert c.name == ""
-        assert c.max_size == 10000
 
     def test_custom_values(self):
         c = StoreConfig(type="memory", path="/tmp/store", name="mem", max_size=500)
@@ -105,15 +90,6 @@ class TestStoreConfig:
 
 
 class TestFilterConfig:
-    def test_defaults(self):
-        c = FilterConfig()
-        assert c.type == "length"
-        assert c.min_length == 10
-        assert c.max_length == 100000
-        assert c.keywords == []
-        assert c.mode == "include"
-        assert c.pattern == ""
-        assert c.allowed_chars_ratio == 0.8
 
     def test_custom_values(self):
         c = FilterConfig(

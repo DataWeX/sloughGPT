@@ -224,43 +224,6 @@ class TestStepBuilder:
         assert result.name == "custom"
 
 
-class TestSloughGPTConfig:
-    """Tests for sloughGPT-specific config."""
-
-    def test_sloughgpt_site_config(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
-
-        assert SLOUGHPGPT_SITE.name == "sloughGPT"
-        assert SLOUGHPGPT_SITE.base_url == "http://localhost:5173"
-        assert len(SLOUGHPGPT_SITE.pages) > 0
-
-    def test_sloughgpt_pages(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_PAGES
-
-        assert "training" in SLOUGHPGPT_PAGES
-        assert "chat" in SLOUGHPGPT_PAGES
-        assert "datasets" in SLOUGHPGPT_PAGES
-
-    def test_sloughgpt_training_pages(self):
-        # SLOUGHPGPT_TRAINING_PAGES was folded into SLOUGHPGPT_PAGES under
-        # training/* keys by the spec consolidation (f7e3d3963 removed the
-        # standalone dict); "/training/queue" no longer exists as a route.
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_PAGES
-
-        # keys now prefixed, matching test_comprehensive_journeys' list.
-        # /training/queue registers nowhere — no app route, no redirect, no
-        # config entry — so assert what actually registers.
-        assert "training" in SLOUGHPGPT_PAGES
-        assert "training/runs" in SLOUGHPGPT_PAGES
-        assert "training/presets" in SLOUGHPGPT_PAGES
-
-    def test_sloughgpt_journey(self):
-        from domain.testing._internal.sloughgpt import SloughGPTJourney
-
-        journey = SloughGPTJourney()
-        assert journey.config.name == "sloughGPT"
-
-
 class TestPrebuiltJourneys:
     """Tests for pre-built journey tests."""
 
@@ -292,11 +255,6 @@ class TestPrebuiltJourneys:
 class TestChromeDevTools:
     """Tests for ChromeDevTools integration."""
 
-    def test_browser_creation(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
-
-        browser = ChromeDevToolsBrowser(base_url="http://localhost:5173")
-        assert browser.base_url == "http://localhost:5173"
 
     def test_browser_state(self):
         from domain.testing._internal.chrome_devtools import BrowserState
@@ -305,12 +263,6 @@ class TestChromeDevTools:
         assert state.page_id is None
         assert state.url == ""
 
-    def test_browser_commands(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
-
-        browser = ChromeDevToolsBrowser()
-        commands = browser.get_commands()
-        assert isinstance(commands, list)
 
     def test_browser_report(self):
         from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser

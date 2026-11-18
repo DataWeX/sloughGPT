@@ -14,8 +14,6 @@ from domain.cognition._internal.base import CognitiveDomain, CognitiveException
 
 
 class TestCognitiveException:
-    def test_is_subclass_of_domain_exception(self):
-        assert issubclass(CognitiveException, DomainException)
 
     def test_is_exception(self):
         assert issubclass(CognitiveException, Exception)

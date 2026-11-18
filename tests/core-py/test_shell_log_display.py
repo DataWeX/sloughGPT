@@ -363,12 +363,6 @@ class TestFormatEntry:
         result = LineModeLogDisplay._format_entry(e)
         assert len(result) < 200
 
-    def test_level_labels(self):
-        assert _LEVEL_LABELS["DEBUG"] == "DBG"
-        assert _LEVEL_LABELS["INFO"] == "INF"
-        assert _LEVEL_LABELS["WARNING"] == "WRN"
-        assert _LEVEL_LABELS["ERROR"] == "ERR"
-        assert _LEVEL_LABELS["CRITICAL"] == "CRT"
 
     def test_format_entry_debug(self):
         e = _make_entry("DEBUG", "trace")

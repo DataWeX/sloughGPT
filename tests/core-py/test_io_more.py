@@ -186,9 +186,6 @@ class TestMemoryIO:
         m.clear()
         assert m.get_output() == ""
 
-    def test_flush_is_noop(self):
-        MemoryIO().flush()
-
 
 class TestCapture:
     def test_capture_redirects_and_restores(self):

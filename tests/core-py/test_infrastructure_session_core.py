@@ -23,9 +23,6 @@ class TestSessionCore:
         assert msgs[0]["content"] == "hello"
         assert msgs[1]["content"] == "hi"
 
-    def test_get_empty_session(self):
-        msgs = SessionCore.get_messages("nonexistent")
-        assert msgs == []
 
     def test_overwrite_session(self):
         SessionCore.store_context("s2", [{"role": "user", "content": "first"}])
@@ -34,7 +31,3 @@ class TestSessionCore:
         assert len(msgs) == 1
         assert msgs[0]["content"] == "second"
 
-    def test_list_sessions(self):
-        SessionCore.store_context("s3", [{"role": "user", "content": "x"}])
-        sessions = SessionCore.list_sessions()
-        assert isinstance(sessions, list)

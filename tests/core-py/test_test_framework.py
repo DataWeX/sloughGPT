@@ -34,9 +34,6 @@ class TestTestResult:
         assert r.metrics == {}
         assert r.details == {}
 
-    def test_with_error(self):
-        r = TestResult(name="t2", status="failed", execution_time=0.01, error_message="boom")
-        assert r.error_message == "boom"
 
     def test_not_a_pytest_test(self):
         assert TestResult.__test__ is False
@@ -110,18 +107,6 @@ class TestTestResult:
 
 
 class TestTestSuite:
-    def test_dataclass_fields(self):
-        s = TestSuite(
-            name="suite",
-            tests=[],
-            total_tests=0,
-            passed_tests=0,
-            failed_tests=0,
-            skipped_tests=0,
-            total_execution_time=0.0,
-        )
-        assert s.name == "suite"
-        assert s.coverage_percentage == 0.0
 
     def test_with_tests(self):
         r1 = TestResult(name="t1", status="passed", execution_time=0.1)

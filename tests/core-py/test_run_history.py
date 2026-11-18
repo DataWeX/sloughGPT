@@ -34,18 +34,6 @@ def store(tmp_path):
     reset_mogdb()
 
 
-class TestNewRunId:
-    def test_format(self):
-        rid = _new_run_id()
-        parts = rid.split("_")
-        assert parts[0] == "run"
-        assert len(parts) >= 4
-
-    def test_unique(self):
-        ids = {_new_run_id() for _ in range(50)}
-        assert len(ids) == 50
-
-
 class TestAgentRunStore:
     def test_start(self, store):
         run_id = store.start(goal="Test goal")

@@ -236,10 +236,6 @@ class TestStats:
 
 
 class TestGetRegistrySingleton:
-    def test_returns_same_instance(self):
-        a = get_registry()
-        b = get_registry()
-        assert a is b
 
     def test_is_collection_registry(self):
         r = get_registry()

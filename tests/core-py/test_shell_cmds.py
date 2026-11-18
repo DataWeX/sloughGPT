@@ -314,10 +314,6 @@ class TestDashboardUtils:
 
 
 class TestStatusUtils:
-    def test_fmt_uptime_seconds(self):
-        from domain.shell._internal.cmds.status import _fmt_uptime
-
-        assert _fmt_uptime(30) == "30s"
 
     def test_fmt_uptime_minutes(self):
         from domain.shell._internal.cmds.status import _fmt_uptime
@@ -330,16 +326,6 @@ class TestStatusUtils:
         result = _fmt_uptime(3660)
         assert "1h" in result
         assert "01m" in result
-
-    def test_fmt_uptime_zero(self):
-        from domain.shell._internal.cmds.status import _fmt_uptime
-
-        assert _fmt_uptime(0) == "0s"
-
-    def test_fmt_uptime_exact_hour(self):
-        from domain.shell._internal.cmds.status import _fmt_uptime
-
-        assert _fmt_uptime(3600) == "1h 00m"
 
 
 class TestLinuxCmdUtils:

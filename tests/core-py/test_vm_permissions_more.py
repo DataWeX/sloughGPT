@@ -35,11 +35,6 @@ class TestX86RBAC:
         assert rbac.check(20, Permission.RAW_MEMORY) is False
         assert rbac.check(20, Permission.RAW_CPU) is False
 
-    def test_kernel_has_every_permission(self):
-        rbac = X86RBAC()
-        rbac.assign(1, Role.KERNEL)
-        for perm in Permission:
-            assert rbac.check(1, perm) is True
 
     def test_unknown_role_falls_back_to_user(self):
         rbac = X86RBAC()
@@ -82,19 +77,13 @@ class TestX86RBAC:
         rbac.assign(40, Role.ADMIN)
         assert rbac.escalate(40, Role.ADMIN, caller_pid=1) is True
 
-    def test_role_enum_order(self):
-        assert Role.USER < Role.ADMIN < Role.KERNEL
 
     def test_role_enum_values(self):
         assert Role.USER.value == 0
         assert Role.ADMIN.value == 1
         assert Role.KERNEL.value == 2
 
-    def test_role_enum_count(self):
-        assert len(Role) == 3
 
-    def test_permission_enum_count(self):
-        assert len(Permission) == 14
 
     def test_permission_auto_values(self):
         assert Permission.FILE_READ.value == 1

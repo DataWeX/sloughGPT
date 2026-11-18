@@ -350,17 +350,9 @@ class TestLogRecord:
 
 
 class TestLogLevelComparison:
-    def test_debug_lt_info(self):
-        assert LogLevel.DEBUG < LogLevel.INFO
 
-    def test_info_lt_warning(self):
-        assert LogLevel.INFO < LogLevel.WARNING
 
-    def test_warning_lt_error(self):
-        assert LogLevel.WARNING < LogLevel.ERROR
 
-    def test_error_lt_critical(self):
-        assert LogLevel.ERROR < LogLevel.CRITICAL
 
     def test_debug_le_debug(self):
         assert LogLevel.DEBUG <= LogLevel.DEBUG

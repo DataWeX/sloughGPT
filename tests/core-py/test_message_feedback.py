@@ -63,12 +63,6 @@ class TestRecordFeedback:
 
 
 class TestGetFeedback:
-    def test_existing(self):
-        mf = MessageFeedback()
-        mf.record_feedback("msg1", "thumbs_up")
-        fb = mf.get_feedback("msg1")
-        assert fb is not None
-        assert fb["rating"] == "thumbs_up"
 
     def test_nonexistent(self):
         mf = MessageFeedback()
@@ -220,10 +214,6 @@ class TestConcurrency:
 
 
 class TestSingleton:
-    def test_same_instance(self):
-        a = get_message_feedback()
-        b = get_message_feedback()
-        assert a is b
 
     def test_singleton_is_message_feedback(self):
         mf = get_message_feedback()

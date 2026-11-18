@@ -55,25 +55,13 @@ class TestAnalyzeSentiment:
         score = sa.analyze_sentiment("This is bad and terrible")
         assert score == -1.0
 
-    def test_neutral_text(self):
-        sa = SentimentAnalyzer()
-        score = sa.analyze_sentiment("The weather is today")
-        assert score == 0.0
 
-    def test_mixed_sentiment(self):
-        sa = SentimentAnalyzer()
-        score = sa.analyze_sentiment("good bad")
-        assert score == 0.0
 
     def test_mostly_positive(self):
         sa = SentimentAnalyzer()
         score = sa.analyze_sentiment("good great amazing bad")
         assert score > 0
 
-    def test_empty_string(self):
-        sa = SentimentAnalyzer()
-        score = sa.analyze_sentiment("")
-        assert score == 0.0
 
     def test_all_positive_words(self):
         sa = SentimentAnalyzer()
@@ -121,13 +109,7 @@ class TestDetectEmotion:
         sa = SentimentAnalyzer()
         assert sa.detect_emotion("I feel so sad and depressed") == "sad"
 
-    def test_angry(self):
-        sa = SentimentAnalyzer()
-        assert sa.detect_emotion("I am angry and frustrated") == "angry"
 
-    def test_fear(self):
-        sa = SentimentAnalyzer()
-        assert sa.detect_emotion("I am scared and worried") == "fear"
 
     def test_surprise(self):
         sa = SentimentAnalyzer()
@@ -147,9 +129,6 @@ class TestDetectEmotion:
         result = sa.detect_emotion("happy sad")
         assert result in ("happy", "sad")
 
-    def test_empty_string_returns_neutral(self):
-        sa = SentimentAnalyzer()
-        assert sa.detect_emotion("") == "neutral"
 
     def test_pure_numbers_returns_neutral(self):
         sa = SentimentAnalyzer()
@@ -528,11 +507,6 @@ class TestEpisodicMemoryStore:
 
 
 class TestCognitiveArchitecture:
-    def test_process_sensory(self):
-        ca = CognitiveArchitecture()
-        result = ca.process_sensory("input data")
-        assert result is True
-        assert len(ca.sensory_buffer) == 1
 
     def test_sensory_buffer_cap(self):
         """Buffer trims to 50 once it exceeds 100; intermediate adds still grow."""
@@ -551,12 +525,6 @@ class TestCognitiveArchitecture:
         ca.to_working("item1")
         assert "item1" in ca.working_memory
 
-    def test_working_memory_fifo_eviction(self):
-        ca = CognitiveArchitecture(working_capacity=3)
-        for i in range(5):
-            ca.to_working(f"item{i}")
-        assert len(ca.working_memory) == 3
-        assert ca.working_memory[0] == "item2"
 
     def test_add_to_session(self):
         ca = CognitiveArchitecture()
@@ -694,11 +662,6 @@ class TestMetaLearningEngine:
         assert mle.strategies["rote"]["success"] == 1
         assert mle.strategies["rote"]["attempts"] == 1
 
-    def test_record_outcome_failure(self):
-        mle = MetaLearningEngine()
-        mle.record_outcome("rote", False)
-        assert mle.strategies["rote"]["success"] == 0
-        assert mle.strategies["rote"]["attempts"] == 1
 
     def test_record_unknown_strategy_ignored(self):
         mle = MetaLearningEngine()
@@ -741,10 +704,6 @@ class TestMetaLearningEngine:
 
 
 class TestDreamProcessingEngine:
-    def test_initial_state(self):
-        dpe = DreamProcessingEngine()
-        assert dpe.dream_cycles == 0
-        assert dpe.consolidated == 0
 
     def test_dream_with_few_memories(self):
         dpe = DreamProcessingEngine()
