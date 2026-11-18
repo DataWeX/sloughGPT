@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "527b1486d3115f497f50d49c26b1a3e73b907ce0",
+    "recorded_commit": "56f1fda8f98d0d87c347b44185b585a8f5b19621",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -478,7 +478,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "fc7b329865bbcce69d08da6a11d4384668df2014"
+      "tree_hash": "bf212973e5aecdff671002d24138bf401c9cff69"
     },
     "slolib": {
       "class": "core-capability",
@@ -550,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "92de3ddd522367f5a906ede0a6c29cb692b45d41"
+      "tree_hash": "7afe5781eab788c8dee35ecfd15d49cb4688134c"
     },
     "voice": {
       "class": "core-capability",

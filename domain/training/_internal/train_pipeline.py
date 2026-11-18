@@ -251,6 +251,125 @@ def _dataset_identity(data_path, data) -> tuple[str, str, str]:
     return fingerprint_array(np.asarray(data, dtype=np.int64)), "", recipe
 
 
+def _measure_and_gate(
+    data: np.ndarray, itos: dict, *, min_quality: float, max_toxicity: float
+) -> tuple[dict[str, float], float | None]:
+    """Compute data-quality metrics for a token stream and enforce the gates.
+
+    Shared by construction and curriculum stage swaps so every corpus
+    entering the trainer passes the same ``min_data_quality`` /
+    ``max_toxicity_rate`` gates. Non-gate failures fall back to zeroed
+    metrics (logged); gate violations raise — byte-identical semantics to
+    the historical inline construction block.
+
+    Args:
+        data: token-id array to sample (first 50k ids decoded via ``itos``).
+        itos: id → token mapping used for the decode.
+        min_quality: ``TrainerConfig.min_data_quality`` gate.
+        max_toxicity: ``TrainerConfig.max_toxicity_rate`` gate.
+
+    Returns:
+        ``(quality_metrics, avg_quality)`` — ``avg_quality`` is ``None``
+        only on the non-gate fallback path.
+    """
+    try:
+        raw_text = "".join(itos.get(int(i), "") for i in data[: min(50000, len(data))])
+        quality = compute_data_quality(raw_text)
+        avg_quality = quality.get("avg_quality")
+        tox_rate = quality.get("toxicity_rate", 0)
+        logger.info(
+            "Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f toxicity=%.2f",
+            quality["avg_quality"],
+            quality["repetition_rate"],
+            quality["diversity"],
+            quality["language_quality"],
+            tox_rate,
+            extra={"tag": "TRAIN"},
+        )
+        if tox_rate > 0.3:
+            logger.warning(
+                "High toxicity detected in training data (%.2f). Consider cleaning the data.",
+                tox_rate,
+                extra={"tag": "TRAIN"},
+            )
+
+        # Enforce quality gates
+        avg_q = quality.get("avg_quality", 0)
+        if avg_q < min_quality:
+            raise ValueError(
+                f"Data quality too low: avg_quality={avg_q:.2f} (minimum={min_quality}). "
+                "Improve your training data or lower min_data_quality in config."
+            )
+        if tox_rate > max_toxicity:
+            raise ValueError(
+                f"Data toxicity too high: toxicity_rate={tox_rate:.2f} (maximum={max_toxicity}). "
+                "Remove harmful content from training data or increase max_toxicity_rate in config."
+            )
+        return quality, avg_quality
+    except Exception as e:
+        if "Data quality too low" in str(e) or "Data toxicity too high" in str(e):
+            raise
+        logger.warning("Data quality computation failed, using defaults: %s", e)
+        return (
+            {
+                "avg_quality": 0.0,
+                "repetition_rate": 0.0,
+                "diversity": 0.0,
+                "language_quality": 0.0,
+                "toxicity_rate": 0.0,
+            },
+            None,
+        )
+
+
+def _resolve_dataset_path(name: str) -> Path | None:
+    """Resolve one corpus entry to a readable file.
+
+    An explicit file path (what ``curriculum.json`` mixes carry) wins, then
+    the ``data/<name>/input.txt`` dataset-directory convention — the same
+    precedence the str branch has always used. ``None`` means unresolvable;
+    the caller warns and skips (never silently substitutes).
+    """
+    direct = Path(name)
+    if direct.is_file():
+        return direct
+    alt = Path("data") / name / "input.txt"
+    if alt.is_file():
+        return alt
+    return None
+
+
+def _read_corpus_file(path: Path) -> str:
+    """Read one corpus file.
+
+    Canonical text corpora (e.g. tinyshakespeare's 32,777 cached records)
+    carry the corpus in each record's ``text`` field when the file is
+    ``.jsonl`` — extract it, never the JSON syntax around it. Only ``text``
+    is extracted: other record shapes (pair datasets like user/assistant …)
+    keep their pre-existing raw-read behaviour. Malformed lines and records
+    without ``text`` are skipped; join with newlines. When no record has a
+    text field, fall back to the raw read.
+    """
+    with open(path, encoding="utf-8") as f:
+        if path.suffix != ".jsonl":
+            return f.read()
+        raw = f.read()
+    texts = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(rec, dict):
+            t = rec.get("text")
+            if isinstance(t, str) and t:
+                texts.append(t)
+    return "\n".join(texts) if texts else raw
+
+
 def backfill_soul_dataset_signature(soul_path, *, data_path=None, block_size=128):
     """Record a missing ``dataset_signature`` on an existing ``.soul``.
 
@@ -356,11 +475,11 @@ def load_corpus_text(data_path, block_size=128) -> str:
         total_len = 0
 
         for ds_name, ratio in datasets_with_ratios:
-            path = Path("data") / ds_name / "input.txt"
-            if path.exists():
-                text = path.read_text(encoding="utf-8")
-                target_len = int(len(text) * ratio)
-                all_texts.append((text, target_len))
+            path = _resolve_dataset_path(ds_name)
+            if path is not None:
+                ds_text = _read_corpus_file(path)
+                target_len = int(len(ds_text) * ratio)
+                all_texts.append((ds_text, target_len))
                 total_len += target_len
             else:
                 logger.warning(
@@ -387,9 +506,9 @@ def load_corpus_text(data_path, block_size=128) -> str:
         datasets = data_path
         texts = []
         for ds_name in datasets:
-            path = Path("data") / ds_name / "input.txt"
-            if path.exists():
-                texts.append(path.read_text(encoding="utf-8"))
+            path = _resolve_dataset_path(ds_name)
+            if path is not None:
+                texts.append(_read_corpus_file(path))
             else:
                 logger.warning(
                     "dataset %s not found, skipping",
@@ -411,33 +530,9 @@ def load_corpus_text(data_path, block_size=128) -> str:
                 raise FileNotFoundError(
                     f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
                 )
-        with open(path, encoding="utf-8") as f:
-            if path.suffix == ".jsonl":
-                # Canonical text corpora (e.g. tinyshakespeare's 32,777
-                # cached records) carry the corpus in each record's `text`
-                # field — extract it, never the JSON syntax around it.
-                # Only `text` is extracted: other record shapes (pair
-                # datasets like user/assistant …) keep their pre-existing
-                # raw-read behaviour. Malformed lines and records without
-                # `text` are skipped; join with newlines. When no record
-                # has a text field, fall back to the raw read.
-                raw = f.read()
-                texts = []
-                for line in raw.splitlines():
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        rec = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if isinstance(rec, dict):
-                        t = rec.get("text")
-                        if isinstance(t, str) and t:
-                            texts.append(t)
-                text = "\n".join(texts) if texts else raw
-            else:
-                text = f.read()
+        # .jsonl text-field extraction lives in _read_corpus_file (shared
+        # with the list/tuple branches) — one reading of the rule.
+        text = _read_corpus_file(path)
 
     return text
 
@@ -1414,52 +1509,12 @@ class SloughGPTTrainer:
         self._build_selfgen_if_configured()
 
         # Compute data quality metrics
-        try:
-            raw_text = "".join(
-                self.itos.get(int(i), "") for i in self.data[: min(50000, len(self.data))]
-            )
-            self._data_quality = compute_data_quality(raw_text)
-            self._avg_quality = self._data_quality.get("avg_quality")
-            tox_rate = self._data_quality.get("toxicity_rate", 0)
-            logger.info(
-                "Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f toxicity=%.2f",
-                self._data_quality["avg_quality"],
-                self._data_quality["repetition_rate"],
-                self._data_quality["diversity"],
-                self._data_quality["language_quality"],
-                tox_rate,
-                extra={"tag": "TRAIN"},
-            )
-            if tox_rate > 0.3:
-                logger.warning(
-                    "High toxicity detected in training data (%.2f). Consider cleaning the data.",
-                    tox_rate,
-                    extra={"tag": "TRAIN"},
-                )
-
-            # Enforce quality gates
-            avg_q = self._data_quality.get("avg_quality", 0)
-            if avg_q < self.config.min_data_quality:
-                raise ValueError(
-                    f"Data quality too low: avg_quality={avg_q:.2f} (minimum={self.config.min_data_quality}). "
-                    "Improve your training data or lower min_data_quality in config."
-                )
-            if tox_rate > self.config.max_toxicity_rate:
-                raise ValueError(
-                    f"Data toxicity too high: toxicity_rate={tox_rate:.2f} (maximum={self.config.max_toxicity_rate}). "
-                    "Remove harmful content from training data or increase max_toxicity_rate in config."
-                )
-        except Exception as e:
-            if "Data quality too low" in str(e) or "Data toxicity too high" in str(e):
-                raise
-            logger.warning("Data quality computation failed, using defaults: %s", e)
-            self._data_quality = {
-                "avg_quality": 0.0,
-                "repetition_rate": 0.0,
-                "diversity": 0.0,
-                "language_quality": 0.0,
-                "toxicity_rate": 0.0,
-            }
+        self._data_quality, self._avg_quality = _measure_and_gate(
+            self.data,
+            self.itos,
+            min_quality=self.config.min_data_quality,
+            max_toxicity=self.config.max_toxicity_rate,
+        )
 
         # Create model
         self._create_model()
@@ -1560,6 +1615,12 @@ class SloughGPTTrainer:
 
         # Initialize EWC if enabled (prevents catastrophic forgetting)
         self._ewc = None
+        # Post-run snapshot toggle: ON by default (the continual-learning
+        # resume path wants a snapshot after every run). The curriculum
+        # runner switches it off and owns snapshots at its named stage
+        # boundaries instead — train()'s anonymous per-run snapshot would
+        # otherwise double the (expensive) Fisher estimation every stage.
+        self.ewc_snapshot_after_train = True
         if self.config.use_ewc:
             from domain.training._internal.ewc import EwcContinualLearner, EWCParameters
 
@@ -2633,23 +2694,11 @@ class SloughGPTTrainer:
         self._is_training = False
 
         # Save EWC snapshot after training (for continual learning)
-        if self._ewc is not None:
-            try:
-
-                def _loss_fn(model, batch):
-                    x, y = batch
-                    _, loss = model(x, y)
-                    return loss
-
-                self._ewc.save_task_snapshot(
-                    task_id=f"task_{int(time.time())}",
-                    task_name=f"train_{getattr(self.config, 'dataset', 'unknown')}",
-                    train_loader=self._get_train_loader(),
-                    loss_fn=_loss_fn,
-                )
-                logger.info("EWC snapshot saved after training", extra={"tag": "TRAIN"})
-            except Exception as exc:
-                logger.debug("EWC snapshot save failed: %s", exc)
+        if self._ewc is not None and self.ewc_snapshot_after_train:
+            self.save_ewc_snapshot(
+                f"task_{int(time.time())}",
+                f"train_{getattr(self.config, 'dataset', 'unknown')}",
+            )
 
         # final_loss: prefer best eval loss, fall back to last train loss
         final_loss = self._best_val_loss
@@ -2724,6 +2773,164 @@ class SloughGPTTrainer:
             checkpoint_name=checkpoint_name,
             avg_quality=self._avg_quality,
             data_quality=getattr(self, "_data_quality", None),
+        )
+
+    def save_ewc_snapshot(self, task_id: str, task_name: str | None = None) -> bool:
+        """Consolidate current weights as EWC task ``task_id``.
+
+        Saves a task snapshot (Fisher estimate + parameter anchor) and makes
+        it the active penalty target (``current_task``), so the next
+        training run's ``ewc_loss()`` penalizes drift from this point.
+        Curriculum stage boundaries call this with the stage's name after
+        the stage completes.
+
+        Args:
+            task_id: snapshot key — the stage name for curriculum runs.
+            task_name: human-readable label; defaults to ``task_id``.
+
+        Returns:
+            ``True`` when the snapshot was saved, ``False`` when EWC is not
+            enabled for this trainer or the estimation failed (logged).
+        """
+        if self._ewc is None:
+            return False
+
+        def _loss_fn(model, batch):
+            x, y = batch
+            _, loss = model(x, y)
+            return loss
+
+        try:
+            self._ewc.save_task_snapshot(
+                task_id=task_id,
+                task_name=task_name or task_id,
+                train_loader=self._get_train_loader(),
+                loss_fn=_loss_fn,
+            )
+            self._ewc.current_task = task_id
+            logger.info("EWC snapshot saved", extra={"tag": "TRAIN", "task": task_id})
+            return True
+        except Exception as exc:
+            logger.debug("EWC snapshot save failed: %s", exc)
+            return False
+
+    def swap_stage_data(self, data_path: Any, *, epochs: int | None = None) -> None:
+        """Replace the training corpus mid-run for a curriculum stage transition.
+
+        Model, optimizer, ``global_step`` and EWC consolidation history all
+        persist across the swap; the corpus and stage-local bookkeeping
+        (epoch counter, early-stopping/eval baselines, rolling quality
+        scores) reset for the new stage. The stage gets a fresh scheduler
+        horizon — the construction horizon would pin later stages at
+        ``min_lr`` once they step past it (warmup re-runs per stage by
+        design).
+
+        The new corpus is tokenized through the EXISTING ``stoi`` — never a
+        corpus-order rebuild: a fresh ``prepare_data`` would assign
+        different ids to the same characters and silently remap everything
+        the model learned. Characters absent from the stage-1 vocabulary
+        map to token 0 (the documented unknown-char behaviour), so the
+        vocabulary can never drift.
+
+        Args:
+            data_path: static dataset spec — a path, a dataset name, or a
+                ``(path, ratio)`` list (as built by
+                ``curriculum.compute_stage_mix``). Live sources (feed /
+                experience) are refused: their samplers are bound to the
+                original source at construction.
+            epochs: stage epoch budget (sets ``config.epochs``).
+
+        Raises:
+            RuntimeError: called while ``train()`` is in flight, or for a
+                live (feed/experience) source.
+            FileNotFoundError: the new corpus does not resolve.
+            ValueError: ``epochs < 1``, or the stage corpus violates the
+                ``min_data_quality`` / ``max_toxicity_rate`` gates (state
+                is left untouched when any of these raise).
+        """
+        if self._is_training:
+            raise RuntimeError("cannot swap training data while train() is in flight")
+
+        paths = [data_path] if isinstance(data_path, str) else [p for p, _ in data_path]
+        for p in paths:
+            if is_feed_source(p) or is_experience_source(p):
+                raise RuntimeError(
+                    f"curriculum stages must be static datasets; refusing live source {p!r}"
+                )
+        if epochs is not None and epochs < 1:
+            raise ValueError(f"epochs must be >= 1, got {epochs}")
+
+        # Load + tokenize + gate FIRST through the existing vocab — trainer
+        # state stays untouched if anything below raises.
+        text = load_corpus_text(data_path, block_size=self.config.block_size)
+        validate_training_data(text)
+        if self.tokenizer is not None:
+            data = np.asarray(self.tokenizer.encode(text), dtype=np.int64)
+            stoi = dict(self.tokenizer.stoi)
+            itos = dict(self.tokenizer.itos)
+            unknown = 0
+        else:
+            unknown = sum(1 for c in text if c not in self.stoi)
+            data = np.asarray([self.stoi.get(c, 0) for c in text], dtype=np.int64)
+            stoi, itos = self.stoi, self.itos
+        quality, avg_quality = _measure_and_gate(
+            data,
+            itos,
+            min_quality=self.config.min_data_quality,
+            max_toxicity=self.config.max_toxicity_rate,
+        )
+
+        # ── commit the swap ──
+        self.data_path = data_path
+        self.data = data
+        self.stoi = stoi
+        self.itos = itos
+        self._data_quality = quality
+        self._avg_quality = avg_quality
+
+        # Split data (same 90/10 as construction)
+        n = int(0.9 * len(self.data))
+        self.train_data = self.data[:n]
+        self.val_data = self.data[n:]
+
+        if epochs is not None:
+            self.config.epochs = epochs
+
+        # Stage-local resets — cross-stage state (model, optimizer,
+        # global_step, _ewc snapshots, _step_traces) deliberately untouched.
+        self.current_epoch = 0
+        self._early_stopped = False
+        self._patience_counter = 0
+        self._best_val_loss = float("inf")
+        self._best_checkpoint_loss = float("inf")
+        self._best_model_path = None
+        self._train_loss_at_best = 0.0
+        self._last_train_loss = None
+        self._ema_loss = None
+        self._quality_scores = []
+
+        # Fresh schedule horizon for the new stage budget (uses the new
+        # train_data split and the updated config.epochs).
+        self.scheduler = self._create_scheduler()
+
+        # Identity follows the data this stage actually trains on.
+        (
+            self.dataset_signature,
+            self.dataset_signature_reason,
+            self.dataset_signature_recipe,
+        ) = _dataset_identity(self.data_path, self.data)
+
+        if unknown:
+            logger.warning(
+                "stage swap: %d chars outside the existing vocabulary map to token 0",
+                unknown,
+                extra={"tag": "TRAIN"},
+            )
+        logger.info(
+            "stage data swapped: %d tokens, epochs=%s",
+            len(self.data),
+            self.config.epochs,
+            extra={"tag": "TRAIN"},
         )
 
     def save_checkpoint(self, metrics: dict[str, float] | None = None, is_final: bool = False):
