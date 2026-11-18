@@ -1017,8 +1017,24 @@ class PlannerStore:
 
     # ── Sync ────────────────────────────────────────────────────────────
 
-    def sync(self) -> tuple[int, int, int]:
-        """Reconcile notes ↔ board. Returns (added, updated, total)."""
+    def orphan_cards(self) -> list[Card]:
+        """Cards whose title matches no note — sync drift, reported only.
+
+        Matching mirrors ``sync()`` exactly: by title, with an empty note
+        title normalised to ``(untitled)``. Read-only by design — cards made
+        with ``grib board add`` carry no note either, so anything acting on
+        this list needs an explicit opt-in (``sync(prune=True)``).
+        """
+        titles = {n.title or "(untitled)" for n in self.list_notes(limit=9999)}
+        return [c for c in self.load_board().cards if c.title not in titles]
+
+    def sync(self, prune: bool = False) -> tuple[int, int, int]:
+        """Reconcile notes ↔ board. Returns (added, updated, total).
+
+        The default only ever adds and updates: a card whose note was deleted
+        stays put, because hand-added cards have no note either and deleting
+        one is a data-loss path. ``prune=True`` opts into removing orphans.
+        """
         from .sync import canonical_notes
 
         notes = canonical_notes(self.list_notes(limit=9999))
@@ -1053,6 +1069,12 @@ class PlannerStore:
             if note.assignee and card.assignee != note.assignee:
                 self.update_card(card.id, assignee=note.assignee)
                 updated += 1
+
+        # Opt-in only: drop cards left behind by a deleted note, then reseal.
+        # Computed after the loop so freshly added cards are never candidates.
+        if prune:
+            for card in self.orphan_cards():
+                self.delete_card(card.id)
 
         # Reconcile, then seal the board: chain recomputation is idempotent
         # and rewrites cards in canonical order (blockers before blocked).
