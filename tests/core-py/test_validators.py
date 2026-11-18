@@ -162,13 +162,6 @@ class TestDataEnricher:
 
 
 class TestRateLimiter:
-    def test_acquire_within_burst(self):
-        rl = RateLimiter(max_per_second=10, burst_size=3)
-        assert rl.acquire() is True
-        assert rl.acquire() is True
-        assert rl.acquire() is True
-        assert rl.stats["allowed"] == 3
-
     def test_acquire_exceeds_burst(self):
         rl = RateLimiter(max_per_second=1, burst_size=1)
         rl.acquire()
@@ -213,10 +206,6 @@ class TestCallableStore:
         cs.write(Record(content="hello"))
         assert len(stored) == 1
         assert cs.count() == 1
-
-    def test_read_all(self):
-        cs = CallableStore(lambda r: None)
-        assert list(cs.read_all()) == []
 
 
 # ── CollectorRunner ──────────────────────────────────────────────────

@@ -213,3 +213,62 @@ def test_finalize_fatal_error_overrides_success() -> None:
     loader.finish_history.assert_called_once_with(success=False, error="phase_ready exploded")
     event, _ = manager.emit.await_args.args
     assert event.value == "startup.failed"
+
+
+def _history(tmp_path, monkeypatch) -> StartupHistory:
+    monkeypatch.setenv("SLO_STARTUP_HISTORY_PATH", str(tmp_path / "no_legacy.json"))
+    return StartupHistory(db_path=tmp_path / "history_mogdb")
+
+
+def test_get_alerts_does_not_slice_the_deque(tmp_path, monkeypatch) -> None:
+    """Regression: `get_alerts` sliced `self._records`, which is a deque.
+
+    `deque[-5:]` raises ``TypeError: sequence index must be integer, not
+    'slice'``, which escaped `health.startup_history` and turned the whole
+    `/health/startup-history` envelope into ``E_UNHANDLED`` — so the UI
+    rendered its empty branch ("No startup records yet") over a healthy store.
+
+    The guard at the top of `get_alerts` is ``len(self._records) < 3``, so an
+    empty store returned ``[]`` and hid the bug; seeding 3 records is exactly
+    the precondition that makes it fire.
+    """
+    history = _history(tmp_path, monkeypatch)
+    _seed_records(history, count=3)
+
+    alerts = history.get_alerts()
+
+    assert isinstance(alerts, list)
+    assert all(isinstance(a, dict) for a in alerts)
+
+
+def test_get_alerts_flags_failed_startup(tmp_path, monkeypatch) -> None:
+    history = _history(tmp_path, monkeypatch)
+    _seed_records(history, count=3)
+    history.start_startup()
+    history.record_stage("critical", 1.0)
+    history.finish_startup(success=False, error="model load exploded")
+
+    alerts = history.get_alerts()
+
+    failed = [a for a in alerts if a["type"] == "failed_startup"]
+    assert len(failed) == 1
+    assert failed[0]["severity"] == "error"
+    assert "model load exploded" in failed[0]["message"]
+
+
+def test_get_alerts_flags_slow_startup_and_regression(tmp_path, monkeypatch) -> None:
+    """Both remaining branches, on a deque big enough for p95 to matter.
+
+    `p95` indexes ``sorted[int(n * 0.95)]``, which is the max for n <= 20 — so
+    ``p95 * 1.5`` can never be exceeded by any record until n >= 21. Seeding 21
+    fast records and inflating the last one exercises slow + regression at once.
+    """
+    history = _history(tmp_path, monkeypatch)
+    _seed_records(history, count=21)
+    history._records[-1].total_duration = 1000.0  # seeded runs are ~0s wall time
+
+    alerts = history.get_alerts()
+
+    types = {a["type"] for a in alerts}
+    assert "slow_startup" in types
+    assert "startup_regression" in types

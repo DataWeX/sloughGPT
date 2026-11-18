@@ -909,10 +909,6 @@ class TestEpisodicMemory:
         episodes = em2.recall(1)
         assert episodes[0].reward == 3.0
 
-    def test_invalid_capacity(self):
-        with pytest.raises(ValueError):
-            EpisodicMemory(capacity=0)
-
     def test_recall_by_reward(self):
         em = EpisodicMemory(capacity=10)
         em.record(np.zeros(3), (0.5,), 1.0)

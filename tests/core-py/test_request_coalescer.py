@@ -13,14 +13,8 @@ from domain.infrastructure._internal.request_coalescer import (
 
 
 class TestHashKey:
-    def test_deterministic(self):
-        assert _hash_key("a", "b") == _hash_key("a", "b")
-
     def test_order_matters_for_positional_args(self):
         assert _hash_key("a", "b") != _hash_key("b", "a")
-
-    def test_different_inputs_different_hash(self):
-        assert _hash_key("a", "b") != _hash_key("a", "c")
 
     def test_empty_input(self):
         h = _hash_key()

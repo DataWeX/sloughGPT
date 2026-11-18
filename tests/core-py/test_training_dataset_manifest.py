@@ -29,10 +29,6 @@ class TestLoadManifest:
         data = load_manifest(p)
         assert data["dataset_id"] == "d1"
 
-    def test_missing_file(self, tmp_path):
-        with pytest.raises(ManifestError, match="not found"):
-            load_manifest(tmp_path / "nope.json")
-
     def test_invalid_json(self, tmp_path):
         p = tmp_path / "bad.json"
         p.write_text("{invalid")

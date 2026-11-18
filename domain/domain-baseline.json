@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "1a23d4526fcd319553fc5d7c87752cd745a0b6b7",
+    "recorded_commit": "527b1486d3115f497f50d49c26b1a3e73b907ce0",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -264,7 +264,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "6588bf393620fec2e4bf19c05eddda67acb995d5"
+      "tree_hash": "b2071304181d381351988637423142a6b135c47f"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -280,7 +280,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "b3be47f87e2bd4db4e353448e669a52017576679"
+      "tree_hash": "c99f36d28794c5d3882324df2e4e097289f7e2b4"
     },
     "knowledge": {
       "class": "core-capability",
@@ -478,7 +478,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "676259af84b5a303361f83d66b4edb772590f9f8"
+      "tree_hash": "fc7b329865bbcce69d08da6a11d4384668df2014"
     },
     "slolib": {
       "class": "core-capability",
@@ -550,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "523bb360f644bfa74b998f8614d93497b5dbede4"
+      "tree_hash": "92de3ddd522367f5a906ede0a6c29cb692b45d41"
     },
     "voice": {
       "class": "core-capability",

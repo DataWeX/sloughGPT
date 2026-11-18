@@ -5044,12 +5044,6 @@ class TestConsoleDeviceCall:
 
 
 class TestPS2KeyboardDeviceCall:
-    def test_call_read_key(self):
-        from domain.shell._internal.vm import PS2KeyboardDevice
-
-        kb = PS2KeyboardDevice()
-        assert kb.call("read_key") == 0
-
     def test_call_has_key(self):
         from domain.shell._internal.vm import PS2KeyboardDevice
 

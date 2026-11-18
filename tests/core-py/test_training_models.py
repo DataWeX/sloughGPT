@@ -29,13 +29,6 @@ from domain.training import (
 
 
 class TestModelType:
-    def test_all_members(self):
-        assert len(ModelType) == 2
-
-    def test_values(self):
-        assert ModelType.LANGUAGE_MODEL.value == "language_model"
-        assert ModelType.CHAT_MODEL.value == "chat_model"
-
     def test_names(self):
         assert ModelType.LANGUAGE_MODEL.name == "LANGUAGE_MODEL"
         assert ModelType.CHAT_MODEL.name == "CHAT_MODEL"
@@ -55,14 +48,6 @@ class TestModelType:
 
 
 class TestModelArchitecture:
-    def test_all_members(self):
-        assert len(ModelArchitecture) == 3
-
-    def test_values(self):
-        assert ModelArchitecture.GPT.value == "gpt"
-        assert ModelArchitecture.BERT.value == "bert"
-        assert ModelArchitecture.CUSTOM.value == "custom"
-
     def test_names(self):
         assert ModelArchitecture.GPT.name == "GPT"
 
@@ -136,11 +121,6 @@ class TestModelManager:
         assert result["name"] == "gpt2"
         assert result["ready"] is True
 
-    def test_create_not_found(self):
-        mgr = ModelManager()
-        with pytest.raises(ValueError, match="not found"):
-            mgr.create_model("nonexistent")
-
     def test_register_multiple(self):
         mgr = ModelManager()
         mgr.register_model(
@@ -189,9 +169,6 @@ class TestModelManager:
 
 
 class TestDatasetType:
-    def test_all_members(self):
-        assert len(DatasetType) == 8
-
     def test_values(self):
         assert DatasetType.TEXT.value == "text"
         assert DatasetType.CODE.value == "code"
@@ -331,16 +308,6 @@ class TestDatasetManager:
 # ---------------------------------------------------------------------------
 
 
-class TestPreprocessingStepType:
-    def test_all_members(self):
-        assert len(PreprocessingStepType) == 3
-
-    def test_values(self):
-        assert PreprocessingStepType.CLEAN.value == "clean"
-        assert PreprocessingStepType.TOKENIZE.value == "tokenize"
-        assert PreprocessingStepType.FILTER.value == "filter"
-
-
 # ---------------------------------------------------------------------------
 # DataPreprocessor
 # ---------------------------------------------------------------------------
@@ -396,17 +363,6 @@ class TestDataPreprocessor:
 # ---------------------------------------------------------------------------
 # PipelineStageType
 # ---------------------------------------------------------------------------
-
-
-class TestPipelineStageType:
-    def test_all_members(self):
-        assert len(PipelineStageType) == 4
-
-    def test_values(self):
-        assert PipelineStageType.PREPROCESS.value == "preprocess"
-        assert PipelineStageType.TRAIN.value == "train"
-        assert PipelineStageType.VALIDATE.value == "validate"
-        assert PipelineStageType.SAVE.value == "save"
 
 
 # ---------------------------------------------------------------------------

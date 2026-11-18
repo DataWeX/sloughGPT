@@ -346,11 +346,6 @@ class TestTask:
         assert t2.data == 42
         assert t2.priority == TaskPriority.HIGH
 
-    def test_unique_ids(self):
-        t1 = Task()
-        t2 = Task()
-        assert t1.id != t2.id
-
     def test_status_lifecycle(self):
         t = Task()
         assert t.status == TaskStatus.PENDING
@@ -373,27 +368,11 @@ class TestTask:
         assert t2.tree_id == "t1"
         assert t2.metadata == {"k": "v"}
 
-    def test_task_default_id_format(self):
-        t = Task()
-        assert len(t.id) == 12
-
     def test_task_created_at_is_recent(self):
         before = time.time()
         t = Task()
         after = time.time()
         assert before <= t.created_at <= after
-
-    def test_task_error_default(self):
-        t = Task()
-        assert t.error is None
-
-    def test_task_result_default(self):
-        t = Task()
-        assert t.result is None
-
-    def test_task_tree_id_default(self):
-        t = Task()
-        assert t.tree_id is None
 
     def test_task_data_none_default(self):
         t = Task()

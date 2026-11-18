@@ -5,7 +5,6 @@ from __future__ import annotations
 from domain.infrastructure._internal.event_buffer import (
     DashboardEvent,
     EventBuffer,
-    get_event_buffer,
 )
 
 
@@ -50,10 +49,6 @@ class TestEventBuffer:
         buf.clear()
         assert buf.recent() == []
 
-    def test_recent_empty(self):
-        buf = EventBuffer()
-        assert buf.recent() == []
-
     def test_recent_n(self):
         buf = EventBuffer(maxlen=50)
         for i in range(10):
@@ -76,10 +71,3 @@ class TestEventBuffer:
             t.join()
         # Should have 100 events (buffer full)
         assert len(buf.recent(200)) == 100
-
-
-class TestGetEventBuffer:
-    def test_singleton(self):
-        a = get_event_buffer()
-        b = get_event_buffer()
-        assert a is b

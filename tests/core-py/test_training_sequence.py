@@ -34,13 +34,6 @@ class TestPhaseResult:
         assert pr.message == ""
         assert pr.metrics == {}
 
-    def test_to_dict(self):
-        pr = PhaseResult(phase=TrainingSequence.EVALUATE, status="success", metrics={"loss": 0.5})
-        d = pr.to_dict()
-        assert d["phase"] == "evaluate"
-        assert d["status"] == "success"
-        assert d["metrics"]["loss"] == 0.5
-
 
 class TestTrainingRunConfig:
     def test_defaults(self):

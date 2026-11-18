@@ -482,6 +482,80 @@ class TestLoadSoulCheckpoint:
         assert result["step"] == 0
         assert result["epoch"] == 0
 
+    def test_real_save_resolves_state_ref_via_base_dir(self, tmp_path):
+        """Phase-2 default write: the header only holds a ``state_ref`` — the
+        loader must resolve it from the soul's own directory (base_dir) or the
+        resume silently degrades to fresh momentum."""
+        from domain.inference._internal.slo_format import SloProfile, save_soul
+        from domain.training._internal.slonet import SloLinear, SloNet
+
+        fat_state = {
+            "step": 7,
+            "epoch": 1,
+            "completed_epochs": 1,
+            "accumulation_step": 0,
+            "optimizer": {
+                "type": "SloAdamW",
+                "hyperparameters": {"lr": 0.001, "betas": [0.9, 0.999]},
+                "state": {
+                    "0": {
+                        "exp_avg": [[0.25, -0.5], [0.125, 0.75]],
+                        "exp_avg_sq": [[0.0625, 0.015625], [0.00390625, 0.5]],
+                    },
+                },
+            },
+            "scheduler": {"type": "cosine", "initial_lr": 0.001},
+        }
+        net = SloNet(layers=[SloLinear(2, 2)], soul_name="RefRes")
+        profile = SloProfile(name="RefRes")
+        profile.metadata = {"training_state": fat_state}
+        soul_path = tmp_path / "ref.soul"
+        save_soul(net, str(soul_path), soul_profile=profile)
+
+        result = _load_soul_checkpoint(str(soul_path))
+        assert result["step"] == 7
+        state = result["optimizer_state_dict"]["state"]
+        np.testing.assert_allclose(state["0"]["exp_avg"], [[0.25, -0.5], [0.125, 0.75]])
+        np.testing.assert_allclose(
+            state["0"]["exp_avg_sq"], [[0.0625, 0.015625], [0.00390625, 0.5]]
+        )
+        # the ref itself proves the default write stripped the header
+        from domain.inference._internal.slo_format import load_soul
+
+        prof, _ = load_soul(str(soul_path))
+        opt = prof.metadata["training_state"]["optimizer"]
+        assert not opt.get("state") and "state_ref" in opt
+
+    def test_periodic_save_resume_carries_moments(self, data_path, tmp_path):
+        """End-to-end journey: a periodic save (moments on) ships a stripped
+        header + sibling bytes; the resume bundle resolves the exact moments
+        and a real resume continues from them."""
+        cfg = tiny_config(tmp_path, max_steps=2, checkpoint_interval=1)
+        t1 = make_trainer(data_path, cfg)
+        t1.train()
+        # non-final save → include_optimizer_state=True (the periodic shape)
+        t1.save(str(tmp_path / "periodic"), include_optimizer_state=True)
+        periodic = str(tmp_path / "periodic.soul")
+
+        from domain.inference._internal.slo_format import load_soul
+
+        prof, _ = load_soul(periodic)
+        opt = prof.metadata["training_state"]["optimizer"]
+        assert not opt.get("state"), "periodic header still embeds moments"
+        assert "state_ref" in opt
+        assert os.path.exists(periodic + ".optimizer.dat")
+
+        bundle = CheckpointManager.load_from_path(periodic)
+        moments = bundle["optimizer_state_dict"]["state"]
+        flat = [v for entry in moments.values() for v in entry.values()]
+        assert flat, "moments lost on the stripped-header save"
+        assert any(np.any(np.asarray(v) != 0) for v in flat), "moments all zero"
+
+        t2 = make_trainer(data_path, tiny_config(tmp_path, max_steps=4))
+        r = t2.train(resume=True, resume_path=periodic)
+        assert r.global_step == 4
+        assert t2.global_step == 4
+
 
 # =============================================================================
 # _build_training_state_metadata

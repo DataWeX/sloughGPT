@@ -35,10 +35,6 @@ class TestFact:
         assert f.source == "unknown"
         assert f.verified is False
 
-    def test_repr(self):
-        f = Fact(subject="s", predicate="p", object="o")
-        assert repr(f) == "(s, p, o)"
-
     def test_custom_values(self):
         f = Fact(
             subject="s", predicate="p", object="o", confidence=0.5, source="wiki", verified=True

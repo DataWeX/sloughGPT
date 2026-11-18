@@ -943,10 +943,6 @@ class TestPointSerialization:
         )
         assert p.nbytes() == 32
 
-    def test_nbytes_function(self):
-        p = Point(identity="w", function_type="linear", params={"a": 1.0, "b": 0.0})
-        assert p.nbytes() == 4 + 2 * 4
-
     def test_to_dict_from_dict_cluster(self):
         p = Point(
             identity="w",

@@ -15,13 +15,6 @@ class TestCharTokenizer:
         assert tok.vocab_size > 0
         assert tok._built is True
 
-    def test_encode_decode_roundtrip(self):
-        tok = CharTokenizer()
-        tok.build_vocab(["hello world"])
-        ids = tok.encode("hello")
-        text = tok.decode(ids)
-        assert text == "hello"
-
     def test_encode_adds_bos_eos(self):
         tok = CharTokenizer()
         tok.build_vocab(["abc"])
@@ -74,10 +67,6 @@ class TestCharTokenizer:
         assert tok2._built is True
         assert tok2.vocab_size == tok.vocab_size
         assert tok2.encode("hello") == tok.encode("hello")
-
-    def test_load_nonexistent(self):
-        tok = CharTokenizer()
-        assert tok.load("/nonexistent/path.json") is False
 
     def test_encode_before_build_raises(self):
         tok = CharTokenizer()

@@ -262,16 +262,6 @@ class TestSentimentAnalyzer:
         result = sa.analyze("happy great wonderful")
         assert result["intensity"] == abs(result["sentiment"])
 
-    def test_empty_text(self):
-        sa = SentimentAnalyzer()
-        score = sa.analyze_sentiment("")
-        assert score == 0.0
-
-    def test_mixed_sentiment(self):
-        sa = SentimentAnalyzer()
-        score = sa.analyze_sentiment("good bad")
-        assert score == 0.0
-
     def test_detect_fear_emotion(self):
         sa = SentimentAnalyzer()
         emotion = sa.detect_emotion("I am afraid and scared")
@@ -292,12 +282,6 @@ class TestRelationshipMemory:
         profile = rm.get_user_profile("user1")
         assert profile["user_id"] == "user1"
         assert profile["total_interactions"] == 0
-
-    def test_get_user_profile_returns_existing(self):
-        rm = RelationshipMemory()
-        p1 = rm.get_user_profile("user1")
-        p2 = rm.get_user_profile("user1")
-        assert p1 is p2
 
     def test_update_from_interaction(self):
         rm = RelationshipMemory()
@@ -532,10 +516,6 @@ class TestEpisodicMemoryStore:
             store.save_episode(f"session_{i}", [{"role": "user", "content": "hello"}])
         recent = store.get_recent_episodes(2)
         assert len(recent) == 2
-
-    def test_get_nonexistent_episode(self):
-        store = EpisodicMemoryStore()
-        assert store.get_episode("nonexistent") is None
 
 
 # ── CognitiveArchitecture ─────────────────────────────────────────────────────

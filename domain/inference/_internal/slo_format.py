@@ -606,6 +606,7 @@ def save_soul(
     output_path: str,
     soul_profile: SloProfile | None = None,
     weights_only: bool = False,
+    keep_optimizer: bool = False,
 ) -> str:
     """Export model to .soul format (binary: header + config + JSON weights).
 
@@ -616,6 +617,11 @@ def save_soul(
         output_path: destination file path
         soul_profile: optional SloProfile with personality/identity metadata
         weights_only: if True, skip writing weight data (header + config only)
+        keep_optimizer: phase-1 behaviour — embed the full optimizer state
+            (base64 manifests) in the header so the .soul stays
+            self-contained; the sidecar is slim either way. Default False:
+            the state leaves BOTH documents into the fsynced sibling
+            ``<x>.optimizer.dat`` and the header keeps a hash-pinned ref.
 
     Returns:
         output_path (for chaining)
@@ -638,14 +644,26 @@ def save_soul(
     if not soul_profile.lineage and hasattr(model, "lineage"):
         soul_profile.lineage = model.lineage
 
-    # Single to_dict + sanitize pass feeds the hash, the embedded config and
-    # the sidecar — each previously re-walked the full training_state.
-    # _embed_state_manifests runs first so the walk and the JSON text see
-    # O(#arrays) manifests instead of O(#floats) nested lists.
-    soul_dict = _soul_json_sanitize(_embed_state_manifests(soul_profile.to_dict()))
-    soul_profile.integrity_hash = _soul_profile_hash(soul_dict)
-    soul_dict["integrity_hash"] = soul_profile.integrity_hash
-    config_json = json.dumps(soul_dict, default=str, allow_nan=False)
+    # Phase 2 (default): the moments leave BOTH documents. Externalize runs
+    # FIRST — it fsyncs the state file before any doc can reference it (WAL:
+    # a published ref never dangles) — then the hash is taken over the final
+    # embedded doc, so embedded and sidecar carry the identical value.
+    # keep_optimizer opts back into the phase-1 self-contained header
+    # (manifests inline, sidecar slim with the ref).
+    meta_path = output_path + ".meta.json"
+    if keep_optimizer:
+        soul_dict = _soul_json_sanitize(_embed_state_manifests(soul_profile.to_dict()))
+        sidecar_doc, _moved = externalize_optimizer_state(soul_dict, meta_path)
+        embedded_doc = soul_dict
+    else:
+        soul_dict, _moved = externalize_optimizer_state(
+            _soul_json_sanitize(soul_profile.to_dict()), meta_path
+        )
+        embedded_doc = sidecar_doc = soul_dict
+    soul_profile.integrity_hash = _soul_profile_hash(embedded_doc)
+    embedded_doc["integrity_hash"] = soul_profile.integrity_hash
+    sidecar_doc["integrity_hash"] = soul_profile.integrity_hash
+    config_json = json.dumps(embedded_doc, default=str, allow_nan=False)
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
@@ -656,8 +674,6 @@ def save_soul(
     # durable flush: it is multi-MB, so the flush is a rounding error against
     # the write, and it is the only thing a resume actually needs. The sidecar
     # is re-derivable from the weights, so it rides on rename atomicity alone.
-    meta_path = output_path + ".meta.json"
-
     with atomic_writer(output_path, binary=True, durable=True) as f:
         params: list[tuple[str, np.ndarray]] = []
         if not weights_only:
@@ -703,9 +719,8 @@ def save_soul(
         )
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
-    # Adam moments leave the JSON here (gzip sibling + hash-pinned state_ref);
-    # the embedded config above keeps them inline — phase 2 owns that copy.
-    sidecar_doc, _externalized = externalize_optimizer_state(soul_dict, meta_path)
+    # The state file itself is already fsynced (externalize ran above); both
+    # docs were hashed together, so they carry the identical integrity_hash.
     atomic_write(
         meta_path,
         json.dumps(sidecar_doc, indent=2, default=str, allow_nan=False),

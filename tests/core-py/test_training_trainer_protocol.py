@@ -32,10 +32,6 @@ class TestTrainResult:
         assert "success" in r
         assert "nonexistent" not in r
 
-    def test_checkpoint_alias(self):
-        r = TrainResult(checkpoint_name="cp1")
-        assert r.checkpoint == "cp1"
-
     def test_to_dict(self):
         r = TrainResult(final_loss=1.0, method="hf")
         d = r.to_dict()

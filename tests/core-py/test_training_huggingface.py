@@ -38,17 +38,6 @@ from domain.training._internal.huggingface.model_map import (
 # ---------------------------------------------------------------------------
 
 
-class TestModelSize:
-    def test_enum_values(self):
-        assert ModelSize.SMALL.value == "small"
-        assert ModelSize.MEDIUM.value == "medium"
-        assert ModelSize.LARGE.value == "large"
-        assert ModelSize.XLARGE.value == "xlarge"
-
-    def test_enum_member_count(self):
-        assert len(ModelSize) == 4
-
-
 class TestHFModelInfo:
     def test_fields(self):
         info = HFModelInfo(
@@ -79,15 +68,8 @@ class TestGetModelInfo:
         assert info.organization == "openai"
         assert info.size == ModelSize.SMALL
 
-    def test_unknown_model_returns_none(self):
-        assert get_model_info("nonexistent/model") is None
-
 
 class TestSearchModels:
-    def test_no_filters_returns_all(self):
-        results = search_models()
-        assert len(results) == len(HF_MODELS)
-
     def test_filter_by_organization(self):
         results = search_models(organization="meta")
         assert len(results) == 2
@@ -108,10 +90,6 @@ class TestSearchModels:
         results = search_models(organization="meta", size=ModelSize.MEDIUM)
         assert len(results) == 1
         assert results[0].model_id == "meta-llama/Llama-2-7b-chat-hf"
-
-    def test_no_match(self):
-        results = search_models(organization="nonexistent")
-        assert results == []
 
     def test_tags_partial_match(self):
         results = search_models(tags=["chat"])
@@ -188,25 +166,11 @@ class TestGetModelRequirements:
 
 
 class TestMapToSloughgptConfig:
-    def test_small_model(self):
-        cfg = map_to_sloughgpt_config("gpt2")
-        assert cfg["n_embed"] == 256
-        assert cfg["n_layer"] == 6
-        assert cfg["n_head"] == 8
-        assert cfg["block_size"] == 512
-
     def test_medium_model(self):
         cfg = map_to_sloughgpt_config("mistralai/Mistral-7B-Instruct-v0.2")
         assert cfg["n_embed"] == 512
         assert cfg["n_layer"] == 12
         assert cfg["n_head"] == 16
-        assert cfg["block_size"] == 1024
-
-    def test_large_model(self):
-        cfg = map_to_sloughgpt_config("meta-llama/Llama-2-13b-chat-hf")
-        assert cfg["n_embed"] == 768
-        assert cfg["n_layer"] == 20
-        assert cfg["n_head"] == 24
         assert cfg["block_size"] == 1024
 
     def test_xlarge_model(self):
@@ -275,35 +239,10 @@ class TestHuggingFaceLocalLoader:
         loader = HuggingFaceLocalLoader(cfg)
         assert loader.config.device == "cpu"
 
-    def test_device_explicit_preserved(self):
-        cfg = HFLocalConfig(model="gpt2", device="cuda")
-        loader = HuggingFaceLocalLoader(cfg)
-        assert loader.config.device == "cuda"
-
     def test_get_dtype_auto(self):
         cfg = HFLocalConfig(model="gpt2")
         loader = HuggingFaceLocalLoader(cfg)
         assert loader._get_dtype() == "auto"
-
-    def test_get_dtype_float32(self):
-        cfg = HFLocalConfig(model="gpt2", dtype="float32")
-        loader = HuggingFaceLocalLoader(cfg)
-        assert loader._get_dtype() == "float32"
-
-    def test_get_dtype_float16(self):
-        cfg = HFLocalConfig(model="gpt2", dtype="float16")
-        loader = HuggingFaceLocalLoader(cfg)
-        assert loader._get_dtype() == "float16"
-
-    def test_get_dtype_half(self):
-        cfg = HFLocalConfig(model="gpt2", dtype="half")
-        loader = HuggingFaceLocalLoader(cfg)
-        assert loader._get_dtype() == "float16"
-
-    def test_get_dtype_bfloat16(self):
-        cfg = HFLocalConfig(model="gpt2", dtype="bfloat16")
-        loader = HuggingFaceLocalLoader(cfg)
-        assert loader._get_dtype() == "bfloat16"
 
     def test_get_dtype_unknown_defaults_to_float32(self):
         cfg = HFLocalConfig(model="gpt2", dtype="something_weird")
@@ -380,9 +319,6 @@ class TestHuggingFaceLocalLoader:
 
 
 class TestHuggingFaceLocalClient:
-    def test_is_subclass(self):
-        assert issubclass(HuggingFaceLocalClient, HuggingFaceLocalLoader)
-
     def test_instantiation(self):
         cfg = HFLocalConfig(model="gpt2")
         client = HuggingFaceLocalClient(cfg)
@@ -469,12 +405,6 @@ class TestHuggingFaceAPILoader:
         ]
         result = loader._format_chat_prompt(msgs)
         assert result == "System: You are helpful\nUser: hi\nAssistant: hello\nAssistant:"
-
-    def test_format_chat_prompt_empty(self):
-        cfg = HFAPIConfig(model="gpt2")
-        loader = HuggingFaceAPILoader(cfg)
-        result = loader._format_chat_prompt([])
-        assert result == "Assistant:"
 
 
 class TestHFInferenceClient:

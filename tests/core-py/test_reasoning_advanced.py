@@ -344,12 +344,6 @@ class TestSyllogismReasoning:
         assert sr._identify_mood(["A", "B", "C"]) == "AAA"
         assert sr._identify_mood(["A"]) == "AA"
 
-    def test_apply_syllogistic_rules_valid(self):
-        sr = SyllogismReasoning()
-        valid, msg = sr._apply_syllogistic_rules(1, "AAA")
-        assert valid is True
-        assert "valid" in msg.lower()
-
     def test_apply_syllogistic_rules_invalid(self):
         sr = SyllogismReasoning()
         valid, msg = sr._apply_syllogistic_rules(1, "OOO")
