@@ -333,7 +333,10 @@ def _verify(args: argparse.Namespace) -> int:
 
 def _sync(args: argparse.Namespace) -> int:
     store = _get_store(args)
-    added, updated, total = store.sync()
+    prune = getattr(args, "prune", False)
+    # Read the drift before syncing: with --prune these are about to vanish.
+    orphans = store.orphan_cards()
+    added, updated, total = store.sync(prune=prune)
     if not args.quiet:
         board = store.load_board()
         for card in board.cards:
@@ -342,6 +345,17 @@ def _sync(args: argparse.Namespace) -> int:
         print(f"\n{added} new card(s), {updated} moved, {total} total")
     else:
         print(f"{added} new card(s), {updated} moved, {total} total")
+    if prune:
+        print(f"{len(orphans)} orphan card(s) removed")
+    elif orphans:
+        # Advisory: sync is additive by default, so drift accumulates silently
+        # (a deleted note leaves its card forever). Report, never delete.
+        print(
+            f"\n{len(orphans)} card(s) have no matching note "
+            f"— run `grib sync --prune` to remove them:"
+        )
+        for card in orphans:
+            print(f"    [{card.column}] {card.title}")
     return 0
 
 
@@ -515,6 +529,14 @@ def build_parser() -> argparse.ArgumentParser:
     # Sync
     sync_p = sub.add_parser("sync", help="Sync notes to board")
     sync_p.add_argument("--quiet", action="store_true")
+    sync_p.add_argument(
+        "--prune",
+        action="store_true",
+        help=(
+            "Also delete cards whose note no longer exists. "
+            "Without this flag orphaned cards are only reported, never removed."
+        ),
+    )
 
     # Verify
     verify_p = sub.add_parser(

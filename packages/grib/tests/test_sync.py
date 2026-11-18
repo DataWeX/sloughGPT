@@ -157,3 +157,72 @@ def test_legacy_sync_twin_notes_converges(tmp_path):
     assert board.cards[0].column == "done", "latest-edited twin decides the column"
     added, updated, total = sync_notes_to_board(_StubNotes(), kanban)
     assert (added, updated) == (0, 0), "legacy rerun must be net-zero"
+
+
+# ── Orphan cards: a note deleted without its card ────────────────────────
+#
+# sync only ever adds and updates, so deleting a note leaves its card behind
+# forever (observed live 2026-11-18: note gone, board count never dropped).
+# The default must stay conservative — hand-added cards (`grib board add`)
+# have no note either, so pruning without an explicit flag is a data-loss path.
+
+
+def test_sync_default_keeps_card_whose_note_was_deleted(store):
+    note = store.create_note("Temporary work")
+    store.create_note("Keeper")
+    store.sync()
+    assert len(store.list_cards()) == 2
+
+    assert store.delete_note(note.id) is True
+    added, updated, total = store.sync()
+
+    assert total == 2, "default sync must never destroy a card"
+    assert {c.title for c in store.list_cards()} == {"Temporary work", "Keeper"}
+    assert (added, updated) == (0, 0)
+
+
+def test_sync_prune_removes_card_whose_note_was_deleted(store):
+    note = store.create_note("Temporary work")
+    store.create_note("Keeper")
+    store.sync()
+
+    store.delete_note(note.id)
+    added, updated, total = store.sync(prune=True)
+
+    assert total == 1, "prune must drop the card whose note is gone"
+    assert {c.title for c in store.list_cards()} == {"Keeper"}
+    assert (added, updated) == (0, 0), "prune must not re-add or move anything"
+
+
+def test_sync_prune_leaves_cards_that_have_notes(store):
+    store.create_note("Keeper A", status="wip")
+    store.create_note("Keeper B", status="done")
+    store.sync()
+
+    added, updated, total = store.sync(prune=True)
+
+    assert total == 2, "prune must not touch cards whose notes exist"
+    assert (added, updated) == (0, 0)
+    assert {c.title: c.column for c in store.list_cards()} == {
+        "Keeper A": "wip",
+        "Keeper B": "done",
+    }
+
+
+def test_orphan_cards_reports_drift_without_deleting(store):
+    note = store.create_note("Temporary work")
+    store.create_note("Keeper")
+    store.sync()
+
+    store.delete_note(note.id)
+    orphans = store.orphan_cards()
+
+    assert [c.title for c in orphans] == ["Temporary work"]
+    assert len(store.list_cards()) == 2, "orphan_cards must be read-only"
+
+
+def test_orphan_cards_empty_when_board_matches_notes(store):
+    store.create_note("Only child")
+    store.sync()
+
+    assert store.orphan_cards() == []
