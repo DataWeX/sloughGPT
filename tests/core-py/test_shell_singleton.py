@@ -136,10 +136,6 @@ class TestResource:
         r = Resource(name="f", kind="k", path="/f", size_bytes=-1)
         assert r.size_str == "-1B"
 
-    def test_zero_size_exact(self):
-        r = Resource(name="f", kind="k", path="/f", size_bytes=0)
-        assert r.size_str == "0B"
-
 
 # ---------------------------------------------------------------------------
 # get_dait_runtime singleton

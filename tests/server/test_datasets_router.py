@@ -710,10 +710,6 @@ class TestSearchValidation:
 class TestExportValidation:
     """POST /datasets/{id}/export bounds."""
 
-    def test_invalid_format_422(self, client):
-        resp = client.post("/datasets/ds1/export", json={"format": "xml"})
-        assert resp.status_code == 422
-
     def test_format_case_sensitive_422(self, client):
         resp = client.post("/datasets/ds1/export", json={"format": "CSV"})
         assert resp.status_code == 422

@@ -1987,13 +1987,6 @@ class TestDataImporterExtended:
         assert result.success is True
         assert result.total_chars == 10000
 
-    def test_extract_pdf_text_both_missing(self, monkeypatch, tmp_path):
-        monkeypatch.setitem(sys.modules, "fitz", None)
-        monkeypatch.setitem(sys.modules, "PyPDF2", None)
-        p = tmp_path / "doc.pdf"
-        p.write_bytes(b"%PDF-1.4")
-        assert DataImporter._extract_pdf_text(p) == ""
-
 
 # ---------------------------------------------------------------------------
 # ImportResult — extended

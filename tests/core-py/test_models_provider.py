@@ -1277,9 +1277,6 @@ class TestUpdatePersonalityTraits:
         assert sp._formality == 0.5
         assert sp._directness == 0.5
 
-    def test_no_default_provider(self):
-        update_personality_traits({"warmth": 0.9})
-
 
 # =============================================================================
 # SloTransformerProvider

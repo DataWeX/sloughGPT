@@ -18,6 +18,7 @@ from typing import Any
 
 from domain.training._internal.step_strategy import (
     DistillationStrategy,
+    DpoStrategy,
     EwcStrategy,
     StepStrategy,
 )
@@ -95,5 +96,25 @@ class MetaTrainer:
             data_path,
             config=config,
             strategies=[DistillationStrategy(teacher, weight=weight, temperature=temperature)],
+            **trainer_kwargs,
+        )
+
+    @classmethod
+    def with_dpo(
+        cls,
+        data_path: str,
+        ref_model: Any,
+        pairs: Any,
+        *,
+        beta: float = 0.1,
+        sft_weight: float = 0.0,
+        config: TrainerConfig | None = None,
+        **trainer_kwargs: Any,
+    ) -> MetaTrainer:
+        """Compose direct preference optimization over ``pairs`` as the loss strategy."""
+        return cls(
+            data_path,
+            config=config,
+            strategies=[DpoStrategy(ref_model, pairs, beta=beta, sft_weight=sft_weight)],
             **trainer_kwargs,
         )

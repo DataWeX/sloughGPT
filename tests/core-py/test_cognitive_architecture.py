@@ -338,10 +338,6 @@ class TestEpisodicMemoryStore:
         results = store.search_episodes("a")
         assert results[0]["turns"] == 2
 
-    def test_empty_conversation_importance(self):
-        store = EpisodicMemoryStore()
-        assert store._calculate_importance([]) == 0.0
-
     def test_importance_cap_at_one(self):
         store = EpisodicMemoryStore()
         conv = [

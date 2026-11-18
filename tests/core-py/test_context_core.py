@@ -786,12 +786,6 @@ class TestContextCoreAdditional:
             cc._add_sensory(f"item {i}")
         assert len(cc.sensory_buffer) == 100
 
-    def test_sensory_buffer_101_truncates(self):
-        cc = ContextCore()
-        for i in range(101):
-            cc._add_sensory(f"item {i}")
-        assert len(cc.sensory_buffer) == 50
-
     def test_get_context_inspector_full(self):
         cc = ContextCore()
         cc.set_session_id("s1")

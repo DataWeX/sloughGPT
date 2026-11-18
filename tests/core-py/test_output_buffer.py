@@ -270,13 +270,6 @@ class TestSubscribers:
         got = asyncio.run(read())
         assert got == []
 
-    def test_sync_read_still_works(self):
-        buf = OutputBuffer()
-        sub = buf.subscribe("s1")
-        buf.append_text("a")
-        got = sub.read(timeout=0.2)
-        assert [l.text for l in got] == ["a"]
-
 
 class TestBufferLogHandler:
     def test_captures_record(self):

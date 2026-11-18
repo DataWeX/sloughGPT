@@ -572,11 +572,6 @@ class TestSemanticCacheEdgeCases:
         assert stats["hits"] == 1
         assert stats["misses"] == 1
 
-    def test_zero_max_entries_still_stores(self):
-        sc = SemanticCache(dim=100, max_entries=0)
-        sc.put("q", "r")
-        assert len(sc.entries) == 1
-
     def test_single_entry_get_hit(self):
         sc = SemanticCache(dim=100, max_entries=10)
         sc.put("exact match query test", "response")

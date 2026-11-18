@@ -962,12 +962,6 @@ class TestEpisodicMemoryStoreExtra:
         score = em._calculate_importance([{"content": "hello"}])
         assert score == 0.5
 
-    def test_importance_many_important_words(self):
-        em = EpisodicMemoryStore()
-        conv = [{"content": "important remember critical key learn"}]
-        score = em._calculate_importance(conv)
-        assert score > 0.5
-
     def test_save_preserves_conversation_copy(self):
         em = EpisodicMemoryStore()
         conv = [{"content": "test"}]

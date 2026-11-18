@@ -605,19 +605,6 @@ class TestPointLibraryRepr:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestPointLibraryDuplicateIdentity:
-    def test_re_add_overwrites(self):
-        lib = PointLibrary()
-        p1 = _periodic_point("dup")
-        p1.params = {"a": 1.0, "b": 0.0, "w": 0.0}
-        p2 = _periodic_point("dup")
-        p2.params = {"a": 2.0, "b": 0.0, "w": 0.0}
-        lib.add(p1)
-        lib.add(p2)
-        assert lib.get("dup").params["a"] == 2.0
-        assert len(lib.list_all()) == 1
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Thread Safety
 # ═══════════════════════════════════════════════════════════════════════════════

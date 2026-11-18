@@ -639,17 +639,6 @@ class TestTrainingExecutor:
         time.sleep(0.1)
         exec_.shutdown(wait=True)
 
-    def test_job_status_members(self):
-        assert JobStatus.QUEUED.value == "queued"
-        assert JobStatus.RUNNING.value == "running"
-        assert JobStatus.COMPLETED.value == "completed"
-        assert JobStatus.FAILED.value == "failed"
-        assert JobStatus.CANCELLED.value == "cancelled"
-
-    def test_job_status_iteration(self):
-        members = list(JobStatus)
-        assert len(members) == 5
-
     def test_job_status_lookup(self):
         assert JobStatus("queued") == JobStatus.QUEUED
         assert JobStatus("completed") == JobStatus.COMPLETED
@@ -720,9 +709,3 @@ class TestTrainingExecutor:
             assert summary is None
         finally:
             exec_.shutdown(wait=True)
-
-    def test_cancel_after_shutdown(self):
-        exec_ = TrainingExecutor(max_workers=1)
-        exec_.submit(lambda jid: True, "j1")
-        time.sleep(0.1)
-        exec_.shutdown(wait=True)

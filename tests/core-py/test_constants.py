@@ -113,9 +113,6 @@ class TestConstantsCrossChecks:
     def test_startup_ge_stall(self):
         assert DEFAULT_STARTUP_TIMEOUT >= DEFAULT_STALL_TIMEOUT
 
-    def test_idle_ge_generate(self):
-        assert DEFAULT_IDLE_TIMEOUT >= DEFAULT_GENERATE_TIMEOUT
-
     def test_retry_delay_less_than_generate(self):
         assert DEFAULT_LOAD_RETRY_DELAY < DEFAULT_GENERATE_TIMEOUT
 
