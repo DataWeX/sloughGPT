@@ -142,7 +142,6 @@ class TestTrainingMethods:
 class TestTrainingDataFormats:
     """Tests for different training data formats."""
 
-
     def test_jsonl_file_training(self):
         from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
@@ -190,7 +189,6 @@ class TestAdaptiveConfigRecommendations:
         large = engine.recommend(dataset_size=100000, model="gpt2", method="finetune")
         assert small.batch_size != large.batch_size or small.epochs != large.epochs
 
-
     def test_recommendation_has_reason(self):
         from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
@@ -202,7 +200,6 @@ class TestAdaptiveConfigRecommendations:
 
 class TestPresetSystem:
     """Tests for the training preset system."""
-
 
     def test_preset_configs_valid(self):
         from domain.training._internal.presets import PRESETS, apply_preset

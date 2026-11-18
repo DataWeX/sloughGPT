@@ -70,7 +70,6 @@ class TestGetModelInfo:
 
 
 class TestSearchModels:
-
     def test_filter_by_organization(self):
         results = search_models(organization="meta")
         assert len(results) == 2
@@ -91,7 +90,6 @@ class TestSearchModels:
         results = search_models(organization="meta", size=ModelSize.MEDIUM)
         assert len(results) == 1
         assert results[0].model_id == "meta-llama/Llama-2-7b-chat-hf"
-
 
     def test_tags_partial_match(self):
         results = search_models(tags=["chat"])
@@ -168,14 +166,12 @@ class TestGetModelRequirements:
 
 
 class TestMapToSloughgptConfig:
-
     def test_medium_model(self):
         cfg = map_to_sloughgpt_config("mistralai/Mistral-7B-Instruct-v0.2")
         assert cfg["n_embed"] == 512
         assert cfg["n_layer"] == 12
         assert cfg["n_head"] == 16
         assert cfg["block_size"] == 1024
-
 
     def test_xlarge_model(self):
         results = search_models(size=ModelSize.XLARGE)
@@ -243,15 +239,10 @@ class TestHuggingFaceLocalLoader:
         loader = HuggingFaceLocalLoader(cfg)
         assert loader.config.device == "cpu"
 
-
     def test_get_dtype_auto(self):
         cfg = HFLocalConfig(model="gpt2")
         loader = HuggingFaceLocalLoader(cfg)
         assert loader._get_dtype() == "auto"
-
-
-
-
 
     def test_get_dtype_unknown_defaults_to_float32(self):
         cfg = HFLocalConfig(model="gpt2", dtype="something_weird")
@@ -328,7 +319,6 @@ class TestHuggingFaceLocalLoader:
 
 
 class TestHuggingFaceLocalClient:
-
     def test_instantiation(self):
         cfg = HFLocalConfig(model="gpt2")
         client = HuggingFaceLocalClient(cfg)

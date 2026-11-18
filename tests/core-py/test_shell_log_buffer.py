@@ -312,8 +312,6 @@ class TestLogBufferThreadSafety:
 
 
 class TestLogBufferSingleton:
-
-
     def test_singleton_has_reasonable_default_size(self):
         buf = get_log_buffer()
         assert buf._max_size >= 100

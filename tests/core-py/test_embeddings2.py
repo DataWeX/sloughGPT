@@ -13,7 +13,6 @@ from domain.inference._internal.embeddings import (
 
 
 class TestEmbeddingProvider:
-
     def test_member_count(self):
         assert len(EmbeddingProvider) == 4
 
@@ -77,7 +76,6 @@ class TestInMemoryEmbedder:
 
     def test_get_dimension(self):
         assert InMemoryEmbedder(dimension=256).get_dimension() == 256
-
 
     def test_word_count_exceeds_dimension(self):
         emb = InMemoryEmbedder(dimension=4)
@@ -145,7 +143,6 @@ class TestEmbedder:
 
 
 class TestOpenAIEmbedder:
-
     def test_init_requires_api_key(self):
         with pytest.raises(ValueError, match="API key required"):
             OpenAIEmbedder(api_key=None)

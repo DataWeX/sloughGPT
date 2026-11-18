@@ -24,7 +24,6 @@ from domain.cognition._internal.reasoning.deep import (
 
 
 class TestLogicalOperator:
-
     def test_values(self):
         assert LogicalOperator.AND.value == "∧"
         assert LogicalOperator.OR.value == "∨"
@@ -32,7 +31,6 @@ class TestLogicalOperator:
         assert LogicalOperator.IMPLIES.value == "→"
         assert LogicalOperator.FORALL.value == "∀"
         assert LogicalOperator.EXISTS.value == "∃"
-
 
     def test_members_are_enums(self):
         for m in LogicalOperator:
@@ -45,7 +43,6 @@ class TestLogicalOperator:
     def test_member_values_are_strings(self):
         for m in LogicalOperator:
             assert isinstance(m.value, str)
-
 
     def test_membership(self):
         assert LogicalOperator.AND in LogicalOperator

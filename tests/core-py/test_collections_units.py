@@ -20,7 +20,6 @@ from domain.collections._internal.stores import FileStore, MemoryStore
 
 
 class TestRecord:
-
     def test_to_dict(self):
         r = Record(content="test", metadata={"a": 1})
         d = r.to_dict()

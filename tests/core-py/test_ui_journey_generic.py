@@ -255,14 +255,12 @@ class TestPrebuiltJourneys:
 class TestChromeDevTools:
     """Tests for ChromeDevTools integration."""
 
-
     def test_browser_state(self):
         from domain.testing._internal.chrome_devtools import BrowserState
 
         state = BrowserState()
         assert state.page_id is None
         assert state.url == ""
-
 
     def test_browser_report(self):
         from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser

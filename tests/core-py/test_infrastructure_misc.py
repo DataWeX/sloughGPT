@@ -12,9 +12,6 @@ from domain.logging._internal.console_logger import ConsoleLogger, _default_colo
 
 
 class TestCorrelationId:
-
-
-
     def test_context_var_isolation(self):
         set_correlation_id("in-main")
 

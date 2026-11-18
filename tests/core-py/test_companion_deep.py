@@ -98,7 +98,6 @@ class TestCompanionSystem:
         assert "User: Hey there!" in prompt
         assert "Alex:" in prompt
 
-
     def test_respond_with_user_name(self):
         c = CompanionSystem()
         c.context.user_name = "Sam"

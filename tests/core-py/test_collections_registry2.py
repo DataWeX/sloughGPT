@@ -236,7 +236,6 @@ class TestStats:
 
 
 class TestGetRegistrySingleton:
-
     def test_is_collection_registry(self):
         r = get_registry()
         assert isinstance(r, CollectionRegistry)

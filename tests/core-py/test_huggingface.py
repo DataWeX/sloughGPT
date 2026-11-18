@@ -11,7 +11,6 @@ import pytest
 from domain.training._internal.huggingface import api_loader, local_loader, model_map
 from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
-    HFInferenceClient,
     HuggingFaceAPILoader,
     chat_via_api,
     create_api_client,
@@ -95,7 +94,6 @@ class TestGetModelInfo:
 
 
 class TestSearchModels:
-
     def test_by_organization(self):
         results = search_models(organization="openai")
         assert results and all(m.organization == "openai" for m in results)
@@ -167,14 +165,12 @@ class TestGetModelRequirements:
 
 
 class TestMapToSloughgptConfig:
-
     def test_medium(self):
         cfg = map_to_sloughgpt_config("meta-llama/Llama-2-7b-chat-hf")
         assert cfg["n_embed"] == 512
         assert cfg["n_layer"] == 12
         assert cfg["n_head"] == 16
         assert cfg["block_size"] == 1024
-
 
     def test_xlarge(self, monkeypatch):
         info = HFModelInfo(
@@ -383,7 +379,6 @@ class TestChatApi:
 
 
 class TestApiHelpers:
-
     def test_create_api_client(self):
         client = create_api_client("gpt2", api_key="k")
         assert isinstance(client, HuggingFaceAPILoader)

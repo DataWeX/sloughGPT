@@ -26,7 +26,6 @@ class _FakeProvider:
 
 
 class TestRegistryEdges:
-
     def test_generate_without_model_raises(self):
         reg = ModelRegistry()
         with pytest.raises(RuntimeError, match="No model registered"):
@@ -307,7 +306,6 @@ class TestHealthSummary:
 
 
 class TestGetModelRegistry:
-
     def test_singleton_has_models(self):
         r = get_model_registry()
         assert isinstance(r, ModelRegistry)

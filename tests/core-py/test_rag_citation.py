@@ -40,7 +40,6 @@ class TestTextChunkFields:
         tc = TextChunk(id="c1", content="x", metadata={})
         assert tc.bm25_score == 0.0
 
-
     def test_single_word(self):
         tc = TextChunk(id="c1", content="hello", metadata={})
         assert tc.token_count == 1
@@ -279,7 +278,6 @@ class TestHybridRetriever:
 # CitationTracker — claim extraction and citation
 # ---------------------------------------------------------------------------
 class TestCitationTrackerExtractClaims:
-
     def test_multiple_claims(self):
         ct = CitationTracker()
         claims = ct.extract_claims("Python is great. Java is popular.")
@@ -497,7 +495,6 @@ class TestHallucinationDetector:
 # ProductionRAG — end-to-end workflow
 # ---------------------------------------------------------------------------
 class TestProductionRAG:
-
     def test_init_custom_config(self):
         rag = ProductionRAG({"dense_weight": 0.5, "sparse_weight": 0.5})
         assert rag.retriever.dense_weight == 0.5

@@ -314,7 +314,6 @@ class TestDashboardUtils:
 
 
 class TestStatusUtils:
-
     def test_fmt_uptime_minutes(self):
         from domain.shell._internal.cmds.status import _fmt_uptime
 

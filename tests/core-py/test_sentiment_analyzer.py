@@ -55,13 +55,10 @@ class TestAnalyzeSentiment:
         score = sa.analyze_sentiment("This is bad and terrible")
         assert score == -1.0
 
-
-
     def test_mostly_positive(self):
         sa = SentimentAnalyzer()
         score = sa.analyze_sentiment("good great amazing bad")
         assert score > 0
-
 
     def test_all_positive_words(self):
         sa = SentimentAnalyzer()
@@ -109,8 +106,6 @@ class TestDetectEmotion:
         sa = SentimentAnalyzer()
         assert sa.detect_emotion("I feel so sad and depressed") == "sad"
 
-
-
     def test_surprise(self):
         sa = SentimentAnalyzer()
         assert sa.detect_emotion("I am shocked and surprised") == "surprise"
@@ -128,7 +123,6 @@ class TestDetectEmotion:
         sa = SentimentAnalyzer()
         result = sa.detect_emotion("happy sad")
         assert result in ("happy", "sad")
-
 
     def test_pure_numbers_returns_neutral(self):
         sa = SentimentAnalyzer()
@@ -507,7 +501,6 @@ class TestEpisodicMemoryStore:
 
 
 class TestCognitiveArchitecture:
-
     def test_sensory_buffer_cap(self):
         """Buffer trims to 50 once it exceeds 100; intermediate adds still grow."""
         ca = CognitiveArchitecture()
@@ -524,7 +517,6 @@ class TestCognitiveArchitecture:
         ca = CognitiveArchitecture()
         ca.to_working("item1")
         assert "item1" in ca.working_memory
-
 
     def test_add_to_session(self):
         ca = CognitiveArchitecture()
@@ -662,7 +654,6 @@ class TestMetaLearningEngine:
         assert mle.strategies["rote"]["success"] == 1
         assert mle.strategies["rote"]["attempts"] == 1
 
-
     def test_record_unknown_strategy_ignored(self):
         mle = MetaLearningEngine()
         mle.record_outcome("nonexistent", True)
@@ -704,7 +695,6 @@ class TestMetaLearningEngine:
 
 
 class TestDreamProcessingEngine:
-
     def test_dream_with_few_memories(self):
         dpe = DreamProcessingEngine()
         npe = NeuralPlasticityEngine()

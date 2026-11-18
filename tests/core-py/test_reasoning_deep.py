@@ -165,8 +165,6 @@ class TestSubstitution:
 
 
 class TestFormalLogicEngine:
-
-
     def test_assert_predicate(self):
         engine = FormalLogicEngine()
         engine.assert_predicate("human", "socrates")

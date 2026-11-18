@@ -3,7 +3,7 @@
 import time
 
 from domain.shell._internal.log_buffer import LogBuffer, LogEntry
-from domain.shell._internal.log_display import _LEVEL_COLORS, _LEVEL_LABELS, LineModeLogDisplay
+from domain.shell._internal.log_display import _LEVEL_COLORS, LineModeLogDisplay
 
 
 def _make_entry(level="INFO", message="test msg", source="slo.test"):
@@ -362,7 +362,6 @@ class TestFormatEntry:
         e = _make_entry("INFO", "x" * 200)
         result = LineModeLogDisplay._format_entry(e)
         assert len(result) < 200
-
 
     def test_format_entry_debug(self):
         e = _make_entry("DEBUG", "trace")

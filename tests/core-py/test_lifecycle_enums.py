@@ -30,7 +30,6 @@ from domain.infrastructure._internal.lifecycle import (
 
 
 class TestLifecyclePhase:
-
     def test_values(self):
         assert LifecyclePhase.INIT.value == "init"
         assert LifecyclePhase.STARTING.value == "starting"
@@ -99,8 +98,6 @@ class TestLifecyclePhase:
 
 
 class TestStartupProfile:
-
-
     def test_from_env_full(self):
         os.environ["SLO_STARTUP_PROFILE"] = "full"
         try:
@@ -128,7 +125,6 @@ class TestStartupProfile:
             assert StartupProfile.from_env() == StartupProfile.FULL
         finally:
             del os.environ["SLO_STARTUP_PROFILE"]
-
 
     def test_from_env_case_insensitive(self):
         os.environ["SLO_STARTUP_PROFILE"] = "MINIMAL"
@@ -470,7 +466,6 @@ class TestTopologicalSort:
 
 
 class TestDependencyLevels:
-
     def test_single_hook(self):
         h = StartupHook(name="a", handler=lambda: None)
         levels = _dependency_levels([h])
@@ -565,11 +560,6 @@ class TestDependencyLevels:
 
 
 class TestEventConstants:
-
-
-
-
-
     def test_all_are_unique(self):
         constants = [EVT_PHASE_CHANGED, EVT_HOOK_STARTED, EVT_HOOK_COMPLETED, EVT_HOOK_FAILED]
         assert len(constants) == len(set(constants))
@@ -581,14 +571,6 @@ class TestEventConstants:
 
 
 class TestLifecycleManagerInit:
-
-
-
-
-
-
-
-
     def test_event_bus_none_by_default(self):
         mgr = LifecycleManager()
         assert mgr._event_bus is None
@@ -707,14 +689,6 @@ class TestLifecycleManagerHooks:
 
 
 class TestLifecycleManagerGates:
-
-
-
-
-
-
-
-
     def test_gates_ready_empty(self):
         mgr = LifecycleManager()
         assert mgr.gates_ready() is True

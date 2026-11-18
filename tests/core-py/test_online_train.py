@@ -147,7 +147,6 @@ class TestOnlineLoRAUpdater:
         assert result.shape == logits.shape
         assert np.all(np.isfinite(result))
 
-
     def test_adaptation_strength_positive_when_init(self):
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=16)
