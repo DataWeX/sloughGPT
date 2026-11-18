@@ -1710,8 +1710,6 @@ class TestAi:
         assert "API server is not connected" in out
 
 
-
-
 # ── tutorial ─────────────────────────────────────────────────────────
 
 
@@ -21883,7 +21881,6 @@ class TestCmdWatchDeeperV2:
                 pass
 
 
-
 class TestCmdChmodDeeperV2:
     def test_chmod_no_args(self, repl):
         with _CaptureOutput(repl):
@@ -22450,8 +22447,6 @@ class TestCmdWhoDeeperV3:
     def test_who_via_execute(self, repl):
         out = repl._execute_single("who", "")
         assert isinstance(out, str)
-
-
 
 
 class TestUpdateColorStateDeeper:
@@ -23901,7 +23896,6 @@ class TestCmdWatchDeeperV3:
         assert "Invalid" in cap.getvalue()
 
 
-
 class TestCmdBgFgDeeperV4:
     def test_bg_no_jobs(self, repl):
         with _CaptureOutput(repl):
@@ -24253,8 +24247,6 @@ class TestCmdVmpermsDeeperV2:
         with _CaptureOutput(repl):
             repl._cmd_vmperms("")
         assert repl._last_exit_code == 0
-
-
 
 
 class TestUpdateColorStateDeeperV2:
@@ -25477,7 +25469,6 @@ class TestCmdWatchV3:
         with _CaptureOutput(repl) as cap:
             repl._cmd_watch("abc ls")
         assert "Invalid" in cap.getvalue() or "Usage" in cap.getvalue()
-
 
 
 class TestCmdEnvSet:
