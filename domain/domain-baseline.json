@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "7f7153fe7830363e8149894921b002d48e32ca9d",
+    "recorded_commit": "56f1fda8f98d0d87c347b44185b585a8f5b19621",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -478,7 +478,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "676259af84b5a303361f83d66b4edb772590f9f8"
+      "tree_hash": "bf212973e5aecdff671002d24138bf401c9cff69"
     },
     "slolib": {
       "class": "core-capability",
