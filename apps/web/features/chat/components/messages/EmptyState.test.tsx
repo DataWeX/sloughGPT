@@ -16,8 +16,10 @@ vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: mockT, locale: 'en' }),
 }))
 
+const { mockPush } = vi.hoisted(() => ({ mockPush: vi.fn() }))
+
 vi.mock('@/vite/next-compat/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: mockPush, replace: vi.fn(), back: vi.fn() }),
 }))
 
 import { EmptyState } from './EmptyState'
@@ -51,6 +53,16 @@ describe('EmptyState', () => {
   it('renders greeting when hasModel is true', () => {
     render(<EmptyState hasModel />)
     expect(screen.getByText(/Good (morning|afternoon|evening)/)).toBeTruthy()
+  })
+
+  it('showcase tiles navigate to their journeys', () => {
+    render(<EmptyState hasModel />)
+    fireEvent.click(screen.getByRole('button', { name: /Teach it/ }))
+    expect(mockPush).toHaveBeenCalledWith('/training')
+    fireEvent.click(screen.getByRole('button', { name: /Bring your files/ }))
+    expect(mockPush).toHaveBeenCalledWith('/knowledge')
+    fireEvent.click(screen.getByRole('button', { name: /Plan & track/ }))
+    expect(mockPush).toHaveBeenCalledWith('/planner')
   })
 
   it('renders suggestion chips when suggestions prop provided', () => {
