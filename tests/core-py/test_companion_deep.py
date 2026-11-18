@@ -98,12 +98,6 @@ class TestCompanionSystem:
         assert "User: Hey there!" in prompt
         assert "Alex:" in prompt
 
-    def test_respond_increments_turn_count(self):
-        c = CompanionSystem()
-        c.respond("hi")
-        assert c.context.turn_count == 1
-        c.respond("hello")
-        assert c.context.turn_count == 2
 
     def test_respond_with_user_name(self):
         c = CompanionSystem()

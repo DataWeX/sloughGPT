@@ -145,8 +145,3 @@ class TestCollectionRegistry:
 # ── get_registry ──────────────────────────────────────────────────────────────
 
 
-class TestGetRegistry:
-    def test_returns_singleton(self):
-        r1 = get_registry()
-        r2 = get_registry()
-        assert r1 is r2

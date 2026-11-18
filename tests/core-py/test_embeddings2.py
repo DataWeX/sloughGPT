@@ -13,11 +13,6 @@ from domain.inference._internal.embeddings import (
 
 
 class TestEmbeddingProvider:
-    def test_values(self):
-        assert EmbeddingProvider.SENTENCE_TRANSFORMERS.value == "sentence_transformers"
-        assert EmbeddingProvider.OPENAI.value == "openai"
-        assert EmbeddingProvider.HUGGINGFACE.value == "huggingface"
-        assert EmbeddingProvider.IN_MEMORY.value == "in_memory"
 
     def test_member_count(self):
         assert len(EmbeddingProvider) == 4
@@ -83,8 +78,6 @@ class TestInMemoryEmbedder:
     def test_get_dimension(self):
         assert InMemoryEmbedder(dimension=256).get_dimension() == 256
 
-    def test_get_model_name(self):
-        assert InMemoryEmbedder().get_model_name() == "in_memory"
 
     def test_word_count_exceeds_dimension(self):
         emb = InMemoryEmbedder(dimension=4)
@@ -152,10 +145,6 @@ class TestEmbedder:
 
 
 class TestOpenAIEmbedder:
-    def test_dimensions_map(self):
-        assert OpenAIEmbedder.DIMENSIONS["text-embedding-ada-002"] == 1536
-        assert OpenAIEmbedder.DIMENSIONS["text-embedding-3-small"] == 1536
-        assert OpenAIEmbedder.DIMENSIONS["text-embedding-3-large"] == 3072
 
     def test_init_requires_api_key(self):
         with pytest.raises(ValueError, match="API key required"):

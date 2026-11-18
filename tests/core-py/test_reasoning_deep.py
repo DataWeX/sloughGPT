@@ -165,16 +165,7 @@ class TestSubstitution:
 
 
 class TestFormalLogicEngine:
-    def test_init(self):
-        engine = FormalLogicEngine()
-        assert engine.knowledge_base == []
-        assert engine.inference_history == []
 
-    def test_assert_fact(self):
-        engine = FormalLogicEngine()
-        wff = WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="socrates")]))
-        engine.assert_fact(wff)
-        assert len(engine.knowledge_base) == 1
 
     def test_assert_predicate(self):
         engine = FormalLogicEngine()

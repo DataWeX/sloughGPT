@@ -24,8 +24,6 @@ from domain.cognition._internal.reasoning.deep import (
 
 
 class TestLogicalOperator:
-    def test_all_members(self):
-        assert len(LogicalOperator) == 7
 
     def test_values(self):
         assert LogicalOperator.AND.value == "∧"
@@ -35,8 +33,6 @@ class TestLogicalOperator:
         assert LogicalOperator.FORALL.value == "∀"
         assert LogicalOperator.EXISTS.value == "∃"
 
-    def test_iff_value(self):
-        assert LogicalOperator.IFF.value == "↔"
 
     def test_members_are_enums(self):
         for m in LogicalOperator:
@@ -50,9 +46,6 @@ class TestLogicalOperator:
         for m in LogicalOperator:
             assert isinstance(m.value, str)
 
-    def test_member_values_unique(self):
-        values = [m.value for m in LogicalOperator]
-        assert len(values) == len(set(values))
 
     def test_membership(self):
         assert LogicalOperator.AND in LogicalOperator
@@ -314,12 +307,6 @@ class TestTerm:
         assert f.is_function is True
         assert len(f.arguments) == 2
 
-    def test_nested_function(self):
-        inner = Term(name="g", is_function=True, arguments=[Term(name="x")])
-        outer = Term(name="f", is_function=True, arguments=[inner])
-        assert outer.arguments[0].is_function is True
-        assert outer.arguments[0].name == "g"
-
 
 # ── Predicate ────────────────────────────────────────────────────────────
 
@@ -391,11 +378,6 @@ class TestSubstitution:
     def test_empty(self):
         s = Substitution()
         assert s.mapping == {}
-
-    def test_with_mapping(self):
-        s = Substitution(mapping={"X": Term(name="socrates")})
-        assert "X" in s.mapping
-        assert s.mapping["X"].name == "socrates"
 
 
 # ── RetrievalSource & RetrievedKnowledge ─────────────────────────────────

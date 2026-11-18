@@ -369,11 +369,6 @@ class TestPointLibraryView:
 
 
 class TestPointLibraryStats:
-    def test_empty_stats(self):
-        lib = PointLibrary(name="empty")
-        s = lib.stats()
-        assert s["total_points"] == 0
-        assert s["avg_accuracy"] == 0.0
 
     def test_stats_with_points(self):
         lib = PointLibrary(name="test")

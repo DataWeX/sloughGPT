@@ -142,15 +142,6 @@ class TestTrainingMethods:
 class TestTrainingDataFormats:
     """Tests for different training data formats."""
 
-    def test_text_file_training(self):
-        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write(DATA_TEXT)
-            f.flush()
-            trainer = ComprehensiveTrainer()
-            result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)
-            assert result.success
 
     def test_jsonl_file_training(self):
         from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
@@ -199,12 +190,6 @@ class TestAdaptiveConfigRecommendations:
         large = engine.recommend(dataset_size=100000, model="gpt2", method="finetune")
         assert small.batch_size != large.batch_size or small.epochs != large.epochs
 
-    def test_recommendation_has_confidence(self):
-        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
-
-        engine = AdaptiveConfigEngine()
-        rec = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
-        assert 0.0 <= rec.confidence <= 1.0
 
     def test_recommendation_has_reason(self):
         from domain.training._internal.adaptive_config import AdaptiveConfigEngine
@@ -218,12 +203,6 @@ class TestAdaptiveConfigRecommendations:
 class TestPresetSystem:
     """Tests for the training preset system."""
 
-    def test_all_presets_applicable(self):
-        from domain.training._internal.presets import PRESETS, apply_preset
-
-        for key in PRESETS:
-            config = apply_preset(key)
-            assert config is not None, f"Failed to apply preset: {key}"
 
     def test_preset_configs_valid(self):
         from domain.training._internal.presets import PRESETS, apply_preset

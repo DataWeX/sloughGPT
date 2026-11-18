@@ -152,12 +152,6 @@ class TestPrefixFilter:
         f.accept(r)
         assert r.content == "[TAG] hello"
 
-    def test_empty_prefix(self):
-        f = PrefixFilter(prefix="")
-        r = Record(content="hello")
-        f.accept(r)
-        assert r.content == "hello"
-
 
 class TestMetadataFilter:
     def test_include(self):

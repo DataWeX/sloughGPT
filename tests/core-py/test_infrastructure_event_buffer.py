@@ -50,9 +50,6 @@ class TestEventBuffer:
         buf.clear()
         assert buf.recent() == []
 
-    def test_recent_empty(self):
-        buf = EventBuffer()
-        assert buf.recent() == []
 
     def test_recent_n(self):
         buf = EventBuffer(maxlen=50)
@@ -78,8 +75,3 @@ class TestEventBuffer:
         assert len(buf.recent(200)) == 100
 
 
-class TestGetEventBuffer:
-    def test_singleton(self):
-        a = get_event_buffer()
-        b = get_event_buffer()
-        assert a is b

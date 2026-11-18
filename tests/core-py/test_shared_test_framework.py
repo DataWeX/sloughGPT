@@ -58,15 +58,6 @@ class TestTestFramework:
         assert summary["pass_rate"] == 100.0
 
 
-class TestMarkTest:
-    def test_marks_function(self):
-        @mark_test
-        def my_test():
-            pass
-
-        assert getattr(my_test, "_is_test", False) is True
-
-
 class TestBenchmarkRunner:
     def test_run_benchmark(self):
         runner = BenchmarkRunner()

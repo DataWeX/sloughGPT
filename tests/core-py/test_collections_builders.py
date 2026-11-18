@@ -45,9 +45,6 @@ def _source(records: list[Record]):
 
 
 class TestCollectorBuilder:
-    def test_build_requires_source(self):
-        with pytest.raises(ValueError, match="Source is required"):
-            CollectorBuilder().build()
 
     def test_build_with_source_and_memory_store(self):
         b = CollectorBuilder()

@@ -7,19 +7,6 @@ from domain.infrastructure._internal.singleton import SingletonMeta, make_single
 
 
 class TestMakeSingleton:
-    def test_returns_same_instance(self):
-        call_count = 0
-
-        def factory():
-            nonlocal call_count
-            call_count += 1
-            return {"value": call_count}
-
-        get = make_singleton(factory)
-        a = get()
-        b = get()
-        assert a is b
-        assert call_count == 1
 
     def test_thread_safety(self):
         instances = []

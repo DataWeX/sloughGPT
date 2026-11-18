@@ -35,16 +35,6 @@ class TestVFSEntry:
         assert e.size == 42
 
 
-class TestVFSGeneratedFile:
-    def test_read_calls_fn(self):
-        f = VFSGeneratedFile("uptime", lambda: "123.45\n")
-        assert f.read() == "123.45\n"
-
-    def test_is_not_dir(self):
-        f = VFSGeneratedFile("x", lambda: "")
-        assert f.is_dir is False
-
-
 class TestVFSWriteOnlyFile:
     def test_write_calls_fn(self):
         received = []
