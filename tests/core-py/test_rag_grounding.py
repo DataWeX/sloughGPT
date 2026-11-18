@@ -44,10 +44,6 @@ class TestTextChunk:
         assert tc.metadata["source"] == "test"
         assert tc.metadata["page"] == 1
 
-
-
-
-
     def test_long_content(self):
         long = " ".join(["word"] * 1000)
         tc = TextChunk(id="c1", content=long, metadata={})
@@ -712,8 +708,6 @@ class TestProductionRAG:
         result = rag.verify_and_ground("Python is a language.", "what is python")
         assert "verification" in result
         assert "confidence" in result
-
-
 
     def test_multiple_documents(self):
         rag = ProductionRAG()

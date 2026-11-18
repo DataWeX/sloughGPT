@@ -17,7 +17,6 @@ if _core_dir not in sys.path:
 
 from domain.agents._internal.run_history import (
     AgentRunStore,
-    _new_run_id,
     reset_agent_run_store,
     reset_mogdb,
     set_mogdb_path,

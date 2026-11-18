@@ -156,7 +156,6 @@ class TestChainOfThought:
         await ChainOfThought(llm_call=track).reason("X")
         assert len(calls) >= 1
 
-
     def test_evaluate_confidence_indicators(self):
         cot = ChainOfThought()
         for word in ["therefore", "thus", "hence", "conclude", "implies"]:
@@ -482,7 +481,6 @@ class TestCausalReasoning:
         assert len(rels) >= 1
         assert rels[0][2] == 0.8
 
-
     def test_build_conclusion_limits_items(self):
         cr = CausalReasoning()
         causes = ["c1", "c2", "c3", "c4"]
@@ -523,8 +521,6 @@ class TestSyllogismReasoning:
         result = await SyllogismReasoning().reason("XYZ not real")
         # Default premises are valid AAA
         assert isinstance(result.metadata["valid"], bool)
-
-
 
     def test_identify_figure_returns_int(self):
         sr = SyllogismReasoning()
@@ -666,18 +662,10 @@ class TestReActReasoning:
 
 
 class TestAdvancedReasoningFactory:
-
-
-
-
-
-
-
     @pytest.mark.asyncio
     async def test_counterfactual_defaults_to_cot(self):
         r = await advanced_reasoning("Q", mode=ReasoningMode.COUNTERFACTUAL)
         assert r.mode == ReasoningMode.CHAIN_OF_THOUGHT
-
 
     @pytest.mark.asyncio
     async def test_beam_width_passed_to_tot(self):

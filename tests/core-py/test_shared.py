@@ -321,7 +321,6 @@ class TestFindServerPython:
 
 
 class TestFeatureFlag:
-
     def test_custom_env_var(self):
         f = FeatureFlag(name="x", description="", env_var="CUSTOM")
         assert f.env_var == "CUSTOM"

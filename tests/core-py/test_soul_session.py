@@ -47,7 +47,6 @@ class TestSessionMemory:
         full = sm.get_full_session()
         assert len(full) == 2
 
-
     def test_get_summary(self):
         sm = SessionMemory()
         sm.add("user", "hello")
@@ -347,8 +346,6 @@ class TestEmotionalResponseGenerator:
         erg = EmotionalResponseGenerator()
         assert len(erg.empathy_responses) > 0
 
-
-
     def test_generate_unknown_emotion_falls_back(self):
         erg = EmotionalResponseGenerator()
         resp = erg.generate_empathetic_response("nonexistent", 0.0)
@@ -485,7 +482,6 @@ class TestCognitiveArchitecture:
             ca.process_sensory(i)
         assert len(ca.sensory_buffer) <= 70
 
-
     def test_working_memory_evicts(self):
         ca = CognitiveArchitecture(working_capacity=3)
         for i in range(5):
@@ -527,7 +523,6 @@ class TestCognitiveArchitecture:
         ca.to_semantic("key1", "value1")
         val = ca.retrieve_semantic("key1")
         assert val == "value1"
-
 
     def test_semantic_strengthen(self):
         ca = CognitiveArchitecture()
@@ -574,7 +569,6 @@ class TestNeuralPlasticityEngine:
         s1 = npe.hebbian_learn("a", "b")
         s2 = npe.hebbian_learn("a", "b")
         assert s2 > s1
-
 
     def test_prune_weak_connections(self):
         npe = NeuralPlasticityEngine()

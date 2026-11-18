@@ -369,7 +369,6 @@ class TestPointLibraryView:
 
 
 class TestPointLibraryStats:
-
     def test_stats_with_points(self):
         lib = PointLibrary(name="test")
         lib.add(_periodic_point("a", accuracy=0.8))

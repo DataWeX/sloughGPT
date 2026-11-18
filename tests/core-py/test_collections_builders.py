@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 import tempfile
 
-import pytest
-
 from domain.collections._internal.builders import (
     CollectorBuilder,
     DataSink,
@@ -45,7 +43,6 @@ def _source(records: list[Record]):
 
 
 class TestCollectorBuilder:
-
     def test_build_with_source_and_memory_store(self):
         b = CollectorBuilder()
         b.source(_source([_r("a")]))

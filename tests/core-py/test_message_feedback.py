@@ -63,7 +63,6 @@ class TestRecordFeedback:
 
 
 class TestGetFeedback:
-
     def test_nonexistent(self):
         mf = MessageFeedback()
         assert mf.get_feedback("missing") is None
@@ -214,7 +213,6 @@ class TestConcurrency:
 
 
 class TestSingleton:
-
     def test_singleton_is_message_feedback(self):
         mf = get_message_feedback()
         assert isinstance(mf, MessageFeedback)

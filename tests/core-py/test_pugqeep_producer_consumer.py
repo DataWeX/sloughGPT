@@ -346,7 +346,6 @@ class TestTask:
         assert t2.data == 42
         assert t2.priority == TaskPriority.HIGH
 
-
     def test_status_lifecycle(self):
         t = Task()
         assert t.status == TaskStatus.PENDING
@@ -369,15 +368,11 @@ class TestTask:
         assert t2.tree_id == "t1"
         assert t2.metadata == {"k": "v"}
 
-
     def test_task_created_at_is_recent(self):
         before = time.time()
         t = Task()
         after = time.time()
         assert before <= t.created_at <= after
-
-
-
 
     def test_task_data_none_default(self):
         t = Task()

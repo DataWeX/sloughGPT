@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from domain.collections._internal.filters import Filter
-from domain.collections._internal.registry import CollectionRegistry, get_registry
+from domain.collections._internal.registry import CollectionRegistry
 from domain.collections._internal.sources import Record, Source
 from domain.collections._internal.stores import MemoryStore
 
@@ -143,5 +143,3 @@ class TestCollectionRegistry:
 
 
 # ── get_registry ──────────────────────────────────────────────────────────────
-
-

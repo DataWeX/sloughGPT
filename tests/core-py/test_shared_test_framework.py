@@ -7,7 +7,6 @@ from domain.shared._internal.test_framework import (
     TestFramework,
     TestResult,
     TestSuite,
-    mark_test,
 )
 
 

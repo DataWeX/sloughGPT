@@ -162,7 +162,6 @@ class TestDataEnricher:
 
 
 class TestRateLimiter:
-
     def test_acquire_exceeds_burst(self):
         rl = RateLimiter(max_per_second=1, burst_size=1)
         rl.acquire()

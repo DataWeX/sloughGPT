@@ -9,8 +9,6 @@ Usage:
 class TestJourneyCore:
     """Tests for the core Journey class."""
 
-
-
     def test_journey_result_to_dict(self):
         from domain.testing import Journey, SiteConfig
 
@@ -37,7 +35,6 @@ class TestJourneyCore:
 class TestStepResult:
     """Tests for StepResult."""
 
-
     def test_step_result_failed(self):
         from domain.testing import StepResult
 
@@ -47,11 +44,6 @@ class TestStepResult:
 
 class TestJourneySteps:
     """Tests for individual journey steps."""
-
-
-
-
-
 
     def test_check_no_console_errors_step(self):
         from domain.testing import Journey, SiteConfig
@@ -111,5 +103,3 @@ class TestJourneyResults:
         journey.run([journey.goto("/")])
         journey.run([journey.goto("/chat")])
         assert len(journey.results) == 2
-
-

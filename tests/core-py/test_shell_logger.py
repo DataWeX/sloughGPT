@@ -350,10 +350,6 @@ class TestLogRecord:
 
 
 class TestLogLevelComparison:
-
-
-
-
     def test_debug_le_debug(self):
         assert LogLevel.DEBUG <= LogLevel.DEBUG
 

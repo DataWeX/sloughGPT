@@ -5022,8 +5022,6 @@ class TestVGADisplayCells:
 
 
 class TestLoadConstTensorParse:
-
-
     def test_tensor_comma_split_mixed(self):
         from domain.shell._internal.vm import CPU, _op_load_const
 
@@ -5033,7 +5031,6 @@ class TestLoadConstTensorParse:
 
         assert isinstance(cpu.regs[0], np.ndarray)
         assert len(cpu.regs[0]) == 3
-
 
     def test_tensor_json_parse(self):
         from domain.shell._internal.vm import CPU, _op_load_const
@@ -9063,12 +9060,6 @@ class TestSyscallHandleDispatch:
         handler = X86SyscallHandler(cpu, pt, sched, mem, fs)
         return handler, cpu, sched, pcb
 
-
-
-
-
-
-
     def test_handle_sys_gettimeofday(self):
         h, cpu, sched, pcb = self._make_handler()
         cpu._regs[0] = h.SYS_GETTIMEOFDAY
@@ -9082,9 +9073,6 @@ class TestSyscallHandleDispatch:
         cpu._regs[3] = 0xF0000
         h.handle()
         assert cpu._regs[0] == 0
-
-
-
 
     def test_handle_sys_serial_write(self):
         h, cpu, sched, pcb = self._make_handler()
@@ -9122,7 +9110,6 @@ class TestSyscallHandleDispatch:
         cpu._regs[1] = 10
         h.handle()
         assert cpu._regs[0] >= 0
-
 
     def test_handle_sys_wait_no_children(self):
         h, cpu, sched, pcb = self._make_handler()
@@ -9179,7 +9166,6 @@ class TestSyscallHandleDispatch:
         cpu._regs[3] = 0xF0000
         h.handle()
         assert cpu._regs[0] >= 0
-
 
     def test_handle_sys_train_get_result(self):
         h, cpu, sched, pcb = self._make_handler()
@@ -9254,7 +9240,6 @@ class TestSysExecImplementation:
         sched.start(cpu)
         handler = X86SyscallHandler(cpu, pt, sched, mem, fs)
         return handler, cpu, sched, pcb, mem
-
 
     def test_exec_file_not_found(self):
         fs = FlatFS(BlockDevice())
@@ -9351,7 +9336,6 @@ class TestCPUMovGroupInstructions:
         cpu.step()
         return cpu
 
-
     def test_movzx_reg_mem(self):
         cpu = X86CPU()
         cpu._mem[0x20000] = 0xAB
@@ -9360,12 +9344,6 @@ class TestCPUMovGroupInstructions:
         cpu._regs[4] = 0x80000
         cpu.step()
         assert cpu._regs[1] == 0xAB
-
-
-
-
-
-
 
     def test_imul_reg_mem(self):
         cpu = X86CPU()
@@ -9412,7 +9390,6 @@ class TestCPUMovGroupInstructions:
         cpu._regs[4] = 0x80000
         cpu.step()
         assert cpu._regs[0] == 0x55667788
-
 
     def test_lgdt(self):
         cpu = X86CPU()

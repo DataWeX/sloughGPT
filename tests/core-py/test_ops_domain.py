@@ -326,7 +326,6 @@ class TestMemoryEfficientSoftmax:
         assert np.allclose(result.sum(), 1.0, atol=1e-5)
         assert result.argmax() == 2
 
-
     def test_unstable_overflow(self):
         logits = np.array([1000.0, 1001.0, 1002.0], dtype=np.float32)
         result = MemoryEfficientSoftmax.forward(logits, stable=False)

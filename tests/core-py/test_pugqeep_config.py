@@ -31,7 +31,6 @@ from domain.infrastructure._internal.pugqeep.config import (
 
 
 class TestPointConfig:
-
     def test_custom(self):
         c = PointConfig(function_type="periodic", n_clusters=32)
         assert c.function_type == "periodic"
@@ -84,7 +83,6 @@ class TestPointConfig:
 
 
 class TestCompressorConfig:
-
     def test_custom(self):
         c = CompressorConfig(n_clusters=64, method="function")
         assert c.n_clusters == 64
@@ -136,7 +134,6 @@ class TestCompressorConfig:
 
 
 class TestLibraryConfig:
-
     def test_custom(self):
         c = LibraryConfig(name="mylib", storage_dir=Path("/tmp"), auto_save=True)
         assert c.name == "mylib"

@@ -29,7 +29,6 @@ class TestLoadManifest:
         data = load_manifest(p)
         assert data["dataset_id"] == "d1"
 
-
     def test_invalid_json(self, tmp_path):
         p = tmp_path / "bad.json"
         p.write_text("{invalid")

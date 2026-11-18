@@ -7,7 +7,6 @@ from domain.infrastructure._internal.singleton import SingletonMeta, make_single
 
 
 class TestMakeSingleton:
-
     def test_thread_safety(self):
         instances = []
 

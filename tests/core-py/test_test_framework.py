@@ -34,7 +34,6 @@ class TestTestResult:
         assert r.metrics == {}
         assert r.details == {}
 
-
     def test_not_a_pytest_test(self):
         assert TestResult.__test__ is False
 
@@ -107,7 +106,6 @@ class TestTestResult:
 
 
 class TestTestSuite:
-
     def test_with_tests(self):
         r1 = TestResult(name="t1", status="passed", execution_time=0.1)
         r2 = TestResult(name="t2", status="failed", execution_time=0.2)

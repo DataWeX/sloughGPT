@@ -29,8 +29,6 @@ from domain.training import (
 
 
 class TestModelType:
-
-
     def test_names(self):
         assert ModelType.LANGUAGE_MODEL.name == "LANGUAGE_MODEL"
         assert ModelType.CHAT_MODEL.name == "CHAT_MODEL"
@@ -50,8 +48,6 @@ class TestModelType:
 
 
 class TestModelArchitecture:
-
-
     def test_names(self):
         assert ModelArchitecture.GPT.name == "GPT"
 
@@ -125,7 +121,6 @@ class TestModelManager:
         assert result["name"] == "gpt2"
         assert result["ready"] is True
 
-
     def test_register_multiple(self):
         mgr = ModelManager()
         mgr.register_model(
@@ -174,7 +169,6 @@ class TestModelManager:
 
 
 class TestDatasetType:
-
     def test_values(self):
         assert DatasetType.TEXT.value == "text"
         assert DatasetType.CODE.value == "code"

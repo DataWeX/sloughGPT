@@ -11,7 +11,6 @@ from domain.collections._internal.config import (
 
 
 class TestSourceConfig:
-
     def test_custom_values(self):
         c = SourceConfig(
             type="url",
@@ -65,7 +64,6 @@ class TestSourceConfig:
 
 
 class TestStoreConfig:
-
     def test_custom_values(self):
         c = StoreConfig(type="memory", path="/tmp/store", name="mem", max_size=500)
         assert c.type == "memory"
@@ -90,7 +88,6 @@ class TestStoreConfig:
 
 
 class TestFilterConfig:
-
     def test_custom_values(self):
         c = FilterConfig(
             type="keyword",

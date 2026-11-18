@@ -51,7 +51,6 @@ class TestCharTokenizer:
         assert tok2.vocab_size == tok.vocab_size
         assert tok2.encode("hi") == tok.encode("hi")
 
-
     def test_encode_before_build_raises(self):
         tok = CharTokenizer()
         try:

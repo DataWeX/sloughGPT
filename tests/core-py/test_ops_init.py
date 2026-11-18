@@ -392,7 +392,6 @@ class TestEstimateAttentionMemory:
 
 
 class TestSilu:
-
     def test_positive(self):
         x = np.array([1.0, 2.0, 5.0])
         y = silu(x)
