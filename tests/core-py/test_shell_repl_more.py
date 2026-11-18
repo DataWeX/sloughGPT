@@ -1709,16 +1709,7 @@ class TestAi:
         out = capture_cmd(repl, repl._cmd_ai, "zzz something")
         assert "API server is not connected" in out
 
-    @pytest.mark.skip(reason="_interpret_natural removed")
-    def test_interpret_natural_procs(self, repl):
-        with patch.object(repl, "_execute_single", return_value="procs output") as m:
-            capture_cmd(repl, repl._interpret_natural, "show running jobs")
-        assert m.called
 
-    @pytest.mark.skip(reason="_interpret_natural removed")
-    def test_interpret_natural_help(self, repl):
-        out = capture_cmd(repl, repl._interpret_natural, "what commands are available")
-        assert "Built-in commands:" in out
 
 
 # ── tutorial ─────────────────────────────────────────────────────────
@@ -16414,44 +16405,6 @@ class TestNoteStatusSummary:
         assert repl._last_exit_code == 0
 
 
-# ── _interpret_natural ────────────────────────────────────────────
-
-
-@pytest.mark.skip(reason="_interpret_natural removed")
-class TestInterpretNatural:
-    def test_processes_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("show me running processes"))
-        assert repl._last_exit_code == 0
-
-    def test_models_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("what models are available"))
-        assert repl._last_exit_code == 0
-
-    def test_health_keyword(self, repl):
-        with patch(
-            "domain.shell._internal.commands.ShellCommands.health",
-            return_value={"status": "healthy"},
-        ):
-            _run_with_io(repl, [], lambda: repl._interpret_natural("check health status"))
-        assert repl._last_exit_code == 0
-
-    def test_dataset_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("show datasets"))
-        assert repl._last_exit_code == 0
-
-    def test_knowledge_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("show knowledge facts"))
-        assert repl._last_exit_code == 0
-
-    def test_checkpoint_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("list checkpoints"))
-        assert repl._last_exit_code == 0
-
-    def test_metric_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("show cpu metrics"))
-        assert repl._last_exit_code == 0
-
-
 # ── _show_welcome ─────────────────────────────────────────────────
 
 
@@ -21850,20 +21803,6 @@ class TestCmdWatchDeeperV2:
             except ValueError:
                 pass
 
-    @pytest.mark.skip(reason="watch uses subprocess.run not _execute_single")
-    def test_watch_keyboard_interrupt(self, repl):
-        call_count = [0]
-
-        def fake_execute(cmd, piped=""):
-            call_count[0] += 1
-            if call_count[0] >= 2:
-                raise KeyboardInterrupt()
-            return "output"
-
-        repl._execute_single = fake_execute
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_watch("1 echo hi")
-        assert "Stopped" in cap.getvalue()
 
 
 class TestCmdChmodDeeperV2:
@@ -22434,40 +22373,6 @@ class TestCmdWhoDeeperV3:
         assert isinstance(out, str)
 
 
-@pytest.mark.skip(reason="_interpret_natural removed")
-class TestInterpretNaturalDeeper:
-    def test_interpret_processes(self, repl):
-        repl._interpret_natural("show me running processes")
-
-    def test_interpret_models(self, repl):
-        repl._interpret_natural("what models are available")
-
-    def test_interpret_soul(self, repl):
-        repl._interpret_natural("show my personality")
-
-    def test_interpret_health(self, repl):
-        repl._interpret_natural("health status")
-
-    def test_interpret_dataset(self, repl):
-        repl._interpret_natural("list datasets")
-
-    def test_interpret_knowledge(self, repl):
-        repl._interpret_natural("show knowledge facts")
-
-    def test_interpret_checkpoint(self, repl):
-        repl._interpret_natural("show checkpoints")
-
-    def test_interpret_finetune(self, repl):
-        repl._interpret_natural("show finetuned models")
-
-    def test_interpret_metrics(self, repl):
-        repl._interpret_natural("cpu metrics")
-
-    def test_interpret_tokenizer(self, repl):
-        repl._interpret_natural("show tokenizer vocab")
-
-    def test_interpret_help(self, repl):
-        repl._interpret_natural("help commands")
 
 
 class TestUpdateColorStateDeeper:
@@ -23916,11 +23821,6 @@ class TestCmdWatchDeeperV3:
             repl._cmd_watch("not_a_number")
         assert "Invalid" in cap.getvalue()
 
-    @pytest.mark.skip(reason="watch uses subprocess.run not _execute_single")
-    def test_watch_keyboard_interrupt(self, repl):
-        repl._execute_single = MagicMock(side_effect=KeyboardInterrupt)
-        repl._cmd_watch("1 echo hi")
-        assert "Stopped" in repl._last_output if hasattr(repl, "_last_output") else True
 
 
 class TestCmdBgFgDeeperV4:
@@ -24276,19 +24176,6 @@ class TestCmdVmpermsDeeperV2:
         assert repl._last_exit_code == 0
 
 
-@pytest.mark.skip(reason="_interpret_natural removed")
-class TestInterpretNaturalDeeperV2:
-    def test_finetuned_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("show finetuned models"))
-        assert repl._last_exit_code == 0
-
-    def test_tokenizer_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("tokenizer vocab"))
-        assert repl._last_exit_code == 0
-
-    def test_soul_keyword(self, repl):
-        _run_with_io(repl, [], lambda: repl._interpret_natural("show soul personality"))
-        assert repl._last_exit_code == 0
 
 
 class TestUpdateColorStateDeeperV2:
@@ -25512,18 +25399,6 @@ class TestCmdWatchV3:
             repl._cmd_watch("abc ls")
         assert "Invalid" in cap.getvalue() or "Usage" in cap.getvalue()
 
-    @pytest.mark.skip(reason="watch uses subprocess.run not _execute_single")
-    def test_watch_keyboard_interrupt(self, repl):
-        call_count = [0]
-
-        def mock_execute(cmd, piped=""):
-            call_count[0] += 1
-            if call_count[0] >= 2:
-                raise KeyboardInterrupt()
-            return "ok"
-
-        repl._execute_single = mock_execute
-        repl._cmd_watch("1 ls")
 
 
 class TestCmdEnvSet:
