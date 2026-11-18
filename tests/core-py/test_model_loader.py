@@ -721,3 +721,36 @@ class TestDatasetSignatureJourney:
         )
         trainer = SloughGPTTrainer(str(other / "journey.txt"), config=cfg)
         assert trainer.dataset_signature == sig_a, "signature must follow content, not location"
+
+    def test_backfilled_legacy_soul_resolves_by_dataset(self, tmp_path, monkeypatch):
+        """A pre-card soul (no signature) → back-fill → loader resolves it.
+
+        The repair journey end to end: strip the signature to simulate a soul
+        saved before card 20261104_081626, back-fill it from its recorded
+        training_dataset, then prove the loader finds the artifact by
+        ``dataset:<sig>`` — the lookup the gap was blocking.
+        """
+        signature, soul = self._train_and_save(tmp_path)
+
+        from domain.inference._internal.slo_format import (
+            read_soul_identity,
+            update_soul_identity_fields,
+        )
+        from domain.training._internal.train_pipeline import (
+            backfill_soul_dataset_signature,
+        )
+
+        update_soul_identity_fields(str(soul), {"dataset_signature": ""})
+        assert read_soul_identity(str(soul)).get("dataset_signature") == ""
+
+        result = backfill_soul_dataset_signature(str(soul))
+        assert result["dataset_signature"] == signature  # back to the producer value
+
+        native = TestModelLoaderSoulResolution._native(tmp_path)
+        native.joinpath(soul.name).write_bytes(soul.read_bytes())
+
+        loader, calls = TestModelLoaderSoulResolution._loader(tmp_path, monkeypatch)
+        res = loader.load(f"dataset:{signature}", verify=False)
+        assert res.success, res.error
+        assert res.metrics["matched_by"] == "dataset"
+        assert len(calls) == 1

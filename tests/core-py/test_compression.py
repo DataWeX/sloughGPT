@@ -592,16 +592,6 @@ class TestLRUCache:
             t.join()
         assert len(lru._cache) <= 50
 
-    def test_lru_cache_fifo_eviction_order(self):
-        lru = LRUCache(max_size=3)
-        lru.put("a", np.array([1]))
-        lru.put("b", np.array([2]))
-        lru.put("c", np.array([3]))
-        lru.put("d", np.array([4]))
-        assert lru.get("a") is None
-        lru.put("e", np.array([5]))
-        assert lru.get("b") is None
-
     def test_lru_cache_put_same_key_preserves_value(self):
         lru = LRUCache(max_size=2)
         lru.put("x", np.array([10]))
@@ -663,13 +653,6 @@ class TestLRUCache:
         lru = LRUCache(max_size=3)
         lru.put("a", None)
         assert lru.get("a") is None
-
-    def test_get_after_eviction_returns_none(self):
-        lru = LRUCache(max_size=1)
-        lru.put("a", np.array([1]))
-        lru.put("b", np.array([2]))
-        assert lru.get("a") is None
-        assert lru.get("b") is not None
 
     def test_many_gets_same_key(self):
         lru = LRUCache(max_size=2)

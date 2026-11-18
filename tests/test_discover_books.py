@@ -361,11 +361,31 @@ class TestValidateText:
 
 
 class TestWriteDataset:
-    def test_writes_txt_and_metadata(self, tmp_path):
+    def test_writes_canonical_v1_layout(self, tmp_path):
         target = db.write_dataset(tmp_path, "my-book", "body text", {"title": "My Book"})
-        assert (target / "my-book.txt").read_text() == "body text"
+        assert (target / "input.txt").read_text() == "body text"
         meta = json.loads((target / "metadata.json").read_text())
         assert meta["title"] == "My Book"
+        manifest = json.loads((target / "manifest.json").read_text())
+        assert manifest["schema_version"] == "1.0"
+        assert manifest["dataset_id"] == "my-book"
+        assert manifest["splits"] == {"train": "input.txt"}
+
+    def test_manifest_satisfies_v1_contract(self, tmp_path):
+        from domain.training._internal.dataset_manifest import (
+            load_manifest,
+            resolve_training_data_path,
+        )
+
+        target = db.write_dataset(
+            tmp_path,
+            "my-book",
+            "body text",
+            {"source": "gutenberg:1", "source_type": "gutenberg", "text_url": "https://x/1.txt"},
+        )
+        resolved, manifest = resolve_training_data_path(target / "manifest.json")
+        assert resolved == target / "input.txt"
+        assert load_manifest(target / "manifest.json")["sources"] == ["https://x/1.txt"]
 
     def test_leaves_no_tmp_dir(self, tmp_path):
         db.write_dataset(tmp_path, "my-book", "x", {})
@@ -389,6 +409,113 @@ class TestWriteDataset:
         with pytest.raises(OSError):
             db.write_dataset(tmp_path, "my-book", "x", {})
         assert not any(tmp_path.iterdir()), "no partial dataset may survive a failed write"
+
+
+class TestStandardize:
+    def _legacy_dir(self, tmp_path, slug="old-book", text="legacy body"):
+        d = tmp_path / slug
+        d.mkdir()
+        (d / f"{slug}.txt").write_text(text, encoding="utf-8")
+        (d / "metadata.json").write_text(
+            json.dumps({"source": "gutenberg:9", "source_type": "gutenberg", "title": "Old"}),
+            encoding="utf-8",
+        )
+        return d
+
+    def test_renames_and_writes_manifest(self, tmp_path):
+        d = self._legacy_dir(tmp_path)
+        assert db.standardize_dir(d) == "renamed + manifest written"
+        assert (d / "input.txt").read_text() == "legacy body"
+        assert not (d / "old-book.txt").exists()
+        manifest = json.loads((d / "manifest.json").read_text())
+        assert manifest["dataset_id"] == "old-book"
+        assert manifest["sources"] == ["gutenberg:9"]
+        assert manifest["splits"] == {"train": "input.txt"}
+        assert (d / "metadata.json").exists(), "metadata sidecar must never be deleted"
+
+    def test_idempotent_second_run_preserves_bytes(self, tmp_path):
+        d = self._legacy_dir(tmp_path)
+        db.standardize_dir(d)
+        before = (d / "input.txt").read_bytes()
+        assert db.standardize_dir(d) == "already conformant"
+        assert (d / "input.txt").read_bytes() == before
+
+    def test_skips_foreign_dirs(self, tmp_path):
+        foreign = tmp_path / "someone-elses"
+        foreign.mkdir()
+        (foreign / "data.txt").write_text("keep", encoding="utf-8")
+        (foreign / "metadata.json").write_text(json.dumps({"title": "x"}), encoding="utf-8")
+        assert db.standardize_dir(foreign) == "skipped (not acquired by this tool)"
+        assert (foreign / "data.txt").exists()
+        assert not (foreign / "manifest.json").exists()
+
+    def test_skips_dirs_without_our_sidecar(self, tmp_path):
+        d = tmp_path / "no-meta"
+        d.mkdir()
+        (d / "no-meta.txt").write_text("x", encoding="utf-8")
+        assert db.standardize_dir(d) == "skipped (not acquired by this tool)"
+
+    def test_skips_when_no_corpus_file(self, tmp_path):
+        d = tmp_path / "empty-book"
+        d.mkdir()
+        (d / "metadata.json").write_text(
+            json.dumps({"source": "gutenberg:1", "source_type": "gutenberg"}),
+            encoding="utf-8",
+        )
+        assert db.standardize_dir(d) == "skipped (no corpus file)"
+
+    def test_rewrites_invalid_manifest(self, tmp_path):
+        from domain.training._internal.dataset_manifest import load_manifest
+
+        d = self._legacy_dir(tmp_path)
+        (d / "manifest.json").write_text("{not json", encoding="utf-8")
+        assert db.standardize_dir(d) == "renamed + manifest written"
+        assert load_manifest(d / "manifest.json")["dataset_id"] == "old-book"
+
+    def test_valid_manifest_left_alone(self, tmp_path):
+        target = db.write_dataset(
+            tmp_path, "new-book", "x", {"source": "gutenberg:1", "source_type": "gutenberg"}
+        )
+        before = (target / "manifest.json").read_bytes()
+        assert db.standardize_dir(target) == "already conformant"
+        assert (target / "manifest.json").read_bytes() == before
+
+    def test_run_standardize_report(self, tmp_path, capsys):
+        self._legacy_dir(tmp_path, "old-book")
+        foreign = tmp_path / "foreign"
+        foreign.mkdir()
+        (foreign / "x.txt").write_text("y", encoding="utf-8")
+        rc = db.run_standardize(argparse_ns({"data_dir": str(tmp_path)}))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "old-book" in out and "renamed + manifest written" in out
+        assert "1 foreign dir(s) untouched" in out
+
+    def test_run_standardize_missing_dir_errors(self, tmp_path, capsys):
+        rc = db.run_standardize(argparse_ns({"data_dir": str(tmp_path / "nope")}))
+        assert rc == 2
+        assert "not a directory" in capsys.readouterr().err
+
+
+class TestCliDispatch:
+    def test_standardize_flag_routes_to_run_standardize(self, tmp_path, monkeypatch):
+        seen = {}
+
+        def fake_run_standardize(args):
+            seen["data_dir"] = args.data_dir
+            return 0
+
+        monkeypatch.setattr(db, "run_standardize", fake_run_standardize)
+        assert db.main(["--standardize", "--data-dir", str(tmp_path)]) == 0
+        assert seen["data_dir"] == str(tmp_path)
+
+    def test_missing_query_is_a_parser_error(self):
+        with pytest.raises(SystemExit):
+            db.main([])
+
+    def test_standardize_rejects_query(self, tmp_path):
+        with pytest.raises(SystemExit):
+            db.main(["--standardize", "-q", "philosophy", "--data-dir", str(tmp_path)])
 
 
 class TestRun:
@@ -415,12 +542,14 @@ class TestRun:
         monkeypatch.setattr(db, "_download_text", lambda gid: "real text body " * 10)
         rc = db.run(self._args(tmp_path))
         assert rc == 0
-        out = tmp_path / "deep-thinking" / "deep-thinking.txt"
+        out = tmp_path / "deep-thinking" / "input.txt"
         assert out.exists()
         assert out.read_text() == "real text body " * 10
         meta = json.loads((out.parent / "metadata.json").read_text())
         assert meta["gutenberg_id"] == 7
         assert meta["source_type"] == "gutenberg"
+        manifest = json.loads((out.parent / "manifest.json").read_text())
+        assert manifest["dataset_id"] == "deep-thinking"
         report = capsys.readouterr().out
         assert "1 dataset(s)" in report
 

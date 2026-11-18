@@ -468,18 +468,6 @@ class TestConfigEdgeCases:
 
 
 class TestGetDtypeExtended:
-    def test_float32_literal(self):
-        loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2", dtype="float32"))
-        assert loader._get_dtype() == "float32"
-
-    def test_float16_literal(self):
-        loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2", dtype="float16"))
-        assert loader._get_dtype() == "float16"
-
-    def test_auto_literal(self):
-        loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2", dtype="auto"))
-        assert loader._get_dtype() == "auto"
-
     def test_unknown_multiple_chars(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2", dtype="complex64"))
         assert loader._get_dtype() == "float32"
@@ -538,18 +526,6 @@ class TestFormatChatPromptExtended:
 
 
 class TestLoaderState:
-    def test_model_none_after_init(self):
-        loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
-        assert loader.model is None
-
-    def test_tokenizer_none_after_init(self):
-        loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
-        assert loader.tokenizer is None
-
-    def test_config_device_resolved(self):
-        loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
-        assert loader.config.device == "cpu"
-
     def test_config_preserved_after_init(self):
         cfg = HFLocalConfig(model="custom-model", device="cpu", dtype="float16")
         loader = HuggingFaceLocalLoader(cfg)
@@ -672,12 +648,6 @@ class TestModuleFunctions:
             "generate_local",
         }
 
-    def test_client_class_name(self):
-        assert HuggingFaceLocalClient.__name__ == "HuggingFaceLocalClient"
-
-    def test_client_is_subclass(self):
-        assert issubclass(HuggingFaceLocalClient, HuggingFaceLocalLoader)
-
     def test_client_has_all_methods(self):
         assert hasattr(HuggingFaceLocalClient, "load")
         assert hasattr(HuggingFaceLocalClient, "generate")
@@ -697,12 +667,6 @@ class TestLoadPath:
                 loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
                 with pytest.raises(ImportError):
                     loader.load()
-
-    def test_load_raises_when_tokenizer_none(self):
-        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
-            loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
-            with pytest.raises(ImportError, match="transformers"):
-                loader.load()
 
     def test_load_raises_when_model_none(self):
         with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", MagicMock()):

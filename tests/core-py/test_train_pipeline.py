@@ -2258,3 +2258,84 @@ class TestDatasetSignature:
         """The recipe string carries a version so a bump is a visible event."""
         t = make_trainer(data_path, tiny_config(tmp_path))
         assert "/v1" in t.dataset_signature_recipe
+
+
+# =============================================================================
+# backfill_soul_dataset_signature — repair pre-card souls (card 20261117_111044)
+# =============================================================================
+
+
+class TestDatasetSignatureBackfill:
+    """A soul saved BEFORE card 20261104_081626 carries no signature, so the
+    loader refuses it for dataset/family lookups. This repairs it honestly:
+    recompute from the recorded ``training_dataset``, back up first, never
+    overwrite an existing signature, never sign a live stream.
+    """
+
+    class _DummyModel:
+        def state_dict(self):
+            return {"w": np.zeros(4, dtype=np.float32)}
+
+    @staticmethod
+    def _legacy_soul(tmp_path, *, dataset: str, signature: str = "") -> str:
+        from domain.inference import create_soul_profile, save_soul
+
+        profile = create_soul_profile(
+            name="legacy",
+            base_model="sloughgpt",
+            training_dataset=dataset,
+            dataset_signature=signature,
+        )
+        path = str(tmp_path / "legacy.soul")
+        save_soul(TestDatasetSignatureBackfill._DummyModel(), path, soul_profile=profile)
+        return path
+
+    def test_backfill_matches_producer_signature(self, data_path, tmp_path):
+        """The core claim: the back-filled value equals what the trainer
+        records fresh for the same corpus — otherwise the loader would be
+        comparing two different hash conventions."""
+        from domain.inference._internal.slo_format import load_soul, read_soul_identity
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset=data_path)
+        result = backfill_soul_dataset_signature(soul)
+
+        identity = read_soul_identity(soul)
+        producer = make_trainer(data_path, tiny_config(tmp_path))
+        assert result["dataset_signature"] == producer.dataset_signature
+        assert identity["dataset_signature"] == producer.dataset_signature
+        assert len(identity["dataset_signature"]) == 64
+
+        profile, _ = load_soul(soul)
+        assert profile.metadata.get("dataset_signature_recipe") == "blake2b256/tokens/v1"
+
+    def test_backfill_creates_restorable_backup(self, data_path, tmp_path):
+        from pathlib import Path
+
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset=data_path)
+        original = Path(soul).read_bytes()
+        result = backfill_soul_dataset_signature(soul)
+
+        backup = Path(result["backup_path"])
+        assert backup.is_file()
+        assert backup.read_bytes() == original  # byte-identical restore point
+
+    def test_backfill_refuses_live_source(self, tmp_path):
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset="feed:api-conversations")
+        with pytest.raises(ValueError, match="live source"):
+            backfill_soul_dataset_signature(soul)
+
+    def test_backfill_refuses_existing_signature(self, data_path, tmp_path):
+        from pathlib import Path
+
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset=data_path, signature="d" * 64)
+        before = Path(soul).read_bytes()
+        with pytest.raises(ValueError, match="already"):
+            backfill_soul_dataset_signature(soul)
+        assert Path(soul).read_bytes() == before  # refusal leaves the file alone

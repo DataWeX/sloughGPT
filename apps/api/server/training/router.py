@@ -661,7 +661,7 @@ async def training_stream(request: Request):
             }
         )
 
-    checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
+    checkpoints_dir = find_repo_root(Path(__file__)) / "models" / "auto-training"
     return await build_training_sse_response(
         request,
         config,
@@ -705,7 +705,7 @@ async def training_from_sessions_stream(request: Request):
             }
         )
 
-    checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
+    checkpoints_dir = find_repo_root(Path(__file__)) / "models" / "auto-training"
     return await build_training_sse_response(
         request,
         config,

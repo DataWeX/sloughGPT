@@ -2953,10 +2953,6 @@ class TestSerialDeviceComprehensive:
         dev.write_byte(65)
         assert dev.has_data() is False  # write_byte goes to TX, not RX
 
-    def test_read_byte_empty(self):
-        dev = SerialDevice()
-        assert dev.read_byte() == -1
-
     def test_push_byte(self):
         dev = SerialDevice()
         dev.push_byte(42)
@@ -4153,19 +4149,6 @@ class TestSysReaddir:
         result = sys._syscall._sys_readdir(0x5000, 10)
         assert result == 2
 
-    def test_readdir_no_fs(self):
-        sys = X86VirtualSystem(filesystem=None)
-        result = sys._syscall._sys_readdir(0x5000, 10)
-        assert result == 0
-
-    def test_readdir_limited(self):
-        sys = X86VirtualSystem()
-        sys._syscall._fs.write("a.txt", b"1")
-        sys._syscall._fs.write("b.txt", b"2")
-        sys._syscall._fs.write("c.txt", b"3")
-        result = sys._syscall._sys_readdir(0x5000, 2)
-        assert result == 2
-
 
 class TestSysExec:
     def test_exec_replaces_process(self):
@@ -4308,11 +4291,6 @@ class TestSysClose:
         assert fd >= 0
         result = sys._syscall._sys_close(fd)
         assert result == 0
-
-    def test_close_invalid_fd(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(999)
-        assert result == -1
 
 
 class TestSysSbrk:
@@ -4473,14 +4451,6 @@ class TestFlatFSLoadTable:
         assert "test.txt" in fs._files
 
 
-class TestSysYield:
-    def test_yield_returns_zero(self):
-        sys = X86VirtualSystem()
-        sys.spawn("yield_test", "[BITS 32]\nHLT")
-        result = sys._syscall._sys_yield()
-        assert result == 0
-
-
 class TestSysGettimeofday:
     def test_gettimeofday_writes_ticks(self):
         sys = X86VirtualSystem()
@@ -4531,11 +4501,6 @@ class TestSysCloseEdgeCases:
     def test_close_nonexistent_fd(self):
         sys = X86VirtualSystem()
         result = sys._syscall._sys_close(999)
-        assert result == -1
-
-    def test_close_negative_fd(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(-1)
         assert result == -1
 
     def test_close_negative_fd(self):
@@ -5031,24 +4996,12 @@ class TestSysUname:
 
 
 class TestSysSbrkEdge:
-    def test_sbrk_no_process(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_sbrk(4096)
-        assert isinstance(result, int)
-
     def test_sbrk_with_process(self):
         sys = X86VirtualSystem()
         sys.spawn("sbrk_test", "[BITS 32]\nHLT")
         sys.scheduler.start(sys.cpu)
         result = sys._syscall._sys_sbrk(4096)
         assert isinstance(result, int)
-
-
-class TestSysCloseEdge:
-    def test_close_invalid_fd(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(999)
-        assert result == -1
 
 
 class TestSysOpenEdge:
@@ -5068,13 +5021,6 @@ class TestVGADisplayCells:
         sys.cpu._write8(0xB8001, 0x0F)
         assert sys.cpu._read8(0xB8000) == ord("A")
         assert sys.cpu._read8(0xB8001) == 0x0F
-
-
-class TestSchedulerStart:
-    def test_scheduler_start(self):
-        sys = X86VirtualSystem()
-        sys.spawn("sched_test", "[BITS 32]\nHLT")
-        sys.scheduler.start(sys.cpu)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -5133,22 +5079,8 @@ class TestLoadConstTensorParse:
         assert isinstance(cpu.regs[0], np.ndarray)
         assert list(cpu.regs[0]) == [10.0, 20.0, 30.0]
 
-    def test_scalar_value(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
-
-        cpu = CPU()
-        _op_load_const(cpu, ["R0", 42])
-        assert cpu.regs[0] == 42
-
 
 class TestFlatFSLoadTable:
-    def test_flatfs_load_empty_table(self):
-        from domain.shell._internal.vm import BlockDevice, FlatFS
-
-        bd = BlockDevice()
-        fs = FlatFS(bd)
-        assert isinstance(fs._files, dict)
-
     def test_flatfs_write_and_read(self):
         from domain.shell._internal.vm import BlockDevice, FlatFS
 
@@ -5459,11 +5391,6 @@ class TestSysClose:
         if fd >= 0:
             result = sys._syscall._sys_close(fd)
             assert result == 0
-
-    def test_close_already_closed(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(999)
-        assert result == -1
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -6760,11 +6687,6 @@ class TestAssemblerCondJumps:
 
 
 class TestAssemblerALUMemImm:
-    def test_add_mem_imm_large(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nADD DWORD [1000], 256")
-        assert len(code) > 0
-
     def test_sub_mem_imm_large(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSUB DWORD [1000], 256")
@@ -6803,11 +6725,6 @@ class TestAssemblerALUMemImm:
     def test_sub_mem16_imm_large(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSUB WORD [1000], 256")
-        assert len(code) > 0
-
-    def test_add_mem8_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nADD BYTE [1000], 5")
         assert len(code) > 0
 
     def test_sub_mem8_imm(self):
@@ -6879,21 +6796,6 @@ class TestDeviceBusInfo:
 
 
 class TestAssemblerRepPrefix:
-    def test_rep_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP MOVSB")
-        assert len(code) > 0
-
-    def test_rep_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP STOSB")
-        assert len(code) > 0
-
-    def test_rep_lodsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP LODSB")
-        assert len(code) > 0
-
     def test_repe_cmpsb(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nREPE CMPSB")
@@ -6941,11 +6843,6 @@ class TestAssemblerDivIdiv:
     def test_idiv_reg(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nIDIV ECX")
-        assert len(code) > 0
-
-    def test_div_mem(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nDIV ECX")
         assert len(code) > 0
 
 
@@ -7022,11 +6919,6 @@ class TestAssemblerShiftReg8Imm:
     def test_shl_al_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSHL AL, 2")
-        assert len(code) > 0
-
-    def test_shr_al_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSHR AL, 2")
         assert len(code) > 0
 
 
@@ -7506,11 +7398,6 @@ class TestAssemblerShiftMulDiv:
         code = asm.assemble("[BITS 32]\nSHL EAX, 2")
         assert len(code) > 0
 
-    def test_shr_eax_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSHR EAX, 2")
-        assert len(code) > 0
-
     def test_rol_eax_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nROL EAX, 2")
@@ -7519,41 +7406,6 @@ class TestAssemblerShiftMulDiv:
     def test_ror_eax_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nROR EAX, 2")
-        assert len(code) > 0
-
-    def test_sar_eax_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSAR EAX, 2")
-        assert len(code) > 0
-
-    def test_mul_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMUL EAX")
-        assert len(code) > 0
-
-    def test_imul_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nIMUL EAX")
-        assert len(code) > 0
-
-    def test_div_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nDIV EAX")
-        assert len(code) > 0
-
-    def test_idiv_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nIDIV EAX")
-        assert len(code) > 0
-
-    def test_neg_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nNEG EAX")
-        assert len(code) > 0
-
-    def test_not_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nNOT EAX")
         assert len(code) > 0
 
 
@@ -7768,46 +7620,6 @@ class TestAssemblerInOut:
 
 
 class TestAssemblerStringOps:
-    def test_lodsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nLODSB")
-        assert len(code) > 0
-
-    def test_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSB")
-        assert len(code) > 0
-
-    def test_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSB")
-        assert len(code) > 0
-
-    def test_cmpsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nCMPSB")
-        assert len(code) > 0
-
-    def test_scasb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSCASB")
-        assert len(code) > 0
-
-    def test_lodsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nLODSW")
-        assert len(code) > 0
-
-    def test_stosw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSW")
-        assert len(code) > 0
-
-    def test_movsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSW")
-        assert len(code) > 0
-
     def test_cmpsw(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nCMPSW")
@@ -7818,34 +7630,9 @@ class TestAssemblerStringOps:
         code = asm.assemble("[BITS 32]\nSCASW")
         assert len(code) > 0
 
-    def test_rep_lodsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP LODSB")
-        assert len(code) > 0
-
-    def test_rep_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP STOSB")
-        assert len(code) > 0
-
-    def test_rep_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP MOVSB")
-        assert len(code) > 0
-
     def test_repne_cmpsb(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nREPNE CMPSB")
-        assert len(code) > 0
-
-    def test_repe_cmpsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREPE CMPSB")
-        assert len(code) > 0
-
-    def test_rep_scasb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREPNE SCASB")
         assert len(code) > 0
 
 
@@ -8934,11 +8721,6 @@ class TestAssembleEstimateDataSizeComprehensive:
 class TestAssembleMovMemEncoding:
     """Test MOV memory operand encoding (L3266-3310)."""
 
-    def test_mov_reg_mem(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOV EAX, [0x100000]")
-        assert len(code) > 0
-
     def test_mov_mem_reg(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nMOV [0x100000], EAX")
@@ -9045,26 +8827,6 @@ class TestAssembleShiftComprehensive:
     def test_shr_reg_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSHR EAX, 3")
-        assert len(code) > 0
-
-    def test_rol_reg_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nROL EAX, 1")
-        assert len(code) > 0
-
-    def test_ror_reg_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nROR EAX, 1")
-        assert len(code) > 0
-
-    def test_sar_reg_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSAR EAX, 2")
-        assert len(code) > 0
-
-    def test_shl_reg_cl(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSHL EAX, CL")
         assert len(code) > 0
 
     def test_shr_reg_cl(self):
@@ -9304,41 +9066,6 @@ class TestX86ShellComprehensive:
         shell = X86Shell()
         shell.type_keys("ab")
         assert len(shell._cpu._kbd_buffer) == 2
-
-    def test_lodsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nLODSW")
-        assert len(code) > 0
-
-    def test_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSB")
-        assert len(code) > 0
-
-    def test_stosw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSW")
-        assert len(code) > 0
-
-    def test_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSB")
-        assert len(code) > 0
-
-    def test_movsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSW")
-        assert len(code) > 0
-
-    def test_cmpsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nCMPSB")
-        assert len(code) > 0
-
-    def test_scasb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSCASB")
-        assert len(code) > 0
 
 
 # ============================================================

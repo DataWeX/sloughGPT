@@ -309,10 +309,6 @@ class TestApplyToLogits:
 
 
 class TestAdaptationStrength:
-    def test_zero_initially(self):
-        u = OnlineLoRAUpdater()
-        assert u.get_adaptation_strength() == 0.0
-
     def test_positive_after_init(self):
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=16)

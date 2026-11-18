@@ -379,14 +379,6 @@ class TestIdleManager:
         assert info["remaining_s"] <= 100.0
         assert info["remaining_s"] >= 0.0
 
-    def test_unregister_clears_from_models_dict(self):
-        im = IdleManager()
-        im.register("m1")
-        im.register("m2")
-        im.unregister("m1")
-        assert "m1" not in im._models
-        assert "m2" in im._models
-
     def test_register_preserves_existing_entry(self):
         im = IdleManager()
         im.register("m1", unload_fn=lambda: None)

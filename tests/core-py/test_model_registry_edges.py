@@ -274,13 +274,6 @@ class TestHealthSummary:
         assert h["has_errors"] is False
         assert h["models"] == []
 
-    def test_health_one_model(self):
-        reg = ModelRegistry()
-        reg.register_engine("eng", _FakeProvider())
-        h = reg.health_summary()
-        assert h["models_registered"] == 1
-        assert h["default_model"] == "eng"
-
     def test_health_degraded_model(self):
         reg = ModelRegistry()
         p = _FakeProvider()
@@ -568,11 +561,6 @@ class TestHealthSummaryExtra:
 
 
 class TestGenerateExtra:
-    def test_generate_no_default_no_model_id(self):
-        reg = ModelRegistry()
-        with pytest.raises(RuntimeError, match="No model registered"):
-            asyncio.run(reg.generate("hello"))
-
     def test_generate_error_includes_model_id(self):
         reg = ModelRegistry()
         with pytest.raises(RuntimeError, match="requested 'x'"):

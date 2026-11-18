@@ -943,10 +943,6 @@ class TestSuggestions:
         resp = client.get("/chat/suggestions")
         assert resp.status_code == 200
 
-    def test_chat_suggestions_alt_path(self, client):
-        resp = client.get("/chat/suggestions")
-        assert resp.status_code == 200
-
     def test_suggestions_data_shape(self, client):
         resp = client.get("/chat/suggestions")
         data = resp.json()["data"]
