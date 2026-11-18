@@ -141,6 +141,120 @@ def _describe_soul(path: Path, identity: dict[str, Any]) -> str:
     )
 
 
+@dataclass(frozen=True)
+class SoulCandidate:
+    """Identity-only resolution of a native ``.soul`` request — no load."""
+
+    path: Path
+    identity: dict[str, Any]
+    matched_by: str  # "name" | "alias" | "hash" | "dataset"
+    candidate_count: int
+
+
+@dataclass(frozen=True)
+class SoulRefusal:
+    """A soul request that must fail loudly instead of falling to ``.slnc``."""
+
+    kind: str
+    key: str
+    entries: tuple[tuple[Path, dict[str, Any]], ...]
+    reason: str | None = None
+
+
+def resolve_soul_candidate(
+    model_id: str, native_dir: Path | None = None
+) -> SoulCandidate | SoulRefusal | None:
+    """Resolve *model_id* to a native ``.soul`` checkpoint — identity only.
+
+    This is the single ``.soul``-priority rule: ``ModelLoader._try_load_soul``
+    (eager autoload) and ``resolve_boot_artifact`` (boot fast paths) both read
+    it, so boot and load can never disagree about which artifact wins.
+    ``native_dir`` defaults to the native checkpoint directory ``ModelLoader``
+    itself defaults to (``models/slonet-native``).
+
+    Identity comes from the checkpoint's own header, never from directory
+    order:
+
+    - ``<checkpoint>`` (or ``<checkpoint>.soul``) — exact stem match;
+    - ``hash:<prefix>`` or a bare hex prefix (>= 12 chars) — matches
+      ``integrity_hash``;
+    - ``dataset:<signature>`` — matches the recorded ``dataset_signature``;
+    - a family id (``sloughgpt``, ``sloughgpt-v1``, ``slonet``,
+      ``slonet-native``) — resolves only when every candidate is provably
+      the same model (same ``base_model`` and same *non-empty* dataset
+      signature), because retraining a model twice on an unchanged dataset
+      produces interchangeable artifacts.
+
+    Anything else is refused with the candidate list rather than guessed: the
+    previous implementation answered *any* request with the newest-mtime
+    ``.soul`` labelled as the requested id, so a request for one model could
+    be served by another (wrong-artifact class).
+
+    Returns:
+        ``SoulCandidate`` when the id names a checkpoint, ``SoulRefusal`` when
+        it is a soul request that cannot be answered (the caller must fail
+        loudly — never fall through to ``.slnc``), or ``None`` when the id is
+        not a soul request at all — including a bare name that matches no
+        checkpoint — in which case the ``.slnc`` path runs exactly as before.
+        HuggingFace ids contain ``/`` and therefore never reach the native
+        checkpoint directory, which is what keeps a request for one model from
+        being answered by another.
+    """
+    if native_dir is None:
+        native_dir = _REPO_ROOT / "models" / _NATIVE_SOUL_DIRNAME
+    request = _classify_soul_request(model_id)
+    if request is None:
+        return None
+    kind, key = request
+
+    named = _safe_soul_path(native_dir, key) if kind in ("name", "alias") else None
+    if kind == "name":
+        if named is None:
+            return None
+        matches = [(named, _soul_identity(named))]
+    elif named is not None:
+        # An explicitly named checkpoint wins over the family id it shares a
+        # name with (e.g. ``sloughgpt.soul``) — a file is a declaration.
+        kind = "name"
+        matches = [(named, _soul_identity(named))]
+    else:
+        if not native_dir.is_dir():
+            return SoulRefusal(kind=kind, key=key, entries=())
+        try:
+            candidates = sorted(native_dir.glob("*.soul"), key=lambda p: p.name)
+        except FileNotFoundError as e:
+            logger.warning(
+                "Native .soul directory removed during scan: %s", e, extra={"tag": "MODEL"}
+            )
+            return None
+        entries = [(path, _soul_identity(path)) for path in candidates]
+        matches = [entry for entry in entries if _soul_matches(kind, key, entry)]
+        if not matches:
+            return SoulRefusal(kind=kind, key=key, entries=tuple(entries))
+        if kind == "alias" and not _same_model(matches):
+            return SoulRefusal(kind=kind, key=key, entries=tuple(entries))
+        if kind == "hash" and len({_hash_of(entry) for entry in matches}) > 1:
+            # A short prefix can address several distinct artifacts — a
+            # guess here is exactly the wrong-artifact bug this fixes.
+            return SoulRefusal(
+                kind=kind,
+                key=key,
+                entries=tuple(entries),
+                reason=f"'{key}' is ambiguous — it prefixes {len(matches)} different "
+                "integrity hashes; request more characters",
+            )
+
+    # ``matches`` is ordered by file name (never mtime); when several
+    # checkpoints are equivalent the pick is deterministic.
+    soul_path, identity = matches[0]
+    return SoulCandidate(
+        path=soul_path,
+        identity=identity,
+        matched_by=kind,
+        candidate_count=len(matches),
+    )
+
+
 @dataclass
 class LoadResult:
     """Standardized result from model loading."""
@@ -378,90 +492,43 @@ class ModelLoader:
     def _try_load_soul(self, model_id: str) -> LoadResult | None:
         """Load the native ``.soul`` checkpoint that *model_id* names.
 
-        Identity comes from the checkpoint's own header, never from directory
-        order:
-
-        - ``<checkpoint>`` (or ``<checkpoint>.soul``) — exact stem match;
-        - ``hash:<prefix>`` or a bare hex prefix (>= 12 chars) — matches
-          ``integrity_hash``;
-        - ``dataset:<signature>`` — matches the recorded ``dataset_signature``;
-        - a family id (``sloughgpt``, ``sloughgpt-v1``, ``slonet``,
-          ``slonet-native``) — resolves only when every candidate is provably
-          the same model (same ``base_model`` and same *non-empty* dataset
-          signature), because retraining a model twice on an unchanged dataset
-          produces interchangeable artifacts.
-
-        Anything else is refused with the candidate list rather than guessed:
-        the previous implementation answered *any* request with the newest-mtime
-        `.soul` labelled as the requested id, so a request for one model could
-        be served by another (wrong-artifact class). Ids that are not bare
-        checkpoint names — HuggingFace ids contain ``/`` — return ``None`` so the
-        ``.slnc`` path runs exactly as before.
+        Identity, priority and refusal semantics live in
+        ``resolve_soul_candidate`` — the single soul-priority rule shared
+        with the boot fast paths. A refusal becomes a failing ``LoadResult``
+        (loud, never a ``.slnc`` fallback); ``None`` falls through to the
+        ``.slnc`` path exactly as before.
 
         Returns:
             ``LoadResult`` on success, a failing ``LoadResult`` when the id
-            names a soul that cannot be resolved, or ``None`` when the id is not
-            a soul request at all.
+            names a soul that cannot be resolved, or ``None`` when the id is
+            not a soul request at all.
         """
-        request = _classify_soul_request(model_id)
-        if request is None:
-            return None
-        kind, key = request
-
         native_dir = Path(self.models_dir) / _NATIVE_SOUL_DIRNAME
-        named = _safe_soul_path(native_dir, key) if kind in ("name", "alias") else None
-        if kind == "name":
-            if named is None:
-                return None
-            matches = [(named, _soul_identity(named))]
-        elif named is not None:
-            # An explicitly named checkpoint wins over the family id it shares a
-            # name with (e.g. ``sloughgpt.soul``) — a file is a declaration.
-            kind = "name"
-            matches = [(named, _soul_identity(named))]
-        else:
-            if not native_dir.is_dir():
-                return self._soul_refusal(model_id, kind, key, [])
-            try:
-                candidates = sorted(native_dir.glob("*.soul"), key=lambda p: p.name)
-            except FileNotFoundError as e:
-                logger.warning(
-                    "Native .soul directory removed during scan: %s", e, extra={"tag": "MODEL"}
-                )
-                return None
-            entries = [(path, _soul_identity(path)) for path in candidates]
-            matches = [entry for entry in entries if _soul_matches(kind, key, entry)]
-            if not matches:
-                return self._soul_refusal(model_id, kind, key, entries)
-            if kind == "alias" and not _same_model(matches):
-                return self._soul_refusal(model_id, kind, key, entries)
-            if kind == "hash" and len({_hash_of(entry) for entry in matches}) > 1:
-                # A short prefix can address several distinct artifacts — a
-                # guess here is exactly the wrong-artifact bug this fixes.
-                return self._soul_refusal(
-                    model_id,
-                    kind,
-                    key,
-                    entries,
-                    reason=f"'{key}' is ambiguous — it prefixes {len(matches)} different "
-                    "integrity hashes; request more characters",
-                )
+        resolution = resolve_soul_candidate(model_id, native_dir)
+        if resolution is None:
+            return None
+        if isinstance(resolution, SoulRefusal):
+            return self._soul_refusal(
+                model_id,
+                resolution.kind,
+                resolution.key,
+                list(resolution.entries),
+                resolution.reason,
+            )
 
-        # ``matches`` is ordered by file name (never mtime); when several
-        # checkpoints are equivalent the pick is deterministic.
-        soul_path, identity = matches[0]
-        if len(matches) > 1:
+        soul_path, identity = resolution.path, resolution.identity
+        if resolution.candidate_count > 1:
             logger.info(
                 "Native .soul request %s matched %d equivalent checkpoints; using %s",
                 model_id,
-                len(matches),
+                resolution.candidate_count,
                 soul_path.name,
                 extra={"tag": "MODEL"},
             )
         logger.info(
             "Found native .soul checkpoint: %s (matched_by=%s, integrity_hash=%s)",
             soul_path,
-            kind,
+            resolution.matched_by,
             identity.get("integrity_hash") or "unrecorded",
             extra={"tag": "MODEL"},
         )
@@ -484,8 +551,8 @@ class ModelLoader:
                 metrics={
                     "soul_path": str(soul_path),
                     "source": "native-trained",
-                    "matched_by": kind,
-                    "candidate_count": len(matches),
+                    "matched_by": resolution.matched_by,
+                    "candidate_count": resolution.candidate_count,
                     "integrity_hash": identity.get("integrity_hash", ""),
                     "dataset_signature": identity.get("dataset_signature", ""),
                     "base_model": identity.get("base_model", ""),

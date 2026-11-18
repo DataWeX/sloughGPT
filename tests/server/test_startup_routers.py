@@ -41,6 +41,7 @@ from apps.api.server.infrastructure.startup import (  # noqa: E402
     _build_guard_for_model,
     _preload_model_imports,
 )
+from domain.infrastructure.model_resolver import BootArtifact  # noqa: E402
 
 
 def test_preload_populates_sys_modules_for_all_declared_modules():
@@ -469,13 +470,12 @@ class TestModelLoadedGuard:
         with (
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/nonexistent-dir"),
-            ) as mock_dir,
-            patch("os.path.exists", return_value=False),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=None,
+            ) as mock_art,
         ):
             assert _build_guard_for_model(cfg, "gpt2") is None
-        mock_dir.assert_called_with("gpt2")
+        mock_art.assert_called_once_with("gpt2")
 
     def test_build_guard_returns_started_guard(self):
         cfg = ServerConfig()
@@ -486,10 +486,9 @@ class TestModelLoadedGuard:
                 "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
             ) as mock_pg,
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake/slnc-dir"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/slnc-dir/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch(
                 "domain.infrastructure.process_guard.resolve_memory_limit_mb",
                 return_value=512.0,
@@ -506,6 +505,14 @@ class TestModelLoadedGuard:
         cfg = ServerConfig()
         with (
             patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
+            ),
+            patch(
+                "domain.infrastructure.process_guard.resolve_memory_limit_mb",
+                return_value=512.0,
+            ),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard",
                 side_effect=RuntimeError("boom"),
@@ -964,10 +971,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/missing"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=None,
             ),
-            patch("os.path.exists", return_value=False),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
 
@@ -979,10 +985,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
@@ -997,10 +1002,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard",
@@ -1029,10 +1033,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
@@ -1073,10 +1076,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch("domain.infrastructure.process_guard.ProcessGuard", return_value=MagicMock()),
             patch(
@@ -1214,3 +1216,23 @@ class TestRunDirectFallback:
         assert mock_reg.call_count == 1
         assert mock_routers.call_count == 1
         mock_ready.assert_awaited()
+
+
+def test_boot_artifact_decision_has_one_home():
+    """startup.py reads ``resolve_boot_artifact`` — it never re-derives the rule.
+
+    Six sites each carried their own ``.slnc``-only artifact rule, divergent
+    from the loader's ``.soul``-first priority (wrong-artifact split-brain,
+    card 20261104_053224). The priority decision lives in the resolver alone.
+    """
+    import re as _re
+
+    from apps.api.server.infrastructure import startup as _startup
+
+    src = Path(_startup.__file__).read_text(encoding="utf-8")
+    assert not _re.search(r"""["']model\.slnc["']""", src), (
+        "startup.py re-derives the .slnc artifact rule inline; read resolve_boot_artifact instead"
+    )
+    assert src.count("resolve_boot_artifact(") >= 6, (
+        "all six boot sites must consult resolve_boot_artifact"
+    )

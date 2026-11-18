@@ -686,13 +686,13 @@ class StartupOrchestrator:
                         from domain.shared._internal.feature_flags import is_enabled
 
                         if is_enabled("native_c_inference"):
-                            from domain.infrastructure.model_resolver import get_model_dir as _gmd
+                            from domain.infrastructure.model_resolver import (
+                                resolve_boot_artifact,
+                            )
 
-                            _p = str(_gmd(cfg.autoload_model) / "model.slnc")
-                            import os as _os
-
-                            if _os.path.exists(_p):
-                                _native_slnc = _p
+                            _art = resolve_boot_artifact(cfg.autoload_model)
+                            if _art is not None and _art.format == "slnc":
+                                _native_slnc = str(_art.path)
                     except Exception:
                         pass
 
@@ -1546,17 +1546,28 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     if not model_type:
         return False
     try:
-        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.model_resolver import resolve_boot_artifact
 
-        slnc_path = str(_get_model_dir(model_type) / "model.slnc")
-        if not os.path.exists(slnc_path):
+        artifact = resolve_boot_artifact(model_type)
+        if artifact is None:
             logger.info(
-                "Lazy-guard autoload skipped: no .slnc at %s", slnc_path, extra={"tag": "START"}
+                "Lazy-guard autoload skipped: no boot artifact for %s",
+                model_type,
+                extra={"tag": "START"},
             )
             return False
+        if artifact.format != "slnc":
+            logger.info(
+                "Lazy-guard autoload skipped: %s resolved to %s (needs .slnc)",
+                model_type,
+                artifact.format,
+                extra={"tag": "START"},
+            )
+            return False
+        slnc_path = str(artifact.path)
     except Exception as e:
         logger.warning(
-            "Lazy-guard autoload: slnc resolution failed (%s)", e, extra={"tag": "START"}
+            "Lazy-guard autoload: artifact resolution failed (%s)", e, extra={"tag": "START"}
         )
         return False
 
@@ -1707,15 +1718,18 @@ def _build_guard_for_model(cfg, model_type: str):
 
         if not get_process_guard_enabled():
             return None
-        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.model_resolver import resolve_boot_artifact
         from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
 
-        slnc_path = str(_get_model_dir(model_type) / "model.slnc")
-        if not os.path.exists(slnc_path):
+        artifact = resolve_boot_artifact(model_type)
+        if artifact is None or artifact.format != "slnc":
             logger.info(
-                "ProcessGuard skipped: no .slnc file at %s", slnc_path, extra={"tag": "START"}
+                "ProcessGuard skipped: no .slnc artifact for %s",
+                model_type,
+                extra={"tag": "START"},
             )
             return None
+        slnc_path = str(artifact.path)
         process_guard = ProcessGuard(
             slnc_path=slnc_path,
             model_id=model_type,
@@ -1759,7 +1773,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     import state as server_state
 
     from domain.infrastructure.model_registry import get_model_registry
-    from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+    from domain.infrastructure.model_resolver import resolve_boot_artifact
     from domain.models._internal.provider import setup_providers
 
     registry = get_model_registry()
@@ -1776,10 +1790,10 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
         )
         # Store reload parameters for idle-reload capability
         if cfg.idle_timeout_seconds > 0 and server_state.model_type:
-            _slnc = str(_get_model_dir(server_state.model_type) / "model.slnc")
+            _art = resolve_boot_artifact(server_state.model_type)
             server.set_hf_model_id(
                 server_state.model_type,
-                slnc_path=_slnc if os.path.exists(_slnc) else None,
+                slnc_path=(str(_art.path) if _art is not None and _art.format == "slnc" else None),
                 quantize=cfg.quantize_slonet,
                 quant_bits=cfg.quant_bits,
                 quant_mode=cfg.quant_mode,
@@ -2149,16 +2163,21 @@ def _start_inference_engine(cfg) -> Any | None:
         return None
 
     try:
-        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.model_resolver import resolve_boot_artifact
 
-        slnc_path = _get_model_dir(model_type) / "model.slnc"
-        if not slnc_path.exists():
+        artifact = resolve_boot_artifact(model_type)
+        if artifact is None or artifact.format != "slnc":
             logger.info(
-                "Inference engine skipped: no .slnc at %s", slnc_path, extra={"tag": "START"}
+                "Inference engine skipped: no .slnc artifact for %s",
+                model_type,
+                extra={"tag": "START"},
             )
             return None
+        slnc_path = artifact.path
     except Exception as e:
-        logger.warning("Inference engine: slnc resolution failed: %s", e, extra={"tag": "START"})
+        logger.warning(
+            "Inference engine: artifact resolution failed: %s", e, extra={"tag": "START"}
+        )
         return None
 
     engine_host = getattr(cfg, "inference_engine_host", "127.0.0.1")
@@ -2309,11 +2328,12 @@ def _make_engine_restart_fn(cfg):
             return None
 
         try:
-            from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure.model_resolver import resolve_boot_artifact
 
-            slnc_path = _get_model_dir(model_type) / "model.slnc"
-            if not slnc_path.exists():
+            artifact = resolve_boot_artifact(model_type)
+            if artifact is None or artifact.format != "slnc":
                 return None
+            slnc_path = artifact.path
         except Exception:
             logger.debug("SLNC model path lookup failed", exc_info=True)
             return None
