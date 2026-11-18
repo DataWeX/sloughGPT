@@ -28,6 +28,13 @@ from fastapi import FastAPI
 from startup_progress import STARTUP_PHASE
 
 from config import ServerConfig
+from infrastructure.model_state import (
+    DEGRADED,
+    LOADED,
+    MATERIALIZING,
+    reset_model_state,
+    set_model_state,
+)
 
 logger = logging.getLogger("slo.startup")
 
@@ -1424,12 +1431,17 @@ def _preload_parent_weights(model_type: str) -> bool:
         logger.debug("Parent preload: server is shutting down, skipping", extra={"tag": "START"})
         return False
 
+    # The scheduled preload is now executing: weights are landing (card
+    # 20261104_053224 — /health must say materialising during this window).
+    set_model_state(MATERIALIZING)
+
     try:
         provider = getattr(server_state, "provider", None)
         if provider is None:
             logger.debug(
                 "Parent preload: no provider on server_state, skipping", extra={"tag": "START"}
             )
+            set_model_state(DEGRADED)
             return False
 
         # Materialize the parent weights WHILE the guard still serves requests.
@@ -1469,6 +1481,7 @@ def _preload_parent_weights(model_type: str) -> bool:
             logger.debug(
                 "Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"}
             )
+        set_model_state(LOADED if model is not None else DEGRADED)
         return model is not None
     except Exception as e:
         logger.debug(
@@ -1476,6 +1489,7 @@ def _preload_parent_weights(model_type: str) -> bool:
             e,
             extra={"tag": "START"},
         )
+        set_model_state(DEGRADED)
         return False
 
 
@@ -1492,6 +1506,9 @@ def _start_parent_preload(model_type: str, delay_s: float | None = None):
     from domain.infrastructure._internal.pugqeep.singleton import get_engine
 
     _shutting_down.clear()  # a fresh boot is not shutting down
+    # From scheduling to completion the server is materialising: the provider
+    # is installed and the weights have not landed yet (card 20261104_053224).
+    set_model_state(MATERIALIZING)
     logger.info(
         "Parent preload: scheduling in %.0fs (avoid GIL starvation of uvicorn bind)",
         _delay,
@@ -1603,6 +1620,9 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     server_state.provider = provider
     server_state.model = None
     server_state.tokenizer = getattr(provider, "_tokenizer", None)
+    # Lifecycle: header-only handle installed, weights still landing — the
+    # window /health must report as materialising (card 20261104_053224).
+    set_model_state(MATERIALIZING)
 
     try:
         from domain.infrastructure.server_state import get_server_state
@@ -1688,6 +1708,10 @@ def _try_lazy_guard_autoload(cfg) -> bool:
             exc_info=True,
             extra={"tag": "START"},
         )
+        # This path never schedules a preload: fall back with a clean holder
+        # so the eager autoload owns the lifecycle from ``absent`` — otherwise
+        # the state would sit at materialising with nobody to complete it.
+        reset_model_state()
         return False
 
     logger.info(

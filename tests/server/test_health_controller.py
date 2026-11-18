@@ -2,6 +2,7 @@
 
 import os
 import sys
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,6 +19,7 @@ from controllers.health import (
     _get_lifecycle_info,
     _get_model_device,
     _get_model_info,
+    _get_model_state,
     _get_mps_monitor_info,
     _get_process_guard_status,
     _get_process_info,
@@ -27,6 +29,7 @@ from controllers.health import (
     _is_app_ready,
     _is_model_loading,
 )
+from infrastructure import model_state
 
 
 @pytest.fixture
@@ -69,6 +72,16 @@ class TestHealthController:
         assert "model_loaded" in result
         assert isinstance(result["model_loaded"], bool)
 
+    def test_basic_health_reports_model_state(self, ctrl):
+        """Additive field (card 20261104_053224): the explicit lifecycle
+        state, next to the booleans it replaces as the source of truth."""
+        result = ctrl.get_basic_health()
+        assert result["model_state"] in ("absent", "materialising", "loaded", "degraded")
+
+    def test_detailed_health_reports_model_state(self, ctrl):
+        result = ctrl.get_detailed_health()
+        assert result["model_state"] in ("absent", "materialising", "loaded", "degraded")
+
     def test_health_has_device_field(self, ctrl):
         result = ctrl.get_basic_health()
         assert "device" in result
@@ -104,6 +117,70 @@ class TestHealthController:
     def test_get_readiness(self, ctrl):
         result = ctrl.get_readiness()
         assert isinstance(result, dict)
+
+
+class TestReadinessState:
+    """Readiness keys off explicit state — never uptime, never registry-only.
+
+    Card 20261104_053224 gate: /health reports materialising during the
+    preload window and loaded after it; a restart inside the window never
+    reports ready-with-no-provider.
+    """
+
+    @staticmethod
+    def _readiness():
+        with (
+            patch("controllers.health._is_app_ready", return_value=True),
+            patch("controllers.health._get_mogdb_health", return_value={"status": "ok"}),
+        ):
+            return HealthController().get_readiness()
+
+    def test_materialising_is_ready_with_explicit_check(self):
+        """The lazy path installs a serving provider before weights land —
+        ready-but-materialising is a legitimate state and must say so."""
+        with _model_env(model=None, provider=MagicMock(), holder="materialising"):
+            result = self._readiness()
+        assert result["status"] == "ready"
+        assert result["checks"]["model"] == "materialising"
+
+    def test_loaded_is_ready(self):
+        with _model_env(model=MagicMock(), provider=None, holder="loaded"):
+            result = self._readiness()
+        assert result["status"] == "ready"
+        assert result["checks"]["model"] == "loaded"
+
+    def test_degraded_is_not_ready(self):
+        with _model_env(model=None, provider=MagicMock(), holder="degraded"):
+            result = self._readiness()
+        assert result["status"] == "not_ready"
+        assert result["checks"]["model"] == "degraded"
+
+    def test_registry_only_never_reports_ready(self):
+        """A registry entry (models on disk) is not a serving handle: with no
+        model, no provider and nothing scheduled, ready-with-no-provider is
+        impossible however healthy the registry looks."""
+        with (
+            patch(
+                "controllers.health._get_model_info_with_registry",
+                return_value=(True, "gpt2", {"healthy": True}),
+            ),
+            _model_env(model=None, provider=None, holder="absent"),
+        ):
+            result = self._readiness()
+        assert result["status"] == "not_ready"
+        assert result["checks"]["model"] == "no_provider"
+
+    def test_eager_load_reports_loading_not_ready(self):
+        with (
+            patch(
+                "domain.infrastructure.model_loader.ModelLoader.is_loading",
+                return_value=True,
+            ),
+            _model_env(model=None, provider=None, holder="absent"),
+        ):
+            result = self._readiness()
+        assert result["status"] == "not_ready"
+        assert result["checks"]["model"] == "loading"
 
 
 class TestHelpers:
@@ -160,6 +237,22 @@ class TestBuildStatusMessage:
             {"phase": "running", "profile": "default", "is_running": True, "is_draining": False},
         )
         assert "Loading model" in msg
+
+    def test_loading_wins_over_loaded(self):
+        """During the preload window a provider makes ``model_loaded`` True
+        while weights are still landing — the message must say loading, not
+        "Ready — model loaded"."""
+        msg = _build_status_message(
+            True,
+            "gpt2",
+            True,
+            None,
+            0,
+            0,
+            {"phase": "running", "profile": "default", "is_running": True, "is_draining": False},
+        )
+        assert "Loading model" in msg
+        assert "Ready" not in msg
 
     def test_no_model(self):
         msg = _build_status_message(
@@ -373,33 +466,88 @@ class TestGetModelInfoReadyGate:
             assert model_type == "gpt2"
 
 
+@contextmanager
+def _model_env(model=None, provider=None, holder="absent"):
+    """Run with explicit model/provider/holder state, restored afterwards."""
+    import state as server_state
+
+    old = (
+        getattr(server_state, "model", None),
+        getattr(server_state, "provider", None),
+        model_state.get_model_state(),
+    )
+    server_state.model = model
+    server_state.provider = provider
+    model_state.set_model_state(holder)
+    try:
+        yield
+    finally:
+        server_state.model = old[0]
+        server_state.provider = old[1]
+        model_state.set_model_state(old[2])
+
+
+class TestGetModelState:
+    """Explicit lifecycle state: model → holder → provider → absent."""
+
+    def test_loaded_when_model_present(self):
+        with _model_env(model=MagicMock(), provider=None, holder="degraded"):
+            # A resident model outranks a stale holder value (preload done,
+            # or the holder was never reset after an unload/reload cycle).
+            assert _get_model_state() == "loaded"
+
+    def test_materialising_from_holder(self):
+        with _model_env(model=None, provider=MagicMock(), holder="materialising"):
+            assert _get_model_state() == "materialising"
+
+    def test_degraded_from_holder(self):
+        with _model_env(model=None, provider=MagicMock(), holder="degraded"):
+            assert _get_model_state() == "degraded"
+
+    def test_loaded_when_provider_only(self):
+        with _model_env(model=None, provider=MagicMock(), holder="absent"):
+            assert _get_model_state() == "loaded"
+
+    def test_absent_when_nothing_installed(self):
+        with _model_env(model=None, provider=None, holder="absent"):
+            assert _get_model_state() == "absent"
+
+    def test_absent_after_unload_with_stale_loaded_holder(self):
+        with _model_env(model=None, provider=None, holder="loaded"):
+            assert _get_model_state() == "absent"
+
+
 class TestIsModelLoading:
-    def test_loading_when_no_model_and_recent(self):
+    def test_uptime_no_longer_decides_loading(self):
+        """Regression (card 20261104_053224): a fresh server with nothing
+        installed and nothing in flight is NOT loading — the old ``uptime < 90``
+        window said True for the first 90 seconds of every process."""
         from datetime import datetime, timedelta
 
-        import state as server_state
-
-        old_model = getattr(server_state, "model", None)
-        old_provider = getattr(server_state, "provider", None)
         old_start = controllers_health._health_start_time
         try:
-            server_state.model = None
-            server_state.provider = None
             controllers_health._health_start_time = datetime.now() - timedelta(seconds=30)
-            result = _is_model_loading()
-            assert result is True
+            with _model_env(model=None, provider=None, holder="absent"):
+                assert _is_model_loading() is False
         finally:
-            server_state.model = old_model
-            server_state.provider = old_provider
             controllers_health._health_start_time = old_start
 
-    def test_not_loading_when_model_loaded(self):
-        import state as server_state
+    def test_loading_during_materialising_window(self):
+        with _model_env(model=None, provider=MagicMock(), holder="materialising"):
+            assert _is_model_loading() is True
 
-        old_model = getattr(server_state, "model", None)
-        try:
-            server_state.model = MagicMock()
-            result = _is_model_loading()
-            assert result is False
-        finally:
-            server_state.model = old_model
+    def test_not_loading_when_model_loaded(self):
+        with _model_env(model=MagicMock(), holder="absent"):
+            assert _is_model_loading() is False
+
+    def test_loading_when_model_loader_busy(self):
+        """An eager/manual ModelLoader.load() is a load in progress even
+        though no holder state belongs to it."""
+        with (
+            patch(
+                "domain.infrastructure.model_loader.ModelLoader.is_loading",
+                return_value=True,
+            ),
+            _model_env(model=None, provider=None, holder="absent"),
+        ):
+            assert _is_model_loading() is True
