@@ -12,8 +12,7 @@ while [ -L "$SOURCE" ]; do
 done
 DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
 
-if [ -f "$DIR/.venv/bin/activate" ]; then
-    source "$DIR/.venv/bin/activate"
-fi
-
-exec python3 "$DIR/cli.py" "$@"
+# Resolve the project interpreter (SLO_PYTHON -> conda env sloughgpt ->
+# .venv -> python3) instead of using bare python3, which lands in base
+# conda and misses project-only packages like mogdb.
+exec "$DIR/scripts/python" "$DIR/cli.py" "$@"

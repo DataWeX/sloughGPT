@@ -127,7 +127,7 @@ border-primary/20`; assistant = left-aligned `bg-card border-border`.
 - **No message index/turn numbers** — the gutter numbering was removed by
   sub-decision; don't reintroduce it.
 - Mechanical check: tests assert `data-message-frame={role}` on both roles;
-  `MessageBubble`, `MessageContent`, and `MessageRenderer` must all compose
+  `MessageBubble` and `MessageContent` must both compose
   `MessageFrame`. See `docs/design/DESIGN_SYSTEM.md` → "The Log Entry".
 
 ## Anti-Patterns to Avoid

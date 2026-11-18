@@ -308,7 +308,7 @@ board (gutter + content + margin):
   the frame footer (`data-message-frame-footer`).
 
 Reference implementations: `features/chat/components/messages/MessageFrame.tsx`
-(composed by `MessageBubble.tsx`, `MessageContent.tsx`, `MessageRenderer.tsx`),
+(composed by `MessageBubble.tsx`, `MessageContent.tsx`),
 `components/planner/CardItem.tsx` + `Tray.tsx` (board entry + column).
 Per-turn chat metrics arrive via `streamChatResponse`'s `onMeta`
 (`{tokens, elapsedMs}`) and live on `ChatMessage.metrics`.
@@ -585,7 +585,7 @@ grep -rn "': '#" apps/web/components apps/web/app --include='*.tsx' | grep -v '.
 grep -rnE 'rounded-(br|bl)-md|chat-bubble' apps/web/features/chat/components/messages/ --include='*.tsx' | grep -v '.test.'   # must be zero
 
 # Chat messages must render through the shared MessageFrame (no hand-rolled chrome)
-grep -rLn 'MessageFrame' apps/web/features/chat/components/messages/MessageBubble.tsx apps/web/features/chat/components/messages/MessageContent.tsx apps/web/features/chat/components/MessageRenderer.tsx   # must print nothing
+grep -rLn 'MessageFrame' apps/web/features/chat/components/messages/MessageBubble.tsx apps/web/features/chat/components/messages/MessageContent.tsx   # must print nothing
 
 # Planner must not pin hues (non-negotiable #1)
 grep -rn 'hsl(' apps/web/components/planner --include='*.tsx' | grep -v '.test.'   # must be zero
