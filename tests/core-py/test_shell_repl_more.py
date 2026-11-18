@@ -11380,9 +11380,6 @@ class TestCmdVmrunExecutionV2:
         repl._cmd_vmrun("hello")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(
-        reason="product bug: built-in `count` maps to FIB_X86 (repl.py:4595) and dies 'vmrun error: unknown opcode 0x62 at EIP=0x101FF0'; hello and counter run, count does not"
-    )
     def test_vmrun_built_in_count(self, repl):
         repl._cmd_vmrun("count")
         assert repl._last_exit_code == 0

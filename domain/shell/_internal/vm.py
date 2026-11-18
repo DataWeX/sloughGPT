@@ -9210,6 +9210,12 @@ class Scheduler:
 
         # Pick next process
         self.start(cpu)
+        if self.current is None and cpu is not None:
+            # Nothing left to schedule: stop the CPU instead of letting it
+            # keep executing the terminated process's memory (falls off the
+            # program image and eventually faults on garbage — the
+            # `vmrun count` "unknown opcode 0x62 at EIP=0x101FF0" ledger bug).
+            cpu._running = False
 
     def block_current(self, cpu: X86CPU):
         """Block current process (e.g. waiting for I/O)."""
