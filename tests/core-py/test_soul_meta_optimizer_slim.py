@@ -11,10 +11,14 @@ manifests — moments are bytes end-to-end, never Python float lists. Legacy
 ``domain/inference/_internal/soul_meta_slim.py``.
 
 Scope guards these tests enforce:
-- embedded .soul header keeps the full inline state (phase 2 is out of scope),
-- ``integrity_hash`` still describes the full logical content (identical in
-  embedded and sidecar),
-- old inline metas keep parsing (no migration required to read),
+- default writes strip the state from BOTH documents: the .soul header
+  carries a hash-pinned ``state_ref`` and the bytes live in the sibling
+  ``<x>.optimizer.dat`` (phase 2 — a periodic header stops being 40+ MB),
+- ``keep_optimizer=True`` preserves the phase-1 self-contained header
+  (base64 manifests inline, sidecar slim),
+- ``integrity_hash`` describes the final embedded doc and is identical in
+  embedded and sidecar,
+- old inline metas/headers keep parsing (no migration required to read),
 - a state_ref without a resolvable base_dir degrades to the existing
   fresh-momentum resume semantics instead of raising.
 """
@@ -133,14 +137,37 @@ class TestSaveSoulExternalizes:
             opt = meta["metadata"]["training_state"]["optimizer"]
             assert opt["hyperparameters"] == {"lr": 0.001, "betas": [0.9, 0.999]}
 
-    def test_embedded_header_carries_full_state_as_manifest(self):
-        """Phase-2 boundary: the .soul header still carries the full state —
-        as base64 byte manifests (bytes end-to-end, no float-text walk)."""
+    def test_embedded_header_carries_ref_not_moments(self):
+        """Phase 2 (default write): the .soul header strips the state too —
+        a hash-pinned ``state_ref``; the bytes live in the sibling file and
+        resolve back through ``load_state_file``."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            sidecar, _ = _saved_pair(tmpdir)
+            sidecar, state_file = _saved_pair(tmpdir)
             soul_path = sidecar.name[: -len(".meta.json")]
             profile, _state = load_soul(os.path.join(tmpdir, soul_path))
-            embedded = profile.metadata["training_state"]["optimizer"]["state"]
+            opt = profile.metadata["training_state"]["optimizer"]
+            assert not opt.get("state"), "moments still embedded in the .soul header"
+            ref = opt["state_ref"]
+            assert ref["file"] == state_file.name and state_file.exists()
+            loaded = load_state_file(ref, tmpdir)
+            assert loaded is not None, "embedded ref failed to resolve"
+            expected = _fat_training_state()["optimizer"]["state"]
+            for pname, entry in expected.items():
+                for moment, values in entry.items():
+                    np.testing.assert_array_equal(loaded[pname][moment], values)
+
+    def test_keep_optimizer_preserves_phase1_selfcontained_header(self):
+        """``keep_optimizer=True`` = phase-1 bytes: manifests inline in the
+        header (self-contained resume), sidecar still slim with the ref."""
+        net = SloNet(layers=[SloLinear(2, 2)], soul_name="KeepOpt")
+        profile = SloProfile(name="KeepOpt")
+        profile.metadata = {"training_state": _fat_training_state()}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = os.path.join(tmpdir, "keep.soul")
+            save_soul(net, out, soul_profile=profile, keep_optimizer=True)
+
+            embedded_profile, _ = load_soul(out)
+            embedded = embedded_profile.metadata["training_state"]["optimizer"]["state"]
             expected = _fat_training_state()["optimizer"]["state"]
             assert set(embedded) == set(expected)
             for pname, entry in expected.items():
@@ -149,11 +176,42 @@ class TestSaveSoulExternalizes:
                     assert isinstance(leaf, dict) and leaf.get("__blob__"), (
                         f"{pname}.{moment} is not a manifest: {type(leaf)}"
                     )
-                    assert leaf["dtype"] == "<f8"
                     arr = np.frombuffer(
                         base64.b64decode(leaf["__blob__"]), dtype=np.dtype(leaf["dtype"])
                     ).reshape(leaf["shape"])
                     np.testing.assert_array_equal(arr, values)
+
+            meta = json.loads(Path(out + ".meta.json").read_text(encoding="utf-8"))
+            opt = meta["metadata"]["training_state"]["optimizer"]
+            assert not opt.get("state"), "keep_optimizer sidecar still carries moments"
+            assert "state_ref" in opt
+            assert meta["integrity_hash"] == embedded_profile.integrity_hash
+
+    def test_default_header_stays_small_under_fat_state(self):
+        """250k-element moments: the default header must not grow with them
+        (inline float text would be ~10 MB; the ref doc stays sub-MB)."""
+        fat = _fat_training_state()
+        fat["optimizer"]["state"] = {
+            "0": {"exp_avg": [[0.125] * 500] * 500, "exp_avg_sq": [[0.0625] * 500] * 500}
+        }
+        net = SloNet(layers=[SloLinear(2, 2)], soul_name="FatHead")
+        profile = SloProfile(name="FatHead")
+        profile.metadata = {"training_state": fat}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = os.path.join(tmpdir, "fat.soul")
+            save_soul(net, out, soul_profile=profile)
+            with open(out, "rb") as f:
+                header = f.read(12)
+                assert header[:4] == b"SOUL"
+                header_len = int(np.frombuffer(header[8:12], dtype="<u4")[0])
+                assert header_len < 1_000_000, f"header grew to {header_len} bytes"
+            state_file = Path(out + ".optimizer.dat")
+            assert state_file.exists()
+            # the moments themselves are intact in the sibling (2×250k floats)
+            meta = json.loads(Path(out + ".meta.json").read_text(encoding="utf-8"))
+            loaded = load_state_file(_ref_of(meta), tmpdir)
+            assert loaded is not None
+            assert loaded["0"]["exp_avg"].shape == (500, 500)
 
     def test_integrity_hash_identical_across_embedded_and_sidecar(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -250,6 +308,43 @@ class TestExportRoundtripSlim:
             ref = _ref_of(meta)
             assert ref["file"] == state_file.name and state_file.exists()
             assert ref["format"] == "bin-v1"
+
+    def test_export_embedded_header_strips_state(self):
+        """Default export: the .soul header carries the ref, not the moments
+        (qt_trained-class headers were 92 MB of inline float text)."""
+        from domain.inference._internal.slo_format import load_soul
+        from domain.training._internal.slonet import export_to_sou
+
+        net = SloNet(layers=[SloLinear(2, 2)], soul_name="StripHdr")
+        net.metadata = {"training_state": _fat_training_state()}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = os.path.join(tmpdir, "strip.soul")
+            export_to_sou(net, out, include_weights=True)
+            profile, _ = load_soul(out)
+            opt = profile.metadata["training_state"]["optimizer"]
+            assert not opt.get("state"), "moments still embedded in export header"
+            ref = opt["state_ref"]
+            state_file = Path(out + ".optimizer.dat")
+            assert ref["file"] == state_file.name and state_file.exists()
+            assert load_state_file(ref, tmpdir) is not None
+
+    def test_export_keep_optimizer_embeds_full_state(self):
+        """``keep_optimizer=True`` keeps phase-1 export bytes: inline state in
+        the header, sidecar slim with the ref."""
+        from domain.inference._internal.slo_format import load_soul
+        from domain.training._internal.slonet import export_to_sou
+
+        net = SloNet(layers=[SloLinear(2, 2)], soul_name="KeepExp")
+        net.metadata = {"training_state": _fat_training_state()}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = os.path.join(tmpdir, "keepexp.soul")
+            export_to_sou(net, out, include_weights=True, keep_optimizer=True)
+            profile, _ = load_soul(out)
+            embedded = profile.metadata["training_state"]["optimizer"]["state"]
+            assert set(embedded) == set(_fat_training_state()["optimizer"]["state"])
+            meta = json.loads(Path(out + ".meta.json").read_text(encoding="utf-8"))
+            opt = meta["metadata"]["training_state"]["optimizer"]
+            assert not opt.get("state") and "state_ref" in opt
 
 
 # ── migration tool ──────────────────────────────────────────────────────────

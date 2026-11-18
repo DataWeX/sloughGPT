@@ -5174,7 +5174,14 @@ def _sanitize(obj):
     return obj
 
 
-def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict = None) -> str:
+def export_to_sou(
+    net: SloNet,
+    path: str,
+    include_weights=True,
+    metadata: dict = None,
+    *,
+    keep_optimizer: bool = False,
+) -> str:
     base_metadata = {
         "version": 3,
         "soul_name": net.soul_name,
@@ -5189,7 +5196,18 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
     if metadata:
         base_metadata["metadata"] = {**(base_metadata.get("metadata") or {}), **metadata}
     metadata = base_metadata
-    json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
+
+    # Externalize FIRST: the state file is fsynced before either document can
+    # reference it (WAL — a published ref never dangles), then the header
+    # embeds the slim doc — a re-export stops shipping 40+ MB of inline float
+    # text (the qt_trained-class 92 MB header). keep_optimizer keeps the
+    # phase-1 self-contained header (inline state); the sidecar is slim
+    # either way.
+    sidecar_path = path + ".meta.json"
+    raw_doc = _sanitize(metadata)
+    slim_doc, _moved = externalize_optimizer_state(raw_doc, sidecar_path)
+    embed_doc = raw_doc if keep_optimizer else slim_doc
+    json_bytes = json.dumps(embed_doc, allow_nan=False).encode()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
     # WAL order: weights first, then the sidecar that describes them. The old
@@ -5221,12 +5239,11 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
     # A round-tripped net can carry training_state moments in net.metadata;
-    # externalize them so a re-export never re-fattens the sidecar.
-    sidecar_path = path + ".meta.json"
-    sidecar_doc, _externalized = externalize_optimizer_state(_sanitize(metadata), sidecar_path)
+    # they left BOTH docs above (externalize ran before the header embed), so
+    # a re-export never re-fattens the header or the sidecar.
     atomic_write(
         sidecar_path,
-        json.dumps(sidecar_doc, indent=2),
+        json.dumps(slim_doc, indent=2),
     )
 
     # Provenance sidecar — records which dataset/model produced this file so

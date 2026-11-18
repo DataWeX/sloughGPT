@@ -28,8 +28,12 @@ dict mirrors the original state structure exactly.
 The .soul header embeds the same bytes as base64 manifests via
 ``to_state_manifest`` (``{"__blob__": ..., "dtype": ..., "shape": ...}``) —
 moments are bytes end-to-end: no ``tolist()`` of millions of floats, no
-40 MB of JSON float text per save. Resume from the embedded header stays
-self-contained (``_load_soul_checkpoint`` has no sidecar base_dir).
+40 MB of JSON float text per save. Since phase 2 that manifest copy is the
+``keep_optimizer=True`` opt-in only: the default write externalizes BEFORE
+either document is written (state file fsynced first — a published ref
+never dangles), so the .soul header carries the hash-pinned ``state_ref``
+and stops being 40+ MB; ``_load_soul_checkpoint`` resolves the ref with
+``base_dir=<soul dir>`` for an exact resume.
 
 WAL order (mirrors the save paths): the state file lands durably first; the
 sidecar that references it is rename-atomic after. A crash between leaves a
