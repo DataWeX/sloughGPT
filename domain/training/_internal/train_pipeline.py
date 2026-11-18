@@ -740,10 +740,17 @@ def _load_soul_checkpoint(path: str) -> dict[str, Any] | None:
         "epoch": 0,
     }
 
-    # Extract training state embedded in metadata
+    # Extract training state embedded in metadata. base_dir = the soul's own
+    # directory: since phase 2 the header carries a hash-pinned state_ref and
+    # the bytes live in the sibling .optimizer.dat — without the directory
+    # context the ref would not resolve and resume would silently degrade to
+    # fresh momentum (the documented no-base_dir semantics, never a raise).
     training = soul_profile.metadata.get("training_state") if soul_profile.metadata else None
     if isinstance(training, dict):
-        parsed = _parse_training_state_metadata({"training_state": training})
+        parsed = _parse_training_state_metadata(
+            {"training_state": training},
+            base_dir=Path(path).parent,
+        )
         result["step"] = parsed.get("step", 0)
         result["epoch"] = parsed.get("epoch", 0)
         result["accumulation_step"] = parsed.get("accumulation_step", 0)
@@ -2722,10 +2729,13 @@ class SloughGPTTrainer:
     def save_checkpoint(self, metrics: dict[str, float] | None = None, is_final: bool = False):
         """Save a checkpoint in ``.soul`` format with vocab.
 
-        Periodic checkpoints (``is_final=False``) embed full optimizer state so
-        a crashed run resumes exactly; the final checkpoint (``is_final=True``)
-        drops momentum buffers — keeping the delivered artifact small, since it
-        is intended for inference, not resume.
+        Periodic checkpoints (``is_final=False``) carry full optimizer state so
+        a crashed run resumes exactly — since phase 2 the .soul header holds a
+        hash-pinned ``state_ref`` and the bytes live in the fsynced sibling
+        ``<x>.optimizer.dat`` (resolved on load via the soul's base_dir). The
+        final checkpoint (``is_final=True``) drops momentum buffers entirely —
+        keeping the delivered artifact small, since it is intended for
+        inference, not resume.
 
         Args:
             metrics: Optional training metrics to record (informational only;
@@ -3019,10 +3029,14 @@ class SloughGPTTrainer:
                 "tree": tokenizer.to_dict(),
             }
 
-        # Embed training state so the .soul is self-contained. Momentum buffers
-        # are omitted when include_optimizer_state=False (final artifacts) —
-        # they dwarf the weights and are not needed for inference; resume
-        # rebuilds a fresh-momentum optimizer from the embedded hyperparameters.
+        # Embed training state so the .soul is self-contained for resume:
+        # hyperparameters ride inline; since phase 2 the momentum buffers
+        # leave the header into the fsynced sibling .optimizer.dat (a
+        # hash-pinned state_ref, resolved on load via base_dir). Momentum
+        # buffers are omitted entirely when include_optimizer_state=False
+        # (final artifacts) — they dwarf the weights and are not needed for
+        # inference; resume rebuilds a fresh-momentum optimizer from the
+        # embedded hyperparameters.
         soul.metadata["training_state"] = _build_training_state_metadata(
             optimizer=getattr(self, "optimizer", None),
             scheduler=getattr(self, "scheduler", None),

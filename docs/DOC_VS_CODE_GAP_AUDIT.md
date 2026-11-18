@@ -62,6 +62,11 @@ measured code disagrees with any value, the script exits 1.
 # diff: 289ca6686 (datasets structured listing, card 20261104_060023,
 # +14/-4 in controllers/datasets.py) landed on main without refreshing this
 # block; controllers_defs unchanged (95).
+# Re-measured 2026-11-18: controllers_lines 2918->2969, controllers_defs
+# 95->96. Cause confirmed by diff: readiness lifecycle state (card
+# 20261104_053224, +79/-28 in controllers/health.py — model_state holder
+# surfaced on /health) moved the code in the same branch that owns this
+# refresh; no other controllers_* value moved.
 # Once in sync these act
 # as a DOWNWARD ratchet: the router/controller conformance work (card
 # b22e878a) lowers them as it lands, and any climb shows up as an alarm.
@@ -77,8 +82,8 @@ routers_internal_files=0
 routers_internal_stmts=0
 routers_internal_in_scope_files=0
 controllers_files=5
-controllers_lines=2918
-controllers_defs=95
+controllers_lines=2969
+controllers_defs=96
 controllers_internal_files=0
 controllers_internal_stmts=0
 controllers_internal_modules=0
