@@ -3715,9 +3715,6 @@ class TestTabCompletion:
         result = repl._complete_args_for("checkpoints")
         assert isinstance(result, list)
 
-    @pytest.mark.skip(
-        reason="product bug: CompletionCache fall-through discards static candidates -- with a cache live, _complete_args_for('train') returns path completions instead of subcommands because 'train' has no API fetcher; _complete_args_for_uncached has the right answer"
-    )
     def test_complete_second_word_train(self, repl):
         result = repl._complete_args_for("train")
         assert "status" in result
