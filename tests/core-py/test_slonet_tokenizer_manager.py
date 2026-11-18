@@ -66,4 +66,3 @@ class TestTokenizerManager:
         mgr = TokenizerManager()
         mgr.train(["hello world"], vocab_size=32)
         assert mgr.vocab_size > 0
-

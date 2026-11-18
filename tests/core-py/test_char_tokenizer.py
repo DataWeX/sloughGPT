@@ -543,7 +543,6 @@ class TestSpecialTokens:
     def test_special_tokens(self):
         assert CharTokenizer.SPECIAL_TOKENS == ["<BOS>", "<EOS>", "<PAD>", "<UNK>"]
 
-
     def test_itos_inverses_vocab(self):
         tok = CharTokenizer()
         tok.build_vocab(["test"])
@@ -589,7 +588,6 @@ class TestEdgeCases:
         tok.build_vocab(["test"])
         assert isinstance(tok.vocab, dict)
         assert isinstance(tok.itos, dict)
-
 
     def test_itos_contains_all_special_tokens(self):
         tok = CharTokenizer()

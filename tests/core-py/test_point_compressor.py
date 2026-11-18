@@ -1383,7 +1383,6 @@ class TestPointExtended:
 
 
 class TestCompressorExtended:
-
     def test_compress_function_periodic_fit(self):
         comp = PointCompressor()
         t = np.arange(100, dtype=np.float32)
@@ -1606,7 +1605,6 @@ class TestDeduplicatorExtended:
         dedup.add_library(lib)
         groups = dedup.find_duplicates()
         assert len(groups) == 1
-
 
     def test_deduplicate_saves_bytes(self):
         lib = PointLibrary("test")

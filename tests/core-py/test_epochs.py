@@ -511,7 +511,6 @@ class TestParseTrainingStateMetadata:
         assert "optimizer" not in result
         assert "scheduler" not in result
 
-
     def test_large_step(self):
         result = _parse_training_state_metadata({"training_state": {"step": 999999}})
         assert result["step"] == 999999
@@ -868,4 +867,3 @@ class TestTrainerConfigExtra:
         assert cfg.eval_interval == 50
         assert cfg.early_stopping_patience == 10
         assert cfg.gradient_accumulation_steps == 4
-

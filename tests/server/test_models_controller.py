@@ -52,7 +52,6 @@ class TestResolveDevice:
         result = ctrl._resolve_device(None)
         assert result in ("cpu", "mps", "cuda")
 
-
     def test_explicit_cuda_unavailable_falls_back_to_cpu(self, ctrl):
         """Regression: requesting cuda on a GPU-less machine must not report
         cuda as the active device — resolve to cpu instead."""

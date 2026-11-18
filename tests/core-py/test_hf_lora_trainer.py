@@ -577,7 +577,6 @@ class TestCancellation:
         assert cfg._cancel_event.is_set()
         assert trainer._is_training is False
 
-
     def test_stop_idempotent(self):
         import threading
 

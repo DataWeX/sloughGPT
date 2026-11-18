@@ -231,7 +231,6 @@ class TestCheckErrors:
         d = _check_errors(100, 50)
         assert d.severity == Severity.CRITICAL
 
-
     def test_message_contains_counts(self):
         d = _check_errors(200, 10)
         assert "10/200" in d.message
@@ -343,7 +342,6 @@ class TestCheckThroughput:
     def test_boundary_5_tps(self):
         d = _check_throughput(5)
         assert d.severity == Severity.CRITICAL
-
 
     def test_boundary_10_tps(self):
         d = _check_throughput(10)

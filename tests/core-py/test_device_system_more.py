@@ -351,7 +351,6 @@ class TestDeviceSystemExpanded:
         assert meta["author"] == "a"
         assert meta["tag"] == "t"
 
-
     def test_call_result_type_preserved(self):
         ds = DeviceSystem()
         ds.register("echo", _EchoDevice())

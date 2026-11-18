@@ -1305,7 +1305,6 @@ class TestSingleton:
 
 
 class TestLifecycleManagerExtended:
-
     def test_is_draining_in_starting(self):
         mgr = LifecycleManager()
         mgr._phase = LifecyclePhase.STARTING
@@ -1320,7 +1319,6 @@ class TestLifecycleManagerExtended:
         mgr = LifecycleManager()
         assert mgr.uptime_seconds == 0.0
         assert mgr.started_at == 0.0
-
 
     def test_profile_set_during_start(self):
         mgr = LifecycleManager()
@@ -1344,7 +1342,6 @@ class TestLifecycleManagerExtended:
         mgr = LifecycleManager()
         results = mgr.shutdown_results
         assert isinstance(results, list)
-
 
     def test_health_gates_dict_empty(self):
         mgr = LifecycleManager()
@@ -1537,7 +1534,6 @@ class TestLifecycleManagerExtended:
 
         mgr = LifecycleManager(event_bus=BadBus())
         mgr._emit_sync("test.event", {})
-
 
     @pytest.mark.asyncio
     async def test_shutdown_from_starting_returns_false(self):

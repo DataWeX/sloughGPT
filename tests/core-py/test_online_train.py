@@ -309,7 +309,6 @@ class TestApplyToLogits:
 
 
 class TestAdaptationStrength:
-
     def test_positive_after_init(self):
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=16)

@@ -2574,7 +2574,6 @@ class TestSvcCommands:
         capture_cmd(repl, repl._cmd_svc, "restart svc1")
         assert repl._last_exit_code == 0
 
-
     def test_svc_status(self, repl):
         repl = self._make_svc_repl(repl)
         capture_cmd(repl, repl._cmd_svc, "status svc1")
@@ -2932,7 +2931,6 @@ class TestSetExport:
         capture_cmd(repl, repl._cmd_set, "")
         assert repl._last_exit_code == 0
 
-
     def test_export_no_args(self, repl):
         capture_cmd(repl, repl._cmd_export, "")
         assert repl._last_exit_code == 0
@@ -2942,7 +2940,6 @@ class TestSetExport:
 
 
 class TestCatPiped:
-
     def test_cat_no_args_no_pipe(self, repl):
         out = capture_cmd(repl, repl._cmd_cat, "")
         assert repl._last_exit_code == 0 or "usage" in out.lower() or "input" in out.lower()
@@ -3073,7 +3070,6 @@ class TestChmodInternals:
 
 
 class TestFindInternals:
-
     def test_find_with_name(self, repl, tmp_path):
         (tmp_path / "target.txt").write_text("x")
         out = capture_cmd(repl, repl._cmd_find, f"{tmp_path} -name target.txt")
@@ -3157,7 +3153,6 @@ class TestNlInternals:
 
 
 class TestSeqInternals:
-
     def test_seq_start_end(self, repl):
         out = capture_cmd(repl, repl._cmd_seq, "2 5")
         assert "2" in out and "5" in out
@@ -3341,7 +3336,6 @@ class TestSystemCommands:
     def test_uname_flags(self, repl):
         capture_cmd(repl, repl._cmd_uname, "-srm")
         assert repl._last_exit_code == 0
-
 
     def test_mktemp(self, repl):
         capture_cmd(repl, repl._cmd_mktemp, "")
@@ -3745,8 +3739,6 @@ class TestRenderMoreInternals:
         capture_cmd(repl, repl._cmd_render, "light 5 5 5 1.0 0.5 0.2 10.0")
         assert repl._last_exit_code == 0
 
-
-
     def test_render_go_default(self, repl):
         repl = self._repl(repl)
         capture_cmd(repl, repl._cmd_render, "go")
@@ -3756,8 +3748,6 @@ class TestRenderMoreInternals:
         repl = self._repl(repl)
         capture_cmd(repl, repl._cmd_render, "go 64 48 2")
         assert repl._last_exit_code == 0
-
-
 
     def test_render_sphere_too_few_args(self, repl):
         repl = self._repl(repl)
@@ -3986,7 +3976,6 @@ class TestCommCommand:
 
 
 class TestTestCommand:
-
     def test_test_file_exists(self, repl, tmp_path):
         f = tmp_path / "exists.txt"
         f.write_text("x")
@@ -4086,7 +4075,6 @@ class TestTestCommand:
 
 
 class TestPrintfCommand:
-
     def test_printf_string(self, repl):
         out = capture_cmd(repl, repl._cmd_printf, "%s hello")
         assert "hello" in out
@@ -4184,7 +4172,6 @@ class TestWhichTypeCommand:
     def test_which_builtin(self, repl):
         out = capture_cmd(repl, repl._cmd_which, "echo")
         assert "builtin" in out.lower() or "echo" in out
-
 
     def test_which_not_found(self, repl):
         out = capture_cmd(repl, repl._cmd_which, "nonexistent_cmd_xyz")
@@ -5699,7 +5686,6 @@ class TestCmdShuf:
 
 
 class TestCmdOd:
-
     def test_od_with_file(self, repl, tmp_path):
         f = tmp_path / "test.bin"
         f.write_bytes(b"\x00\x01\x02\x03")
@@ -6048,7 +6034,6 @@ class TestCmdConfirmV2:
 
 
 class TestCmdLoad:
-
     def test_load_fallback(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -6214,7 +6199,6 @@ class TestErrorPaths:
         repl._cmd_chmod("")
         assert repl._last_exit_code == 1
 
-
     def test_head_no_piped_no_file(self, repl):
         repl._piped_input = None
         repl._cmd_head("")
@@ -6352,7 +6336,6 @@ class TestCmdWhichType:
 
 
 class TestCmdBootShutdown:
-
     @pytest.mark.skip(
         reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
     )
@@ -6546,7 +6529,6 @@ class TestUtilityCommandsV2:
     def test_du_not_found(self, repl):
         repl._cmd_du("/nonexistent/path")
         assert repl._last_exit_code == 0
-
 
     def test_diff_same(self, repl, tmp_path):
         f1 = tmp_path / "a.txt"
@@ -6747,11 +6729,6 @@ class TestUtilityCommandsV2:
         repl._cmd_basename("/a/b/c.txt .txt")
         assert repl._last_exit_code == 0
 
-
-
-
-
-
     def test_shuf_no_input(self, repl):
         repl._piped_input = None
         repl._cmd_shuf("")
@@ -6772,7 +6749,6 @@ class TestUtilityCommandsV2:
         repl._cmd_rev("")
         assert repl._last_exit_code == 0
 
-
     def test_paste_files(self, repl, tmp_path):
         f1 = tmp_path / "a.txt"
         f2 = tmp_path / "b.txt"
@@ -6785,8 +6761,6 @@ class TestUtilityCommandsV2:
         repl._cmd_paste("/nonexistent/a /nonexistent/b")
         assert repl._last_exit_code == 1
 
-
-
     def test_comm_files(self, repl, tmp_path):
         f1 = tmp_path / "a.txt"
         f2 = tmp_path / "b.txt"
@@ -6798,7 +6772,6 @@ class TestUtilityCommandsV2:
     def test_comm_not_found(self, repl):
         repl._cmd_comm("/nonexistent/a /nonexistent/b")
         assert repl._last_exit_code == 1
-
 
     def test_test_file_exists(self, repl, tmp_path):
         f = tmp_path / "exists.txt"
@@ -6817,7 +6790,6 @@ class TestUtilityCommandsV2:
     def test_test_exists(self, repl, tmp_path):
         repl._cmd_test(f"-e {tmp_path}")
         assert repl._last_exit_code == 0
-
 
     def test_test_string_ne(self, repl):
         repl._cmd_test("abc != def")
@@ -6851,9 +6823,6 @@ class TestUtilityCommandsV2:
         repl._cmd_test("[ 1 -eq 1 ]")
         assert repl._last_exit_code == 0
 
-
-
-
     def test_printf_string(self, repl):
         repl._cmd_printf("%s %shello world")
         assert repl._last_exit_code == 0
@@ -6861,7 +6830,6 @@ class TestUtilityCommandsV2:
     def test_printf_newline(self, repl):
         repl._cmd_printf("hello\\n")
         assert repl._last_exit_code == 0
-
 
     def test_find_in_dir(self, repl, tmp_path):
         (tmp_path / "testfile.txt").write_text("x")
@@ -6985,7 +6953,6 @@ class TestCmdTrainDistillArgs:
 
 
 class TestCmdHelpV2:
-
     def test_help_known_cmd_in_dict(self, repl):
         repl._cmd_help("help")
         assert repl._last_exit_code == 0
@@ -7431,8 +7398,6 @@ class TestCmdVmrunFlags:
 
 
 class TestCmdDateV2:
-
-
     def test_date_custom_format(self, repl):
         repl._cmd_date("+%Y")
         assert repl._last_exit_code == 0
@@ -7652,7 +7617,6 @@ class TestCmdRenderGo:
 
 
 class TestCmdSvcServiceTable:
-
     def test_svc_ls(self, repl):
         init = MagicMock()
         init.service_table.return_value = "  svc1: running"
@@ -7765,8 +7729,6 @@ class TestCmdRenderExtra:
 
 
 class TestCmdTrainFollowStop:
-
-
     def test_train_stop_with_id(self, repl):
         from unittest.mock import PropertyMock, patch
 
@@ -8303,8 +8265,6 @@ class TestCmdLogsLevels:
 
 
 class TestCmdConfirmV3:
-
-
     def test_confirm_toggle(self, repl):
         repl._cmd_confirm("toggle")
         assert repl._last_exit_code == 0
@@ -8389,7 +8349,6 @@ class TestCmdRead:
 
 
 class TestCmdWatchV2:
-
     def test_watch_bad_interval(self, repl):
         repl._cmd_watch("abc ls")
         assert repl._last_exit_code == 1
@@ -8437,8 +8396,6 @@ class TestCmdUnexpand:
 
 
 class TestCmdMisc:
-
-
     def test_who(self, repl):
         repl._cmd_who("")
         assert repl._last_exit_code == 0
@@ -8462,7 +8419,6 @@ class TestCmdMisc:
 
 
 class TestCmdJoin:
-
     def test_join_two_files(self, repl, tmp_path):
         f1 = tmp_path / "a.txt"
         f2 = tmp_path / "b.txt"
@@ -8923,10 +8879,6 @@ class TestCmdVmrunExecution:
 
 
 class TestCmdConfirmConfig:
-
-
-
-
     def test_confirm_config_import_error(self, repl):
         import builtins
 
@@ -9255,7 +9207,6 @@ class TestCmdExecutionPaths:
         assert repl._last_exit_code == 1
         del repl.COMMANDS["badcmd"]
 
-
     def test_unknown_command(self, repl):
         repl.execute("nonexistentcmd12345")
         assert repl._last_exit_code != 0
@@ -9427,7 +9378,6 @@ class TestSortInternalsV2:
         repl._cmd_sort("")
         assert repl._last_exit_code == 0
 
-
     def test_sort_numeric(self, repl):
         repl._piped_input = "10\n2\n30\n1"
         repl._cmd_sort("-n")
@@ -9473,7 +9423,6 @@ class TestTrInternalsV2:
         repl._cmd_tr("a-z A-Z")
         assert repl._last_exit_code == 0
 
-
     def test_tr_squeeze(self, repl):
         repl._piped_input = "heeeello"
         repl._cmd_tr("-s e")
@@ -9495,13 +9444,9 @@ class TestTrInternalsV2:
 
 
 class TestSeqInternalsV2:
-
     def test_seq_two_args(self, repl):
         repl._cmd_seq("2 5")
         assert repl._last_exit_code == 0
-
-
-
 
     def test_seq_too_many(self, repl):
         repl._cmd_seq("1 2 3 4")
@@ -9533,7 +9478,6 @@ class TestFoldInternalsV2:
         repl._cmd_fold("-w 10")
         assert repl._last_exit_code == 0
 
-
     def test_fold_file_not_found(self, repl):
         repl._cmd_fold("/nonexistent/file")
         assert repl._last_exit_code == 1
@@ -9545,8 +9489,6 @@ class TestFoldInternalsV2:
 
 
 class TestShufInternalsV2:
-
-
     def test_shuf_file_not_found(self, repl):
         repl._cmd_shuf("/nonexistent/file")
         assert repl._last_exit_code == 1
@@ -9584,7 +9526,6 @@ class TestPasteInternalsV2:
             os.unlink(f1.name)
             os.unlink(f2.name)
 
-
     def test_paste_file_not_found(self, repl):
         repl._cmd_paste("/nonexistent/a.txt /nonexistent/b.txt")
         assert repl._last_exit_code == 1
@@ -9607,7 +9548,6 @@ class TestCommInternals:
             os.unlink(f1.name)
             os.unlink(f2.name)
 
-
     def test_comm_one_arg(self, repl):
         repl._cmd_comm("file.txt")
         assert repl._last_exit_code == 1
@@ -9621,12 +9561,9 @@ class TestCommInternals:
 
 
 class TestCmdTestInternals:
-
-
     def test_test_file_not_exists(self, repl):
         repl._cmd_test("-f /nonexistent/file")
         assert repl._last_exit_code == 1
-
 
     def test_test_dir_not_dir(self, repl):
         repl._cmd_test("-d /etc/hostname")
@@ -9636,8 +9573,6 @@ class TestCmdTestInternals:
         repl._cmd_test("-e /etc/hostname")
         assert repl._last_exit_code == 0
 
-
-
     def test_test_eq(self, repl):
         repl._cmd_test("hello = hello")
         assert repl._last_exit_code == 0
@@ -9645,12 +9580,6 @@ class TestCmdTestInternals:
     def test_test_ne(self, repl):
         repl._cmd_test("hello != world")
         assert repl._last_exit_code == 0
-
-
-
-
-
-
 
     def test_test_bracket_syntax(self, repl):
         repl._cmd_test("[ -f /etc/hostname ]")
@@ -9678,7 +9607,6 @@ class TestCmdPrintfInternals:
         repl._cmd_printf("100%%")
         assert repl._last_exit_code == 0
 
-
     def test_printf_escape(self, repl):
         repl._cmd_printf("hello\\nworld")
         assert repl._last_exit_code == 0
@@ -9691,18 +9619,15 @@ class TestCmdPrintfInternals:
         repl._cmd_printf("%f abc")
         assert repl._last_exit_code == 0
 
-
     def test_printf_literal_only(self, repl):
         repl._cmd_printf("hello world")
         assert repl._last_exit_code == 0
 
 
 class TestCmdDuInternals:
-
     def test_du_human(self, repl):
         repl._cmd_du("-h .")
         assert repl._last_exit_code == 0
-
 
     def test_du_multiple_targets(self, repl):
         repl._cmd_du(". /etc/hostname")
@@ -9743,7 +9668,6 @@ class TestCmdDiffInternals:
             os.unlink(f1.name)
             os.unlink(f2.name)
 
-
     def test_diff_one_arg(self, repl):
         repl._cmd_diff("file.txt")
         assert repl._last_exit_code == 1
@@ -9758,7 +9682,6 @@ class TestCmdTacInternals:
         repl._piped_input = "a\nb\nc"
         repl._cmd_tac("")
         assert repl._last_exit_code == 0
-
 
     def test_tac_file_not_found(self, repl):
         repl._cmd_tac("/nonexistent/file")
@@ -9786,7 +9709,6 @@ class TestCmdLsInternals:
 
 
 class TestCmdHelpInternals:
-
     def test_help_known_command(self, repl):
         repl._cmd_help("exit")
         assert repl._last_exit_code == 0
@@ -10356,7 +10278,6 @@ class TestCmdDiffExtra:
 
 
 class TestCmdWhichTypeEdge:
-
     def test_which_alias(self, repl):
         repl._aliases["ll"] = "ls -la"
         repl._cmd_which("ll")
@@ -10381,7 +10302,6 @@ class TestCmdWhichTypeEdge:
         with patch("shutil.which", return_value="/usr/bin/ls"):
             repl._cmd_which("ls")
         assert repl._last_exit_code == 0
-
 
     def test_type_alias(self, repl):
         repl._aliases["ll"] = "ls -la"
@@ -10458,8 +10378,6 @@ class TestCmdConfirmExtra:
         with patch.dict("os.environ", {}, clear=False):
             repl._cmd_confirm("")
             assert repl._last_exit_code == 0
-
-
 
     def test_confirm_yes(self, repl):
         repl._cmd_confirm("yes")
@@ -10609,10 +10527,6 @@ class TestPipelineInternals:
 
 
 class TestCmdUnameFlagsV2:
-
-
-
-
     def test_uname_srm(self, repl):
         repl._cmd_uname("-srm")
         assert repl._last_exit_code == 0
@@ -10625,7 +10539,6 @@ class TestCmdUnameFlagsV2:
 
 
 class TestCmdOdFlags:
-
     def test_od_hex(self, repl):
         import tempfile
 
@@ -10705,7 +10618,6 @@ class TestCmdPasteExtra:
 
 
 class TestCmdCommExtra2:
-
     def test_comm_one_arg(self, repl):
         repl._cmd_comm("file1.txt")
         assert repl._last_exit_code == 1
@@ -10754,7 +10666,6 @@ class TestCmdColumn:
 
 
 class TestCmdYesExtra:
-
     def test_yes_custom(self, repl):
         repl._cmd_yes("hello")
         assert repl._last_exit_code == 0
@@ -10764,13 +10675,9 @@ class TestCmdYesExtra:
 
 
 class TestCmdPathUtils:
-
-
-
     def test_dirname_valid(self, repl):
         repl._cmd_dirname("/foo/bar/baz")
         assert repl._last_exit_code == 0
-
 
     def test_basename_valid(self, repl):
         repl._cmd_basename("/foo/bar/baz.txt")
@@ -10794,7 +10701,6 @@ class TestCmdPathUtils:
 
 
 class TestCmdExpandUnexpand:
-
     def test_expand_file(self, repl):
         import tempfile
 
@@ -10810,7 +10716,6 @@ class TestCmdExpandUnexpand:
     def test_expand_not_found(self, repl):
         repl._cmd_expand("/nonexistent/file.txt")
         assert repl._last_exit_code == 1
-
 
     def test_unexpand_file(self, repl):
         import tempfile
@@ -10833,7 +10738,6 @@ class TestCmdExpandUnexpand:
 
 
 class TestCmdReadExtra:
-
     def test_read_with_prompt(self, repl):
         from domain.shell._internal.io import MemoryIO
 
@@ -10879,7 +10783,6 @@ class TestCmdReadExtra:
 
 
 class TestCmdSourceExtraV2:
-
     def test_source_valid(self, repl):
         import tempfile
 
@@ -10897,7 +10800,6 @@ class TestCmdSourceExtraV2:
 
 
 class TestCmdAliasUnaliasExtra:
-
     def test_alias_single(self, repl):
         repl._cmd_alias("ll")
         assert repl._last_exit_code == 0
@@ -10936,8 +10838,6 @@ class TestCmdSetExportExtra:
 
 
 class TestCmdSleepExtra:
-
-
     def test_sleep_no_args(self, repl):
         repl._cmd_sleep("")
         assert repl._last_exit_code == 0
@@ -10950,7 +10850,6 @@ class TestCmdSleepExtra:
 
 
 class TestCmdCalExtra:
-
     def test_cal_year(self, repl):
         repl._cmd_cal("2026")
         assert repl._last_exit_code == 0
@@ -10964,7 +10863,6 @@ class TestCmdCalExtra:
 
 
 class TestCmdLnExtra:
-
     def test_ln_one_arg(self, repl):
         repl._cmd_ln("target.txt")
         assert repl._last_exit_code == 1
@@ -11035,7 +10933,6 @@ class TestCmdFileNotFound:
 
 
 class TestCmdGenExtra:
-
     def test_gen_no_api(self, repl):
         with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_gen("hello")
@@ -11070,8 +10967,6 @@ class TestCmdGenExtra:
 
 
 class TestCmdChatExtra:
-
-
     def test_chat_no_api(self, repl):
         with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_chat("hello")
@@ -11117,10 +11012,6 @@ class TestCmdChatExtra:
 
 
 class TestCmdAsmExtra:
-
-
-
-
     def test_asm_vm_fault(self, repl):
         repl._piped_input = "INVALID_OP"
         with patch("domain.shell._internal.vm.VMRunner") as MockRunner:
@@ -11137,7 +11028,6 @@ class TestCmdVmrunExtra:
         repl._cmd_vmrun("")
         assert repl._last_exit_code == 1
 
-
     def test_vmrun_not_found(self, repl):
         repl._cmd_vmrun("/nonexistent/file.asm")
         assert repl._last_exit_code == 1
@@ -11151,7 +11041,6 @@ class TestCmdVmrunExtra:
         with patch.dict(os.environ, {"MAN_VM_ROLE": "user"}):
             repl._cmd_vmrun("--admin --list")
         assert repl._last_exit_code == 0
-
 
     def test_vmrun_debug(self, repl):
         repl._cmd_vmrun("--debug --steps=10 hello")
@@ -11312,16 +11201,13 @@ class TestCmdApiExtra:
 
 
 class TestCmdRenderExtraV2:
-
     def test_render_info(self, repl):
         repl._cmd_render("info")
         assert repl._last_exit_code == 0
 
-
     def test_render_sphere(self, repl):
         repl._cmd_render("sphere 1.0 0 0 0")
         assert repl._last_exit_code == 0
-
 
     def test_render_cube(self, repl):
         repl._cmd_render("cube 1.0 0 0 0")
@@ -11367,7 +11253,6 @@ class TestCmdRenderExtraV2:
         repl._cmd_render("go 10 10 1")
         assert repl._last_exit_code == 0
 
-
     def test_render_preset_demo(self, repl):
         repl._cmd_render("preset demo")
         assert repl._last_exit_code == 0
@@ -11379,7 +11264,6 @@ class TestCmdRenderExtraV2:
     def test_render_preset_spheres(self, repl):
         repl._cmd_render("preset spheres")
         assert repl._last_exit_code == 0
-
 
     def test_render_unknown(self, repl):
         repl._cmd_render("bogus")
@@ -11408,7 +11292,6 @@ class TestCmdTutorialExtra:
 
 
 class TestCmdAiExtra:
-
     def test_ai_no_api(self, repl):
         with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_ai("help me")
@@ -11478,8 +11361,6 @@ class TestCmdVmrunExecutionV2:
         repl._cmd_vmrun("--debug --admin hello")
         assert repl._last_exit_code == 0
 
-
-
     def test_vmrun_user_role_denied(self, repl):
         with patch.dict(os.environ, {"MAN_VM_ROLE": "user"}):
             repl._cmd_vmrun("--admin hello")
@@ -11503,8 +11384,6 @@ class TestCmdVmrunExecutionV2:
 
 
 class TestCmdAsmExecution:
-
-
     def test_asm_piped_input(self, repl):
         repl._piped_input = "MOV R0, 42\nHALT"
         repl._cmd_asm("")
@@ -11539,7 +11418,6 @@ class TestCmdAsmExecution:
         repl._cmd_asm("--self-test")
         assert repl._last_exit_code == 0
 
-
     def test_asm_piped_with_file(self, repl):
         repl._piped_input = "mov eax, 1\njmp $"
         repl._cmd_asm("--list")
@@ -11551,9 +11429,6 @@ class TestCmdAsmExecution:
 
 
 class TestCmdGenExecution:
-
-
-
     def test_gen_error(self, repl):
         with (
             patch.object(repl, "_require_api", return_value=True),
@@ -11572,7 +11447,6 @@ class TestCmdGenExecution:
 
 
 class TestCmdChatExecution:
-
     def test_chat_reset(self, repl):
         repl._chat_session_id = "old"
         repl._chat_history = [{"role": "user", "content": "hi"}]
@@ -11581,7 +11455,6 @@ class TestCmdChatExecution:
         assert repl._chat_session_id is None
         assert repl._chat_history == []
         assert repl._last_exit_code == 0
-
 
     def test_chat_new_session(self, repl):
         with (
@@ -11788,11 +11661,9 @@ class TestPipelineInternalsV2:
         repl.execute("testerr")
         assert repl._last_exit_code == 1
 
-
     def test_execute_single_unknown_with_suggestion(self, repl):
         repl.execute("hepl")
         assert repl._last_exit_code == 127
-
 
     def test_execute_single_ext_command(self, repl):
         mock_ext = MagicMock()
@@ -12276,7 +12147,6 @@ class TestCmdTrainPaths:
 
 
 class TestCmdReadExtraV2:
-
     def test_read_prompt_only(self, repl):
         from domain.shell._internal.io import MemoryIO
 
@@ -12307,8 +12177,6 @@ class TestCmdReadExtraV2:
 
 
 class TestCmdWhichTypeEdgeV2:
-
-
     def test_which_ext_cmd(self, repl):
         repl._ext_cmds["myext"] = MagicMock()
         repl._cmd_which("myext")
@@ -12323,8 +12191,6 @@ class TestCmdWhichTypeEdgeV2:
         with patch("shutil.which", return_value="/usr/bin/python3"):
             repl._cmd_which("python3")
         assert repl._last_exit_code == 0
-
-
 
     def test_type_ext_cmd(self, repl):
         repl._ext_cmds["myext"] = MagicMock()
@@ -12349,8 +12215,6 @@ class TestCmdHelpInternalsV2:
     def test_help_brief(self, repl):
         repl._cmd_help("-b")
         assert repl._last_exit_code == 0
-
-
 
     def test_help_ext_cmd(self, repl):
         repl._ext_cmds["myext"] = MagicMock()
@@ -12620,7 +12484,6 @@ class TestCmdLogsExplainExtraV2:
         repl._cmd_logs("--stats")
         assert repl._last_exit_code == 0
 
-
     def test_logs_export(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
 
@@ -12676,7 +12539,6 @@ class TestCmdLogsExplainExtraV2:
 
 
 class TestCmdConfirmConfigV2:
-
     def test_confirm_on(self, repl):
         with patch("domain.infrastructure._internal.config.get_config") as mock_get_cfg:
             mock_cfg = MagicMock()
@@ -12700,7 +12562,6 @@ class TestCmdConfirmConfigV2:
 
 
 class TestCmdBootShutdownV3:
-
     @pytest.mark.skip(
         reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
     )
@@ -12935,7 +12796,6 @@ class TestCmdProtectUnprotectV2:
 
 
 class TestCmdUptimeStatus:
-
     def test_status(self, repl):
         repl._cmd_status("")
         assert repl._last_exit_code == 0
@@ -12978,8 +12838,6 @@ class TestCmdProcsPsKill:
         repl._cmd_procs("")
         assert repl._last_exit_code == 0
 
-
-
     def test_kill_pid(self, repl):
         repl._cmd_kill("1234")
         assert repl._last_exit_code == 0
@@ -12993,7 +12851,6 @@ class TestCmdFcExtra:
         repl._history.clear()
         repl._cmd_fc("")
         assert repl._last_exit_code == 0
-
 
     def test_fc_list_with_n(self, repl):
         repl._history = ["echo hello", "ls -la", "pwd"]
@@ -13015,7 +12872,6 @@ class TestCmdFcExtra:
 
 
 class TestCmdWatchBgFg:
-
     def test_watch_with_cmd(self, repl):
         repl._cmd_watch("echo test")
         assert repl._last_exit_code == 1
@@ -13035,8 +12891,6 @@ class TestCmdWatchBgFg:
 
 
 class TestCmdLnExtraV2:
-
-
     def test_ln_hard(self, repl):
         import os
         import tempfile
@@ -13074,8 +12928,6 @@ class TestCmdLnExtraV2:
 
 
 class TestCmdDateCalExtra:
-
-
     def test_cal_year(self, repl):
         repl._cmd_cal("2025")
         assert repl._last_exit_code == 0
@@ -13093,13 +12945,11 @@ class TestCmdDateCalExtra:
 
 
 class TestCmdExpandUnexpandExtra:
-
     def test_expand_piped(self, repl):
         repl._piped_input = "hello\tworld"
         repl._cmd_expand("")
         repl._piped_input = None
         assert repl._last_exit_code == 0
-
 
     def test_unexpand_piped(self, repl):
         repl._piped_input = "hello    world"
@@ -13118,16 +12968,13 @@ class TestCmdExpandUnexpandExtra:
 
 
 class TestCmdPathUtilsExtra:
-
     def test_realpath_valid(self, repl):
         repl._cmd_realpath("/tmp")
         assert repl._last_exit_code == 0
 
-
     def test_dirname_valid(self, repl):
         repl._cmd_dirname("/tmp/test.txt")
         assert repl._last_exit_code == 0
-
 
     def test_basename_valid(self, repl):
         repl._cmd_basename("/tmp/test.txt")
@@ -13145,7 +12992,6 @@ class TestCmdPathUtilsExtra:
 
 
 class TestCmdEnvExtraV2:
-
     def test_env_with_var(self, repl):
         repl._env["MY_VAR"] = "hello"
         repl._cmd_env("")
@@ -13156,12 +13002,10 @@ class TestCmdEnvExtraV2:
 
 
 class TestCmdSetExportExtraV2:
-
     def test_set_with_value(self, repl):
         repl._cmd_set("MY_VAR=hello")
         assert repl._env.get("MY_VAR") == "hello"
         assert repl._last_exit_code == 0
-
 
     def test_export_with_value(self, repl):
         repl._cmd_export("MY_VAR=world")
@@ -13173,7 +13017,6 @@ class TestCmdSetExportExtraV2:
 
 
 class TestCmdSourceExtraV3:
-
     def test_source_valid(self, repl):
         import tempfile
 
@@ -13191,12 +13034,10 @@ class TestCmdSourceExtraV3:
 
 
 class TestCmdAliasUnaliasExtraV2:
-
     def test_alias_single(self, repl):
         repl._cmd_alias("ll=ls -la")
         assert repl._aliases.get("ll") == "ls -la"
         assert repl._last_exit_code == 0
-
 
     def test_unalias_existing(self, repl):
         repl._aliases["ll"] = "ls -la"
@@ -13400,7 +13241,6 @@ class TestCmdExportExtra:
 
 
 class TestCmdChmodExecution:
-
     def test_chmod_valid(self, repl):
         import tempfile
 
@@ -13417,7 +13257,6 @@ class TestCmdChmodExecution:
 
 
 class TestCmdStatExecution:
-
     def test_stat_valid(self, repl):
         repl._cmd_stat("/tmp")
         assert repl._last_exit_code == 0
@@ -13433,8 +13272,6 @@ class TestCmdStatExecution:
 
 
 class TestCmdBgFgJobs:
-
-
     def test_fg_with_job(self, repl):
         import threading
 
@@ -13484,7 +13321,6 @@ class TestCmdTuiExtra:
 
 
 class TestCmdTutorialExecution:
-
     def test_tutorial_step_through(self, repl):
         from domain.shell._internal.io import MemoryIO
 
@@ -13681,12 +13517,9 @@ class TestCmdFcBoundary:
 
 
 class TestCmdSeqThreeArgFloat:
-
     def test_seq_float(self, repl):
         repl._cmd_seq("0.5 0.5 2.0")
         assert repl._last_exit_code == 0
-
-
 
     def test_seq_negative_increment(self, repl):
         repl._cmd_seq("5 -1 1")
@@ -13818,7 +13651,6 @@ class TestExecutePaths:
         repl.execute("exitcmd")
         assert repl._last_exit_code == 42
         del repl.COMMANDS["exitcmd"]
-
 
     def test_execute_pipeline(self, repl):
         repl.execute("echo hello | cat")
@@ -14150,7 +13982,6 @@ class TestCmdWhichEdgeCases:
 
 
 class TestCmdTypeEdgeCases:
-
     def test_type_alias(self, repl):
         repl._aliases["ll"] = "ls"
         repl._cmd_type("ll")
@@ -14198,7 +14029,6 @@ class TestCmdOdEdgeCases:
 
 
 class TestCmdPasteEdgeCases:
-
     def test_paste_two_files(self, repl):
         import tempfile
 
@@ -14232,7 +14062,6 @@ class TestCmdPasteEdgeCases:
 
 
 class TestCmdJoinEdgeCases:
-
     def test_join_file_not_found(self, repl):
         repl._cmd_join("/f1.txt /f2.txt")
         assert repl._last_exit_code == 1
@@ -14242,7 +14071,6 @@ class TestCmdJoinEdgeCases:
 
 
 class TestCmdTacEdgeCases:
-
     def test_tac_file(self, repl):
         import tempfile
 
@@ -14260,7 +14088,6 @@ class TestCmdTacEdgeCases:
 
 
 class TestCmdRevEdgeCases:
-
     def test_rev_no_args_no_piped(self, repl):
         repl._piped_input = ""
         repl._cmd_rev("")
@@ -14320,7 +14147,6 @@ class TestCmdXargsEdgeCases:
 
 
 class TestCmdReadEdgeCases:
-
     def test_read_var(self, repl):
         from domain.shell._internal.io import MemoryIO
 
@@ -14353,7 +14179,6 @@ class TestCmdReadEdgeCases:
 
 
 class TestCmdWatchEdgeCases:
-
     def test_watch_no_interval(self, repl):
         repl._cmd_watch("echo hello")
         assert repl._last_exit_code == 1
@@ -14395,7 +14220,6 @@ class TestCmdFgEdgeCases:
         repl._bg_threads = {}
         repl._cmd_fg("abc")
         assert repl._last_exit_code == 0
-
 
     def test_fg_done_thread(self, repl):
         import threading
@@ -14638,7 +14462,6 @@ class TestExpandHistory:
 
 
 class TestParseInlineEnvV2:
-
     def test_multiple_vars(self, repl):
         env, rest = repl._parse_inline_env("A=1 B=2 cmd")
         assert env == {"A": "1", "B": "2"}
@@ -14682,7 +14505,6 @@ class TestStripRedirectionV2:
 
 
 class TestCmdPyV3:
-
     def test_py_no_args(self, repl):
         repl._cmd_py("")
         assert repl._last_exit_code == 0
@@ -14789,7 +14611,6 @@ class TestParsePipeline:
 
 
 class TestCmdLsFlags:
-
     def test_ls_tmp(self, repl):
         repl._cmd_ls("/tmp")
         assert repl._last_exit_code == 0
@@ -14939,7 +14760,6 @@ class TestCmdWcExtra:
 
 
 class TestCmdGrepExtra:
-
     def test_grep_no_match(self, repl):
         repl._cmd_grep("nomatch /dev/null")
         assert repl._last_exit_code == 1
@@ -15021,7 +14841,6 @@ class TestCmdTrExtra:
 
 
 class TestCmdCalExtraV2:
-
     def test_cal_month_year(self, repl):
         repl._cmd_cal("1 2026")
         assert repl._last_exit_code == 0
@@ -15498,7 +15317,6 @@ class TestCmdCommExtraV2:
 
 
 class TestCmdPrintfExtraV2:
-
     def test_printf_string(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_printf("hello"))
         assert "hello" in out
@@ -16894,12 +16712,9 @@ class TestCmdEchoDeeper:
 
 
 class TestCmdTestDeeper:
-
     def test_test_bracket_syntax(self, repl):
         repl._cmd_test("[ 1 = 1 ]")
         assert repl._last_exit_code == 0
-
-
 
     def test_test_ge(self, repl):
         repl._cmd_test("2 -ge 1")
@@ -16920,7 +16735,6 @@ class TestCmdTestDeeper:
     def test_test_neq(self, repl):
         repl._cmd_test("a != b")
         assert repl._last_exit_code == 0
-
 
     def test_test_z_empty(self, repl):
         repl._cmd_test("[ -n hello ]")
@@ -18254,7 +18068,6 @@ class TestCmdShufDeeper3:
 
 
 class TestCmdRevDeeper3:
-
     def test_rev_multiline(self, repl):
         repl._piped_input = "ab\ncd"
         out = _run_with_io(repl, [], lambda: repl._cmd_rev(""))
@@ -18551,7 +18364,6 @@ class TestCmdIdDeeper2:
 
 
 class TestCmdUnameDeeper2:
-
     def test_uname_m(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_uname("-m"))
         assert len(out.strip()) > 0
@@ -18583,7 +18395,6 @@ class TestCmdDateDeeper2:
 
 
 class TestCmdSleepDeeper2:
-
     def test_sleep_negative(self, repl):
         try:
             repl._cmd_sleep("-1")
@@ -18595,7 +18406,6 @@ class TestCmdSleepDeeper2:
 
 
 class TestCmdPermitDeeper2:
-
     def test_permit_grant(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_permit("rm"))
         assert "Granted" in out
@@ -18618,7 +18428,6 @@ class TestCmdPermitDeeper2:
 
 
 class TestCmdDenyDeeper2:
-
     def test_deny_revoke(self, repl):
         repl._perms.grant("testcmd")
         out = _run_with_io(repl, [], lambda: repl._cmd_deny("testcmd"))
@@ -18637,7 +18446,6 @@ class TestCmdDenyDeeper2:
 
 
 class TestCmdLogsDeeper2:
-
     def test_logs_clear(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_logs("-c"))
         assert "cleared" in out.lower()
@@ -18867,7 +18675,6 @@ class TestCmdDateDeeper3:
 
 
 class TestCmdCalDeeper3:
-
     def test_cal_specific(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_cal("3 2024"))
         assert "March" in out or "2024" in out
@@ -18904,7 +18711,6 @@ class TestCmdMktempDeeper2:
 
 
 class TestCmdIdDeeper3:
-
     def test_id_contains_gid(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_id(""))
         assert "gid" in out.lower()
@@ -18917,7 +18723,6 @@ class TestCmdIdDeeper3:
 
 
 class TestCmdUnameDeeper3:
-
     def test_uname_n(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_uname("-s"))
         assert len(out.strip()) > 0
@@ -19069,7 +18874,6 @@ class TestCmdDenyDeeper3:
         out = _run_with_io(repl, [], lambda: repl._cmd_deny("testpersist --persist"))
         assert "Revoked" in out
 
-
     def test_deny_all_dangerous(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_deny("--all-DANGEROUS"))
         assert "DANGEROUS" in out
@@ -19155,12 +18959,10 @@ class TestCmdEventsDeeper2:
 
 
 class TestCmdProtectDeeper2:
-
     def test_protect_import_error(self, repl):
         with patch.dict(sys.modules, {"domain.infrastructure._internal.model_protector": None}):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
             assert "Error" in out
-
 
     def test_unprotect_import_error(self, repl):
         with patch.dict(sys.modules, {"domain.infrastructure._internal.model_protector": None}):
@@ -19557,7 +19359,6 @@ class TestCmdNotesDeeper2:
 
 
 class TestCmdSourceDeeper3:
-
     def test_source_nonexistent(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_source("/nonexistent/file.rc"))
         assert "no such file" in out.lower()
@@ -19869,7 +19670,6 @@ class TestCmdTrainSubcommandsV2:
 
 
 class TestCmdLoadDeeperV2:
-
     def test_load_no_api(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_load("gpt2"))
         assert "api" in out.lower() or repl._last_exit_code == 1
@@ -20017,7 +19817,6 @@ class TestExpandCmdSubstDeeperV2:
 
 
 class TestExpandHistoryEdgeCases:
-
     def test_history_nth_arg_out_of_range(self, repl):
         repl._history = ["echo a b"]
         result = repl._expand_history("!:99")
@@ -20038,7 +19837,6 @@ class TestExpandHistoryEdgeCases:
 
 
 class TestExpandGlobsEdgeCases:
-
     def test_glob_quoted(self, repl):
         result = repl._expand_globs("echo 'a*b'")
         assert "a*b" in result
@@ -20127,7 +19925,6 @@ class TestCmdProcsDeeper:
 
 
 class TestCmdBgFgDeeperV2:
-
     def test_fg_empty(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_fg(""))
         assert "Usage" in out or repl._last_exit_code == 1
@@ -20559,7 +20356,6 @@ class TestNoteTagsDeeper:
 
 
 class TestNoteSprintDeeper:
-
     def test_note_sprint_no_sprints(self, repl):
         mock_store = MagicMock()
         mock_store.sprints.return_value = []
@@ -20713,7 +20509,6 @@ class TestPrintHeaderDeeper:
 
 
 class TestFormatTableDeeperV2:
-
     def test_with_header(self, repl):
         result = repl._format_table([["a", "b"], ["c", "d"]], header=["Col1", "Col2"])
         assert "Col1" in result
@@ -20739,7 +20534,6 @@ class TestFormatTableDeeperV2:
 
 
 class TestCmdWatchDeeper3V2:
-
     def test_watch_invalid_interval(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_watch("abc echo hi"))
         assert "Invalid interval" in out
@@ -21355,7 +21149,6 @@ class TestCmdSvcDeeperV2:
         repl._cmd_svc("")
         assert repl._last_exit_code == 0
 
-
     def test_svc_list(self, repl):
         init = MagicMock()
         repl.os._init = init
@@ -21512,7 +21305,6 @@ class TestDispatchEdgeCases:
     def test_dispatch_with_background(self, repl):
         repl._dispatch("echo background_test &")
         assert repl._last_exit_code == 0
-
 
     def test_dispatch_with_redirect(self, repl):
         import tempfile
@@ -22151,7 +21943,6 @@ class TestCmdSetDeeperV2:
 
 
 class TestCmdAliasDeeperV2:
-
     def test_alias_creates(self, repl):
         repl._cmd_alias("ll=ls -la")
         assert repl._aliases.get("ll") == "ls -la"
@@ -22610,7 +22401,6 @@ class TestCmdFoldDeeperV3:
 
 
 class TestCmdPrintfDeeperV2:
-
     def test_printf_format(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_printf("%s hellothere")
@@ -23593,9 +23383,6 @@ class TestStripRedirectionV3:
 
 
 class TestParseInlineEnvV3:
-
-
-
     def test_quoted_value(self, repl):
         env, rest = repl._parse_inline_env('FOO="hello world" cmd')
         assert env == {"FOO": "hello"}
@@ -23683,7 +23470,6 @@ class TestCmdDiffDeeperV3:
         repl._cmd_diff(f"{f1} /nonexistent/file.txt")
         assert repl._last_exit_code == 1
 
-
     def test_one_arg(self, repl):
         repl._cmd_diff("file1.txt")
         assert repl._last_exit_code == 1
@@ -23704,7 +23490,6 @@ class TestCmdLnDeeperV3:
         link = tmp_path / "link.txt"
         repl._cmd_ln(f"-s {src} {link}")
         assert link.is_symlink()
-
 
     def test_missing_link_name(self, repl, tmp_path):
         src = tmp_path / "src.txt"
@@ -23733,7 +23518,6 @@ class TestCmdStatDeeperV3:
         assert repl._last_exit_code == 0
         assert "directory" in cap.getvalue()
 
-
     def test_nonexistent(self, repl):
         repl._cmd_stat("/nonexistent/file.txt")
         assert repl._last_exit_code == 1
@@ -23747,7 +23531,6 @@ class TestCmdDuDeeperV3:
             repl._cmd_du(str(f))
         assert repl._last_exit_code == 0
 
-
     def test_nonexistent(self, repl):
         repl._cmd_du("/nonexistent/file.txt")
         assert repl._last_exit_code == 0
@@ -23759,7 +23542,6 @@ class TestCmdChmodDeeperV3:
         f.write_text("hello")
         repl._cmd_chmod(f"755 {f}")
         assert repl._last_exit_code == 0
-
 
     def test_one_arg(self, repl):
         repl._cmd_chmod("755")
@@ -23773,7 +23555,6 @@ class TestCmdOdDeeperV3:
         with _CaptureOutput(repl):
             repl._cmd_od(str(f))
         assert repl._last_exit_code == 0
-
 
     def test_with_piped_input(self, repl, tmp_path):
         f = tmp_path / "data.bin"
@@ -23791,7 +23572,6 @@ class TestCmdNlDeeperV4:
             repl._cmd_nl(str(f))
         assert repl._last_exit_code == 0
         assert "1" in cap.getvalue()
-
 
     def test_with_piped_input(self, repl):
         repl._piped_input = "line1\nline2\n"
@@ -23835,7 +23615,6 @@ class TestCmdCutDeeperV4:
 
 
 class TestCmdTrDeeperV3:
-
     def test_tr_delete(self, repl):
         repl._piped_input = "hello\n"
         with _CaptureOutput(repl) as cap:
@@ -23853,7 +23632,6 @@ class TestCmdJoinDeeperV3:
             repl._cmd_join(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
-
     def test_one_file(self, repl, tmp_path):
         f1 = tmp_path / "a.txt"
         f1.write_text("a 1\n")
@@ -23862,7 +23640,6 @@ class TestCmdJoinDeeperV3:
 
 
 class TestCmdXargsDeeperV3:
-
     def test_no_args_no_pipe(self, repl):
         repl._cmd_xargs("")
         assert repl._last_exit_code == 1
@@ -23971,7 +23748,6 @@ class TestCmdWhoDeeperV4:
 
 
 class TestCmdTypeDeeperV2:
-
     def test_type_unknown(self, repl):
         repl._cmd_type("nonexistent_command_xyz")
         assert repl._last_exit_code == 1
@@ -23989,16 +23765,13 @@ class TestCmdWhichDeeperV2:
 
 
 class TestCmdTestDeeperV3:
-
     def test_string_not_equal(self, repl):
         repl._cmd_test("abc = xyz")
         assert repl._last_exit_code == 1
 
-
     def test_file_not_exists(self, repl):
         repl._cmd_test("-f /nonexistent_file_xyz")
         assert repl._last_exit_code == 1
-
 
     def test_empty_file(self, repl, tmp_path):
         f = tmp_path / "empty.txt"
@@ -24018,7 +23791,6 @@ class TestCmdReadDeeperV3:
         finally:
             repl.io = old_io
         assert repl._env.get("myvar") == "test_value"
-
 
     def test_read_prompt(self, repl):
         mem = MemoryIO()
@@ -24061,7 +23833,6 @@ class TestCmdSourceDeeperV3:
 
 
 class TestCmdSetDeeperV3:
-
     def test_set_no_args(self, repl):
         with _CaptureOutput(repl):
             repl._cmd_set("")
@@ -24103,7 +23874,6 @@ class TestCmdAliasDeeperV3:
 
 
 class TestCmdFcDeeperV3:
-
     def test_fc_list(self, repl):
         repl._history.append("echo hello")
         repl._history.append("echo world")
@@ -24131,7 +23901,6 @@ class TestCmdHistoryDeeperV3:
 
 
 class TestCmdSleepDeeperV4:
-
     def test_sleep_invalid(self, repl):
         repl._cmd_sleep("not_a_number")
         assert repl._last_exit_code == 0
@@ -24246,7 +24015,6 @@ class TestCmdDirnameDeeperV4:
         with _CaptureOutput(repl) as cap:
             repl._cmd_dirname("/a/b/c.txt")
         assert "/a/b" in cap.getvalue()
-
 
     def test_single_component(self, repl):
         with _CaptureOutput(repl) as cap:
@@ -24385,7 +24153,6 @@ class TestCmdRmDeeperV3:
         repl._cmd_rm(str(f))
         assert not f.exists()
 
-
     def test_rm_nonexistent(self, repl):
         repl._cmd_rm("/nonexistent_file_xyz")
         assert repl._last_exit_code == 1
@@ -24511,16 +24278,9 @@ class TestCmdVmpermsDeeperV2:
 
 @pytest.mark.skip(reason="_interpret_natural removed")
 class TestInterpretNaturalDeeperV2:
-
-
-
-
-
-
     def test_finetuned_keyword(self, repl):
         _run_with_io(repl, [], lambda: repl._interpret_natural("show finetuned models"))
         assert repl._last_exit_code == 0
-
 
     def test_tokenizer_keyword(self, repl):
         _run_with_io(repl, [], lambda: repl._interpret_natural("tokenizer vocab"))
@@ -24582,7 +24342,6 @@ class TestShowWelcomeDeeperV2:
 
 
 class TestRenderPromptDeeperV3:
-
     def test_render_prompt_lambda(self, repl):
         result = repl._render_prompt()
         assert "λ" in result
@@ -24645,7 +24404,6 @@ class TestFormatSizeDeeper:
 
 
 class TestExpandGlobsDeeperV3:
-
     def test_quoted_glob(self, repl):
         result = repl._expand_globs('echo "*.txt"')
         assert "*.txt" in result
@@ -24668,7 +24426,6 @@ class TestExpandVarsDeeperV3:
 
 
 class TestExpandCmdSubstDeeperV4:
-
     def test_no_subst(self, repl):
         result = repl._expand_cmd_subst("echo hello")
         assert result == "echo hello"
@@ -24912,8 +24669,6 @@ class TestHistoryExpansionEdgeCases:
         result = repl._expand_history("!$")
         assert result == "hello"
 
-
-
     def test_nth_arg_in_range(self, repl):
         repl._history = ["echo a b c"]
         result = repl._expand_history("!:1")
@@ -24938,9 +24693,6 @@ class TestHistoryExpansionEdgeCases:
         repl._history = ["hello"]
         result = repl._expand_history("!*")
         assert result == ""
-
-
-
 
     def test_neg_history_empty(self, repl):
         repl._history = []
@@ -25106,7 +24858,6 @@ class TestCmdDiffDeeperV4:
 
 
 class TestExpandGlobsDeeperV4:
-
     def test_glob_with_matches(self, repl, tmp_path):
         (tmp_path / "a.txt").write_text("x")
         (tmp_path / "b.txt").write_text("y")
@@ -25316,7 +25067,6 @@ class TestCmdExportState:
 
 
 class TestDispatchDeeperV3:
-
     def test_empty_line_noop(self, repl):
         initial_count = repl._cmd_count
         repl._dispatch("")
@@ -25326,7 +25076,6 @@ class TestDispatchDeeperV3:
         with patch.object(repl, "_check_permission", return_value=False):
             repl._dispatch("rm -rf /")
         assert repl._last_exit_code == 126
-
 
     def test_suggest_command(self, repl):
         repl._dispatch("hep")
@@ -25387,8 +25136,6 @@ class TestCmdVmrunDeeper:
 
 
 class TestCmdPyDeeperV4:
-
-
     def test_syntax_error(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_py("def def def")
@@ -25752,7 +25499,6 @@ class TestCmdBgFgV2:
             repl._cmd_bg("")
         assert "No background" in cap.getvalue() or "Usage" in cap.getvalue()
 
-
     def test_fg_unknown_job(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_fg("999")
@@ -25785,7 +25531,6 @@ class TestCmdEnvSet:
         with _CaptureOutput(repl) as cap:
             repl._cmd_env("")
         assert "PATH" in cap.getvalue() or "HOME" in cap.getvalue()
-
 
     def test_set_show_all(self, repl):
         repl._cmd_set("FOO=bar")
@@ -26013,7 +25758,6 @@ class TestCmdShufV2:
 
 
 class TestCmdRevV2:
-
     def test_rev_empty(self, repl):
         repl._piped_input = ""
         with _CaptureOutput(repl) as cap:
@@ -26052,7 +25796,6 @@ class TestCmdSleepV2:
 
 
 class TestCmdKillV2:
-
     def test_kill_invalid_pid(self, repl):
         with _CaptureOutput(repl):
             repl._cmd_kill("99999")
@@ -26084,7 +25827,6 @@ class TestCmdReadV2:
 
 
 class TestCmdSource:
-
     def test_source_nonexistent(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_source("/nonexistent/script.sh")
@@ -26096,7 +25838,6 @@ class TestCmdSource:
 
 
 class TestCmdPyV4:
-
     def test_py_syntax_error(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_py("def def def")
@@ -26119,7 +25860,6 @@ class TestCmdPyV4:
 
 
 class TestCmdAlias:
-
     def test_alias_show_all(self, repl):
         repl._cmd_alias("myalias=echo hi")
         with _CaptureOutput(repl) as cap:
@@ -26514,8 +26254,6 @@ class TestCmdCutDeeperV5:
 
 
 class TestCmdTrDeeperV4:
-
-
     def test_tr_empty(self, repl):
         repl._piped_input = ""
         with _CaptureOutput(repl) as cap:
@@ -26780,7 +26518,6 @@ class TestCmdCommEdgeCasesV2:
 
 
 class TestCmdKillSubprocessV2:
-
     def test_kill_nonexistent(self, repl):
         with _CaptureOutput(repl):
             repl._cmd_kill("99999")
@@ -26802,8 +26539,6 @@ class TestCmdFoldEdgesV2:
 
 
 class TestCmdPasteEdgesV2:
-
-
     def test_paste_custom_delim(self, repl, tmp_path):
         f1 = tmp_path / "a.txt"
         f1.write_text("x\ny\n")
@@ -26862,7 +26597,6 @@ class TestCmdJoinEdgesV2:
 
 
 class TestCmdReadEdgesV2:
-
     def test_read_with_var(self, repl):
         _run_with_io(repl, ["hello"], lambda: repl._cmd_read("myvar"))
         assert repl._env.get("myvar") == "hello"
@@ -26884,7 +26618,6 @@ class TestCmdBgRunningV2:
 
 
 class TestCmdFgRunningV2:
-
     def test_fg_invalid_id(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_fg("abc")
@@ -26996,7 +26729,6 @@ class TestCdPwdEchoV2:
             repl._cmd_pwd("")
         assert len(cap.getvalue().strip()) > 0
 
-
     def test_echo_empty(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_echo("")
@@ -27040,7 +26772,6 @@ class TestSourceMore:
 
 
 class TestLogsV2:
-
     def test_logs_stats(self, repl):
         with _CaptureOutput(repl):
             repl._cmd_logs("--stats")
@@ -27110,12 +26841,10 @@ class TestAsmV2:
 
 
 class TestCalLnV2:
-
     def test_cal_specific(self, repl):
         with _CaptureOutput(repl):
             repl._cmd_cal("1 2025")
         assert repl._last_exit_code == 0
-
 
     def test_ln_create(self, repl, tmp_path):
         f = tmp_path / "target.txt"
@@ -28816,7 +28545,6 @@ class TestCmdCpFlags:
             if os.path.exists(dst):
                 shutil.rmtree(dst)
 
-
     def test_cp_one_arg(self, repl):
         repl._cmd_cp("somefile")
         assert repl._last_exit_code == 1
@@ -28842,7 +28570,6 @@ class TestCmdMvFlags:
         finally:
             if os.path.exists(dst):
                 os.unlink(dst)
-
 
     def test_mv_one_arg(self, repl):
         repl._cmd_mv("somefile")

@@ -170,7 +170,6 @@ class TestX86RBAC:
         rbac.assign(20, Role.ADMIN)
         assert rbac.check(20, Permission.DEVICE_MOUSE) is True
 
-
     def test_admin_has_device_net(self):
         rbac = X86RBAC()
         rbac.assign(20, Role.ADMIN)

@@ -102,8 +102,6 @@ class TestScheduleReview:
         diff = ts - time.time()
         assert diff >= 29 * 86400
 
-
-
     def test_boundary_05_gets_day(self):
         sched = SpacedRepetitionScheduler()
         ts = sched.schedule_review("doc1", 0.5)

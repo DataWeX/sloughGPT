@@ -78,7 +78,6 @@ class TestTier:
         assert Tier("hot") is Tier.HOT
         assert Tier("memory") is Tier.MEMORY
 
-
     def test_invalid_value(self):
         with pytest.raises(ValueError):
             Tier("ssd")

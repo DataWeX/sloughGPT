@@ -468,9 +468,6 @@ class TestConfigEdgeCases:
 
 
 class TestGetDtypeExtended:
-
-
-
     def test_unknown_multiple_chars(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2", dtype="complex64"))
         assert loader._get_dtype() == "float32"
@@ -529,9 +526,6 @@ class TestFormatChatPromptExtended:
 
 
 class TestLoaderState:
-
-
-
     def test_config_preserved_after_init(self):
         cfg = HFLocalConfig(model="custom-model", device="cpu", dtype="float16")
         loader = HuggingFaceLocalLoader(cfg)
@@ -654,8 +648,6 @@ class TestModuleFunctions:
             "generate_local",
         }
 
-
-
     def test_client_has_all_methods(self):
         assert hasattr(HuggingFaceLocalClient, "load")
         assert hasattr(HuggingFaceLocalClient, "generate")
@@ -675,7 +667,6 @@ class TestLoadPath:
                 loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
                 with pytest.raises(ImportError):
                     loader.load()
-
 
     def test_load_raises_when_model_none(self):
         with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", MagicMock()):

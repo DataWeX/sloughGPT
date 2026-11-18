@@ -769,7 +769,6 @@ class TestSpawnVMProcessExtended:
         proc.entry()
         assert isinstance(proc.metadata["output_log"], list)
 
-
     def test_vm_with_default_priority(self):
         k = Kernel()
         k.boot()
@@ -867,8 +866,6 @@ class TestRunProgramExtended:
         result = k.run_program(src)
         assert result["steps"] == 11
 
-
-
     def test_run_program_regs_excludes_zero(self):
         k = Kernel()
         k.boot()
@@ -889,8 +886,6 @@ class TestKernelShellAdditional:
         joined = "\n".join(out)
         for cmd in ["help", "meminfo", "procs", "run", "ls", "cat", "write", "halt"]:
             assert cmd in joined
-
-
 
     def test_multiple_empty_lines(self):
         k = Kernel()
@@ -957,8 +952,6 @@ class TestKernelShellAdditional:
         out = _shell_outputs(k, ["halt"])
         assert "shutting down..." in "\n".join(out)
 
-
-
     def test_whitespace_only_line(self):
         k = Kernel()
         k.boot()
@@ -997,9 +990,6 @@ class TestSetupExtended:
         proc = k.spawn_shell(shell_class=FakeShell)
         assert proc.name == "shell"
         proc.entry()
-
-
-
 
     def test_setup_idempotent(self):
         k = Kernel()

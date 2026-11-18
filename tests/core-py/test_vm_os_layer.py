@@ -2953,7 +2953,6 @@ class TestSerialDeviceComprehensive:
         dev.write_byte(65)
         assert dev.has_data() is False  # write_byte goes to TX, not RX
 
-
     def test_push_byte(self):
         dev = SerialDevice()
         dev.push_byte(42)
@@ -4504,7 +4503,6 @@ class TestSysCloseEdgeCases:
         result = sys._syscall._sys_close(999)
         assert result == -1
 
-
     def test_close_negative_fd(self):
         sys = X86VirtualSystem()
         result = sys._syscall._sys_close(-1)
@@ -4998,7 +4996,6 @@ class TestSysUname:
 
 
 class TestSysSbrkEdge:
-
     def test_sbrk_with_process(self):
         sys = X86VirtualSystem()
         sys.spawn("sbrk_test", "[BITS 32]\nHLT")
@@ -5084,7 +5081,6 @@ class TestLoadConstTensorParse:
 
 
 class TestFlatFSLoadTable:
-
     def test_flatfs_write_and_read(self):
         from domain.shell._internal.vm import BlockDevice, FlatFS
 
@@ -6691,7 +6687,6 @@ class TestAssemblerCondJumps:
 
 
 class TestAssemblerALUMemImm:
-
     def test_sub_mem_imm_large(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSUB DWORD [1000], 256")
@@ -6731,7 +6726,6 @@ class TestAssemblerALUMemImm:
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSUB WORD [1000], 256")
         assert len(code) > 0
-
 
     def test_sub_mem8_imm(self):
         asm = X86Assembler()
@@ -6802,9 +6796,6 @@ class TestDeviceBusInfo:
 
 
 class TestAssemblerRepPrefix:
-
-
-
     def test_repe_cmpsb(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nREPE CMPSB")
@@ -7407,7 +7398,6 @@ class TestAssemblerShiftMulDiv:
         code = asm.assemble("[BITS 32]\nSHL EAX, 2")
         assert len(code) > 0
 
-
     def test_rol_eax_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nROL EAX, 2")
@@ -7630,14 +7620,6 @@ class TestAssemblerInOut:
 
 
 class TestAssemblerStringOps:
-
-
-
-
-
-
-
-
     def test_cmpsw(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nCMPSW")
@@ -7647,9 +7629,6 @@ class TestAssemblerStringOps:
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSCASW")
         assert len(code) > 0
-
-
-
 
     def test_repne_cmpsb(self):
         asm = X86Assembler()
@@ -8742,7 +8721,6 @@ class TestAssembleEstimateDataSizeComprehensive:
 class TestAssembleMovMemEncoding:
     """Test MOV memory operand encoding (L3266-3310)."""
 
-
     def test_mov_mem_reg(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nMOV [0x100000], EAX")
@@ -8850,10 +8828,6 @@ class TestAssembleShiftComprehensive:
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSHR EAX, 3")
         assert len(code) > 0
-
-
-
-
 
     def test_shr_reg_cl(self):
         asm = X86Assembler()

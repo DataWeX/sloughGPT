@@ -1391,7 +1391,6 @@ class TestCLILoggerExtended:
 
 
 class TestWebLoggerExtended:
-
     def test_emit_json_includes_context(self):
         import json
 
@@ -1471,7 +1470,6 @@ class TestWebLoggerExtended:
         record = log.from_json(data)
         assert record.context["key"] == "val"
 
-
     def test_from_json_missing_fields(self):
         import json
 
@@ -1480,7 +1478,6 @@ class TestWebLoggerExtended:
         record = log.from_json(data)
         assert record.message == ""
         assert record.logger == "slo"
-
 
     def test_to_json_includes_exception(self):
         import json
