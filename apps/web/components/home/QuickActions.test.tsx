@@ -163,6 +163,25 @@ describe('QuickActions', () => {
     })
   })
 
+  it('shows the shared streaming cursor while tokens arrive', async () => {
+    let release: (() => void) | undefined
+    mockStream.mockImplementation(async function* () {
+      yield 'Hello'
+      await new Promise<void>((r) => {
+        release = r
+      })
+      yield ' back'
+    })
+    const { container } = render(<QuickActionsWrapper />)
+    const buttons = container.querySelectorAll('button')
+    const testBtn = Array.from(buttons).find((b) => b.textContent?.includes('Test model'))
+    fireEvent.click(testBtn!)
+    await waitFor(() => {
+      expect(container.querySelector('.animate-pulse')).toBeTruthy()
+    })
+    release?.()
+  })
+
   it('shows error when model call fails', async () => {
     // eslint-disable-next-line require-yield -- stub generator that throws before yielding
     mockStream.mockImplementation(async function* () {

@@ -282,7 +282,7 @@ export default function ConsciousnessHealthPage() {
                 y="68"
                 textAnchor="middle"
                 className="fill-muted-foreground"
-                fontSize="8"
+                fontSize="11"
               >
                 {t('consciousness_health.out_of_100')}
               </text>
@@ -290,7 +290,7 @@ export default function ConsciousnessHealthPage() {
                 x="60"
                 y="82"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="500"
                 fill={scoreColor}
               >
@@ -532,7 +532,7 @@ export default function ConsciousnessHealthPage() {
                         x="35"
                         y={y + 3}
                         textAnchor="end"
-                        fontSize="8"
+                        fontSize="11"
                         className="fill-muted-foreground"
                       >
                         {v}

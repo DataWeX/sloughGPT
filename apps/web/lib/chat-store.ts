@@ -1,11 +1,19 @@
 'use client'
 
 /**
- * ChatStore — Zustand-based state management for the chat interface.
+ * ChatStore — the SINGLE state authority for chat state AND actions.
  *
- * Replaces the monolithic useChatMessages hook with a composable store.
- * The token accumulator and streaming pipeline operate on this store
- * directly via getState()/setState().
+ * Since card 20261116_124020 every message/input/loading read AND write goes
+ * through this store; since stage 3 the SEND/REGENERATE pipeline lives here
+ * too — one token accumulator, one stream pipeline, one AbortController
+ * (`streamAbortRef`). useChatMessages is now a projection of this store: its
+ * facade returns these actions unchanged so component call sites don't move.
+ *
+ * Hook-owned concerns stay hook-owned: session list CRUD and loadSession's
+ * guarded transcript swap live in useChatSessions (they own the list state),
+ * and the store reaches them through ChatConfig callbacks
+ * (saveSessionToStorage / renameSession). useChatStoreBridge keeps `_config`
+ * in sync with the live controller inputs — config only, never state.
  */
 
 import { create } from 'zustand'
@@ -18,16 +26,17 @@ import {
   generateSessionId,
   CURRENT_SESSION_KEY,
   buildLocalPrompt,
+  exportConversationAsMarkdown,
+  copyConversationAsMarkdown,
   type ChatMessage,
   type ImageAttachment,
-  type ChatSession,
 } from '@/lib/chat-utils'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { getErrorInfo } from '@/features/chat/components/feedback/ErrorBanner'
 import { chatController } from '@/lib/chat-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { multimodalController } from '@/lib/multimodal-controller'
+import { multimodalController, type MultimodalCapabilities } from '@/lib/multimodal-controller'
 import { chatDB } from '@/lib/db'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { publishMemoryEvent } from '@/lib/memory-events'
@@ -37,6 +46,13 @@ import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
 
 const _log = logger.child('chat-store')
+
+/**
+ * The live stream's AbortController — the ONE handle stop(), Escape and the
+ * stop button abort through (this was `loadingRef` inside useChatMessages).
+ * sendMessage/regenerate assign it; `stop()` and the finally blocks clear it.
+ */
+export const streamAbortRef: { current: AbortController | null } = { current: null }
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,8 +95,19 @@ export interface ChatConfig {
     qualityScore?: number
     userId?: string
   }) => Promise<boolean>
-  onVisionUpdate: (caps: unknown, history: string[], vocab: number | undefined) => void
+  onVisionUpdate: (
+    caps: MultimodalCapabilities | null,
+    history: string[],
+    vocab: number | undefined,
+  ) => void
   onKnowledgeUpdate: (ctx: { count: number; context: string }) => void
+  /** Session-list writes stay hook-owned (useChatSessions) — the store calls
+   *  through this seam for send/stream auto-save (trim + name derivation +
+   *  sidebar upsert). Never a raw chatDB.saveSession from here: that wiped
+   *  the derived title with `name: ''`. */
+  saveSessionToStorage: (msgs: ChatMessage[], sessionId: string) => Promise<void>
+  /** Auto-name on first send — persists AND refreshes the hook-owned list. */
+  renameSession: (id: string, newName: string) => Promise<void>
 }
 
 // ── Store State ──────────────────────────────────────────────────────────────
@@ -104,7 +131,6 @@ export interface ChatState {
   // Session
   sessionId: string
   userId: string
-  sidebarConversations: ChatSession[]
   sessionSaved: boolean
 
   // Selection
@@ -130,20 +156,29 @@ export interface ChatActions {
   newChat: () => void
   handleRetry: () => void
 
-  // Session
-  loadSession: (id: string) => Promise<void>
-  deleteSession: (id: string) => Promise<void>
-  starSession: (id: string, starred: boolean) => Promise<void>
-  pinSession: (id: string, pinned: boolean) => Promise<void>
-  archiveSession: (id: string, archived: boolean) => Promise<void>
-  renameSession: (id: string, newName: string) => Promise<void>
-  duplicateSession: (id: string) => Promise<void>
-
   // Input
   setInput: (value: string | ((prev: string) => string)) => void
   setMessages: (updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
   setLoading: (loading: boolean) => void
   setCurrentError: (error: ErrorInfo | null) => void
+
+  // Session flags — parity setters the controller-era hook needs now that
+  // its useState copies were replaced with store selectors (card 20261116_124020)
+  setSessionSaved: (saved: boolean) => void
+  setSessionLoading: (loading: boolean) => void
+
+  // Stream/media meta
+  setImages: (updater: ImageAttachment[] | ((prev: ImageAttachment[]) => ImageAttachment[])) => void
+  setToolEvents: (updater: ToolCallEvent[] | ((prev: ToolCallEvent[]) => ToolCallEvent[])) => void
+  setContextLayers: (updater: ContextLayer[] | ((prev: ContextLayer[]) => ContextLayer[])) => void
+  setRagVerification: (info: RagVerificationInfo | null) => void
+  setPendingToolApproval: (
+    approval: { toolName: string; args?: Record<string, unknown> } | null,
+  ) => void
+
+  // Selection
+  setSelectedMessageIds: (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => void
+  setSelectionMode: (mode: boolean | ((prev: boolean) => boolean)) => void
 
   // Images
   handleAddImage: (dataUrl: string) => void
@@ -169,7 +204,9 @@ export interface ChatActions {
 
   // UI
   handleSuggestionClick: (text: string) => void
-  handleCopy: (text: string) => void
+  handleCopy: () => void
+  handleExportMarkdown: () => void
+  handleCopyMarkdown: () => Promise<void>
   handleToolApproval: (approved: boolean) => void
   cancelStream: () => void
   approveTool: (toolName: string, approved: boolean) => Promise<void>
@@ -207,23 +244,14 @@ function flushTokens() {
     useChatStore.setState({ messages: updated })
   })
 
-  // Auto-save during streaming
+  // Auto-save during streaming — through the hook-owned seam (trim + name
+  // derivation + sidebar upsert). No config (tests that never init) skips the
+  // save rather than writing a nameless raw row.
   const state = useChatStore.getState()
   const now = Date.now()
   if (state.sessionId && now - (_lastSaveTs || 0) > 500) {
     _lastSaveTs = now
-    chatDB
-      .saveSession({
-        id: state.sessionId,
-        name: '',
-        messages: updated,
-        createdAt: '',
-        updatedAt: '',
-        synced: false,
-        starred: false,
-        pinned: false,
-      })
-      .catch(() => {})
+    state._config?.saveSessionToStorage(updated, state.sessionId).catch(() => {})
   }
 }
 
@@ -263,7 +291,6 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
   images: [],
   sessionId: '',
   userId: 'default',
-  sidebarConversations: [],
   sessionSaved: false,
   selectedMessageIds: new Set(),
   selectionMode: false,
@@ -290,13 +317,14 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
       })
     }
 
-    // NOTE: Do not load the session here. The controller (useChatMessages) is the
-    // single source of truth for messages and loads the session on mount; the
-    // one-way bridge (useChatStoreBridge) mirrors controller → store. An
-    // independent store-side loadSession raced the bridge, resolving later with a
-    // stale/persisted read and clobbering live messages — blanking the pane while
-    // the toolbar (controller) still showed the real count. Session hydration is
-    // the controller's job, not the store's.
+    // NOTE: Do not load the session here. Session hydration belongs to
+    // useChatSessions.loadSession — called from useChatMessages' mount effect —
+    // whose guarded transcript swap (claim id up front, supersede if the claim
+    // moves) is the only loader (stage 3 deleted the store's duplicate). A
+    // second load scheduled from init races that mount load: resolving later
+    // with a stale/persisted read clobbers live messages, blanking the pane
+    // while the toolbar still shows the real count (the stage-2 split-brain
+    // bug). init hydrates config + ids only — never messages.
   },
 
   // ── Set Input ──
@@ -324,6 +352,30 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
 
   // ── Set Error ──
   setCurrentError: (error) => set({ currentError: error }),
+
+  // ── Session flags ──
+  setSessionSaved: (saved) => set({ sessionSaved: saved }),
+  setSessionLoading: (loading) => set({ sessionLoading: loading }),
+
+  // ── Stream/media meta ──
+  setImages: (updater) =>
+    set((s) => ({ images: typeof updater === 'function' ? updater(s.images) : updater })),
+  setToolEvents: (updater) =>
+    set((s) => ({ toolEvents: typeof updater === 'function' ? updater(s.toolEvents) : updater })),
+  setContextLayers: (updater) =>
+    set((s) => ({
+      contextLayers: typeof updater === 'function' ? updater(s.contextLayers) : updater,
+    })),
+  setRagVerification: (info) => set({ ragVerification: info }),
+  setPendingToolApproval: (approval) => set({ pendingToolApproval: approval }),
+
+  // ── Selection ──
+  setSelectedMessageIds: (updater) =>
+    set((s) => ({
+      selectedMessageIds: typeof updater === 'function' ? updater(s.selectedMessageIds) : updater,
+    })),
+  setSelectionMode: (mode) =>
+    set((s) => ({ selectionMode: typeof mode === 'function' ? mode(s.selectionMode) : mode })),
 
   // ── Send Message ──
   sendMessage: async (overrideText) => {
@@ -370,15 +422,16 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
 
     chatDB.deleteDraft(state.sessionId)
 
-    // Auto-name conversation from first user message
-    if (state.messages.length === 0 && text.trim()) {
+    // Auto-name conversation from first user message (only once a session id
+    // exists — renameSession cannot persist without one)
+    if (state.messages.length === 0 && text.trim() && state.sessionId) {
       const title = text
         .trim()
         .slice(0, 50)
         .replace(/[^\w\s-]/g, '')
         .trim()
       if (title.length > 5) {
-        get().renameSession(state.sessionId, title)
+        config.renameSession(state.sessionId, title).catch(() => {})
       }
     }
 
@@ -423,19 +476,11 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
 
     const messagesWithNew = [...state.messages, userMessage, assistantMessage]
 
-    // Save session
-    chatDB
-      .saveSession({
-        id: state.sessionId,
-        name: '',
-        messages: messagesWithNew,
-        createdAt: '',
-        updatedAt: '',
-        synced: false,
-        starred: false,
-        pinned: false,
-      })
-      .catch(() => {})
+    // Save session through the hook-owned seam — trim + name derivation +
+    // sidebar upsert (a raw chatDB.saveSession here wiped the title).
+    config
+      .saveSessionToStorage(messagesWithNew, state.sessionId)
+      .catch((e) => _log.warning('Could not session save', { error: String(e) }))
 
     // Local engine path
     if (config.useLocalEngine && !config.engineRef.current && !config.engineLoadingRef.current) {
@@ -443,10 +488,12 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     }
 
     const loadingController = new AbortController()
+    streamAbortRef.current = loadingController
 
     try {
       if (config.useLocalEngine && config.engineRef.current) {
         const prompt = buildLocalPrompt(messagesWithNew, systemPrompt)
+        let hasContent = false
         let assistantContentLen = 0
         const signal = loadingController.signal
         // Offline twin of the turn seam: resolve this conversation's delta
@@ -461,6 +508,7 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
           eff.temperature,
         )) {
           if (signal.aborted) break
+          hasContent = true
           let cleanedToken = token
           if (assistantContentLen === 0) {
             cleanedToken = stripAssistantPrefix(cleanedToken)
@@ -472,6 +520,14 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
           tokenBuf.push({ id: assistantId, text: cleanedToken })
           scheduleFlush()
         }
+        if (!hasContent) {
+          set((s) => ({
+            messages: s.messages.map((m) =>
+              m.id === assistantId ? { ...m, content: '(empty response)' } : m,
+            ),
+          }))
+        }
+        set({ sessionSaved: true })
       } else {
         let assistantContentLen = 0
         let streamComplete = false
@@ -512,6 +568,11 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
                 ),
               }))
             })
+          },
+          onMeta: (meta) => {
+            set((s) => ({
+              messages: s.messages.map((m) => (m.id === assistantId ? { ...m, metrics: meta } : m)),
+            }))
           },
           onError: (status, text, opts) => {
             cancelFlush()
@@ -666,12 +727,15 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         }))
       })
     } finally {
+      if (streamAbortRef.current === loadingController) streamAbortRef.current = null
       set({ loading: false, streamingMessageId: null })
     }
   },
 
   // ── Stop ──
   stop: () => {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
     cancelFlush()
     const state = get()
     if (state._config) {
@@ -730,6 +794,7 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
 
     const loadingController = new AbortController()
+    streamAbortRef.current = loadingController
 
     try {
       let assistantContentLen = 0
@@ -740,6 +805,8 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         userId: state.userId,
         sessionId: state.sessionId,
         signal: loadingController.signal,
+        agentId: config.currentAgent?.id || undefined,
+        knowledge: knowledgeFacts.length > 0 ? knowledgeFacts : undefined,
         onToken: (token) => {
           let cleanedToken = token
           if (assistantContentLen === 0) {
@@ -759,6 +826,11 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
             messages: s.messages.map((m) =>
               m.id === target.id && !m.content ? { ...m, content: '(empty response)' } : m,
             ),
+          }))
+        },
+        onMeta: (meta) => {
+          set((s) => ({
+            messages: s.messages.map((m) => (m.id === target.id ? { ...m, metrics: meta } : m)),
           }))
         },
         onError: (status, text, opts) => {
@@ -787,7 +859,16 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         ),
       }))
     } finally {
+      if (streamAbortRef.current === loadingController) streamAbortRef.current = null
       set({ loading: false, streamingMessageId: null })
+      // Persist the finished transcript from LIVE state — same as the
+      // controller-era hook's regenerate finally did.
+      chatController
+        .saveSessionContext(
+          get().sessionId,
+          get().messages.map((m) => ({ role: m.role, content: m.content })),
+        )
+        .catch(() => {})
     }
   },
 
@@ -838,6 +919,7 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     const systemPrompt = parts.join('\n\n')
 
     const loadingController = new AbortController()
+    streamAbortRef.current = loadingController
 
     try {
       let assistantContentLen = 0
@@ -873,6 +955,11 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
             ),
           }))
         },
+        onMeta: (meta) => {
+          set((s) => ({
+            messages: s.messages.map((m) => (m.id === target.id ? { ...m, metrics: meta } : m)),
+          }))
+        },
         onError: (status, text, opts) => {
           cancelFlush()
           const errorInfo = getErrorInfo(status, text || 'Stream error', opts)
@@ -899,7 +986,16 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         ),
       }))
     } finally {
+      if (streamAbortRef.current === loadingController) streamAbortRef.current = null
       set({ loading: false, streamingMessageId: null })
+      // Persist the finished transcript from LIVE state — same as the
+      // controller-era hook's regenerate finally did.
+      chatController
+        .saveSessionContext(
+          get().sessionId,
+          get().messages.map((m) => ({ role: m.role, content: m.content })),
+        )
+        .catch(() => {})
     }
   },
 
@@ -937,89 +1033,6 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     } else if (state.input.trim()) {
       get().sendMessage()
     }
-  },
-
-  // ── Session Operations ──
-  loadSession: async (id) => {
-    set({ sessionLoading: true })
-    try {
-      const sessions = await chatDB.loadSessions()
-      const session = sessions.find((s) => s.id === id)
-      if (session) {
-        startTransition(() => {
-          set({
-            messages: session.messages || [],
-            sessionId: id,
-            sessionSaved: true,
-          })
-        })
-        chatDB.setKV(CURRENT_SESSION_KEY, id)
-      }
-    } catch (err) {
-      _log.error('Failed to load session', { error: String(err) })
-    } finally {
-      set({ sessionLoading: false })
-    }
-  },
-
-  deleteSession: async (id) => {
-    try {
-      await chatDB.deleteSession(id)
-      set((s) => ({
-        sidebarConversations: s.sidebarConversations.filter((c) => c.id !== id),
-      }))
-      if (get().sessionId === id) get().newChat()
-    } catch (err) {
-      _log.error('Failed to delete session', { error: String(err) })
-    }
-  },
-
-  starSession: async (id, starred) => {
-    set((s) => ({
-      sidebarConversations: s.sidebarConversations.map((c) =>
-        c.id === id ? { ...c, starred } : c,
-      ),
-    }))
-  },
-
-  pinSession: async (id, pinned) => {
-    set((s) => ({
-      sidebarConversations: s.sidebarConversations.map((c) => (c.id === id ? { ...c, pinned } : c)),
-    }))
-  },
-
-  archiveSession: async (id, archived) => {
-    set((s) => ({
-      sidebarConversations: s.sidebarConversations.map((c) =>
-        c.id === id ? { ...c, archived } : c,
-      ),
-    }))
-  },
-
-  renameSession: async (id, newName) => {
-    set((s) => ({
-      sidebarConversations: s.sidebarConversations.map((c) =>
-        c.id === id ? { ...c, name: newName } : c,
-      ),
-    }))
-  },
-
-  duplicateSession: async (id) => {
-    const state = get()
-    const session = state.sidebarConversations.find((c) => c.id === id)
-    if (!session) return
-    const newId = generateSessionId()
-    const duplicate: ChatSession = {
-      ...session,
-      id: newId,
-      name: `${session.name} (copy)`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    await chatDB.saveSession(duplicate)
-    set((s) => ({
-      sidebarConversations: [...s.sidebarConversations, duplicate],
-    }))
   },
 
   // ── Images ──
@@ -1109,7 +1122,10 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     const msgIndex = state.messages.findIndex((m) => m.id === messageId)
     if (msgIndex === -1) return
     set({ messages: state.messages.slice(0, msgIndex), loading: false, currentError: null })
-    setTimeout(() => get().sendMessage(newContent), 0)
+    // No setTimeout deferral: zustand state is synchronous, so sendMessage
+    // below already reads the sliced transcript (the hook's messagesRef used
+    // to lag a render behind, which is what the deferral papered over).
+    get().sendMessage(newContent)
   },
 
   // ── Reactions ──
@@ -1170,11 +1186,23 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
   // ── UI ──
   handleSuggestionClick: (text) => {
     set({ input: text })
-    setTimeout(() => get().sendMessage(text), 0)
+    get().sendMessage(text)
   },
 
-  handleCopy: (text) => {
+  handleCopy: () => {
     get()._config?.showToast('Copied to clipboard')
+  },
+
+  handleExportMarkdown: () => {
+    exportConversationAsMarkdown(get().messages)
+  },
+
+  handleCopyMarkdown: async () => {
+    const ok = await copyConversationAsMarkdown(get().messages)
+    get()._config?.showToast(
+      ok ? 'Copied to clipboard' : 'Could not copy',
+      ok ? 'success' : 'error',
+    )
   },
 
   handleToolApproval: (approved) => {

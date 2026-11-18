@@ -146,7 +146,7 @@ function GridLines({ yMin, yMax, steps }: { yMin: number; yMax: number; steps: n
           x={M.left - 8}
           y={y + 3}
           textAnchor="end"
-          fontSize="10"
+          fontSize="11"
           className="fill-muted-foreground"
         >
           {val.toFixed(2)}
@@ -169,7 +169,7 @@ function XAxisLabels({ labels }: { labels: string[] }) {
             x={M.left + (labels.length > 1 ? (i / (labels.length - 1)) * PW : PW / 2)}
             y={SVG_H - 8}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             className="fill-muted-foreground"
           >
             {l}
@@ -198,7 +198,7 @@ function TooltipBox({ x, y, lines }: { x: number; y: number; lines: string[] }) 
         strokeWidth="1"
       />
       {lines.map((line, i) => (
-        <text key={i} x={bx + 8} y={by + 14 + i * 16} fontSize="10" className="fill-foreground">
+        <text key={i} x={bx + 8} y={by + 14 + i * 16} fontSize="11" className="fill-foreground">
           {line}
         </text>
       ))}
@@ -229,7 +229,7 @@ function BarChart({
         x={M.left - 40}
         y={M.top + PH / 2}
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         className="fill-muted-foreground"
         transform={`rotate(-90, ${M.left - 40}, ${M.top + PH / 2})`}
       >
@@ -239,7 +239,7 @@ function BarChart({
         x={M.left + PW / 2}
         y={SVG_H - 2}
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         className="fill-muted-foreground"
       >
         Day
@@ -268,7 +268,7 @@ function BarChart({
               x={x + barW / 2}
               y={SVG_H - 8}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               className="fill-muted-foreground"
             >
               {labels[i]}
@@ -775,7 +775,7 @@ export default function ConsciousnessStatisticsPage() {
                     x={M.left - 40}
                     y={M.top + PH / 2}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     className="fill-muted-foreground"
                     transform={`rotate(-90, ${M.left - 40}, ${M.top + PH / 2})`}
                   >
@@ -785,7 +785,7 @@ export default function ConsciousnessStatisticsPage() {
                     x={M.left + PW / 2}
                     y={SVG_H - 2}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     className="fill-muted-foreground"
                   >
                     Day
@@ -850,7 +850,7 @@ export default function ConsciousnessStatisticsPage() {
                   x={M.left - 40}
                   y={M.top + PH / 2}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   className="fill-muted-foreground"
                   transform={`rotate(-90, ${M.left - 40}, ${M.top + PH / 2})`}
                 >
@@ -860,7 +860,7 @@ export default function ConsciousnessStatisticsPage() {
                   x={M.left + PW / 2}
                   y={SVG_H - 2}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   className="fill-muted-foreground"
                 >
                   Episode
@@ -953,7 +953,7 @@ export default function ConsciousnessStatisticsPage() {
                   <text
                     x={M.left + PW - 96}
                     y={M.top + 12}
-                    fontSize="10"
+                    fontSize="11"
                     className="fill-muted-foreground"
                   >
                     Raw
@@ -970,7 +970,7 @@ export default function ConsciousnessStatisticsPage() {
                   <text
                     x={M.left + PW - 96}
                     y={M.top + 28}
-                    fontSize="10"
+                    fontSize="11"
                     className="fill-muted-foreground"
                   >
                     SMA(5)

@@ -62,9 +62,7 @@ def bench_device(frames: int) -> float:
 
 def bench_world(frames: int) -> float:
     """Mean seconds per live-world frame through RenderBridge.render_tick."""
-    scene = make_live_scene(
-        grid=(24, 12, 24), population=8, organic_pools=3, day_ticks=24, seed=7
-    )
+    scene = make_live_scene(grid=(24, 12, 24), population=8, organic_pools=3, day_ticks=24, seed=7)
     bridge = RenderBridge(RenderConfig(width=160, height=120, samples=16))
     times = []
     for _ in range(frames):
@@ -88,8 +86,10 @@ def main() -> int:
     print(f"world frame (RenderBridge):    {world_s:8.2f}s   gate < {GATE_WORLD_S:.0f}s")
 
     baseline_equiv_s = 2875.0  # scalar tracer extrapolated to this config
-    print(f"speedup vs scalar baseline:    {baseline_equiv_s / dev_s:8.1f}x "
-          f"(baseline {baseline_equiv_s:.0f}s/frame, extrapolated)")
+    print(
+        f"speedup vs scalar baseline:    {baseline_equiv_s / dev_s:8.1f}x "
+        f"(baseline {baseline_equiv_s:.0f}s/frame, extrapolated)"
+    )
 
     ok = dev_s < GATE_DEVICE_S and world_s < GATE_WORLD_S
     print("PASS" if ok else "FAIL")

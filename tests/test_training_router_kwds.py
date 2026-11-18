@@ -133,9 +133,7 @@ class TestBpeTokenizerWiring:
         assert isinstance(second, TokenTree)
         assert second.encode("the quick brown fox") == first.encode("the quick brown fox")
 
-    def test_same_corpus_reuses_cache_and_new_corpus_retrains(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_same_corpus_reuses_cache_and_new_corpus_retrains(self, tmp_path, monkeypatch) -> None:
         from training.helpers import _sloughgpt_trainer_kwds
 
         from domain.training._internal.token_tree import TokenTree

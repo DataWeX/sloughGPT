@@ -122,7 +122,9 @@ def selector_probe_js(selector) -> str | None:
         "const r = el.getBoundingClientRect(); "
         "const cs = getComputedStyle(el); "
         "const cls = typeof el.className === 'string' ? el.className : ''; "
-        "return {found: true, " + _DESCRIPTOR_FIELDS_JS + "idx: all.indexOf(el), total: all.length};"
+        "return {found: true, "
+        + _DESCRIPTOR_FIELDS_JS
+        + "idx: all.indexOf(el), total: all.length};"
     )
 
 

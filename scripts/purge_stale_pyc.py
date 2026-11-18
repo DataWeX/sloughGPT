@@ -217,19 +217,14 @@ def purge_stale_pyc(
 def _print_report(report: PurgeReport, roots: list[Path], *, applied: bool) -> None:
     verb = "Deleted" if applied else "Would delete"
     print(f"Scanned {report.scanned} .pyc under {', '.join(str(r) for r in roots)}")
-    print(
-        f"  orphaned: {len(report.orphaned)}   stale: {len(report.stale)}"
-        f"   kept: {report.kept}"
-    )
+    print(f"  orphaned: {len(report.orphaned)}   stale: {len(report.stale)}   kept: {report.kept}")
     for label, items in (("orphaned", report.orphaned), ("stale", report.stale)):
         for pyc, detail in items[:5]:
             print(f"    [{label}] {pyc}\n        -> {detail}")
         if len(items) > 5:
             print(f"    [{label}] ... and {len(items) - 5} more")
     if applied:
-        print(
-            f"{verb} {report.deleted}; skipped tracked: {report.skipped_tracked}"
-        )
+        print(f"{verb} {report.deleted}; skipped tracked: {report.skipped_tracked}")
     elif report.removable:
         print(f"{verb} {len(report.removable)} (dry-run; pass --apply to delete)")
 

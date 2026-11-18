@@ -18,6 +18,7 @@ def register(cli):
     @click.option("--output", default="data/training_feedback.jsonl")
     def feedback_export(fmt, output):
         from commands.train import _cmd_feedback_export
+
         args = _ns(format=fmt, output=output)
         _cmd_feedback_export(args)
 
@@ -27,6 +28,7 @@ def register(cli):
     @click.option("--stats-only", is_flag=True)
     def feedback_prepare(fmt, output, stats_only):
         from commands.train import _cmd_feedback_train
+
         args = _ns(format=fmt, output=output, stats_only=stats_only)
         _cmd_feedback_train(args)
 

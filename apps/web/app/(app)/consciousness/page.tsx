@@ -386,7 +386,7 @@ export default function ConsciousnessPage() {
                           textAnchor="middle"
                           dominantBaseline="middle"
                           className="fill-muted-foreground"
-                          fontSize="8"
+                          fontSize="11"
                         >
                           {key.slice(0, 3).toUpperCase()}
                         </text>

@@ -30,6 +30,7 @@ class APIError(SloughGPTError):
 
 class AuthenticationError(SloughGPTError):
     """Exception raised for authentication failures."""
+
     pass
 
 
@@ -43,29 +44,35 @@ class RateLimitError(SloughGPTError):
 
 class ValidationError(SloughGPTError):
     """Exception raised for request validation errors."""
+
     pass
 
 
 class TimeoutError(SloughGPTError):
     """Exception raised when request times out."""
+
     pass
 
 
 class ConnectionError(SloughGPTError):
     """Exception raised for connection errors."""
+
     pass
 
 
 class ModelNotFoundError(SloughGPTError):
     """Exception raised when model is not found."""
+
     pass
 
 
 class ModelNotLoadedError(SloughGPTError):
     """Exception raised when model is not loaded."""
+
     pass
 
 
 class CacheError(SloughGPTError):
     """Exception raised for cache errors."""
+
     pass

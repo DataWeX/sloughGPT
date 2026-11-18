@@ -51,9 +51,7 @@ def make_scene() -> Scene:
         create_plane(size=6, y=-1, mat_idx=0),
         create_sphere(radius=0.6, center=np.array([0, 0, 0]), segments=8, mat_idx=1),
     ]
-    scene.lights = [
-        Light(position=np.array([2, 3, 2]), color=np.array([1, 0.95, 0.9]), strength=6)
-    ]
+    scene.lights = [Light(position=np.array([2, 3, 2]), color=np.array([1, 0.95, 0.9]), strength=6)]
     scene.build_bvh()
     return scene
 

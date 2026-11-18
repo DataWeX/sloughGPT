@@ -61,7 +61,7 @@ from domain.training._internal.step_strategy import (
     OwnedObjectiveStrategy,
     StepStrategy,
 )
-from domain.training._internal.trace import StepTrace, fingerprint_batch
+from domain.training._internal.trace import StepTrace, fingerprint_array, fingerprint_batch
 from domain.training._internal.trainer_protocol import TrainResult
 from domain.training._internal.training_feed import is_feed_source, load_feed_text
 from domain.training._internal.training_handler import (
@@ -207,6 +207,109 @@ def validate_conversation_data(path: str, max_errors: int = 10) -> dict:
         "valid_count": valid_count,
         "error_count": error_count,
         "errors": errors,
+    }
+
+
+def _dataset_identity(data_path, data) -> tuple[str, str, str]:
+    """Derive the dataset identity recorded on a ``.soul`` (card 20261104_081626).
+
+    ``ModelLoader`` proves two checkpoints are interchangeable by comparing
+    ``base_model`` AND a non-empty, equal ``dataset_signature`` — this is the
+    producer half of that contract, which until now was never written, so
+    every recorded signature was ``""`` and family aliases
+    (``sloughgpt``/``slonet``/…) refused with a candidate listing.
+
+    Args:
+        data_path: the trainer's data spec — inspected ONLY to classify the
+            source, never hashed. Path-based identities break the moment a
+            file is renamed while its content is unchanged.
+        data: the resolved token-id array this run actually trained on.
+
+    Returns:
+        ``(signature, reason, recipe)``:
+        - ``signature`` — 64 hex chars for a reproducible source, ``""`` for a
+          live one.
+        - ``reason`` — ``""``, or why no signature was recorded.
+        - ``recipe`` — versioned hashing recipe (``blake2b256/tokens/v1``),
+          stamped into metadata so a future algorithm change is a visible,
+          reviewable event instead of a silent invalidation of every
+          previously recorded signature.
+
+    Live sources (``feed:``/``http(s)://``/``experience``) deliberately record
+    NO signature: the stream keeps growing during training, so two runs over
+    the same URL ingest different records and any signature would claim an
+    equivalence that does not hold. ``""`` is the honest answer, and the loader
+    already treats empty as *refuse*.
+    """
+    recipe = "blake2b256/tokens/v1"
+    if isinstance(data_path, str) and (
+        is_feed_source(data_path) or is_experience_source(data_path)
+    ):
+        return "", "live-source-not-reproducible", recipe
+    # A list spec (names / (name, ratio) tuples) is a static blend, so it
+    # still hashes — only a str can name a live source.
+    return fingerprint_array(np.asarray(data, dtype=np.int64)), "", recipe
+
+
+def backfill_soul_dataset_signature(soul_path, *, data_path=None, block_size=128):
+    """Record a missing ``dataset_signature`` on an existing ``.soul``.
+
+    The producer half (card 20261104_081626) signs every soul it writes;
+    souls saved before that land carry ``""``, and the loader refuses them
+    for ``dataset:<sig>`` / family-alias lookups. This repairs ONE such soul
+    honestly (card 20261117_111044):
+
+    - Recomputes the signature from the soul's own recorded
+      ``training_dataset`` (or *data_path*) with the SAME recipe the trainer
+      uses, so the back-filled value equals what a fresh retrain records —
+      the loader then compares like with like.
+    - Copies the original aside (``<path>.bak-YYYYMMDD``) BEFORE writing:
+      this rewrites an identity file, and the file-safety rule wants a
+      byte-identical restore point.
+    - Refuses (``ValueError``, file untouched) when a signature already
+      exists — never overwrite an identity — and refuses live sources
+      (``feed:``/``http(s)``/``experience``), which have no reproducible
+      signature to back-fill.
+
+    Returns:
+        ``{"path", "dataset_signature", "backup_path", "integrity_hash"}``.
+    """
+    from domain.inference._internal.slo_format import (
+        read_soul_identity,
+        update_soul_identity_fields,
+    )
+
+    identity = read_soul_identity(soul_path)
+    if identity.get("dataset_signature"):
+        raise ValueError(f"{soul_path} already records a dataset_signature — refusing to overwrite")
+    source = data_path or identity.get("training_dataset")
+    if not source:
+        raise ValueError(f"{soul_path} records no training_dataset — pass data_path explicitly")
+    if isinstance(source, str) and (is_feed_source(source) or is_experience_source(source)):
+        raise ValueError(
+            f"live source ({source}) has no reproducible signature — refusing to back-fill"
+        )
+
+    data, *_ = prepare_data(source, block_size)
+    signature, reason, recipe = _dataset_identity(source, data)
+    if not signature:
+        raise ValueError(f"no signature derivable for {source} ({reason}) — refusing to back-fill")
+
+    import shutil
+
+    backup_path = f"{soul_path}.bak-{time.strftime('%Y%m%d')}"
+    shutil.copy2(soul_path, backup_path)
+
+    result = update_soul_identity_fields(
+        soul_path,
+        {"dataset_signature": signature},
+        metadata_changes={"dataset_signature_recipe": recipe},
+    )
+    return {
+        "path": soul_path,
+        "dataset_signature": signature,
+        "backup_path": backup_path,
+        "integrity_hash": result["integrity_hash"],
     }
 
 
@@ -1244,6 +1347,21 @@ class SloughGPTTrainer:
         self.data, data_vocab_size, self.stoi, self.itos = prepare_data(
             data_path, self.config.block_size, tokenizer=tokenizer
         )
+
+        # Dataset identity — computed HERE, not in save(): ``self.data`` is the
+        # corpus exactly as this run resolved it, and save() runs every
+        # checkpoint interval (500 steps) so hashing there would be a repeated
+        # O(corpus) cost on the training path. Re-reading the file at save time
+        # would be worse than wasteful: feed/experience sources re-resolve to
+        # DIFFERENT bytes than were trained on, so the signature would describe
+        # data this run never saw. Hashes token ids, not raw bytes — same text
+        # under a different tokenizer yields a model that cannot consume the
+        # other's data, so interchangeability requires the same ids too.
+        (
+            self.dataset_signature,
+            self.dataset_signature_reason,
+            self.dataset_signature_recipe,
+        ) = _dataset_identity(data_path, self.data)
         if config is not None and self.config.vocab_size > 0:
             self.vocab_size = self.config.vocab_size
         elif vocab_size is not None:
@@ -2839,8 +2957,18 @@ class SloughGPTTrainer:
             final_val_loss=final_val_loss,
             personality=PersonalityCore(**self._personality) if self._personality else None,
             lineage="sloughgpt",
+            # Passed as the kwarg (not assigned after) so create_soul_profile's
+            # integrity_hash — computed from to_dict() at the end of this
+            # function — already covers it. Assigning afterwards would leave a
+            # window where the profile's own hash disagrees with its fields.
+            dataset_signature=self.dataset_signature,
             tags=["sloughgpt", "trained", "soul"],
         )
+        # Why a live source recorded no signature — otherwise "" looks like an
+        # oversight rather than the deliberate refusal it is.
+        if self.dataset_signature_reason:
+            soul.metadata["dataset_signature_reason"] = self.dataset_signature_reason
+        soul.metadata["dataset_signature_recipe"] = self.dataset_signature_recipe
         # Bake vocab into soul metadata so checkpoint is self-contained
         _stoi = stoi or self.stoi
         _itos = itos or self.itos

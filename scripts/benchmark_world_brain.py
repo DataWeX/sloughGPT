@@ -283,8 +283,10 @@ def main() -> int:
         f"pop={args.pop}, hidden={args.hidden}, seeds={args.seeds}) =="
     )
     tp = bench_throughput(args, brain_kw)
-    print(f"  {'kind':11s} {'tps (warmup in)':>16s} {'tps (excluded)':>15s} "
-          f"{'reg (in)':>10s} {'reg (ex)':>9s}")
+    print(
+        f"  {'kind':11s} {'tps (warmup in)':>16s} {'tps (excluded)':>15s} "
+        f"{'reg (in)':>10s} {'reg (ex)':>9s}"
+    )
     for kind in ("perceptron", *COMPARATIVE_KINDS):
         r = tp[kind]
         reg_in = r.get("regression_pct_included")
@@ -296,7 +298,9 @@ def main() -> int:
         )
     # The gate reads the warmup-EXCLUDED number; the included column is the
     # audit trail that shows how much (if anything) the warmup was hiding.
-    gate_tp = all(tp[k]["regression_pct_excluded"] < THROUGHPUT_BUDGET_PCT for k in COMPARATIVE_KINDS)
+    gate_tp = all(
+        tp[k]["regression_pct_excluded"] < THROUGHPUT_BUDGET_PCT for k in COMPARATIVE_KINDS
+    )
     print(f"  gate: every kind within {THROUGHPUT_BUDGET_PCT:.0f}% of baseline (warmup excluded)")
 
     print(f"\n== emergence (evolved vs frozen, hidden={args.hidden}, seed={args.seeds[0]}) ==")

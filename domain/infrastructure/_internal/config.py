@@ -13,6 +13,7 @@ Usage:
 Env overrides use double-underscore for nesting:
     SLO_MODEL__NAME=gpt2    overrides config.model.name
     SLO_SERVER__PORT=9000   overrides config.server.port
+    SLO_VISION__MODEL=vlm   overrides config.vision.model
 """
 
 from __future__ import annotations
@@ -109,6 +110,20 @@ class EmbeddingConfig(BaseModel):
         return self
 
 
+class VisionConfig(BaseModel):
+    """Vision provider selection (card 20261116_144837).
+
+    ``model`` names the registered vision provider used for image
+    understanding — independent of the text LLM chosen via ``model.name``
+    or the external-provider settings. Default ``"multimodal"`` is the
+    built-in VisionCNN/MultimodalEngine backend; any other name must be
+    registered as a provider or consumers report unavailable (never a
+    silent fallback to a different model). Env: ``SLO_VISION__MODEL``.
+    """
+
+    model: str = "multimodal"
+
+
 class StorageConfig(BaseModel):
     data_dir: str = "data"
     datasets_dir: str = "data"
@@ -125,6 +140,7 @@ class AppConfig(BaseModel):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     tracking: TrackingConfig = Field(default_factory=TrackingConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    vision: VisionConfig = Field(default_factory=VisionConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
 
     model_config = ConfigDict(extra="forbid")
@@ -335,6 +351,8 @@ class ConfigManager:
             f'  provider: "{defaults.embedding.provider}"\n'
             f'  api_key: "{defaults.embedding.api_key}"\n'
             f'  base_url: "{defaults.embedding.base_url}"\n\n'
+            "vision:\n"
+            f'  model: "{defaults.vision.model}"\n\n'
             "storage:\n"
             f'  data_dir: "{defaults.storage.data_dir}"\n'
             f'  datasets_dir: "{defaults.storage.datasets_dir}"\n'

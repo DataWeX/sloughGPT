@@ -29,6 +29,7 @@ from .registry import (
 from .router import ProviderRouter
 from .setup import _server_from_provider, setup_providers, update_personality_traits
 from .slo_transformer import SloTransformerProvider
+from .vision import MULTIMODAL, get_vision_model_name, get_vision_provider
 
 __all__ = [
     "ChatMessage",
@@ -55,4 +56,7 @@ __all__ = [
     "SloTransformerProvider",
     "setup_providers",
     "update_personality_traits",
+    "MULTIMODAL",
+    "get_vision_model_name",
+    "get_vision_provider",
 ]

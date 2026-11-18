@@ -89,16 +89,24 @@ def test_monitor_alias_forwards_to_logs_dashboard(monkeypatch, capsys):
 
     def fake_sse(host, port, interval, output_json, clear, compact):
         captured.update(
-            host=host, port=port, interval=interval, output_json=output_json,
-            clear=clear, compact=compact,
+            host=host,
+            port=port,
+            interval=interval,
+            output_json=output_json,
+            clear=clear,
+            compact=compact,
         )
 
     monkeypatch.setattr(logs_mod, "_consume_sse_dashboard", fake_sse)
     result = CliRunner().invoke(monitor, ["--interval", "1", "--port", "9000"])
     assert result.exit_code == 0, result.output
     assert captured == {
-        "host": "localhost", "port": 9000, "interval": 1.0,
-        "output_json": False, "clear": True, "compact": False,
+        "host": "localhost",
+        "port": 9000,
+        "interval": 1.0,
+        "output_json": False,
+        "clear": True,
+        "compact": False,
     }
     notice = result.stderr + result.output
     assert "logs --dashboard" in notice, "alias must announce the merge"
@@ -108,7 +116,8 @@ def test_logs_dashboard_flag_routes_to_run_dashboard(monkeypatch):
     """`logs --dashboard` calls the shared entry, not an inline copy."""
     called = {}
     monkeypatch.setattr(
-        logs_mod, "run_dashboard",
+        logs_mod,
+        "run_dashboard",
         lambda *a, **k: called.update(args=a, kwargs=k),
     )
     result = CliRunner().invoke(
@@ -118,7 +127,9 @@ def test_logs_dashboard_flag_routes_to_run_dashboard(monkeypatch):
     assert result.exit_code == 0, result.output
     assert called["args"] == ("h1", 9, 3.0)
     assert called["kwargs"] == {
-        "output_json": False, "no_clear": False, "compact": True,
+        "output_json": False,
+        "no_clear": False,
+        "compact": True,
     }
 
 
@@ -129,7 +140,8 @@ def test_train_monitor_delegates_to_run_dashboard(monkeypatch):
 
     called = {}
     monkeypatch.setattr(
-        logs_mod, "run_dashboard",
+        logs_mod,
+        "run_dashboard",
         lambda *a, **k: called.update(args=a, kwargs=k),
     )
 
@@ -162,9 +174,7 @@ def test_load_color_thresholds():
 
 
 def test_sys_metrics_color_graded(colored, capsys):
-    _render_dashboard(
-        _snap(health={"cpu_percent": 95, "memory_percent": 40}), clear=False
-    )
+    _render_dashboard(_snap(health={"cpu_percent": 95, "memory_percent": 40}), clear=False)
     out = capsys.readouterr().out
     assert colored._c("95%", colored._RED) in out
     assert colored._c("40%", colored._GREEN) in out
@@ -188,9 +198,11 @@ def test_gen_line_coloring(colored, capsys):
 
 
 def test_process_without_detail_shows_status_word(colored, capsys):
-    snap = _snap(processes={
-        "t1": {"status": "queued", "label": "job", "detail": "", "progress": 0},
-    })
+    snap = _snap(
+        processes={
+            "t1": {"status": "queued", "label": "job", "detail": "", "progress": 0},
+        }
+    )
     _render_dashboard(snap, clear=False)
     out = capsys.readouterr().out
     assert colored._c("queued", colored._YELLOW) in out
@@ -200,10 +212,16 @@ def test_process_without_detail_shows_status_word(colored, capsys):
 
 
 def test_process_exited_shows_status_and_detail(colored, capsys):
-    snap = _snap(processes={
-        "s1": {"status": "exited", "label": "self-train", "detail": "exit code 1",
-               "progress": 0},
-    })
+    snap = _snap(
+        processes={
+            "s1": {
+                "status": "exited",
+                "label": "self-train",
+                "detail": "exit code 1",
+                "progress": 0,
+            },
+        }
+    )
     _render_dashboard(snap, clear=False)
     out = capsys.readouterr().out
     assert colored._c("exited", colored._GREY) in out
@@ -211,10 +229,16 @@ def test_process_exited_shows_status_and_detail(colored, capsys):
 
 
 def test_running_process_keeps_detail_and_bar(colored, capsys):
-    snap = _snap(processes={
-        "d1": {"status": "running", "label": "dl:model", "detail": "45% 1.2MB/s",
-               "progress": 45},
-    })
+    snap = _snap(
+        processes={
+            "d1": {
+                "status": "running",
+                "label": "dl:model",
+                "detail": "45% 1.2MB/s",
+                "progress": 45,
+            },
+        }
+    )
     _render_dashboard(snap, clear=False)
     out = capsys.readouterr().out
     assert "45% 1.2MB/s" in out
@@ -254,8 +278,7 @@ def test_health_score_folded_into_server_line(colored, capsys):
 
 def test_compact_hides_processes_and_events(colored, capsys):
     snap = _snap(
-        processes={"t1": {"status": "running", "label": "x", "detail": "d",
-                          "progress": 0}},
+        processes={"t1": {"status": "running", "label": "x", "detail": "d", "progress": 0}},
         events=[{"ts": 1, "category": "SYSTEM", "msg": "hello"}],
     )
     _render_dashboard(snap, clear=False, compact=True)

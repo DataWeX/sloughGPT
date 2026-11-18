@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "edd7c6ecb892c0fa1f9bc637ac855e19e8613608",
+    "recorded_commit": "bebc225afc1456d85fb01daf1fd60cc0955ee7aa",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -21,7 +21,7 @@
       "consumers": ["tests/", "apps/api/", "domain/shell/"],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "3a074455f2562779340ba2458a1c3c913741afc1"
+      "tree_hash": "6986d33ee26859eed915333cd853f1024108bd5c"
     },
     "ai_personality": {
       "class": "feature",
@@ -45,7 +45,7 @@
       "consumers": ["apps/api/", "domain/search/"],
       "note": "session/token checks at the edge (apps/api)",
       "debt": null,
-      "tree_hash": "3a707067d6b52ad80ad635999bd56bb63624b16b"
+      "tree_hash": "9ff927a2d5b602807ceecc18ce21e6490671bd92"
     },
     "benchmark": {
       "class": "feature",
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "4bcd48502864a5028a297d9d9e5770094694b2c2"
+      "tree_hash": "6588bf393620fec2e4bf19c05eddda67acb995d5"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "5a390cc84a884cef408d3c1f36a628bc4900fc57"
+      "tree_hash": "b3be47f87e2bd4db4e353448e669a52017576679"
     },
     "knowledge": {
       "class": "core-capability",
@@ -223,7 +223,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "e12800497932236cf65be2b58e12608a9f139435"
+      "tree_hash": "1a364e002c15fe7ffcc043784db1c2d85e4fa496"
     },
     "multimodal": {
       "class": "core-capability",
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "d3b6eac621e45a68840f0bc03e2851b4ad6da36f"
+      "tree_hash": "1a70b56aa46c37b7c9a6714aa9437fd4e68f981f"
     },
     "voice": {
       "class": "core-capability",

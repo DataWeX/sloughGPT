@@ -25,11 +25,11 @@ import threading
 import time
 from typing import Any
 
-from domain.shared import utc_now_iso
+from domain.shared import find_repo_root, utc_now_iso
 
 logger = logging.getLogger("slo.agents.runs")
 
-RUNS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agent_runs")
+RUNS_DIR = os.path.join(find_repo_root(__file__), "data", "agent_runs")
 
 # Openers of the bootstrap model's canned refusals — shared by the export
 # filter and the loop's synthesis fallback (training on refusals teaches the

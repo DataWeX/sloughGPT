@@ -96,30 +96,10 @@ export function useChatPageController(
     }
   }, [setConvSidebarOpen])
 
-  const chat = useChatMessages({
-    model: model.model,
-    temperature: model.temperature,
-    maxTokens: model.maxTokens,
-    currentSoul: model.currentSoul,
-    currentAgent: agents.currentAgent,
-    useLocalEngine: engine.useLocalEngine,
-    engineRef: engine.engineRef,
-    engineLoadingRef: engine.engineLoadingRef,
-    initLocalEngine: engine.initLocalEngine,
-    showToast,
-    recordFeedback,
-    fetchStats,
-    fetchAdapterStats,
-    customSystemPrompt,
-    onVisionUpdate: (caps, history, vocab) => {
-      vision.setVisionCaps(caps)
-      vision.setVisionCaptionHistory(history)
-      vision.setVisionVocabSize(vocab)
-    },
-    onKnowledgeUpdate: (ctx) => {
-      agents.setKnowledgeCtx((prev) => ({ ...prev, ...ctx }))
-    },
-  })
+  // ChatConfig (model/engine/prompts/feedback/vision/knowledge) reaches the
+  // store through useChatStoreBridge's config-sync seam — since stage 3 this
+  // hook only needs the toast (its action surface is the store's).
+  const chat = useChatMessages({ showToast })
 
   const messageNotes = useMessageNotes({ sessionId: chat.sessionIdRef.current })
 

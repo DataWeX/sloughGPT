@@ -10,45 +10,17 @@ import {
 } from '@/lib/chat-utils'
 import { chatDB, type ChatSession as DBChatSession } from '@/lib/db'
 import { sessionController } from '@/lib/session-controller'
+import { loadMergedMessages } from '@/lib/chat-merge'
+import { useChatStore } from '@/lib/chat-store'
 import { addGlobalError } from '@/lib/error-store'
 import { trackEvent } from '@/lib/dev-log'
 import type { Conversation } from '@/lib/session-controller'
 
 const MAX_STORAGE_MESSAGES = 200
 
-/** Upper bound on the backend remote-merge phase of loadSession. If the server
- *  is slow or offline, fetchMessages can otherwise hold sessionLoading true for
- *  minutes (http-client retries with a fresh 30s timeout per attempt), leaving
- *  the chat screen stuck on its loading skeleton instead of the conversation. */
-const REMOTE_MERGE_TIMEOUT_MS = 8000
-
 /** Module-level tracking: prevents duplicate backend session creation across
  *  React StrictMode double-mounts and concurrent hook instances. */
 const _createdSessions = new Set<string>()
-
-/** Runs `task` with an AbortSignal and rejects if `ms` elapses before it
- *  settles. On timeout the controller is aborted so the underlying request is
- *  cancelled, and the race guarantees the caller is never left awaiting a
- *  request that ignores its signal. The losing task keeps a handler attached
- *  (Promise.race) so its eventual outcome is never an unhandled rejection. */
-async function withRemoteTimeout<T>(
-  task: (signal: AbortSignal) => Promise<T>,
-  ms: number,
-): Promise<T> {
-  const controller = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort()
-      reject(new Error('Remote merge timed out'))
-    }, ms)
-  })
-  try {
-    return await Promise.race([task(controller.signal), timeout])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
-}
 
 export interface UseChatSessionsReturn {
   sessions: ChatSession[]
@@ -138,6 +110,9 @@ export function useChatSessions(opts: {
     async (sessionId: string) => {
       trackEvent('session_loaded', { session_id: sessionId })
       sessionIdRef.current = sessionId
+      // Keep the store's session claim in lockstep with the ref — the store
+      // (single state authority) uses it to supersede stale loads/actions.
+      useChatStore.setState({ sessionId })
       setSessionLoading(true)
       inFlightLoadsRef.current++
       const baselineMsgCount = messagesRef.current.length
@@ -148,39 +123,18 @@ export function useChatSessions(opts: {
       try {
         const session = await chatDB.loadSession(sessionId)
         if (session) {
-          const filteredMessages = session.messages.filter((msg) => {
-            if (msg.role === 'assistant' && !msg.content.trim()) return false
-            return true
-          })
-          try {
-            const remoteMsgs = await withRemoteTimeout(
-              (signal) => sessionController.fetchMessages(sessionId, { signal, silent: true }),
-              REMOTE_MERGE_TIMEOUT_MS,
-            )
-            if (superseded()) return
-            const remoteChatMsgs = remoteMsgs.map((m) => ({
-              id: `remote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              role: m.role as 'user' | 'assistant',
-              content: m.content,
-              timestamp: new Date(),
-            }))
-            const seen = new Set(remoteChatMsgs.map((m) => `${m.role}:${m.content}`))
-            const uniqueLocal = filteredMessages.filter((m) => !seen.has(`${m.role}:${m.content}`))
-            setMessages([...remoteChatMsgs, ...uniqueLocal])
-          } catch {
-            if (superseded()) return
-            setMessages(filteredMessages)
-          }
+          // One merge shared with useChatStore.loadSession (chat-merge.ts):
+          // chronological LCS alignment, empty-assistant filter, timeout.
+          const merged = await loadMergedMessages(sessionId, session.messages)
           if (superseded()) return
+          setMessages(merged)
           await chatDB.setKV(CURRENT_SESSION_KEY, sessionId)
-          const isComplete =
-            filteredMessages.length > 0 &&
-            filteredMessages[filteredMessages.length - 1].role === 'assistant'
+          const isComplete = merged.length > 0 && merged[merged.length - 1].role === 'assistant'
           setSessionSaved(isComplete)
           const savedDraft = await chatDB.getDraft(sessionId)
           if (savedDraft) setInput(savedDraft)
           else setInput('')
-          if (filteredMessages.length > 0) showToast(`Loaded: ${session.name}`)
+          if (merged.length > 0) showToast(`Loaded: ${session.name}`)
         }
       } finally {
         inFlightLoadsRef.current--

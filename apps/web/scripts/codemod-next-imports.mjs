@@ -27,7 +27,9 @@ const SPECIFIER_MAP = {
   'next/dynamic': '@/vite/next-compat/dynamic',
   'next/web-vitals': '@/vite/next-compat/web-vitals',
   'next/server': '@/vite/next-compat/server',
-  'next-auth/react': '@/vite/next-compat/next-auth',
+  // next-auth/react is OUT OF SCOPE (header line 4) and no source imports it —
+  // its shim was deleted as dead code (card 20261117_084723_web-kill-2); this
+  // entry must not return or the codemod would rewrite onto a missing module.
 }
 
 const EXTS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx'])

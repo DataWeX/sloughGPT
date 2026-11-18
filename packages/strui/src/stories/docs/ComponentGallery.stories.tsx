@@ -7,7 +7,6 @@ import { ChatThread } from '@/components/ai/chat-thread'
 import { Citation } from '@/components/ai/citation'
 import { CodeSnippet } from '@/components/ai/code-snippet'
 import { EmptyState } from '@/components/ai/empty-state'
-import { IconCpu } from '@/components/ui/icons'
 import { JobStatus } from '@/components/ai/job-status'
 import { MessageBubble } from '@/components/ai/message-bubble'
 import { PromptComposer } from '@/components/ai/prompt-composer'
@@ -42,15 +41,9 @@ import { Timeline } from '@/components/composed/timeline'
 import { Toolbar } from '@/components/composed/toolbar'
 import { ActionCard } from '@/components/composed/action-card'
 import { ChipGroup } from '@/components/composed/chip-group'
-import { DetailRow } from '@/components/composed/detail-row'
-import { InfoCard } from '@/components/composed/info-card'
 import { InsightsCard } from '@/components/composed/insights-card'
 import { MetricsCard } from '@/components/composed/metrics-card'
-import { SortDropdown } from '@/components/composed/sort-dropdown'
-import { TabGroup } from '@/components/composed/tab-group'
 import { StatusBadge } from '@/components/composed/status-badge'
-import { DetailList } from '@/components/composed/detail-list'
-import { LoadingCard } from '@/components/composed/loading-card'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -420,35 +413,6 @@ function GalleryCanvas() {
                 { label: 'Python', tone: 'primary' },
                 { label: 'PyTorch', tone: 'success' },
                 { label: 'GPU', tone: 'warning' },
-              ]}
-            />
-            <InfoCard
-              icon={<IconCpu className="h-4 w-4" />}
-              title="GPU"
-              description="NVIDIA RTX 4090"
-              tone="success"
-              size="sm"
-            />
-            <DetailList
-              items={[
-                { label: 'Model', value: 'GPT-2' },
-                { label: 'Path', value: '/models/gpt2', mono: true },
-              ]}
-            />
-            <LoadingCard title="Loading..." rows={2} />
-            <SortDropdown
-              value="newest"
-              options={[
-                { value: 'newest', label: 'Newest' },
-                { value: 'oldest', label: 'Oldest' },
-              ]}
-              onChange={() => {}}
-            />
-            <TabGroup
-              defaultValue="a"
-              tabs={[
-                { value: 'a', label: 'Tab A', content: <p className="text-sm">Content A</p> },
-                { value: 'b', label: 'Tab B', content: <p className="text-sm">Content B</p> },
               ]}
             />
           </div>

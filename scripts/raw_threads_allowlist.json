@@ -7,7 +7,7 @@
       "deferred": "charter ruling: migrate when the site is next touched",
       "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
     },
-    "site_count": 240
+    "site_count": 241
   },
   "entries": {
     "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
@@ -97,6 +97,11 @@
     },
     "domain/infrastructure/_internal/inference_engine.py::InferenceEngine.start": {
       "reason": "inference engine accept loop — the subsystem's own loop (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/instance.py::SloughInstance._ensure_loop": {
+      "reason": "sync-facade run-loop bound to the instance lifecycle — the SloughInstance public API's own loop (card 20261116_095706, charter grandfather)",
       "kind": "grandfathered",
       "count": 1
     },

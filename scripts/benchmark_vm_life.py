@@ -61,6 +61,7 @@ STEP_BUDGET = 4_000_000
 
 # ── harness (mirrors packages/core-py/tests/test_vm_life_program.py) ─────────
 
+
 def _spawn() -> X86VirtualSystem:
     vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
     pid = vs.spawn("life", LIFE_ASM)
@@ -138,6 +139,7 @@ def _press_segmented(
 
 # ── benchmarks ───────────────────────────────────────────────────────────────
 
+
 def bench_assemble() -> dict:
     t0 = time.perf_counter()
     code = X86Assembler().assemble(LIFE_ASM, org=0x100000)
@@ -186,9 +188,11 @@ def bench_seed_curve(labels: dict[str, int]) -> dict:
         _, after = _press_segmented(
             vs,
             "\r",
-            lambda: _dword(vs, labels["lives"]) == n
-            and _dword(vs, labels["livecount"]) == n
-            and _dword(vs, labels["gen"]) == 0,
+            lambda: (
+                _dword(vs, labels["lives"]) == n
+                and _dword(vs, labels["livecount"]) == n
+                and _dword(vs, labels["gen"]) == 0
+            ),
         )
         first[str(n)] = after
         # Setup for the reseed measurement: the program auto-resumed after
@@ -196,9 +200,7 @@ def bench_seed_curve(labels: dict[str, int]) -> dict:
         # real state to reset (gen 1 -> 0 marks seed_board's completion).
         _feed(vs, " ")  # pause (running 1 -> 0)
         _feed(vs, "s")  # one generation while paused
-        _, after_r = _press_segmented(
-            vs, "r", lambda: _dword(vs, labels["gen"]) == 0
-        )
+        _, after_r = _press_segmented(vs, "r", lambda: _dword(vs, labels["gen"]) == 0)
         reseed[str(n)] = after_r
     return {"first_seed_steps": first, "reseed_steps": reseed}
 
@@ -210,13 +212,12 @@ def bench_step_frame(labels: dict[str, int]) -> dict:
     _feed(vs, str(DEFAULT_LIVES))
     _press_segmented(vs, "\r", lambda: _dword(vs, labels["livecount"]) == DEFAULT_LIVES)
     _press_segmented(vs, " ", lambda: _dword(vs, labels["running"]) == 0)
-    _, after = _press_segmented(
-        vs, "s", lambda: _dword(vs, labels["gen"]) >= 1
-    )
+    _, after = _press_segmented(vs, "s", lambda: _dword(vs, labels["gen"]) >= 1)
     return {"step_frame_steps": after}
 
 
 # ── entry ────────────────────────────────────────────────────────────────────
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Benchmark the life VM builtin")
@@ -245,8 +246,7 @@ def main() -> int:
             f"  amortized/gen    : {metrics['batch_steps_per_gen']:>8} steps "
             f"(batch total / 4 — dominated by the 15000-poll prompt timeout)"
         )
-    print(f"  step frame (s)   : {metrics['step_frame_steps']:>8} steps "
-          f"(key tail + rule sweep)")
+    print(f"  step frame (s)   : {metrics['step_frame_steps']:>8} steps (key tail + rule sweep)")
     print("  first seed (Enter -> board ready):")
     for n, s in metrics["first_seed_steps"].items():
         print(f"    n={n:>4}: {s:>8} steps")

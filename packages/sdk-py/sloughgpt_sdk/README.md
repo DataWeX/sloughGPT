@@ -138,13 +138,19 @@ from sloughgpt_sdk import (
     # Core
     SloughGPTClient,
     AsyncSloughGPTClient,
-
     # Models
-    GenerateRequest, GenerationResult,
-    ChatMessage, ChatRequest, ChatResult,
-    BatchRequest, BatchResult,
-    ModelInfo, DatasetInfo,
-    HealthStatus, SystemInfo, MetricsData,
+    GenerateRequest,
+    GenerationResult,
+    ChatMessage,
+    ChatRequest,
+    ChatResult,
+    BatchRequest,
+    BatchResult,
+    ModelInfo,
+    DatasetInfo,
+    HealthStatus,
+    SystemInfo,
+    MetricsData,
 )
 ```
 
