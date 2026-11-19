@@ -138,23 +138,45 @@ def test_phase6_routers_raises_on_nontransient_error_without_retry():
     assert orch._routers_registered is False
 
 
-def test_phase6_routers_skips_already_registered_prefixes():
-    """Routers whose prefix is already on the app must be skipped."""
+def test_phase6_routers_registers_shared_prefixes_and_skips_fully_registered():
+    """Prefix sharing must NOT skip; full declared-path overlap must.
+
+    The old rule skipped a router when *any* registered path ``startswith``
+    its prefix. The manifest imports ``agent_routines`` (prefix ``/agents``)
+    before ``agents`` (same prefix), so the whole 11-route ``agents`` router
+    was dropped — production 404'd ``GET /agents`` while the contract gate
+    and the test harness, which assembled unconditionally, reported it
+    served (card ``20261119_105501``).
+
+    New invariants: two real routers sharing a prefix both register; a
+    router whose declared paths are *all* already on the app is the only
+    legitimate skip (idempotent boot retry); a pre-lifespan route stays.
+    """
     app = FastAPI()
 
     @app.get("/health")
     def health():
         return {"ok": True}
 
-    included = APIRouter(prefix="/foo")
+    first = APIRouter(prefix="/foo")
 
-    @included.get("/bar")
+    @first.get("/bar")
     def bar():
         return {}
 
-    skipped = types.SimpleNamespace(prefix="/health")
+    second = APIRouter(prefix="/foo")
 
-    get_all = MagicMock(return_value=[skipped, included])
+    @second.get("/baz")
+    def baz():
+        return {}
+
+    duplicate = APIRouter()
+
+    @duplicate.get("/health")
+    def dup_health():
+        return {"dup": True}
+
+    get_all = MagicMock(return_value=[first, second, duplicate])
     orch = StartupOrchestrator(app, ServerConfig())
     with patch.dict(
         sys.modules,
@@ -164,8 +186,14 @@ def test_phase6_routers_skips_already_registered_prefixes():
     assert orch._routers_registered is True
     assert get_all.call_count == 1
     paths = app.openapi()["paths"]
+    # Both shared-prefix routers landed — prefix collision is not a skip.
     assert "/foo/bar" in paths
-    assert not any(p.startswith("/health") for p in paths if p != "/health")
+    assert "/foo/baz" in paths
+    # Pre-lifespan route untouched; the fully-duplicated router skipped
+    # (covered by the single-/health-route assertion — no shadow copy).
+    assert "/health" in paths
+    health_routes = [r for r in app.routes if getattr(r, "path", None) == "/health"]
+    assert len(health_routes) == 1
 
 
 # ── Phase 2: model load ──────────────────────────────────────────────────────

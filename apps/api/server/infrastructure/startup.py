@@ -35,6 +35,7 @@ from infrastructure.model_state import (
     reset_model_state,
     set_model_state,
 )
+from infrastructure.route_registration import register_routers
 
 logger = logging.getLogger("slo.startup")
 
@@ -927,16 +928,25 @@ class StartupOrchestrator:
         self._registry = wire_model_registry(log=logger)
 
     async def _phase6_routers(self):
-        """Register all feature routers.
+        """Register all feature routers through the single assembler.
 
-        Skips any routers already registered before lifespan (e.g.
-        health/status which are needed during model load).
+        ``register_routers`` skips a router only when *every* path it
+        declares is already served (idempotent re-registration for the boot
+        retry and for routers mounted pre-lifespan); a router sharing only a
+        *prefix* with an existing one is always included. The old rule here
+        — skip when any registered path ``startswith(router.prefix)`` —
+        dropped the whole 11-route ``agents`` router because
+        ``agent_routines`` (also ``/agents``) registers first in the
+        manifest: production 404'd ``GET /agents`` while the contract gate
+        and the test harness, which assembled the app unconditionally, kept
+        reporting it served (card ``20261119_105501``).
 
         A first-time import can transiently fail with ``OSError`` errno 9
         (EBADF) or a partial ``ImportError`` if another thread is importing
         concurrently; in that case the whole pass is retried once. Failed
         imports are rolled back out of ``sys.modules`` by importlib, so a
-        retry re-imports cleanly and skips any routers already included.
+        retry re-imports cleanly and registers_routers skips anything a
+        previous attempt already put on the app.
         """
         STARTUP_PHASE.update(
             phase="registering_routers", step=8, total=9, message="Registering routes..."
@@ -946,25 +956,19 @@ class StartupOrchestrator:
             try:
                 from routers import get_all_routers
 
-                # Collect prefixes already registered (health/status are
-                # registered pre-lifespan in main.py).
-                existing = set()
-                for route in self._app.routes:
-                    if hasattr(route, "path") and hasattr(route, "methods"):
-                        existing.add(route.path)
-                for r in get_all_routers():
-                    # Skip if this router's prefix already has routes
-                    prefix = getattr(r, "prefix", "")
-                    if prefix and any(p.startswith(prefix) for p in existing):
-                        logger.debug("Skipping already-registered router: %s", prefix)
-                        continue
-                    self._app.include_router(r)
-                    if prefix:
-                        existing.add(prefix)
+                result = register_routers(self._app, get_all_routers())
+                logger.debug(
+                    "Phase: registered %d routers, skipped %d",
+                    len(result.included),
+                    len(result.skipped),
+                    extra={"tag": "START"},
+                )
                 try:
                     from training.router import router as training_router
 
-                    self._app.include_router(training_router)
+                    # Same assembler: idempotent across the retry loop, so a
+                    # second attempt can't double-register these routes.
+                    register_routers(self._app, [training_router])
                 except Exception as exc:
                     logger.warning("Phase: training router failed: %s", exc, extra={"tag": "START"})
                 logger.info(
