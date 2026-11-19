@@ -45,7 +45,7 @@ export function MagazineTypography() {
                     className="text-sm font-medium"
                     style={{ fontFamily: 'var(--font-rubik), system-ui, sans-serif' }}
                   >
-                    Rubik
+                    Outfit
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Body text &mdash; system-ui fallback
@@ -55,17 +55,12 @@ export function MagazineTypography() {
               </div>
               <div className="flex items-center justify-between border-b border-border/40 pb-2">
                 <div>
-                  <div
-                    className="text-sm font-medium"
-                    style={{ fontFamily: 'var(--font-lato), system-ui, sans-serif' }}
-                  >
-                    Lato
-                  </div>
+                  <div className="font-numeric tabular-nums text-sm font-medium">1,234.56</div>
                   <div className="text-xs text-muted-foreground">
-                    Numeric data &mdash; system-ui fallback
+                    Numeric data &mdash; same face as body
                   </div>
                 </div>
-                <Badge variant="secondary">--font-lato</Badge>
+                <Badge variant="secondary">font-numeric</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <div>
