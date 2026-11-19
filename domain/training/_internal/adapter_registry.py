@@ -58,9 +58,19 @@ class BatchArray(Protocol):
     def __iter__(self): ...
 
 
+#: Closed BatchSampler vocabulary — how an adapter's output becomes batches.
+KNOWN_SAMPLERS = frozenset({"pairs", "token-stream"})
+
+
 @dataclass(frozen=True)
 class AdapterSpec:
-    """Declared in/out contract for one adapter — the gate walks these."""
+    """Declared in/out contract for one adapter — the gate walks these.
+
+    ``sampler``/``block_size`` are the adapter's BatchSampler contract
+    (card 20261114_151505 (2)): ``pairs`` = pre-aligned (x, y) examples;
+    ``token-stream`` = flat ids the loop cuts into blocks of ``block_size``
+    (None = the training config supplies it at runtime).
+    """
 
     name: str
     task: str
@@ -68,6 +78,8 @@ class AdapterSpec:
     produces: type
     build: Callable[..., BatchArray]
     module: str
+    sampler: str
+    block_size: int | None
 
 
 class AdapterRegistry:
@@ -96,6 +108,18 @@ class AdapterRegistry:
             )
         if not callable(spec.build):
             raise AdapterError(f"{spec.name}: build must be callable")
+        if spec.sampler not in KNOWN_SAMPLERS:
+            raise AdapterError(
+                f"{spec.name}: sampler must be one of {sorted(KNOWN_SAMPLERS)}, got {spec.sampler!r}"
+            )
+        if spec.block_size is not None and (
+            isinstance(spec.block_size, bool)
+            or not isinstance(spec.block_size, int)
+            or spec.block_size <= 0
+        ):
+            raise AdapterError(
+                f"{spec.name}: block_size must be a positive int or None, got {spec.block_size!r}"
+            )
         self._specs[spec.name] = spec
         return spec
 
