@@ -50,6 +50,10 @@ SPEC = AdapterSpec(
     produces=SnapshotBatchArray,
     build=build,
     module=__name__,
+    # BatchSampler contract: records get tokenized, then the loop cuts
+    # random blocks — block_size comes from the training config at runtime.
+    sampler="token-stream",
+    block_size=None,
 )
 
 register(SPEC)
