@@ -3,22 +3,20 @@
 import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
 import { cn } from '@sloughgpt/strui'
-import { IconChat, IconTraining, IconBookmark, IconSettings } from '@/components/icons/NavIcons'
 import { useLocale } from '@/hooks/useLocale'
-import type { ComponentType } from 'react'
+import { ALL_ROUTES, SIDEBAR_ICONS } from '@/lib/navigation'
 
-interface BottomNavItem {
-  path: string
-  labelKey: string
-  icon: ComponentType<{ className?: string }>
-}
+/** Curated mobile subset — membership is the only thing this file decides;
+ *  labelKeys and icons project from navigation.ts (the single source). */
+const BOTTOM_NAV_PATHS = ['/chat', '/training', '/knowledge', '/settings'] as const
 
-const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
-  { path: '/chat', labelKey: 'nav.chat', icon: IconChat },
-  { path: '/training', labelKey: 'nav.training', icon: IconTraining },
-  { path: '/knowledge', labelKey: 'nav.knowledge', icon: IconBookmark },
-  { path: '/settings', labelKey: 'nav.settings', icon: IconSettings },
-]
+const BOTTOM_NAV_ITEMS = BOTTOM_NAV_PATHS.map((path) => {
+  const route = ALL_ROUTES.find((r) => r.path === path)
+  if (!route) throw new Error(`BottomNav: ${path} missing from NAV_SECTIONS`)
+  const icon = SIDEBAR_ICONS[path]
+  if (!icon) throw new Error(`BottomNav: ${path} missing from SIDEBAR_ICONS`)
+  return { path, labelKey: route.labelKey, icon }
+})
 
 export function BottomNav() {
   const pathname = usePathname()
