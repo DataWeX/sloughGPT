@@ -489,8 +489,13 @@ class TestImportHuggingface:
 class TestImportUrl:
     """POST /datasets/import/url"""
 
+    @patch("apps.api.server.routers.datasets._validate_url_not_private")
     @patch("domain.training._internal.data_import.URLImporter")
-    def test_success(self, mock_cls, client):
+    def test_success(self, mock_cls, mock_validate, client):
+        # Stub the SSRF guard (real DNS lookup) — this test targets the
+        # importer→response mapping; guard behaviour has its own suite in
+        # apps/api/server/tests/test_webhook_url_guard.py.
+        mock_validate.assert_not_called()
         result = MagicMock()
         result.success = True
         result.files_imported = 1
@@ -505,12 +510,14 @@ class TestImportUrl:
                 "name": "u",
             },
         )
+        mock_validate.assert_called_once_with("https://x.example/data.txt")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
         assert "Downloaded 50 chars" in resp.json()["message"]
 
+    @patch("apps.api.server.routers.datasets._validate_url_not_private")
     @patch("domain.training._internal.data_import.URLImporter")
-    def test_failure_400(self, mock_cls, client):
+    def test_failure_400(self, mock_cls, mock_validate, client):
         result = MagicMock()
         result.success = False
         result.error = "404 not found"
@@ -524,6 +531,7 @@ class TestImportUrl:
                 "name": "u",
             },
         )
+        mock_validate.assert_called_once_with("https://x.example/missing.txt")
         assert resp.status_code == 400
         assert resp.json()["error"] == "404 not found"
 

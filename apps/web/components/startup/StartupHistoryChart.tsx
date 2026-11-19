@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils'
 import { authFetch } from '@/lib/http-client'
 import { useQuery } from '@/lib/cache'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 
 interface StartupRecord {
   timestamp: number
@@ -39,7 +40,7 @@ export function useStartupHistory() {
 }
 
 export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
-  const { data, isLoading } = useStartupHistory()
+  const { data, isLoading, error, refetch } = useStartupHistory()
   const records = (data?.records as StartupRecord[] | undefined) ?? []
 
   if (isLoading) {
@@ -50,6 +51,30 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
         </div>
         <div className="h-32 flex items-center justify-center">
           <span className="text-[11px] text-term-text-dim">Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // A FAILED read is a third state, not the empty one: `data === undefined`
+  // with an error means the API was unreachable, and reporting "No startup
+  // records yet" would lie (it masked a real backend bug — card
+  // 20261118_085717). Stale records from an earlier read keep rendering
+  // (the cache preserves them across a failed revalidate on purpose).
+  if (error && records.length === 0) {
+    return (
+      <div className={cn('rounded-xl border border-white/[0.06] bg-term-surface p-4', className)}>
+        <div className="h-9 -mx-4 -mt-4 mb-4 px-4 bg-term-header border-b border-white/[0.06] flex items-center">
+          <span className="text-[11px] font-medium text-term-text-muted">Startup History</span>
+        </div>
+        <div className="h-32 flex items-center">
+          <StatusBanner
+            variant="error"
+            message="Failed to load startup history"
+            dismissible={false}
+            onRetry={() => void refetch()}
+            className="w-full"
+          />
         </div>
       </div>
     )
@@ -91,7 +116,13 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
             return (
               <div
                 key={`${record.timestamp}-${i}`}
-                className="flex-1 flex flex-col items-center gap-1 group"
+                // `h-full` gives the column a definite height so the bar's
+                // percentage below has a containing block to resolve against —
+                // without it the column is content-sized, the bar's `%` of an
+                // indefinite height collapses to 0, and the chart renders empty.
+                // `justify-end` restores the baseline the row's `items-end`
+                // previously provided once the column stops shrink-wrapping.
+                className="flex-1 h-full flex flex-col items-center justify-end gap-1 group"
               >
                 {/* Tooltip */}
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -mt-8 bg-term-header border border-white/[0.06] rounded px-2 py-1 text-[11px] font-mono text-term-text pointer-events-none z-10">

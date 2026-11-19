@@ -337,6 +337,19 @@ the tests actually patch.
 
 ---
 
+## Surface status: apps/mobile is deps-only
+
+**Verdict (2026-11-18, card `20261118_104006`): (b) DEPS-ONLY.** `apps/mobile` (React Native, 247 source files) is *maintained but not chartered*: it has its own CI (`.github/workflows/mobile.yml` — eslint `--max-warnings 310`, `tsc --noEmit`, jest `--passWithNoTests`) and keeps receiving Dependabot bumps, but it is **not** in the root `package.json` workspaces (turbo `build`/`dev` never touch it), its recent commits are dependency bumps only (zero feature commits), and **no persona journey in `USER_PERSONA.md` runs on mobile** — Alex chats on web, Maya wants API/SDK, Jon wants infra.
+
+**What this means for every future change unit:**
+- UI / a11y / design-token / UX changes are **web-only by default** — `apps/mobile` files are out of scope for them (this is most of the scatteredness PR 258's audit kept surfacing).
+- Mobile work happens only through an explicit, separately-approved card, or as cross-cutting dependency/security bumps (Dependabot stays).
+- **Not frozen:** the CI lane stays green as a historical contract guard against core/API regressions — stopping bumps would rot it into a resurrection project.
+
+Revisit this verdict only if a mobile journey lands in `docs/UX_FLOWS.md`.
+
+---
+
 ## Dead Code to Remove
 
 | What                            | Why                                       | Action                                                                                               |

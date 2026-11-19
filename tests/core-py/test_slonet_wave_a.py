@@ -75,12 +75,11 @@ class _FakeAcc:
 
 
 def test_check_numba_false_branch(monkeypatch):
-    old = sys.modules.pop("numba", None)
-    try:
-        assert slonet._check_numba() is False
-    finally:
-        if old is not None:
-            sys.modules["numba"] = old
+    # pop() only clears the import cache — a reinstallable numba still
+    # re-imports from disk and answers True. None in sys.modules halts
+    # the import outright (ImportError), which is the branch under test.
+    monkeypatch.setitem(sys.modules, "numba", None)
+    assert slonet._check_numba() is False
 
 
 def test_check_numba_true_branch(monkeypatch):

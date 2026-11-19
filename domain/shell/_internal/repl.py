@@ -909,8 +909,9 @@ class ShellREPL(LinuxCommandsMixin):
             fetcher = _COMMAND_CACHE_FETCHERS.get(cmd)
             if fetcher:
                 return self._completion_cache_obj.get(cmd, fetcher)
-            # No API fetcher — fall through to path completion
-            return self._complete_path("")
+            # No API fetcher — static candidates (train/permit/note/…) first;
+            # _complete_args_for_uncached falls back to path completion itself.
+            return self._complete_args_for_uncached(cmd)
 
         # Fallback: local dict cache with 30s TTL
         now = time.monotonic()

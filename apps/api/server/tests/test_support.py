@@ -52,22 +52,26 @@ except Exception:
 
 
 def _ensure_routers_registered():
-    """Register all feature routers on the app if they haven't been yet."""
+    """Register all feature routers on the app through the single assembler.
+
+    ``register_routers`` (infrastructure/route_registration.py) is the same
+    path production boot and scripts/check_contract.py use, and it is
+    idempotent — a router whose declared paths are all already served is
+    skipped — so the old ``/benchmark``-prefix guard is unnecessary. The
+    three assemblers used to diverge: this one included unconditionally,
+    production prefix-skipped (dropping the whole /agents router), and the
+    gate included unconditionally — tests stayed green while live 404'd
+    (card 20261119_105501).
+    """
+    from infrastructure.route_registration import register_routers
     from main import app
-
-    # Check if benchmark router is already registered (proxy for "all routers")
-    has_routers = any(hasattr(r, "path") and r.path.startswith("/benchmark") for r in app.routes)
-    if has_routers:
-        return
-
     from routers import get_all_routers
 
-    for r in get_all_routers():
-        app.include_router(r)
+    register_routers(app, get_all_routers())
     try:
         from training.router import router as training_router
 
-        app.include_router(training_router)
+        register_routers(app, [training_router])
     except Exception:
         pass
 

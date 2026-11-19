@@ -3715,9 +3715,6 @@ class TestTabCompletion:
         result = repl._complete_args_for("checkpoints")
         assert isinstance(result, list)
 
-    @pytest.mark.skip(
-        reason="product bug: CompletionCache fall-through discards static candidates -- with a cache live, _complete_args_for('train') returns path completions instead of subcommands because 'train' has no API fetcher; _complete_args_for_uncached has the right answer"
-    )
     def test_complete_second_word_train(self, repl):
         result = repl._complete_args_for("train")
         assert "status" in result
@@ -11383,9 +11380,6 @@ class TestCmdVmrunExecutionV2:
         repl._cmd_vmrun("hello")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(
-        reason="product bug: built-in `count` maps to FIB_X86 (repl.py:4595) and dies 'vmrun error: unknown opcode 0x62 at EIP=0x101FF0'; hello and counter run, count does not"
-    )
     def test_vmrun_built_in_count(self, repl):
         repl._cmd_vmrun("count")
         assert repl._last_exit_code == 0
