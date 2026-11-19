@@ -181,3 +181,11 @@ The endpoint rule governs the API surface, the page rule the UI surface, the com
    - **Integration/E2E only when the journey changed** (pages, API contracts, SSE): `test-server` + Playwright E2E. A training/inference-loop change does not need them — unit + affected closure + benchmark is its right-sized set.
    - **Benchmarks** follow any training/inference/quantization change (SOP step 11) — tests prove correctness, benchmarks prove no regression; neither substitutes for the other.
    - **Three-strike rule for red tests:** reproduce on a pristine base before assuming it's yours; then fix or card it — never weaken or delete an assertion to go green.
+
+## Work Selection Rule (balance the sets; a >20-min wait is a card)
+
+**The queue is sets, not a line; a check that blocks more than 20 minutes is evidence, not weather.**
+
+1. **Balance the sets.** The todo queue groups into recurring sets — perf/latency, CI/test speed, training/data, product fixes, agent, decisions/policy. Pick the next card across sets: never two long-lead cards of the same set back-to-back; and when one set's debt visibly taxes every other set (CI wait taxing every PR), its speed-up card jumps the queue.
+2. **A wait over 20 minutes is a card, not a wait.** The first time a PR/CI check blocks >20 min, queue (or claim) the speed-up card that removes it — affected-closure on PRs, suite parallelization, path filters. Waiting is never the strategy; record the measured wait on the card as evidence.
+3. **Grandfather clause** — in-flight picks are never reshuffled mid-card; the rule governs the *next* selection only.
