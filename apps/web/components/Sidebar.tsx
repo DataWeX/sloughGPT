@@ -166,7 +166,7 @@ export function Sidebar({
                         </li>
                       )
                     })}
-                    {!isCollapsed && t('nav.section.ai') === t(section.labelKey) && (
+                    {!isCollapsed && section.labelKey === 'nav.section.ai' && (
                       <li className="mt-0.5">
                         <ConsciousnessSidebarWidget />
                       </li>

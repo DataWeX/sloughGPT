@@ -93,14 +93,14 @@
     "/monitoring",
     "/settings",
     "/developer",
+    "/shortcuts",
     "/feedback",
     "/planner",
     "/plugins-cloud",
     "/workspace",
     "/workspace/members",
     "/workspace/settings",
-    "/workspace/data",
-    "/shortcuts"
+    "/workspace/data"
   ],
   "knownShadowed": [],
   "knownWorkspaceNamespace": [
