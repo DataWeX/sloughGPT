@@ -2450,3 +2450,38 @@ class TestSaveCheckpointMixDataPath:
 
         saved = list((tmp_path / "ckpts").glob("*.soul"))
         assert saved and saved[0].name.startswith("singledir_")
+
+
+class TestSaveEwcSnapshot:
+    """``save_ewc_snapshot`` must honour ewc.py's ``loss_fn(outputs, targets)``.
+
+    The closure handed to ``save_task_snapshot`` declared
+    ``_loss_fn(model, batch)`` and unpacked the batch itself, but ewc.py
+    calls ``loss_fn(outputs, targets)`` at every site (Fisher estimate,
+    optimal-loss pass, ``forward_and_ewc``): a ``(batch, block)`` target
+    array unpacked into two names raised ``too many values to unpack
+    (expected 2)``, the exception was swallowed by ``except Exception``,
+    and every trainer EWC snapshot silently failed — curriculum stage
+    boundaries and the default post-run snapshot alike (found by the
+    calibration run, card 20261115_081635 follow-up).
+
+    ``batch_size`` must exceed 2 in this test: at batch_size=2 the unpack
+    silently succeeds with the wrong x/y instead of raising.
+    """
+
+    def test_snapshot_saved_and_recorded(self, tmp_path, data_path):
+        cfg = tiny_config(tmp_path, use_ewc=True, batch_size=4, ewc_num_samples=4)
+        t = make_trainer(data_path, cfg)
+        assert t._ewc is not None
+
+        ok = t.save_ewc_snapshot("stage1", "stage one")
+
+        assert ok is True, (
+            "save_ewc_snapshot failed — _loss_fn must match ewc.py's "
+            "loss_fn(outputs, targets) contract"
+        )
+        assert t._ewc.current_task == "stage1"
+        assert "stage1" in t._ewc.task_snapshots
+        snap = t._ewc.task_snapshots["stage1"]
+        assert snap.num_samples > 0
+        assert np.isfinite(snap.optimal_loss)

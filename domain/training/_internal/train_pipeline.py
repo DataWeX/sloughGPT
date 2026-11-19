@@ -55,7 +55,7 @@ from domain.training._internal.experience_adapter import (
 )
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
-from domain.training._internal.slonet import load_checkpoint_npz
+from domain.training._internal.slonet import Tensor, cross_entropy, load_checkpoint_npz
 from domain.training._internal.step_strategy import (
     EwcStrategy,
     OwnedObjectiveStrategy,
@@ -2822,10 +2822,17 @@ class SloughGPTTrainer:
         if self._ewc is None:
             return False
 
-        def _loss_fn(model, batch):
-            x, y = batch
-            _, loss = model(x, y)
-            return loss
+        def _loss_fn(outputs, targets):
+            # ewc.py's contract: loss_fn(logits, targets) — it calls this
+            # after `outputs = self.model(inputs)`, so the CE is computed
+            # straight from logits (the trainer's model(x, y) signature
+            # never reaches this path; using it unpacked the (batch, block)
+            # target array into two names and every snapshot silently failed).
+            if not isinstance(outputs, Tensor):
+                outputs = Tensor(np.asarray(outputs, dtype=np.float32))
+            if not isinstance(targets, Tensor):
+                targets = Tensor(np.asarray(targets, dtype=np.int64))
+            return cross_entropy(outputs, targets)
 
         try:
             self._ewc.save_task_snapshot(
