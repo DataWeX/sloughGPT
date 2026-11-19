@@ -147,19 +147,19 @@ The endpoint rule governs the API half of surface area and the page rule the UI 
 5. **Grandfather clause** — no retroactive purge of the existing methods. A command migrates to `CommandSpec` only when it is next touched, and positionals/subcommands stay hand-written until that descriptor exists (deferral decided 2026-10-28). Migration means: delete the hand-written parser, keep behaviour byte-identical, and let this gate prove it.
 6. **The baseline may only shrink** — known documentation gaps live in `packages/core-py/tests/command_parity_baseline.json` as strict xfails: fix a gap and the node passes, strict-xfail turns that pass into a failure, and the entry must be deleted. Adding an entry is an explicit, reviewed edit — the same ratchet as `page-baseline.json`. Policy lives here; the gate keeps sessions honest at 2am.
 
-## Surface Rule (one change unit = one shipping surface)
+## Surface Rule (one change unit spans one shipping surface)
 
-**A PR/branch touches exactly one shipping surface — split the rest out before you push.**
+**A PR/branch touches exactly one shipping surface — a branch's conflict surface is the product of the cadences it spans, not the sum.**
 
-Surfaces ship on different cadences: `apps/web` deploys per merge, `apps/mobile` receives only Dependabot bumps, `domain/` runs its own test closure, `packages/*` publish independently. A branch spanning N surfaces therefore accumulates drift from all N simultaneously — its conflict surface is the **product** of the cadences, not the sum. Measured evidence (2026-11-18, PR 258 `fix/audit-a11y-design-tokens`): 28 commits, **341 files across 8+ surfaces**; after main moved (Next removal, page pruning, route consolidation) **187/341 files conflicted**, the PR was unlandable and closed unmerged. The follow-up audit of the 165 remaining candidates took hours and concluded **0 files were worth porting** (97 already landed, 79 correctly pruned) — the entire cost was scope, not conflict difficulty.
+The endpoint rule governs which API artifact may exist, the page rule which UI page, the command rule which CLI flag — none of them governs how many surfaces one _change unit_ may touch. This is the missing fourth rule, same recurring-cost framing: surfaces ship on different cadences (web deploys per merge, mobile only gets Dependabot, domain runs on its own test closure), so a branch spanning N surfaces accumulates drift from all N simultaneously.
 
-1. **The surfaces.** `apps/web` · `apps/mobile` · `apps/api` · `domain/` · `packages/*` (each package counts as its own surface). Docs (`docs/`, `*.md`), `.github/`, and root config may ride along with any surface — they ship nowhere and drift with nothing.
-2. **One unit, one surface.** A branch's diff spans at most one surface from this list. Cross-surface needs are two PRs in dependency order, not one PR "while you're in there".
-3. **Exception — genuinely cross-cutting changes.** A mechanical rename touching every surface (file move, API rename, token rename) is exempt but must say so in the PR description; the gate is advisory and prints the surface list so the reviewer can confirm the exception is real. What is _not_ an exception: "the same fix in three places" (still one PR per surface, or a shared helper in `domain/`/`packages/` that one PR introduces and follow-ups consume).
-4. **Relationship to the sibling rules** — this governs the change unit (how many surfaces one PR may touch), not the artifacts: the endpoint rule says which route may exist, the page rule which `page.tsx`, the command rule which flag, the test rule which tests run. Same recurring-cost framing, fourth instance.
-5. **The gate is advisory first, ratchet later** — `scripts/check_surface_scope.py` computes the distinct surfaces in a diff range and warns (never fails) while the rule beds in; promoting it to failing is a deliberate, reviewed change once false positives are known to be rare.
+**Evidence — PR 258 (`fix/audit-a11y-design-tokens`, audited 2026-11-18):** 28 commits, **341 files** across apps/web + apps/mobile + domain/ + apps/api + docs/ + meta stores; after main moved (Next removal, page pruning, route consolidation) **187/341 files conflicted** — closed, never merged. The follow-up audit cost a full multi-hour pass to conclude **0 of 165 conflict candidates were worth porting** (4 already landed, 3 superseded by main refactors, 1 cosmetic, 1 canonical-store). Scope — not conflict difficulty — made it unlandable.
 
-MUST NOT TOUCH: `.dev-notes/`, `.kanban/`, `.planner/` — the canonical store lives outside the diff (moved 2026-10-28); PR 258's edits there were harmful as-is.
+1. **One surface per change unit.** A PR/branch spans exactly one of: `apps/web` | `apps/mobile` | `apps/api` | `domain` | `packages/*`. Split the rest into follow-up PRs — one per surface — even when they feel like "the same change": each surface lands on its own cadence with its own test closure.
+2. **Meta files are not surfaces.** `docs/`, `scripts/`, `.github/`, tests belonging to the touched code, and the planner stores are travel companions of the change, not a second surface.
+3. **Exception — one identity across surfaces.** A genuinely mechanical change expressing ONE identity (a rename, a shared token/dependency bump, a contract regen) may span surfaces; it says so in its title (e.g. "rename X across surfaces") and never mixes in a behaviour change. Only a human can tell this from scope creep — which is why the gate is advisory.
+4. **Advisory first, ratchet later** — `scripts/check_surface_scope.py` prints a diff's surface span (exit 0; `--strict` exits 1). Wiring it as a required check is a later card, once it has caught real spans. Policy lives here; the gate keeps sessions honest at 2am.
+5. **Grandfather clause** — no retroactive split of open branches; the rule applies at each branch's next rebase or slice.
 
 ## Test Rule (change-scoped execution, owned-code coverage)
 
@@ -181,3 +181,11 @@ The endpoint rule governs the API surface, the page rule the UI surface, the com
    - **Integration/E2E only when the journey changed** (pages, API contracts, SSE): `test-server` + Playwright E2E. A training/inference-loop change does not need them — unit + affected closure + benchmark is its right-sized set.
    - **Benchmarks** follow any training/inference/quantization change (SOP step 11) — tests prove correctness, benchmarks prove no regression; neither substitutes for the other.
    - **Three-strike rule for red tests:** reproduce on a pristine base before assuming it's yours; then fix or card it — never weaken or delete an assertion to go green.
+
+## Work Selection Rule (balance the sets; a >20-min wait is a card)
+
+**The queue is sets, not a line; a check that blocks more than 20 minutes is evidence, not weather.**
+
+1. **Balance the sets.** The todo queue groups into recurring sets — perf/latency, CI/test speed, training/data, product fixes, agent, decisions/policy. Pick the next card across sets: never two long-lead cards of the same set back-to-back; and when one set's debt visibly taxes every other set (CI wait taxing every PR), its speed-up card jumps the queue.
+2. **A wait over 20 minutes is a card, not a wait.** The first time a PR/CI check blocks >20 min, queue (or claim) the speed-up card that removes it — affected-closure on PRs, suite parallelization, path filters. Waiting is never the strategy; record the measured wait on the card as evidence.
+3. **Grandfather clause** — in-flight picks are never reshuffled mid-card; the rule governs the _next_ selection only.

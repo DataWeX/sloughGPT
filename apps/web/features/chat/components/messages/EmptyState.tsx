@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState, memo } from 'react'
+import { useState, memo } from 'react'
 import { useLocale } from '@/hooks/useLocale'
-import { IconChat, IconEdit, IconBrain, IconBolt, cn } from '@sloughgpt/strui'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { IconChat, IconEdit, IconBrain, IconBolt } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { Lightbulb } from 'lucide-react'
+import { FolderOpen, GraduationCap, LayoutDashboard, Lightbulb } from 'lucide-react'
 
 interface EmptyStateProps {
   hasModel: boolean
@@ -19,20 +20,46 @@ const QUICK_STARTERS = [
   { text: 'Brainstorm weekend activities', icon: <IconBolt className="h-3.5 w-3.5" /> },
 ]
 
+// First-impression showcase: the journeys beyond this screen, mapped to the
+// UX_FLOWS charter (Train My AI, Read My Files, Manage My Work).
+const CAPABILITIES = [
+  {
+    title: 'Teach it',
+    caption: 'Train on your data in 3 clicks',
+    href: '/training',
+    icon: GraduationCap,
+  },
+  {
+    title: 'Bring your files',
+    caption: 'Drop docs — it reads and answers',
+    href: '/knowledge',
+    icon: FolderOpen,
+  },
+  {
+    title: 'Plan & track',
+    caption: 'A kanban board that stays local',
+    href: '/planner',
+    icon: LayoutDashboard,
+  },
+]
+
+function computeGreeting(): string {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export const EmptyState = memo(function EmptyState({
   hasModel,
   suggestions,
   onSuggestionClick,
 }: EmptyStateProps) {
   const { t } = useLocale()
-  const [greeting, setGreeting] = useState('')
-
-  useEffect(() => {
-    const h = new Date().getHours()
-    if (h < 12) setGreeting('Good morning')
-    else if (h < 18) setGreeting('Good afternoon')
-    else setGreeting('Good evening')
-  }, [])
+  const router = useRouter()
+  // Lazy initializer: the greeting word is correct at first paint (the old
+  // ''-then-effect version flashed "Ready!" before swapping to the real word).
+  const [greeting] = useState(computeGreeting)
 
   const displayStarters = hasModel
     ? suggestions && suggestions.length > 0
@@ -57,13 +84,35 @@ export const EmptyState = memo(function EmptyState({
       {/* Greeting */}
       <div className="space-y-1.5">
         <p className="text-base font-semibold text-foreground tracking-tight">
-          {hasModel ? (greeting || 'Ready') + '!' : t('common.starting')}
+          {hasModel ? greeting + '!' : t('common.starting')}
         </p>
         <p className="text-xs text-muted-foreground max-w-[280px] leading-relaxed">
           {hasModel
             ? 'Just ask — writing, translation, ideas, explanations, or a plain chat.'
             : t('common.starting_sub')}
         </p>
+      </div>
+
+      {/* Capability rail — what sloughGPT does beyond this chat */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 w-full max-w-lg">
+        {CAPABILITIES.map((c) => {
+          const Icon = c.icon
+          return (
+            <button
+              key={c.href}
+              type="button"
+              onClick={() => router.push(c.href)}
+              className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex flex-col items-center gap-1 px-3 py-3 rounded-xl border border-border/30 bg-card/30 hover:border-primary/20 hover:bg-primary/[0.03] hover:shadow-sm transition-all duration-200 cursor-pointer"
+            >
+              <Icon
+                className="h-4 w-4 text-primary/60 group-hover:text-primary transition-colors"
+                aria-hidden="true"
+              />
+              <span className="text-sm font-medium text-foreground">{c.title}</span>
+              <span className="text-xs text-muted-foreground leading-relaxed">{c.caption}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Quick Starters */}

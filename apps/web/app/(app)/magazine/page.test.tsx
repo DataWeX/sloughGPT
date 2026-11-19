@@ -176,9 +176,16 @@ describe('MagazinePage', () => {
 
   it('renders font families', () => {
     render(<MagazinePage />)
-    expect(screen.getAllByText('Rubik').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Lato').length).toBeGreaterThanOrEqual(1)
+    // Verdict 2026-10-31: letters/digits = Outfit, code = JetBrains Mono.
+    expect(screen.getAllByText('Outfit').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('JetBrains Mono').length).toBeGreaterThanOrEqual(1)
+    // The numeric role keeps its own specimen row (same face as body today).
+    expect(screen.getAllByText(/Numeric data/).length).toBeGreaterThanOrEqual(1)
+    // No row may claim a family that is not loaded: Rubik exists only as the
+    // legacy --font-rubik variable (which resolves to Outfit) and Lato was
+    // never loaded at all, so neither may appear as a specimen label.
+    expect(screen.queryByText('Rubik')).toBeNull()
+    expect(screen.queryByText('Lato')).toBeNull()
   })
 
   it('renders button variants', () => {

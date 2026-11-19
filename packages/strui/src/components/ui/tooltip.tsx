@@ -196,7 +196,7 @@ TooltipTrigger.displayName = 'TooltipTrigger'
 
 const tooltipContentVariants = cva(
   [
-    'z-50 rounded-md px-2.5 py-1.5 text-xs font-medium shadow-md pointer-events-none',
+    'z-50 rounded-md font-medium shadow-md pointer-events-none',
     'animate-in fade-in-0 zoom-in-95 duration-150',
     'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
   ].join(' '),
@@ -205,9 +205,18 @@ const tooltipContentVariants = cva(
       variant: {
         default: 'bg-foreground text-background',
         muted: 'bg-card border border-border text-foreground',
+        primary: 'bg-primary/15 text-primary',
+        success: 'bg-success/15 text-success',
+        warning: 'bg-warning/15 text-warning',
+        destructive: 'bg-destructive/15 text-destructive',
+      },
+      size: {
+        sm: 'px-2 py-1 text-[11px]',
+        default: 'px-2.5 py-1.5 text-xs',
+        lg: 'px-3 py-2 text-sm',
       },
     },
-    defaultVariants: { variant: 'default' },
+    defaultVariants: { variant: 'default', size: 'default' },
   },
 )
 
@@ -220,7 +229,16 @@ interface TooltipContentProps
 
 export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
   (
-    { className, children, variant, side = 'top', align = 'center', sideOffset = 8, ...props },
+    {
+      className,
+      children,
+      variant,
+      size,
+      side = 'top',
+      align = 'center',
+      sideOffset = 8,
+      ...props
+    },
     ref,
   ) => {
     const { open, triggerRef, contentId } = useTooltipContext()
@@ -308,7 +326,7 @@ export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
         id={contentId}
         role="tooltip"
         data-state={open ? 'open' : 'closed'}
-        className={cn(tooltipContentVariants({ variant }), className)}
+        className={cn(tooltipContentVariants({ variant, size }), className)}
         /* transition:none overrides the base `duration-150` (whose default
            transition-property is `all`) so position changes never tween. The
            entry animation is unaffected — it runs on `animation`, not
@@ -326,12 +344,11 @@ TooltipContent.displayName = 'TooltipContent'
 
 /* ─── Convenience: SimpleTooltip ────────────────────────────── */
 
-interface SimpleTooltipProps {
+interface SimpleTooltipProps extends VariantProps<typeof tooltipContentVariants> {
   content: ReactNode
   side?: Side
   align?: Align
   delay?: number
-  variant?: 'default' | 'muted'
   children: ReactNode
   className?: string
 }
@@ -339,6 +356,7 @@ interface SimpleTooltipProps {
 /**
  * Drop-in wrapper: wraps a single child in a Tooltip with no boilerplate.
  * Usage: <SimpleTooltip content="Copy"><Button /></SimpleTooltip>
+ * variant/size are derived from the cva — single source of truth, no hand-written union.
  */
 export function SimpleTooltip({
   content,
@@ -346,6 +364,7 @@ export function SimpleTooltip({
   align = 'center',
   delay = 400,
   variant = 'default',
+  size,
   children,
   className,
 }: SimpleTooltipProps) {
@@ -354,7 +373,7 @@ export function SimpleTooltip({
       <TooltipTrigger asChild className={className}>
         {children as any}
       </TooltipTrigger>
-      <TooltipContent side={side} align={align} variant={variant}>
+      <TooltipContent side={side} align={align} variant={variant} size={size}>
         {content}
       </TooltipContent>
     </Tooltip>
