@@ -68,7 +68,18 @@ def main() -> int:
             return 0  # advisory: never block on missing history
         rng = f"{base}..HEAD"
 
-    files = subprocess.check_output(["git", "diff", "--name-only", rng], text=True).splitlines()
+    try:
+        files = subprocess.check_output(
+            ["git", "diff", "--name-only", rng],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).splitlines()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Advisory contract (module docstring): always exit 0. A typo'd range or
+        # a missing git must not traceback into exit 1 — a gate that blocks CI
+        # on a bad revision trains people to bypass it.
+        print(f"surface-scope: no diff for {rng} — pass --base or --range")
+        return 0
 
     span: dict[str, list[str]] = {}
     for f in files:
