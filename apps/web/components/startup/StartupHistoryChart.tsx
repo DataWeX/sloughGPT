@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils'
 import { authFetch } from '@/lib/http-client'
 import { useQuery } from '@/lib/cache'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 
 interface StartupRecord {
   timestamp: number
@@ -39,7 +40,7 @@ export function useStartupHistory() {
 }
 
 export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
-  const { data, isLoading } = useStartupHistory()
+  const { data, isLoading, error, refetch } = useStartupHistory()
   const records = (data?.records as StartupRecord[] | undefined) ?? []
 
   if (isLoading) {
@@ -50,6 +51,30 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
         </div>
         <div className="h-32 flex items-center justify-center">
           <span className="text-[11px] text-term-text-dim">Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // A FAILED read is a third state, not the empty one: `data === undefined`
+  // with an error means the API was unreachable, and reporting "No startup
+  // records yet" would lie (it masked a real backend bug — card
+  // 20261118_085717). Stale records from an earlier read keep rendering
+  // (the cache preserves them across a failed revalidate on purpose).
+  if (error && records.length === 0) {
+    return (
+      <div className={cn('rounded-xl border border-white/[0.06] bg-term-surface p-4', className)}>
+        <div className="h-9 -mx-4 -mt-4 mb-4 px-4 bg-term-header border-b border-white/[0.06] flex items-center">
+          <span className="text-[11px] font-medium text-term-text-muted">Startup History</span>
+        </div>
+        <div className="h-32 flex items-center">
+          <StatusBanner
+            variant="error"
+            message="Failed to load startup history"
+            dismissible={false}
+            onRetry={() => void refetch()}
+            className="w-full"
+          />
         </div>
       </div>
     )

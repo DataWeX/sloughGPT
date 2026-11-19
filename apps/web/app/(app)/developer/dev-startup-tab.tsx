@@ -3,6 +3,7 @@
 /** Startup tab — live stage timeline and history chart. */
 import { StartupTimeline } from '@/components/startup/StartupTimeline'
 import { StartupHistoryChart, useStartupHistory } from '@/components/startup/StartupHistoryChart'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useQuery } from '@/lib/cache'
 import { authFetch } from '@/lib/http-client'
@@ -29,11 +30,16 @@ export function StartupTab() {
   // plain strings so they are referentially stable: `refetch` is
   // `useCallback([key])`, and stable `refetch` identities keep the poll below
   // from being re-created on every render.
-  const { data: startupData, refetch: refetchStartupProgress } = useQuery<Record<string, unknown>>(
-    'developer-startup-progress',
-    fetchStartupProgress,
-  )
-  const { data: historyData, refetch: refetchStartupHistory } = useStartupHistory()
+  const {
+    data: startupData,
+    error: startupProgressError,
+    refetch: refetchStartupProgress,
+  } = useQuery<Record<string, unknown>>('developer-startup-progress', fetchStartupProgress)
+  const {
+    data: historyData,
+    error: startupHistoryError,
+    refetch: refetchStartupHistory,
+  } = useStartupHistory()
 
   // The 2s poll stays a plain effect: it is a timer, i.e. a side effect, not a
   // data read. The reads above are cached, so a refresh reaches this tab without
@@ -96,10 +102,29 @@ export function StartupTab() {
     | Array<{ type: string; severity: string; message: string; stage?: string; hook?: string }>
     | undefined
 
+  // A FAILED read is a third state, not "nothing to show": with an error and
+  // no payload, these sections would silently vanish and the tab would report
+  // nothing while the API is unreachable. Each one gets an explicit
+  // failed-read banner (retry via the query's existing refetch) instead.
+  // Stale data from an earlier successful read keeps rendering as before.
+  const historyReadFailed = startupHistoryError !== null && historyData === undefined
+  const progressReadFailed = startupProgressError !== null && startupData === undefined
+
+  const readFailedBanner = (message: string, onRetry: () => void) => (
+    <StatusBanner
+      variant="error"
+      message={message}
+      dismissible={false}
+      onRetry={() => void onRetry()}
+    />
+  )
+
   return (
     <div className="space-y-4">
       {/* Alerts */}
-      {alerts && alerts.length > 0 && (
+      {historyReadFailed ? (
+        readFailedBanner('Failed to load startup alerts', refetchStartupHistory)
+      ) : alerts && alerts.length > 0 ? (
         <div className="space-y-2">
           {alerts.map((alert, i) => (
             <div
@@ -126,10 +151,12 @@ export function StartupTab() {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Suggestions */}
-      {suggestions && suggestions.length > 0 && (
+      {historyReadFailed ? (
+        readFailedBanner('Failed to load optimization suggestions', refetchStartupHistory)
+      ) : suggestions && suggestions.length > 0 ? (
         <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
           <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
             <span className="text-[11px] font-medium text-muted-foreground/80">
@@ -182,7 +209,7 @@ export function StartupTab() {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* History Chart */}
       <StartupHistoryChart />
@@ -379,7 +406,9 @@ export function StartupTab() {
       )}
 
       {/* Stage Stats */}
-      {stageStats && Object.keys(stageStats).length > 0 && (
+      {historyReadFailed ? (
+        readFailedBanner('Failed to load stage performance', refetchStartupHistory)
+      ) : stageStats && Object.keys(stageStats).length > 0 ? (
         <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
           <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
             <span className="text-[11px] font-medium text-muted-foreground/80">
@@ -419,13 +448,15 @@ export function StartupTab() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Timeline */}
       <StartupTimeline />
 
       {/* Hooks */}
-      {hooks && Object.keys(hooks).length > 0 && (
+      {progressReadFailed ? (
+        readFailedBanner('Failed to load startup hooks', refetchStartupProgress)
+      ) : hooks && Object.keys(hooks).length > 0 ? (
         <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
           <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
             <span className="text-[11px] font-medium text-muted-foreground/80">Hooks</span>
@@ -473,7 +504,7 @@ export function StartupTab() {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
