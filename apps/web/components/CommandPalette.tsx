@@ -15,6 +15,7 @@ import { revalidateAll } from '@/lib/cache'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { SEARCH_STORES } from '@/lib/search-stores'
+import { useLocale } from '@/hooks/useLocale'
 
 interface SystemSearchHit {
   id: string
@@ -56,6 +57,7 @@ export function CommandPalette() {
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
   const currentWorkspaceId = useAuthStore((s) => s.currentWorkspace?.id)
+  const { t } = useLocale()
 
   // Sessions/models/souls for the palette come from the /bootstrap payload
   // (the same slices the landing consumes) — no mount prewarm fetches.
@@ -106,7 +108,7 @@ export function CommandPalette() {
     const nav: CommandAction[] = NAV_SECTIONS.flatMap((section) =>
       section.routes.map((route) => ({
         id: `nav-${route.path}`,
-        label: route.description || route.path,
+        label: t(route.labelKey) || route.description || route.path,
         description: route.description || '',
         icon: route.icon || '📄',
         category: 'navigation' as const,
@@ -225,7 +227,7 @@ export function CommandPalette() {
     }))
 
     return [...nav, ...modelActs, ...soulActs, ...acts, ...conv]
-  }, [router, recentSessions, models, souls, settings, updateSettings])
+  }, [router, recentSessions, models, souls, settings, updateSettings, t])
 
   const dataActions = useMemo<CommandAction[]>(() => {
     const toAction = (h: SystemSearchHit): CommandAction => {

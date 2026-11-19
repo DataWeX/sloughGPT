@@ -55,11 +55,26 @@ exit 0
     return stub
 
 
-def _env(stub: Path, log: Path, **extra: str) -> dict[str, str]:
+def _env(stub: Path, log: Path, tmp_path: Path, **extra: str) -> dict[str, str]:
     env = {**os.environ, "SLO_PYTHON": str(stub), "STUB_LOG": str(log)}
+    # Phase state (status/log) lives under a per-test dir: the repo-global
+    # .pytest_cache/slow-phase.* paths are shared by every xdist worker, so
+    # one worker's cleanup deletes another's verdict (reproduced under -n
+    # 2026-11-19). The script honors RUN_AFFECTED_CACHE_DIR (card
+    # 20261104_085623); extras may still override it explicitly.
+    env["RUN_AFFECTED_CACHE_DIR"] = str(_phase_cache(tmp_path))
+    # Background is the default contract; CI prefixes the flag onto the
+    # run_affected invocation itself, which leaks into this test process's
+    # environment. Strip it unless a test opts in explicitly via extras.
+    env.pop("RUN_AFFECTED_FOREGROUND_SLOW", None)
     env.update(extra)
     # The script must see a slow list we control; RUN_ALL tests opt in via extra.
     return env
+
+
+def _phase_cache(tmp_path: Path) -> Path:
+    """Per-test phase-state dir (never the repo-global .pytest_cache)."""
+    return tmp_path / "phase-cache"
 
 
 def _run(
@@ -113,7 +128,7 @@ def test_phase1_ignores_slow_paths_phase2_runs_them_exit_codes_split(
     _cleanup_phases()
     log = tmp_path / "stub.log"
     sl = _slow_list(tmp_path, [SLOW_A, SLOW_B])
-    env = _env(stub_python, log, STUB_RC="3", STUB_RC_SLOW="9")
+    env = _env(stub_python, log, tmp_path, STUB_RC="3", STUB_RC_SLOW="9")
 
     try:
         res = _run([], env, sl)
@@ -140,13 +155,13 @@ def test_phase1_ignores_slow_paths_phase2_runs_them_exit_codes_split(
 
         # Phase 2 recorded its own result: EXIT=9 in log + status file.
         deadline = time.monotonic() + 15
-        status = REPO_ROOT / ".pytest_cache" / "slow-phase.status"
+        status = _phase_cache(tmp_path) / "slow-phase.status"
         while time.monotonic() < deadline and (
             not status.exists() or status.read_text().strip() != "EXIT=9"
         ):
             time.sleep(0.05)
         assert status.read_text().strip() == "EXIT=9"
-        slow_log = (REPO_ROOT / ".pytest_cache" / "slow-phase.log").read_text()
+        slow_log = (_phase_cache(tmp_path) / "slow-phase.log").read_text()
         assert "=== slow phase started" in slow_log
         assert "EXIT=9" in slow_log
     finally:
@@ -157,7 +172,7 @@ def test_missing_slow_list_keeps_single_invocation(stub_python: Path, tmp_path: 
     """No list → no --ignore, no phase 2: today's behavior exactly."""
     _cleanup_phases()
     log = tmp_path / "stub.log"
-    env = _env(stub_python, log)
+    env = _env(stub_python, log, tmp_path)
 
     res = _run([], env, tmp_path / "does-not-exist.txt")
 
@@ -166,7 +181,7 @@ def test_missing_slow_list_keeps_single_invocation(stub_python: Path, tmp_path: 
     assert len(lines) == 1, f"expected exactly one invocation, got {lines}"
     assert "--ignore=" not in lines[0]
     assert "running in background" not in res.stdout
-    assert not (REPO_ROOT / ".pytest_cache" / "slow-phase.status").exists()
+    assert not (_phase_cache(tmp_path) / "slow-phase.status").exists()
 
 
 def test_user_flags_pass_through_to_both_phases(stub_python: Path, tmp_path: Path) -> None:
@@ -174,7 +189,7 @@ def test_user_flags_pass_through_to_both_phases(stub_python: Path, tmp_path: Pat
     _cleanup_phases()
     log = tmp_path / "stub.log"
     sl = _slow_list(tmp_path, [SLOW_A])
-    env = _env(stub_python, log)
+    env = _env(stub_python, log, tmp_path)
 
     try:
         res = _run(["--ignore=tests/server/test_phoneme_router.py"], env, sl)
@@ -195,7 +210,7 @@ def test_run_all_splits_with_noselect(stub_python: Path, tmp_path: Path) -> None
     _cleanup_phases()
     log = tmp_path / "stub.log"
     sl = _slow_list(tmp_path, [SLOW_A])
-    env = _env(stub_python, log, RUN_ALL="1")
+    env = _env(stub_python, log, tmp_path, RUN_ALL="1")
 
     try:
         res = _run([], env, sl)
@@ -212,7 +227,7 @@ def test_run_all_splits_with_noselect(stub_python: Path, tmp_path: Path) -> None
 def test_phase2_entry_with_empty_list_runs_nothing(stub_python: Path, tmp_path: Path) -> None:
     """An empty list at phase-2 entry must not collect pytest's testpaths."""
     log = tmp_path / "stub.log"
-    env = _env(stub_python, log, RUN_AFFECTED_PHASE="slow")
+    env = _env(stub_python, log, tmp_path, RUN_AFFECTED_PHASE="slow")
     env["RUN_AFFECTED_SLOW_LIST"] = str(tmp_path / "empty.txt")
     (tmp_path / "empty.txt").write_text("# only comments\n")
 
@@ -240,7 +255,7 @@ def test_positional_scope_partitions_exactly(stub_python: Path, tmp_path: Path) 
         tmp_path,
         ["tests/core-py/test_vm_life_program.py", "tests/test_journeys_vertical.py"],
     )
-    env = _env(stub_python, log)
+    env = _env(stub_python, log, tmp_path)
 
     try:
         res = _run(["tests/core-py"], env, sl)
@@ -279,7 +294,7 @@ def test_explicit_slow_path_arg_runs_exactly_once(stub_python: Path, tmp_path: P
     _cleanup_phases()
     log = tmp_path / "stub.log"
     sl = _slow_list(tmp_path, [SLOW_A, SLOW_B])
-    env = _env(stub_python, log)
+    env = _env(stub_python, log, tmp_path)
 
     try:
         res = _run([SLOW_B], env, sl)
@@ -320,12 +335,104 @@ def test_slow_paths_txt_entries_exist_and_stay_in_testpaths() -> None:
     assert not outside, f"slow_paths.txt entries are outside pytest testpaths: {outside}"
 
 
+def test_foreground_mode_is_synchronous_and_carries_slow_failure(
+    stub_python: Path, tmp_path: Path
+) -> None:
+    """``RUN_AFFECTED_FOREGROUND_SLOW=1``: phase 2 runs before exit (CI contract).
+
+    A CI runner tears down at job end, so a backgrounded phase 2 would
+    silently never run — deselected slow paths, violating "nothing is
+    deselected". Foreground mode runs phase 2 synchronously, and the exit
+    code carries BOTH phases: a red slow phase must fail the job now, not
+    warn the next run.
+    """
+    _cleanup_phases()
+    log = tmp_path / "stub.log"
+    sl = _slow_list(tmp_path, [SLOW_A, SLOW_B])
+    env = _env(
+        stub_python, log, tmp_path, RUN_AFFECTED_FOREGROUND_SLOW="1", STUB_RC="0", STUB_RC_SLOW="9"
+    )
+
+    try:
+        res = _run([], env, sl)
+        # Synchronous: both phases are logged by the time the script returned
+        # — no waiting, no background launch.
+        assert log.exists(), res.stderr
+        lines = log.read_text().splitlines()
+        assert len(lines) == 2, f"expected both phases before exit, got: {lines}"
+        assert lines[0].startswith("PHASE=phase1 ")
+        assert lines[1].startswith("PHASE=slow ")
+        assert "running in foreground" in res.stdout
+        assert "running in background" not in res.stdout
+        # Phase 1 was clean (0), the slow phase red (9) is the verdict.
+        assert res.returncode == 9, res.stderr
+        status = _phase_cache(tmp_path) / "slow-phase.status"
+        assert status.exists() and status.read_text().strip() == "EXIT=9"
+    finally:
+        _cleanup_phases()
+
+
+def test_foreground_mode_phase1_failure_wins_and_phase2_still_runs(
+    stub_python: Path, tmp_path: Path
+) -> None:
+    """Both phases always run (diagnostics parity with background mode);
+    the first nonzero — phase 1 — is the script's verdict."""
+    _cleanup_phases()
+    log = tmp_path / "stub.log"
+    sl = _slow_list(tmp_path, [SLOW_A])
+    env = _env(
+        stub_python, log, tmp_path, RUN_AFFECTED_FOREGROUND_SLOW="1", STUB_RC="3", STUB_RC_SLOW="9"
+    )
+
+    try:
+        res = _run([], env, sl)
+        lines = log.read_text().splitlines()
+        assert len(lines) == 2, f"phase 2 must still run for diagnostics, got: {lines}"
+        assert res.returncode == 3, res.stderr
+    finally:
+        _cleanup_phases()
+
+
+def test_cache_dir_override_isolates_phase_state_from_repo(
+    stub_python: Path, tmp_path: Path
+) -> None:
+    """``RUN_AFFECTED_CACHE_DIR`` moves phase status/log out of the repo cache.
+
+    CI runs this file under xdist: the repo-global ``.pytest_cache/slow-phase.*``
+    paths are shared by every worker, so one worker's cleanup deletes another's
+    verdict (reproduced 2026-11-19: FileNotFoundError / a foreign EXIT= under
+    ``-n auto``, testmon-independent). With the override each test owns its
+    state and the repo cache is never touched.
+    """
+    _cleanup_phases()
+    log = tmp_path / "stub.log"
+    cache = _phase_cache(tmp_path)
+    sl = _slow_list(tmp_path, [SLOW_A])
+    env = _env(
+        stub_python,
+        log,
+        tmp_path,
+        RUN_AFFECTED_FOREGROUND_SLOW="1",
+        STUB_RC="0",
+        STUB_RC_SLOW="0",
+    )
+
+    res = _run([], env, sl)
+    assert res.returncode == 0, res.stderr
+    # Phase 2 ran and recorded its verdict under the override dir…
+    assert (cache / "slow-phase.status").read_text().strip() == "EXIT=0"
+    assert "EXIT=0" in (cache / "slow-phase.log").read_text()
+    # …and the repo-global cache was never written.
+    assert not (REPO_ROOT / ".pytest_cache" / "slow-phase.status").exists()
+    assert not (REPO_ROOT / ".pytest_cache" / "slow-phase.log").exists()
+
+
 def test_stale_slow_phase_failure_warns_on_next_run(stub_python: Path, tmp_path: Path) -> None:
     """A nonzero EXIT from the last completed slow phase is surfaced, not lost."""
     _cleanup_phases()
     log = tmp_path / "stub.log"
-    env = _env(stub_python, log)
-    status = REPO_ROOT / ".pytest_cache" / "slow-phase.status"
+    env = _env(stub_python, log, tmp_path)
+    status = _phase_cache(tmp_path) / "slow-phase.status"
     status.parent.mkdir(parents=True, exist_ok=True)
     status.write_text("EXIT=7")
 

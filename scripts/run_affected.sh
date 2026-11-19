@@ -35,6 +35,18 @@
 # warned about on the next invocation — no silent reds. Same tests, same
 # mode, merely ordered; nothing is deselected.
 #
+# Foreground mode (RUN_AFFECTED_FOREGROUND_SLOW=1 — set by PR CI): phase 2
+# runs before the script exits and the exit code carries BOTH phases
+# (phase 1's nonzero wins, else phase 2's). A CI runner tears down at job
+# end, so a backgrounded slow phase would silently never run — deselected
+# paths — and a slow red would only warn the next invocation, never the
+# job. Locally nothing changes: without the flag the launcher stays
+# background, exactly as before.
+#
+# Phase state (status/log) defaults to .pytest_cache/ as always;
+# RUN_AFFECTED_CACHE_DIR relocates it so parallel (xdist) test workers each
+# own their copy instead of racing on one repo-global file.
+#
 # Scope: the path arguments YOU passed decide what is deferred. A slow path
 # passed explicitly runs in phase 1 only (pytest collects explicit files no
 # matter what --ignore says — ignoring one would be a no-op or a duplicate),
@@ -46,6 +58,12 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+# Phase state (slow-phase status/log) lives here. Overridable so each test
+# can isolate its own copy: the repo-global .pytest_cache paths race across
+# xdist workers (one worker's cleanup deletes another's verdict — card
+# 20261104_085623). The default is unchanged for every existing caller.
+CACHE_DIR="${RUN_AFFECTED_CACHE_DIR:-$ROOT/.pytest_cache}"
 
 # Both phases need the repo packages on the path (seed helper + pytest).
 export PYTHONPATH="$ROOT/packages/downcraft:$ROOT/packages/core-py:$ROOT/apps/api/server${PYTHONPATH:+:$PYTHONPATH}"
@@ -96,9 +114,9 @@ if [ "${RUN_AFFECTED_PHASE:-}" = "slow" ]; then
     echo "run_affected: slow phase requested but the slow list is empty — nothing to run" >&2
     exit 0
   fi
-  SLOW_LOG="$ROOT/.pytest_cache/slow-phase.log"
-  SLOW_STATUS="$ROOT/.pytest_cache/slow-phase.status"
-  mkdir -p "$ROOT/.pytest_cache"
+  SLOW_LOG="$CACHE_DIR/slow-phase.log"
+  SLOW_STATUS="$CACHE_DIR/slow-phase.status"
+  mkdir -p "$CACHE_DIR"
   {
     echo "=== slow phase started $(date -Is) ==="
     if [ "$#" -eq 0 ]; then
@@ -151,9 +169,9 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # The last COMPLETED slow phase's exit code — a red must not vanish silently.
-SLOW_STATUS="$ROOT/.pytest_cache/slow-phase.status"
+SLOW_STATUS="$CACHE_DIR/slow-phase.status"
 if [ -f "$SLOW_STATUS" ] && grep -q '^EXIT=[^0]' "$SLOW_STATUS" 2>/dev/null; then
-  echo "run_affected: WARNING — last slow phase FAILED ($(cat "$SLOW_STATUS")): see .pytest_cache/slow-phase.log" >&2
+  echo "run_affected: WARNING — last slow phase FAILED ($(cat "$SLOW_STATUS")): see $CACHE_DIR/slow-phase.log" >&2
 fi
 
 # ── the deferred set: what phase 1 ignores is EXACTLY what phase 2 runs. ──
@@ -206,8 +224,25 @@ if [ -n "$SLOW_DEFERRED" ]; then
     fi
     i=$((i + 1))
   done
-  SLOW_LOG="$ROOT/.pytest_cache/slow-phase.log"
-  mkdir -p "$ROOT/.pytest_cache"
+  SLOW_LOG="$CACHE_DIR/slow-phase.log"
+  mkdir -p "$CACHE_DIR"
+  if [ "${RUN_AFFECTED_FOREGROUND_SLOW:-0}" = "1" ]; then
+    # Foreground mode (PR CI): a runner tears down at job end, so a
+    # backgrounded phase 2 would silently never run — deselected slow
+    # paths, violating "nothing is deselected". Both phases run here and
+    # the verdict carries both: phase 1 first (it ran first), else
+    # phase 2's — a red slow phase fails the job now, not the next run.
+    echo "run_affected: slow phase ($SLOW_DEFERRED) running in foreground — log: $SLOW_LOG"
+    RUN_AFFECTED_PHASE=slow \
+      RUN_AFFECTED_SLOW_PATHS="$SLOW_DEFERRED" \
+      RUN_AFFECTED_SLOW_LIST="$SLOW_LIST" \
+      "$ROOT/scripts/run_affected.sh" "$@" >> "$SLOW_LOG" 2>&1
+    SLOW2_RC=$?
+    if [ "$PHASE1_RC" -ne 0 ]; then
+      exit "$PHASE1_RC"
+    fi
+    exit "$SLOW2_RC"
+  fi
   echo "run_affected: slow phase ($SLOW_DEFERRED) running in background — log: $SLOW_LOG"
   RUN_AFFECTED_PHASE=slow \
     RUN_AFFECTED_SLOW_PATHS="$SLOW_DEFERRED" \

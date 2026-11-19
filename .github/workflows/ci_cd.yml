@@ -79,7 +79,9 @@ jobs:
     # A hung step fails the job instead of holding the
     # concurrency group for GitHub's 6-hour default
     # (card 20261102_025758 — test-root hung 6 h on main).
-    timeout-minutes: 60
+    # 90 (was 60): main's full run now also RECORDS testmon data for PR
+    # selection — measured +40% (35m51s → ~50m, card 20261104_085623).
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -97,11 +99,59 @@ jobs:
           # pyyaml: transformers used to supply it transitively —
           # domain/benchmark/weighted.py imports it at module level.
           python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow pyyaml
-          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist pytest-timeout
+          # pytest-testmon: PRs select the affected closure against main's
+          # recording; main's full run records it (card 20261104_085623).
+          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist pytest-timeout pytest-testmon
           # test_vfs_addon.py imports lz4 at module scope -> collection error
           python -m pip install lz4
 
-      - name: Run core-py tests
+      # ── PR mode: affected closure (Test Rule clause 3, card 20261104_085623) ──
+      # The testmon DB is written ONLY by main's full runs (single writer: a
+      # partial PR record would poison the canonical selection state). PRs
+      # restore main's freshest recording and select against it; a cache miss
+      # (first run after this card lands) degrades to run_affected's
+      # documented full-record fallback — unknown state is a full run, never
+      # a guess. Coverage is deliberately absent here: a % measured on the
+      # affected closure measures the subset, not the codebase — the 50%
+      # floor stays on main's full run, where it measures the whole tree.
+      # The seam gates (contract, feature tags, board, lint) are separate
+      # seconds-jobs and run unchanged on every PR.
+      - name: Restore testmon DB (PR selection basis)
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: .testmondata
+          key: testmon-v1-${{ github.sha }}
+          restore-keys: |
+            testmon-v1-
+
+      - name: Run affected core-py tests (PR)
+        if: github.event_name == 'pull_request'
+        env:
+          # A runner tears down at job end: phase 2 must run before exit
+          # (else the deferred slow paths would silently never run —
+          # deselected tests), and its red must fail THIS job rather than
+          # warn the next invocation.
+          RUN_AFFECTED_FOREGROUND_SLOW: "1"
+        run: |
+          # Same scope + ignores as the full run below; selection is
+          # pytest-testmon over main's recording (mechanical, not filename
+          # guessing — shared utils and transitive imports are picked up).
+          ./scripts/run_affected.sh tests/core-py/ \
+            --ignore=tests/core-py/test_server_integration.py \
+            --ignore=tests/core-py/test_process_isolation.py \
+            --ignore=tests/core-py/test_numpy_engine.py \
+            --ignore=tests/core-py/test_safetensors_loader.py \
+            --ignore=tests/core-py/test_morph_tokenizer.py \
+            --ignore=tests/core-py/test_point_library.py \
+            --ignore=tests/core-py/test_slonet_compute_sensitivity.py \
+            --ignore=tests/core-py/test_slonet_provider.py \
+            --ignore=tests/core-py/test_shell_repl.py \
+            -q --tb=short -n auto
+
+      # ── merge to main: the full suite — unchanged, the backstop ──
+      - name: Run core-py tests (full suite backstop)
+        if: github.event_name != 'pull_request'
         run: |
           # 2026-10-25 test-tree consolidation: tests moved from
           # packages/core-py/tests/ to the unified tests/ root (tests/core-py/).
@@ -117,6 +167,12 @@ jobs:
           # distributed coverage natively — the 50% floor still measures
           # the whole run). Serial test-core-py was 50m19s on 2026-11-11;
           # this is the duration lever (card 20261112_062436).
+          # --testmon-noselect: run EVERYTHING (nothing deselected) while
+          # RECORDING each test's file dependencies — this recording is the
+          # DB PRs select against; plain pytest writes no testmon data.
+          # Measured cost 2026-11-19: +40% wall (32.6s → 45.6s on
+          # test_adapter_composition_gate; coverage TOTAL byte-identical,
+          # both tracers coexist) → hence timeout-minutes: 90 above.
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -128,7 +184,21 @@ jobs:
             --ignore=tests/core-py/test_slonet_provider.py \
             --ignore=tests/core-py/test_shell_repl.py \
             --cov=domain --cov-report=term-missing --cov-fail-under=50 \
+            --testmon-noselect \
             -q --tb=short -n auto
+
+      # Single-writer discipline: only main's full runs persist the DB PRs
+      # restore (a PR record would be partial — poisoning selection state).
+      # continue-on-error: a re-run's key already exists; the next main push
+      # refreshes it either way, and a missed save merely over-selects on
+      # PRs (safe direction — never under-selects).
+      - name: "Save testmon DB (single writer: main only)"
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .testmondata
+          key: testmon-v1-${{ github.sha }}
 
   # ─── Server API tests ───────────────────────────────────────────
   test-server:
