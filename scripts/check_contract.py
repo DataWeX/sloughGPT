@@ -504,12 +504,19 @@ def _diff_operations(current: dict, previous: dict) -> list[str]:
     return changes
 
 
-def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> int:
+def run_runtime(
+    baseline: Path, write_baseline: bool, artifact: Path | None, list_routes: bool = False
+) -> int:
     """Import the boot router set; verify registry ↔ served routes, diff baseline."""
     print("── runtime contract checks (imports the boot router set)")
     try:
         from fastapi import FastAPI
         from infrastructure.contract import REGISTRY
+        from infrastructure.route_registration import (
+            _app_paths,
+            declared_paths,
+            register_routers,
+        )
         from routers import get_all_routers
     except ImportError as exc:
         print(f"✗ runtime checks need the app's dependencies: {exc}", file=sys.stderr)
@@ -520,13 +527,22 @@ def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> 
     inventory = _inventory_from_routers(routers_list)
     entries = REGISTRY.routes()
 
-    # Assemble the app the way main.py does and verify every registry claim is
-    # a route FastAPI really serves — projection vs. reality, not a second
-    # source of truth.
+    # Assemble through the ONE assembler production uses
+    # (infrastructure/route_registration.py). This used to be an
+    # unconditional include_router loop while startup.py prefix-skipped, so
+    # the gate reported routes the server actually 404'd (/agents, card
+    # 20261119_105501): the spec lied and the suite stayed green.
     app = FastAPI()
-    for router in routers_list:
-        app.include_router(router)
+    registration = register_routers(app, routers_list)
     served = set(_iter_served_routes(app.routes))
+
+    if list_routes:
+        print(f"── served route table ({len(served)} method+path pairs)")
+        for path, method in sorted(served, key=lambda pm: (pm[0], pm[1])):
+            print(f"   {method:6} {path}")
+        for reason in registration.skipped:
+            print(f"   · skipped {reason}")
+        return 0
 
     # Contract facts (params / body / responses) cost one openapi() pass, so
     # only build them when a baseline will actually be written or compared.
@@ -539,11 +555,28 @@ def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> 
         if (entry["path"], entry["method"]) not in served
     ]
 
+    # Declared-vs-served parity: every path the boot router set declares must
+    # be on the assembled app. register_routers only skips when *all* declared
+    # paths are already served, so a miss here is an assembly defect — the
+    # exact class that hid behind the old prefix-skip (card 20261119_105501).
+    # _app_paths, not the (path, method) set: websocket routes
+    # (APIWebSocketRoute) carry no ``methods`` and would false-positive.
+    served_paths = _app_paths(app)
+    for router in routers_list:
+        name = getattr(router, "prefix", None) or repr(router)
+        missing = [p for p in declared_paths(router) if p not in served_paths]
+        if missing:
+            failures.append(
+                f"{name}: declares {', '.join(missing)} but the assembled app does not serve them"
+            )
+
     print(
         f"   routers: {len(routers_list)} · routes: {len(inventory)} · "
         f"descriptor crossings: {len(entries)}"
         + (f" · operations: {len(operations)}" if operations is not None else "")
     )
+    for reason in registration.skipped:
+        print(f"   · skipped {reason}")
     for entry in entries:
         print(f"   ✓ {entry['method']:6} {entry['path']:30} {entry['name']}")
 
@@ -673,6 +706,11 @@ def main(argv: list[str] | None = None) -> int:
         help="record current hand-built declaration counts (the ratchet baseline)",
     )
     parser.add_argument("--json", type=Path, help="write a machine-readable artifact")
+    parser.add_argument(
+        "--list-routes",
+        action="store_true",
+        help="print the assembled app's served METHOD path table and exit",
+    )
     args = parser.parse_args(argv)
 
     if args.write_declaration_baseline:
@@ -691,7 +729,7 @@ def main(argv: list[str] | None = None) -> int:
     if run_static_mode:
         status |= run_static()
     if run_runtime_mode:
-        status |= run_runtime(args.baseline, args.write_baseline, args.json)
+        status |= run_runtime(args.baseline, args.write_baseline, args.json, args.list_routes)
     return status
 
 
