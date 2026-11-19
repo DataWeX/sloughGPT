@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "56f1fda8f98d0d87c347b44185b585a8f5b19621",
+    "recorded_commit": "2135bbf7e836e880075eb688b64676de20daff9e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -376,7 +376,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "1a364e002c15fe7ffcc043784db1c2d85e4fa496"
+      "tree_hash": "bb2e7d1740600c44da3572cf8b401c6faf20e15c"
     },
     "multimodal": {
       "class": "core-capability",
@@ -550,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "7afe5781eab788c8dee35ecfd15d49cb4688134c"
+      "tree_hash": "ea9a1a22c04a2635bc636f8fed3ae93e6699a3c0"
     },
     "voice": {
       "class": "core-capability",
