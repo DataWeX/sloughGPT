@@ -60,6 +60,8 @@ class TestFailFastRegistration:
                     produces=BatchArray,
                     build=lambda: None,
                     module=__name__,
+                    sampler="token-stream",
+                    block_size=None,
                 )
             )
 
@@ -72,6 +74,8 @@ class TestFailFastRegistration:
             produces=BatchArray,
             build=lambda: None,
             module=__name__,
+            sampler="token-stream",
+            block_size=None,
         )
         reg.register(spec)
         with pytest.raises(AdapterError, match="duplicate"):
@@ -88,6 +92,8 @@ class TestFailFastRegistration:
                     produces=BatchArray,
                     build=lambda: None,
                     module=__name__,
+                    sampler="token-stream",
+                    block_size=None,
                 )
             )
 
@@ -102,6 +108,8 @@ class TestFailFastRegistration:
                     produces=int,
                     build=lambda: None,
                     module=__name__,
+                    sampler="token-stream",
+                    block_size=None,
                 )
             )
 
@@ -116,6 +124,8 @@ class TestFailFastRegistration:
                     produces=BatchArray,
                     build=None,  # type: ignore[arg-type]
                     module=__name__,
+                    sampler="token-stream",
+                    block_size=None,
                 )
             )
 
@@ -139,7 +149,9 @@ class TestStaticComposition:
         """Day-one coverage: an empty registry must never pass the gate."""
         assert registry, "registry is empty — composition gate would be vacuous"
 
-    @pytest.mark.parametrize("field", ("name", "task", "consumes", "produces", "build", "module"))
+    @pytest.mark.parametrize(
+        "field", ("name", "task", "consumes", "produces", "build", "module", "sampler")
+    )
     def test_spec_complete(self, registry, field):
         for spec in registry:
             assert getattr(spec, field) is not None, f"{spec.name}.{field} is None"
