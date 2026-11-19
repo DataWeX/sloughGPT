@@ -229,7 +229,16 @@ interface TooltipContentProps
 
 export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
   (
-    { className, children, variant, size, side = 'top', align = 'center', sideOffset = 8, ...props },
+    {
+      className,
+      children,
+      variant,
+      size,
+      side = 'top',
+      align = 'center',
+      sideOffset = 8,
+      ...props
+    },
     ref,
   ) => {
     const { open, triggerRef, contentId } = useTooltipContext()
@@ -335,8 +344,7 @@ TooltipContent.displayName = 'TooltipContent'
 
 /* ─── Convenience: SimpleTooltip ────────────────────────────── */
 
-interface SimpleTooltipProps
-  extends VariantProps<typeof tooltipContentVariants> {
+interface SimpleTooltipProps extends VariantProps<typeof tooltipContentVariants> {
   content: ReactNode
   side?: Side
   align?: Align

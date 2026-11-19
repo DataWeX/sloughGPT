@@ -38,7 +38,9 @@ describe('buildMonthGrid', () => {
   })
 
   it('handles February in a non-leap year (28 days)', () => {
-    const days = buildMonthGrid(2026, 1).flat().filter((d): d is Date => d !== null)
+    const days = buildMonthGrid(2026, 1)
+      .flat()
+      .filter((d): d is Date => d !== null)
     expect(days).toHaveLength(28)
   })
 })
