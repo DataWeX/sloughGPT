@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
-import { StartupHistoryChart } from './StartupHistoryChart'
-import { revalidateAll } from '@/lib/cache'
+import { StartupHistoryChart, STARTUP_HISTORY_KEY } from './StartupHistoryChart'
+import { revalidateAll, getQueryState } from '@/lib/cache'
+import { useQueryStore } from '@/lib/cache/client'
 
 const record = (total: number, i: number) => ({
   timestamp: 1700000000000 + i,
@@ -19,6 +21,13 @@ const payload = (runs: number) => ({
 })
 
 describe('StartupHistoryChart', () => {
+  beforeEach(() => {
+    // The query store is module-global: without a reset, a failed read in one
+    // test would inherit the previous test's cached records (and the error
+    // branch — which only fires when nothing is cached — would never run).
+    useQueryStore.setState({ cache: {}, fetchingKeys: new Set(), refreshVersion: 0 })
+  })
+
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
@@ -87,5 +96,60 @@ describe('StartupHistoryChart', () => {
     for (const bar of container.querySelectorAll('[style*="height"]')) {
       expect(bar.getAttribute('style')).toMatch(/height:\s*[\d.]+%/)
     }
+  })
+
+  it('shows Loading... while the read is in flight, not the empty state', async () => {
+    // Never-settling fetch: the read stays in flight for the whole test.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    )
+
+    render(<StartupHistoryChart />)
+    await waitFor(() => expect(screen.getByText('Loading...')).toBeTruthy())
+    expect(screen.queryByText('No startup records yet')).toBeNull()
+    expect(screen.queryByText('Failed to load startup history')).toBeNull()
+  })
+
+  it('keeps "No startup records yet" for a genuinely zero read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(payload(0))),
+    )
+
+    render(<StartupHistoryChart />)
+    await waitFor(() => expect(getQueryState(STARTUP_HISTORY_KEY).status).toBe('success'))
+    expect(screen.getByText('No startup records yet')).toBeTruthy()
+    expect(screen.queryByText('Failed to load startup history')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it('renders a failed read as an error state with a working Retry, not as empty', async () => {
+    const user = userEvent.setup()
+    let reads = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        reads += 1
+        return reads === 1
+          ? Promise.reject(new Error('network unreachable'))
+          : Promise.resolve(payload(2))
+      }),
+    )
+
+    const { container } = render(<StartupHistoryChart />)
+    const card = container.firstChild
+
+    // read #1 fails → explicit failed-read state, NEVER the empty copy
+    await waitFor(() => expect(screen.getByText('Failed to load startup history')).toBeTruthy())
+    expect(screen.queryByText('No startup records yet')).toBeNull()
+    expect(reads).toBe(1)
+
+    // Retry → read #2 succeeds → records render in place (no remount)
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getByText('2 runs')).toBeTruthy())
+    expect(container.firstChild).toBe(card)
+    expect(screen.queryByText('Failed to load startup history')).toBeNull()
+    expect(reads).toBe(2)
   })
 })
