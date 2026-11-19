@@ -264,15 +264,20 @@ class SloughGPTModel(SloTransformer, ModelInterface):
         temperature: float = 1.0,
         top_k: int | None = None,
         top_p: float | None = None,
+        eos_token: int | None = 0,
         **kwargs,
     ) -> np.ndarray:
+        # eos_token defaults to 0 (legacy behaviour: token 0 terminates),
+        # but callers may override — e.g. curriculum gate sampling requests
+        # eos_token=None for a full-length, scorable sample.
         result = super().generate(
             input_ids,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
-            eos_token=0,
+            eos_token=eos_token,
+            **kwargs,
         )
         return result.data
 

@@ -386,7 +386,15 @@ def _sample_metrics(
         return None
     try:
         seed = np.zeros((1, 1), dtype=np.int64)
-        out = generate(seed, max_new_tokens=max_new_tokens, temperature=temperature)
+        # eos_token=None: sample the full max_new_tokens — a char-vocab
+        # model puts '\n' at id 0, so the default eos would truncate the
+        # sample below min_chars and the gate could never score it.
+        out = generate(
+            seed,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            eos_token=None,
+        )
         ids = np.asarray(out)[0]
         text = _decode(ids[1:] if len(ids) > 1 else ids, itos)
     except Exception as exc:  # noqa: BLE001 — a generation failure is "no sample"
