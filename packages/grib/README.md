@@ -48,39 +48,42 @@ grib board add "Ship v2.0" --column wip --tags release
 grib board move <card-id> done
 
 # Sync notes to board explicitly
-grib sync
+grib board sync
 
 # Three-way diff: note frontmatter (status/board/landed) <-> board card <-> git
-grib verify <note> --repo /path/to/repo   # exit 1 on any drift
+grib note verify <note> --repo /path/to/repo   # exit 1 on any drift
 
 # Local web UI (stdlib HTTP server, embedded SPA)
 grib gui
 ```
 
+Top-level spellings (`grib sync`, `grib verify`, `grib snapshot`,
+`grib export`) remain as aliases — same handlers, byte-identical behavior.
+
 ## Commands
 
-| Command                               | Purpose                                                                        |
-| ------------------------------------- | ------------------------------------------------------------------------------ |
-| `note new <title>`                    | Create a note (`--tags`, `--status`, `--body`, `--sprint`, `--gh`)              |
-| `note list`                           | List notes (`--tag`, `--status`, `--limit`)                                     |
-| `note show <id>`                      | Show a note                                                                    |
-| `note update <id>`                    | Update a note (`--title`, `--status`, `--tags`, `--body`)                       |
-| `note delete <id>`                    | Delete a note (alias `rm`)                                                     |
-| `note search <query>`                 | Search notes                                                                   |
-| `board show`                          | Show the ASCII board; `board show <id>` shows one card                          |
-| `board add <title>`                   | Add a card (`--column`, `--priority`, `--description`, `--tags`)                |
-| `board move <id> <column>`            | Move card to another column                                                    |
-| `board delete <id>`                   | Delete a card (alias `rm`)                                                     |
-| `board tags`                          | List tags                                                                      |
-| `board stats`                         | Board statistics                                                               |
-| `board index`                         | Rebuild the read-only MogDB query index                                        |
-| `board query`                         | Filter cards via the index (file fallback)                                     |
-| `sync`                                | Sync notes to board                                                            |
-| `verify <note>`                       | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift) |
-| `migrate`                             | Import repo-local `.kanban`/`.dev-notes` into the canonical store              |
-| `snapshot`                            | Copy the canonical board into `<repo>/.kanban/snapshots/`                       |
-| `export`                              | Mirror canonical board + notes into the repo checkout                          |
-| `gui`                                 | Launch the web GUI (`--backend {file,mogdb}`, `--port`)                         |
+| Command                    | Purpose                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `note new <title>`         | Create a note (`--tags`, `--status`, `--body`, `--sprint`, `--gh`)                                           |
+| `note list`                | List notes (`--tag`, `--status`, `--limit`)                                                                  |
+| `note show <id>`           | Show a note                                                                                                  |
+| `note update <id>`         | Update a note (`--title`, `--status`, `--tags`, `--body`)                                                    |
+| `note delete <id>`         | Delete a note (alias `rm`)                                                                                   |
+| `note search <query>`      | Search notes                                                                                                 |
+| `board show`               | Show the ASCII board; `board show <id>` shows one card                                                       |
+| `board add <title>`        | Add a card (`--column`, `--priority`, `--description`, `--tags`)                                             |
+| `board move <id> <column>` | Move card to another column                                                                                  |
+| `board delete <id>`        | Delete a card (alias `rm`)                                                                                   |
+| `board tags`               | List tags                                                                                                    |
+| `board stats`              | Board statistics                                                                                             |
+| `board index`              | Rebuild the read-only MogDB query index                                                                      |
+| `board query`              | Filter cards via the index (file fallback)                                                                   |
+| `board sync`               | Sync notes to board (alias: top-level `sync`)                                                                |
+| `note verify <note>`       | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift; alias: top-level `verify`) |
+| `migrate`                  | Import repo-local `.kanban`/`.dev-notes` into the canonical store                                            |
+| `board snapshot`           | Copy the canonical board into `<repo>/.kanban/snapshots/` (alias: top-level `snapshot`)                      |
+| `board export`             | Mirror canonical board + notes into the repo checkout (alias: top-level `export`)                            |
+| `gui`                      | Launch the web GUI (`--backend {file,mogdb}`, `--port`)                                                      |
 
 Aliases: `notes` → `note`, `kanban` → `board`.
 
