@@ -329,7 +329,11 @@ jobs:
           # pyyaml + setuptools: transitive deps of the removed torch tree (run
           # 43180934654) — 4 root suites import yaml top-level;
           # test_packaging_config.py imports setuptools.
-          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pyyaml setuptools
+          # pillow: tests/test_gallery_generators.py (c5a3b45e9) generates
+          # real PNGs via domain.multimodal — without it 5 tests raise
+          # "Pillow library required" (main runs 44712585390/44708416860;
+          # test-core-py already installs pillow).
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow pyyaml setuptools
           python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist pytest-timeout
           python -m pip install -e packages/mogdb
 
