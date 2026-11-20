@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 from collections.abc import AsyncIterator, Collection
@@ -33,7 +34,7 @@ from schemas.common import classify_and_raise, raise_error, safe_audit_log, succ
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
+from domain.agents import ToolParam, ToolSpec, agentic_stream, get_agent_system, get_tool_registry
 from domain.cognition import get_rag_service
 from domain.feedback import SAFE_BAND, get_response_tracker
 from domain.infrastructure import AppError
@@ -405,11 +406,18 @@ from domain.inference.app_scope import (  # noqa: E402
     resolve_scope,
 )
 from domain.inference.engine import (  # noqa: E402
+    TurnEvent,
     TurnRequest,
     TurnResult,
     fold,
     register_chat_engine,
 )
+
+# The kernel-appended image markdown (agentic_stream's attachment append:
+# ``\n\n![alt](data:image/…;base64,…)``) rides the token stream so cache and
+# history keep the image. Memory/ingest must not see the blob, so the clean
+# pre-append text is this pattern stripped off the collected stream.
+_ATTACH_MD = re.compile(r"\n\n!\[[^\]]*\]\(data:image/[^)]*\)")
 
 # In-memory store for pending control requests per session
 _chat_control_store: dict[str, dict] = {}
@@ -2297,27 +2305,49 @@ class InferenceRouter:
 
         model = _chat_state.model_type or req.model
 
-        collected: list[str] = []
-        try:
-            async for token in provider.chat_stream(
-                messages,
+        # ONE provider round, params bound right here: agentic_stream drives
+        # the loop (fenced tool protocol — model-driven intent routing, card
+        # 20261116_090332) and calls this closure once per round with the
+        # contract-injected messages. The turn's stop flag rides every round:
+        # minted by whoever owns the registry (chat's manager) and delivered
+        # with the request. The provider polls is_set() each token, so a
+        # cancel fired mid-stream stops generation here. None only when the
+        # caller has no registry.
+        def _round_stream(prepared: list) -> AsyncIterator[str]:
+            return provider.chat_stream(
+                prepared,
                 max_tokens=req.max_tokens,
-                # The turn's stop flag: minted by whoever owns the registry
-                # (chat's manager) and delivered with the request. The provider
-                # polls is_set() each token, so a cancel fired mid-stream stops
-                # generation here. None only when the caller has no registry.
                 cancel_event=req.cancel_event,
                 session_id=session_id,
                 **gen_params,
+            )
+
+        collected: list[str] = []
+        try:
+            async for item in agentic_stream(
+                messages, tools=get_tool_registry(), stream_fn=_round_stream
             ):
-                if token:
-                    collected.append(token)
-                    yield token
+                if isinstance(item, dict):
+                    # Loop tool events ride out-of-band BETWEEN tokens; edges
+                    # project them (chat maps them to phase: TOOL frames).
+                    # Never tokens — the raw fence stays in-process.
+                    yield TurnEvent(
+                        kind=str(item.get("kind", "tool")), data=item.get("data") or {}
+                    )
+                elif item:
+                    collected.append(item)
+                    yield item
         except Exception as e:
             logger.error("chat stream failed: %s", e, exc_info=True)
             raise
 
-        text = "".join(collected)
+        # Augmented = tokens as streamed, INCLUDING the kernel-appended image
+        # markdown (chat's cache is built from these tokens and TurnResult.text
+        # is what history stores — a reload must keep the image). Clean =
+        # pre-append text, for token counting and memory ingest, which must
+        # never see the base64 blob.
+        text_augmented = "".join(collected)
+        text = _ATTACH_MD.sub("", text_augmented)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
             tokens = _count_tokens(text, _chat_state)
@@ -2334,7 +2364,7 @@ class InferenceRouter:
         _post_gen: dict[str, Any] = {}
         try:
             _post_gen = _run_post_gen_tasks(
-                text,
+                text_augmented,
                 user_msg or "",
                 session_id,
                 _chat_start_dt,
@@ -2409,7 +2439,7 @@ class InferenceRouter:
             )
 
         yield TurnResult(
-            text=text,
+            text=text_augmented,
             session_id=session_id,
             done=True,
             model=model,
