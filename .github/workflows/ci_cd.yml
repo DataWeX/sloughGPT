@@ -162,6 +162,17 @@ jobs:
             -q --tb=short -n auto
 
       # ── merge to main: the full suite — unchanged, the backstop ──
+      # TWO separate pytest passes, deliberately. Main run 44542985298
+      # (2026-11-19) proved the single-pass unification crashes: pytest-cov
+      # and pytest-testmon each drive coverage's CTracer, and under xdist
+      # their collectors stop OUT of LIFO order at session end
+      # (coverage/collector.py: assert self._collectors[-1] is self) →
+      # INTERNALERROR exit 3 AFTER all 42596 tests had passed
+      # ("Expected current collector to be <CTracer>, but it's <CTracer>").
+      # Each pass alone is CI-proven: pass 1 is the pre-card behavior; pass
+      # 2 with --testmon-noselect and NO coverage is every PR run of #353
+      # (19m15s for the full record). tests/test_workflow_testmon_split.py
+      # pins the split — never re-merge them into one command.
       - name: Run core-py tests (full suite backstop)
         if: github.event_name != 'pull_request'
         run: |
@@ -179,12 +190,8 @@ jobs:
           # distributed coverage natively — the 50% floor still measures
           # the whole run). Serial test-core-py was 50m19s on 2026-11-11;
           # this is the duration lever (card 20261112_062436).
-          # --testmon-noselect: run EVERYTHING (nothing deselected) while
-          # RECORDING each test's file dependencies — this recording is the
-          # DB PRs select against; plain pytest writes no testmon data.
-          # Measured cost 2026-11-19: +40% wall (32.6s → 45.6s on
-          # test_adapter_composition_gate; coverage TOTAL byte-identical,
-          # both tracers coexist) → hence timeout-minutes: 90 above.
+          # PASS 1 = the coverage gate ONLY. No testmon here: see the
+          # two-pass comment above (collector clash, run 44542985298).
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -196,6 +203,30 @@ jobs:
             --ignore=tests/core-py/test_slonet_provider.py \
             --ignore=tests/core-py/test_shell_repl.py \
             --cov=domain --cov-report=term-missing --cov-fail-under=50 \
+            -q --tb=short -n auto
+
+      - name: Record testmon DB (full suite, no coverage)
+        if: github.event_name != 'pull_request'
+        run: |
+          # PASS 2 = the recording ONLY, no coverage (same 9 ignores as
+          # pass 1 — the recorded closure must match the gated closure).
+          # --testmon-noselect: run EVERYTHING (nothing deselected) while
+          # RECORDING each test's file dependencies — this recording is the
+          # DB PRs select against; plain pytest writes no testmon data.
+          # No --cov here by design: the two CTracers clash under xdist
+          # (run 44542985298, traceback in the comment above). Measured on
+          # #353's PR runs: full record without coverage = 19m15s.
+          # Pass 1 ≈ 35m51s + pass 2 ≈ 19m15s ≈ 55m < timeout-minutes: 90.
+          python -m pytest tests/core-py/ \
+            --ignore=tests/core-py/test_server_integration.py \
+            --ignore=tests/core-py/test_process_isolation.py \
+            --ignore=tests/core-py/test_numpy_engine.py \
+            --ignore=tests/core-py/test_safetensors_loader.py \
+            --ignore=tests/core-py/test_morph_tokenizer.py \
+            --ignore=tests/core-py/test_point_library.py \
+            --ignore=tests/core-py/test_slonet_compute_sensitivity.py \
+            --ignore=tests/core-py/test_slonet_provider.py \
+            --ignore=tests/core-py/test_shell_repl.py \
             --testmon-noselect \
             -q --tb=short -n auto
 
@@ -310,7 +341,11 @@ jobs:
           # pyyaml + setuptools: transitive deps of the removed torch tree (run
           # 43180934654) — 4 root suites import yaml top-level;
           # test_packaging_config.py imports setuptools.
-          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pyyaml setuptools
+          # pillow: tests/test_gallery_generators.py (c5a3b45e9) generates
+          # real PNGs via domain.multimodal — without it 5 tests raise
+          # "Pillow library required" (main runs 44712585390/44708416860;
+          # test-core-py already installs pillow).
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow pyyaml setuptools
           python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist pytest-timeout
           python -m pip install -e packages/mogdb
 
