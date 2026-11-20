@@ -145,6 +145,31 @@ class TestSloughGPTModel:
         assert result.shape[0] == 1
         assert result.shape[1] > 3  # generated at least some tokens
 
+    def test_generate_forwards_eos_token_and_kwargs(self, small_model, monkeypatch):
+        """`eos_token` and sampling kwargs must reach SloTransformer.generate.
+
+        Regression: the override hardcoded ``eos_token=0`` and silently
+        discarded ``**kwargs``, so callers requesting ``eos_token=None``
+        (full-length samples) or ``repetition_penalty`` got neither.
+        """
+        from domain.training._internal import slonet
+
+        captured: dict = {}
+
+        def fake_generate(self, input_ids, **kw):
+            captured.update(kw)
+            return slonet.Tensor(np.asarray(input_ids))
+
+        monkeypatch.setattr(slonet.SloTransformer, "generate", fake_generate)
+        small_model.generate(
+            np.array([[1, 2, 3]], dtype=np.int32),
+            max_new_tokens=4,
+            eos_token=None,
+            repetition_penalty=1.5,
+        )
+        assert captured.get("eos_token") is None, "eos_token kwarg was dropped"
+        assert captured.get("repetition_penalty") == 1.5, "sampling kwargs were dropped"
+
 
 class TestAliases:
     """Symbols still re-exported from domain.models.
