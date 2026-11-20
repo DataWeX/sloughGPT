@@ -73,19 +73,26 @@ def _events(items) -> list[dict]:
 class TestPlainTurn:
     async def test_no_fence_tokens_forwarded_verbatim(self) -> None:
         rec = _Recorder([["Hello", ", ", "world!"]])
-        items = await _collect(agentic_stream(
-            [{"role": "user", "content": "hi"}], tools=ToolRegistry(register_defaults=False),
-            stream_fn=rec,
-        ))
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "hi"}],
+                tools=ToolRegistry(register_defaults=False),
+                stream_fn=rec,
+            )
+        )
         assert _text(items) == "Hello, world!"
         assert _events(items) == []
         assert len(rec.calls) == 1  # single round — same as today's plain path
 
     async def test_tool_contract_injected_into_system_message(self) -> None:
         rec = _Recorder([["ok"]])
-        await _collect(agentic_stream(
-            [{"role": "user", "content": "hi"}], tools=_registry_with_echo(), stream_fn=rec,
-        ))
+        await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "hi"}],
+                tools=_registry_with_echo(),
+                stream_fn=rec,
+            )
+        )
         system = rec.calls[0][0]
         assert system["role"] == "system"
         assert "tool_call" in system["content"]
@@ -95,13 +102,19 @@ class TestPlainTurn:
 class TestFenceTurn:
     async def test_fence_held_tool_runs_events_flow_answer_streams(self) -> None:
         fence = "```tool_call\n" + '{"name": "echo", "args": {"text": "hi"}}' + "\n```"
-        rec = _Recorder([
-            ["Sure, ", "doing it: ", fence],
-            ["All ", "done!"],
-        ])
-        items = await _collect(agentic_stream(
-            [{"role": "user", "content": "echo hi"}], tools=_registry_with_echo(), stream_fn=rec,
-        ))
+        rec = _Recorder(
+            [
+                ["Sure, ", "doing it: ", fence],
+                ["All ", "done!"],
+            ]
+        )
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "echo hi"}],
+                tools=_registry_with_echo(),
+                stream_fn=rec,
+            )
+        )
 
         text = _text(items)
         # raw fence never reaches the user; preamble + round-2 answer do
@@ -121,13 +134,19 @@ class TestFenceTurn:
         assert toolish, "round-2 messages must carry the tool result"
 
     async def test_second_round_still_gets_contract(self) -> None:
-        rec = _Recorder([
-            ["```tool_call\n" + '{"name": "echo", "args": {"text": "x"}}' + "\n```"],
-            ["answer"],
-        ])
-        await _collect(agentic_stream(
-            [{"role": "user", "content": "go"}], tools=_registry_with_echo(), stream_fn=rec,
-        ))
+        rec = _Recorder(
+            [
+                ["```tool_call\n" + '{"name": "echo", "args": {"text": "x"}}' + "\n```"],
+                ["answer"],
+            ]
+        )
+        await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "go"}],
+                tools=_registry_with_echo(),
+                stream_fn=rec,
+            )
+        )
         for prepared in rec.calls:
             assert "tool_call" in prepared[0]["content"]
 
@@ -136,10 +155,13 @@ class TestCodeBlockNotAte:
     async def test_code_fence_flushes_and_streams_normally(self) -> None:
         tokens = ["Here: ", "```py", "thon\nprint(1)", "\n```", " done"]
         rec = _Recorder([tokens])
-        items = await _collect(agentic_stream(
-            [{"role": "user", "content": "code"}], tools=ToolRegistry(register_defaults=False),
-            stream_fn=rec,
-        ))
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "code"}],
+                tools=ToolRegistry(register_defaults=False),
+                stream_fn=rec,
+            )
+        )
         assert _text(items) == "".join(tokens)
         assert _events(items) == []
 
@@ -148,17 +170,25 @@ class TestDegradation:
     async def test_protocol_error_flushes_dropped_fence_as_plain_answer(self) -> None:
         bad = "```tool_call\n{not valid json}\n```"
         rec = _Recorder([["Sure ", bad]])
-        items = await _collect(agentic_stream(
-            [{"role": "user", "content": "x"}], tools=_registry_with_echo(), stream_fn=rec,
-        ))
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "x"}],
+                tools=_registry_with_echo(),
+                stream_fn=rec,
+            )
+        )
         # degraded but complete: preamble (forwarded) + dropped tail (flushed)
         assert _text(items) == "Sure " + bad
 
     async def test_trailing_partial_fence_flushed_at_end(self) -> None:
         rec = _Recorder([["answer ```tool_c"]])
-        items = await _collect(agentic_stream(
-            [{"role": "user", "content": "x"}], tools=_registry_with_echo(), stream_fn=rec,
-        ))
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "x"}],
+                tools=_registry_with_echo(),
+                stream_fn=rec,
+            )
+        )
         assert _text(items) == "answer ```tool_c"
 
 
@@ -185,13 +215,23 @@ class TestAttachmentAppend:
                 execute=_gen,
             )
         )
-        rec = _Recorder([
-            ["```tool_call\n" + '{"name": "image_gen", "args": {"prompt": "a blue sky"}}' + "\n```"],
-            ["Here you go."],
-        ])
-        items = await _collect(agentic_stream(
-            [{"role": "user", "content": "draw a blue sky"}], tools=reg, stream_fn=rec,
-        ))
+        rec = _Recorder(
+            [
+                [
+                    "```tool_call\n"
+                    + '{"name": "image_gen", "args": {"prompt": "a blue sky"}}'
+                    + "\n```"
+                ],
+                ["Here you go."],
+            ]
+        )
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "draw a blue sky"}],
+                tools=reg,
+                stream_fn=rec,
+            )
+        )
         assert _text(items) == "Here you go.\n\n![a blue sky](data:image/png;base64,QUJD)"
         # attachment must NOT leak into any event payload (SSE stays small)
         for ev in _events(items):

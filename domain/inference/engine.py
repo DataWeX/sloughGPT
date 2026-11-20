@@ -131,9 +131,7 @@ class ChatEngine(Protocol):
     Non-streaming surfaces fold this stream at the edge.
     """
 
-    def stream(
-        self, req: TurnRequest
-    ) -> AsyncIterator[TurnResult | TurnEvent | str]: ...
+    def stream(self, req: TurnRequest) -> AsyncIterator[TurnResult | TurnEvent | str]: ...
 
 
 def fold(stream: AsyncIterator[TurnResult | str]) -> Awaitable[TurnResult]:
