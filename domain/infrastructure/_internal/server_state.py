@@ -356,6 +356,12 @@ class ServerState:
         with self._lock:
             req_count = self._request_count
             err_count = self._error_count
+            inference_count = self._inference_count
+
+        # Engine-declared device (providers set _device in their loaders) —
+        # the slow-band label follows it automatically if a CUDA path lands.
+        provider = self.provider.get()
+        device = str(getattr(provider, "_device", "") or "")
 
         avg_lat = self.get_avg_latency()
         tps = self.get_tokens_per_second()
@@ -374,6 +380,8 @@ class ServerState:
             model_type=model_type,
             cpu_percent=cpu_percent,
             memory_percent=memory_percent,
+            inference_count=inference_count,
+            device=device,
         )
 
         return {

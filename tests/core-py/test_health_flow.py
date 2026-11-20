@@ -91,6 +91,43 @@ class TestCheckThroughput:
         d = _check_throughput(2)
         assert d.severity == Severity.CRITICAL
 
+    # ── Sample floor + honest label (card 20261119_124725) ────────────
+
+    def test_thin_sample_does_not_earn_very_slow(self):
+        """A partial sliding window (< 10 inferences) cannot earn a red verdict.
+
+        Live Phase-1 sample was 6 lifetime inferences / 231 tokens rendering
+        CRITICAL "Very slow — 2 tok/s" — too thin a basis for a red badge.
+        """
+        d = _check_throughput(2, inference_count=6)
+        assert d.severity == Severity.INFO
+        assert "Warming up" in d.message
+        assert "6 generations" in d.message
+
+    def test_full_window_keeps_the_verdict(self):
+        """At the full window (10) the CRITICAL verdict stands."""
+        d = _check_throughput(2, inference_count=10)
+        assert d.severity == Severity.CRITICAL
+        assert "Very slow" in d.message
+
+    def test_slow_band_names_the_engine(self):
+        """The slow band states the engine's own declared device — honest label."""
+        d = _check_throughput(2, inference_count=10, device="cpu")
+        assert "Very slow" in d.message
+        assert "(cpu inference)" in d.message
+
+    def test_unknown_device_stays_silent(self):
+        """No device known (provider absent) → no engine claim in the message."""
+        d = _check_throughput(2, inference_count=10)
+        assert "Very slow" in d.message
+        assert "inference" not in d.message
+
+    def test_thin_sample_defaults_keep_old_behavior(self):
+        """Caller that doesn't supply a count (0 = unknown) gets band logic."""
+        d = _check_throughput(7)
+        assert d.severity == Severity.CRITICAL
+        assert "Slow" in d.message
+
 
 class TestRunHealthFlow:
     def test_healthy_system(self):
@@ -121,6 +158,23 @@ class TestRunHealthFlow:
         )
         assert result.score < 60
         assert result.status in ("unhealthy", "degraded")
+
+    def test_sample_and_device_pass_through(self):
+        """run_health_flow forwards the sample floor + device to the verdict."""
+        result = run_health_flow(
+            req_count=100,
+            err_count=0,
+            avg_latency_ms=200,
+            tokens_per_sec=2,
+            uptime_seconds=600,
+            model_loaded=True,
+            model_type="qwen",
+            inference_count=6,
+            device="cpu",
+        )
+        tp = next(d for d in result.diagnoses if d.check == "throughput")
+        assert tp.severity == Severity.INFO
+        assert "Warming up" in tp.message
 
     def test_no_model(self):
         result = run_health_flow(
