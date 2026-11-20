@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "4936bbcd704de0db6b9108fbb98c00da218d7848",
+    "recorded_commit": "705bd3bd7f1eff489c72cf1482dfa11b58eaf687",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -393,7 +393,7 @@
       ],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "5f54e51b86e650c89c641e706d2782693c856d11"
+      "tree_hash": "833104def118896989347afd225c2ceccb1e085d"
     },
     "ops": {
       "class": "core-capability",
