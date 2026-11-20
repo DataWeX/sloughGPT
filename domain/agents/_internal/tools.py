@@ -232,9 +232,7 @@ class ToolRegistry:
                     "Generate an image from a text description and attach it to the reply"
                 ),
                 parameters=[
-                    ToolParam(
-                        "prompt", "string", "What to depict in the image", required=True
-                    ),
+                    ToolParam("prompt", "string", "What to depict in the image", required=True),
                     ToolParam(
                         "style",
                         "string",

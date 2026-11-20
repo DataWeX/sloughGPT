@@ -118,9 +118,7 @@ class TrainingRuntime:
             self._sub_seq += 1
             token = self._sub_seq
             self._subscribers[token] = callback
-            jobs = [
-                self._job_view(jid, entry["job"]) for jid, entry in self._jobs.items()
-            ]
+            jobs = [self._job_view(jid, entry["job"]) for jid, entry in self._jobs.items()]
         return token, jobs
 
     def unsubscribe(self, token: int) -> None:
