@@ -62,22 +62,30 @@ def _write(tmp_path, doc, name="curriculum.json") -> str:
     return str(p)
 
 
+# explicit per-key nulls = opt out of ALL calibrated defaults (vacuous gate)
+_NO_GATE = {"max_eval_loss": None, "min_quality": None, "max_toxicity": None}
+
+
 # ── Schema ──────────────────────────────────────────────────────────────
 
 
 class TestLoadCurriculum:
     def test_minimal_valid(self, tmp_path):
-        cur = load_curriculum(_write(tmp_path, {"version": 1, "stages": [_stage()]}))
+        # minimal valid now carries an eval_text: the default gate judges
+        # max_eval_loss, which cannot be measured without one.
+        cur = load_curriculum(
+            _write(tmp_path, {"version": 1, "eval_text": "data/eval.txt", "stages": [_stage()]})
+        )
         assert len(cur.stages) == 1
         s = cur.stages[0]
         assert s.name == "s1"
         assert s.epochs == 1
         assert s.replay == 0.0
         assert s.ewc is False
-        assert s.gate.is_empty
+        assert s.gate == GateCriteria()  # no `gate` key → calibrated defaults
         assert s.on_gate_fail == "continue"
         assert s.eval_text is None
-        assert cur.eval_text is None
+        assert cur.eval_text == "data/eval.txt"
         assert cur.stages[0].datasets == (("data/s1/input.txt", 1.0),)
 
     def test_description_is_exposed(self, tmp_path):
@@ -85,7 +93,15 @@ class TestLoadCurriculum:
         its own placeholder thresholds as placeholders."""
         note = "EXAMPLE: gate thresholds are placeholders; calibrate first."
         cur = load_curriculum(
-            _write(tmp_path, {"version": 1, "description": note, "stages": [_stage()]})
+            _write(
+                tmp_path,
+                {
+                    "version": 1,
+                    "eval_text": "data/eval.txt",
+                    "description": note,
+                    "stages": [_stage()],
+                },
+            )
         )
         assert cur.description == note
 
@@ -151,28 +167,42 @@ class TestLoadCurriculum:
                 "min_loss",
                 id="unknown-gate-key",
             ),
+            # eval_text present in the dataset/dupe fixtures so the default
+            # gate parses and the INTENDED error (not the eval_text one) fires
             pytest.param(
-                {"version": 1, "stages": [_stage(), _stage()]},
+                {"version": 1, "eval_text": "data/eval.txt", "stages": [_stage(), _stage()]},
                 "duplicate",
                 id="duplicate-names",
             ),
             pytest.param(
-                {"version": 1, "stages": [_stage(datasets=[{"path": "a", "ratio": 0}])]},
+                {
+                    "version": 1,
+                    "eval_text": "data/eval.txt",
+                    "stages": [_stage(datasets=[{"path": "a", "ratio": 0}])],
+                },
                 "ratio",
                 id="zero-ratio",
             ),
             pytest.param(
-                {"version": 1, "stages": [_stage(datasets=[{"path": "a", "ratio": -1}])]},
+                {
+                    "version": 1,
+                    "eval_text": "data/eval.txt",
+                    "stages": [_stage(datasets=[{"path": "a", "ratio": -1}])],
+                },
                 "ratio",
                 id="negative-ratio",
             ),
             pytest.param(
-                {"version": 1, "stages": [_stage(datasets=[{"path": "a", "ratio": float("inf")}])]},
+                {
+                    "version": 1,
+                    "eval_text": "data/eval.txt",
+                    "stages": [_stage(datasets=[{"path": "a", "ratio": float("inf")}])],
+                },
                 "ratio",
                 id="infinite-ratio",
             ),
             pytest.param(
-                {"version": 1, "stages": [_stage(datasets=[])]},
+                {"version": 1, "eval_text": "data/eval.txt", "stages": [_stage(datasets=[])]},
                 "datasets",
                 id="empty-datasets",
             ),
@@ -227,6 +257,7 @@ class TestLoadCurriculum:
     def test_ratio_normalization(self, tmp_path):
         doc = {
             "version": 1,
+            "eval_text": "data/eval.txt",
             "stages": [
                 _stage(
                     "a",
@@ -242,6 +273,67 @@ class TestLoadCurriculum:
         ratios = [r for _, r in cur.stages[0].datasets]
         assert ratios == pytest.approx([0.125, 0.375, 0.5])
         assert sum(ratios) == pytest.approx(1.0)
+
+
+# ── Calibrated defaults (absence judges, never passes vacuously) ────────
+
+
+class TestCalibratedGateDefaults:
+    """A missing gate means the calibrated defaults, not a free pass.
+
+    Defaults are the measured values from the real 4-stage run 2026-11-19
+    (same numbers as examples/curriculum.json): eval_loss <= 3.5,
+    quality >= 2.5, toxicity <= 0.2. Explicit ``GateCriteria(None, None,
+    None)`` / ``"max_eval_loss": null`` remain the opt-out.
+    """
+
+    CALIBRATED = (3.5, 2.5, 0.2)
+
+    def test_dataclass_defaults_are_the_calibrated_values(self):
+        g = GateCriteria()
+        assert (g.max_eval_loss, g.min_quality, g.max_toxicity) == self.CALIBRATED
+        assert not g.is_empty
+
+    def test_explicit_none_triple_is_the_vacuous_opt_out(self):
+        assert GateCriteria(None, None, None).is_empty
+
+    def test_json_stage_without_gate_gets_calibrated_defaults(self, tmp_path):
+        doc = {
+            "version": 1,
+            "eval_text": "docs/UX_FLOWS.md",
+            "stages": [_stage("s1")],
+        }
+        cur = load_curriculum(_write(tmp_path, doc))
+        g = cur.stages[0].gate
+        assert (g.max_eval_loss, g.min_quality, g.max_toxicity) == self.CALIBRATED
+
+    def test_json_without_gate_or_eval_text_is_rejected_with_guidance(self, tmp_path):
+        # max_eval_loss (from any source) needs an eval_text; the error must
+        # point at the explicit-null opt-out instead of failing mysteriously.
+        with pytest.raises(CurriculumError, match="eval_text"):
+            load_curriculum(_write(tmp_path, {"version": 1, "stages": [_stage("s1")]}))
+
+    def test_json_explicit_null_skips_the_loss_check(self, tmp_path):
+        doc = {
+            "version": 1,
+            "stages": [_stage("s1", gate={"max_eval_loss": None})],
+        }
+        cur = load_curriculum(_write(tmp_path, doc))
+        g = cur.stages[0].gate
+        assert g.max_eval_loss is None  # author opted out of the loss check
+        assert g.min_quality == 2.5  # remaining defaults still judge
+        assert g.max_toxicity == 0.2
+        assert not g.is_empty
+
+    def test_default_gate_fails_honestly_when_unmeasurable(self):
+        # No eval_text + no sample: a default gate must FAIL (never vacuous).
+        stage = StageSpec(name="s1", datasets=(("a.txt", 1.0),))
+        ok, reason, metrics = evaluate_stage_gate(
+            MagicMock(), stage, checkpoint="c.soul", eval_text=""
+        )
+        assert ok is False
+        assert "cannot evaluate eval_loss" in reason
+        assert "cannot evaluate quality" in reason
 
 
 # ── Stage mixing (ratios + replay) ──────────────────────────────────────
@@ -303,7 +395,10 @@ class TestEvaluateStageGate:
 
     def test_empty_gate_passes_vacuously(self):
         ok, reason, metrics = evaluate_stage_gate(
-            MagicMock(), self._stage(GateCriteria()), checkpoint="c.soul", eval_text="e.txt"
+            MagicMock(),
+            self._stage(GateCriteria(None, None, None)),  # explicit opt-out
+            checkpoint="c.soul",
+            eval_text="e.txt",
         )
         assert ok is True
         assert reason == ""
@@ -771,7 +866,10 @@ class TestCurriculumRoute:
             "domain.infrastructure.cancel_manager.get_cancel_manager",
             MagicMock(),
         )
-        path = _write(tmp_path, {"version": 1, "stages": [_stage("one"), _stage("two")]})
+        path = _write(
+            tmp_path,
+            {"version": 1, "eval_text": "data/eval.txt", "stages": [_stage("one"), _stage("two")]},
+        )
         res = local_api._post_training_curriculum({}, {}, {"curriculum": path})
         assert res["status"] == "running"
         assert res["stages"] == 2
@@ -816,7 +914,10 @@ class TestRunCurriculumJob:
         from domain.shell._internal import local_api
         from domain.training._internal.curriculum import StageResult
 
-        path = _write(tmp_path, {"version": 1, "stages": [_stage("one"), _stage("two")]})
+        path = _write(
+            tmp_path,
+            {"version": 1, "eval_text": "data/eval.txt", "stages": [_stage("one"), _stage("two")]},
+        )
         jid = self._job(local_api, monkeypatch, path)
         report = SimpleNamespace(
             cancelled=False,
@@ -871,7 +972,10 @@ class TestRunCurriculumJob:
     def test_stage_gate_abort_marks_job_failed(self, tmp_path, monkeypatch):
         from domain.shell._internal import local_api
 
-        path = _write(tmp_path, {"version": 1, "stages": [_stage("one")]})
+        path = _write(
+            tmp_path,
+            {"version": 1, "eval_text": "data/eval.txt", "stages": [_stage("one")]},
+        )
         jid = self._job(local_api, monkeypatch, path)
 
         def fake_run(curriculum, *, config, on_progress, cancel_event, pause_event):
@@ -888,7 +992,10 @@ class TestRunCurriculumJob:
 
         from domain.shell._internal import local_api
 
-        path = _write(tmp_path, {"version": 1, "stages": [_stage("one")]})
+        path = _write(
+            tmp_path,
+            {"version": 1, "eval_text": "data/eval.txt", "stages": [_stage("one")]},
+        )
         jid = self._job(local_api, monkeypatch, path)
 
         def fake_run(curriculum, *, config, on_progress, cancel_event, pause_event):
@@ -970,17 +1077,23 @@ class TestRealTrainerEndToEnd:
                 {
                     "version": 1,
                     "stages": [
-                        _stage("s1", datasets=[{"path": str(a), "ratio": 1.0}]),
+                        _stage(
+                            "s1",
+                            datasets=[{"path": str(a), "ratio": 1.0}],
+                            gate=_NO_GATE,  # mechanics only — see below
+                        ),
                         _stage(
                             "s2",
                             datasets=[{"path": str(b), "ratio": 1.0}],
                             replay=0.25,
+                            gate=_NO_GATE,
                         ),
                     ],
                 },
             )
         )
-        # this test exercises staging mechanics, not data-quality gates
+        # this test exercises staging mechanics, not data-quality gates:
+        # explicit nulls keep the calibrated defaults from sampling/eval'ing
         cfg = _tiny_config(tmp_path, min_data_quality=0.0, max_toxicity_rate=1.0)
 
         report = run_curriculum(cur, config=cfg)
