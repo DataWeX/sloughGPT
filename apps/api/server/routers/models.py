@@ -20,6 +20,7 @@ from controllers.models import get_models_controller
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.inference_metrics import count_tokens, record
 from pydantic import BaseModel, Field
 from schemas.common import (
     classify_and_raise,
@@ -2158,15 +2159,8 @@ class InferRouter:
                 repetition_penalty=req.repetition_penalty,
             )
             elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-            tokens = len(result.split())
-            try:
-                from domain.infrastructure.server_state import get_server_state
-
-                get_server_state().record_inference(
-                    tokens=tokens, elapsed_ms=elapsed_ms, model=req.model
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
+            tokens = count_tokens(result, provider=provider)
+            record(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model)
             model = self._get_model()
             model_name = req.model or (
                 getattr(model, "model_id", None) or type(model).__name__ if model else "unknown"
@@ -2264,6 +2258,8 @@ class InferRouter:
                 provider_messages = [{"role": "user", "content": prompt_text}]
                 start = datetime.datetime.now()
                 token_count = 0
+                parts: list[str] = []
+                _decode_start: float | None = None
                 _token_gen_start = _time.time()
                 _max_token_wait_s = getattr(cfg, "generate_timeout", 60)
                 _heartbeat_interval_s = 10.0
@@ -2280,8 +2276,11 @@ class InferRouter:
                         if await request.is_disconnected():
                             return
                         if token:
+                            if _decode_start is None:
+                                _decode_start = _time.monotonic()
                             _token_gen_start = _time.time()
                             token_count += 1
+                            parts.append(token)
                             yield self._sse_token("infer", token)
                         else:
                             now = _time.time()
@@ -2315,14 +2314,14 @@ class InferRouter:
                     yield self._sse_error("infer", err.code, err.user_message)
                     return
                 elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-                try:
-                    from domain.infrastructure.server_state import get_server_state
-
-                    get_server_state().record_inference(
-                        tokens=token_count, elapsed_ms=elapsed_ms, model=req.model
-                    )
-                except Exception as e:
-                    logger.warning("Failed to record inference metrics: %s", e)
+                record(
+                    tokens=count_tokens("".join(parts), provider=provider),
+                    # Decode window: first chunk -> last (0 when nothing decoded).
+                    elapsed_ms=(_time.monotonic() - _decode_start) * 1000
+                    if _decode_start is not None
+                    else 0.0,
+                    model=req.model,
+                )
                 safe_audit_log(
                     "infer.stream",
                     resource=req.model or "default",
