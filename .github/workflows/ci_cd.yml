@@ -105,6 +105,17 @@ jobs:
           # test_vfs_addon.py imports lz4 at module scope -> collection error
           python -m pip install lz4
 
+      # ── seam gate: command parity always runs on PRs (card 20261104_085623) ──
+      # Testmon selection is dependency-based, so for most diffs the parity
+      # test isn't selected — yet a Command Rule gate must not ride on
+      # selection (Test Rule clause 4: seam gates run when their surface is
+      # touched). Seconds: 7 passed / 4 xfailed baseline, ~1.5s. Main's full
+      # run below covers it anyway (same tests/core-py/ scope); this step
+      # only closes the PR-mode gap — duplicate run on selection is noise-free.
+      - name: Command parity (seam gate, always on PRs)
+        if: github.event_name == 'pull_request'
+        run: python -m pytest tests/core-py/test_command_parity.py -q --tb=short
+
       # ── PR mode: affected closure (Test Rule clause 3, card 20261104_085623) ──
       # The testmon DB is written ONLY by main's full runs (single writer: a
       # partial PR record would poison the canonical selection state). PRs
@@ -115,7 +126,8 @@ jobs:
       # affected closure measures the subset, not the codebase — the 50%
       # floor stays on main's full run, where it measures the whole tree.
       # The seam gates (contract, feature tags, board, lint) are separate
-      # seconds-jobs and run unchanged on every PR.
+      # seconds-jobs and run unchanged on every PR; command parity runs as
+      # the always-on step above (in-job — the env is already set up).
       - name: Restore testmon DB (PR selection basis)
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@v4

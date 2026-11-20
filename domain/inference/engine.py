@@ -88,6 +88,21 @@ class TurnRequest:
 
 
 @dataclass(slots=True)
+class TurnEvent:
+    """Out-of-band turn event — the engine pushes these BETWEEN tokens.
+
+    Edges project them as they arrive (the chat SSE surface renders
+    ``kind="tool"`` as ``phase: TOOL`` frames); ``fold`` deliberately ignores
+    them — a folding caller gets tokens + the final ``TurnResult``, never a
+    crash on the new yieldable. Carries lifecycle data only (small strings) —
+    attachments stay in-process and never ride this type to a client.
+    """
+
+    kind: str = "tool"
+    data: dict = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class TurnResult:
     """Everything the engine pushes out for one turn — the "details" the chat
     surface reads off the output (values the old handler computed and
@@ -111,11 +126,14 @@ class TurnResult:
 class ChatEngine(Protocol):
     """The generate engine's public seam.
 
-    ``stream`` is the single engine method: it yields raw tokens, then a
-    final ``TurnResult``. Non-streaming surfaces fold this stream at the edge.
+    ``stream`` is the single engine method: it yields raw tokens (and
+    ``TurnEvent`` out-of-band events), then a final ``TurnResult``.
+    Non-streaming surfaces fold this stream at the edge.
     """
 
-    def stream(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]: ...
+    def stream(
+        self, req: TurnRequest
+    ) -> AsyncIterator[TurnResult | TurnEvent | str]: ...
 
 
 def fold(stream: AsyncIterator[TurnResult | str]) -> Awaitable[TurnResult]:

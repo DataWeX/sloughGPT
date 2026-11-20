@@ -85,13 +85,20 @@ class AgentLoop:
         *,
         system_prompt: str | None = None,
         approve: ApproveFn | None = None,
+        messages: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[Event]:
+        """Drive the loop. ``task`` names the run (plan event); pass ``messages``
+        to seed full conversation history (the chat turn path) — omitted, the
+        loop builds the classic [system?] + [user task] pair."""
         specs = [tools.get(t["name"]) for t in tools.list_tools()]
         specs = [s for s in specs if s is not None]
-        messages: list[dict[str, Any]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": task})
+        if messages is not None:
+            messages = [dict(m) for m in messages]
+        else:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": task})
         yield Event(
             "plan", {"task": task, "tools": [s.name for s in specs], "max_iters": self.max_iters}
         )
