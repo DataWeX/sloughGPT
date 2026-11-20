@@ -452,6 +452,32 @@ def _gui(args: argparse.Namespace) -> int:
 # ── CLI Parser ───────────────────────────────────────────────────────────
 
 
+def _add_sync_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--quiet", action="store_true")
+    p.add_argument(
+        "--prune",
+        action="store_true",
+        help=(
+            "Also delete cards whose note no longer exists. "
+            "Without this flag orphaned cards are only reported, never removed."
+        ),
+    )
+
+
+def _add_verify_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("note", help="Note file path or title substring")
+    p.add_argument("--repo", default=".", help="Git repo to check landed: shas in (default: cwd)")
+    p.add_argument("--board-file", default=None, help="board.jsonl path (default: config)")
+
+
+def _add_snapshot_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--repo", default=".", help="Destination repo root (default: cwd)")
+
+
+def _add_export_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--repo", default=".", help="Destination repo root (default: cwd)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="grib",
@@ -526,20 +552,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--text", default=None)
     p.add_argument("--limit", type=int, default=None)
 
-    # Sync
-    sync_p = sub.add_parser("sync", help="Sync notes to board")
-    sync_p.add_argument("--quiet", action="store_true")
-    sync_p.add_argument(
-        "--prune",
-        action="store_true",
-        help=(
-            "Also delete cards whose note no longer exists. "
-            "Without this flag orphaned cards are only reported, never removed."
+    # Sync — canonical path `grib board sync`; top-level kept as an alias.
+    sync_p = sub.add_parser("sync", help="Sync notes to board (alias of `grib board sync`)")
+    _add_sync_args(sync_p)
+    p = board_sub.add_parser("sync", help="Sync notes to board")
+    _add_sync_args(p)
+
+    # Verify — canonical path `grib note verify`; top-level kept as an alias.
+    verify_p = sub.add_parser(
+        "verify",
+        help="Diff a note card against its board card + landed git shas (alias of `grib note verify`)",
+        description=(
+            "Three-way consistency check: note frontmatter (status/board/landed) "
+            "vs the board card vs actual git history. Exits 1 on any drift."
         ),
     )
-
-    # Verify
-    verify_p = sub.add_parser(
+    _add_verify_args(verify_p)
+    p = note_sub.add_parser(
         "verify",
         help="Diff a note card against its board card + landed git shas",
         description=(
@@ -547,11 +576,7 @@ def build_parser() -> argparse.ArgumentParser:
             "vs the board card vs actual git history. Exits 1 on any drift."
         ),
     )
-    verify_p.add_argument("note", help="Note file path or title substring")
-    verify_p.add_argument(
-        "--repo", default=".", help="Git repo to check landed: shas in (default: cwd)"
-    )
-    verify_p.add_argument("--board-file", default=None, help="board.jsonl path (default: config)")
+    _add_verify_args(p)
 
     # Migrate
     migrate_p = sub.add_parser(
@@ -578,6 +603,16 @@ def build_parser() -> argparse.ArgumentParser:
     # Snapshot
     snapshot_p = sub.add_parser(
         "snapshot",
+        help="Copy the canonical board into <repo>/.kanban/snapshots/ (alias of `grib board snapshot`)",
+        description=(
+            "Export a dated, byte-exact copy of the canonical board into the "
+            "repo for versioned history. Prints the suggested commit command; "
+            "never runs git itself."
+        ),
+    )
+    _add_snapshot_args(snapshot_p)
+    p = board_sub.add_parser(
+        "snapshot",
         help="Copy the canonical board into <repo>/.kanban/snapshots/",
         description=(
             "Export a dated, byte-exact copy of the canonical board into the "
@@ -585,10 +620,21 @@ def build_parser() -> argparse.ArgumentParser:
             "never runs git itself."
         ),
     )
-    snapshot_p.add_argument("--repo", default=".", help="Destination repo root (default: cwd)")
+    _add_snapshot_args(p)
 
     # Export (live mirror for the GitHub sync pipeline — see grib.export)
     export_p = sub.add_parser(
+        "export",
+        help="Mirror canonical board+notes into the repo (alias of `grib board export`)",
+        description=(
+            "Producer half of the kanban GitHub sync: byte-exact mirror of the "
+            "canonical board and notes into the repo working copies plus "
+            ".kanban/manifest.json for the CI freshness alarm. Never runs git — "
+            "scripts/kanban_sync.sh commits and pushes."
+        ),
+    )
+    _add_export_args(export_p)
+    p = board_sub.add_parser(
         "export",
         help="Mirror canonical board+notes into <repo>/.kanban/board.jsonl + <repo>/.dev-notes/",
         description=(
@@ -598,7 +644,7 @@ def build_parser() -> argparse.ArgumentParser:
             "scripts/kanban_sync.sh commits and pushes."
         ),
     )
-    export_p.add_argument("--repo", default=".", help="Destination repo root (default: cwd)")
+    _add_export_args(p)
 
     # GUI
     gui_p = sub.add_parser(
@@ -662,10 +708,18 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "index"): _board_index,
         ("kanban", "query"): _board_query,
         ("sync", None): _sync,
+        ("board", "sync"): _sync,
+        ("kanban", "sync"): _sync,
         ("verify", None): _verify,
+        ("note", "verify"): _verify,
+        ("notes", "verify"): _verify,
         ("migrate", None): _migrate,
         ("snapshot", None): _snapshot,
+        ("board", "snapshot"): _snapshot,
+        ("kanban", "snapshot"): _snapshot,
         ("export", None): _export,
+        ("board", "export"): _export,
+        ("kanban", "export"): _export,
         ("gui", None): _gui,
     }
 

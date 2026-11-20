@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "4936bbcd704de0db6b9108fbb98c00da218d7848",
+    "recorded_commit": "aee699ae225118f2a2fec8e2dfcc81d056d52d8b",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "6986d33ee26859eed915333cd853f1024108bd5c"
+      "tree_hash": "b37889c76548eed1c7d4ee3c2469d4456c867a12"
     },
     "ai_personality": {
       "class": "feature",
@@ -264,7 +264,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "b2071304181d381351988637423142a6b135c47f"
+      "tree_hash": "dab42645e74c27bac195a536e6c4cbdd6ee8eb21"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -280,7 +280,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "713b21079f4c3db92f9b70eb860fd0146b491b86"
+      "tree_hash": "0f9b3d3e2e3aec8f8d9340a07d10255148a578f7"
     },
     "knowledge": {
       "class": "core-capability",
@@ -393,7 +393,7 @@
       ],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "5f54e51b86e650c89c641e706d2782693c856d11"
+      "tree_hash": "833104def118896989347afd225c2ceccb1e085d"
     },
     "ops": {
       "class": "core-capability",
