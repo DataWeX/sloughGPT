@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "5c778a0efda59a7376d9cdab34cc570bf5641e6a",
+    "recorded_commit": "705bd3bd7f1eff489c72cf1482dfa11b58eaf687",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -280,7 +280,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "c99f36d28794c5d3882324df2e4e097289f7e2b4"
+      "tree_hash": "713b21079f4c3db92f9b70eb860fd0146b491b86"
     },
     "knowledge": {
       "class": "core-capability",
@@ -376,7 +376,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "1a364e002c15fe7ffcc043784db1c2d85e4fa496"
+      "tree_hash": "bb2e7d1740600c44da3572cf8b401c6faf20e15c"
     },
     "multimodal": {
       "class": "core-capability",
@@ -393,7 +393,7 @@
       ],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "5f54e51b86e650c89c641e706d2782693c856d11"
+      "tree_hash": "833104def118896989347afd225c2ceccb1e085d"
     },
     "ops": {
       "class": "core-capability",
@@ -550,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "c7ca61208e1f6a09cdc6985f173f13a47eb6f40d"
+      "tree_hash": "4ba2515acef25ac608f386de6dc1fbb3013d3105"
     },
     "voice": {
       "class": "core-capability",

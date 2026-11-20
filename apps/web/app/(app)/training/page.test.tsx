@@ -17,6 +17,7 @@ vi.mock('@sloughgpt/strui', () => {
     CardContent: passthrough,
     CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
+    CardDescription: ({ children }: any) => <p>{children}</p>,
     Label: ({ children }: any) => <label>{children}</label>,
     Input: ({ value, onChange, placeholder, type }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} type={type} />
@@ -195,10 +196,11 @@ vi.mock('@/components/training/TrainingHealthCard', () => ({ TrainingHealthCard:
 vi.mock('@/components/OutputCard', () => ({ OutputCard: () => null }))
 vi.mock('@/components/training/TestModelDialog', () => ({ TestModelDialog: () => null }))
 vi.mock('@/components/training/TrainingPipeline', () => ({
-  TrainingPipeline: ({ form, datasets, session, checkpoints, onTest }: any) => (
+  TrainingPipeline: ({ form, datasets, session, checkpoints, onTest, step }: any) => (
     <div data-testid="training-pipeline">
       <span>pipeline:{checkpoints.checkpoints.length}</span>
       <span>jobs:{form.allJobs.length}</span>
+      <span>step:{step}</span>
       {session.trainingRunning && <span>running</span>}
     </div>
   ),
@@ -386,5 +388,22 @@ describe('TrainingPage', () => {
       fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     })
     expect(mockForm.startTraining).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the mode chooser and routes a card into the guided setup', async () => {
+    // Journey (card 20261119_130319): land on /training → see there is more
+    // than datasets → pick a way → the setup below is configured for it.
+    render(<Page />)
+    await waitFor(() => {
+      expect(screen.getByText('How do you want to train?')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Paste text/ }))
+    expect(mockForm.setInputMode).toHaveBeenCalledWith('text')
+    expect(screen.getByText('step:configure')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Train on a dataset/ }))
+    expect(mockForm.setInputMode).toHaveBeenCalledWith('dataset')
+    expect(screen.getByText('step:data')).toBeTruthy()
   })
 })

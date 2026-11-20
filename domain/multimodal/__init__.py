@@ -10,6 +10,12 @@ from __future__ import annotations
 from domain.multimodal._internal.config import MultiModalConfig
 from domain.multimodal._internal.diffusion import LatentDiffusionModel
 from domain.multimodal._internal.engine import ReplayBuffer
+from domain.multimodal._internal.gallery import (
+    IMAGE_STYLES,
+    generate_image,
+    hex_to_rgb,
+    save_image,
+)
 from domain.multimodal._internal.manager import (
     MultimodalCapabilities,
     MultimodalManager,
@@ -22,6 +28,7 @@ from domain.multimodal._internal.vae import SloVAE
 from domain.multimodal._internal.video import VideoProcessor
 
 __all__ = [
+    "IMAGE_STYLES",
     "LatentDiffusionModel",
     "MultiModalConfig",
     "MultimodalCapabilities",
@@ -31,6 +38,9 @@ __all__ = [
     "TextEncoder",
     "UnifiedPhonemeEncoder",
     "VideoProcessor",
+    "generate_image",
     "get_multimodal_manager",
+    "hex_to_rgb",
     "initialize_multimodal",
+    "save_image",
 ]

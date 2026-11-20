@@ -380,3 +380,46 @@ class TestEnvironmentGate:
         )
         with _serve(headers={WEB_TREE_HEADER: web_tree_id()}) as url:
             assert environment_gate(url) is None
+
+
+class TestJourneySuiteTreeGuard:
+    """Ratchet: every suite driving the served web root must gate on identity.
+
+    Card 20261119_144623: ``test_e2e_training_trigger.py`` read whatever
+    localhost:5173 served (a foreign lane's vite, X-Slo-Web-Tree of another
+    checkout) with no identity check — 2 content reds structurally
+    impossible to attribute. The gate itself landed in card 20261104_085623;
+    the defect here is WIRING drift: a suite carrying the web-root BASE
+    idiom can be written (or was written) without calling it.
+
+    Static source read — the command-parity idiom: importing the slow
+    suites here would drag their ``pytest.importorskip``/playwright
+    contagion into the fast lane, and the check is about the source
+    carrying the wiring, not about executing it.
+    """
+
+    # The web-root BASE idiom: a suite that resolves its own page root from
+    # SLO_WEB_URL defaulting to the vite port drives the served checkout.
+    WEB_ROOT_IDIOM = 'SLO_WEB_URL") or "http://localhost:5173"'
+
+    def test_web_root_suites_call_the_environment_gate(self):
+        repo = Path(__file__).resolve().parents[1]
+        drivers = sorted(
+            p
+            for p in (repo / "tests").rglob("test_*.py")
+            if self.WEB_ROOT_IDIOM in p.read_text(encoding="utf-8")
+        )
+        assert drivers, (
+            "no suite carries the web-root BASE idiom — if it was renamed, "
+            "update this pin to the new spelling"
+        )
+        ungated = [
+            str(p.relative_to(repo))
+            for p in drivers
+            if "skip_gate_identity" not in p.read_text(encoding="utf-8")
+        ]
+        assert not ungated, (
+            f"suites driving the served web root without the tree gate "
+            f"(import environment_gate from tests.skip_gate_identity and "
+            f"call it after the readiness wait): {ungated}"
+        )

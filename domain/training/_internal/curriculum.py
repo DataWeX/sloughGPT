@@ -77,11 +77,19 @@ class StageGateError(RuntimeError):
 
 @dataclass(frozen=True)
 class GateCriteria:
-    """Thresholds a stage's checkpoint must meet to advance cleanly."""
+    """Thresholds a stage's checkpoint must meet to advance cleanly.
 
-    max_eval_loss: float | None = None
-    min_quality: float | None = None
-    max_toxicity: float | None = None
+    Defaults are the CALIBRATED values from the real 4-stage run
+    2026-11-19 (same numbers as ``examples/curriculum.json``): a missing
+    gate judges with eval_loss <= 3.5, quality >= 2.5, toxicity <= 0.2
+    rather than passing vacuously. The opt-out is explicit:
+    ``GateCriteria(None, None, None)`` (programmatic) or
+    ``"max_eval_loss": null`` per key (JSON).
+    """
+
+    max_eval_loss: float | None = 3.5
+    min_quality: float | None = 2.5
+    max_toxicity: float | None = 0.2
 
     @property
     def is_empty(self) -> bool:
@@ -185,17 +193,26 @@ def _parse_datasets(raw: Any, where: str) -> tuple[tuple[str, float], ...]:
 
 def _parse_gate(raw: Any, where: str, eval_text: str | None) -> GateCriteria:
     if raw is None:
-        return GateCriteria()
-    if not isinstance(raw, dict):
-        raise _fail(f"gate must be an object in {where}")
-    _check_keys(raw, _ALLOWED_GATE_KEYS, f"{where} gate")
-    kwargs: dict[str, float | None] = {}
-    for key in _ALLOWED_GATE_KEYS:
-        if key in raw and raw[key] is not None:
-            kwargs[key] = _positive(key, raw[key], f"{where} gate")
-    gate = GateCriteria(**kwargs)
+        # No `gate` key: the calibrated GateCriteria defaults apply.
+        gate = GateCriteria()
+    else:
+        if not isinstance(raw, dict):
+            raise _fail(f"gate must be an object in {where}")
+        _check_keys(raw, _ALLOWED_GATE_KEYS, f"{where} gate")
+        kwargs: dict[str, float | None] = {}
+        for key in _ALLOWED_GATE_KEYS:
+            if key in raw:
+                # explicit null = author opts THIS check out (stays None);
+                # absent key = calibrated default applies.
+                kwargs[key] = (
+                    None if raw[key] is None else _positive(key, raw[key], f"{where} gate")
+                )
+        gate = GateCriteria(**kwargs)
     if gate.max_eval_loss is not None and not eval_text:
-        raise _fail(f"gate.max_eval_loss requires an eval_text (stage or top-level) in {where}")
+        raise _fail(
+            f"gate.max_eval_loss requires an eval_text (stage or top-level) in {where} "
+            "— add an eval_text, or set gate.max_eval_loss to null to skip the loss check"
+        )
     return gate
 
 
@@ -386,7 +403,15 @@ def _sample_metrics(
         return None
     try:
         seed = np.zeros((1, 1), dtype=np.int64)
-        out = generate(seed, max_new_tokens=max_new_tokens, temperature=temperature)
+        # eos_token=None: sample the full max_new_tokens — a char-vocab
+        # model puts '\n' at id 0, so the default eos would truncate the
+        # sample below min_chars and the gate could never score it.
+        out = generate(
+            seed,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            eos_token=None,
+        )
         ids = np.asarray(out)[0]
         text = _decode(ids[1:] if len(ids) > 1 else ids, itos)
     except Exception as exc:  # noqa: BLE001 — a generation failure is "no sample"
