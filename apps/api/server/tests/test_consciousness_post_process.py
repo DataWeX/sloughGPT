@@ -69,7 +69,9 @@ class TestRunPostGenTasksReturnsConsciousness:
         monkeypatch.setattr(inference_mod, "extract_and_store", lambda *a, **k: None)
         monkeypatch.setattr(inference_mod, "get_learner", lambda: MagicMock())
         monkeypatch.setattr(inference_mod, "get_response_tracker", lambda: MagicMock())
-        monkeypatch.setattr(inference_mod, "get_server_state", lambda: MagicMock())
+        # Site A records through the shared seam; patch it there (the module
+        # no longer binds get_server_state directly — card 20261119_132133).
+        monkeypatch.setattr("infrastructure.inference_metrics.record", lambda *a, **k: None)
         req = MagicMock()
         req.use_rag = False
         req.use_context_core = False
@@ -109,7 +111,9 @@ class TestRunPostGenTasksReturnsConsciousness:
         monkeypatch.setattr(inference_mod, "extract_and_store", lambda *a, **k: None)
         monkeypatch.setattr(inference_mod, "get_learner", lambda: MagicMock())
         monkeypatch.setattr(inference_mod, "get_response_tracker", lambda: MagicMock())
-        monkeypatch.setattr(inference_mod, "get_server_state", lambda: MagicMock())
+        # Site A records through the shared seam; patch it there (the module
+        # no longer binds get_server_state directly — card 20261119_132133).
+        monkeypatch.setattr("infrastructure.inference_metrics.record", lambda *a, **k: None)
         req = MagicMock()
         req.use_rag = False
         req.use_context_core = False
