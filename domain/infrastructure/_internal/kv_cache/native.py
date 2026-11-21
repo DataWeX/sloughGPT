@@ -278,6 +278,7 @@ class NativeKVState:
         "_cache",
         "_lens",
         "_fallback",
+        "_fb_layers",
     )
 
     def __init__(self, n_layers: int, n_kv_heads: int, head_dim: int, seq_capacity: int = 2048):
@@ -289,6 +290,10 @@ class NativeKVState:
         self._lib = None
         self._cache = None
         self._fallback = _NumpyBackend(n_layers, cap=seq_capacity)
+        # Layers whose history lives in the numpy backend (an update deviated
+        # from the C layout) — get()/seq_len must read the same side that
+        # update() wrote, never a mix of the two.
+        self._fb_layers: set[int] = set()
 
         try:
             from domain.inference._internal.native.bindings import load_lib
@@ -331,6 +336,10 @@ class NativeKVState:
     @property
     def seq_len(self) -> int:
         if self._cache is not None:
+            if self._fb_layers and self._fallback is not None:
+                # Mixed state: deviated layers live in the numpy backend, so
+                # the true length is the max across both sides.
+                return max(self._cache.seq_len, self._fallback.seq_len)
             return self._cache.seq_len
         return self._fallback.seq_len if self._fallback is not None else 0
 
@@ -338,18 +347,44 @@ class NativeKVState:
     def stride(self) -> int:
         return self._n_kv_heads * self._head_dim
 
-    def _layer_ptr(self, layer_idx: int, which: str) -> ctypes.POINTER(ctypes.c_float):
+    def _layer_ptr(self, layer_idx: int, which: str, elem_offset: int = 0) -> ctypes.POINTER(
+        ctypes.c_float
+    ):
+        """Typed pointer to layer `layer_idx`'s slot (+`elem_offset` floats).
+
+        ctypes scalar pointers have no `+` (arithmetic is only defined for
+        array-pointees), so the offset runs on the integer address:
+        cast to c_void_p, add bytes (floats * 4), cast back.
+        """
         ptr = self._cache.k if which == "k" else self._cache.v
-        offset = layer_idx * self.stride * self._seq_capacity
-        return ctypes.cast(ptr + offset, ctypes.POINTER(ctypes.c_float))
+        addr = ctypes.cast(ptr, ctypes.c_void_p).value or 0
+        floats = layer_idx * self.stride * self._seq_capacity + elem_offset
+        return ctypes.cast(
+            ctypes.c_void_p(addr + floats * ctypes.sizeof(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_float),
+        )
 
     def update(self, layer_idx: int, k: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Append new K, V for a layer; return the full concatenated (K, V)."""
         if self._cache is None:
             return self._fallback.update(layer_idx, k, v)
 
+        if layer_idx in self._fb_layers:
+            # This layer's history already lives in the numpy backend — keep
+            # it there so get() sees one consistent history.
+            return self._fallback.update(layer_idx, k, v)
+
         if k.shape != (1, k.shape[1], self._n_kv_heads, self._head_dim):
             # Not a single-seq contiguous step — deviate to the numpy backend.
+            # Migrate any native history first so the deviation doesn't drop
+            # earlier tokens, then pin the layer to the fallback.
+            if self._lens[layer_idx] > 0:
+                hist = self.get(layer_idx)
+                if hist is not None:
+                    self._fallback.update(layer_idx, hist[0], hist[1])
+                self._lens[layer_idx] = 0
+                self._cache.seq_len = max(self._lens)
+            self._fb_layers.add(layer_idx)
             return self._fallback.update(layer_idx, k, v)
 
         n_new = int(k.shape[1])
@@ -357,7 +392,7 @@ class NativeKVState:
         if base < self._seq_capacity:
             n_copy = min(n_new, self._seq_capacity - base)
             for which, arr in (("k", k), ("v", v)):
-                dst = self._layer_ptr(layer_idx, which) + base * self.stride
+                dst = self._layer_ptr(layer_idx, which, base * self.stride)
                 ctypes.memmove(
                     dst,
                     np.ascontiguousarray(arr, dtype=np.float32).ctypes.data,
@@ -371,7 +406,7 @@ class NativeKVState:
 
     def get(self, layer_idx: int) -> tuple[np.ndarray, np.ndarray] | None:
         """Return the concatenated (K, V) for a layer, or None."""
-        if self._cache is None:
+        if self._cache is None or layer_idx in self._fb_layers:
             return self._fallback.get(layer_idx)
         n = self._lens[layer_idx]
         if n == 0:
@@ -388,6 +423,7 @@ class NativeKVState:
         if self._cache is not None:
             self._lib.transformer_kv_cache_reset(self._cache)
         self._lens = [0] * self._n_layers
+        self._fb_layers.clear()
         if self._fallback is not None:
             self._fallback.reset()
 

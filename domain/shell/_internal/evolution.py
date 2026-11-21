@@ -42,6 +42,7 @@ from dataclasses import replace
 
 import numpy as np
 
+from .llm_brain import LLMBrain
 from .memory import WorldMemory
 from .model_brain import SloNetBrain
 from .simulation import (
@@ -202,18 +203,21 @@ class Genome:
             serializable inherited episodes.
 
         Raises:
-            NotImplementedError: when a behavior brain is a ``SloNetBrain`` —
-                the genome's flat ``W``/``b``/``H``/``bh`` tensor format
-                cannot represent a native SloNet stack, and inventing a
-                tensor-inventory parity for it is out of scope (conservative
-                default, card 7ff49d20). ``slonet`` brains breed whole through
-                ``SimBaby.spawn_child`` instead of generational evolution.
+            NotImplementedError: when a behavior brain is a ``SloNetBrain``
+                or ``LLMBrain`` — the genome's flat ``W``/``b``/``H``/``bh``
+                tensor format cannot represent a native SloNet stack or a
+                prompt-configured LLM brain, and inventing a
+                tensor-inventory parity for either is out of scope
+                (conservative default, card 7ff49d20). Both breed whole
+                through ``SimBaby.spawn_child`` instead of generational
+                evolution.
         """
-        if isinstance(getattr(baby, "perceptron_cells", None), SloNetBrain):
+        if isinstance(getattr(baby, "perceptron_cells", None), (SloNetBrain, LLMBrain)):
             raise NotImplementedError(
-                "Genome.from_baby does not support 'slonet' behavior brains: the flat "
-                "W/b[/H/bh] genome format cannot represent a native SloNet stack. "
-                "slonet brains inherit whole via SimBaby.spawn_child instead."
+                "Genome.from_baby does not support 'slonet'/'llm' behavior brains: the flat "
+                "W/b[/H/bh] genome format cannot represent a native SloNet stack or a "
+                "prompt-configured LLM brain. Both inherit whole via SimBaby.spawn_child "
+                "instead of generational evolution."
             )
         tensors: dict[str, np.ndarray] = {}
         names = ("cells", "body", "entity", "move")
@@ -357,16 +361,18 @@ class Genome:
             - records the genome's memories into baby.memory
 
         Raises:
-            NotImplementedError: when a behavior brain is a ``SloNetBrain`` —
-                the genome's flat tensors cannot overwrite a native stack
-                without silently corrupting it (card 7ff49d20, conservative
-                default: fail loud rather than half-apply).
+            NotImplementedError: when a behavior brain is a ``SloNetBrain``
+                or ``LLMBrain`` — the genome's flat tensors cannot
+                overwrite a native stack or an LLM brain without silently
+                corrupting it (card 7ff49d20, conservative default: fail
+                loud rather than half-apply).
         """
-        if isinstance(getattr(baby, "perceptron_cells", None), SloNetBrain):
+        if isinstance(getattr(baby, "perceptron_cells", None), (SloNetBrain, LLMBrain)):
             raise NotImplementedError(
-                "Genome.apply_to does not support 'slonet' behavior brains: the flat "
-                "W/b[/H/bh] genome format cannot overwrite a native SloNet stack. "
-                "slonet brains inherit whole via SimBaby.spawn_child instead."
+                "Genome.apply_to does not support 'slonet'/'llm' behavior brains: the flat "
+                "W/b[/H/bh] genome format cannot overwrite a native SloNet stack or an "
+                "LLM brain (there are no tensors to overwrite). Both inherit whole via "
+                "SimBaby.spawn_child instead."
             )
         for name in ("cells", "body", "entity", "move"):
             p = getattr(baby, f"perceptron_{name}")
