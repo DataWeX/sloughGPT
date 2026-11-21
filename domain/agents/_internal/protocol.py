@@ -33,8 +33,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-CANONICAL_RE = re.compile(r"```tool_call\s*\n(.*?)\n\s*```", re.DOTALL)
+CANONICAL_RE = re.compile(r"```(tool_call|json)\s*\n(.*?)\n\s*```", re.DOTALL)
 LEGACY_TOOL_RE = re.compile(r"\[\[TOOL:\s*(\w+)\s*\]\]\s*([^\n]+)")
+_TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
 
 
 class ProtocolError(ValueError):
@@ -76,13 +77,42 @@ def _parse_call_item(item: Any, position: int) -> ToolCall:
     return ToolCall(name=name, args=dict(args))
 
 
+def _repair_trailing_commas(raw: str) -> str:
+    """Strip trailing commas before ``}``/``]`` — the 0.5B model's most
+    common JSON sloppiness (live-observed on the Phase 2 journey walk,
+    card 20261116_090332). Lenient parse applies to the informal ``json``
+    tag only; the canonical ``tool_call`` contract stays strict."""
+    return _TRAILING_COMMA_RE.sub(r"\1", raw)
+
+
+def _looks_like_tool_call(payload: Any) -> bool:
+    """Tool-shaped = a call name, or a ``tool_calls`` list (json tag gate)."""
+    if not isinstance(payload, dict):
+        return False
+    if "tool_calls" in payload:
+        return isinstance(payload["tool_calls"], list)
+    return bool(payload.get("name") or payload.get("tool"))
+
+
 def _decode_canonical(text: str, calls: list[ToolCall]) -> str:
     def _sub(m: re.Match[str]) -> str:
-        raw = m.group(1).strip()
+        tag, raw = m.group(1), m.group(2).strip()
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as e:
-            raise ProtocolError(f"invalid tool_call JSON: {e}", position=m.start()) from e
+            if tag == "tool_call":
+                raise ProtocolError(
+                    f"invalid tool_call JSON: {e}", position=m.start()
+                ) from e
+            # Informal ``json`` tag carries no contract: retry with the
+            # lenient parse, else the block is just code — prose, never an
+            # error (strictness belongs to ``tool_call`` alone).
+            try:
+                payload = json.loads(_repair_trailing_commas(raw))
+            except json.JSONDecodeError:
+                return m.group(0)
+        if tag == "json" and not _looks_like_tool_call(payload):
+            return m.group(0)  # a plain JSON snippet — code, not a call
         calls.extend(_parse_canonical_payload(payload, m.start()))
         return ""
 
