@@ -1,7 +1,7 @@
 {
  "note": "Route + OpenAPI baseline for scripts/check_contract.py \u2014 report-only drift signal, regenerated with --write-baseline.",
  "routers": 46,
- "count": 342,
+ "count": 336,
  "routes": [
   [
    "/",
@@ -22,6 +22,10 @@
   [
    "/agents/orchestrate",
    "POST"
+  ],
+  [
+   "/agents/routines/stream",
+   "GET"
   ],
   [
    "/agents/runs",
@@ -202,22 +206,6 @@
   [
    "/chat/{session_id}/regenerate",
    "POST"
-  ],
-  [
-   "/cloud-training/jobs",
-   "GET"
-  ],
-  [
-   "/cloud-training/submit",
-   "POST"
-  ],
-  [
-   "/cloud-training/{job_id}/cancel",
-   "POST"
-  ],
-  [
-   "/cloud-training/{job_id}/status",
-   "GET"
   ],
   [
    "/config/generation",
@@ -494,18 +482,6 @@
   [
    "/info/soul",
    "GET"
-  ],
-  [
-   "/lora-eval/aggregate",
-   "POST"
-  ],
-  [
-   "/lora-eval/history",
-   "GET"
-  ],
-  [
-   "/lora-eval/run",
-   "POST"
   ],
   [
    "/memory/archive",
@@ -932,20 +908,12 @@
    "GET"
   ],
   [
+   "/runtime-config",
+   "GET"
+  ],
+  [
    "/search",
    "GET"
-  ],
-  [
-   "/self-train/start",
-   "POST"
-  ],
-  [
-   "/self-train/status",
-   "GET"
-  ],
-  [
-   "/self-train/stop",
-   "POST"
   ],
   [
    "/tenants",
@@ -969,6 +937,10 @@
   ],
   [
    "/tenants/{tenant_id}/stats",
+   "GET"
+  ],
+  [
+   "/test-results",
    "GET"
   ],
   [
@@ -1216,6 +1188,10 @@
    "GET"
   ],
   [
+   "/voice/stt",
+   "POST"
+  ],
+  [
    "/voice/tts",
    "POST"
   ],
@@ -1373,6 +1349,16 @@
   ]
  ],
  "operations": {
+  "/agents/routines/stream": {
+   "GET": {
+    "operationId": "agents.routines_stream.get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
   "/agents": {
    "GET": {
     "operationId": "list_agents_agents_get",
@@ -1903,84 +1889,6 @@
     "body": null,
     "responses": [
      "200"
-    ]
-   }
-  },
-  "/cloud-training/jobs": {
-   "GET": {
-    "operationId": "list_jobs_cloud_training_jobs_get",
-    "params": [
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/cloud-training/submit": {
-   "POST": {
-    "operationId": "submit_job_cloud_training_submit_post",
-    "params": [
-     {
-      "name": "dataset_id",
-      "in": "query",
-      "required": false,
-      "type": "string"
-     },
-     {
-      "name": "provider",
-      "in": "query",
-      "required": false,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/cloud-training/{job_id}/status": {
-   "GET": {
-    "operationId": "job_status_cloud_training__job_id__status_get",
-    "params": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/cloud-training/{job_id}/cancel": {
-   "POST": {
-    "operationId": "cancel_job_cloud_training__job_id__cancel_post",
-    "params": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
     ]
    }
   },
@@ -4458,84 +4366,6 @@
     ]
    }
   },
-  "/lora-eval/run": {
-   "POST": {
-    "operationId": "run_eval_lora_eval_run_post",
-    "params": [
-     {
-      "name": "adapter_path",
-      "in": "query",
-      "required": false,
-      "type": "string"
-     },
-     {
-      "name": "soul",
-      "in": "query",
-      "required": false,
-      "type": "string"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/lora-eval/history": {
-   "GET": {
-    "operationId": "get_eval_history_lora_eval_history_get",
-    "params": [
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/lora-eval/aggregate": {
-   "POST": {
-    "operationId": "trigger_aggregation_lora_eval_aggregate_post",
-    "params": [
-     {
-      "name": "min_feedback",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     },
-     {
-      "name": "output_name",
-      "in": "query",
-      "required": false,
-      "type": "string"
-     },
-     {
-      "name": "run_eval",
-      "in": "query",
-      "required": false,
-      "type": "boolean"
-     },
-     {
-      "name": "top_k",
-      "in": "query",
-      "required": false,
-      "type": "integer"
-     }
-    ],
-    "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
   "/memory/stats": {
    "GET": {
     "operationId": "stats_memory_stats_get",
@@ -6798,6 +6628,16 @@
     ]
    }
   },
+  "/consciousness/personality/history": {
+   "GET": {
+    "operationId": "consciousness.personality_history.get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
   "/plugins": {
    "GET": {
     "operationId": "list_plugins_plugins_get",
@@ -6969,50 +6809,6 @@
     "responses": [
      "200",
      "422"
-    ]
-   }
-  },
-  "/self-train/start": {
-   "POST": {
-    "operationId": "start_self_train_self_train_start_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": {
-      "anyOf": [
-       {
-        "$ref": "#/components/schemas/SelfTrainRequest"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Req"
-     }
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/self-train/stop": {
-   "POST": {
-    "operationId": "stop_self_train_self_train_stop_post",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/self-train/status": {
-   "GET": {
-    "operationId": "get_self_train_status_self_train_status_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
     ]
    }
   },
@@ -8796,6 +8592,16 @@
     ]
    }
   },
+  "/test-results": {
+   "GET": {
+    "operationId": "test_results.list.get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
   "/token-tree/stats": {
    "GET": {
     "operationId": "get_stats_token_tree_stats_get",
@@ -9655,6 +9461,20 @@
     ]
    }
   },
+  "/voice/stt": {
+   "POST": {
+    "operationId": "speech_to_text_voice_stt_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_speech_to_text_voice_stt_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
   "/workflow/status": {
    "GET": {
     "operationId": "get_workflow_status_workflow_status_get",
@@ -10362,9 +10182,9 @@
     ]
    }
   },
-  "/consciousness/personality/history": {
+  "/runtime-config": {
    "GET": {
-    "operationId": "consciousness.personality_history.get",
+    "operationId": "runtime_config.get.get",
     "params": [],
     "body": null,
     "responses": [
