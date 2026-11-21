@@ -79,9 +79,14 @@ jobs:
     # A hung step fails the job instead of holding the
     # concurrency group for GitHub's 6-hour default
     # (card 20261102_025758 — test-root hung 6 h on main).
-    # 90 (was 60): main's full run now also RECORDS testmon data for PR
-    # selection — measured +40% (35m51s → ~50m, card 20261104_085623).
-    timeout-minutes: 90
+    # 120 (was 90): main's run is now TWO passes (coverage gate, then
+    # testmon record — the CTracer LIFO clash, run 44542985298). Measured
+    # on run 44748601711 (contended runner): pass 1 = 47m27s, pass 2 was
+    # at 99% after 15.5m with the same ~31m slow-test tail pass 1 had →
+    # ~97m need vs the 90m budget; the timeout killed pass 2 ~5 min
+    # before completion (record + save skipped). Uncontended baseline:
+    # 35m51s + 19m15s ≈ 55m (card 20261104_085623).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -215,8 +220,9 @@ jobs:
           # DB PRs select against; plain pytest writes no testmon data.
           # No --cov here by design: the two CTracers clash under xdist
           # (run 44542985298, traceback in the comment above). Measured on
-          # #353's PR runs: full record without coverage = 19m15s.
-          # Pass 1 ≈ 35m51s + pass 2 ≈ 19m15s ≈ 55m < timeout-minutes: 90.
+          # #353's PR runs: full record without coverage = 19m15s; on main
+          # run 44748601711 (contended) pass 2 hit 99% after 15.5m and
+          # needed the same ~31m slow-test tail pass 1 had → budget 120m.
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
