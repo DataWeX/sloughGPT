@@ -7,6 +7,8 @@ import { trackEvent } from '@/lib/dev-log'
 import {
   isStoredThemeId,
   isStoredPaletteId,
+  isThemeMode,
+  toggleMode,
   MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
   PALETTE_STORAGE_KEY,
@@ -37,7 +39,7 @@ function getInitialTheme(): StoredThemeId {
 function getInitialMode(): ThemeMode {
   if (typeof window === 'undefined') return 'dark'
   const v = localStorage.getItem(MODE_STORAGE_KEY)
-  if (v === 'light' || v === 'dark') return v
+  if (isThemeMode(v)) return v
   return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
@@ -85,7 +87,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Listen for Ctrl+Shift+D dark mode toggle
   useEffect(() => {
-    const handler = () => setMode(mode === 'dark' ? 'light' : 'dark')
+    const handler = () => setMode(toggleMode(mode))
     window.addEventListener('toggle-dark-mode', handler)
     return () => window.removeEventListener('toggle-dark-mode', handler)
   }, [mode, setMode])

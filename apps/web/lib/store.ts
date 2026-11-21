@@ -13,7 +13,10 @@ export interface AppSettings {
   defaultMaxTokens: number
   defaultTopP: number
   defaultTopK: number
-  theme: 'dark' | 'light' | 'system'
+  /** Canvas preference, mirrored by the Appearance picker — `ThemeProvider.mode`
+   *  is what actually reaches `<html>`. `system` is legacy: older clients
+   *  persisted it, nothing writes it now (the picker offers three canvases). */
+  theme: 'dark' | 'light' | 'high-contrast' | 'system'
   streaming: boolean
   customContext: string
   collapsibleMessageLength: number
