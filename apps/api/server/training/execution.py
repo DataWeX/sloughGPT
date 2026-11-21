@@ -116,7 +116,7 @@ def _find_start_checkpoint(name: str) -> Path | None:
     traversal attempt resolves outside the root and is rejected: the roots are
     the boundary (card 20261120_124701).
     """
-    from domain.training._internal.state import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR
+    from domain.training import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR
 
     for base in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR):
         root = base.resolve()

@@ -161,9 +161,7 @@ class TestStreamTurnConsciousnessGate:
             monkeypatch.setattr(mod, "get_response_tracker", lambda: MagicMock())
             # Site A records through the shared seam; patch it there (the
             # module no longer binds get_server_state — card 20261119_132133).
-            monkeypatch.setattr(
-                "infrastructure.inference_metrics.record", lambda *a, **k: None
-            )
+            monkeypatch.setattr("infrastructure.inference_metrics.record", lambda *a, **k: None)
         monkeypatch.setattr(cognition, "get_consciousness", _probe)
 
         # Bare probe: flag off → the engine is never touched.

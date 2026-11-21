@@ -233,9 +233,7 @@ class TestUnclosedFence:
     async def test_missing_outer_brace_executes_and_stays_hidden(self) -> None:
         # walk_img7 exact bytes: closed fence, payload missing the
         # outer "}" — must repair, execute, and never reach the user.
-        fence = (
-            '```tool_call\n{"tool_calls": [{"name": "echo", "query": "hi"}]\n```'
-        )
+        fence = '```tool_call\n{"tool_calls": [{"name": "echo", "query": "hi"}]\n```'
         rec = _Recorder([["Sure, ", fence], ["All done!"]])
         items = await _collect(
             agentic_stream(

@@ -185,9 +185,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
         if route_limiter is not None:
             allowed, route_remaining = route_limiter.check(f"{client_ip}:{route_prefix}")
-            route_limit = _ROUTE_LIMITS[route_prefix][0] * (
-                _LOCAL_MULTIPLIER if is_local else 1
-            )
+            route_limit = _ROUTE_LIMITS[route_prefix][0] * (_LOCAL_MULTIPLIER if is_local else 1)
             if not allowed:
                 return JSONResponse(
                     status_code=429,
