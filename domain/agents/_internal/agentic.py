@@ -39,6 +39,21 @@ from domain.agents._internal.provider_infer import _prepare_messages, render_too
 from domain.agents._internal.tools import ToolRegistry
 
 FENCE = "```tool_call"
+# Both headers the model uses for a tool block: the canonical contract tag
+# and the informal ``json`` variant it emits spontaneously (live-observed on
+# the Phase 2 journey walk, card 20261116_090332). Held identically so
+# ``decode`` gets a chance; a json block that decodes to nothing flushes as
+# prose at round end.
+FENCE_HEADERS = (FENCE, "```json")
+
+
+def _fence_head(text: str) -> str:
+    """The known fence header ``text`` matches — or "" for a divergence.
+
+    Asks the shortening question against both headers: a partial header
+    (`` ``` `` … `` ```js ``) holds, a complete one confirms, anything else
+    is a code block / stray backticks and passes through."""
+    return next((h for h in FENCE_HEADERS if text.startswith(h)), "")
 
 StreamFn = Callable[[list[dict[str, Any]]], AsyncIterator[str]]
 
@@ -69,11 +84,12 @@ def _guard(state: _GuardState, token: str) -> str | None:
         head, text = token[:i], token[i:]
     else:
         return token
-    if text.startswith(FENCE):
+    matched = _fence_head(text)
+    if matched:
         state.confirmed = True
         state.round_dropped += text
         return head or None
-    if FENCE.startswith(text):
+    if any(h.startswith(text) for h in FENCE_HEADERS):
         state.held = text
         return head or None
     # Divergence — not (yet) the fence header: a code block or stray backticks.

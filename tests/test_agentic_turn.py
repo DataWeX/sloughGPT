@@ -166,6 +166,46 @@ class TestCodeBlockNotAte:
         assert _events(items) == []
 
 
+class TestJsonTaggedFence:
+    """The model tags its tool block ``json`` as often as ``tool_call``
+    (live-observed, card 20261116_090332): the guard must hold it like the
+    canonical fence so decode gets a chance — and the raw block must never
+    reach the user when it turns out to be a call."""
+
+    async def test_json_fence_executes_and_stays_hidden(self) -> None:
+        fence = '```json\n{"name": "echo", "args": {"text": "hi"}}\n```'
+        rec = _Recorder([["Sure, ", fence], ["All done!"]])
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "echo hi"}],
+                tools=_registry_with_echo(),
+                stream_fn=rec,
+            )
+        )
+        text = _text(items)
+        assert "```" not in text, "json-tagged wire format must not reach the user"
+        assert text == "Sure, All done!"
+        kinds = [e["kind"] for e in _events(items)]
+        assert kinds == ["tool_call", "tool_result"]
+        assert _events(items)[0]["data"]["name"] == "echo"
+
+    async def test_non_tool_json_block_flushed_as_prose(self) -> None:
+        # A plain JSON snippet is code: held like any fence, then flushed
+        # whole at round end because no call was decoded (degradation —
+        # the user still sees the block, as text).
+        block = '```json\n{"answer": 42}\n```'
+        rec = _Recorder([["Result: ", block]])
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "show json"}],
+                tools=ToolRegistry(register_defaults=False),
+                stream_fn=rec,
+            )
+        )
+        assert _text(items) == "Result: " + block
+        assert _events(items) == []
+
+
 class TestDegradation:
     async def test_protocol_error_flushes_dropped_fence_as_plain_answer(self) -> None:
         bad = "```tool_call\n{not valid json}\n```"

@@ -90,6 +90,53 @@ def test_encode_roundtrip_single_and_multi():
     assert calls == multi
 
 
+# ── json-tagged fences (the model's informal variant) ────────────────
+# The 0.5B model spontaneously tags its tool block ``json`` instead of
+# ``tool_call`` (observed live during the Phase 2 journey walk, card
+# 20261116_090332). The contract keeps ``tool_call`` canonical, but a
+# tool-SHAPED json block must execute — and only that: any other json
+# block is a code snippet and stays prose, never a call and never an
+# error.
+
+
+def test_decode_json_tagged_single_call():
+    text = 'Sure.\n```json\n{"name": "calculator", "args": {"expression": "2+2"}}\n```'
+    calls, residual = decode(text)
+    assert calls == [ToolCall(name="calculator", args={"expression": "2+2"})]
+    assert "Sure." in residual
+    assert "```" not in residual
+
+
+def test_decode_json_tagged_multi_call_tolerates_trailing_comma():
+    # The model's real output from the journey walk: a trailing comma
+    # before the closing brace. Informal tag → lenient parse.
+    text = (
+        '```json\n{"tool_calls": [{"name": "calculator", '
+        '"args": {"expression": "2+2"}},],}\n```'
+    )
+    calls, residual = decode(text)
+    assert [c.name for c in calls] == ["calculator"]
+    assert residual == ""
+
+
+def test_decode_json_tagged_non_tool_payload_stays_prose():
+    text = 'Result:\n```json\n{"answer": 42}\n```'
+    calls, residual = decode(text)
+    assert calls == [], "a plain JSON snippet is code, not a tool call"
+    assert '{"answer": 42}' in residual
+    assert "```" in residual, "the code block must survive intact as prose"
+
+
+def test_decode_json_tagged_invalid_json_stays_prose_not_error():
+    # Informal tag carries no contract: broken json is degraded prose,
+    # never ProtocolError (that strictness belongs to ``tool_call`` only —
+    # pinned by test_decode_invalid_json_raises_protocol_error).
+    text = '```json\n{broken: }\n```'
+    calls, residual = decode(text)
+    assert calls == []
+    assert "{broken: }" in residual
+
+
 # ── loop helpers ─────────────────────────────────────────────────────
 
 
