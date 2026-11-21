@@ -99,6 +99,14 @@ _LAZY_IMPORTS = {
     # private by name, but they are the historical read points, so the facade
     # binds them there rather than inventing a new indirection (facade
     # binding rule: map to the module the tests actually patch).
+    # Checkpoint roots read by the resume-select lookup in the training route
+    # surface (execution.py) — same facade rule as every other sub-router
+    # read: bound to ``_internal.state`` because that is the module the
+    # tests import from (facade binding rule: map to the module the tests
+    # actually read).
+    "CHECKPOINTS_DIR": ("._internal.state", "CHECKPOINTS_DIR"),
+    "LORA_DIR": ("._internal.state", "LORA_DIR"),
+    "TURBO_DIR": ("._internal.state", "TURBO_DIR"),
     "is_feed_source": ("._internal.training_feed", "is_feed_source"),
     "ManifestError": ("._internal.dataset_manifest", "ManifestError"),
     "create_training_tracker_for_api_job": (
@@ -211,6 +219,9 @@ __all__ = [
     "peek_training_executor",
     # Route-surface reads (card 20261101_140447)
     "is_feed_source",
+    "CHECKPOINTS_DIR",
+    "LORA_DIR",
+    "TURBO_DIR",
     "ManifestError",
     "create_training_tracker_for_api_job",
     "DistillationConfig",
