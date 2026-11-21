@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "98f43dc850681edffed81637358e4e1240ce17ff",
+    "recorded_commit": "29410b2e4dd2e0482d08df5709d77a858e99519e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "bdee8f83d437a70e4a2e9632ca8fbac4d831da7d"
+      "tree_hash": "f79cdb851dfea28b5f915c733887a445302244c8"
     },
     "ai_personality": {
       "class": "feature",
@@ -550,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "4ba2515acef25ac608f386de6dc1fbb3013d3105"
+      "tree_hash": "9e8ed902586277a9fc7672465f1a18ded622ceef"
     },
     "voice": {
       "class": "core-capability",
