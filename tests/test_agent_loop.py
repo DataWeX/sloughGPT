@@ -193,6 +193,37 @@ def test_decode_explicit_args_still_wins_over_siblings():
     assert calls == [ToolCall(name="a", args={"x": 1})]
 
 
+# ── repair ladder for the canonical tag (live walk #3) ────────────────
+# walk_img7 bytes: a CLOSED fence whose payload is missing the outer
+# brace — {"tool_calls": [{...}]  (the 0.5B's systematic sloppiness,
+# same class as the trailing comma). Strictness means UNREPAIRABLE
+# garbage raises, not byte-perfect JSON: punctuation repair applies to
+# tool_call too, or every near-miss call degrades to a raw leak with
+# zero TOOL frames.
+
+
+def test_decode_missing_outer_brace_repairs_and_executes():
+    text = 'Sure.\n```tool_call\n{"tool_calls": [{"name": "image_gen", "query": "blue circle"}]\n```'
+    calls, residual = decode(text)
+    assert calls == [ToolCall(name="image_gen", args={"query": "blue circle"})]
+    assert "Sure." in residual
+    assert "```" not in residual
+
+
+def test_decode_trailing_comma_in_canonical_tag_repairs():
+    text = '```tool_call\n{"tool_calls": [{"name": "a", "args": {"x": 1}},],}\n```'
+    calls, _ = decode(text)
+    assert calls == [ToolCall(name="a", args={"x": 1})]
+
+
+def test_decode_unrepairable_canonical_json_still_raises():
+    # The ladder's floor: bareword keys survive every repair step, so
+    # the pinned ProtocolError contract holds (no keyword guessing).
+    text = '```tool_call\n{not valid json}\n```'
+    with pytest.raises(ProtocolError):
+        decode(text)
+
+
 # ── loop helpers ─────────────────────────────────────────────────────
 
 
