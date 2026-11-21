@@ -52,7 +52,7 @@
     "eslint": "^8.57.0",
     "expo-modules-autolinking": "^57.0.10",
     "jest": "^29.7.0",
-    "react-dom": "^19.2.7",
+    "react-dom": "^19.3.1",
     "react-native-web": "^0.21.2",
     "react-test-renderer": "^19.3.1",
     "test-renderer": "^1.2.0",
