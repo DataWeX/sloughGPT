@@ -63,6 +63,33 @@ let _stopped = true
 let _refCount = 0
 let _pollingJobId: string | null = null
 
+// ── Immediate-tick bridge (stream terminal → poll fetch) ────────────
+// The pushed frame carries the job view but not the full REST record
+// (model_path / result live only on GET /training/jobs/{id}), so terminal
+// side effects (toasts, onComplete) stay owned by the poll. On a terminal
+// frame the stream ticks the registered poll so it fetches the full
+// record immediately instead of waiting out its cadence. Single slot:
+// the active standard poll owns it.
+let _immediateTick: { jobId: string; tick: () => void } | null = null
+
+export function registerImmediateTick(jobId: string, tick: () => void) {
+  _immediateTick = { jobId, tick }
+}
+
+export function clearImmediateTick() {
+  _immediateTick = null
+}
+
+/** True while the job-events stream is connected and has spoken our
+ *  vocabulary — polls demote to the fallback cadence while this holds. */
+export function isTrainingStreamLive(): boolean {
+  return Boolean(_stream?.connected && _receivedInit)
+}
+
+function fireImmediateTick(jobId: string) {
+  if (_immediateTick && _immediateTick.jobId === jobId) _immediateTick.tick()
+}
+
 function stopFallback() {
   if (_fallbackTimer) {
     clearInterval(_fallbackTimer)
@@ -130,17 +157,24 @@ function onEvent(envelope: SSEEnvelope) {
 
   const event = envelope.phase?.toLowerCase()
   const data = envelope.data as Record<string, unknown>
-  const jobId = (data.job_id as string) || null
+  const jobId = ((data.id ?? data.job_id) as string) || null
 
   if (event === 'init') {
-    const jobs = data.jobs as Record<string, TrainingJob> | undefined
-    if (jobs) {
-      const activeJobId = Object.keys(jobs)[0]
-      const activeJob = Object.values(jobs)[0] as TrainingJob | undefined
-      if (activeJob && activeJob.status === 'running') {
-        batchWriteTraining({ jobId: activeJobId, phase: 'TRAINING' })
-        applyJobToShell(activeJob)
-      }
+    // Contract: data.jobs is an ARRAY of job views keyed by `id`; the
+    // legacy dict shape (job_id keys) is accepted so old frames parse too.
+    const jobs = data.jobs
+    const entries: [string, TrainingJob][] = Array.isArray(jobs)
+      ? (jobs as Record<string, unknown>[]).map((j) => [
+          String(j.id ?? j.job_id ?? ''),
+          j as unknown as TrainingJob,
+        ])
+      : jobs && typeof jobs === 'object'
+        ? Object.entries(jobs as Record<string, TrainingJob>)
+        : []
+    const [activeJobId, activeJob] = entries[0] ?? []
+    if (activeJobId && activeJob && activeJob.status === 'running') {
+      batchWriteTraining({ jobId: activeJobId, phase: 'TRAINING' })
+      applyJobToShell(activeJob)
     }
     return
   }
@@ -150,7 +184,8 @@ function onEvent(envelope: SSEEnvelope) {
     const d = data as Record<string, number | string | null | undefined>
     const patch: Partial<TrainingShellState> = { jobId }
     if (d.progress != null) patch.progress = Number(d.progress)
-    if (d.epoch != null) patch.epoch = Number(d.epoch)
+    const epoch = d.current_epoch ?? d.epoch
+    if (epoch != null) patch.epoch = Number(epoch)
     if (d.global_step != null) patch.globalStep = Number(d.global_step)
     if (d.total_steps != null) patch.totalSteps = Number(d.total_steps)
     if (d.train_loss != null) {
@@ -163,6 +198,8 @@ function onEvent(envelope: SSEEnvelope) {
     if (d.eval_loss != null) patch.loss = Number(d.eval_loss)
     if (d.eta_s != null) patch.eta = Number(d.eta_s)
     if (d.elapsed_s != null) patch.elapsedSeconds = Number(d.elapsed_s)
+    if (d.steps_per_sec != null) patch.stepsPerSec = Number(d.steps_per_sec)
+    if (d.avg_quality != null) patch.avgQuality = Number(d.avg_quality)
     if (Object.keys(patch).length > 1) batchWriteTraining(patch)
     return
   }
@@ -173,6 +210,7 @@ function onEvent(envelope: SSEEnvelope) {
   }
 
   if (event === 'completed' && jobId) {
+    fireImmediateTick(jobId)
     const current = readTraining()
     batchWriteTraining({
       phase: 'complete', progress: 100,
@@ -184,7 +222,24 @@ function onEvent(envelope: SSEEnvelope) {
   }
 
   if (event === 'failed' && jobId) {
+    fireImmediateTick(jobId)
     batchWriteTraining({ phase: 'error', error: (data.error as string) || 'Training failed' })
+    return
+  }
+
+  // Terminal phases of the closed contract set the old hook never saw —
+  // a cancelled/interrupted/abandoned job is an error shell state, and
+  // the poll is ticked so toasts/onComplete fire from the full REST job.
+  if (
+    jobId &&
+    (event === 'cancelled' || event === 'interrupted' || event === 'abandoned')
+  ) {
+    fireImmediateTick(jobId)
+    batchWriteTraining({
+      phase: 'error',
+      error:
+        (data.error as string) || envelope.message || `Training ${event}`,
+    })
     return
   }
 }
@@ -219,7 +274,7 @@ export function initTrainingStream(): () => void {
   _receivedInit = false
 
   _stream = createSSEStream({
-    url: '/training/stream',
+    url: '/training/job-events/stream',
     onEvent,
     onOpen: () => {},
     onClose,
@@ -270,11 +325,17 @@ function decrementRef() {
 /**
  * SSE-backed training hook — replaces HTTP polling with real-time push.
  *
- * Uses a singleton SSE connection to `/training/stream`. Multiple
- * components can use this hook simultaneously.
+ * Uses a singleton SSE connection to the subscribe-only
+ * `/training/job-events/stream` (init snapshot first, then store-pushed
+ * frames — the server computes once, every connected client listens).
+ * Multiple components can use this hook simultaneously.
  *
  * Progress events are batched via requestAnimationFrame to avoid
- * triggering a React re-render on every training step.
+ * triggering a React re-render on every training step. Terminal frames
+ * tick the registered immediate poll so terminal side effects (toasts,
+ * onComplete) fire from the full REST job without waiting out the poll
+ * cadence; polls otherwise run at their base delay while the stream is
+ * live (see useTrainingPolling).
  *
  * Usage:
  *   const { isTraining, connected } = useLiveTraining()
