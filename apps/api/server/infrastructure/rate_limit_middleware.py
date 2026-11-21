@@ -168,33 +168,43 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = request.client.host if request.client else "unknown"
         is_local = client_ip in ("127.0.0.1", "::1", "localhost")
 
+        # Success-path X-RateLimit-* headers describe the GOVERNING bucket:
+        # the tightest (min-limit) quota among route -> workspace -> global,
+        # ties resolving to the earlier-checked tier. Every request consumes
+        # 1 from each applicable bucket, so the smallest-limit bucket always
+        # empties first — a 200 must therefore report the ceiling it is
+        # actually counted against (card 20261121_080632). Each tier's own
+        # 429 already reports that tier's numbers, unchanged here.
+        gov_limit: int | None = None
+        gov_remaining: int | None = None
+
         # Check route-specific limit first (stricter). The bucket set is
         # chosen by client class: local clients get the 10x budgets.
         route_prefix, route_limiter = self._match_route(
             path, self._local_route_limiters if is_local else self._route_limiters
         )
         if route_limiter is not None:
-            allowed, remaining = route_limiter.check(f"{client_ip}:{route_prefix}")
+            allowed, route_remaining = route_limiter.check(f"{client_ip}:{route_prefix}")
+            route_limit = _ROUTE_LIMITS[route_prefix][0] * (
+                _LOCAL_MULTIPLIER if is_local else 1
+            )
             if not allowed:
-                route_limit = _ROUTE_LIMITS[route_prefix][0] * (
-                    _LOCAL_MULTIPLIER if is_local else 1
-                )
-                route_window = _ROUTE_LIMITS[route_prefix][1]
                 return JSONResponse(
                     status_code=429,
                     content={"detail": f"Rate limit exceeded for {route_prefix}. Try again later."},
                     headers={
                         RATE_LIMIT_HEADER_REMAINING: "0",
                         RATE_LIMIT_HEADER_LIMIT: str(route_limit),
-                        "Retry-After": str(route_window),
+                        "Retry-After": str(_ROUTE_LIMITS[route_prefix][1]),
                     },
                 )
+            gov_limit, gov_remaining = route_limit, route_remaining
 
         # Check workspace-specific limit
         workspace_id = self._extract_workspace_id(request)
         if workspace_id:
             ws_limiter = self._get_workspace_limiter(workspace_id)
-            allowed, remaining = ws_limiter.check(workspace_id)
+            allowed, ws_remaining = ws_limiter.check(workspace_id)
             if not allowed:
                 return JSONResponse(
                     status_code=429,
@@ -205,12 +215,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         "Retry-After": str(self.window_seconds),
                     },
                 )
+            if gov_limit is None or _DEFAULT_WORKSPACE_LIMIT < gov_limit:
+                gov_limit, gov_remaining = _DEFAULT_WORKSPACE_LIMIT, ws_remaining
 
         # Check global limit
+        global_limit = self.max_requests * (_LOCAL_MULTIPLIER if is_local else 1)
         if is_local:
-            allowed, remaining = self._local_global_limiter.check(client_ip)
+            allowed, global_remaining = self._local_global_limiter.check(client_ip)
         else:
-            allowed, remaining = self._global_limiter.check(client_ip)
+            allowed, global_remaining = self._global_limiter.check(client_ip)
 
         if not allowed:
             return JSONResponse(
@@ -218,16 +231,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Too many requests. Try again later."},
                 headers={
                     RATE_LIMIT_HEADER_REMAINING: "0",
-                    RATE_LIMIT_HEADER_LIMIT: str(
-                        self.max_requests * (_LOCAL_MULTIPLIER if is_local else 1)
-                    ),
+                    RATE_LIMIT_HEADER_LIMIT: str(global_limit),
                     "Retry-After": str(self.window_seconds),
                 },
             )
+        if gov_limit is None or global_limit < gov_limit:
+            gov_limit, gov_remaining = global_limit, global_remaining
 
         response = await call_next(request)
-        response.headers[RATE_LIMIT_HEADER_REMAINING] = str(remaining)
-        response.headers[RATE_LIMIT_HEADER_LIMIT] = str(
-            self.max_requests * (_LOCAL_MULTIPLIER if is_local else 1)
-        )
+        response.headers[RATE_LIMIT_HEADER_REMAINING] = str(gov_remaining)
+        response.headers[RATE_LIMIT_HEADER_LIMIT] = str(gov_limit)
         return response
