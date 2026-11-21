@@ -12,7 +12,6 @@ import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from 'react-rout
 import AppLayout from '@/components/AppLayout'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { BootstrapProvider } from '@/contexts/BootstrapContext'
-import { ModelProvider } from '@/contexts/ModelContext'
 import { LocaleProvider } from '@/hooks/useLocale'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import { StartupOverlay } from '@/components/startup/StartupOverlay'
@@ -80,7 +79,6 @@ function App() {
   return (
     <ThemeProvider>
       <BootstrapProvider>
-        <ModelProvider>
           <LocaleProvider>
             <ErrorLifecycle />
             <StartupOverlay />
@@ -136,7 +134,6 @@ function App() {
               </Routes>
             </BrowserRouter>
           </LocaleProvider>
-        </ModelProvider>
       </BootstrapProvider>
     </ThemeProvider>
   )

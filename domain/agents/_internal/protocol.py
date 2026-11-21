@@ -34,6 +34,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 CANONICAL_RE = re.compile(r"```(tool_call|json)\s*\n(.*?)\n\s*```", re.DOTALL)
+# An UNCLOSED fence: the model hits finish_reason=stop (or max_tokens)
+# before emitting the closing backticks — live-observed on the Phase 2
+# journey walk (card 20261116_090332): "```tool_call\n{...}" with no
+# close. Runs to EOF — an unclosed fence swallows the rest by definition.
+UNCLOSED_RE = re.compile(r"```(tool_call|json)\s*\n(.*)\Z", re.DOTALL)
 LEGACY_TOOL_RE = re.compile(r"\[\[TOOL:\s*(\w+)\s*\]\]\s*([^\n]+)")
 _TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
 
@@ -69,9 +74,16 @@ def _parse_call_item(item: Any, position: int) -> ToolCall:
     name = item.get("name") or item.get("tool")
     if not isinstance(name, str) or not name:
         raise ProtocolError("tool call missing 'name'", position=position)
-    args = item.get("args", item.get("arguments", {}))
-    if args is None:
-        args = {}
+    if "args" in item or "arguments" in item:
+        args = item.get("args", item.get("arguments"))
+        if args is None:
+            args = {}
+    else:
+        # Flat shape (live-observed): {"name": ..., "query": "..."} — the
+        # model puts parameters as siblings of name. Carry them instead of
+        # silently dropping to {}: validate_args can then name the mismatch
+        # ("unknown parameter 'query'") and round-2 feedback corrects it.
+        args = {k: v for k, v in item.items() if k not in ("name", "tool")}
     if not isinstance(args, dict):
         raise ProtocolError(f"args for '{name}' must be an object", position=position)
     return ToolCall(name=name, args=dict(args))
@@ -80,9 +92,57 @@ def _parse_call_item(item: Any, position: int) -> ToolCall:
 def _repair_trailing_commas(raw: str) -> str:
     """Strip trailing commas before ``}``/``]`` — the 0.5B model's most
     common JSON sloppiness (live-observed on the Phase 2 journey walk,
-    card 20261116_090332). Lenient parse applies to the informal ``json``
-    tag only; the canonical ``tool_call`` contract stays strict."""
+    card 20261116_090332)."""
     return _TRAILING_COMMA_RE.sub(r"\1", raw)
+
+
+def _repair_unbalanced(raw: str) -> str:
+    """Append the missing ``}``/``]`` closers — walk_img7 bytes: the
+    payload was missing its outer brace (``{"tool_calls": [{...}]``).
+    Scans outside strings; an unterminated string is NOT repairable
+    (truncation mid-string — the closers would land inside the string),
+    so the raw text is returned and the strict floor still applies."""
+    stack: list[str] = []
+    in_str = False
+    esc = False
+    for ch in raw:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            stack.append("}")
+        elif ch == "[":
+            stack.append("]")
+        elif ch in "}]":
+            if stack and stack[-1] == ch:
+                stack.pop()
+    if in_str or not stack:
+        return raw
+    return raw + "".join(reversed(stack))
+
+
+def _parse_repairing(raw: str) -> Any | None:
+    """Parse with the repair ladder: strict → trailing-comma → balance
+    (comma+balance combined). None = unrepairable (no keyword guessing)."""
+    for candidate in (raw, _repair_trailing_commas(raw)):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+    balanced = _repair_unbalanced(_repair_trailing_commas(raw))
+    if balanced != raw:
+        try:
+            return json.loads(balanced)
+        except json.JSONDecodeError:
+            pass
+    return None
 
 
 def _looks_like_tool_call(payload: Any) -> bool:
@@ -95,28 +155,47 @@ def _looks_like_tool_call(payload: Any) -> bool:
 
 
 def _decode_canonical(text: str, calls: list[ToolCall]) -> str:
-    def _sub(m: re.Match[str]) -> str:
-        tag, raw = m.group(1), m.group(2).strip()
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError as e:
-            if tag == "tool_call":
-                raise ProtocolError(
-                    f"invalid tool_call JSON: {e}", position=m.start()
-                ) from e
-            # Informal ``json`` tag carries no contract: retry with the
-            # lenient parse, else the block is just code — prose, never an
-            # error (strictness belongs to ``tool_call`` alone).
-            try:
-                payload = json.loads(_repair_trailing_commas(raw))
-            except json.JSONDecodeError:
-                return m.group(0)
-        if tag == "json" and not _looks_like_tool_call(payload):
+    def _consume(m: re.Match[str], payload: Any) -> str:
+        if m.group(1) == "json" and not _looks_like_tool_call(payload):
             return m.group(0)  # a plain JSON snippet — code, not a call
         calls.extend(_parse_canonical_payload(payload, m.start()))
         return ""
 
-    return CANONICAL_RE.sub(_sub, text)
+    def _sub(m: re.Match[str]) -> str:
+        tag, raw = m.group(1), m.group(2).strip()
+        payload = _parse_repairing(raw)
+        if payload is None:
+            if tag == "tool_call":
+                # Strictness floor: UNREPAIRABLE canonical JSON raises —
+                # repairable near-misses (trailing comma, missing brace)
+                # execute instead of degrading to a raw leak.
+                raise ProtocolError(
+                    "invalid tool_call JSON: unrepairable payload", position=m.start()
+                )
+            # Informal ``json`` tag carries no contract: the block is
+            # just code — prose, never an error.
+            return m.group(0)
+        return _consume(m, payload)
+
+    residual = CANONICAL_RE.sub(_sub, text)
+
+    # Unclosed fence (model stopped before the closing backticks): same
+    # tag rules, block runs to EOF. Closed fences were already consumed
+    # above, so any remaining header is genuinely unterminated.
+    def _sub_unclosed(m: re.Match[str]) -> str:
+        tag, raw = m.group(1), m.group(2).strip()
+        if not raw:
+            return m.group(0)  # bare header, nothing to parse — prose
+        payload = _parse_repairing(raw)
+        if payload is None:
+            if tag == "tool_call":
+                raise ProtocolError(
+                    "invalid tool_call JSON: unrepairable payload", position=m.start()
+                )
+            return m.group(0)
+        return _consume(m, payload)
+
+    return UNCLOSED_RE.sub(_sub_unclosed, residual)
 
 
 def _decode_legacy(text: str, calls: list[ToolCall]) -> str:

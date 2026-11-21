@@ -110,10 +110,7 @@ def test_decode_json_tagged_single_call():
 def test_decode_json_tagged_multi_call_tolerates_trailing_comma():
     # The model's real output from the journey walk: a trailing comma
     # before the closing brace. Informal tag → lenient parse.
-    text = (
-        '```json\n{"tool_calls": [{"name": "calculator", '
-        '"args": {"expression": "2+2"}},],}\n```'
-    )
+    text = '```json\n{"tool_calls": [{"name": "calculator", "args": {"expression": "2+2"}},],}\n```'
     calls, residual = decode(text)
     assert [c.name for c in calls] == ["calculator"]
     assert residual == ""
@@ -131,10 +128,99 @@ def test_decode_json_tagged_invalid_json_stays_prose_not_error():
     # Informal tag carries no contract: broken json is degraded prose,
     # never ProtocolError (that strictness belongs to ``tool_call`` only —
     # pinned by test_decode_invalid_json_raises_protocol_error).
-    text = '```json\n{broken: }\n```'
+    text = "```json\n{broken: }\n```"
     calls, residual = decode(text)
     assert calls == []
     assert "{broken: }" in residual
+
+
+# ── unclosed fences (model stops before the closing backticks) ────────
+# Live walk evidence (card 20261116_090332): the model emitted
+# "```tool_call\n{...}" and hit finish_reason=stop — no closing fence.
+# The canonical RE requires one, so decode saw no call and the guard's
+# terminal flush leaked the raw block to the user with zero TOOL frames.
+
+
+def test_decode_unclosed_tool_call_fence_at_eof():
+    text = 'Sure.\n```tool_call\n{"name": "calculator", "args": {"expression": "2+2"}}'
+    calls, residual = decode(text)
+    assert calls == [ToolCall(name="calculator", args={"expression": "2+2"})]
+    assert "```" not in residual
+    assert "Sure." in residual
+
+
+def test_decode_unclosed_json_fence_executes_when_tool_shaped():
+    text = '```json\n{"tool_calls": [{"name": "calculator", "args": {"expression": "2+2"}}]}'
+    calls, residual = decode(text)
+    assert [c.name for c in calls] == ["calculator"]
+    assert residual == ""
+
+
+def test_decode_unclosed_non_tool_json_stays_prose():
+    text = 'Result:\n```json\n{"answer": 42}'
+    calls, residual = decode(text)
+    assert calls == [], "an unclosed non-tool json block is code, not a call"
+    assert '{"answer": 42}' in residual
+
+
+def test_decode_unclosed_tool_call_truncated_json_is_protocol_error():
+    # Truncated mid-JSON (max_tokens cut): canonical strictness holds —
+    # the agentic degradation path (pinned in test_agentic_turn) flushes.
+    text = '```tool_call\n{"name": "image_gen", "args": {"prompt": "blu'
+    with pytest.raises(ProtocolError):
+        decode(text)
+
+
+# ── flat call shape (siblings of name ARE the args) ───────────────────
+# Live walk evidence: {"name": "image_gen", "query": "..."} — no args
+# wrapper. Silently dropping to {} hides the model's intent from
+# validate_args; carrying the siblings lets the error name them and the
+# round-2 feedback correct it (file_qa's declared `query` validates as-is).
+
+
+def test_decode_flat_call_carries_sibling_keys_as_args():
+    text = '```tool_call\n{"name": "image_gen", "query": "a blue circle"}\n```'
+    calls, _ = decode(text)
+    assert calls == [ToolCall(name="image_gen", args={"query": "a blue circle"})]
+
+
+def test_decode_explicit_args_still_wins_over_siblings():
+    text = '```tool_call\n{"name": "a", "args": {"x": 1}, "query": "ignored"}\n```'
+    calls, _ = decode(text)
+    assert calls == [ToolCall(name="a", args={"x": 1})]
+
+
+# ── repair ladder for the canonical tag (live walk #3) ────────────────
+# walk_img7 bytes: a CLOSED fence whose payload is missing the outer
+# brace — {"tool_calls": [{...}]  (the 0.5B's systematic sloppiness,
+# same class as the trailing comma). Strictness means UNREPAIRABLE
+# garbage raises, not byte-perfect JSON: punctuation repair applies to
+# tool_call too, or every near-miss call degrades to a raw leak with
+# zero TOOL frames.
+
+
+def test_decode_missing_outer_brace_repairs_and_executes():
+    text = (
+        'Sure.\n```tool_call\n{"tool_calls": [{"name": "image_gen", "query": "blue circle"}]\n```'
+    )
+    calls, residual = decode(text)
+    assert calls == [ToolCall(name="image_gen", args={"query": "blue circle"})]
+    assert "Sure." in residual
+    assert "```" not in residual
+
+
+def test_decode_trailing_comma_in_canonical_tag_repairs():
+    text = '```tool_call\n{"tool_calls": [{"name": "a", "args": {"x": 1}},],}\n```'
+    calls, _ = decode(text)
+    assert calls == [ToolCall(name="a", args={"x": 1})]
+
+
+def test_decode_unrepairable_canonical_json_still_raises():
+    # The ladder's floor: bareword keys survive every repair step, so
+    # the pinned ProtocolError contract holds (no keyword guessing).
+    text = "```tool_call\n{not valid json}\n```"
+    with pytest.raises(ProtocolError):
+        decode(text)
 
 
 # ── loop helpers ─────────────────────────────────────────────────────
