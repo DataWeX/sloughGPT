@@ -52,12 +52,22 @@ export default function TrainingPage() {
   const visibilityRef = useRef<boolean>(true)
   const ready = useApiReady()
   const tickRef = useRef<() => void>(() => {})
+  // Checkpoints only change while a job is saving — so the tick polls them on
+  // the running cadence plus ONE tick after the last running tick (the final
+  // save can land just before the job flips out of 'running'). An idle page
+  // polls nothing: mount fetch + the Refresh shortcut + post-action fetches
+  // cover every other refresh need (card 20261119_110913 — the unconditional
+  // 10s poll was pure co-tenant noise: 26 checkpoint errors in the /training
+  // capture). Jobs keep their existing cadence (while running only).
+  const hadRunningRef = useRef(false)
   tickRef.current = () => {
-    if (visibilityRef.current) {
+    if (!visibilityRef.current) return
+    const hasRunning = form.allJobs.some((j) => j.status === 'running')
+    if (hasRunning || hadRunningRef.current) {
       void checkpoints.fetchCheckpoints()
-      const hasRunning = form.allJobs.some((j) => j.status === 'running')
       if (hasRunning) void checkpoints.fetchJobs()
     }
+    hadRunningRef.current = hasRunning
   }
   useEffect(() => {
     if (!ready) return

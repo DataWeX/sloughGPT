@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // The provider replaces the landing journey's ~24-call boot fan-out: one
-// fetch serves the landing page, ModelContext, CommandPalette, and the
+// fetch serves the landing page, CommandPalette, and the
 // consciousness quick actions from typed slices.
 //
 // While the server is still booting (startup_progress.phase !== 'ready')

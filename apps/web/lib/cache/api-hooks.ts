@@ -5,7 +5,10 @@ import { soulsController } from '@/lib/souls-controller'
 import { useQuery, useMutation, useInvalidate } from '@/lib/cache'
 
 export function useModels() {
-  return useQuery('models', () => modelController.list(), { staleTime: 10000 })
+  // 60s freshness: the list changes only through load/unload, which
+  // invalidate 'models' explicitly — a remount within the window must serve
+  // the cache instead of adding another GET /models/hf (card 20261119_110913).
+  return useQuery('models', () => modelController.list(), { staleTime: 60000 })
 }
 
 export function useLoadModel() {
