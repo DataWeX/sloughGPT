@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from domain.shell._internal.evolution import Genome
+from domain.shell._internal.llm_brain import LLMBrain
 from domain.shell._internal.model_brain import (
     BRAIN_KINDS,
     ModelBrain,
@@ -49,7 +50,7 @@ class TestBrainRegistry:
     """``make_brain``/``brain_from_dict`` are the one seam for every kind."""
 
     def test_registry_lists_every_kind(self):
-        assert set(BRAIN_KINDS) == {"perceptron", "model", "slonet", "random"}
+        assert set(BRAIN_KINDS) == {"perceptron", "model", "slonet", "random", "llm"}
 
     @pytest.mark.parametrize(
         ("kind", "expected"),
@@ -58,6 +59,7 @@ class TestBrainRegistry:
             ("model", ModelBrain),
             ("slonet", SloNetBrain),
             ("random", RandomBrain),
+            ("llm", LLMBrain),
         ],
     )
     def test_make_brain_dispatch(self, kind, expected):
