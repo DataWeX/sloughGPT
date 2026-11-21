@@ -87,7 +87,7 @@ export function TrainStep({ form, datasets, onBack }: StepProps) {
             size="sm"
             className="h-7 text-xs"
             disabled={!form.canStart}
-            onClick={() => form.startTraining()}
+            onClick={() => form.startTraining(form.resumeCheckpoint || undefined)}
           >
             {form.method === 'distill' && form.inputMode === 'text' && form.textInput.trim()
               ? 'Train on pasted text'
