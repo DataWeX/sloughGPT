@@ -55,6 +55,7 @@ def _fence_head(text: str) -> str:
     is a code block / stray backticks and passes through."""
     return next((h for h in FENCE_HEADERS if text.startswith(h)), "")
 
+
 StreamFn = Callable[[list[dict[str, Any]]], AsyncIterator[str]]
 
 
