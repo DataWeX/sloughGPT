@@ -3,9 +3,19 @@
 import { useCallback, useRef, useEffect } from 'react'
 import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
 import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
+import {
+  registerImmediateTick,
+  clearImmediateTick,
+  isTrainingStreamLive,
+} from './useLiveTraining'
 
 const MAX_POLL_RETRIES = 10
 const STANDARD_BASE_DELAY_MS = 3000
+// While /training/job-events/stream is live it pushes the job view, so
+// the poll is a fallback only — demote its cadence 3s → 15s and let the
+// stream's terminal frames tick it (registerImmediateTick) for instant
+// terminal side effects instead of a fast poll.
+const STREAM_LIVE_DELAY_MS = 15000
 const STANDARD_MAX_DELAY_MS = 30000
 const TURBO_BASE_DELAY_MS = 3000
 const TURBO_MAX_DELAY_MS = 60000
@@ -28,7 +38,13 @@ export interface TrainingPolling {
  * Manages training poll intervals. Reads fresh shell state on every tick
  * via readTraining() — no stale closures, no React state.
  *
- * - Standard poll: GET /training/jobs/{id} every 3s.
+ * - Standard poll: GET /training/jobs/{id} — 3s cadence normally,
+ *   demoted to 15s (STREAM_LIVE_DELAY_MS) while the job-events stream
+ *   is live (push carries the job view; the poll is the fallback and
+ *   the source of the full REST record for terminal side effects).
+ *   A stream terminal frame fires the registered immediate tick, which
+ *   pulls the next poll right away — toasts/onComplete without waiting
+ *   out the cadence.
  * - Turbo poll: GET /training/turbo/status every 3s.
  *
  * Resilient: retries on transient network errors, warns user after
@@ -45,6 +61,7 @@ export function useTrainingPolling(): TrainingPolling {
     if (turboPollRef.current) { clearTimeout(turboPollRef.current); turboPollRef.current = null }
     standardRetryRef.current = 0
     turboRetryRef.current = 0
+    clearImmediateTick()
   }, [])
 
   const startStandardPoll = useCallback((
@@ -54,7 +71,12 @@ export function useTrainingPolling(): TrainingPolling {
     if (standardPollRef.current) { clearTimeout(standardPollRef.current); standardPollRef.current = null }
     standardRetryRef.current = 0
 
+    // One terminal side-effect set per poll chain — the immediate tick can
+    // pull a terminal poll ahead of a scheduled one; neither may double-fire.
+    let terminalFired = false
+
     const poll = async () => {
+      if (terminalFired) return
       try {
         const job = await trainingJobsController.get(jobId)
         standardRetryRef.current = 0
@@ -81,11 +103,16 @@ export function useTrainingPolling(): TrainingPolling {
             patch.lossHistory = hist.length > 200 ? hist.slice(-200) : hist
           }
           writeTraining(patch)
-          standardPollRef.current = setTimeout(poll, STANDARD_BASE_DELAY_MS)
+          // Stream live → push carries state; poll falls back to 15s.
+          standardPollRef.current = setTimeout(
+            poll,
+            isTrainingStreamLive() ? STREAM_LIVE_DELAY_MS : STANDARD_BASE_DELAY_MS,
+          )
           return
         }
 
         if (job.status === 'completed') {
+          terminalFired = true
           const result = job.result as Record<string, unknown> | undefined
           writeTraining({
             phase: 'complete', progress: 100,
@@ -98,6 +125,7 @@ export function useTrainingPolling(): TrainingPolling {
           sendBrowserNotification('Training Complete', `${job.name || 'Training job'} finished successfully`)
           opts?.onComplete?.(job)
         } else {
+          terminalFired = true
           writeTraining({ phase: 'error', error: job.error || 'Could not train' })
           opts?.addToast?.(job.error || 'Could not train', 'error')
           sendBrowserNotification('Training Failed', job.error || 'Training encountered an error')
@@ -106,6 +134,7 @@ export function useTrainingPolling(): TrainingPolling {
         standardRetryRef.current++
         if (standardRetryRef.current >= MAX_POLL_RETRIES) {
           standardPollRef.current = null
+          terminalFired = true
           writeTraining({ phase: 'error', error: 'Lost connection to training service' })
           opts?.addToast?.('Lost connection to training — check server status', 'error')
           sendBrowserNotification('Training Lost', 'Lost connection to training service')
@@ -116,6 +145,14 @@ export function useTrainingPolling(): TrainingPolling {
       }
     }
     standardPollRef.current = setTimeout(poll, STANDARD_BASE_DELAY_MS)
+    // Stream terminal frame → fetch the full REST record right now.
+    registerImmediateTick(jobId, () => {
+      if (standardPollRef.current) {
+        clearTimeout(standardPollRef.current)
+        standardPollRef.current = null
+      }
+      void poll()
+    })
   }, [])
 
   const startTurboPoll = useCallback((addToast?: TrainingToastFn) => {

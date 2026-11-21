@@ -63,6 +63,17 @@ vi.mock('@/lib/training-facade', () => ({
 
 const mockAddToast = vi.fn()
 
+// The real hook opens an SSE fetch on mount — mock it so the session's
+// subscription is a no-op here (the poll/stream bridge is unit-tested in
+// useLiveTraining.test.ts + useTrainingPolling.test.ts).
+vi.mock('./useLiveTraining', () => ({
+  useLiveTraining: () => ({ isTraining: false, connected: false }),
+  initTrainingStream: () => () => {},
+  registerImmediateTick: vi.fn(),
+  clearImmediateTick: vi.fn(),
+  isTrainingStreamLive: () => false,
+}))
+
 import { useTrainingSession } from './useTrainingSession'
 import { appShellStore } from '@/lib/app-shell'
 
