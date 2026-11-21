@@ -81,6 +81,16 @@ resolve() {
     return 0
   fi
 
+  # Prefer project venv if present (has installed dependencies)
+  if [ -x "$ROOT/.venv/bin/python" ]; then
+    printf '%s\n' "$ROOT/.venv/bin/python"
+    return 0
+  fi
+  if [ -x "$ROOT/.venv/bin/python3" ]; then
+    printf '%s\n' "$ROOT/.venv/bin/python3"
+    return 0
+  fi
+
   # Ask the Python-side resolver — the same authority app code consults.
   for py in python3 python; do
     command -v "$py" >/dev/null 2>&1 || continue
