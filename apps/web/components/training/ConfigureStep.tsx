@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import {
   Card,
   CardContent,
@@ -30,7 +30,36 @@ import {
   parseTrainingField,
   validateTrainingField,
 } from '@/lib/sanitize'
+import type { Checkpoint } from '@/lib/souls-controller'
 import type { StepProps } from './DataStep'
+
+/**
+ * Is this checkpoint a continuation of `dataset`? (card 20261119_133132)
+ *
+ * `training_dataset` records the trainer's **data_path**
+ * (`datasets/shakespeare/input.txt`) while the select's value is a dataset
+ * **id** (`shakespeare`) — a raw `===` would essentially never match, so the
+ * comparison is over path components. When the field is absent (most stored
+ * rows carry no metadata) the `<dataset>_<unix-ts>.soul` filename is the
+ * provenance. The recorded field is authoritative: a row that names another
+ * corpus is never a match, filename or not.
+ */
+function isTrainedOnDataset(c: Checkpoint, dataset: string): boolean {
+  const recorded = c.training_dataset
+  if (recorded) {
+    return recorded === dataset || recorded.split(/[\\/]/).includes(dataset)
+  }
+  const match = /^(.*)_(\d+)\.(?:soul|slo)$/.exec(c.name)
+  return match !== null && match[1] === dataset
+}
+
+/** Newest of the candidates: `created_at` when every dated row can speak,
+ *  otherwise list order — the API already returns mtime-desc per directory. */
+function latestCheckpoint(list: Checkpoint[]): Checkpoint {
+  const dated = list.filter((c) => Boolean(c.created_at))
+  if (dated.length === 0) return list[0]
+  return dated.reduce((a, b) => ((b.created_at as string) > (a.created_at as string) ? b : a))
+}
 
 export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: StepProps) {
   const [recommendation, setRecommendation] = useState<TrainingRecommendationResponse | null>(null)
@@ -100,6 +129,30 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
         .finally(() => setLoadingRec(false))
     }
   }, [datasets?.selectedDataset, form.method])
+
+  // ── Resume default (card 20261119_133132) ──────────────────────────────
+  // One-shot: fill an EMPTY resume select with the newest checkpoint trained
+  // on the same dataset, then never again. `resumeTouchedRef` latches on the
+  // select's own onValueChange — which fires for the explicit "" = "Start
+  // fresh" option too — so an explicit choice is never stolen back by a later
+  // checkpoint fetch; `resumeDefaultedRef` keeps a single mount from
+  // re-defaulting when the dataset or list changes underneath it.
+  const checkpointList = checkpoints?.checkpoints
+  const resumeValue = form.resumeCheckpoint
+  const setResume = form.setResumeCheckpoint
+  const resumeDefaultedRef = useRef(false)
+  const resumeTouchedRef = useRef(false)
+
+  useEffect(() => {
+    if (resumeTouchedRef.current || resumeDefaultedRef.current) return
+    if (!datasets.selectedDataset || resumeValue !== '') return
+    const matches = (checkpointList ?? []).filter((c) =>
+      isTrainedOnDataset(c, datasets.selectedDataset),
+    )
+    if (matches.length === 0) return
+    resumeDefaultedRef.current = true
+    setResume(latestCheckpoint(matches).name)
+  }, [datasets.selectedDataset, checkpointList, resumeValue, setResume])
 
   const applyRecommendation = () => {
     if (!recommendation) return
@@ -456,7 +509,16 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     >
                       Resume from checkpoint (optional)
                     </label>
-                    <Select value={form.resumeCheckpoint} onValueChange={form.setResumeCheckpoint}>
+                    <Select
+                      value={form.resumeCheckpoint}
+                      onValueChange={(next) => {
+                        // Any explicit pick — including "Start fresh" ("") —
+                        // latches the guard so the one-shot default above can
+                        // never overwrite it.
+                        resumeTouchedRef.current = true
+                        form.setResumeCheckpoint(next)
+                      }}
+                    >
                       <SelectTrigger
                         id="resume-checkpoint"
                         className="h-8 text-xs font-mono"
