@@ -1,10 +1,23 @@
 """Stage B tests — LLMBrain (token-space) and the world worker pool.
 
-Covers the brain contract (registry, serialization, deterministic mock, no
-RNG consumption, neutral fallback), the non-genome breeding rules (spawn_child
-inherits whole; the flat genome refuses), worker-pool seeded parity, and the
-Stage-B CLI surface (--brain llm, --runs/--workers sweep).
+Covers the brain contract (registry, serialization, parsing, neutral
+fallback, no RNG consumption), the non-genome breeding rules (spawn_child
+inherits whole; the flat genome refuses), worker-pool seeded parity, and
+the Stage-B CLI surface (--brain llm, --runs/--workers sweep).
+
+No mock anywhere (user ruling 2026-11-21): the model path runs against a
+REAL local InferenceEngine — already-running at ``$SLO_TEST_ENGINE_PORT``
+or ``127.0.0.1:9100``, else spawned as a subprocess (skipped when CI has
+no engine) — the transport-failure path against a real dead port
+(connection refused), and answer parsing as the pure function it is.
 """
+
+import os
+import socket
+import subprocess
+import sys
+import threading
+import time
 
 import numpy as np
 import pytest
@@ -12,11 +25,10 @@ import pytest
 from domain.shell._internal.evolution import Genome
 from domain.shell._internal.llm_brain import (
     LLMBrain,
-    MockModelClient,
-    ModelClient,
+    LocalEngineClient,
+    get_default_client,
     make_client,
     reset_default_client,
-    set_default_client,
 )
 from domain.shell._internal.model_brain import BRAIN_KINDS, brain_from_dict, make_brain
 from domain.shell._internal.simulation import SimBaby, WorldParams
@@ -24,12 +36,94 @@ from domain.shell._internal.world_driver import WorldDriver, main
 from domain.shell._internal.world_workers import run_world_runs
 
 
-@pytest.fixture(autouse=True)
-def _mock_client():
-    """Every test runs against the deterministic mock backend."""
-    set_default_client(MockModelClient())
-    yield
-    reset_default_client()
+def _dead_client() -> LocalEngineClient:
+    """A real client pointed at a closed port — connection refused, no listener."""
+    return LocalEngineClient("127.0.0.1", 1)
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _engine_alive(port: int) -> bool:
+    from domain.infrastructure._internal.inference_client import InferenceClient
+
+    try:
+        client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
+        alive = bool(client.connect())
+        client.disconnect()
+        return alive
+    except Exception:  # noqa: BLE001 — any transport answer means "not usable"
+        return False
+
+
+@pytest.fixture(scope="module")
+def engine_port():
+    """A real local InferenceEngine, or skip (no mock anywhere).
+
+    Resolution order: ``$SLO_TEST_ENGINE_PORT`` → an already-running engine
+    on ``127.0.0.1:9100`` → spawn the engine as a subprocess. CI ships no
+    model weights and starts no engine, so it skips: tests that need a real
+    model are local-only by design (user ruling — real engine in tests,
+    skip or fail without it).
+    """
+    env_port = os.environ.get("SLO_TEST_ENGINE_PORT")
+    if env_port:
+        port = int(env_port)
+        if _engine_alive(port):
+            yield port
+            return
+        pytest.skip(f"SLO_TEST_ENGINE_PORT={port} is not answering")
+    if _engine_alive(9100):
+        yield 9100
+        return
+    if os.environ.get("CI"):
+        pytest.skip("no running engine in CI — real-model tests are local-only")
+
+    port = _free_port()
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "domain.infrastructure._internal.inference_engine",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    lines: list[str] = []
+
+    def _drain() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            lines.append(line.rstrip())
+
+    threading.Thread(target=_drain, daemon=True).start()
+    deadline = time.monotonic() + 90.0
+    ready = False
+    while time.monotonic() < deadline:
+        if any(f"ENGINE_READY port={port}" in line for line in lines):
+            ready = True
+            break
+        if proc.poll() is not None:
+            break
+        time.sleep(0.25)
+    if not ready:
+        proc.kill()
+        pytest.skip(f"engine did not become ready: {' | '.join(lines[-3:])}")
+    yield port
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 def _small_params(**kw) -> WorldParams:
@@ -40,27 +134,6 @@ def _spec(seed: int, kind: str = "ticks", **kw) -> dict:
     spec = {"seed": seed, "params": _small_params(world_seed=seed), "kind": kind}
     spec.update(kw)
     return spec
-
-
-class _StaticClient(ModelClient):
-    """Client that answers with fixed text (parse-path tests)."""
-
-    name = "static"
-
-    def __init__(self, text: str):
-        self._text = text
-
-    def complete(self, prompt: str, *, timeout: float = 30.0) -> str:
-        return self._text
-
-
-class _FailingClient(ModelClient):
-    """Client that always raises (transport-failure path)."""
-
-    name = "failing"
-
-    def complete(self, prompt: str, *, timeout: float = 30.0) -> str:
-        raise ConnectionError("engine unreachable")
 
 
 # ── registry ────────────────────────────────────────────────────────────────
@@ -89,57 +162,62 @@ def test_brain_from_dict_unknown_kind_fails_loud():
         brain_from_dict({"kind": "nope", "input_dim": 1, "output_dim": 1})
 
 
-# ── decision contract ───────────────────────────────────────────────────────
+def test_default_client_is_the_real_local_engine():
+    """Until configured, the process default is the real local engine (no mock)."""
+    reset_default_client()
+    assert isinstance(get_default_client(), LocalEngineClient)
+    reset_default_client()
 
 
-def test_llm_forward_deterministic_on_same_observation():
-    x = np.array([0.1, 0.2, 0.3], dtype=np.float32)
-    a = LLMBrain(3, 3, client=MockModelClient()).forward(x)
-    b = LLMBrain(3, 3, client=MockModelClient()).forward(x)
-    assert np.array_equal(a, b)
-    assert a.shape == (3,)
-    assert np.all((0.0 <= a) & (a <= 1.0))
+# ── decision contract (hermetic — no model needed) ──────────────────────────
 
 
-def test_llm_forward_differs_across_observations():
-    client = MockModelClient()
-    brain = LLMBrain(3, 3, client=client)
-    a = brain.forward(np.zeros(3, dtype=np.float32))
-    b = brain.forward(np.ones(3, dtype=np.float32))
-    assert not np.array_equal(a, b)
+def test_prompt_varies_with_observation():
+    """The owned half of decision variance: obs → byte-stable, distinct requests.
+
+    That two prompts yield two different ANSWERS is the model's contract,
+    not ours (Test Rule — owned code only); what we own is that the same
+    observation always sends the identical request and a different one
+    never does.
+    """
+    brain = LLMBrain(3, 3, client=_dead_client())
+    zero = brain._render_prompt(np.zeros(3, dtype=np.float32))
+    assert zero == brain._render_prompt(np.zeros(3, dtype=np.float32))
+    one = brain._render_prompt(np.ones(3, dtype=np.float32))
+    assert zero != one
 
 
-def test_llm_parses_pads_and_clips():
-    brain = LLMBrain(3, 4, client=_StaticClient("1.5, -0.2, 0.7"))
-    gates = brain.forward(np.zeros(3, dtype=np.float32))
+def test_parse_pads_and_clips():
+    brain = LLMBrain(3, 4, client=_dead_client())
+    gates = brain._parse_gates("1.5, -0.2, 0.7")
     # taken in order, clipped to [0,1], missing 4th gate padded neutral
     assert gates.dtype == np.float32
     assert np.allclose(gates, [1.0, 0.0, 0.7, 0.5])
 
 
-def test_llm_unparseable_answer_steers_neutral():
-    brain = LLMBrain(2, 3, client=_StaticClient("no numbers here"))
-    gates = brain.forward(np.zeros(2, dtype=np.float32))
-    assert np.allclose(gates, [0.5, 0.5, 0.5])
+def test_unparseable_answer_is_neutral():
+    brain = LLMBrain(2, 3, client=_dead_client())
+    assert np.allclose(brain._parse_gates("no numbers here"), [0.5, 0.5, 0.5])
 
 
-def test_llm_client_failure_steers_neutral():
-    brain = LLMBrain(2, 2, client=_FailingClient())
+def test_dead_engine_steers_neutral():
+    """Real transport failure (connection refused) → neutral, never a raised tick."""
+    brain = LLMBrain(2, 2, client=_dead_client())
     gates = brain.forward(np.zeros(2, dtype=np.float32))
     assert np.allclose(gates, [0.5, 0.5])
 
 
-def test_llm_update_is_noop():
-    brain = LLMBrain(3, 2)
+def test_update_is_noop():
+    brain = LLMBrain(3, 2, client=_dead_client())
     before = brain.to_dict()
     brain.update(np.ones(3, dtype=np.float32), np.array([1.0, -1.0]), lr=0.5)
     assert brain.to_dict() == before
 
 
-def test_llm_consumes_no_rng():
+def test_consumes_no_rng():
     """Enabling an LLM brain must not perturb the seeded world's RNG stream."""
     before = np.random.get_state()
-    brain = LLMBrain(4, 3)
+    brain = LLMBrain(4, 3, client=_dead_client())
     x = np.zeros(4, dtype=np.float32)
     brain.forward(x)
     brain.update(x, np.ones(3, dtype=np.float32))
@@ -150,12 +228,39 @@ def test_llm_consumes_no_rng():
     assert before[2:] == after[2:]
 
 
-def test_llm_counts_model_calls():
-    brain = LLMBrain(2, 2)
+def test_counts_model_calls():
+    brain = LLMBrain(2, 2, client=_dead_client())
     assert brain.calls == 0
     brain.forward(np.zeros(2, dtype=np.float32))
     brain.forward(np.zeros(2, dtype=np.float32))
     assert brain.calls == 2
+
+
+# ── real engine (the model path — no canned answers) ────────────────────────
+
+
+class TestRealEngine:
+    """End-to-end against a real local InferenceEngine (fixture skips if absent)."""
+
+    def test_forward_deterministic_on_same_observation(self, engine_port):
+        client = LocalEngineClient("127.0.0.1", engine_port)
+        x = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+        a = LLMBrain(3, 3, client=client).forward(x)
+        b = LLMBrain(3, 3, client=client).forward(x)
+        # temperature=0.0 → greedy argmax (slonet._sample_token), so the
+        # identical request must come back as identical gates.
+        assert np.array_equal(a, b)
+        assert a.shape == (3,)
+        assert np.all((0.0 <= a) & (a <= 1.0))
+
+    def test_forward_decides_from_the_observation(self, engine_port):
+        """Obs → prompt → real model → parsed gates, for both extremes."""
+        brain = LLMBrain(3, 3, client=LocalEngineClient("127.0.0.1", engine_port))
+        for x in (np.zeros(3, dtype=np.float32), np.ones(3, dtype=np.float32)):
+            gates = brain.forward(x)
+            assert gates.shape == (3,)
+            assert np.all((0.0 <= gates) & (gates <= 1.0))
+        assert brain.calls == 2
 
 
 # ── breeding rules (non-genome tier) ────────────────────────────────────────
@@ -187,13 +292,15 @@ def test_genome_apply_to_refuses_llm_brain():
 
 
 def test_make_client_by_backend():
-    assert isinstance(make_client("mock"), MockModelClient)
     local = make_client("local", "127.0.0.1:9999")
     assert local.name == "local"
     assert (local.host, local.port) == ("127.0.0.1", 9999)
     api = make_client("api", "http://example.invalid/v1")
     assert api.name == "api"
     assert api.base_url == "http://example.invalid/v1"
+    # the mock backend is gone by user ruling — it must fail loud, not revive
+    with pytest.raises(ValueError, match="unknown model backend"):
+        make_client("mock")
     with pytest.raises(ValueError, match="unknown model backend"):
         make_client("nope")
 
@@ -252,7 +359,12 @@ def test_workers_empty_and_unknown_kind():
 # ── CLI surface ─────────────────────────────────────────────────────────────
 
 
-def test_cli_llm_mock_smoke(capsys):
+def test_cli_llm_smoke(capsys):
+    """--brain llm runs end-to-end hermetically: dead port → neutral steering.
+
+    The wiring (flag → make_client → set_default_client → babies) is what
+    this proves; the model itself is covered by TestRealEngine above.
+    """
     code = main(
         [
             "--grid",
@@ -266,7 +378,9 @@ def test_cli_llm_mock_smoke(capsys):
             "--brain",
             "llm",
             "--model-backend",
-            "mock",
+            "local",
+            "--model-url",
+            "127.0.0.1:1",
         ]
     )
     assert code == 0
@@ -299,14 +413,5 @@ def test_cli_runs_sweep_prints_one_line_per_seed(capsys):
 
 
 def test_cli_rejects_unknown_model_backend(capsys):
-    code = main(
-        [
-            "--brain",
-            "llm",
-            "--model-backend",
-            "bogus",
-            "--ticks",
-            "1",
-        ]
-    )
+    code = main(["--brain", "llm", "--model-backend", "bogus", "--ticks", "1"])
     assert code == 2  # argparse rejects the choice before any world builds

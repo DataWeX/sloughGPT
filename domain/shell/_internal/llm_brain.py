@@ -21,13 +21,18 @@ knowledge of which tier is deciding. What changes:
   Stage A already put it — the baby's episodic memory (memotype) and
   generational selection. A reward-aware prompt is a documented follow-up,
   not a hidden side effect.
-* **The model sits behind a client.** ``ModelClient`` has three backends:
-  ``mock`` (deterministic, network-free — tests/CI), ``local`` (the served
-  ``InferenceEngine`` over its length-prefixed socket), and ``api`` (any
-  OpenAI-compatible HTTP endpoint). ``make_client`` is the single
-  construction seam; a process-wide default set once at CLI start
-  (``set_default_client``) keeps the registry factory a plain
-  ``(input_dim, output_dim)`` constructor like every other kind.
+* **The model sits behind a client — real backends only.** ``ModelClient``
+  has two backends: ``local`` (the served ``InferenceEngine`` over its
+  length-prefixed socket) and ``api`` (any OpenAI-compatible HTTP
+  endpoint). There is deliberately **no mock** (user ruling 2026-11-21:
+  "no mock anywhere, real engine in tests"): tests talk to a real engine
+  (already-running or spawned — see ``engine_port`` in
+  ``test_world_llm_brain``) or to a dead port for the transport-failure
+  path, and answer parsing is exercised as the pure function it is.
+  ``make_client`` is the single construction seam; a process-wide default
+  set once at CLI start (``set_default_client``) keeps the registry
+  factory a plain ``(input_dim, output_dim)`` constructor like every
+  other kind.
 
 Fail-safe: a dead client must steer neutral, not kill the tick — transport
 errors and unparseable answers both fall back to gates of 0.5 (the same
@@ -36,7 +41,6 @@ contract ``_FALLBACK_GATE`` states in ``model_brain``).
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import re
@@ -79,31 +83,6 @@ class ModelClient:
         raise NotImplementedError
 
 
-class MockModelClient(ModelClient):
-    """Deterministic, network-free backend for tests and CI.
-
-    The answer is derived from ``sha256(prompt)`` alone: same observation,
-    same gates — and, like ``RandomBrain``, construction and completion
-    consume **no** ``np.random`` state, so enabling an LLM brain never
-    perturbs the perception-noise stream or spawn layout of a seeded world.
-    """
-
-    name = "mock"
-
-    def complete(self, prompt: str, *, timeout: float = 30.0) -> str:
-        """Answer with 32 hash-derived floats in [0, 1) (32 bytes of digest).
-
-        Args:
-            prompt: the serialized decision request.
-            timeout: ignored — the mock never blocks.
-
-        Returns:
-            Comma-separated floats; the brain takes the first ``output_dim``.
-        """
-        digest = hashlib.sha256(prompt.encode("utf-8")).digest()
-        return ", ".join(f"{byte / 255.0:.4f}" for byte in digest)
-
-
 class LocalEngineClient(ModelClient):
     """Backend over the served ``InferenceEngine`` TCP protocol.
 
@@ -143,12 +122,15 @@ class LocalEngineClient(ModelClient):
             from domain.infrastructure._internal.inference_client import InferenceClient
 
             self._client = InferenceClient(host=self.host, port=self.port)
+        # temperature=0.0 → greedy argmax in the engine's sampler
+        # (slonet._sample_token), so one observation always yields the
+        # same gates — the determinism tests depend on it.
         response = self._client._send_and_recv(
             {
                 "type": "generate",
                 "id": uuid.uuid4().hex,
                 "messages": [{"role": "user", "content": prompt}],
-                "params": {"max_new_tokens": 64},
+                "params": {"max_new_tokens": 64, "temperature": 0.0},
             },
             timeout=timeout,
         )
@@ -223,37 +205,36 @@ class ExternalApiClient(ModelClient):
         return str(response.json()["choices"][0]["message"]["content"])
 
 
-def make_client(backend: str = "mock", url: str | None = None) -> ModelClient:
+def make_client(backend: str = "local", url: str | None = None) -> ModelClient:
     """Construct a model client by backend name — the one construction seam.
 
     Args:
-        backend: ``mock`` | ``local`` | ``api``.
+        backend: ``local`` | ``api`` (no mock — real models only).
         url: ``host:port`` for ``local`` (default ``127.0.0.1:9100``);
             base URL for ``api`` (default ``$SLO_WORLD_API_BASE`` or
-            ``http://127.0.0.1:8000/v1``). Ignored by ``mock``.
+            ``http://127.0.0.1:8000/v1``).
 
     Returns:
         A ready ``ModelClient``.
 
     Raises:
-        ValueError: on an unknown backend name (fail loud).
+        ValueError: on an unknown backend name (fail loud — including
+            ``"mock"``, removed by user ruling 2026-11-21).
     """
-    if backend == "mock":
-        return MockModelClient()
     if backend == "local":
         host, sep, port = (url or "127.0.0.1:9100").partition(":")
         return LocalEngineClient(host=host or "127.0.0.1", port=int(port) if sep and port else 9100)
     if backend == "api":
         base = url or os.environ.get("SLO_WORLD_API_BASE", "http://127.0.0.1:8000/v1")
         return ExternalApiClient(base, api_key=os.environ.get("SLO_WORLD_API_KEY"))
-    raise ValueError(f"unknown model backend {backend!r} (known: mock, local, api)")
+    raise ValueError(f"unknown model backend {backend!r} (known: local, api)")
 
 
 _default_client: ModelClient | None = None
 
 
 def get_default_client() -> ModelClient:
-    """Return the process-wide model client (mock until configured).
+    """Return the process-wide model client (the real local engine until configured).
 
     Not lazily re-created per call: the CLI sets the default once before
     any brain constructs, and worker processes inherit that choice through
@@ -261,7 +242,7 @@ def get_default_client() -> ModelClient:
     """
     global _default_client
     if _default_client is None:
-        _default_client = MockModelClient()
+        _default_client = LocalEngineClient()
     return _default_client
 
 
@@ -272,7 +253,7 @@ def set_default_client(client: ModelClient) -> None:
 
 
 def reset_default_client() -> None:
-    """Drop the process-wide client so the next use starts from mock."""
+    """Drop the process-wide client so the next use starts from the local engine."""
     global _default_client
     _default_client = None
 
@@ -310,8 +291,8 @@ class LLMBrain:
         """Serialize perception features into the decision prompt.
 
         Deterministic and compact: fixed4-decimal rendering so the same
-        observation always produces byte-identical prompt text (the mock's
-        determinism and the parity tests depend on it).
+        observation always produces byte-identical prompt text (the
+        determinism tests and seeded parity depend on it).
 
         Args:
             x: perception feature vector.

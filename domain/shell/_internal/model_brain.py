@@ -51,7 +51,8 @@ Registered kinds:
 ``llm``
     :class:`LLMBrain` (``llm_brain.py``) — Stage B token-space tier: the
     observation is serialized into a prompt and answered by a model client
-    (mock / local InferenceEngine / OpenAI-compatible API). NOT
+    (local InferenceEngine / OpenAI-compatible HTTP API — no mock backend;
+    tests run against a real engine). NOT
     genome-compatible for the same reason as ``slonet`` — there are no flat
     ``W``/``b`` tensors to carry — so breeding raises ``NotImplementedError``
     (``evolution.py``) and offspring inherit whole via ``spawn_child``.
