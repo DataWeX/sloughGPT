@@ -37,7 +37,7 @@ export function useSettingsWorkbench() {
   const updateSettings = useUpdateSettings()
   const { healthLegacy: apiHealth } = useLiveStatus()
   const { locale, setLocale } = useLocale()
-  const { palette, setPalette } = useTheme()
+  const { palette, setPalette, mode, setMode } = useTheme()
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
   const [disk, setDisk] = useState<DiskUsage | null>(null)
@@ -154,6 +154,7 @@ export function useSettingsWorkbench() {
     isOnline,
     locale,
     metrics,
+    mode,
     modelLoaded,
     modelType,
     palette,
@@ -166,6 +167,7 @@ export function useSettingsWorkbench() {
     setInfo,
     setLocale,
     setMetrics,
+    setMode,
     setPalette,
     setProcessGuard,
     setSettingsErrors,

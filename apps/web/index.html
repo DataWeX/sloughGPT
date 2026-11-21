@@ -40,16 +40,20 @@
           var pl = localStorage.getItem("palette")
           var r = document.documentElement
           var th = k.indexOf(t) >= 0 ? t : "purple"
-          var mode = "light" === mo || "dark" === mo ? mo : "dark"
+          var mode = "light" === mo || "dark" === mo || "high-contrast" === mo ? mo : "dark"
           var pa = p.indexOf(pl) >= 0 ? pl : "noir-violet"
-          r.classList.remove("light", "dark")
+          r.classList.remove("light", "dark", "high-contrast")
           k.forEach(function (id) {
             r.classList.remove("theme-" + id)
           })
           p.forEach(function (id) {
             r.classList.remove("palette-" + id)
           })
-          r.classList.add(mode, "theme-" + th)
+          // High contrast layers on the dark canvas — both classes, so every
+          // `html.dark` rule applies and `html.dark.high-contrast` overrides it.
+          var modes = "high-contrast" === mode ? ["dark", "high-contrast"] : [mode]
+          r.classList.add.apply(r.classList, modes)
+          r.classList.add("theme-" + th)
           if (pa !== "noir-violet") r.classList.add("palette-" + pa)
         } catch (e) {}
       })()

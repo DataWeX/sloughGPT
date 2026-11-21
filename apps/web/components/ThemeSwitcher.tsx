@@ -4,7 +4,7 @@ import { IconMoon, IconSun } from '@/components/icons/NavIcons'
 
 import { cn, Button } from '@sloughgpt/strui'
 import { useTheme, THEMES } from './ThemeProvider'
-import { PALETTE_IDS, PALETTE_LABELS, PALETTE_COLORS } from '@/lib/theme-storage'
+import { PALETTE_IDS, PALETTE_LABELS, PALETTE_COLORS, toggleMode } from '@/lib/theme-storage'
 
 export function ThemeSwitcher() {
   const { theme, mode, palette, mounted, setTheme, setMode, setPalette } = useTheme()
@@ -16,11 +16,15 @@ export function ThemeSwitcher() {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="flex items-center justify-center gap-3" role="group" aria-label="Theme settings">
+      <div
+        className="flex items-center justify-center gap-3"
+        role="group"
+        aria-label="Theme settings"
+      >
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
+          onClick={() => setMode(toggleMode(mode))}
           aria-label={mounted && mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
         >
           {showLight ? <IconSun aria-hidden="true" /> : <IconMoon aria-hidden="true" />}
@@ -34,9 +38,12 @@ export function ThemeSwitcher() {
               key={t.id}
               type="button"
               onClick={() => setTheme(t.id)}
-              className={cn('h-3.5 w-3.5 rounded-none transition-all duration-200 ease-smooth', mounted && theme === t.id
+              className={cn(
+                'h-3.5 w-3.5 rounded-none transition-all duration-200 ease-smooth',
+                mounted && theme === t.id
                   ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110 shadow-sm'
-                  : 'opacity-80 hover:scale-105 hover:opacity-100')}
+                  : 'opacity-80 hover:scale-105 hover:opacity-100',
+              )}
               style={{ backgroundColor: t.color }}
               role="radio"
               aria-checked={mounted && theme === t.id}
@@ -47,15 +54,22 @@ export function ThemeSwitcher() {
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-2" role="radiogroup" aria-label="Palette">
+      <div
+        className="flex items-center justify-center gap-2"
+        role="radiogroup"
+        aria-label="Palette"
+      >
         {PALETTE_IDS.map((id) => (
           <button
             key={id}
             type="button"
             onClick={() => setPalette(id)}
-            className={cn('h-3.5 w-3.5 rounded-full transition-all duration-200 ease-smooth', mounted && palette === id
+            className={cn(
+              'h-3.5 w-3.5 rounded-full transition-all duration-200 ease-smooth',
+              mounted && palette === id
                 ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110 shadow-sm'
-                : 'opacity-80 hover:scale-105 hover:opacity-100')}
+                : 'opacity-80 hover:scale-105 hover:opacity-100',
+            )}
             style={{ backgroundColor: PALETTE_COLORS[id] }}
             role="radio"
             aria-checked={mounted && palette === id}
