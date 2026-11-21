@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "0948ef679ceb6f85a48c023743b8f025c64c5b94",
+    "recorded_commit": "3fed0a55342c8e2fddab757f127219ff146df90d",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "515b2f22773819f8bbf1b677784eeca5d28968d3"
+      "tree_hash": "634b7a118ab7fda591bb940cb38fed55c1bcc1c7"
     },
     "ai_personality": {
       "class": "feature",
@@ -280,7 +280,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "0f9b3d3e2e3aec8f8d9340a07d10255148a578f7"
+      "tree_hash": "cd9bf01289f5dae0be934b76e5d40ea8cfba0864"
     },
     "knowledge": {
       "class": "core-capability",
@@ -376,7 +376,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "bb2e7d1740600c44da3572cf8b401c6faf20e15c"
+      "tree_hash": "eac9d056af24862e61cfa03abdd1b1b43cb54d9b"
     },
     "multimodal": {
       "class": "core-capability",
@@ -550,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "4ba2515acef25ac608f386de6dc1fbb3013d3105"
+      "tree_hash": "9e8ed902586277a9fc7672465f1a18ded622ceef"
     },
     "voice": {
       "class": "core-capability",
