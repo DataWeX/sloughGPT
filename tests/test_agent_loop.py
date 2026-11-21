@@ -200,7 +200,9 @@ def test_decode_explicit_args_still_wins_over_siblings():
 
 
 def test_decode_missing_outer_brace_repairs_and_executes():
-    text = 'Sure.\n```tool_call\n{"tool_calls": [{"name": "image_gen", "query": "blue circle"}]\n```'
+    text = (
+        'Sure.\n```tool_call\n{"tool_calls": [{"name": "image_gen", "query": "blue circle"}]\n```'
+    )
     calls, residual = decode(text)
     assert calls == [ToolCall(name="image_gen", args={"query": "blue circle"})]
     assert "Sure." in residual
@@ -216,7 +218,7 @@ def test_decode_trailing_comma_in_canonical_tag_repairs():
 def test_decode_unrepairable_canonical_json_still_raises():
     # The ladder's floor: bareword keys survive every repair step, so
     # the pinned ProtocolError contract holds (no keyword guessing).
-    text = '```tool_call\n{not valid json}\n```'
+    text = "```tool_call\n{not valid json}\n```"
     with pytest.raises(ProtocolError):
         decode(text)
 
