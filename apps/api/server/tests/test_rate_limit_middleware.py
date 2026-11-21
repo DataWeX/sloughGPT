@@ -74,9 +74,11 @@ def _workspace_token(workspace_id: str) -> str:
     The middleware only base64-decodes the payload (rate limiting, not
     auth — see ``_extract_workspace_from_token``), so no signature needed.
     """
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"workspace_id": workspace_id}).encode()
-    ).decode().rstrip("=")
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"workspace_id": workspace_id}).encode())
+        .decode()
+        .rstrip("=")
+    )
     return f"header.{payload}.sig"
 
 

@@ -101,9 +101,7 @@ def _decode_canonical(text: str, calls: list[ToolCall]) -> str:
             payload = json.loads(raw)
         except json.JSONDecodeError as e:
             if tag == "tool_call":
-                raise ProtocolError(
-                    f"invalid tool_call JSON: {e}", position=m.start()
-                ) from e
+                raise ProtocolError(f"invalid tool_call JSON: {e}", position=m.start()) from e
             # Informal ``json`` tag carries no contract: retry with the
             # lenient parse, else the block is just code — prose, never an
             # error (strictness belongs to ``tool_call`` alone).

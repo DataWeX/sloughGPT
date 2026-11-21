@@ -2327,9 +2327,7 @@ class InferenceRouter:
                     # Loop tool events ride out-of-band BETWEEN tokens; edges
                     # project them (chat maps them to phase: TOOL frames).
                     # Never tokens — the raw fence stays in-process.
-                    yield TurnEvent(
-                        kind=str(item.get("kind", "tool")), data=item.get("data") or {}
-                    )
+                    yield TurnEvent(kind=str(item.get("kind", "tool")), data=item.get("data") or {})
                 elif item:
                     collected.append(item)
                     yield item
