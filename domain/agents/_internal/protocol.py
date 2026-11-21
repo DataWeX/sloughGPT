@@ -34,6 +34,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 CANONICAL_RE = re.compile(r"```(tool_call|json)\s*\n(.*?)\n\s*```", re.DOTALL)
+# An UNCLOSED fence: the model hits finish_reason=stop (or max_tokens)
+# before emitting the closing backticks — live-observed on the Phase 2
+# journey walk (card 20261116_090332): "```tool_call\n{...}" with no
+# close. Runs to EOF — an unclosed fence swallows the rest by definition.
+UNCLOSED_RE = re.compile(r"```(tool_call|json)\s*\n(.*)\Z", re.DOTALL)
 LEGACY_TOOL_RE = re.compile(r"\[\[TOOL:\s*(\w+)\s*\]\]\s*([^\n]+)")
 _TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
 
@@ -69,9 +74,16 @@ def _parse_call_item(item: Any, position: int) -> ToolCall:
     name = item.get("name") or item.get("tool")
     if not isinstance(name, str) or not name:
         raise ProtocolError("tool call missing 'name'", position=position)
-    args = item.get("args", item.get("arguments", {}))
-    if args is None:
-        args = {}
+    if "args" in item or "arguments" in item:
+        args = item.get("args", item.get("arguments"))
+        if args is None:
+            args = {}
+    else:
+        # Flat shape (live-observed): {"name": ..., "query": "..."} — the
+        # model puts parameters as siblings of name. Carry them instead of
+        # silently dropping to {}: validate_args can then name the mismatch
+        # ("unknown parameter 'query'") and round-2 feedback corrects it.
+        args = {k: v for k, v in item.items() if k not in ("name", "tool")}
     if not isinstance(args, dict):
         raise ProtocolError(f"args for '{name}' must be an object", position=position)
     return ToolCall(name=name, args=dict(args))
@@ -114,7 +126,32 @@ def _decode_canonical(text: str, calls: list[ToolCall]) -> str:
         calls.extend(_parse_canonical_payload(payload, m.start()))
         return ""
 
-    return CANONICAL_RE.sub(_sub, text)
+    residual = CANONICAL_RE.sub(_sub, text)
+
+    # Unclosed fence (model stopped before the closing backticks): same
+    # tag rules, block runs to EOF. Closed fences were already consumed
+    # above, so any remaining header is genuinely unterminated.
+    def _sub_unclosed(m: re.Match[str]) -> str:
+        tag, raw = m.group(1), m.group(2).strip()
+        if not raw:
+            return m.group(0)  # bare header, nothing to parse — prose
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as e:
+            if tag == "tool_call":
+                raise ProtocolError(
+                    f"invalid tool_call JSON: {e}", position=m.start()
+                ) from e
+            try:
+                payload = json.loads(_repair_trailing_commas(raw))
+            except json.JSONDecodeError:
+                return m.group(0)
+        if tag == "json" and not _looks_like_tool_call(payload):
+            return m.group(0)
+        calls.extend(_parse_canonical_payload(payload, m.start()))
+        return ""
+
+    return UNCLOSED_RE.sub(_sub_unclosed, residual)
 
 
 def _decode_legacy(text: str, calls: list[ToolCall]) -> str:

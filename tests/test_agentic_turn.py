@@ -206,6 +206,31 @@ class TestJsonTaggedFence:
         assert _events(items) == []
 
 
+class TestUnclosedFence:
+    """The model hits finish_reason=stop before the closing backticks
+    (live walk, card 20261116_090332: `` ```tool_call\\n{...}`` with no
+    close). The block must still execute — and the raw wire format must
+    never reach the user."""
+
+    async def test_unclosed_fence_executes_and_stays_hidden(self) -> None:
+        # Exact live shape: no closing fence, flat query sibling.
+        fence = '```tool_call\n{"name": "echo", "args": {"text": "hi"}}'
+        rec = _Recorder([["Sure, ", fence], ["All done!"]])
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "echo hi"}],
+                tools=_registry_with_echo(),
+                stream_fn=rec,
+            )
+        )
+        text = _text(items)
+        assert "```" not in text, "the unclosed wire block must not reach the user"
+        assert text == "Sure, All done!"
+        kinds = [e["kind"] for e in _events(items)]
+        assert kinds == ["tool_call", "tool_result"]
+        assert _events(items)[0]["data"]["name"] == "echo"
+
+
 class TestDegradation:
     async def test_protocol_error_flushes_dropped_fence_as_plain_answer(self) -> None:
         bad = "```tool_call\n{not valid json}\n```"
