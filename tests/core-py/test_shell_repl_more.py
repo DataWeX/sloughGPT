@@ -11413,9 +11413,6 @@ class TestCmdVmrunExecutionV2:
             repl._cmd_vmrun("--admin hello")
         assert repl._last_exit_code == 1
 
-    @pytest.mark.skip(
-        reason="product bug: x86 emulator dies on the piped demo program with 'vmrun error: read8 out of bounds at 0x69590027' instead of executing it"
-    )
     def test_vmrun_piped_input(self, repl):
         repl._piped_input = "mov eax, 3\nmov ebx, 1\nmov ecx, hello\nmov edx, 5\nint 0x80\nmov eax, 1\nxor ebx, ebx\nint 0x80\njmp $\nhello: db 'Hi', 10"
         repl._cmd_vmrun("")
