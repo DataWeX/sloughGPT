@@ -226,8 +226,12 @@ def setup_providers(
                 e,
                 extra={"tag": "MODEL"},
             )
-    else:
-        # Standalone SloNet mode: auto-detect a cached .slnc model
+    elif native_slnc_path is None:
+        # Standalone SloNet mode: auto-detect a cached .slnc model. Skipped
+        # when an explicit native_slnc_path was given — if that model failed
+        # to load we degrade to "no text provider" rather than substituting
+        # an unrelated cached model (which would also clobber native-c,
+        # registered above as the highest-priority text provider).
         default_model = None
         try:
             from domain.infrastructure._internal.config import get_config
