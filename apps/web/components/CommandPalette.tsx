@@ -7,7 +7,6 @@ import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useBootstrap } from '@/contexts/BootstrapContext'
 import { normalizeHfModels } from '@/lib/bootstrap-controller'
-import { useSettings, useUpdateSettings } from '@/lib/store'
 import { NAV_SECTIONS } from '@/lib/navigation'
 import { chatDB } from '@/lib/db'
 import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
@@ -54,8 +53,6 @@ export function CommandPalette() {
   const [dataHits, setDataHits] = useState<SystemSearchHit[]>([])
   const [dataPartial, setDataPartial] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
-  const settings = useSettings()
-  const updateSettings = useUpdateSettings()
   const currentWorkspaceId = useAuthStore((s) => s.currentWorkspace?.id)
   const { t } = useLocale()
 
@@ -170,11 +167,14 @@ export function CommandPalette() {
       },
       {
         id: 'act-theme',
-        label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`,
-        description: 'Toggle theme',
+        label: 'Toggle Light/Dark Mode',
+        description: 'Switch between light and dark',
         icon: '🌓',
         category: 'action',
-        run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }),
+        // The DOM transition belongs to ThemeProvider — the same
+        // `toggle-dark-mode` seam Ctrl+Shift+D uses. Writing settings.theme
+        // alone never reached <html>, so this command used to be a no-op.
+        run: () => window.dispatchEvent(new CustomEvent('toggle-dark-mode')),
       },
       {
         id: 'act-clear',
@@ -227,7 +227,7 @@ export function CommandPalette() {
     }))
 
     return [...nav, ...modelActs, ...soulActs, ...acts, ...conv]
-  }, [router, recentSessions, models, souls, settings, updateSettings, t])
+  }, [router, recentSessions, models, souls, t])
 
   const dataActions = useMemo<CommandAction[]>(() => {
     const toAction = (h: SystemSearchHit): CommandAction => {
