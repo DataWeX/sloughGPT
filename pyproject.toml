@@ -86,9 +86,9 @@ all = [
 sloughgpt = "apps.cli.src.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/iamtowbee/sloughGPT"
-Documentation = "https://github.com/iamtowbee/sloughGPT#readme"
-Repository = "https://github.com/iamtowbee/sloughGPT"
+Homepage = "https://github.com/DataWeX/sloughGPT"
+Documentation = "https://github.com/DataWeX/sloughGPT#readme"
+Repository = "https://github.com/DataWeX/sloughGPT"
 
 [tool.setuptools]
 # Dual-tree consolidation moved `domain` from packages/core-py/domains to the

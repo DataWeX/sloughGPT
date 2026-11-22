@@ -4,7 +4,7 @@
 
 set -e
 
-REPO="iamtowbee/sloughGPT"
+REPO="DataWeX/sloughGPT"
 
 echo "=========================================="
 echo "Checking CI/CD Status for SloughGPT"

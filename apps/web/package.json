@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iamtowbee/sloughGPT.git",
+    "url": "https://github.com/DataWeX/sloughGPT.git",
     "directory": "apps/web"
   },
-  "homepage": "https://github.com/iamtowbee/sloughGPT/tree/main/apps/web",
+  "homepage": "https://github.com/DataWeX/sloughGPT/tree/main/apps/web",
   "bugs": {
-    "url": "https://github.com/iamtowbee/sloughGPT/issues"
+    "url": "https://github.com/DataWeX/sloughGPT/issues"
   },
   "engines": {
     "node": ">=20.0.0"

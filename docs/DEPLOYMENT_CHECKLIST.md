@@ -27,7 +27,7 @@
 ### Using Docker Compose
 ```bash
 # 1. Clone repository
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 
 # 2. Copy environment file
