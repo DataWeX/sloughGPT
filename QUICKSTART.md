@@ -5,7 +5,7 @@
 ### 1. Install
 
 ```bash
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 python3 -m pip install torch transformers fastapi uvicorn pydantic pytest
 # Editable install + dev tools (ruff, pytest, …) and the ``sloughgpt`` console script
@@ -459,7 +459,7 @@ SloughGPT/
 
 ## Links
 
-- **GitHub**: https://github.com/iamtowbee/sloughGPT
+- **GitHub**: https://github.com/DataWeX/sloughGPT
 - **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Security**: [SECURITY.md](SECURITY.md)
 - **Agents**: [AGENTS.md](AGENTS.md)

@@ -149,6 +149,38 @@ vi.mock('@/lib/db', () => ({
 vi.mock('@/lib/theme-storage', () => ({
   PALETTE_IDS: ['noir-violet', 'ocean'],
   PALETTE_LABELS: { 'noir-violet': 'Noir Violet', ocean: 'Ocean' },
+  THEME_PREVIEWS: [
+    {
+      id: 'dark',
+      label: 'Dark',
+      bg: '#110f18',
+      fg: '#eeeaf8',
+      panel: '#1c1926',
+      border: '#342e48',
+      primary: '#c0aaf4',
+      primaryFg: '#191624',
+    },
+    {
+      id: 'light',
+      label: 'Light',
+      bg: '#f8f6fc',
+      fg: '#191624',
+      panel: '#ffffff',
+      border: '#e4e0f2',
+      primary: '#7c52c4',
+      primaryFg: '#faf8ff',
+    },
+    {
+      id: 'high-contrast',
+      label: 'High Contrast',
+      bg: '#000000',
+      fg: '#ffffff',
+      panel: '#000000',
+      border: '#ffffff',
+      primary: '#ffff00',
+      primaryFg: '#000000',
+    },
+  ],
 }))
 
 vi.mock('@/lib/config', () => ({
@@ -244,7 +276,23 @@ describe('SettingsPage', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Light').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Dark').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('System').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('High Contrast').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('marks the applied canvas as the selected tile', () => {
+    render(<SettingsPage />)
+    // useTheme mock reports mode: 'dark'
+    expect(screen.getByRole('radio', { name: 'Dark' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: 'Light' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('radio', { name: 'High Contrast' }).getAttribute('aria-checked')).toBe(
+      'false',
+    )
+  })
+
+  it('clicking a tile applies that canvas and mirrors it into settings', () => {
+    render(<SettingsPage />)
+    screen.getByRole('radio', { name: 'High Contrast' }).click()
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ theme: 'high-contrast' })
   })
 
   it('renders Streaming switch', () => {

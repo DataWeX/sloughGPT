@@ -241,3 +241,12 @@ jobs:
         # (card 20261031_084842). A dead producer means GitHub board history
         # goes stale silently — this reddens instead. Stdlib-only.
         run: python3 scripts/check_kanban_freshness.py --max-age-minutes 120
+      - name: Session ledger shape (prepend order + well-formed headers)
+        # docs/AGENT_SYNC.md is the cross-session ledger that grib ledger
+        # parse/query/check reads; a bottom-append or a malformed header must
+        # redden every PR instead of silently corrupting the read tools.
+        # Known findings pin to a SHRINK-ONLY baseline: fixing an entry
+        # without deleting its baseline line reddens too (page-baseline
+        # precedent), and fingerprints are line-number-free because the doc
+        # only prepends. Stdlib-only (grib dependencies = []).
+        run: PYTHONPATH=packages/grib/src python3 -m grib ledger check --baseline packages/grib/ledger_baseline.json

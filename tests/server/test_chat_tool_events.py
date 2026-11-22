@@ -153,9 +153,7 @@ async def test_stream_turn_yields_tool_events_and_hides_fence():
     provider, calls = _fake_provider([["Let me echo ", FENCE_ECHO], ["Done."]])
 
     with (
-        patch(
-            "apps.api.server.routers.inference.get_provider", return_value=provider
-        ),
+        patch("apps.api.server.routers.inference.get_provider", return_value=provider),
         patch(
             "apps.api.server.routers.inference.get_tool_registry",
             return_value=_echo_registry(),
@@ -195,9 +193,9 @@ async def test_stream_turn_yields_tool_events_and_hides_fence():
     assert any("Available tools:" in (m.get("content") or "") for m in calls[0]), (
         "tool contract must be injected into round 1's system message"
     )
-    assert any(
-        (m.get("content") or "").startswith("[tool result: echo]") for m in calls[1]
-    ), "round 2 must carry the re-attributed tool result"
+    assert any((m.get("content") or "").startswith("[tool result: echo]") for m in calls[1]), (
+        "round 2 must carry the re-attributed tool result"
+    )
 
 
 @patch.dict(
@@ -222,9 +220,7 @@ async def test_stream_turn_attachment_markdown_rides_stream_but_not_memory():
     memory_service = SimpleNamespace(remember_facts_async=_remember)
 
     with (
-        patch(
-            "apps.api.server.routers.inference.get_provider", return_value=provider
-        ),
+        patch("apps.api.server.routers.inference.get_provider", return_value=provider),
         patch(
             "apps.api.server.routers.inference.get_tool_registry",
             return_value=_draw_registry(),
@@ -259,8 +255,7 @@ async def test_stream_turn_attachment_markdown_rides_stream_but_not_memory():
 
     assert mem_calls, "memory step must run for this turn"
     assert all("base64" not in t for t in mem_calls), (
-        "remember_facts_async must get the clean pre-append text — never the "
-        "base64 blob"
+        "remember_facts_async must get the clean pre-append text — never the base64 blob"
     )
     assert all("Here you go." in t for t in mem_calls)
     assert postgen_texts, "_run_post_gen_tasks must run for this turn"
@@ -312,9 +307,7 @@ def test_post_chat_projects_turn_events_as_tool_frames(client):
 
     fake_engine = SimpleNamespace(stream=_stream)
 
-    with patch(
-        "apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine
-    ):
+    with patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine):
         resp = client.post(
             "/chat",
             json={
@@ -326,7 +319,7 @@ def test_post_chat_projects_turn_events_as_tool_frames(client):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/event-stream")
     frames = [
-        json.loads(line[len("data: "):])
+        json.loads(line[len("data: ") :])
         for line in resp.text.splitlines()
         if line.startswith("data: ")
     ]

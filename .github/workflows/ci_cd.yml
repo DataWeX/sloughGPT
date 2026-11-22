@@ -79,9 +79,14 @@ jobs:
     # A hung step fails the job instead of holding the
     # concurrency group for GitHub's 6-hour default
     # (card 20261102_025758 — test-root hung 6 h on main).
-    # 90 (was 60): main's full run now also RECORDS testmon data for PR
-    # selection — measured +40% (35m51s → ~50m, card 20261104_085623).
-    timeout-minutes: 90
+    # 120 (was 90): main's run is now TWO passes (coverage gate, then
+    # testmon record — the CTracer LIFO clash, run 44542985298). Measured
+    # on run 44748601711 (contended runner): pass 1 = 47m27s, pass 2 was
+    # at 99% after 15.5m with the same ~31m slow-test tail pass 1 had →
+    # ~97m need vs the 90m budget; the timeout killed pass 2 ~5 min
+    # before completion (record + save skipped). Uncontended baseline:
+    # 35m51s + 19m15s ≈ 55m (card 20261104_085623).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -215,8 +220,9 @@ jobs:
           # DB PRs select against; plain pytest writes no testmon data.
           # No --cov here by design: the two CTracers clash under xdist
           # (run 44542985298, traceback in the comment above). Measured on
-          # #353's PR runs: full record without coverage = 19m15s.
-          # Pass 1 ≈ 35m51s + pass 2 ≈ 19m15s ≈ 55m < timeout-minutes: 90.
+          # #353's PR runs: full record without coverage = 19m15s; on main
+          # run 44748601711 (contended) pass 2 hit 99% after 15.5m and
+          # needed the same ~31m slow-test tail pass 1 had → budget 120m.
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -582,7 +588,16 @@ jobs:
             ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-cli:latest
             ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-cli:${{ github.sha }}
 
-  # ─── Deploy to K8s (release only) ──────────────────────────────
+  # ─── Deploy: pull-based compose on the host (release only) ──────
+  # USER RULING 2026-10-27: "fastest + cheapest target = pull-based
+  # compose deploy on the host." The job that used to live here only
+  # ECHOED `kubectl set image ...` while reporting a green run — the
+  # second-writer anti-pattern this replaces: it deployed nothing.
+  # The Helm chart (infra/helm/sloughgpt/) is deliberately NOT used:
+  # the user declined that direction.
+  #
+  # It stays release-only (github.event_name == 'release'). Widening it
+  # to fire on every main push is a product decision, not this card's.
   deploy:
     runs-on: ubuntu-latest
     # A hung step fails the job instead of holding the
@@ -597,17 +612,95 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to Kubernetes
+      # Secrets live on the `production` environment, so they are checked in
+      # a STEP — the `secrets` context is not readable from a job-level
+      # `if:`. Missing credentials must FAIL the release, never skip it
+      # silently and never report success without deploying.
+      - name: Verify deploy credentials
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          echo "Deploying release ${{ github.event.release.tag_name }}..."
-          echo "Images:"
-          echo "  API:  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "  Web:  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ github.sha }}"
-          echo "  CLI:  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-cli:${{ github.sha }}"
-          echo ""
-          echo "To deploy, run:"
-          echo "  kubectl set image deployment/sloughgpt-api api=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n sloughgpt"
-          echo "  kubectl set image deployment/sloughgpt-web web=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ github.sha }} -n sloughgpt"
+          missing=""
+          [ -n "$TS_AUTHKEY" ]     || missing="$missing TS_AUTHKEY"
+          [ -n "$DEPLOY_HOST" ]    || missing="$missing DEPLOY_HOST"
+          [ -n "$DEPLOY_SSH_KEY" ] || missing="$missing DEPLOY_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::release deploy cannot run — missing secrets:$missing"
+            exit 1
+          fi
+          echo "credentials present (host=$DEPLOY_HOST)"
+
+      # Same transport as deploy-git-sync.yml: Tailscale + SSH + rsync.
+      # Ported, not rebuilt.
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      # Ship the compose project at its REPO-RELATIVE path (/opt/sloughgpt/
+      # infra/docker/) so the compose file's `context: ../..` and its
+      # `./prometheus.prod.yml`, `./grafana/`, `./docker/nginx/` references
+      # still resolve. Host secrets are NEVER overwritten — every .env* is
+      # excluded; the host owns its own credentials.
+      - name: Sync compose project to host
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER || 'root' }}@${{ secrets.DEPLOY_HOST }} "mkdir -p /opt/sloughgpt/infra/docker"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_rsa" \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude '__pycache__' \
+            infra/docker/ ${{ secrets.DEPLOY_USER || 'root' }}@${{ secrets.DEPLOY_HOST }}:/opt/sloughgpt/infra/docker/
+
+      # Pull the sha-tagged images the build job above actually published
+      # (ghcr.io/datawex/sloughgpt{,-web}), then restart the stack.
+      # `pull` exits non-zero when a tag does not exist, so an unpublished
+      # sha fails here instead of pretending to deploy.
+      - name: Pull sha-tagged images + restart stack
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          VERSION: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/id_rsa "$DEPLOY_USER@$DEPLOY_HOST" \
+            "export VERSION='$VERSION'; bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/sloughgpt/infra/docker
+          if [ ! -f .env ]; then
+            echo "ERROR: /opt/sloughgpt/infra/docker/.env is missing on this host." >&2
+            echo "Provision it first (keys: POSTGRES_PASSWORD, REDIS_PASSWORD," >&2
+            echo "GRAFANA_ADMIN_PASSWORD, SLO_JWT_SECRET, SLO_API_KEY) — see" >&2
+            echo "infra/docker/.env.production in the repo." >&2
+            exit 1
+          fi
+          compose() { docker compose -f docker-compose.prod.yml --env-file .env "$@"; }
+
+          # api/web are the images ci_cd.yml publishes sha-tagged. gateway is
+          # NOT published by CI (no build job for it) — it is excluded so it
+          # cannot silently resolve to a stale or absent registry tag, and
+          # `--no-build` stops compose from quietly building it on the host.
+          # CI coverage for gateway/gpu/dev is a separate card.
+          compose pull api web
+
+          services=$(compose config --services)
+          services=$(printf '%s\n' "$services" | grep -vx gateway || true)
+          [ -n "$services" ] || { echo "ERROR: no deployable services resolved" >&2; exit 1; }
+          compose up -d --no-build $services
+          compose ps
+          echo "deployed VERSION=$VERSION"
+          REMOTE
+
 
   # ─── Benchmark (main only) ─────────────────────────────────────
   benchmark:

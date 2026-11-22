@@ -148,3 +148,25 @@ Every icon-only button MUST have an accessible label:
 | Toggle without `role="switch"` | Add `role="switch"` + `aria-checked` |
 | Dialog without `role="dialog"` | Add `role="dialog"` + `aria-modal="true"` |
 | Disabled button still in tab order | Add `tabIndex={-1}` or `aria-disabled` |
+| Selected state styled with `success` | Selection → `primary`/`ring` + shape redundancy; `success` is reserved for outcomes |
+| Hover that only shifts alpha <15% | Change a shape/edge channel (border, bg step, shadow) |
+
+## Declared ≠ Shipped — Verify States by Measurement
+
+A state declared in source is not proof it reaches the user. Proof case from
+the 2026-11-22 Settings audit (finding 1): `button.tsx:15` ghost declares
+`hover:bg-accent/8`, yet the emitted stylesheet has no `.bg-accent\/8` rule —
+`:hover` matched `true` on the Settings Reset button while its background
+stayed `rgba(0,0,0,0)`.
+
+Verify every state by measurement, never by reading source (full probe
+descriptions in design-system-enforcement → "How to audit — 3 probes"):
+
+- **Hover** — read computed style → dispatch a real hover event → read again.
+  A declared `:hover` in source is not proof it shipped.
+- **Focus-visible** — real `Tab`/`Shift+Tab` keypress →
+  `getComputedStyle(document.activeElement)`. Focus-from-load does not
+  trigger `:focus-visible`.
+- **Utility existence** — scan `document.styleSheets` for the emitted class
+  (e.g. `.bg-accent\/8`) before trusting an opacity step; prefer steps known
+  to be emitted (/5 /10 /15 /20 /50 /80 for accent).

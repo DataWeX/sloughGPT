@@ -1608,9 +1608,7 @@ class TestTraitSteeringReachesThePrompt:
         content = system["content"].strip()
         contract_at = content.find("You can call tools.")
         assert contract_at > 0, "tool contract must be injected after the steering"
-        assert content[:contract_at].strip() == (
-            TestTraitSteeringReachesThePrompt.STEERING.strip()
-        )
+        assert content[:contract_at].strip() == (TestTraitSteeringReachesThePrompt.STEERING.strip())
 
 
 class TestFrameBuildsWithoutFacts:

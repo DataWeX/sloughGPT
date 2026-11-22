@@ -1,6 +1,6 @@
 # SloughGPT Installation Script
 
-**Canonical repository:** [github.com/iamtowbee/sloughGPT](https://github.com/iamtowbee/sloughGPT). For a maintained local setup, start with **QUICKSTART.md** (`python3 -m pip install -e ".[dev]"` from the repo root, then `./verify.sh`). With **Node** installed, optional repo-root **`npm install`** enables **`npm run dev:stack`** (API + web) and **`npm run test:repo-root`** (root **`package.json`** contract); **`make dev-stack`** / **`make test-repo-root`** are equivalent shell entrypoints.
+**Canonical repository:** [github.com/DataWeX/sloughGPT](https://github.com/DataWeX/sloughGPT). For a maintained local setup, start with **QUICKSTART.md** (`python3 -m pip install -e ".[dev]"` from the repo root, then `./verify.sh`). With **Node** installed, optional repo-root **`npm install`** enables **`npm run dev:stack`** (API + web) and **`npm run test:repo-root`** (root **`package.json`** contract); **`make dev-stack`** / **`make test-repo-root`** are equivalent shell entrypoints.
 
 ## 🚀 Automated Installation
 
@@ -8,7 +8,7 @@ This script provides a quick way to set up SloughGPT and resolve common dependen
 
 ```bash
 # Download and run the installation script
-curl -fsSL https://raw.githubusercontent.com/iamtowbee/sloughGPT/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DataWeX/sloughGPT/main/install.sh | bash
 ```
 
 ## Manual Installation Steps
@@ -67,8 +67,8 @@ sloughgpt --help
 ### Using Pre-built Docker Image
 
 ```bash
-# Image tag/registry may vary; Helm default is ghcr.io/iamtowbee/sloughgpt (see infra/k8s/helm/sloughgpt/values.yaml)
-docker pull ghcr.io/iamtowbee/sloughgpt:latest
+# Image tag/registry may vary; Helm default is ghcr.io/datawex/sloughgpt (see infra/k8s/helm/sloughgpt/values.yaml)
+docker pull ghcr.io/datawex/sloughgpt:latest
 
 # Run with environment variables
 docker run -d \
@@ -76,14 +76,14 @@ docker run -d \
   -p 8000:8000 \
   -e DATABASE_URL=sqlite:///sloughgpt.db \
   -e JWT_SECRET_KEY=your-secret-key \
-  ghcr.io/iamtowbee/sloughgpt:latest
+  ghcr.io/datawex/sloughgpt:latest
 ```
 
 ### Building from Source
 
 ```bash
 # Clone repository
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 
 # Build Docker image (compose/Dockerfiles live under infra/docker/)
@@ -304,7 +304,7 @@ After successful installation:
 ## Support
 
 - **Documentation**: https://docs.sloughgpt.ai
-- **Issues**: https://github.com/iamtowbee/sloughGPT/issues
+- **Issues**: https://github.com/DataWeX/sloughGPT/issues
 - **Community**: https://community.sloughgpt.ai
 - **Enterprise Support**: enterprise@sloughgpt.ai
 

@@ -1,11 +1,17 @@
 services:
+  # Image registry — ONE scheme, the one ci_cd.yml publishes to:
+  #   ghcr.io/datawex/sloughgpt{,-web,-cli}  (sha-tagged + :latest)
+  # gateway / api-gpu (gpu) / dev below are NOT published by CI, so they
+  # keep their local build names on purpose — pointing them at
+  # ghcr.io/datawex/* would reference tags that do not exist.
+  # (card 20261121_150816 — registry unification, the pull half)
   # ─── API Server (CPU) ─────────────────────────────────────────────
   api:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile
     container_name: sloughgpt-api
-    image: sloughgpt/api:latest
+    image: ghcr.io/datawex/sloughgpt:${VERSION:-latest}
     ports:
       - "8000:8000"
     environment:
@@ -34,6 +40,8 @@ services:
       - sloughgpt-net
 
   # ─── Edge Gateway (compression / byte-relay) ─────────────────────
+  # NOT published by CI — built locally only. Do not rename to
+  # ghcr.io/datawex/*: no such tag exists (card 20261121_150816).
   gateway:
     build:
       context: ../..
@@ -70,7 +78,7 @@ services:
       context: ../..
       dockerfile: apps/web/Dockerfile
     container_name: sloughgpt-web
-    image: sloughgpt/web:latest
+    image: ghcr.io/datawex/sloughgpt-web:${VERSION:-latest}
     ports:
       - "3000:3000"
     environment:
@@ -100,7 +108,7 @@ services:
       context: ../..
       dockerfile: infra/docker/Dockerfile.cli
     container_name: sloughgpt-cli
-    image: sloughgpt/cli:latest
+    image: ghcr.io/datawex/sloughgpt-cli:${VERSION:-latest}
     environment:
       - SLO_API_URL=http://api:8000
     volumes:
@@ -114,6 +122,7 @@ services:
     tty: true
 
   # ─── GPU API (NVIDIA CUDA) ────────────────────────────────────────
+  # NOT published by CI — local build only (see header comment).
   api-gpu:
     build:
       context: ../..
@@ -144,6 +153,7 @@ services:
       - sloughgpt-net
 
   # ─── Dev (hot reload) ─────────────────────────────────────────────
+  # NOT published by CI — local build only (see header comment).
   dev:
     build:
       context: ../..

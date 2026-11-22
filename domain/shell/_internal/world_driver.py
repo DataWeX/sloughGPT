@@ -245,11 +245,12 @@ _STAGE_B_FLAGS: tuple[dict[str, Any], ...] = (
     {
         "name": "--model-backend",
         "type": str,
-        "default": "mock",
-        "choices": ("mock", "local", "api"),
-        "help": "model client for --brain llm: mock (deterministic, no network), "
-        "local (served InferenceEngine TCP, --model-url host:port), "
-        "api (OpenAI-compatible HTTP, --model-url base URL)",
+        "default": "local",
+        "choices": ("local", "api"),
+        "help": "model client for --brain llm: local (served InferenceEngine "
+        "TCP, --model-url host:port; default), "
+        "api (OpenAI-compatible HTTP, --model-url base URL). "
+        "No mock backend — the brain talks to real models only",
     },
     {
         "name": "--model-url",
