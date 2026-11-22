@@ -16,7 +16,7 @@ Usage:
 __version__ = "1.1.0"
 __author__ = "SloughGPT"
 __email__ = "dev@sloughgpt.ai"
-__url__ = "https://github.com/iamtowbee/sloughGPT"
+__url__ = "https://github.com/DataWeX/sloughGPT"
 
 import importlib.util
 import os
