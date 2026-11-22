@@ -48,6 +48,17 @@ class TestRegistryProjection:
         assert spec.params["required"] == ["prompt"]
         assert "prompt" in spec.params["properties"]
 
+    def test_image_gen_prompt_declares_query_alias(self) -> None:
+        # walk_img11: the model writes file_qa's input key (`query`) for
+        # image_gen — the alias is declared ON the param (one source of
+        # truth) and maps to canonical at the loop + execute seams.
+        spec = ToolRegistry().get("image_gen")
+        params = {p.name: p for p in spec.parameters}
+        assert params["prompt"].aliases == ("query",)
+        # the JSON Schema keeps teaching the canonical name only — aliases
+        # are silent repair (like the trailing-comma rung), not contract.
+        assert "query" not in spec.params["properties"]
+
 
 class TestImageGenExecutor:
     @pytest.fixture()
@@ -88,6 +99,19 @@ class TestImageGenExecutor:
         res = await registry.execute("image_gen", {"prompt": "   "})
         assert not res.success
         assert res.error
+
+    async def test_query_alias_accepted_at_execute_seam(self, registry) -> None:
+        # walk_img11: the model called image_gen with file_qa's input key
+        # (`query`) — declared aliases map it to `prompt` at the seam, so the
+        # tool runs instead of failing validation.
+        res = await registry.execute("image_gen", {"query": "a blue circle"})
+        assert res.success, res.error
+        assert res.metadata["attachment"]["alt"] == "a blue circle"
+
+    async def test_canonical_beats_alias_when_both_present(self, registry) -> None:
+        res = await registry.execute("image_gen", {"prompt": "canonical", "query": "ignored"})
+        assert res.success, res.error
+        assert res.metadata["attachment"]["alt"] == "canonical"
 
 
 class TestFileQAExecutor:

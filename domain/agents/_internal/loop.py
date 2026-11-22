@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from domain.agents._internal.protocol import ProtocolError, ToolCall, decode
-from domain.agents._internal.tools import ToolRegistry, ToolSpec
+from domain.agents._internal.tools import ToolRegistry, ToolSpec, normalize_args
 
 InferFn = Callable[[list[dict[str, Any]], list[ToolSpec]], Awaitable[str]]
 ApproveFn = Callable[[ToolCall], bool]
@@ -153,7 +153,11 @@ class AgentLoop:
         spec = tools.get(call.name)
         if spec is None:
             return {"output": "", "error": f"Unknown tool: {call.name}"}
-        problems = validate_args(spec, call.args)
+        # normalize BEFORE validate — the same repaired args reach both
+        # validate_args and the execute seam (never validated against one
+        # shape and executed with another).
+        args = normalize_args(spec, call.args)
+        problems = validate_args(spec, args)
         if problems:
             return {"output": "", "error": f"invalid args for '{call.name}': {'; '.join(problems)}"}
         if spec.requires_approval:
@@ -167,5 +171,5 @@ class AgentLoop:
         # approver passed through: loop already prompted (L151-158) — the
         # seam gate in ToolRegistry.execute sees a declared approver and
         # lets the run through; callers without one are refused there.
-        result = await tools.execute(call.name, call.args, approve=approve)
+        result = await tools.execute(call.name, args, approve=approve)
         return {"output": result.output, "error": result.error}

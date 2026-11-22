@@ -406,6 +406,66 @@ async def test_loop_missing_required_arg_is_rejected_before_execute():
     assert "missing required parameter 'expression'" in result.payload["error"]
 
 
+async def test_loop_alias_maps_to_canonical_before_validate():
+    """Aliases are applied at the seam where args are transformed, so the
+    same normalized args reach both validate_args and execute."""
+    registry = ToolRegistry()
+
+    async def _echo(text: str) -> dict[str, Any]:
+        return {"output": text}
+
+    registry.register(
+        ToolSpec(
+            name="echo",
+            description="echo",
+            parameters=[
+                ToolParam("text", "string", "text", required=True, aliases=("word", "input")),
+            ],
+            execute=_echo,
+        )
+    )
+    script = [
+        encode_tool_block([ToolCall(name="echo", args={"input": "hi"})]),
+        "ok",
+    ]
+    events = await _run(script, tools=registry)
+    result = events[2]
+    assert result.payload["success"] is True, result.payload.get("error")
+    assert result.payload["output"] == "hi"
+
+
+async def test_loop_canonical_wins_over_alias_and_unknown_still_rejected():
+    registry = ToolRegistry()
+
+    async def _echo(text: str) -> dict[str, Any]:
+        return {"output": text}
+
+    registry.register(
+        ToolSpec(
+            name="echo",
+            description="echo",
+            parameters=[
+                ToolParam("text", "string", "text", required=True, aliases=("input",)),
+            ],
+            execute=_echo,
+        )
+    )
+    # canonical + alias together → canonical wins, alias dropped
+    both = await _run(
+        [encode_tool_block([ToolCall(name="echo", args={"text": "a", "input": "b"})]), "ok"],
+        tools=registry,
+    )
+    assert both[2].payload["success"] is True, both[2].payload.get("error")
+    assert both[2].payload["output"] == "a"
+    # a key that is neither canonical nor an alias still fails loudly
+    bad = await _run(
+        [encode_tool_block([ToolCall(name="echo", args={"nope": 1})]), "ok"],
+        tools=registry,
+    )
+    assert bad[2].payload["success"] is False
+    assert "nope" in bad[2].payload["error"]
+
+
 async def test_loop_unknown_and_mistyped_args_rejected():
     registry = ToolRegistry()
 
