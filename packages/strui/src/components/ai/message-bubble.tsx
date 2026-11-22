@@ -30,7 +30,7 @@ export function MessageBubble({
 
   const surface =
     role === 'user'
-      ? 'ml-auto max-w-[var(--chat-thread-max)] border border-primary/22 bg-primary/[0.11] text-foreground shadow-[0_1px_2px_color-mix(in_srgb,var(--foreground)_6%,transparent)]'
+      ? 'ml-auto max-w-[var(--chat-thread-max)] border border-primary/20 bg-primary/[0.11] text-foreground shadow-[0_1px_2px_color-mix(in_srgb,var(--foreground)_6%,transparent)]'
       : role === 'assistant'
         ? 'mr-auto max-w-[var(--chat-thread-max)] border border-border/75 bg-card/80 text-card-foreground shadow-sm [border-left-width:3px] [border-left-color:color-mix(in_srgb,var(--primary)_52%,var(--border))]'
         : null
