@@ -27,11 +27,30 @@ def _mock(mod_name, attrs):
     m = MagicMock()
     for k, v in attrs.items():
         setattr(m, k, v)
+    # Bind the parent package chain BEFORE the swap (card 20261122_082043):
+    # if the package's first import happens during the window, its __init__
+    # binds names from the MOCK (domain.settings.__init__ would do
+    # `from ..._internal.persistent import get_settings` and capture the
+    # MagicMock whose return_value is a plain dict), and _cleanup can never
+    # repair that binding — every later test in the worker then gets the
+    # mock (test_apply_preset: dict.update("training", ...) -> ValueError).
+    # Best-effort: if the parent cannot import, fall back to the old
+    # behaviour; the test needing it will fail on its own terms.
+    parent = mod_name.rpartition(".")[0]
+    while parent:
+        if parent not in sys.modules:
+            try:
+                __import__(parent)
+            except ImportError:
+                pass
+        parent = parent.rpartition(".")[0]
     # Save the REAL module (if any) before swapping: _cleanup must restore
     # it, not pop the entry — popping evicts the real module from the import
     # cache, so every later `import` of it creates a fresh copy and objects
     # bound earlier (collection-time imports, eagerly-bound facades) end up
-    # split-brained against the new one.
+    # split-brained against the new one. Importing the parents first also
+    # guarantees the real child is what gets recorded here when the parent
+    # pulls it in, so _cleanup restores instead of popping.
     if mod_name not in original_imports:
         original_imports[mod_name] = sys.modules.get(mod_name)
     sys.modules[mod_name] = m
