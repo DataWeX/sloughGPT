@@ -155,28 +155,44 @@ def parse(doc: str | Path) -> list[dict]:
     return _project(entries)
 
 
+def fingerprint(v: dict) -> str:
+    """Stable identity of a violation for baseline files.
+
+    Line numbers shift on every prepend (the doc's whole write pattern), so a
+    line-keyed baseline would churn daily. Date + header head (order) and the
+    message (malformed) survive prepends; they change only when the entry
+    itself is edited — which is exactly when review should fire again."""
+    if v["kind"] == "order":
+        return f"order|{v['date']}|{v['head'][:80]}"
+    return f"{v['kind']}|{v['msg'][:100]}"
+
+
 def check(doc: str | Path) -> tuple[bool, list[dict]]:
     """Gate the ledger's shape and order. Violations: a bold-dated line that
     does not parse as a header (impossible date, missing em-dash separator,
     bold that never closes), and a date that increases top-to-bottom (the
     bottom-append / backdated-insert signature — review, then either move the
-    entry to line 1 or accept it). Returns ``(ok, violations)``."""
+    entry to line 1 or accept it). Returns ``(ok, violations)``; violations
+    carry ``line`` plus stable identity fields for :func:`fingerprint`."""
     entries, malformed = _parse_blocks(Path(doc))
     violations = list(malformed)
-    prev: str | None = None
+    prev: dict | None = None
     for e in entries:
-        if prev is not None and e["date"] > prev:
+        if prev is not None and e["date"] > prev["date"]:
             violations.append(
                 {
                     "line": e["line"],
                     "kind": "order",
+                    "date": e["date"],
+                    "head": e["head"],
                     "msg": (
-                        f"{e['date']} is newer than the entry above ({prev}) — "
-                        "review: bottom-append or backdated insert"
+                        f"{e['date']} is newer than the entry above "
+                        f"({prev['date']}) — review: bottom-append or "
+                        "backdated insert"
                     ),
                 }
             )
-        prev = e["date"]
+        prev = e
     violations.sort(key=lambda v: v["line"])
     return (not violations, violations)
 

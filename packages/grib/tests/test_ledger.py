@@ -12,7 +12,7 @@ import json
 
 import pytest
 from grib.cli import main
-from grib.ledger import check, parse, query
+from grib.ledger import check, fingerprint, parse, query
 
 # Two entries in prepend order (newest first), one mid-entry emphasis line
 # that must NOT parse as an entry, one continuation line per entry.
@@ -172,3 +172,85 @@ def test_cli_errors_cleanly_when_no_doc_found(tmp_path, monkeypatch, capsys):
     rc = main(["ledger", "check"])
     assert rc == 2
     assert "AGENT_SYNC.md" in capsys.readouterr().out
+
+
+# --- baseline (the CI gate: known findings, shrink-only) -------------------
+
+_ORDER_DOC = """\
+**2026-11-19 — OPENCODE (older lane): card `20261119_000000` — older entry.**
+
+body
+
+**2026-11-21 — OPENCODE (newer lane): card `20261121_000000` — newer below.**
+
+body
+"""
+
+
+def test_order_violation_carries_stable_identity_fields(tmp_path):
+    p = tmp_path / "o.md"
+    p.write_text(_ORDER_DOC, encoding="utf-8")
+    ok, violations = check(p)
+    assert ok is False
+    v = violations[0]
+    assert v["kind"] == "order"
+    assert v["line"] == 5
+    assert v["date"] == "2026-11-21"  # the NEWER entry's date (below)
+    assert "newer lane" in v["head"]
+
+
+def test_fingerprint_survives_a_prepend(tmp_path):
+    """Lines shift on every prepend — a baseline keyed on line numbers would
+    churn daily. The fingerprint must not."""
+    p = tmp_path / "o.md"
+    p.write_text(_ORDER_DOC, encoding="utf-8")
+    _, v1 = check(p)
+    fp1 = fingerprint(v1[0])
+    p.write_text(
+        "**2026-11-21 — OPENCODE (top lane): card `20261121_111111` — fresh top.**\n\n"
+        + p.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    _, v2 = check(p)
+    assert v2[0]["line"] == 7  # shifted by the prepend…
+    assert fingerprint(v2[0]) == fp1  # …identity unchanged
+
+
+def test_cli_check_baseline_accepts_known_findings(tmp_path, capsys):
+    p = tmp_path / "o.md"
+    p.write_text(_ORDER_DOC, encoding="utf-8")
+    _, violations = check(p)
+    bp = tmp_path / "baseline.json"
+    bp.write_text(json.dumps({"violations": [fingerprint(violations[0])]}), encoding="utf-8")
+    rc = main(["ledger", "check", "--doc", str(p), "--baseline", str(bp)])
+    assert rc == 0
+    assert "baseline aligned" in capsys.readouterr().out
+
+
+def test_cli_check_baseline_rejects_a_new_violation(tmp_path, capsys):
+    p = tmp_path / "o.md"
+    p.write_text(_ORDER_DOC, encoding="utf-8")
+    bp = tmp_path / "baseline.json"
+    bp.write_text(json.dumps({"violations": []}), encoding="utf-8")
+    rc = main(["ledger", "check", "--doc", str(p), "--baseline", str(bp)])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "NEW" in out
+    assert "new" in out  # the counts line
+
+
+def test_cli_check_baseline_rejects_a_stale_entry(tmp_path, capsys):
+    # Doc is clean; the baseline still pins a finding that no longer occurs ->
+    # strict shrink: fixing is not enough, the line must be deleted.
+    p = tmp_path / "clean.md"
+    p.write_text("**2026-11-21 — one fine entry.**\n", encoding="utf-8")
+    bp = tmp_path / "baseline.json"
+    bp.write_text(
+        json.dumps({"violations": ["order|2026-11-19|OPENCODE (older lane): gone"]}),
+        encoding="utf-8",
+    )
+    rc = main(["ledger", "check", "--doc", str(p), "--baseline", str(bp)])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "STALE" in out
+    assert "delete" in out

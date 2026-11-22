@@ -485,12 +485,39 @@ def _ledger_query(args: argparse.Namespace) -> int:
 
 
 def _ledger_check(args: argparse.Namespace) -> int:
-    from grib.ledger import check
+    import json
+
+    from grib.ledger import check, fingerprint
 
     doc = _ledger_doc(args)
     if doc is None:
         return 2
     ok, violations = check(doc)
+
+    if args.baseline:
+        # Shrink-only ratchet (page-baseline precedent): known findings pass,
+        # unknown ones redden, and a fixed finding whose baseline line survives
+        # reddens too — the baseline may only shrink.
+        try:
+            with open(args.baseline, encoding="utf-8") as fh:
+                baseline = list(json.load(fh).get("violations", []))
+        except (OSError, ValueError, AttributeError) as exc:
+            print(f"ledger: baseline unreadable: {exc}")
+            return 2
+        known = set(baseline)
+        current = {fingerprint(v) for v in violations}
+        new = [v for v in violations if fingerprint(v) not in known]
+        stale = [b for b in baseline if b not in current]
+        for v in new:
+            print(f"ledger: NEW line {v['line']}: {v['kind']} — {v['msg']}")
+        for b in stale:
+            print(f"ledger: STALE baseline entry (no longer occurs — delete it): {b}")
+        if new or stale:
+            print(f"ledger: {len(new)} new, {len(stale)} stale (baseline must only shrink)")
+            return 1
+        print(f"ledger: ok — {len(violations)} known finding(s), baseline aligned: {doc}")
+        return 0
+
     if ok:
         print(f"ledger: ok — {doc}")
         return 0
@@ -740,6 +767,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Gate: well-formed headers + prepend order (exit 1 on violation)",
     )
     p.add_argument("--doc", default=None, help=_doc_help)
+    p.add_argument(
+        "--baseline",
+        default=None,
+        help=(
+            "JSON file pinning known findings (shrink-only): unknown "
+            "violations fail, stale baseline entries fail until deleted"
+        ),
+    )
 
     # GUI
     gui_p = sub.add_parser(

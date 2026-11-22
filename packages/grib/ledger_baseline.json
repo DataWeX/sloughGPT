@@ -1,0 +1,9 @@
+{
+  "comment": "Known findings of `grib ledger check --baseline` (ci.yml board-integrity). SHRINK ONLY (page-baseline precedent): fix an entry and DELETE its line here — a stale line reddens CI just like a new violation. Fingerprints are line-number-free (prepend-only doc): order|date|head[:80]. All four are backdated inserts — an older date prepended above a newer one — indistinguishable from a bottom-append statically; re-dating/moving them needs a user ruling.",
+  "violations": [
+    "order|2026-11-21|OPENCODE (testing lane): card `20261118_115231` (product-bug skip ledger in `tes",
+    "order|2026-11-19|OPENCODE (surface-scope lane): card `20261119_094711_test-surface-rule-gate-unte",
+    "order|2026-11-15|OPENCODE (training-perf lane): the 1.4-steps/s card closed — gelu one-pass (+41%",
+    "order|2026-10-29|OPENCODE (chat-ui-quality landing): PR #243 (`feat/remove-next-land`) MERGED → m"
+  ]
+}
