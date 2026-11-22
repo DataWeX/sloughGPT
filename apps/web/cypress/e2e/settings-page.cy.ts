@@ -23,7 +23,13 @@ describe('Settings page', () => {
   })
 
   it('marks the applied canvas selected', () => {
-    cy.get('[role="radio"][aria-checked="true"]').should('have.length', 1)
+    // Scope to the Theme group: the page also carries "Color theme" and
+    // "Palette" radiogroups (present whenever the nav dialog is mounted),
+    // each with its own checked radio — a global count is the wrong invariant.
+    cy.get('[role="radiogroup"][aria-label="Theme"] [role="radio"][aria-checked="true"]').should(
+      'have.length',
+      1,
+    )
     cy.contains('button', 'Dark').should('have.attr', 'aria-checked', 'true')
   })
 
