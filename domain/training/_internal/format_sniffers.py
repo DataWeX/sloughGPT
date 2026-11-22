@@ -13,9 +13,10 @@ as the router manifest): a sniffer declares ``name`` + ``formats`` (its
 fixture ids — the gate walks both sides) and claims paths in priority
 order.
 
-Grandfathered: conversation / instruction / audio stay in
+Grandfathered: instruction / audio / .json-conversation stay in
 ``detect_dataset_type``'s if-chain until their adapters register
-(``chat-sft``; ``tts-espeak`` after the ADR's byte-parity requirement).
+(``tts-espeak`` after the ADR's byte-parity requirement); jsonl-conversation
+migrated with chat-sft (card 20261101_052145).
 The if-chain shrinks as sniffers migrate — never a big-bang rewrite.
 
 Precedence is legacy-exact: the sniffers below only claim a jsonl record
@@ -186,12 +187,26 @@ def _claim_jsonl_video(path: Path) -> SniffResult | None:
 
 
 def _claim_text(path: Path) -> SniffResult | None:
-    # .jsonl / .json stay with the grandfathered if-chain (their conv /
-    # instruction / audio branches are not migrated until their adapters
-    # register); everything else with no earlier claim is plain text.
+    # .jsonl / .json stay with the grandfathered if-chain (their
+    # instruction / audio / .json-conv branches are not migrated yet);
+    # everything else with no earlier claim is plain text.
     if path.suffix.lower() in (".jsonl", ".json"):
         return None
     return SniffResult(dataset_type=DatasetType.TEXT, adapter="text-pretrain")
+
+
+def _claim_chat_sft(path: Path) -> SniffResult | None:
+    if path.suffix.lower() != ".jsonl":
+        return None
+    data = _read_first_line(path)
+    if data is None:
+        return None
+    # conv keys are the EARLIEST legacy elif keys — nothing precedes them,
+    # so the claim only needs the key itself (the image/video sniffers
+    # registered above already refused records carrying it).
+    if any(k in data for k in _CONV_KEYS):
+        return SniffResult(dataset_type=DatasetType.CONVERSATION, adapter="chat-sft")
+    return None
 
 
 register_sniffer(FormatSniffer("code-ext", ("code-ext",), _claim_code_ext))
@@ -199,6 +214,7 @@ register_sniffer(FormatSniffer("code-content", ("code-content",), _claim_code_co
 register_sniffer(FormatSniffer("jsonl-image", ("jsonl-image",), _claim_jsonl_image))
 register_sniffer(FormatSniffer("jsonl-video", ("jsonl-video",), _claim_jsonl_video))
 register_sniffer(FormatSniffer("text", ("text",), _claim_text))
+register_sniffer(FormatSniffer("chat-sft", ("jsonl-conversation",), _claim_chat_sft))
 
 #: The registered sniffers, in claim order — what the gate walks.
 SNIFFERS: tuple[FormatSniffer, ...] = tuple(_SNIFFERS.values())

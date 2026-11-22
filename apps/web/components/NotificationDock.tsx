@@ -120,7 +120,7 @@ export const NotificationDock = memo(function NotificationDock() {
 
   return (
     <div
-      className="fixed bottom-20 right-4 z-[150] flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 md:bottom-4"
+      className="fixed bottom-20 right-4 z-[150] flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 lg:bottom-4"
       aria-live="polite"
       aria-label="Process notifications"
     >

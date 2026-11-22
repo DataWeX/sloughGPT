@@ -51,8 +51,43 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     environment: production
-    if: ${{ secrets.TS_AUTHKEY != '' && secrets.DEPLOY_HOST != '' && secrets.DEPLOY_SSH_KEY != '' }}
+    # `secrets` is NOT a legal context in ANY `if:`. GitHub's
+    # context-availability table lists it for `jobs.<job_id>.env`,
+    # `steps.env`, `steps.run`, `steps.with` … but NOT for
+    # `jobs.<job_id>.if` nor `jobs.<job_id>.steps.if` — and actionlint
+    # enforces exactly that table. The old job-level
+    # `if: ${{ secrets.TS_AUTHKEY != '' && … }}` therefore made the whole
+    # workflow invalid: 2 runs ever (2026-10-27), both failure at 0 s with
+    # zero jobs and no log. That guard is gone — credentials are checked in
+    # a step below — and the one remaining `secrets`-in-`if` (Purge
+    # Cloudflare) is lifted into `env`, which `jobs.<job_id>.env` does allow.
+    # Card 20261122_083741.
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
+      # Ported from ci_cd.yml's "Verify deploy credentials" (db958b791) —
+      # same pattern, one credential-check idiom in the repo, not two. A
+      # missing secret FAILS the run with `::error::` instead of skipping
+      # silently. The old guard checked TS_AUTHKEY, which this workflow
+      # never reads; this checks the four secrets the steps below consume.
+      - name: Verify deploy credentials
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=""
+          [ -n "$TS_OAUTH_CLIENT_ID" ] || missing="$missing TS_OAUTH_CLIENT_ID"
+          [ -n "$TS_OAUTH_SECRET" ]    || missing="$missing TS_OAUTH_SECRET"
+          [ -n "$DEPLOY_HOST" ]        || missing="$missing DEPLOY_HOST"
+          [ -n "$DEPLOY_SSH_KEY" ]     || missing="$missing DEPLOY_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::web deploy cannot run — missing secrets:$missing"
+            exit 1
+          fi
+          echo "credentials present (host=$DEPLOY_HOST)"
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
@@ -83,7 +118,9 @@ jobs:
         if: always()
 
       - name: Purge Cloudflare
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && vars.CF_ZONE_ID != '' }}
+        # Tested from the job-level `env` above: `secrets` is not an allowed
+        # context in `steps.if` (context-availability table), `env` is.
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' && vars.CF_ZONE_ID != '' }}
         run: |
           curl -X POST "https://api.cloudflare.com/client/v4/zones/${{ vars.CF_ZONE_ID }}/purge_cache" \
             -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \

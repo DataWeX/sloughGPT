@@ -279,11 +279,11 @@ class TestToolNamedFence:
     async def test_tool_named_fence_executes_and_stays_hidden(self) -> None:
         # Exact live shape: tool-named tag, key: value body, mangled closer.
         fence = (
-            '```image_gen\n'
+            "```image_gen\n"
             'prompt: "A blue circle"\n'
             'style: "cyberpunk"\n'
             'output: {"name": "image_gen", "args": {"filename": "", "url": ""}}\n'
-            '```image'
+            "```image"
         )
         rec = _Recorder([["Sure. ", fence], ["Done!"]])
         items = await _collect(

@@ -21,7 +21,7 @@ export function TrainTab({ vs }: TrainTabProps) {
         className={cn(
           'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
           vs.previewUrl
-            ? 'border-primary/30 bg-primary/3'
+            ? 'border-primary/30 bg-primary/5'
             : 'border-border/50 hover:border-primary/40',
         )}
       >

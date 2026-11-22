@@ -53,9 +53,7 @@ def _headers_for(tools: ToolRegistry) -> tuple[str, ...]:
     `` ```image_gen `` instead of `` ```tool_call `` — the guard must hold
     it so ``decode`` gets a chance). Code-block tags (``python``, ``js``)
     are never registered tools, so they still diverge and stream live."""
-    return FENCE_HEADERS + tuple(
-        f"```{t['name']}" for t in tools.list_tools() if t.get("name")
-    )
+    return FENCE_HEADERS + tuple(f"```{t['name']}" for t in tools.list_tools() if t.get("name"))
 
 
 def _fence_head(text: str, headers: tuple[str, ...]) -> str:
