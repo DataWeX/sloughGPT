@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { createContext, useContext, useState, useEffect, useLayoutEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
 import { trackEvent } from '@/lib/dev-log'
 import {
@@ -49,11 +49,18 @@ function getInitialPalette(): StoredPaletteId {
   return isStoredPaletteId(v) ? v : 'noir-violet'
 }
 
+/** Last tuple written to `<html>` — lets the post-mount effect tell a real
+ *  change from its own redundant first run. */
+function syncKey(mode: ThemeMode, theme: StoredThemeId, palette: StoredPaletteId) {
+  return `${mode}|${theme}|${palette}`
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, _setTheme] = useState<StoredThemeId>(getInitialTheme)
   const [mode, _setMode] = useState<ThemeMode>(getInitialMode)
   const [palette, _setPalette] = useState<StoredPaletteId>(getInitialPalette)
   const [mounted, setMounted] = useState(false)
+  const lastSynced = useRef<string | null>(null)
 
   const setTheme = (next: StoredThemeId) => {
     trackEvent('theme_changed', { from: theme, to: next })
@@ -72,14 +79,26 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     // Theme is already loaded from localStorage synchronously.
-    // Sync to HTML element and mark as mounted.
-    syncHtmlTheme(mode, theme, palette)
+    // Sync to HTML element and mark as mounted. Never animated: this is the
+    // first paint, and arming the transition here would fade the whole page
+    // in from nothing on every load.
+    syncHtmlTheme(mode, theme, palette, false)
+    lastSynced.current = syncKey(mode, theme, palette)
     setMounted(true)
   }, [])
 
   useEffect(() => {
     if (!mounted) return
-    syncHtmlTheme(mode, theme, palette)
+    const key = syncKey(mode, theme, palette)
+    // The layout effect above already wrote this exact tuple; syncing again
+    // would be a no-op on the DOM but would still arm (and then disarm) the
+    // transition, flashing a swap the user never made. The persistence below
+    // still runs — a first-run default (no stored mode, prefers-color-scheme
+    // picking 'light') has to be written back even though nothing changed.
+    if (lastSynced.current !== key) {
+      syncHtmlTheme(mode, theme, palette, true)
+      lastSynced.current = key
+    }
     localStorage.setItem(THEME_STORAGE_KEY, theme)
     localStorage.setItem(MODE_STORAGE_KEY, mode)
     localStorage.setItem(PALETTE_STORAGE_KEY, palette)
