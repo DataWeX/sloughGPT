@@ -818,6 +818,8 @@ def cmd_serve(args):
 
     With --web: starts full FastAPI server + Vite web UI and opens browser.
     With --mobile: starts FastAPI server + React Native metro bundler.
+    With --unified: uses the unified single-origin launcher (Python API + Rust
+        gateway + production web build on one port/URL).
     Without flags: starts the full FastAPI server only (API-only mode).
 
     Before starting, checks if the autoload model needs downloading and
@@ -828,6 +830,8 @@ def cmd_serve(args):
 
     web = getattr(args, "web", False)
     mobile = getattr(args, "mobile", False)
+    unified = getattr(args, "unified", False)
+    build = getattr(args, "build", False)
 
     if web and mobile:
         log.error("Cannot use --web and --mobile together. Pick one.")
@@ -837,8 +841,9 @@ def cmd_serve(args):
         _cmd_api_and_mobile(args)
         return
 
-    if web:
-        _cmd_api_and_web(args)
+    # ── Unified single-origin mode ───────────────────────
+    if unified or (web and not mobile):
+        _cmd_unified_serve(args, build=build)
         return
 
     # ── API-only mode ────────────────────────────────────
@@ -866,6 +871,57 @@ def _preflight_model_check(args):
         if not pm.confirm_autoload_download(model_id):
             log.info("Server start cancelled")
             raise SystemExit(0)
+
+
+def _cmd_unified_serve(args, build: bool = False):
+    """Delegate to scripts/serve.py for unified single-origin serving.
+
+    Builds web (dist-vite) if --build is set, then launches Python API +
+    Rust gateway (or Vite dev proxy as fallback) on one origin.
+    """
+    root = _repo_root()
+    serve_script = root / "scripts" / "serve.py"
+    python = find_server_python(root)
+
+    if build:
+        log.info("Building web (dist-vite) ...")
+        try:
+            subprocess.run(
+                ["npm", "run", "build:vite"],
+                cwd=str(root / "apps" / "web"),
+                check=True,
+            )
+            log.info("Web build complete")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            log.error(f"Web build failed: {e}")
+            return
+
+    if not serve_script.exists():
+        log.error(f"Unified serve script not found: {serve_script}")
+        return
+
+    mode = "unified"
+    # Fall back to dev if gateway binary missing
+    gw_bin = root / "apps" / "gateway" / "target" / "release" / "slough-gateway"
+    if not gw_bin.exists():
+        mode = "dev"
+        log.warning("Gateway binary missing — falling back to dev mode (Vite proxy)")
+
+    cmd = [python, str(serve_script), "--mode", mode]
+    port = getattr(args, "port", 8000)
+    web_port = getattr(args, "web_port", 3000)
+    cmd += ["--api-port", str(port), "--web-port", str(web_port)]
+
+    log.info(f"Starting unified serve ({mode}) ...")
+    log.info(f"  API: :{port}  |  Origin: :{web_port if mode == 'dev' else 8080}")
+
+    env = os.environ.copy()
+    try:
+        subprocess.run(cmd, cwd=str(root), env=env)
+    except KeyboardInterrupt:
+        log.info("Unified serve stopped")
+    except Exception as e:
+        log.error(f"Unified serve failed: {e}")
 
 
 def _cmd_api_only(args):
