@@ -4,7 +4,9 @@ services:
     env: docker
     dockerfilePath: ./infra/docker/Dockerfile
     plan: free
-    branch: session/agent_4563443b-dfec-4a33-8ddd-a92fc5c84485
+    # Retargeted from the dead session/agent_4563443b branch (its push
+    # trigger could never fire) — card 20261121_150816.
+    branch: main
     region: oregon
     healthCheckPath: /health
     envVars:
