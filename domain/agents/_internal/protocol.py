@@ -56,9 +56,7 @@ def _toolnamed_re(tool_names: frozenset[str], unclosed: bool) -> re.Pattern[str]
     (`` ```image `` — the live walk's missing ``_gen``) so it does not
     leak into the residual. Longest tag first so a tool named ``image``
     cannot shadow ``image_gen``."""
-    tags = "|".join(
-        sorted((re.escape(t) for t in tool_names), key=len, reverse=True)
-    )
+    tags = "|".join(sorted((re.escape(t) for t in tool_names), key=len, reverse=True))
     if unclosed:
         return re.compile(rf"```({tags})\s*\n(.*)\Z", re.DOTALL)
     return re.compile(rf"```({tags})\s*\n(.*?)\n\s*```\w*", re.DOTALL)

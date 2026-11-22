@@ -233,11 +233,11 @@ def test_decode_unrepairable_canonical_json_still_raises():
 
 def test_decode_tool_named_fence_yaml_body():
     text = (
-        '```image_gen\n'
+        "```image_gen\n"
         'prompt: "A blue circle"\n'
         'style: "cyberpunk"\n'
         'output: {"name": "image_gen", "args": {"filename": "", "url": ""}}\n'
-        '```'
+        "```"
     )
     calls, residual = decode(text, tool_names={"image_gen"})
     assert calls == [
@@ -263,14 +263,14 @@ def test_decode_tool_named_fence_json_body():
 def test_decode_tool_named_fence_requires_registered_tag():
     # A code block is not a call, even with a key: value body: the tag
     # must name a registered tool (python isn't one).
-    text = '```python\nfoo: bar\n```'
+    text = "```python\nfoo: bar\n```"
     calls, residual = decode(text, tool_names={"echo"})
     assert calls == []
     assert "```python" in residual
 
 
 def test_decode_tool_named_fence_unparseable_body_stays_prose():
-    text = '```echo\nnot parameters at all\n```'
+    text = "```echo\nnot parameters at all\n```"
     calls, residual = decode(text, tool_names={"echo"})
     assert calls == []
     assert "```echo" in residual

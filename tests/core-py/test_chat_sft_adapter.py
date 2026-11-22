@@ -39,9 +39,7 @@ TOOL_TRAJ = [
     {
         "role": "assistant",
         "content": "",
-        "tool_calls": [
-            {"function": {"name": "weather", "arguments": '{"city": "Oslo"}'}}
-        ],
+        "tool_calls": [{"function": {"name": "weather", "arguments": '{"city": "Oslo"}'}}],
     },
     {"role": "tool", "content": '{"temp": 3}'},
     {"role": "assistant", "content": "It is 3 degrees in Oslo."},

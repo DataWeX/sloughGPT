@@ -76,15 +76,9 @@ class TrajectoryBatchArray:
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    raise ValueError(
-                        f"{path}:{number}: invalid JSON trajectory record"
-                    ) from exc
-                if not isinstance(record, dict) or not isinstance(
-                    record.get("messages"), list
-                ):
-                    raise ValueError(
-                        f"{path}:{number}: trajectory record needs a messages list"
-                    )
+                    raise ValueError(f"{path}:{number}: invalid JSON trajectory record") from exc
+                if not isinstance(record, dict) or not isinstance(record.get("messages"), list):
+                    raise ValueError(f"{path}:{number}: trajectory record needs a messages list")
                 if split is not None and record.get("split", "train") != split:
                     continue
                 self._rendered.append(render_trajectory(record["messages"]))
