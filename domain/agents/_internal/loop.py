@@ -104,11 +104,12 @@ class AgentLoop:
         )
 
         last_text = ""
+        tool_names = {s.name for s in specs}
         for iteration in range(1, self.max_iters + 1):
             text = await infer(messages, specs)
             last_text = text
             try:
-                calls, residual = decode(text)
+                calls, residual = decode(text, tool_names=tool_names)
             except ProtocolError as e:
                 yield Event("error", {"stage": "decode", "iteration": iteration, "message": str(e)})
                 yield Event("final", {"text": text, "iteration": iteration, "truncated": False})

@@ -47,13 +47,24 @@ FENCE = "```tool_call"
 FENCE_HEADERS = (FENCE, "```json")
 
 
-def _fence_head(text: str) -> str:
+def _headers_for(tools: ToolRegistry) -> tuple[str, ...]:
+    """The fence headers one turn must hold: the two protocol tags plus a
+    tag naming each REGISTERED tool (walk_img10: the model wrote
+    `` ```image_gen `` instead of `` ```tool_call `` — the guard must hold
+    it so ``decode`` gets a chance). Code-block tags (``python``, ``js``)
+    are never registered tools, so they still diverge and stream live."""
+    return FENCE_HEADERS + tuple(
+        f"```{t['name']}" for t in tools.list_tools() if t.get("name")
+    )
+
+
+def _fence_head(text: str, headers: tuple[str, ...]) -> str:
     """The known fence header ``text`` matches — or "" for a divergence.
 
     Asks the shortening question against both headers: a partial header
     (`` ``` `` … `` ```js ``) holds, a complete one confirms, anything else
     is a code block / stray backticks and passes through."""
-    return next((h for h in FENCE_HEADERS if text.startswith(h)), "")
+    return next((h for h in headers if text.startswith(h)), "")
 
 StreamFn = Callable[[list[dict[str, Any]]], AsyncIterator[str]]
 
@@ -70,7 +81,7 @@ class _GuardState:
     round_had_calls: bool = False
 
 
-def _guard(state: _GuardState, token: str) -> str | None:
+def _guard(state: _GuardState, token: str, headers: tuple[str, ...]) -> str | None:
     """Route one token: forward now (str), or hold/drop (None)."""
     if state.confirmed:
         state.round_dropped += token
@@ -84,12 +95,12 @@ def _guard(state: _GuardState, token: str) -> str | None:
         head, text = token[:i], token[i:]
     else:
         return token
-    matched = _fence_head(text)
+    matched = _fence_head(text, headers)
     if matched:
         state.confirmed = True
         state.round_dropped += text
         return head or None
-    if any(h.startswith(text) for h in FENCE_HEADERS):
+    if any(h.startswith(text) for h in headers):
         state.held = text
         return head or None
     # Divergence — not (yet) the fence header: a code block or stray backticks.
@@ -149,6 +160,7 @@ async def agentic_stream(
     """
     state = _GuardState()
     tap = _AttachmentTap(tools)
+    headers = _headers_for(tap)
     q: asyncio.Queue = asyncio.Queue()
     seed = [dict(m) for m in messages]
 
@@ -163,7 +175,7 @@ async def agentic_stream(
             if not token:
                 continue
             parts.append(token)
-            out = _guard(state, token)
+            out = _guard(state, token, headers)
             if out:
                 await q.put(("tok", out))
         return "".join(parts)

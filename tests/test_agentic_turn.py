@@ -36,6 +36,25 @@ def _registry_with_echo() -> ToolRegistry:
     return reg
 
 
+def _registry_with_image_gen() -> ToolRegistry:
+    async def _gen(prompt: str, style: str = "default") -> dict:
+        return {"output": f"generated: {prompt} ({style})"}
+
+    reg = ToolRegistry(register_defaults=False)
+    reg.register(
+        ToolSpec(
+            name="image_gen",
+            description="Generate an image from a prompt",
+            parameters=[
+                ToolParam("prompt", "string", "image description", required=True),
+                ToolParam("style", "string", "art style", required=False),
+            ],
+            execute=_gen,
+        )
+    )
+    return reg
+
+
 class _Recorder:
     """Fake provider round-stream: scripted rounds, captures prepared msgs."""
 
@@ -250,6 +269,55 @@ class TestUnclosedFence:
         evs = _events(items)
         assert [e["kind"] for e in evs] == ["tool_call", "tool_result"]
         assert evs[0]["data"]["name"] == "echo"
+
+
+class TestToolNamedFence:
+    """The model invents its own fence tag naming a registered tool
+    (live walk #4, card 20261116_090332: ```image_gen with a key: value
+    body and a mangled ```image closer). The guard must HOLD that block —
+    a tag naming a registered tool is wire format — and decode must
+    execute it; prose tags (python, js) keep streaming through."""
+
+    async def test_tool_named_fence_executes_and_stays_hidden(self) -> None:
+        # Exact live shape: tool-named tag, key: value body, mangled closer.
+        fence = (
+            '```image_gen\n'
+            'prompt: "A blue circle"\n'
+            'style: "cyberpunk"\n'
+            'output: {"name": "image_gen", "args": {"filename": "", "url": ""}}\n'
+            '```image'
+        )
+        rec = _Recorder([["Sure. ", fence], ["Done!"]])
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "generate a blue circle"}],
+                tools=_registry_with_image_gen(),
+                stream_fn=rec,
+            )
+        )
+        text = _text(items)
+        assert "```" not in text, "the wire block must not reach the user"
+        assert text == "Sure. Done!"
+        calls = [e for e in _events(items) if e["kind"] == "tool_call"]
+        assert len(calls) == 1
+        assert calls[0]["data"]["name"] == "image_gen"
+        assert calls[0]["data"]["args"]["prompt"] == "A blue circle"
+
+    async def test_prose_tag_streams_through(self) -> None:
+        # A code block is not a call: ```python diverges and streams live
+        # (pinned by TestCodeBlockNotAte; this guards the extended header
+        # set does not swallow ordinary prose fences).
+        rec = _Recorder([["Here:", "```python\nprint(1)\n```", "!"]])
+        items = await _collect(
+            agentic_stream(
+                [{"role": "user", "content": "show python"}],
+                tools=_registry_with_image_gen(),
+                stream_fn=rec,
+            )
+        )
+        text = _text(items)
+        assert "```python" in text
+        assert _events(items) == []
 
 
 class TestDegradation:
