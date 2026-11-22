@@ -44,7 +44,7 @@ export function ConsciousnessSidebarWidget() {
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => setExpanded((prev) => !prev)}
-        className="group relative flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[11px] transition-colors duration-200 ease-smooth text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground"
+        className="group relative flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[11px] transition-colors duration-200 ease-smooth text-foreground/80 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground"
         aria-expanded={expanded}
         aria-label={t('consciousness_sidebar.aria_label')}
       >
@@ -166,7 +166,7 @@ function QuickLink({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="w-full rounded px-2 py-1 text-left text-[11px] text-foreground/78 transition-colors hover:bg-primary/10 hover:text-primary"
+      className="w-full rounded px-2 py-1 text-left text-[11px] text-foreground/80 transition-colors hover:bg-primary/10 hover:text-primary"
     >
       {label}
     </button>

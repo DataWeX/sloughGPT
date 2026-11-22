@@ -26,7 +26,7 @@ export function SoulSelectorDropdown() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-1.5 sm:px-2.5 text-xs gap-1 sm:gap-1.5 rounded-full bg-primary/8 text-primary hover:bg-primary/15 border border-primary/15"
+          className="h-7 px-1.5 sm:px-2.5 text-xs gap-1 sm:gap-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/15 border border-primary/15"
           title={currentSoul?.traits?.join(', ')}
         >
           <IconHeart className="h-3 w-3 shrink-0" />
@@ -72,7 +72,7 @@ export function SoulSelectorDropdown() {
                 onSelect={() => onSelect(s)}
                 className={cn(
                   'flex items-start gap-2 px-3 py-2 text-xs',
-                  isActive ? 'bg-primary/8' : '',
+                  isActive ? 'bg-primary/10' : '',
                 )}
               >
                 <IconHeart

@@ -264,7 +264,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
           <div
             role="region"
             aria-label="Notifications"
-            className="fixed bottom-0 right-0 z-[300] flex flex-col-reverse gap-2 p-4 max-h-screen w-full sm:w-[400px] pointer-events-none"
+            className="fixed bottom-20 right-0 z-[300] lg:bottom-0 flex flex-col-reverse gap-2 p-4 max-h-screen w-full sm:w-[400px] pointer-events-none"
           >
             {toasts.map((t) => (
               <Toast key={t.id} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>

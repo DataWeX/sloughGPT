@@ -66,7 +66,7 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
 
   return (
     <div
-      className="fixed bottom-12 right-4 w-[calc(100vw-2rem)] max-w-[520px] max-h-[400px] z-50 bg-background border rounded-lg shadow-lg flex flex-col"
+      className="fixed bottom-16 right-4 lg:bottom-12 w-[calc(100vw-2rem)] max-w-[520px] max-h-[400px] z-50 bg-background border rounded-lg shadow-lg flex flex-col"
       role="region"
       aria-label="Service output"
     >

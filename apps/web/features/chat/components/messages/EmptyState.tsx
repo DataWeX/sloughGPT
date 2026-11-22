@@ -75,8 +75,8 @@ export const EmptyState = memo(function EmptyState({
     >
       {/* Hero */}
       <div className="relative" aria-hidden="true">
-        <div className="absolute inset-0 rounded-2xl bg-primary/8 blur-2xl" />
-        <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/8 to-accent/10 flex items-center justify-center border border-primary/10 shadow-sm">
+        <div className="absolute inset-0 rounded-2xl bg-primary/10 blur-2xl" />
+        <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-accent/10 flex items-center justify-center border border-primary/10 shadow-sm">
           <IconChat className="h-6 w-6 sm:h-7 sm:w-7 text-primary/40" />
         </div>
       </div>
