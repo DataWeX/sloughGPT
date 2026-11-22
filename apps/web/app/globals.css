@@ -1918,3 +1918,59 @@ html.light .token.variable {
     opacity: calc(0.6 + var(--voice-intensity, 0) * 0.3);
   }
 }
+
+/**
+ * High Contrast — an accessibility canvas layered on the dark one.
+ *
+ * Selector is `html.dark.high-contrast` (0,2,1) and the block is LAST in this
+ * file on purpose: it has to out-rank the accent-theme blocks
+ * (`html.dark.theme-*`, also 0,2,1) and the palette blocks
+ * (`html.palette-*`), which would otherwise re-tint the canvas back to their
+ * own hues. Both classes are always applied together by `syncHtmlTheme` and
+ * the `index.html` bootstrap, so every `html.dark` rule still lands first and
+ * this block overrides it.
+ *
+ * AAA-targeted: body text is pure white on pure black (21:1), borders are hard
+ * white so every surface edge is defined without relying on soft depth, and
+ * yellow is the action colour (19.6:1 as ink on black, 19.6:1 as black on
+ * yellow). `--muted`/`--secondary` stay a near-black grey rather than pure
+ * black: their foregrounds are white, and a white-on-black muted surface would
+ * be indistinguishable from the canvas (the pairing bug globals-chrome.test.ts
+ * exists to prevent).
+ */
+html.dark.high-contrast {
+  color-scheme: dark;
+  --chat-bg: 0 0 0;
+  --background: 0 0 0;
+  --foreground: 255 255 255;
+  --card: 0 0 0;
+  --card-foreground: 255 255 255;
+  --popover: 0 0 0;
+  --popover-foreground: 255 255 255;
+  --primary: 255 255 0;
+  --primary-foreground: 0 0 0;
+  --secondary: 40 40 40;
+  --secondary-foreground: 255 255 255;
+  --muted: 40 40 40;
+  --muted-foreground: 255 255 255;
+  --accent: 255 255 0;
+  --accent-foreground: 0 0 0;
+  --ring: 255 255 0;
+  --border: 255 255 255;
+  --input: 255 255 255;
+  --success: 0 255 128;
+  --warning: 255 255 0;
+  --destructive: 255 80 80;
+  --destructive-foreground: 0 0 0;
+  --info: 0 214 255;
+  --chart-1: 255 255 0;
+  --chart-2: 0 255 128;
+  --chart-3: 255 128 0;
+  --chart-4: 0 214 255;
+  --chart-5: 255 80 80;
+  /* No soft depth on pure black — elevation becomes a hard outline. */
+  --shadow-sm: 0 0 0 1px rgb(var(--border));
+  --shadow-md: 0 0 0 1px rgb(var(--border));
+  --shadow-lg: 0 0 0 1px rgb(var(--border));
+  --shadow-xl: 0 0 0 1px rgb(var(--border));
+}

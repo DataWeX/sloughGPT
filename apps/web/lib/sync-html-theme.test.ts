@@ -76,3 +76,34 @@ describe('syncHtmlTheme — palette', () => {
     expect(document.documentElement.classList.contains('palette-neural-precision')).toBe(false)
   })
 })
+
+describe('syncHtmlTheme — high contrast', () => {
+  beforeEach(() => {
+    document.documentElement.className = ''
+  })
+
+  it('applies dark and high-contrast together (high contrast layers on dark)', () => {
+    syncHtmlTheme('high-contrast', 'blue')
+    const root = document.documentElement
+    expect(root.classList.contains('dark')).toBe(true)
+    expect(root.classList.contains('high-contrast')).toBe(true)
+    expect(root.classList.contains('light')).toBe(false)
+  })
+
+  it('drops both classes when leaving high contrast for light', () => {
+    syncHtmlTheme('high-contrast', 'blue')
+    syncHtmlTheme('light', 'blue')
+    const root = document.documentElement
+    expect(root.classList.contains('dark')).toBe(false)
+    expect(root.classList.contains('high-contrast')).toBe(false)
+    expect(root.classList.contains('light')).toBe(true)
+  })
+
+  it('strips high-contrast when switching to plain dark', () => {
+    syncHtmlTheme('high-contrast', 'blue')
+    syncHtmlTheme('dark', 'blue')
+    const root = document.documentElement
+    expect(root.classList.contains('high-contrast')).toBe(false)
+    expect(root.classList.contains('dark')).toBe(true)
+  })
+})
