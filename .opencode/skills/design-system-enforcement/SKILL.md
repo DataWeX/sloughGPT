@@ -200,3 +200,66 @@ Before committing any UI component, verify:
 | Live dot via `bg-green-400` in a card                               | `StatusDot` (`tone="success" pulse showLabel`)                         |
 | No hover on button                                                  | Add `hover:bg-primary/90`                                              |
 | Focus without ring                                                  | Add `focus-visible:ring-2 focus-visible:ring-ring`                     |
+| Hover only shifts alpha <15%                                        | Change a shape/edge channel (border, bg step, shadow)                  |
+| Selected state styled with `success`                                | Selection → `primary`/`ring` + shape redundancy; `success` = outcomes  |
+
+## System Map — Where Things Actually Live
+
+Read the system in one pass before auditing (mapped during the 2026-11-22
+Settings pixel audit):
+
+| Concern | File | Notes |
+| ------- | ---- | ----- |
+| Palette tokens | `apps/web/palette.json` | Source of truth; regenerates `globals.css` (contract regen — commit e14975dc6 "token source of truth"). **Never hand-edit generated color rules in `globals.css`.** |
+| Theme modes (Dark/Light/High Contrast) | `apps/web/lib/theme-storage.ts` | `THEME_PREVIEWS` powers the theme picker's tile mini-renders — by design they use this data, NOT live vars (only one mode's tokens are live at a time). Applied via `ThemeProvider.tsx` |
+| strui button variants | `packages/strui/src/components/ui/button.tsx` | ghost/default/outline definitions |
+| Selection/semantic tokens | `success`, `primary`, `accent`, `ring`, `border`, `muted` | see "selection ≠ outcome" below |
+| Settings appearance UI | `apps/web/app/(app)/settings/settings-appearance.tsx` | theme tiles + palette section |
+| Fixed overlays | FAB `apps/web/components/consciousness/ConsciousnessQuickActions.tsx` (z-9999); toasts `apps/web/features/chat/components/feedback/Toast.tsx` (z-300); bottom nav z-40 | each must declare its z-band contract vs the bottom nav |
+
+## How to Audit — 3 Probes, All Three Required
+
+1. **Alpha-corrected contrast scan** — composite the full background chain
+   (element + ancestors over page bg) BEFORE computing the WCAG ratio.
+   Ignoring alpha produced 2 false positives in the 2026-11-22 Settings audit
+   (yellow-on-11%-yellow read as 1.0:1; actually fine).
+2. **Hover before/after probe** — read computed style, dispatch a real hover
+   event, read again. A `:hover` declared in source is NOT proof it shipped.
+3. **Tab-ring check** — real `Tab`/`Shift+Tab` keypress, then read
+   `getComputedStyle(document.activeElement)`. Focus-from-load does NOT
+   trigger `:focus-visible`, so loading-state focus proves nothing.
+
+## Canonical Findings (Settings audit, 2026-11-22)
+
+1. **Declared-but-unemitted utility.** `button.tsx:15` ghost declares
+   `hover:bg-accent/8`, but the emitted stylesheet has no `.bg-accent\/8`
+   rule (emitted steps: /5 /10 /15 /20 /50 /80). Live proof: `:hover` matched
+   `true` on the Settings Reset button while bg stayed `rgba(0,0,0,0)`.
+   **Rule:** verify the utility exists in the emitted CSS (scan
+   `document.styleSheets`) before trusting an opacity step; prefer steps
+   known to be emitted.
+2. **Overlay not nav-aware.** FAB `bottom-6` (24px) vs 56px bottom nav →
+   32px overlap; at 390px viewport the FAB covers the last nav item's icon.
+   **Rule:** any `position:fixed` bottom overlay must state its z-band
+   contract vs the bottom nav; bottom offset ≥ nav height (or explicitly
+   document covering it).
+3. **Toast stack z-300 bottom-0** sits inside the nav band (full-width on
+   mobile) → toasts cover nav items when present. Same rule as (2).
+4. **Weak hover.** Palette outline buttons hover only shifts alpha 1→0.9 —
+   imperceptible. **Rule:** hover must change a *shape/edge* channel (border,
+   bg step, shadow), not just alpha <15%.
+
+### Semantic-token rule: selection ≠ outcome
+
+The theme tile selection uses `success` (`border-success bg-success/10` +
+corner ribbon) — *selected is not an outcome*. **Rule:** selection →
+`primary`/`ring` + shape redundancy (the ribbon shape + `aria-checked` are
+what saved it); `success` is reserved for outcomes. Recorded as a rule only —
+changing `settings-appearance.tsx` is a separate card.
+
+### Audit baseline (passes worth recording)
+
+0 contrast failures page-wide; equal tile geometry (223×106, 10px gaps);
+focus rings present on tiles + palette (black 2px + yellow 4px double ring);
+11px text floor held; no horizontal overflow; palette wraps cleanly at 390px;
+a11y radiogroup/`aria-checked` solid.

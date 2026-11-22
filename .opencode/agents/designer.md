@@ -34,6 +34,14 @@ this file never has to duplicate them:
 
 You own the criteria; you do not duplicate their tables here.
 
+For pixel/design audits, route through these two skills first:
+`.opencode/skills/design-system-enforcement/SKILL.md` holds the **System Map**
+(where palette/theme/button/overlay files live), the **3 required probes**
+(alpha-corrected contrast, hover before/after, tab-ring) and the canonical
+findings baseline; `.opencode/skills/component-state-completeness/SKILL.md`
+holds the **"declared ≠ shipped"** measurement rule. Verify states by probing
+the running app, never by reading source.
+
 ## Scope Boundary
 
 | Agent              | Owns                                                                         |
