@@ -40,7 +40,7 @@ export function Sidebar({
   const navLinkClass = (active: boolean) =>
     cn(
       'group relative flex min-h-10 items-center gap-2.5 rounded-lg py-1.5 text-[11px] transition-colors duration-200 ease-smooth',
-      isCollapsed ? 'justify-center px-2' : 'px-2.5',
+      isCollapsed ? 'justify-center px-2' : 'px-3',
       active
         ? 'bg-primary/[0.13] font-medium text-primary dark:bg-primary/[0.11]'
         : 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
@@ -132,7 +132,7 @@ export function Sidebar({
                     <div className="my-2 border-t border-border/30 dark:border-border/40" />
                   )}
                   {!isCollapsed && (
-                    <p className="mb-1 mt-2.5 px-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground first:mt-0.5">
+                    <p className="mb-1 mt-2.5 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground first:mt-0.5">
                       {t(section.labelKey)}
                     </p>
                   )}
@@ -180,17 +180,14 @@ export function Sidebar({
 
         {!isDrawer && (
           <div
-            className={cn(
-              'shrink-0 border-t border-border/50 px-2.5 py-2.5',
-              isCollapsed && 'w-fit',
-            )}
+            className={cn('shrink-0 border-t border-border/50 px-3 py-2.5', isCollapsed && 'w-fit')}
           >
             {!isCollapsed && <TrainingIndicator />}
             <ThemeSwitcher />
           </div>
         )}
         {isDrawer && (
-          <div className="shrink-0 border-t border-border/50 px-2.5 py-2.5">
+          <div className="shrink-0 border-t border-border/50 px-3 py-2.5">
             <TrainingIndicator />
           </div>
         )}
