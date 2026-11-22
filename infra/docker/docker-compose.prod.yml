@@ -74,12 +74,15 @@ services:
       - sloughgpt-net
 
   # ─── API Server ───────────────────────────────────────────────
+  # Image names follow the ONE registry scheme ci_cd.yml publishes to
+  # (ghcr.io/datawex/sloughgpt{,-web,-cli}); VERSION carries the sha from
+  # CI or deploy.sh. gateway below is NOT published by CI (card 20261121_150816).
   api:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile
     container_name: sloughgpt-api
-    image: sloughgpt/api:${VERSION:-latest}
+    image: ghcr.io/datawex/sloughgpt:${VERSION:-latest}
     environment:
       SLO_ENV: production
       SLO_LOG_LEVEL: ${SLO_LOG_LEVEL:-INFO}
@@ -125,6 +128,8 @@ services:
       - sloughgpt-net
 
   # ─── Edge Gateway (compression / byte-relay) ─────────────────────
+  # NOT published by CI — built locally only. Do not rename to
+  # ghcr.io/datawex/*: no such tag exists (card 20261121_150816).
   gateway:
     build:
       context: ../..
@@ -159,7 +164,7 @@ services:
       context: ../..
       dockerfile: apps/web/Dockerfile
     container_name: sloughgpt-web
-    image: sloughgpt/web:${VERSION:-latest}
+    image: ghcr.io/datawex/sloughgpt-web:${VERSION:-latest}
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: "${PUBLIC_API_URL:-http://api:8000}"
