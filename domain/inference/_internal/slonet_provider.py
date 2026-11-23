@@ -32,7 +32,11 @@ from typing import Any
 
 import numpy as np
 
-from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
+from domain.infrastructure._internal.constants import (
+    DEFAULT_GENERATE_TIMEOUT,
+    prefill_max_tokens,
+)
+from domain.infrastructure._internal.errors import PromptTooLongError
 from domain.infrastructure._internal.kv_cache.session import SessionKVManager
 from domain.infrastructure._internal.structured_log import StructuredLogger
 
@@ -41,6 +45,34 @@ logger = StructuredLogger("slo.inference.slonet_provider")
 # Streaming robustness timeouts (overridable in tests).
 _STREAM_GET_TIMEOUT_S = 30.0
 _STREAM_TOTAL_TIMEOUT_S = DEFAULT_GENERATE_TIMEOUT
+
+
+def _message_role(m) -> str | None:
+    """Role of a message given as dict (chat API) or object (SDK types)."""
+    if isinstance(m, dict):
+        return m.get("role")
+    return getattr(m, "role", None)
+
+
+def _oldest_droppable(messages: list) -> int | None:
+    """Index of the oldest turn the prefill window may drop, or None.
+
+    Windowing rules (card 20261102_001622): the SYSTEM prompt is pinned
+    (identity/instructions are never the expendable part), the NEWEST turn
+    is pinned (it holds the question being answered), and only whole
+    messages in between are droppable — never sliced mid-message. Returns
+    the lowest eligible index so the window slides from the oldest edge
+    first; None means nothing left to drop and the caller must fail loud.
+    """
+    last = len(messages) - 1
+    for i, m in enumerate(messages):
+        if i == last:
+            continue  # newest turn — pinned
+        if _message_role(m) == "system":
+            continue  # system prompt — pinned
+        return i
+    return None
+
 
 # Lazy import to avoid circular dependency
 _SloLayerNorm = None
@@ -1292,13 +1324,89 @@ class SloNetChatProvider:
         )
 
     def _build_prompt(self, messages):
-        """Build prompt via central PromptEngine (single source)."""
+        """Build prompt via central PromptEngine (single source).
+
+        Chat-seam context windowing (card 20261102_001622): when the
+        rendered prompt exceeds ``SLO_PREFILL_MAX_TOKENS``, the OLDEST
+        non-system turns are dropped — whole turns only, never sliced
+        mid-message — until it fits, and the system prompt + newest turn
+        are always kept. The drop is ANNOUNCED: a marker line is prepended
+        so the model knows it is missing turns (it can ask the user to
+        repeat instead of hallucinating continuity), and the count is
+        logged. This is the graceful half; the engine backstop
+        (``_check_prefill_cap``) still guards callers with nothing to
+        trim — including this one when a single newest turn alone
+        exceeds the cap.
+
+        The window is token-budgeted (not turn-count): turns vary from
+        ~10 to ~2000 tokens and only tokens map to the measured
+        latency/memory constraint.
+        """
         from .prompt_engine import render_prompt as _render
 
-        # Preserve legacy string shortcut for backwards compat.
+        # Preserve legacy string shortcut for backwards compat — raw prompts
+        # have no turns to trim, so they go straight through to the engine
+        # guard (E_PROMPT_TOO_LONG) if over cap.
         if isinstance(messages, str):
             return messages
-        return _render(messages, tokenizer=getattr(self, "_tokenizer", None), model_type="qwen2")
+        # Legacy falsy shortcut (None/[]): render_prompt returns "" — no
+        # messages means nothing to measure or trim.
+        if not messages:
+            return _render(
+                messages, tokenizer=getattr(self, "_tokenizer", None), model_type="qwen2"
+            )
+
+        tok = getattr(self, "_tokenizer", None)
+        cap = prefill_max_tokens()
+        omitted = 0
+        msgs = list(messages)
+
+        while True:
+            prompt = _render(msgs, tokenizer=tok, model_type="qwen2")
+            # Legacy passthrough: render_prompt may return a non-str (numeric
+            # content) — the old code returned it untouched; measuring it
+            # would TypeError, and there is no token count to window on.
+            if not isinstance(prompt, str):
+                return prompt
+            if tok is not None and hasattr(tok, "encode"):
+                try:
+                    n_tokens = len(tok.encode(prompt))
+                except Exception:
+                    n_tokens = len(prompt) // 4  # rough fallback, see estimate_tokens
+            else:
+                n_tokens = len(prompt) // 4
+            if n_tokens <= cap:
+                break
+
+            drop_idx = _oldest_droppable(msgs)
+            if drop_idx is None:
+                # System + newest turn alone still over cap — nothing left
+                # to trim; the engine guard's error is the right answer.
+                raise PromptTooLongError(
+                    f"single turn exceeds the prefill cap of {cap} tokens (prompt is {n_tokens})",
+                    details={"prompt_tokens": n_tokens, "prefill_cap": cap},
+                )
+            # Drop the whole exchange: the oldest turn AND its assistant
+            # reply (if that reply is what follows) — an orphaned answer
+            # with no question is exactly the confusion the omission marker
+            # exists to prevent. The newest turn is never swept (it is the
+            # pinned question being answered).
+            del msgs[drop_idx]
+            omitted += 1
+            while drop_idx < len(msgs) - 1 and _message_role(msgs[drop_idx]) == "assistant":
+                del msgs[drop_idx]
+                omitted += 1
+
+        if omitted:
+            prompt = f"[{omitted} earlier messages omitted — context limit]\n" + prompt
+            logger.info(
+                "prefill window: dropped %d oldest turn(s), prompt now %d/%d tokens",
+                omitted,
+                n_tokens,
+                cap,
+                extra={"tag": "INF", "omitted_count": omitted},
+            )
+        return prompt
 
     def _load_tokenizer(self, model_dir, config):
         """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing.

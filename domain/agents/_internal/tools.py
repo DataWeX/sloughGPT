@@ -274,7 +274,7 @@ class ToolRegistry:
                     ToolParam(
                         "prompt",
                         "string",
-                        'What to depict in the image — the ONE required argument; '
+                        "What to depict in the image — the ONE required argument; "
                         'always pass it under the key "prompt" (never "query")',
                         required=True,
                         # walk_img11: the model reused file_qa's input key —

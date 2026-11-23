@@ -89,8 +89,12 @@ def _stub_probes(monkeypatch) -> list[str]:
 
     monkeypatch.setattr(journey_probe, "_sweep", _sweep_must_not_run)
     monkeypatch.setattr(mole_mod, "_preflight", lambda api: None)
-    monkeypatch.setitem(PROBES[0], "run", _stub_probe("http", "api.health"))
-    monkeypatch.setitem(PROBES[1], "run", _stub_probe("sse", "stream.cadence"))
+    # Index by NAME, not position — the registry grew (system/gates/benchmarks
+    # now precede http/sse), so PROBES[0]/[1] no longer mean http/sse and the
+    # real network probes used to slip past this "hermetic" helper.
+    by_name = {entry["name"]: entry for entry in PROBES}
+    monkeypatch.setitem(by_name["http"], "run", _stub_probe("http", "api.health"))
+    monkeypatch.setitem(by_name["sse"], "run", _stub_probe("sse", "stream.cadence"))
     return sweep_calls
 
 
@@ -237,3 +241,82 @@ class TestMoleRun:
         assert fetched["report"] == posted
         assert fetched["age_s"] is not None
         assert fetched["age_s"] < 5.0
+
+
+# ── POST /mole/run — optional body {window_s, skip} ────────────────────
+
+
+class TestMoleRunBody:
+    """The optional body that gives the shell `mole` command flag parity.
+
+    Omission = historical contract (regression guard), out-of-range window
+    and unknown probe names = 422 *before* anything runs, and ``run_sweep``
+    stays inexpressible (``_stub_probes`` makes the sweep raise on call).
+    """
+
+    @pytest.fixture
+    def window_seen(self, monkeypatch):
+        """Hermetic probes; the sse probe records the window_s it was given."""
+        _stub_probes(monkeypatch)
+        seen: dict[str, float | None] = {}
+
+        def _run(**kwargs):
+            seen["window_s"] = kwargs.get("window_s")
+            return ProbeResult(name="sse", ok=True, findings=[])
+
+        sse = next(entry for entry in PROBES if entry["name"] == "sse")
+        monkeypatch.setitem(sse, "run", _run)
+        return seen
+
+    def test_omitted_body_keeps_historical_defaults(self, client, mole_env, window_seen):
+        resp = client.post("/mole/run")
+        assert resp.status_code == 200
+        # LIGHT_WINDOW_S (6.0), not the standalone CLI's 9.0 default.
+        assert window_seen["window_s"] == 6.0
+
+    def test_empty_body_object_equals_defaults(self, client, mole_env, window_seen):
+        resp = client.post("/mole/run", json={})
+        assert resp.status_code == 200
+        assert window_seen["window_s"] == 6.0
+
+    def test_window_s_body_is_honored(self, client, mole_env, window_seen):
+        resp = client.post("/mole/run", json={"window_s": 11.0})
+        assert resp.status_code == 200
+        assert window_seen["window_s"] == 11.0
+
+    @pytest.mark.parametrize("window", [0, 0.5, 301])
+    def test_window_s_out_of_bounds_is_422(self, client, mole_env, window_seen, window):
+        resp = client.post("/mole/run", json={"window_s": window})
+        assert resp.status_code == 422
+        # Validation precedes the run: nothing executed, report untouched.
+        assert "window_s" not in window_seen
+        assert not mole_env["report"].exists()
+
+    def test_skip_is_honored(self, client, mole_env, monkeypatch):
+        _stub_probes(monkeypatch)
+
+        def _must_not_run(**_kwargs):
+            raise AssertionError("a skipped probe must never execute")
+
+        sse = next(entry for entry in PROBES if entry["name"] == "sse")
+        monkeypatch.setitem(sse, "run", _must_not_run)
+        resp = client.post("/mole/run", json={"skip": ["sse"]})
+        assert resp.status_code == 200
+        report = resp.json()["data"]["report"]
+        sse = next(p for p in report["probes"] if p["name"] == "sse")
+        assert sse["ok"] is None
+        assert sse["error"] == "skipped"
+
+    def test_unknown_probe_is_422_and_runs_nothing(self, client, mole_env, monkeypatch):
+        _stub_probes(monkeypatch)
+        resp = client.post("/mole/run", json={"skip": ["nope"]})
+        assert resp.status_code == 422
+        assert not mole_env["report"].exists()
+
+    def test_body_cannot_enable_the_browser_sweep(self, client, mole_env, monkeypatch):
+        # _stub_probes replaces journey's _sweep with a raising sentinel —
+        # if the body could turn run_sweep on, this would fail loudly.
+        sweep_calls = _stub_probes(monkeypatch)
+        resp = client.post("/mole/run", json={"window_s": 9.0, "skip": ["system"]})
+        assert resp.status_code == 200
+        assert sweep_calls == []

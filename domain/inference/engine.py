@@ -84,6 +84,18 @@ class TurnRequest:
     travels with the turn rather than being resolved inside the engine. The
     engine never imports the registry; it only reads the flag.
     """
+    regenerate: bool = False
+    """This turn re-runs an already-recorded turn (POST /chat/{id}/regenerate).
+
+    Generation-side stages all run — readiness gates, context/RAG
+    enrichment, the agentic loop — so a re-run answers exactly like a
+    fresh turn. The COUNTING-side post-gen is skipped: conversation
+    capture, response tracking, metrics and auto-memory ingest already
+    recorded the original turn, and one conversation event must not be
+    counted twice (audit gap G2's rule applied to the re-run; card
+    20261120_150317). Server-set only — never a wire field: the
+    regenerate route takes no body.
+    """
     model_fields_set: set[str] = field(default_factory=set)
 
 

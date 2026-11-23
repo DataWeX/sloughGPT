@@ -452,6 +452,18 @@ def _ledger_doc(args: argparse.Namespace) -> Path | None:
     return doc
 
 
+def _ledger_entry(args: argparse.Namespace) -> int:
+    from grib.ledger import prepend_entry
+
+    doc = _ledger_doc(args)
+    if doc is None:
+        return 2
+    line = prepend_entry(doc, args.text, day=args.date)
+    print(f"ledger: sealed entry prepended -> {doc}")
+    print(line)
+    return 0
+
+
 def _ledger_parse(args: argparse.Namespace) -> int:
     from grib.ledger import dumps, parse
 
@@ -764,7 +776,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--grep", default=None, help="Substring anywhere in the entry")
     p = ledger_sub.add_parser(
         "check",
-        help="Gate: well-formed headers + prepend order (exit 1 on violation)",
+        help="Gate: well-formed headers + prepend order + seals (exit 1 on violation)",
     )
     p.add_argument("--doc", default=None, help=_doc_help)
     p.add_argument(
@@ -775,6 +787,13 @@ def build_parser() -> argparse.ArgumentParser:
             "violations fail, stale baseline entries fail until deleted"
         ),
     )
+    p = ledger_sub.add_parser(
+        "entry",
+        help="Prepend a sealed entry at line 1 (grib computes the hash trail)",
+    )
+    p.add_argument("--doc", default=None, help=_doc_help)
+    p.add_argument("--text", required=True, help="Entry prose after the date")
+    p.add_argument("--date", default=None, help="Entry date YYYY-MM-DD (default: today)")
 
     # GUI
     gui_p = sub.add_parser(
@@ -853,6 +872,7 @@ def main(argv: list[str] | None = None) -> int:
         ("ledger", "parse"): _ledger_parse,
         ("ledger", "query"): _ledger_query,
         ("ledger", "check"): _ledger_check,
+        ("ledger", "entry"): _ledger_entry,
         ("gui", None): _gui,
     }
 

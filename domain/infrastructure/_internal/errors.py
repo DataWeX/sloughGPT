@@ -61,6 +61,7 @@ class ErrorCode(StrEnum):
     E_VAL_REQUEST = "E_VAL_REQUEST"
     E_VAL_FIELD = "E_VAL_FIELD"
     E_NOT_IMPLEMENTED = "E_NOT_IMPLEMENTED"
+    E_PROMPT_TOO_LONG = "E_PROMPT_TOO_LONG"
 
     # Auth
     E_AUTH_MISSING = "E_AUTH_MISSING"
@@ -263,6 +264,28 @@ class ValidationError(AppError):
     user_message: str = "Invalid request."
 
 
+class PromptTooLongError(AppError):
+    """Prompt exceeds the prefill token cap (card 20261102_001622).
+
+    Raised by the engine backstop in ``generate_numpy`` BEFORE any prefill
+    work starts — the 120s request budget and the box's RAM both scale with
+    prompt length, so an over-cap prompt must fail loud and instant rather
+    than burn the budget or OOM the process. Never raised for trimming:
+    chat drops oldest turns at its own seam and announces ``omitted_count``;
+    callers with nothing to trim (CLI, raw API prompts) get this error.
+
+    ``recoverable`` is True: the caller can shorten the prompt and retry.
+    """
+
+    code: str = "E_PROMPT_TOO_LONG"
+    recoverable: bool = True
+    http_status: int = 413
+    user_message: str = (
+        "Prompt is too long for the configured prefill limit. "
+        "Shorten the conversation or start a new one."
+    )
+
+
 class ConfigError(AppError):
     """Misconfiguration — missing env, bad file, invalid value."""
 
@@ -410,6 +433,13 @@ ERROR_REGISTRY[ErrorCode.E_FATAL] = (
     "A critical error occurred. Please restart the server.",
 )
 ERROR_REGISTRY[ErrorCode.E_BAD_REQUEST] = ("ValidationError", 400, False, "Invalid request.")
+ERROR_REGISTRY[ErrorCode.E_PROMPT_TOO_LONG] = (
+    "PromptTooLongError",
+    413,
+    True,
+    "Prompt is too long for the configured prefill limit. "
+    "Shorten the conversation or start a new one.",
+)
 ERROR_REGISTRY[ErrorCode.E_VAL_REQUEST] = (
     "ValidationError",
     422,
