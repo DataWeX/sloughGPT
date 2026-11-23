@@ -283,9 +283,7 @@ def test_stream_tracked_delivers_stop_event_and_never_stores(manager):
     ):
         asyncio.run(_drain())
 
-    assert seen["stream_stop"] is stop, (
-        "stream_tracked must deliver the registered stop event"
-    )
+    assert seen["stream_stop"] is stop, "stream_tracked must deliver the registered stop event"
     mock_store.assert_not_called(), "a re-run must not re-store history"
     mock_untrack.assert_called_once()
 

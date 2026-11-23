@@ -403,9 +403,7 @@ async def test_stream_turn_regenerate_skips_counting_side_effects():
     assert "".join(i for i in items if isinstance(i, str)) == "Plain answer."
     assert finals[0].memory is None, "a re-run must not surface a MEMORY sideband"
     assert finals[0].consciousness is None, "no reflection sideband on a re-run"
-    assert mock_pg.call_count == 0, (
-        "a re-run must not re-run post-gen (capture/tracker/metrics)"
-    )
+    assert mock_pg.call_count == 0, "a re-run must not re-run post-gen (capture/tracker/metrics)"
     assert mem_calls == [], "a re-run must not re-ingest auto-memory"
 
     # Contrast in the same harness: a fresh turn still counts — the guard

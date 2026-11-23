@@ -394,11 +394,22 @@ class SloModel:
 
         backend = ApiBackend(base_url=base_url, timeout=timeout)
         name = f"slo-http:{base_url}"
+        # The server names its budget max_new_tokens, and its own defaults
+        # (temperature 0.7, 256 tokens) are what every run got until these were
+        # put in the body. Callers that name neither keep the server defaults.
+        sampling = {
+            key: value
+            for key, value in (
+                ("max_new_tokens", kwargs.get("max_tokens")),
+                ("temperature", kwargs.get("temperature")),
+            )
+            if value is not None
+        }
 
         async def generate(prompt: str) -> str:
             await backend.start()
             try:
-                resp = await backend.post(endpoint, {"prompt": prompt})
+                resp = await backend.post(endpoint, {"prompt": prompt, **sampling})
             finally:
                 await backend.stop()
             if not resp.ok:

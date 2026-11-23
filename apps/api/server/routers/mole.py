@@ -101,9 +101,11 @@ class MoleRunBody(BaseModel):
     def _known_probes_only(self):
         if self.skip:
             # Lazy import: validator runs per request, boot stays cheap.
-            from domain.core._internal.mole.probes import PROBES
+            # Through the public facade, never domain.*._internal (router
+            # facade guard) — same registry, one import site.
+            from domain.core import known_probe_names
 
-            known = {entry["name"] for entry in PROBES}
+            known = set(known_probe_names())
             unknown = {name.strip() for name in self.skip if name.strip()} - known
             if unknown:
                 raise ValueError(f"unknown probe(s) in skip: {', '.join(sorted(unknown))}")

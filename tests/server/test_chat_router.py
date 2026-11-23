@@ -108,9 +108,7 @@ class TestRegenerateChat:
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
     @patch("domain.models.get_provider")
-    def test_regenerate_stream_emits_errors_as_sse(
-        self, mock_get_provider, mock_get, client
-    ):
+    def test_regenerate_stream_emits_errors_as_sse(self, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_get_provider.return_value = MagicMock()
 
@@ -128,9 +126,7 @@ class TestRegenerateChat:
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
     @patch("domain.models.get_provider")
     @patch("fastapi.Request.is_disconnected")
-    def test_regenerate_stops_on_disconnect(
-        self, mock_disc, mock_get_provider, mock_get, client
-    ):
+    def test_regenerate_stops_on_disconnect(self, mock_disc, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_get_provider.return_value = MagicMock()
         engine = _engine_yielding(
@@ -191,9 +187,7 @@ class TestRegenerateChat:
         assert resp.status_code == 200
 
         events = [
-            json.loads(line[6:])
-            for line in resp.text.splitlines()
-            if line.startswith("data: ")
+            json.loads(line[6:]) for line in resp.text.splitlines() if line.startswith("data: ")
         ]
         tool_frames = [e for e in events if e.get("phase") == "TOOL"]
         assert [f["status"] for f in tool_frames] == ["working", "complete"]
@@ -203,9 +197,7 @@ class TestRegenerateChat:
         streamed = "".join(e.get("data", {}).get("token", "") for e in events)
         assert "prose answer" in streamed
         done = [
-            e
-            for e in events
-            if e.get("phase") == "STREAMING" and e.get("status") == "complete"
+            e for e in events if e.get("phase") == "STREAMING" and e.get("status") == "complete"
         ]
         assert done, "regenerate must close with the done frame"
         assert done[-1]["meta"]["usage_tokens"] == {
@@ -238,20 +230,14 @@ class TestRegenerateChat:
 
         engine = SimpleNamespace(stream=_stream)
         with (
-            patch(
-                "apps.api.server.routers.chat.get_chat_engine", return_value=engine
-            ),
+            patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine),
             patch("apps.api.server.routers.chat.get_chat_response_cache") as mock_cache,
-            patch(
-                "apps.api.server.routers.chat.set_chat_response_cache"
-            ) as mock_set,
+            patch("apps.api.server.routers.chat.set_chat_response_cache") as mock_set,
         ):
             resp = client.post("/chat/sess-1/regenerate")
         assert resp.status_code == 200
         turn = captured["turn"]
-        assert turn.regenerate is True, (
-            "a re-run must be marked so the engine skips recount"
-        )
+        assert turn.regenerate is True, "a re-run must be marked so the engine skips recount"
         assert turn.messages == [{"role": "user", "content": "Hello"}]
         assert turn.session_id == "sess-1"
         mock_cache.assert_not_called()

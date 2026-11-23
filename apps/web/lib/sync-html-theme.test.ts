@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { syncHtmlTheme } from './sync-html-theme'
+import { syncHtmlTheme, resetThemeSyncGuard } from './sync-html-theme'
 
 describe('syncHtmlTheme', () => {
   beforeEach(() => {
@@ -105,5 +105,56 @@ describe('syncHtmlTheme — high contrast', () => {
     const root = document.documentElement
     expect(root.classList.contains('high-contrast')).toBe(false)
     expect(root.classList.contains('dark')).toBe(true)
+  })
+})
+
+describe('syncHtmlTheme — swap transition', () => {
+  const armed = () => document.documentElement.classList.contains('theme-transitioning')
+
+  beforeEach(() => {
+    document.documentElement.className = ''
+    resetThemeSyncGuard()
+  })
+
+  it('never arms the transition on the first sync (first paint)', () => {
+    syncHtmlTheme('dark', 'purple')
+    expect(armed()).toBe(false)
+  })
+
+  it('arms the transition for a user-initiated change', () => {
+    syncHtmlTheme('dark', 'purple') // mount
+    syncHtmlTheme('light', 'purple') // change
+    expect(armed()).toBe(true)
+  })
+
+  it('disarms once the swap window has elapsed', async () => {
+    syncHtmlTheme('dark', 'purple')
+    syncHtmlTheme('light', 'purple')
+    expect(armed()).toBe(true)
+    await new Promise((r) => setTimeout(r, 260))
+    expect(armed()).toBe(false)
+  })
+
+  it('honours an explicit animate=false even after the first sync', () => {
+    syncHtmlTheme('dark', 'purple')
+    syncHtmlTheme('light', 'purple', undefined, false)
+    expect(armed()).toBe(false)
+  })
+
+  it('resetThemeSyncGuard returns the module to a cold-document state', () => {
+    syncHtmlTheme('dark', 'purple')
+    resetThemeSyncGuard()
+    syncHtmlTheme('light', 'purple')
+    expect(armed()).toBe(false)
+  })
+
+  it('keeps the mode/theme/palette swap itself correct while armed', () => {
+    syncHtmlTheme('dark', 'purple')
+    syncHtmlTheme('high-contrast', 'blue', 'neural-precision')
+    const root = document.documentElement
+    expect(armed()).toBe(true)
+    expect(root.classList.contains('high-contrast')).toBe(true)
+    expect(root.classList.contains('theme-blue')).toBe(true)
+    expect(root.classList.contains('palette-neural-precision')).toBe(true)
   })
 })
