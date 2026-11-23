@@ -1,7 +1,11 @@
 /** FastAPI backend base URL for the app (client bundles).
  *
- * `??` (not `||`) so an explicit empty value survives: `npm run build:vite`
- * builds same-origin, where the gateway relays the API — a `||` fallback to
- * `http://localhost:8000` there would reintroduce a second origin (CORS) for
- * every request the static site makes. */
-export const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+ * Same-origin by contract (card 20261123_135845): the empty base makes
+ * every request root-relative — the SERVER owns the port, the browser owns
+ * exactly one origin. Dev relays through vite (`vite/api-relay-plugin`,
+ * the gateway's kind-rule); the static build is served by the gateway
+ * (MAN_STATIC_DIR), which byte-relays to Python. No `process.env` reaches
+ * the browser: user `define` keys do not apply under vite 8 dev, so the
+ * old expression was served raw and threw at import — killing
+ * http-client's whole chain while vitest stayed green in Node. */
+export const PUBLIC_API_URL = ''

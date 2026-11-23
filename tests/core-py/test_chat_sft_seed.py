@@ -88,7 +88,9 @@ class TestSeedFixture:
         train = build(SEED)
         heldout = build(SEED, split="heldout")
         everything = build(SEED, split=None)
-        assert len(train) == len(records) - heldout_n, "default train must exclude every heldout record"
+        assert len(train) == len(records) - heldout_n, (
+            "default train must exclude every heldout record"
+        )
         assert len(heldout) == heldout_n
         assert len(everything) == len(train) + len(heldout)
         rendered = "".join(train[i] for i in range(len(train)))
