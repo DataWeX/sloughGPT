@@ -31,18 +31,18 @@ Single source of truth for navigation. Read this first.
 
 ## Features
 
-| Doc                         | Purpose                                                    |
-| --------------------------- | ---------------------------------------------------------- |
-| **FEATURES.md**             | Feature list                                               |
+| Doc                              | Purpose                                                           |
+| -------------------------------- | ----------------------------------------------------------------- |
+| **FEATURES.md**                  | Feature list                                                      |
 | **moodboards/voice-warble.html** | Mood board #2 — voice warble (aura + echo stack, open in browser) |
-| **moodboards/widgets.html** | Mood board #1 — widgets (visual ideation, open in browser) |
-| **NAVIGATION_AND_SOULS.md** | Soul/personality system                                    |
-| **SHELL.md**                | CLI shell                                                  |
-| **VM_CONSOLE.md**           | VM console                                                 |
-| **vm-devices-spec.md**      | VM device spec                                             |
-| **WORLD_REALM.md**          | World rendering                                            |
-| **CACHING.md**              | LLM response cache: keys + invalidation                    |
-| **LLM_RESPONSE_CACHE.md**   | LLM response cache: keys + invalidation                    |
+| **moodboards/widgets.html**      | Mood board #1 — widgets (visual ideation, open in browser)        |
+| **NAVIGATION_AND_SOULS.md**      | Soul/personality system                                           |
+| **SHELL.md**                     | CLI shell                                                         |
+| **VM_CONSOLE.md**                | VM console                                                        |
+| **vm-devices-spec.md**           | VM device spec                                                    |
+| **WORLD_REALM.md**               | World rendering                                                   |
+| **CACHING.md**                   | LLM response cache: keys + invalidation                           |
+| **LLM_RESPONSE_CACHE.md**        | LLM response cache: keys + invalidation                           |
 
 ## Design
 
@@ -58,15 +58,15 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 
 ## Setup & Deploy
 
-| Doc                         | Purpose                                                     |
-| --------------------------- | ----------------------------------------------------------- |
-| **INSTALL.md**              | Installation                                                |
-| **ENVIRONMENT.md**          | Environment setup                                           |
-| **DEPLOYMENT.md**           | Deployment guide                                            |
-| **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks                                           |
-| **WORKTREE_RECOVERY.md**    | Worktree wipe prevention + prune/recreate recovery runbook  |
+| Doc                         | Purpose                                                                    |
+| --------------------------- | -------------------------------------------------------------------------- |
+| **INSTALL.md**              | Installation                                                               |
+| **ENVIRONMENT.md**          | Environment setup                                                          |
+| **DEPLOYMENT.md**           | Deployment guide                                                           |
+| **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks                                                          |
+| **WORKTREE_RECOVERY.md**    | Worktree wipe prevention + prune/recreate recovery runbook                 |
 | **WORKTREE_AUDIT.md**       | 2026-11-13 audit — 115→33 worktrees, hold-list, sloughGPT-separate verdict |
-| **scripts/systemd/**        | systemd --user unit for the shared API (:8000) + install.sh |
+| **scripts/systemd/**        | systemd --user unit for the shared API (:8000) + install.sh                |
 
 ## Integration
 
@@ -91,6 +91,12 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | **MOBILE_AI_UI_SOP.md**      | SOP: AI + mobile UI development practice                                                                     |
 | **DEVELOPER_GUIDE.md**       | Developer guide                                                                                              |
 | **DOC_VS_CODE_GAP_AUDIT.md** | API doc-vs-code audit + parity script                                                                        |
+
+## Reference
+
+| Doc                                      | Purpose                                                                                                                |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **misc/FUNGOLABS_LAUNCHPAD_ANALYSIS.md** | External reference: FungoLabs Launchpad (encrypted NFT launchpad) — patterns to port, defects to avoid, 3 cards raised |
 
 ## Meta
 
