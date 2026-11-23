@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.context.managers")
 import threading
@@ -93,14 +94,17 @@ class TraitWeightsConfig:
     def _init_mogdb(self):
         """Initialize MogDB with JSON sync for trait weights.
 
-        Store lives next to the config file so each instance path gets its
-        own store (default data/trait_weights.json → data/trait_weights_mogdb;
-        per-test tmp paths stay isolated instead of sharing one cross-run DB).
+        Storage lives next to the JSON file so every config instance gets an
+        isolated store (production: data/; tests: their own tmp dir).
         """
+        import os
+
         from mogdb import MogDB
 
-        base = self._path.parent
-        return MogDB(str(base / "trait_weights_mogdb"), sync_dir=str(base / "trait_weights_json"))
+        base_dir = self._path.parent
+        db_path = os.path.join(base_dir, "trait_weights_mogdb")
+        sync_path = os.path.join(base_dir, "trait_weights_json")
+        return MogDB(db_path, sync_dir=sync_path)
 
     # ── Access ───────────────────────────────────────────────────────
 
@@ -345,7 +349,7 @@ class TraitWeightsConfig:
         safe = name.replace(" ", "_").replace("/", "_")
         with _lock:
             data = {**self._weights}
-            data["_meta"] = {"saved_at": datetime.now(UTC).isoformat(), "label": name}
+            data["_meta"] = {"saved_at": utc_now_iso(), "label": name}
         self._snapshot_repo.save(safe, data)
         return str(self._snapshots_dir / f"{safe}.json")
 
@@ -375,20 +379,12 @@ class TraitWeightsConfig:
     # ── Persistence ──────────────────────────────────────────────────
 
     def _save(self) -> None:
-        """Write weights to MogDB (JSON sync) and mirror to the JSON path.
-
-        The mirror keeps ``self._path`` authoritative for readers when MogDB is
-        unavailable or mocked (tests, bootstrap fallback via ``_load_legacy``).
-        """
-        weights_data = {k: round(v, 4) for k, v in self._weights.items()}
-        try:
-            self._path.write_text(json.dumps(weights_data))
-        except OSError as e:
-            logger.warning("Failed to write trait weights JSON %s: %s", self._path, e)
+        """Write weights to MogDB (with automatic JSON sync)."""
         try:
             col = self._db.collection("weights")
             # Upsert: update if exists, insert if not
             existing = col.find_one({"_key": "trait_weights"})
+            weights_data = {k: round(v, 4) for k, v in self._weights.items()}
             if existing:
                 col.update_one(
                     {"_key": "trait_weights"},
@@ -447,6 +443,49 @@ def get_trait_config() -> TraitWeightsConfig:
 def reset_trait_config() -> None:
     global _trait_config
     _trait_config = None
+
+
+def ensure_managers(core: Any, config: TraitWeightsConfig | None = None) -> dict[str, str]:
+    """Attach the four trait-driven managers to a ContextCore instance.
+
+    This is the seam the architecture always described and never connected::
+
+        feedback -> TraitWeightsConfig.update() -> managers read weights
+                 -> ContextCore applies -> prompt
+
+    ``ContextCore.set_managers()`` already existed, but had **only test
+    callers** — so ``_apply_managers()`` never ran in production and the frame
+    carried no trait steering. Meanwhile a *second* feedback integrator
+    (``domain/feedback/_internal/meta_weights.py`` → sampler parameters) did
+    run, and because it integrated unbounded floats into a shared, model-
+    agnostic gain it could saturate to ``repetition_penalty 0.8`` — which
+    rewards tokens the model already emitted and makes a finished answer
+    replay forever (card 20261102_001621).
+
+    Trait weights are clamped to [0.0, 1.0] by construction, so the worst this
+    path can express is a strong preference rendered as prompt text — readable
+    and reversible per request, instead of a sampler corner every request
+    inherits.
+
+    Args:
+        core: the ContextCore singleton (``domain.infrastructure.get_context_core()``).
+        config: trait weights to read; defaults to the shared singleton.
+
+    Returns:
+        Names of the attached managers (``{}`` when ``core`` is falsy).
+    """
+    if core is None:
+        return {}
+
+    cfg = config if config is not None else get_trait_config()
+    managers = {
+        "personality": PersonalityManager(cfg),
+        "memory": MemoryManager(cfg),
+        "style": StyleManager(cfg),
+        "task": TaskManager(cfg),
+    }
+    core.set_managers(**managers)
+    return {name: type(mgr).__name__ for name, mgr in managers.items()}
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -951,9 +990,13 @@ class ConsciousnessManager:
                 lines.append(f"Experiences processed: {episodes}")
 
         if level >= 3:
-            reflection = self._engine.reflect()
-            if reflection:
-                lines.append(f"Self-reflection: {reflection[:200]}")
+            # Propose-only: prompt injection must not commit belief deltas.
+            reflection = self._engine.reflect(apply=False)
+            text = getattr(reflection, "narrative", None)
+            if text is None:
+                text = reflection if isinstance(reflection, str) else str(reflection)
+            if text:
+                lines.append(f"Self-reflection: {text[:200]}")
 
         if not lines:
             return ""
