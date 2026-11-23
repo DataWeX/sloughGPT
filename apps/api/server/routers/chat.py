@@ -351,9 +351,7 @@ class ChatRouter:
                     # SAME translation POST /chat uses; regenerate's recount
                     # semantics are marked on the turn inside _stream_tokens.
                     chat_req = ChatRequest(
-                        messages=[
-                            Message(role=m["role"], content=m["content"]) for m in msgs
-                        ],
+                        messages=[Message(role=m["role"], content=m["content"]) for m in msgs],
                         session_id=session_id,
                     )
 

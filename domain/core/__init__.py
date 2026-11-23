@@ -90,6 +90,7 @@ __all__ = [
     "SelfIdentity",
     "default_report_path",
     "run_mole",
+    "known_probe_names",
     "MoleReport",
     "default_report_path",
 ]
@@ -136,6 +137,7 @@ def __getattr__(name):
         "MultimodalCapabilities": "domain.multimodal",
         # Mole (Phase A: report-only probes)
         "run_mole": "domain.core._internal.mole",
+        "known_probe_names": "domain.core._internal.mole",
         "MoleReport": "domain.core._internal.mole",
         "default_report_path": "domain.core._internal.mole.report",
     }

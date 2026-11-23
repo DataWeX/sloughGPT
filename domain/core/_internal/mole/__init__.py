@@ -66,6 +66,7 @@ __all__ = [
     "default_report_path",
     "default_targets",
     "fingerprint",
+    "known_probe_names",
     "load_context",
     "merge",
     "rank",
@@ -108,6 +109,16 @@ def _preflight(api: str) -> ProbeResult | None:
         ],
         error=detail,
     )
+
+
+def known_probe_names() -> tuple[str, ...]:
+    """Public facade: the registered probe names, for caller-side validation.
+
+    Routers validate request bodies against this instead of reaching into
+    ``domain.*._internal`` (router facade guard): one registry, one import
+    site, and the accept/reject contract stays derived from ``PROBES``.
+    """
+    return tuple(entry["name"] for entry in PROBES)
 
 
 def run_mole(
