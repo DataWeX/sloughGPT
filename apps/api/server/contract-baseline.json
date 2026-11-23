@@ -6170,9 +6170,23 @@
    "POST": {
     "operationId": "run_mole_mole_run_post",
     "params": [],
-    "body": null,
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/MoleRunBody"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Body"
+     }
+    },
     "responses": [
-     "200"
+     "200",
+     "422"
     ]
    }
   },

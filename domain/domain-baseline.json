@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "491fd8ef286a58418c5389c5bfb2b20bdc162a7e",
+    "recorded_commit": "7796095f23791b613026883e3171c2668d8a8390",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "97db0059798a915459567696be428ef6458fae3d"
+      "tree_hash": "c93381ba2e7e034c73fd2e03c741de497c7c1222"
     },
     "ai_personality": {
       "class": "feature",
@@ -264,7 +264,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "ed8fa40e8abbdc7a4a16e8ff3017279ae07fae58"
+      "tree_hash": "7f347482b0827d33232f1b6c7509b1806d4fde19"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -280,7 +280,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "b5074093d2b6c70160b1197aec704fb1e283404a"
+      "tree_hash": "4d2254d66c9e5fb41eb70fa3826d45d2414135e3"
     },
     "knowledge": {
       "class": "core-capability",
@@ -550,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "3212f58dbd3341f6ef2e5f36a1f76829044e0e63"
+      "tree_hash": "9f75e850b62456b087c8f18143c09f8974e78677"
     },
     "voice": {
       "class": "core-capability",

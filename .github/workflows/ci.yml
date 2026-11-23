@@ -156,7 +156,19 @@ jobs:
       # --ignore-scripts skips cypress's binary download; fetch it explicitly.
       - run: npx cypress install
         if: steps.fe.outputs.web == 'true'
-      - run: npm run e2e:vite
+      # QUARANTINE (card 20261121_152656): chat-inference.cy.ts hangs in
+      # its beforeEach / first cy.visit('/chat') — run 44908497278 printed
+      # its describe header at 13:23:42 and produced nothing until the 45m
+      # timeout cancelled the job at 14:07:15 (spec 1/22 passed in 14s, so
+      # the hang alone is the entire budget burn; the other 20 specs never
+      # ran). Same command as `npm run e2e:vite`, minus the hanger. The
+      # explicit string lives here so the exclusion is visible in the job
+      # log rather than hidden in package.json. Re-enable when either the
+      # hang-diagnosis card or the Cypress -> domain/testing port series
+      # (both filed from 20261121_152656) lands.
+      - run: >-
+          npm exec -- start-server-and-test "vite" http://localhost:5173
+          "cypress run --config excludeSpecPattern=**/chat-inference.cy.ts"
         if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
 
