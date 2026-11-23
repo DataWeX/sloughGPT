@@ -348,3 +348,84 @@ def test_post_chat_projects_turn_events_as_tool_frames(client):
     assert tok_frames[-1]["status"] == "complete"
     assert tok_frames[-1]["data"].get("token") == ""
     assert frames[-1] is tok_frames[-1], "done frame must remain the last frame"
+
+
+@patch.dict(
+    "sys.modules",
+    {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+)
+async def test_stream_turn_regenerate_skips_counting_side_effects():
+    """A re-run must not double-count (card 20261120_150317).
+
+    ``TurnRequest.regenerate=True`` keeps every generation-side stage —
+    readiness gates, context/RAG enrichment, the agentic loop, the token
+    stream itself — but skips the counting-side work: conversation capture,
+    response tracking and metrics (``_run_post_gen_tasks``) and the
+    auto-memory ingest. The ORIGINAL turn already recorded those; recording
+    them again would count one conversation event twice (audit gap G2's
+    rule applied to the re-run).
+    """
+    provider, _ = _fake_provider([["Plain answer."]])
+
+    postgen_texts: list[str] = []
+    mem_calls: list[str] = []
+
+    async def _remember(user_msg, text, *a, **kw):
+        mem_calls.append(text)
+        return []
+
+    def _post_gen(text, *a, **kw):
+        postgen_texts.append(text)
+        return {}
+
+    memory_service = SimpleNamespace(remember_facts_async=_remember)
+
+    with (
+        patch("apps.api.server.routers.inference.get_provider", return_value=provider),
+        patch(
+            "apps.api.server.routers.inference.get_memory_service",
+            return_value=memory_service,
+        ),
+        patch(
+            "apps.api.server.routers.inference._run_post_gen_tasks",
+            side_effect=_post_gen,
+        ) as mock_pg,
+    ):
+        rerun = TurnRequest(
+            messages=[{"role": "user", "content": "hi"}],
+            session_id="sess-regen-rerun",
+            regenerate=True,
+        )
+        items = [i async for i in _inference_router.stream_turn(rerun)]
+
+    finals = [i for i in items if isinstance(i, TurnResult)]
+    assert len(finals) == 1, "a re-run still streams a complete turn"
+    assert "".join(i for i in items if isinstance(i, str)) == "Plain answer."
+    assert finals[0].memory is None, "a re-run must not surface a MEMORY sideband"
+    assert finals[0].consciousness is None, "no reflection sideband on a re-run"
+    assert mock_pg.call_count == 0, (
+        "a re-run must not re-run post-gen (capture/tracker/metrics)"
+    )
+    assert mem_calls == [], "a re-run must not re-ingest auto-memory"
+
+    # Contrast in the same harness: a fresh turn still counts — the guard
+    # is the flag, not a broken default path.
+    with (
+        patch("apps.api.server.routers.inference.get_provider", return_value=provider),
+        patch(
+            "apps.api.server.routers.inference.get_memory_service",
+            return_value=memory_service,
+        ),
+        patch(
+            "apps.api.server.routers.inference._run_post_gen_tasks",
+            side_effect=_post_gen,
+        ) as mock_pg2,
+    ):
+        fresh = TurnRequest(
+            messages=[{"role": "user", "content": "hi"}],
+            session_id="sess-regen-fresh",
+        )
+        [i async for i in _inference_router.stream_turn(fresh)]
+
+    assert mock_pg2.call_count == 1, "a fresh turn runs post-gen exactly once"
+    assert mem_calls, "a fresh turn still runs auto-memory"

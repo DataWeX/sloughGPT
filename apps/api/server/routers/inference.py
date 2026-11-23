@@ -2356,26 +2356,32 @@ class InferenceRouter:
         # every turn (audit gap G2's rule, applied to the single path the
         # stream-first architecture left).
         _post_gen: dict[str, Any] = {}
-        try:
-            _post_gen = _run_post_gen_tasks(
-                text_augmented,
-                user_msg or "",
-                session_id,
-                _chat_start_dt,
-                req,
-                # Resolve only when the turn opted into the context stack:
-                # first resolution wires ContextCore (incl. its consciousness
-                # engine) — a bare probe must not drag that in (quick-test
-                # card). None changes nothing downstream: add_response is
-                # gated on req.use_context_core anyway.
-                self._get_context_core() if req.use_context_core else None,
-                self._bg_tasks_lock,
-                self._BG_TASKS,
-                self._bg_tasks_lock_discard,
-                corr_id="stream",
-            )
-        except Exception as e:
-            logger.warning("Post-gen tasks failed: %s", e)
+        # Re-run (TurnRequest.regenerate): the generation side above all ran,
+        # but the counting side already recorded the ORIGINAL turn — capture,
+        # response tracking, metrics, continual-learning ingest and
+        # reflection must not count one conversation event twice (audit gap
+        # G2's rule applied to the re-run; card 20261120_150317).
+        if not req.regenerate:
+            try:
+                _post_gen = _run_post_gen_tasks(
+                    text_augmented,
+                    user_msg or "",
+                    session_id,
+                    _chat_start_dt,
+                    req,
+                    # Resolve only when the turn opted into the context stack:
+                    # first resolution wires ContextCore (incl. its consciousness
+                    # engine) — a bare probe must not drag that in (quick-test
+                    # card). None changes nothing downstream: add_response is
+                    # gated on req.use_context_core anyway.
+                    self._get_context_core() if req.use_context_core else None,
+                    self._bg_tasks_lock,
+                    self._BG_TASKS,
+                    self._bg_tasks_lock_discard,
+                    corr_id="stream",
+                )
+            except Exception as e:
+                logger.warning("Post-gen tasks failed: %s", e)
         if _post_gen.get("narrative"):
             logger.info(
                 "Chat reflection recorded (level=%s)",
@@ -2384,12 +2390,13 @@ class InferenceRouter:
             )
 
         _memory: dict | None = None
-        try:
-            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
-            if _memory_facts:
-                _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
-        except Exception as e:
-            logger.debug("Auto-memory remember failed: %s", e)
+        if not req.regenerate:  # counting side — the original turn already ingested
+            try:
+                _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+                if _memory_facts:
+                    _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
+            except Exception as e:
+                logger.debug("Auto-memory remember failed: %s", e)
 
         # Sideband frames the chat edge forwards verbatim before close:
         # the consciousness reflection surfaced by post-gen, then the
@@ -2413,13 +2420,14 @@ class InferenceRouter:
         _memory_stored = False
         _memory_fact = None
         _memory_facts: list[str] = []
-        try:
-            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
-            _memory_stored = len(_memory_facts) > 0
-            if _memory_stored:
-                _memory_fact = _memory_facts[0]
-        except Exception as e:
-            logger.debug("Auto-memory remember failed: %s", e)
+        if not req.regenerate:  # ditto: no MEMORY sideband on a re-run
+            try:
+                _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+                _memory_stored = len(_memory_facts) > 0
+                if _memory_stored:
+                    _memory_fact = _memory_facts[0]
+            except Exception as e:
+                logger.debug("Auto-memory remember failed: %s", e)
 
         if _memory_stored:
             _sideband_events.append(

@@ -36,7 +36,7 @@ from infrastructure.chat_response_cache import (
 )
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
-from schemas.chat import ChatRequest
+from schemas.chat import ChatRequest, Message
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
@@ -70,6 +70,8 @@ class ChatRouter:
         self,
         request: ChatRequest,
         cancel_event: threading.Event | None = None,
+        *,
+        regenerate: bool = False,
     ) -> AsyncIterator:
         """The single path: the engine's raw-token stream.
 
@@ -86,11 +88,55 @@ class ChatRouter:
         by the tracked wrapper that owns the registry; it rides the turn down to
         the provider's token loop. Chat never polls it itself — it only forwards
         the channel it was handed.
+
+        ``regenerate=True`` marks the turn a re-run (server-set only — the
+        regenerate route takes no body): every generation stage still runs,
+        while the engine skips counting-side post-gen because the original
+        turn already recorded it (card 20261120_150317).
         """
         engine = get_chat_engine()
         turn_req = request.to_turn(cancel_event=cancel_event)
+        if regenerate:
+            turn_req.regenerate = True
         async for item in engine.stream(turn_req):
             yield item
+
+    def _project_turn_event(self, item: TurnEvent) -> list[str]:
+        """``TurnEvent`` → SSE TOOL frames — the ONE projection.
+
+        POST /chat and regenerate both ride the engine port, so both project
+        the loop's out-of-band events through here — the exact shape
+        ``stream-chat-response.ts`` reads (working → executing, complete →
+        success, error → error; ``data.tool`` required). Never a token and
+        never cached: only prose does (card 20261116_090332 PR-C).
+        """
+        d = item.data or {}
+        tool = str(d.get("name") or d.get("tool") or "")
+        if item.kind == "tool_call":
+            return [
+                self._sse_event(
+                    "chat",
+                    "TOOL",
+                    "working",
+                    data={"tool": tool, "args": d.get("args") or {}},
+                    message=f"Calling {tool}",
+                )
+            ]
+        ok = bool(d.get("success"))
+        return [
+            self._sse_event(
+                "chat",
+                "TOOL",
+                "complete" if ok else "error",
+                data={
+                    "tool": tool,
+                    "output": d.get("output") or "",
+                    "error": d.get("error") or "",
+                    "success": ok,
+                },
+                message=f"{tool} {'succeeded' if ok else 'failed'}",
+            )
+        ]
 
     @endpoint("chat.stream")
     async def stream(
@@ -175,36 +221,11 @@ class ChatRouter:
                             yield self._sse_token("chat", item)
                     elif isinstance(item, TurnEvent):
                         # Out-of-band tool event from the loop behind the
-                        # engine port (card 20261116_090332): project it as
-                        # a TOOL frame — the exact shape
-                        # stream-chat-response.ts reads (working → executing,
-                        # complete → success, error → error; data.tool
-                        # required). It is never a token and never enters the
-                        # cache: only prose does.
-                        d = item.data or {}
-                        tool = str(d.get("name") or d.get("tool") or "")
-                        if item.kind == "tool_call":
-                            yield self._sse_event(
-                                "chat",
-                                "TOOL",
-                                "working",
-                                data={"tool": tool, "args": d.get("args") or {}},
-                                message=f"Calling {tool}",
-                            )
-                        else:
-                            ok = bool(d.get("success"))
-                            yield self._sse_event(
-                                "chat",
-                                "TOOL",
-                                "complete" if ok else "error",
-                                data={
-                                    "tool": tool,
-                                    "output": d.get("output") or "",
-                                    "error": d.get("error") or "",
-                                    "success": ok,
-                                },
-                                message=f"{tool} {'succeeded' if ok else 'failed'}",
-                            )
+                        # engine port (card 20261116_090332): one shared
+                        # projection with regenerate. Never a token and
+                        # never enters the cache: only prose does.
+                        for frame in self._project_turn_event(item):
+                            yield frame
                     else:
                         # Final TurnResult: close the stream. The engine computes
                         # usage/timing/finish on it, so surface them here — that
@@ -279,7 +300,18 @@ class ChatRouter:
         request: Request,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
-        """Regenerate last assistant response for a session."""
+        """Regenerate last assistant response for a session.
+
+        Rides the SAME engine port as POST /chat (card 20261120_150317):
+        the stored context translates through ChatRequest → to_turn with
+        ``regenerate=True`` (server-set — the route takes no body), so a
+        re-run gets model-readiness gates, context/RAG enrichment and the
+        agentic loop exactly like a fresh turn, and projects TOOL frames
+        through the one projection. Counting-side post-gen is skipped at
+        the engine (the original turn already recorded it), history is not
+        re-stored, and the response cache is untouched — a re-run must
+        re-generate, never replay the answer it is replacing.
+        """
         try:
             from domain.chat import get_chat_manager
 
@@ -315,22 +347,49 @@ class ChatRouter:
                         )
                         return
 
+                    # Stored context → wire contract → engine domain: the
+                    # SAME translation POST /chat uses; regenerate's recount
+                    # semantics are marked on the turn inside _stream_tokens.
+                    chat_req = ChatRequest(
+                        messages=[
+                            Message(role=m["role"], content=m["content"]) for m in msgs
+                        ],
+                        session_id=session_id,
+                    )
+
                     yield self._sse_event(
                         "chat", "REGENERATE", "thinking", data={}, message="Regenerating..."
                     )
 
-                    async for token in manager.stream(
-                        messages=msgs,
-                        session_id=session_id,
+                    async for item in manager.stream_tracked(
+                        session_id,
+                        lambda stop: self._stream_tokens(chat_req, stop, regenerate=True),
                     ):
                         if await request.is_disconnected():
                             return
-                        if token:
-                            _token_count += 1
-                            yield self._sse_token("chat", token)
-                    yield self._sse_token(
-                        "chat", "", done=True, meta={"usage_tokens": manager.last_usage()}
-                    )
+                        if isinstance(item, str):
+                            if item:
+                                _token_count += 1
+                                yield self._sse_token("chat", item)
+                        elif isinstance(item, TurnEvent):
+                            # The Phase 2 journey on a re-run: same TOOL
+                            # projection as POST /chat (one seam).
+                            for frame in self._project_turn_event(item):
+                                yield frame
+                        else:
+                            # Final TurnResult — usage/details the engine
+                            # computed, surfaced exactly like POST /chat.
+                            yield self._sse_token(
+                                "chat",
+                                "",
+                                done=True,
+                                meta={
+                                    "usage_tokens": item.usage,
+                                    "model": item.model,
+                                    "finish_reason": item.finish_reason,
+                                    "elapsed_ms": item.elapsed_ms,
+                                },
+                            )
                     _elapsed_ms = round((time.time() - _start) * 1000)
                     safe_audit_log(
                         "chat.regenerate",
