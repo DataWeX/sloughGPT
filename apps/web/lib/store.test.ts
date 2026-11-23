@@ -25,7 +25,10 @@ beforeEach(() => {
 describe('useAppStore', () => {
   it('has default settings', () => {
     const { settings } = useAppStore.getState()
-    expect(settings.apiUrl).toBe('http://localhost:8000')
+    // Same-origin default (card 20261123_135845): the service URL starts
+    // empty — the server owns the port; an absolute localhost default would
+    // re-introduce the second origin the empty base exists to remove.
+    expect(settings.apiUrl).toBe('')
     expect(settings.defaultTemp).toBe(0.7)
     expect(settings.theme).toBe('light')
     expect(settings.streaming).toBe(true)

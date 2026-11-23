@@ -4,6 +4,7 @@ import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { apiRoutesPlugin } from './vite/api-middleware-plugin'
+import { apiRelayPlugin } from './vite/api-relay-plugin'
 import { redirectsPlugin } from './vite/redirect-plugin'
 
 // Phase 0 migration spike — Vite coexists with Next.
@@ -29,7 +30,7 @@ const webTreeId = crypto
   .slice(0, 16)
 
 export default defineConfig({
-  plugins: [react(), redirectsPlugin(), apiRoutesPlugin()],
+  plugins: [react(), redirectsPlugin(), apiRoutesPlugin(), apiRelayPlugin()],
   root: __dirname,
   publicDir: 'public',
   server: {
@@ -136,11 +137,9 @@ export default defineConfig({
     preserveSymlinks: true,
   },
   define: {
-    'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(
-      // `||` would swallow an explicit empty string; an empty base makes the
-      // static build same-origin (gateway relays the API — one origin, no CORS).
-      process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
-    ),
+    // Only built-in keys: user env keys (NEXT_PUBLIC_*) did not apply under
+    // vite 8 dev and reached the browser raw — config.ts no longer reads any
+    // (same-origin '' base, card 20261123_135845), so the old define is gone.
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   },
   worker: {

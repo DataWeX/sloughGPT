@@ -42,12 +42,19 @@
   /* Chat thread max width — full-bleed by default, responsive padding handles
      readability. Set to 100% so the conversation spans the available column. */
   --chat-thread-max: 100%;
-  --chat-bg: 246 242 237;
   /* Content area max width for large screens */
   --content-max-width: 80rem;
   color-scheme: light;
-
+  /* Rationale for the generated colour tokens below. The generator emits
+     plain `token: value` lines, so these notes live here rather than
+     interleaved with the values they explain:
+       --warning  Scheme-derived: amber dot from the reference render
+                  (hue-shifted golden -> true amber, slightly deeper for contrast).
+       --info     Periwinkle from the reference render -- azure pulled toward
+                  violet; contrast kept >= the old azure (3.2:1 vs 3.1:1 white). */
+/* @tokens:light BEGIN */
   /* Light — warm cream paper with violet undertone */
+  --chat-bg: 246 242 237;
   --background: 248 246 252;
   --foreground: 25 22 36;
   --card: 255 255 255;
@@ -67,19 +74,16 @@
   --input: 228 224 242;
   --radius: 6px;
   --success: 52 176 125;
-  /* Scheme-derived: amber dot from the reference render (hue-shifted golden
-     → true amber, slightly deeper for contrast). */
   --warning: 245 158 11;
   --destructive: 220 80 90;
   --destructive-foreground: 250 248 255;
-  /* Periwinkle from the reference render — azure pulled toward violet;
-     contrast kept ≥ the old azure (3.2:1 vs 3.1:1 on white). */
   --info: 104 142 226;
   --chart-1: 124 82 196;
   --chart-2: 52 176 125;
   --chart-3: 236 145 95;
   --chart-4: 104 142 226;
   --chart-5: 220 80 90;
+/* @tokens:light END */
   /*
    * Session-group identity colours — deliberately THEME-CONSTANT (like the
    * terminal ladder below): a group's identity must not change when the
@@ -137,6 +141,11 @@
 
 html.dark {
   color-scheme: dark;
+  /* Rationale for the generated colour tokens below:
+       --warning  Same scheme, dark-adapted: amber-400 pops on the charcoal canvas.
+       --info     Periwinkle dark counterpart -- sky to periwinkle to match the
+                  light hue, lightened for the dark canvas; pairs with lilac. */
+/* @tokens:dark BEGIN */
   --chat-bg: 22 20 30;
   --background: 17 15 24;
   --foreground: 238 234 248;
@@ -156,18 +165,16 @@ html.dark {
   --border: 52 46 72;
   --input: 52 46 72;
   --success: 72 192 140;
-  /* Same scheme, dark-adapted: amber-400 pops on the charcoal canvas. */
   --warning: 251 191 36;
   --destructive: 235 100 110;
   --destructive-foreground: 25 22 36;
-  /* Periwinkle dark counterpart — sky→periwinkle to match the light hue,
-     lightened for the dark canvas; pairs with the lilac primary. */
   --info: 138 166 242;
   --chart-1: 192 170 244;
   --chart-2: 72 192 140;
   --chart-3: 240 176 130;
   --chart-4: 138 166 242;
   --chart-5: 235 100 110;
+/* @tokens:dark END */
 }
 
 /* Magazine "Dark Mode Preview" — scope html.dark values to the demo box so a
@@ -1156,8 +1163,10 @@ select:focus-visible {
   border-color: rgb(var(--primary) / 0.5);
 }
 
+/* @tokens:palettes BEGIN */
 /* Palettes — full-spectrum overrides applied via html class */
 html.palette-neural-precision {
+  --chat-bg: 246 242 237;
   --background: 240 242 247;
   --foreground: 22 20 32;
   --card: 255 255 255;
@@ -1214,6 +1223,7 @@ html.dark.palette-neural-precision {
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
 }
+/* @tokens:palettes END */
 
 /* Operating System Blue (system-cobalt) — PROJECTION of apps/web/lib/os-blue-palette.ts.
    Do not hand-edit: apps/web/lib/os-blue-palette.test.ts re-runs the OKLCH derivation
@@ -1407,10 +1417,17 @@ html.dark.palette-rose-blue select:active {
   border-color: rgb(140,153,224);
 }
 
-/* Accent themes — website color for accented elements (message bubbles,
-   buttons, focus rings). Override --primary/--ring on <html> so the chosen
-   accent wins even when a palette class is present; the palette still
-   controls the rest of the color system (background, card, border, etc.). */
+/* @tokens:auras BEGIN */
+/* Accent themes — the aura is the ACCENT layer. On <html> it overrides
+   --primary/--ring plus its own secondary/muted/border/input ladder, and it
+   is declared after the palettes at equal specificity so the chosen accent
+   always wins. Everything else — background, card, foreground, charts,
+   shadows — belongs to the palette (or the noir-violet base).
+   KNOWN BEHAVIOUR: those aura surface tokens shadow the palette's own
+   secondary/muted/border/input, so palette + aura renders the aura's neutral
+   ladder over the palette's. That is what ships today; narrowing an aura to
+   --primary/--ring only is the palette-x-aura cascade fix and would be a
+   deliberate visual change, not a refactor. */
 /* ── Aura: Blue — calm ocean, trustworthy ─────────────────────── */
 html.theme-blue,
 html.dark.theme-blue {
@@ -1543,7 +1560,9 @@ html.dark.theme-teal {
   --border: 42 60 72;
   --input: 42 60 72;
 }
+/* @tokens:auras END */
 
+/* @tokens:shadows BEGIN */
 /* Shadow design tokens — layered depth system */
 :root {
   --shadow-sm: 0 1px 2px rgba(25, 22, 36, 0.06);
@@ -1557,6 +1576,7 @@ html.dark {
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.45);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.55);
 }
+/* @tokens:shadows END */
 
 /**
  * Shell navigation — light: opaque pastel lattice (matches main column, readable on busy UIs).
@@ -1973,4 +1993,53 @@ html.dark.high-contrast {
   --shadow-md: 0 0 0 1px rgb(var(--border));
   --shadow-lg: 0 0 0 1px rgb(var(--border));
   --shadow-xl: 0 0 0 1px rgb(var(--border));
+}
+
+/* ── Theme swap transition ────────────────────────────────────────────────
+   A token swap is ONE atomic event: syncHtmlTheme rewrites the class groups
+   on <html>, every var(--token) resolves, and every consumer jumps at once.
+   Uniform timing therefore cannot be declared per element — 472 call sites
+   already carry transition-colors at mixed durations, while the ~97 raw color
+   rules in this file carry none, so a palette click tears: half the page
+   eases, half snaps.
+
+   `.theme-transitioning` is armed by syncHtmlTheme for the duration of a
+   swap only, and declares the colour-bearing properties in ONE place so every
+   consumer eases over the same 200ms / same curve. Scoped to the class rather
+   than applied globally so nothing animates on first paint or on hover.
+
+   Colour properties ONLY: `transition` replaces the property list rather than
+   merging, so listing transform/opacity here would both freeze layout motion
+   mid-swap and make a palette click slide the whole UI. Custom properties
+   themselves cannot transition (unregistered), which is fine — what animates
+   is the computed values that consume them.
+
+   Cost, stated plainly: during the ~200ms window an element's own
+   transform/opacity transition is superseded by this list. Accepted — we are
+   mid-swap and uniform timing is the point. */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition:
+    background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    fill 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    stroke 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    text-decoration-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    caret-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Reduced motion: the swap still happens, it just isn't animated — same
+   opt-out the other five animation blocks in this file already use. */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transitioning,
+  html.theme-transitioning *,
+  html.theme-transitioning *::before,
+  html.theme-transitioning *::after {
+    transition: none !important;
+  }
 }

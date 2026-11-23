@@ -290,6 +290,32 @@ class ChatManager:
         finally:
             self._untrack(session_id, op_id, error=error)
 
+    async def stream_tracked(
+        self,
+        session_id: str,
+        stream: Callable[[threading.Event], AsyncIterator[Any]],
+    ) -> AsyncIterator[Any]:
+        """The tracking half of ``generate_stream_tracked`` WITHOUT the store.
+
+        Regenerate's entry (card 20261120_150317): a re-run must register
+        its op — so ``cancel_session`` can reach it — and deliver the stop
+        event down the turn, but must NOT re-store history: the original
+        turn already wrote it, and a second store would append a duplicate
+        assistant message over the answer being replaced. Items pass
+        through untouched (str tokens, ``TurnEvent``s, final ``TurnResult``).
+        """
+        op_id, stop = self._track(session_id, f"chat-stream:{session_id}")
+        error: str | None = None
+        try:
+            async for item in stream(stop):
+                yield item
+        except Exception as exc:
+            logger.error("ChatManager.stream_tracked failed: %s", exc, exc_info=True)
+            error = str(exc)
+            raise
+        finally:
+            self._untrack(session_id, op_id, error=error)
+
     async def stream(
         self,
         messages: list[dict[str, str]],

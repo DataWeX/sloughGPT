@@ -10,7 +10,9 @@ Acceptance:
 
 from __future__ import annotations
 
+import json
 import os
+import struct
 from pathlib import Path
 
 import numpy as np
@@ -87,6 +89,43 @@ class TestFromSoulNativeArch:
         out = provider._model.generate(np.array([[1, 2, 3]], dtype=np.int64), max_new_tokens=4)
         arr = out.data if hasattr(out, "data") else out
         assert arr.shape[-1] >= 3
+
+
+def _strip_vocab(soul_path: str, dest: Path) -> str:
+    """Rewrite a .soul keeping weights verbatim but removing the embedded vocab.
+
+    Format: ``SOUL | <I ver> | <I json_len> | JSON | weight table``. Only the
+    metadata JSON is replaced; the weight bytes are copied untouched, so the
+    model still loads and the loader reaches its tokenizer branch.
+    """
+    raw = Path(soul_path).read_bytes()
+    assert raw[:4] == b"SOUL"
+    jlen = struct.unpack("<I", raw[8:12])[0]
+    meta = json.loads(raw[12 : 12 + jlen])
+    md = meta.get("metadata") or {}
+    md.pop("stoi", None)
+    md.pop("itos", None)
+    md.pop("tokenizer", None)
+    meta["metadata"] = md
+    new_json = json.dumps(meta).encode("utf-8")
+    dest.write_bytes(raw[:8] + struct.pack("<I", len(new_json)) + new_json + raw[12 + jlen :])
+    return str(dest)
+
+
+class TestFromSoulTokenizerFailFast:
+    """A soul with no vocab must fail at load, not crash at first inference.
+
+    Regression: continual.soul (learner output) carried architecture config but
+    no stoi/itos/tokenizer; from_soul silently set _tokenizer=None and the first
+    generate died with an opaque 'NoneType' object has no attribute 'encode'.
+    """
+
+    def test_vocabless_soul_raises_at_load(self, trained_soul: str, tmp_path: Path) -> None:
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
+
+        bad = _strip_vocab(trained_soul, tmp_path / "novocab.soul")
+        with pytest.raises(ValueError, match="tokenizer"):
+            SloNetChatProvider.from_soul(bad, model_id="novocab")
 
 
 class TestSoulToSlnc:
