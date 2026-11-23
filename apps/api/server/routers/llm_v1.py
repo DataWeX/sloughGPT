@@ -176,13 +176,20 @@ def _frame(payload: dict[str, Any]) -> str:
 # ── Response cache: the ladder (card 20261102_021851) ───────────────────────
 
 
-def _cache_key(
-    req: ChatBody,
+def _ladder(
+    *,
+    stream: bool,
+    tools: bool,
+    temperature: float,
     messages: list[dict[str, str]],
     model_id: str,
-    sampling: dict[str, Any],
+    max_tokens: int,
+    extra: dict[str, Any],
 ) -> tuple[str | None, str]:
-    """Exact-tier key for this request, or ``None`` when it must generate.
+    """The response-cache ladder — ONE decision, every envelope projects it.
+
+    Cards 20261102_021851 (/v1) and 20261102_023531 (/infer parity): the rule
+    is declared once here and reused, never re-derived per route.
 
     A total decision function, first match wins, and every ambiguous case falls
     to "generate": a wrong miss costs latency, while a wrong hit costs
@@ -196,29 +203,55 @@ def _cache_key(
                              deliberately absent — similarity may propose a
                              candidate but must never decide one)
 
-    Key completeness is the entire correctness argument, so every input that
-    can change the output participates. ``top_k`` is keyed **as sent** because
-    ``_sampling`` maps 0 to the SloNet default — keying the raw 0 would make two
-    identical requests miss each other. ``stop`` is ignored by phase 1 but keyed
-    anyway, so honouring it later cannot silently collide. ``session_id`` selects
-    a KV state; a state that does not prefix-match falls back to a full prefill,
-    which ``test_slonet_kv_cache`` pins as output-identical. The module's
-    generation token already covers model load/unload/swap.
+    ``stream`` and ``tools`` are envelope facts the caller declares: /v1's
+    ChatBody carries both; /infer's non-streaming, tool-less envelope evaluates
+    both false by construction. Key completeness is the entire correctness
+    argument — every input that can change the output must reach ``messages`` /
+    ``model_id`` / ``max_tokens`` / ``extra``. The generation token inside
+    ``build_key`` covers model load/unload/swap.
     """
     from domain.inference import ResponseCache
 
-    if req.stream:
+    if stream:
         return None, "stream"
-    if not ResponseCache.is_deterministic(req.temperature):
+    if not ResponseCache.is_deterministic(temperature):
         return None, "stochastic"
-    if req.tools or req.tool_choice:
+    if tools:
         return None, "tools"
     key = ResponseCache.build_key(
         messages=messages,
         model=model_id,
-        temperature=req.temperature,
-        max_tokens=req.max_tokens,
+        temperature=temperature,
+        max_tokens=max_tokens,
         system_prompt="",  # /v1 carries the system prompt as a message
+        extra=extra,
+    )
+    return key, "cacheable"
+
+
+def _cache_key(
+    req: ChatBody,
+    messages: list[dict[str, str]],
+    model_id: str,
+    sampling: dict[str, Any],
+) -> tuple[str | None, str]:
+    """/v1's projection of the ladder (the rung rules live on ``_ladder``).
+
+    Key-surface specifics of this envelope: ``top_k`` is keyed **as sent**
+    because ``_sampling`` maps 0 to the SloNet default — keying the raw 0 would
+    make two identical requests miss each other. ``stop`` is ignored by phase 1
+    but keyed anyway, so honouring it later cannot silently collide.
+    ``session_id`` selects a KV state; a state that does not prefix-match falls
+    back to a full prefill, which ``test_slonet_kv_cache`` pins as
+    output-identical.
+    """
+    return _ladder(
+        stream=req.stream,
+        tools=bool(req.tools or req.tool_choice),
+        temperature=req.temperature,
+        messages=messages,
+        model_id=model_id,
+        max_tokens=req.max_tokens,
         extra={
             "top_p": sampling["top_p"],
             "top_k": sampling["top_k"],
@@ -226,7 +259,6 @@ def _cache_key(
             "session_id": req.session_id,
         },
     )
-    return key, "cacheable"
 
 
 def _completion(
