@@ -37,7 +37,12 @@ export function MessageBubble({
 
   const system = 'mx-auto border-dashed border-warning/50 bg-muted/40 text-muted-foreground'
 
-  const tone = role === 'system' ? system : variant === 'surface' ? surface! : transcript!
+  const tone =
+    role === 'system'
+      ? system
+      : variant === 'surface'
+        ? surface!
+        : transcript!
 
   const padding =
     role === 'system'
@@ -49,24 +54,14 @@ export function MessageBubble({
           : 'max-w-[var(--chat-thread-max)] transition-colors duration-200 ease-smooth'
 
   const roleLabel =
-    role === 'user'
-      ? 'User message'
-      : role === 'assistant'
-        ? 'Assistant response'
-        : 'System message'
+    role === 'user' ? 'User message' : role === 'assistant' ? 'Assistant response' : 'System message'
 
   return (
     <article
       className={cn(padding, tone, className)}
       role="article"
       aria-label={roleLabel}
-      aria-roledescription={
-        role === 'assistant'
-          ? 'assistant message'
-          : role === 'user'
-            ? 'user message'
-            : 'system message'
-      }
+      aria-roledescription={role === 'assistant' ? 'assistant message' : role === 'user' ? 'user message' : 'system message'}
       {...props}
     >
       {children}

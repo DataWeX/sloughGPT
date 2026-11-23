@@ -16,10 +16,8 @@ export const buttonVariants = cva(
         outline:
           'border border-border bg-transparent text-foreground shadow-sm hover:bg-primary/10 hover:text-primary hover:border-primary/25',
         destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
-        success:
-          'bg-success/15 text-success border border-success/25 shadow-sm hover:bg-success/25',
-        warning:
-          'bg-warning/15 text-warning border border-warning/25 shadow-sm hover:bg-warning/25',
+        success: 'bg-success/15 text-success border border-success/25 shadow-sm hover:bg-success/25',
+        warning: 'bg-warning/15 text-warning border border-warning/25 shadow-sm hover:bg-warning/25',
         menu: 'text-foreground hover:bg-primary/10 hover:text-primary focus-visible:ring-ring',
         bare: 'text-foreground hover:text-primary focus-visible:ring-ring',
         select:
@@ -40,7 +38,7 @@ export const buttonVariants = cva(
       variant: 'default',
       size: 'default',
     },
-  },
+  }
 )
 
 /* ── Spinner ───────────────────────────────────────────────── */
@@ -67,7 +65,8 @@ function ButtonSpinner() {
 /* ── Button ────────────────────────────────────────────────── */
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+  extends ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   /** Shows a spinner and disables the button */
   loading?: boolean
   /** Label shown next to spinner (defaults to children) */
@@ -80,20 +79,8 @@ export interface ButtonProps
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    {
-      className,
-      variant,
-      size,
-      type,
-      loading,
-      loadingText,
-      leftIcon,
-      rightIcon,
-      children,
-      disabled,
-      ...props
-    },
-    ref,
+    { className, variant, size, type, loading, loadingText, leftIcon, rightIcon, children, disabled, ...props },
+    ref
   ) => {
     const isDisabled = disabled || loading
 
@@ -120,6 +107,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
       </button>
     )
-  },
+  }
 )
 Button.displayName = 'Button'

@@ -79,59 +79,61 @@ function App() {
   return (
     <ThemeProvider>
       <BootstrapProvider>
-        <LocaleProvider>
-          <ErrorLifecycle />
-          <StartupOverlay />
-          <BrowserRouter>
-            <Routes>
-              <Route element={<Shell />}>
-                {/* Legacy redirects first — Next proxy shadows real pages (30/39 have page.tsx) */}
-                {Object.entries(REDIRECTS).map(([from, to]) => {
-                  const { path, search } = splitTarget(to)
-                  return (
-                    <Route
-                      key={from}
-                      path={from}
-                      element={<Navigate to={{ pathname: path, search }} replace />}
-                    />
-                  )
-                })}
-                {/* The sentinel sits INSIDE each route's Suspense boundary,
+          <LocaleProvider>
+            <ErrorLifecycle />
+            <StartupOverlay />
+            <BrowserRouter>
+              <Routes>
+                <Route element={<Shell />}>
+                  {/* Legacy redirects first — Next proxy shadows real pages (30/39 have page.tsx) */}
+                  {Object.entries(REDIRECTS).map(([from, to]) => {
+                    const { path, search } = splitTarget(to)
+                    return (
+                      <Route
+                        key={from}
+                        path={from}
+                        element={<Navigate to={{ pathname: path, search }} replace />}
+                      />
+                    )
+                  })}
+                  {/* The sentinel sits INSIDE each route's Suspense boundary,
                       beside the (lazy) page: React mounts a suspended boundary's
                       children only once its chunk has committed, so the
                       data-app-ready flag can never lead the route content it
                       declares readiness for. */}
-                {discoveredRoutes.map(({ path, Component, Loading, ErrorComponent }) => (
-                  <Route
-                    key={path}
-                    path={path}
-                    element={
-                      <RouteErrorBoundary errorComponent={ErrorComponent}>
-                        <Suspense fallback={Loading ? <Loading /> : <PageFallback />}>
-                          <Component />
-                          <AppReadySentinel />
-                        </Suspense>
-                      </RouteErrorBoundary>
-                    }
-                  />
-                ))}
-                {!hasHome ? <Route path="/" element={<Navigate to="/datasets" replace />} /> : null}
-                {/* 404s render a real (static) route — the sentinel still has to
+                  {discoveredRoutes.map(({ path, Component, Loading, ErrorComponent }) => (
+                    <Route
+                      key={path}
+                      path={path}
+                      element={
+                        <RouteErrorBoundary errorComponent={ErrorComponent}>
+                          <Suspense fallback={Loading ? <Loading /> : <PageFallback />}>
+                            <Component />
+                            <AppReadySentinel />
+                          </Suspense>
+                        </RouteErrorBoundary>
+                      }
+                    />
+                  ))}
+                  {!hasHome ? (
+                    <Route path="/" element={<Navigate to="/datasets" replace />} />
+                  ) : null}
+                  {/* 404s render a real (static) route — the sentinel still has to
                       ride beside the content so readiness is declared for THIS
                       commit, not for the shell that loaded before it. */}
-                <Route
-                  path="*"
-                  element={
-                    <>
-                      <NotFound />
-                      <AppReadySentinel />
-                    </>
-                  }
-                />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </LocaleProvider>
+                  <Route
+                    path="*"
+                    element={
+                      <>
+                        <NotFound />
+                        <AppReadySentinel />
+                      </>
+                    }
+                  />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </LocaleProvider>
       </BootstrapProvider>
     </ThemeProvider>
   )

@@ -144,11 +144,7 @@ describe('TrainingModeChooser', () => {
     mockCtl.streamFromSessionsSloNet.mockReturnValue(
       sse([
         { status: 'working', message: 'Extracting chat pairs from sessions...', data: {} },
-        {
-          status: 'working',
-          message: 'Learning from your chats...',
-          data: { progress_percent: 42 },
-        },
+        { status: 'working', message: 'Learning from your chats...', data: { progress_percent: 42 } },
         { status: 'complete', message: 'Training complete', data: { progress_percent: 100 } },
       ]),
     )
@@ -177,11 +173,7 @@ describe('TrainingModeChooser', () => {
       release = resolve
     })
     async function* hanging() {
-      yield {
-        status: 'working',
-        message: 'Learning from your chats...',
-        data: { progress_percent: 10 },
-      }
+      yield { status: 'working', message: 'Learning from your chats...', data: { progress_percent: 10 } }
       await gate
       yield { status: 'complete', message: 'Training complete', data: { progress_percent: 100 } }
     }

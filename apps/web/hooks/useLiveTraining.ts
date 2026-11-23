@@ -122,13 +122,11 @@ function applyJobToShell(job: TrainingJob) {
     batchWriteTraining(patch)
   } else if (job.status === 'completed') {
     batchWriteTraining({
-      phase: 'complete',
-      progress: 100,
+      phase: 'complete', progress: 100,
       checkpoint: job.checkpoint ?? null,
       finalLoss: job.loss ?? job.train_loss ?? null,
       modelPath: job.output_dir ?? null,
-      avgQuality:
-        ((job.metrics as Record<string, unknown> | undefined)?.avg_quality as number) ?? null,
+      avgQuality: (job.metrics as Record<string, unknown> | undefined)?.avg_quality as number ?? null,
     })
   } else if (job.status === 'failed') {
     batchWriteTraining({ phase: 'error', error: job.error || 'Training failed' })
@@ -141,10 +139,7 @@ function startFallbackPoll(jobId: string) {
   _fallbackTimer = setInterval(async () => {
     try {
       const job = await trainingJobsController.get(jobId)
-      if (!job) {
-        stopFallback()
-        return
-      }
+      if (!job) { stopFallback(); return }
       applyJobToShell(job)
       if (job.status !== 'running' && job.status !== 'queued') {
         stopFallback()
@@ -218,8 +213,7 @@ function onEvent(envelope: SSEEnvelope) {
     fireImmediateTick(jobId)
     const current = readTraining()
     batchWriteTraining({
-      phase: 'complete',
-      progress: 100,
+      phase: 'complete', progress: 100,
       checkpoint: (data.checkpoint as string) ?? current.checkpoint,
       finalLoss: data.loss != null ? Number(data.loss) : current.finalLoss,
       modelPath: (data.model_path as string) ?? current.modelPath,
@@ -236,11 +230,15 @@ function onEvent(envelope: SSEEnvelope) {
   // Terminal phases of the closed contract set the old hook never saw —
   // a cancelled/interrupted/abandoned job is an error shell state, and
   // the poll is ticked so toasts/onComplete fire from the full REST job.
-  if (jobId && (event === 'cancelled' || event === 'interrupted' || event === 'abandoned')) {
+  if (
+    jobId &&
+    (event === 'cancelled' || event === 'interrupted' || event === 'abandoned')
+  ) {
     fireImmediateTick(jobId)
     batchWriteTraining({
       phase: 'error',
-      error: (data.error as string) || envelope.message || `Training ${event}`,
+      error:
+        (data.error as string) || envelope.message || `Training ${event}`,
     })
     return
   }
@@ -346,10 +344,7 @@ export function useLiveTraining() {
   const cleanupRef = useRef<(() => void) | null>(null)
   useEffect(() => {
     cleanupRef.current = initTrainingStream()
-    return () => {
-      cleanupRef.current?.()
-      cleanupRef.current = null
-    }
+    return () => { cleanupRef.current?.(); cleanupRef.current = null }
   }, [])
 
   return {

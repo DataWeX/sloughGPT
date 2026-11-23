@@ -63,9 +63,7 @@ export function buildMonthGrid(year: number, month: number): (Date | null)[][] {
 
 function sameDay(a: Date, b: Date): boolean {
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
   )
 }
 
@@ -107,12 +105,7 @@ export function MiniCalendar({ selected, onSelect, className }: MiniCalendarProp
 
   const handleGridKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const key = event.key
-    const deltas: Record<string, number> = {
-      ArrowLeft: -1,
-      ArrowRight: 1,
-      ArrowUp: -7,
-      ArrowDown: 7,
-    }
+    const deltas: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
     let next: number | null = null
     if (key in deltas) next = rovingIndex + deltas[key]
     else if (key === 'Home') next = 0
@@ -159,12 +152,7 @@ export function MiniCalendar({ selected, onSelect, className }: MiniCalendarProp
               stroke="currentColor"
               aria-hidden="true"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <button
@@ -200,12 +188,7 @@ export function MiniCalendar({ selected, onSelect, className }: MiniCalendarProp
               stroke="currentColor"
               aria-hidden="true"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
         </div>

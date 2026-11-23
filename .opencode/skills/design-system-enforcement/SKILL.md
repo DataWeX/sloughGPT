@@ -208,14 +208,14 @@ Before committing any UI component, verify:
 Read the system in one pass before auditing (mapped during the 2026-11-22
 Settings pixel audit):
 
-| Concern                                | File                                                                                                                                                                   | Notes                                                                                                                                                                                   |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Palette tokens                         | `apps/web/palette.json`                                                                                                                                                | Source of truth; regenerates `globals.css` (contract regen — commit e14975dc6 "token source of truth"). **Never hand-edit generated color rules in `globals.css`.**                     |
-| Theme modes (Dark/Light/High Contrast) | `apps/web/lib/theme-storage.ts`                                                                                                                                        | `THEME_PREVIEWS` powers the theme picker's tile mini-renders — by design they use this data, NOT live vars (only one mode's tokens are live at a time). Applied via `ThemeProvider.tsx` |
-| strui button variants                  | `packages/strui/src/components/ui/button.tsx`                                                                                                                          | ghost/default/outline definitions                                                                                                                                                       |
-| Selection/semantic tokens              | `success`, `primary`, `accent`, `ring`, `border`, `muted`                                                                                                              | see "selection ≠ outcome" below                                                                                                                                                         |
-| Settings appearance UI                 | `apps/web/app/(app)/settings/settings-appearance.tsx`                                                                                                                  | theme tiles + palette section                                                                                                                                                           |
-| Fixed overlays                         | FAB `apps/web/components/consciousness/ConsciousnessQuickActions.tsx` (z-9999); toasts `apps/web/features/chat/components/feedback/Toast.tsx` (z-300); bottom nav z-40 | each must declare its z-band contract vs the bottom nav                                                                                                                                 |
+| Concern | File | Notes |
+| ------- | ---- | ----- |
+| Palette tokens | `apps/web/palette.json` | Source of truth; regenerates `globals.css` (contract regen — commit e14975dc6 "token source of truth"). **Never hand-edit generated color rules in `globals.css`.** |
+| Theme modes (Dark/Light/High Contrast) | `apps/web/lib/theme-storage.ts` | `THEME_PREVIEWS` powers the theme picker's tile mini-renders — by design they use this data, NOT live vars (only one mode's tokens are live at a time). Applied via `ThemeProvider.tsx` |
+| strui button variants | `packages/strui/src/components/ui/button.tsx` | ghost/default/outline definitions |
+| Selection/semantic tokens | `success`, `primary`, `accent`, `ring`, `border`, `muted` | see "selection ≠ outcome" below |
+| Settings appearance UI | `apps/web/app/(app)/settings/settings-appearance.tsx` | theme tiles + palette section |
+| Fixed overlays | FAB `apps/web/components/consciousness/ConsciousnessQuickActions.tsx` (z-9999); toasts `apps/web/features/chat/components/feedback/Toast.tsx` (z-300); bottom nav z-40 | each must declare its z-band contract vs the bottom nav |
 
 ## How to Audit — 3 Probes, All Three Required
 
@@ -246,13 +246,13 @@ Settings pixel audit):
 3. **Toast stack z-300 bottom-0** sits inside the nav band (full-width on
    mobile) → toasts cover nav items when present. Same rule as (2).
 4. **Weak hover.** Palette outline buttons hover only shifts alpha 1→0.9 —
-   imperceptible. **Rule:** hover must change a _shape/edge_ channel (border,
+   imperceptible. **Rule:** hover must change a *shape/edge* channel (border,
    bg step, shadow), not just alpha <15%.
 
 ### Semantic-token rule: selection ≠ outcome
 
 The theme tile selection uses `success` (`border-success bg-success/10` +
-corner ribbon) — _selected is not an outcome_. **Rule:** selection →
+corner ribbon) — *selected is not an outcome*. **Rule:** selection →
 `primary`/`ring` + shape redundancy (the ribbon shape + `aria-checked` are
 what saved it); `success` is reserved for outcomes. Recorded as a rule only —
 changing `settings-appearance.tsx` is a separate card.

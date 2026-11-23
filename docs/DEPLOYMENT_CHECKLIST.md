@@ -3,7 +3,6 @@
 ## Pre-Deployment
 
 ### Security Checklist
-
 - [ ] Generate new API keys (`openssl rand -hex 32`)
 - [ ] Generate new JWT secret (`openssl rand -hex 64`)
 - [ ] Update `.env` file with production values
@@ -12,7 +11,6 @@
 - [ ] Review rate limiting settings
 
 ### Infrastructure Checklist
-
 - [ ] Verify Kubernetes cluster is accessible
 - [ ] Check GPU nodes are available (if using GPU)
 - [ ] Verify storage class exists for PVCs
@@ -20,7 +18,6 @@
 - [ ] Check Prometheus/Grafana operator is installed
 
 ### Dependencies Checklist
-
 - [ ] All tests passing locally
 - [ ] Docker images built and pushed to registry
 - [ ] Helm chart tested in staging
@@ -28,7 +25,6 @@
 ## Docker Deployment
 
 ### Using Docker Compose
-
 ```bash
 # 1. Clone repository
 git clone https://github.com/DataWeX/sloughGPT.git
@@ -47,7 +43,6 @@ docker compose -f infra/docker/docker-compose.yml logs -f api
 ```
 
 ### Using Docker (Manual)
-
 ```bash
 # Build image (repository root as context)
 docker build -f infra/docker/Dockerfile -t sloughgpt/api:latest .
@@ -65,7 +60,6 @@ docker run -d \
 ## Kubernetes Deployment
 
 ### Using Helm
-
 ```bash
 # 1. Add Helm repository (if published)
 helm repo add sloughgpt https://iamtowbee.github.io/sloughGPT
@@ -88,7 +82,6 @@ kubectl logs -n sloughgpt -l app.kubernetes.io/component=api
 ```
 
 ### Using kubectl (Manifests)
-
 ```bash
 # 1. Apply manifests (from repository root; review YAMLs before production)
 kubectl apply -f infra/k8s/k8s/
@@ -98,7 +91,6 @@ kubectl apply -f https://raw.githubusercontent.com/NVIDIA/device-plugin/master/n
 ```
 
 ### Verify Deployment
-
 ```bash
 # Check all resources
 kubectl get all -n sloughgpt
@@ -117,7 +109,6 @@ curl http://sloughgpt.example.com/health/ready
 ## Monitoring Setup
 
 ### Prometheus
-
 ```bash
 # Check Prometheus is scraping metrics
 kubectl exec -n monitoring deploy/prometheus-server -- \
@@ -125,7 +116,6 @@ kubectl exec -n monitoring deploy/prometheus-server -- \
 ```
 
 ### Grafana
-
 ```bash
 # Import dashboard from grafana/dashboards/
 # Dashboard UID: sloughgpt
@@ -139,21 +129,18 @@ curl -X POST -H "Content-Type: application/json" \
 ## Post-Deployment
 
 ### Health Checks
-
 - [ ] `GET /health` returns 200
 - [ ] `GET /health/ready` returns 200 with model loaded
 - [ ] `GET /health/live` returns 200
 - [ ] `GET /metrics` returns Prometheus metrics
 
 ### Security Verification
-
 - [ ] Rate limiting is working
 - [ ] JWT authentication works
 - [ ] Audit logs are being recorded
 - [ ] Security headers are present
 
 ### Load Testing
-
 ```bash
 # Test with curl
 for i in {1..100}; do
@@ -168,7 +155,6 @@ ab -n 1000 -c 10 http://sloughgpt.example.com/health
 ## Rollback Procedures
 
 ### Docker Compose
-
 ```bash
 # Rollback to previous version
 docker compose -f infra/docker/docker-compose.yml down
@@ -177,7 +163,6 @@ docker compose -f infra/docker/docker-compose.yml up -d api
 ```
 
 ### Kubernetes
-
 ```bash
 # Rollback deployment
 kubectl rollout undo deployment/sloughgpt-api -n sloughgpt
@@ -191,7 +176,6 @@ kubectl rollout status deployment/sloughgpt-api -n sloughgpt
 ### Common Issues
 
 #### Pod Not Starting
-
 ```bash
 # Check pod status
 kubectl describe pod -n sloughgpt <pod-name>
@@ -201,7 +185,6 @@ kubectl get events -n sloughgpt --sort-by='.lastTimestamp'
 ```
 
 #### Model Not Loading
-
 ```bash
 # Check PVC is bound
 kubectl get pvc -n sloughgpt
@@ -211,7 +194,6 @@ kubectl exec -it -n sloughgpt deploy/sloughgpt-api -- ls -la /app/models
 ```
 
 #### GPU Not Available
-
 ```bash
 # Check nvidia-device-plugin is running
 kubectl get pods -n nvidia-gpu-operator
@@ -221,7 +203,6 @@ kubectl describe node <node-name> | grep nvidia
 ```
 
 #### High Memory Usage
-
 ```bash
 # Check pod resource usage
 kubectl top pods -n sloughgpt
@@ -235,7 +216,6 @@ resources:
 ## Production Checklist
 
 ### Security
-
 - [ ] API keys rotated
 - [ ] SSL/TLS enabled
 - [ ] CORS configured for specific origins
@@ -244,19 +224,16 @@ resources:
 - [ ] Secrets stored in Kubernetes secrets
 
 ### Scaling
-
 - [ ] HPA configured and tested
 - [ ] Load balancer health checks working
 - [ ] Database connection pooling configured
 
 ### Backup
-
 - [ ] Regular backups scheduled
 - [ ] Backup restoration tested
 - [ ] Model weights backed up
 
 ### Documentation
-
 - [ ] Runbook created
 - [ ] On-call contacts documented
 - [ ] Architecture diagram updated

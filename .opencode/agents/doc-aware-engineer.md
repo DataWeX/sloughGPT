@@ -28,21 +28,21 @@ report the drift in your summary instead of silently editing this charter.
 
 Given a task, identify which area(s) it touches:
 
-| Area                 | Path pattern                                                                | Relevant docs                                                                                                                 |
-| -------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend**         | `apps/web/`                                                                 | `docs/UX_FLOWS.md`, `docs/API.md`, `docs/OPENWEBUI_INTEGRATION.md`                                                            |
-| **Backend API**      | `apps/api/`                                                                 | `docs/routers.md`, `docs/API.md`, `docs/mogdb-guide.md`, `docs/DEPLOYMENT.md`                                                 |
-| **Core Python**      | `domain/`                                                                   | `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`, `docs/RAG_ARCHITECTURE.md`, `docs/RAG_PATTERNS.md`, `AGENTS.md` |
-| **Training**         | `domain/training/_internal/`                                                | `docs/DEVELOPER_GUIDE.md`, `AGENTS.md` (Training Architecture section)                                                        |
-| **Infrastructure**   | `infra/`, `docker-compose*`, `Dockerfile*`                                  | `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`, `docs/ENVIRONMENT.md`                                                   |
-| **Config**           | `config/`                                                                   | `docs/ENVIRONMENT.md`, `docs/INSTALL.md`                                                                                      |
-| **SDK**              | `packages/sdk-py/`, `packages/sdk-ts/`                                      | `docs/API.md`                                                                                                                 |
-| **Soul Engine**      | `domain/core/_internal/soul.py`, `domain/inference/_internal/slo_format.py` | `docs/AI_SOFTWARE_ENGINEERING.md`, `AGENTS.md` (Soul section)                                                                 |
-| **Docs themselves**  | `docs/`                                                                     | `docs/INDEX.md` (navigation source of truth), `docs/README.md`                                                                |
-| **CLI**              | `apps/cli/`                                                                 | `docs/integration/CLI_README.md`, `docs/INSTALL.md`                                                                           |
-| **Testing**          | `tests/`, `apps/web/cypress/`                                               | `docs/TESTING.md`, `docs/DEVELOPER_GUIDE.md`                                                                                  |
-| **Ops / monitoring** | `domain/core/_internal/mole/`                                               | `docs/TESTING.md` (Mole section), `docs/FEATURES.md`                                                                          |
-| **Uncertain**        | —                                                                           | `docs/INDEX.md`, `docs/STRUCTURE.md`                                                                                          |
+| Area                | Path pattern                                                                | Relevant docs                                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Frontend**        | `apps/web/`                                                                 | `docs/UX_FLOWS.md`, `docs/API.md`, `docs/OPENWEBUI_INTEGRATION.md`                                                            |
+| **Backend API**     | `apps/api/`                                                                 | `docs/routers.md`, `docs/API.md`, `docs/mogdb-guide.md`, `docs/DEPLOYMENT.md`                                                 |
+| **Core Python**     | `domain/`                                                                   | `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`, `docs/RAG_ARCHITECTURE.md`, `docs/RAG_PATTERNS.md`, `AGENTS.md` |
+| **Training**        | `domain/training/_internal/`                                                | `docs/DEVELOPER_GUIDE.md`, `AGENTS.md` (Training Architecture section)                                                        |
+| **Infrastructure**  | `infra/`, `docker-compose*`, `Dockerfile*`                                  | `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`, `docs/ENVIRONMENT.md`                                                   |
+| **Config**          | `config/`                                                                   | `docs/ENVIRONMENT.md`, `docs/INSTALL.md`                                                                                      |
+| **SDK**             | `packages/sdk-py/`, `packages/sdk-ts/`                                      | `docs/API.md`                                                                                                                 |
+| **Soul Engine**     | `domain/core/_internal/soul.py`, `domain/inference/_internal/slo_format.py` | `docs/AI_SOFTWARE_ENGINEERING.md`, `AGENTS.md` (Soul section)                                                                 |
+| **Docs themselves** | `docs/`                                                                     | `docs/INDEX.md` (navigation source of truth), `docs/README.md`                                                             |
+| **CLI**             | `apps/cli/`                                                                 | `docs/integration/CLI_README.md`, `docs/INSTALL.md`                                                                           |
+| **Testing**         | `tests/`, `apps/web/cypress/`                                               | `docs/TESTING.md`, `docs/DEVELOPER_GUIDE.md`                                                                                  |
+| **Ops / monitoring**| `domain/core/_internal/mole/`                                              | `docs/TESTING.md` (Mole section), `docs/FEATURES.md`                                                                          |
+| **Uncertain**       | —                                                                           | `docs/INDEX.md`, `docs/STRUCTURE.md`                                                                                          |
 
 ## 2. Read Docs First
 

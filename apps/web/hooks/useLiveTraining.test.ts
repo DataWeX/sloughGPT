@@ -15,13 +15,7 @@ vi.mock('@/lib/sse-client', () => ({
     _onEvent = opts.onEvent as (e: Record<string, unknown>) => void
     _onClose = opts.onClose as () => void
     _onError = opts.onError as () => void
-    return {
-      start: mockStart,
-      stop: mockStop,
-      get connected() {
-        return true
-      },
-    }
+    return { start: mockStart, stop: mockStop, get connected() { return true } }
   },
 }))
 
@@ -46,28 +40,13 @@ import {
 } from './useLiveTraining'
 
 const S = {
-  phase: 'idle',
-  jobId: null,
-  progress: 0,
-  loss: null,
+  phase: 'idle', jobId: null, progress: 0, loss: null,
   lossHistory: [] as Array<{ step: number; loss: number }>,
-  epoch: 0,
-  totalEpochs: 0,
-  globalStep: 0,
-  totalSteps: 0,
-  stepsPerSec: null,
-  eta: null,
-  elapsedSeconds: null,
-  checkpoint: null,
-  finalLoss: null,
-  error: null,
-  method: null,
-  message: '',
-  evalResult: null,
-  startTime: null,
-  modelPath: null,
-  avgQuality: null,
-  dataQuality: null,
+  epoch: 0, totalEpochs: 0, globalStep: 0, totalSteps: 0,
+  stepsPerSec: null, eta: null, elapsedSeconds: null,
+  checkpoint: null, finalLoss: null, error: null, method: null,
+  message: '', evalResult: null, startTime: null, modelPath: null,
+  avgQuality: null, dataQuality: null,
 }
 
 describe('useLiveTraining hook', () => {
@@ -80,10 +59,7 @@ describe('useLiveTraining hook', () => {
     mockReadTraining.mockReturnValue({ ...S })
     mockGetJob.mockResolvedValue(null)
   })
-  afterEach(() => {
-    cleanup()
-    vi.useRealTimers()
-  })
+  afterEach(() => { cleanup(); vi.useRealTimers() })
 
   it('returns idle state initially', () => {
     const { result } = renderHook(() => useLiveTraining())
@@ -127,14 +103,11 @@ describe('initTrainingStream SSE events', () => {
     mockGetJob.mockResolvedValue(null)
   })
 
-  afterAll(() => {
-    vi.useRealTimers()
-  })
+  afterAll(() => { vi.useRealTimers() })
 
   it('handles init event with active job', () => {
     _onEvent!({
-      stream: 'training',
-      phase: 'init',
+      stream: 'training', phase: 'init',
       data: { jobs: { job1: { status: 'running', progress: 50, loss: 0.5 } } },
     })
     vi.advanceTimersByTime(16)
@@ -146,8 +119,7 @@ describe('initTrainingStream SSE events', () => {
   it('handles progress event', () => {
     mockReadTraining.mockReturnValue({ ...S, phase: 'TRAINING', jobId: 'j1' })
     _onEvent!({
-      stream: 'training',
-      phase: 'progress',
+      stream: 'training', phase: 'progress',
       data: { job_id: 'j1', progress: 75, train_loss: 0.3, global_step: 100 },
     })
     vi.advanceTimersByTime(16)
@@ -166,8 +138,7 @@ describe('initTrainingStream SSE events', () => {
 
   it('handles completed event', () => {
     _onEvent!({
-      stream: 'training',
-      phase: 'completed',
+      stream: 'training', phase: 'completed',
       data: { job_id: 'j3', checkpoint: 'cp1', loss: 0.1 },
     })
     expect(mockWriteTraining).toHaveBeenCalledWith(
@@ -177,8 +148,7 @@ describe('initTrainingStream SSE events', () => {
 
   it('handles failed event', () => {
     _onEvent!({
-      stream: 'training',
-      phase: 'failed',
+      stream: 'training', phase: 'failed',
       data: { job_id: 'j4', error: 'OOM' },
     })
     expect(mockWriteTraining).toHaveBeenCalledWith(
@@ -210,11 +180,12 @@ describe('initTrainingStream SSE events', () => {
 
   it('batchWriteTraining flushes terminal events immediately', () => {
     _onEvent!({
-      stream: 'training',
-      phase: 'completed',
+      stream: 'training', phase: 'completed',
       data: { job_id: 'j1', checkpoint: 'cp1' },
     })
-    expect(mockWriteTraining).toHaveBeenCalledWith(expect.objectContaining({ phase: 'complete' }))
+    expect(mockWriteTraining).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'complete' }),
+    )
   })
 
   it('fallback poll stops when job completes', async () => {
@@ -222,19 +193,17 @@ describe('initTrainingStream SSE events', () => {
     mockGetJob.mockResolvedValue({ status: 'completed', checkpoint: 'cp1' })
     _onClose!()
     await vi.advanceTimersByTimeAsync(5000)
-    expect(mockWriteTraining).toHaveBeenCalledWith(expect.objectContaining({ phase: 'complete' }))
+    expect(mockWriteTraining).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'complete' }),
+    )
   })
 })
 
 describe('job-events contract alignment (subscribe-only stream)', () => {
   // Same timer regime as the SSE-events describe above — batched writes
   // flush via rAF, which only fires under fake timers.
-  beforeAll(() => {
-    vi.useFakeTimers()
-  })
-  afterAll(() => {
-    vi.useRealTimers()
-  })
+  beforeAll(() => { vi.useFakeTimers() })
+  afterAll(() => { vi.useRealTimers() })
 
   it('connects to /training/job-events/stream', () => {
     expect(_lastUrl).toBe('/training/job-events/stream')

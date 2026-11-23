@@ -71,10 +71,7 @@ export function ChatMoreMenu() {
                 <DropdownMenuItem
                   key={a.id || a.name}
                   onSelect={() => ctx.agent.onSelect(a)}
-                  className={cn(
-                    'flex items-start gap-2 px-3 py-2',
-                    isActive ? 'bg-primary/10' : '',
-                  )}
+                  className={cn('flex items-start gap-2 px-3 py-2', isActive ? 'bg-primary/10' : '')}
                 >
                   <span
                     className={cn(

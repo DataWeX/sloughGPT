@@ -17,10 +17,7 @@ vi.mock('@sloughgpt/strui', async (importOriginal) => {
     // The real Select is a popover; a native <select> keeps value +
     // onValueChange observable (same contract as QuickTrainCard.test.tsx).
     Select: ({ children, value, onValueChange }: any) => (
-      <select
-        value={value}
-        onChange={(e) => onValueChange?.((e.target as HTMLSelectElement).value)}
-      >
+      <select value={value} onChange={(e) => onValueChange?.((e.target as HTMLSelectElement).value)}>
         {children}
       </select>
     ),
@@ -257,17 +254,9 @@ describe('ConfigureStep resume default', () => {
   const openAdvanced = () => fireEvent.click(screen.getByText('Show advanced options'))
 
   const shakespeareCkpts = [
-    {
-      name: 'shakespeare_1700000100.soul',
-      soul: 'shakespeare',
-      created_at: '2026-11-01T00:00:00Z',
-    },
+    { name: 'shakespeare_1700000100.soul', soul: 'shakespeare', created_at: '2026-11-01T00:00:00Z' },
     { name: 'other_1700000999.soul', soul: 'other', created_at: '2026-11-09T00:00:00Z' },
-    {
-      name: 'shakespeare_1700000200.soul',
-      soul: 'shakespeare',
-      created_at: '2026-11-05T00:00:00Z',
-    },
+    { name: 'shakespeare_1700000200.soul', soul: 'shakespeare', created_at: '2026-11-05T00:00:00Z' },
     // training_dataset is a PATH while selectedDataset is an id: the match is
     // the path component, not a raw === (train_pipeline writes data_path).
     {

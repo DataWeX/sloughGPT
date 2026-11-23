@@ -103,12 +103,7 @@ export function TrainingModeChooser({
         const done = event.status === 'complete' || event.status === 'error'
         if (done) sawTerminal = true
         setChats({
-          phase:
-            event.status === 'complete'
-              ? 'complete'
-              : event.status === 'error'
-                ? 'error'
-                : 'running',
+          phase: event.status === 'complete' ? 'complete' : event.status === 'error' ? 'error' : 'running',
           progress,
           message: event.message || null,
           cancelled: event.data?.cancelled === true,
@@ -163,8 +158,7 @@ export function TrainingModeChooser({
     {
       id: 'text',
       title: 'Paste text',
-      description:
-        'No files yet? Paste stories, docs, conversations or code straight into the box.',
+      description: 'No files yet? Paste stories, docs, conversations or code straight into the box.',
       pick: onPickText,
     },
     {

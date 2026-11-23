@@ -85,13 +85,13 @@ cp .env.example .env
 
 Key variables:
 
-| Variable                | Default                 | Description                                           |
-| ----------------------- | ----------------------- | ----------------------------------------------------- |
-| `VECTOR_STORE_PROVIDER` | `in_memory`             | Vector store: in_memory, pinecone, weaviate, chromadb |
-| `EMBEDDING_PROVIDER`    | `sentence_transformers` | Embedding: sentence_transformers, openai, huggingface |
-| `EMBEDDING_MODEL`       | `all-MiniLM-L6-v2`      | Embedding model                                       |
-| `PINECONE_API_KEY`      | -                       | Pinecone API key                                      |
-| `WEAVIATE_URL`          | -                       | Weaviate URL                                          |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VECTOR_STORE_PROVIDER` | `in_memory` | Vector store: in_memory, pinecone, weaviate, chromadb |
+| `EMBEDDING_PROVIDER` | `sentence_transformers` | Embedding: sentence_transformers, openai, huggingface |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Embedding model |
+| `PINECONE_API_KEY` | - | Pinecone API key |
+| `WEAVIATE_URL` | - | Weaviate URL |
 
 ## Kubernetes Deployment
 
@@ -116,13 +116,11 @@ helm upgrade --install sloughgpt ./infra/k8s/helm/sloughgpt/ -n sloughgpt --crea
 ## API Endpoints
 
 ### Generation
-
 - `POST /generate` - Text generation
 - `POST /generate/stream` - Streaming generation
 - `POST /chat` - Chat completion (SSE streaming — the endpoint's only state)
 
 ### Model
-
 - `GET /models` - List models
 - `POST /models/load` - Load model
 - `GET /health` - Health check
@@ -198,7 +196,7 @@ docker stats
 
 ### Out of Memory
 
-````bash
+```bash
 # Force CPU inference
 SLO_FORCE_CPU=true
 
@@ -212,30 +210,26 @@ nvidia-smi
 
 # Mac MPS: use CPU explicitly
 # Inference defaults to CPU on MPS to avoid memory issues
-````
+```
 
 ## Free Cloud Deployment
 
 If you don't want to run anything locally, these free tiers can host SloughGPT.
 
 ### Frontend — Cloudflare Pages
-
 - Free, unlimited bandwidth, global CDN.
 - Deploys from GitHub; sets `NEXT_PUBLIC_API_URL` in the dashboard.
 
 ### Backend — Render.com
-
 - Free web service with Docker.
 - URL: `https://<service-name>.onrender.com`
 - Note: 512MB RAM limit; use a quantized or small model.
 
 ### Backend — Fly.io
-
 - Free tier: 3 shared VMs, 160GB outbound/month.
 - Note: 256MB RAM per VM; only viable with 4-bit quantization or a tiny model.
 
 ### Important: model size
-
 The default model checkpoint is ~2.5GB unquantized. Free tiers cannot hold that in memory. For free hosting, use a smaller model or 4-bit quantization.
 
 ## Production Checklist

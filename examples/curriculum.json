@@ -5,14 +5,18 @@
   "stages": [
     {
       "name": "foundation",
-      "datasets": [{ "path": "docs/AGENT_SYNC.md", "ratio": 1.0 }],
+      "datasets": [
+        { "path": "docs/AGENT_SYNC.md", "ratio": 1.0 }
+      ],
       "epochs": 1,
       "gate": { "max_eval_loss": 3.5 },
       "on_gate_fail": "continue"
     },
     {
       "name": "realm",
-      "datasets": [{ "path": "docs/WORLD_REALM.md", "ratio": 1.0 }],
+      "datasets": [
+        { "path": "docs/WORLD_REALM.md", "ratio": 1.0 }
+      ],
       "epochs": 1,
       "replay": 0.15,
       "ewc": true,
@@ -21,7 +25,9 @@
     },
     {
       "name": "persona",
-      "datasets": [{ "path": "docs/USER_PERSONA.md", "ratio": 1.0 }],
+      "datasets": [
+        { "path": "docs/USER_PERSONA.md", "ratio": 1.0 }
+      ],
       "epochs": 1,
       "replay": 0.2,
       "ewc": true,
