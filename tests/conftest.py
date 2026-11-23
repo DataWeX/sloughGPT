@@ -1,4 +1,4 @@
-"""Pytest configuration: path bootstrap and shared fixtures."""
+"""Pytest configuration: path bootstrap, CI shard hook, shared fixtures."""
 
 from __future__ import annotations
 
@@ -6,6 +6,26 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests import shard_split
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items):
+    """CI sharding (card 20261107_112103): honour SLO_TEST_SHARD="k/n".
+
+    Registered tryfirst so the slice happens before any other plugin's
+    selection (marker filters etc. then apply to this shard's list — union
+    of the shards is unchanged either way). Unset -> no-op: local runs,
+    testmon closures and every non-CI suite collect exactly as before.
+    A malformed spec is a usage error, not a silent full-suite run.
+    """
+    spec = shard_split.enabled()
+    if spec is None:
+        return
+    try:
+        items[:] = shard_split.apply(items, spec)
+    except ValueError as e:
+        raise pytest.UsageError(str(e)) from e
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Add project sub-packages at high priority (position 0).
