@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "7796095f23791b613026883e3171c2668d8a8390",
+    "recorded_commit": "852c653860a424a168d17143dd79c505fc18009e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -195,7 +195,7 @@
       ],
       "note": "base types/exports every domain builds on",
       "debt": null,
-      "tree_hash": "ed7ba1156a685433e44ab3b027c2ebb4517563c3"
+      "tree_hash": "837403de1261b69700d12e5acba4933e92ffcb4b"
     },
     "errors": {
       "class": "core-capability",

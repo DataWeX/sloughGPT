@@ -2392,7 +2392,9 @@ class InferenceRouter:
         _memory: dict | None = None
         if not req.regenerate:  # counting side — the original turn already ingested
             try:
-                _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+                _memory_facts = await get_memory_service().remember_facts_async(
+                    user_msg or "", text
+                )
                 if _memory_facts:
                     _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
             except Exception as e:
@@ -2422,7 +2424,9 @@ class InferenceRouter:
         _memory_facts: list[str] = []
         if not req.regenerate:  # ditto: no MEMORY sideband on a re-run
             try:
-                _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+                _memory_facts = await get_memory_service().remember_facts_async(
+                    user_msg or "", text
+                )
                 _memory_stored = len(_memory_facts) > 0
                 if _memory_stored:
                     _memory_fact = _memory_facts[0]
