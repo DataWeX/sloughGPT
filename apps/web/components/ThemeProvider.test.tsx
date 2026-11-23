@@ -10,6 +10,7 @@ vi.mock('@/lib/dev-log', () => ({
 }))
 
 import { ThemeProvider, useTheme } from './ThemeProvider'
+import { syncHtmlTheme } from '@/lib/sync-html-theme'
 
 function TestChild() {
   const { theme, mode, palette, setTheme, setMode, setPalette } = useTheme()
@@ -239,5 +240,62 @@ describe('ThemeProvider — palette', () => {
     act(() => {
       window.dispatchEvent(new CustomEvent('toggle-dark-mode'))
     })
+  })
+})
+
+describe('ThemeProvider — swap transition', () => {
+  const calls = () => vi.mocked(syncHtmlTheme).mock.calls
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.mocked(syncHtmlTheme).mockClear()
+  })
+
+  it('does not animate the first paint', async () => {
+    render(
+      <ThemeProvider>
+        <TestChild />
+      </ThemeProvider>,
+    )
+    await waitFor(() => expect(syncHtmlTheme).toHaveBeenCalled())
+    expect(calls()[0][3]).toBe(false)
+  })
+
+  it('animates a real mode change', async () => {
+    const { container } = render(
+      <ThemeProvider>
+        <TestChild />
+      </ThemeProvider>,
+    )
+    await waitFor(() => expect(syncHtmlTheme).toHaveBeenCalled())
+    const btn = container.querySelector('[data-testid="set-mode"]') as HTMLButtonElement
+    btn.click()
+    await waitFor(() => {
+      const c = calls()
+      expect(c[c.length - 1][3]).toBe(true)
+    })
+  })
+
+  it('does not re-sync when nothing changed (no spurious swap)', async () => {
+    render(
+      <ThemeProvider>
+        <TestChild />
+      </ThemeProvider>,
+    )
+    await waitFor(() => expect(syncHtmlTheme).toHaveBeenCalled())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    expect(calls().length).toBe(1)
+  })
+
+  it('still persists the first-run default even though it does not sync', async () => {
+    render(
+      <ThemeProvider>
+        <TestChild />
+      </ThemeProvider>,
+    )
+    await waitFor(() => expect(localStorage.getItem('man_mode')).not.toBeNull())
+    expect(calls().length).toBe(1)
   })
 })

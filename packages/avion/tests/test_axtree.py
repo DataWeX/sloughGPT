@@ -10,7 +10,7 @@ import asyncio
 import json
 
 import pytest
-from avion.ai.choice import propose_candidates
+from avion.ai.choice import propose_options
 from avion.backends.axtree import (
     VOCABULARY,
     cap_nodes,
@@ -310,7 +310,7 @@ class TestContractWithTheRestOfAvion:
             ax(4, "link", name="Archive", parent=1, dom=4),
         ]
         tree, _ = normalize_ax_nodes(nodes)
-        labels = [c.label for c in propose_candidates(tree, "write a note")]
+        labels = [c.label for c in propose_options(tree, "write a note")]
         assert labels[0] == "type 'write a note' into 'new note'"
         assert "click 'Add note'" in labels and "click 'Archive'" in labels
 
