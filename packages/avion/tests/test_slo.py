@@ -188,10 +188,12 @@ class TestAdapters:
         assert a.action_type == ActionType.NAVIGATE
 
     def test_from_http(self):
+        seen: list[dict] = []
+
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 length = int(self.headers.get("Content-Length", 0))
-                self.rfile.read(length)
+                seen.append(json.loads(self.rfile.read(length)))
                 body = json.dumps({"text": '{"action_type": "done"}'}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -209,6 +211,16 @@ class TestAdapters:
             m = SloModel.from_http(f"http://127.0.0.1:{port}")
             a = run(m.predict_action("t", ""))
             assert a.action_type == ActionType.DONE
+            # A caller that names no budget and no temperature sends neither, so
+            # the server's own defaults stay the ones in force.
+            assert seen[-1] == {"prompt": seen[-1]["prompt"]}
+
+            tuned = SloModel.from_http(f"http://127.0.0.1:{port}", max_tokens=32, temperature=0.1)
+            run(tuned.predict_action("t", ""))
+            # max_tokens is the model's name for the budget; the endpoint calls
+            # it max_new_tokens, and an unknown field there is a 422.
+            assert seen[-1]["max_new_tokens"] == 32
+            assert seen[-1]["temperature"] == 0.1
         finally:
             httpd.shutdown()
 
