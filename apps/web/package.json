@@ -21,7 +21,7 @@
     "dev:clean": "npm run clean && vite",
     "dev:restart": "../../scripts/grab-port.sh 5173 && npm run dev",
     "build": "vite build",
-    "build:vite": "NEXT_PUBLIC_API_URL= vite build",
+    "build:vite": "vite build",
     "start": "vite preview",
     "lint": "eslint . --max-warnings 900",
     "typecheck": "tsc --noEmit",
