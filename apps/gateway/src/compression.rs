@@ -3,7 +3,13 @@
 //! Stateless passthrough: negotiate Accept-Encoding, stream-compress body
 //! chunks, never buffer the full body, never touch disk. Identity fallback
 //! when the client can't decode, the payload is already encoded, the
-//! response is SSE/206/no-transform, or the body is tiny.
+//! response is 206/no-transform, or a *known* body is tiny.
+//!
+//! SSE (`text/event-stream`) compresses too — it is the model's token
+//! stream, the largest sustained bandwidth item during inference. SSE
+//! carries no Content-Length, so it starts encoding at byte 0: no peek,
+//! no hold, first-token latency untouched. A/B for benchmarks: send
+//! `Accept-Encoding` → gzip/zstd, omit it → identity.
 
 use axum::body::Body;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
@@ -16,9 +22,9 @@ use std::io::Write;
 
 /// Skip compression for these content-type prefixes.
 /// Note: `application/octet-stream` is intentionally NOT skipped — it is the
-/// primary file-download type this gateway exists to compress.
-const SKIP_CT_PREFIXES: [&str; 6] = [
-    "text/event-stream",
+/// primary file-download type this gateway exists to compress. Nor is
+/// `text/event-stream`: the token stream *is* the bandwidth we're saving.
+const SKIP_CT_PREFIXES: [&str; 5] = [
     "image/",
     "video/",
     "audio/",
@@ -27,7 +33,8 @@ const SKIP_CT_PREFIXES: [&str; 6] = [
 ];
 
 /// Known bodies smaller than this stream through identity — compression
-/// overhead isn't worth it.
+/// overhead isn't worth it. Unknown-length bodies (SSE) never gate on it:
+/// they are open-ended streams, not tiny responses.
 const MIN_COMPRESS_BYTES: u64 = 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,6 +128,8 @@ pub fn should_skip_response(
     {
         return true;
     }
+    // Size gate applies to *known* lengths only: an unknown-length body
+    // (SSE token stream) is open-ended and compresses from byte 0.
     if let Some(len) = resp_headers
         .get(header::CONTENT_LENGTH)
         .and_then(|v| v.to_str().ok())
@@ -313,15 +322,17 @@ mod tests {
     }
 
     #[test]
-    fn skip_already_compressed_sse_range_small() {
+    fn skip_already_compressed_range_small() {
         let req = HeaderMap::new();
         let mut resp = HeaderMap::new();
         resp.insert(header::CONTENT_ENCODING, hv("gzip"));
         assert!(should_skip_response(StatusCode::OK, &req, &resp));
 
+        // SSE is NOT skipped: the token stream compresses from byte 0
+        // (no Content-Length → no size gate).
         let mut resp = HeaderMap::new();
-        resp.insert(header::CONTENT_TYPE, hv("text/event-stream"));
-        assert!(should_skip_response(StatusCode::OK, &req, &resp));
+        resp.insert(header::CONTENT_TYPE, hv("text/event-stream; charset=utf-8"));
+        assert!(!should_skip_response(StatusCode::OK, &req, &resp));
 
         let mut resp = HeaderMap::new();
         resp.insert(header::CONTENT_TYPE, hv("application/json"));
@@ -503,5 +514,93 @@ mod tests {
         assert!(wire.len() < payload.len() / 2);
         let decoded = zstd::decode_all(&wire[..]).unwrap();
         assert_eq!(decoded, payload);
+    }
+
+    /// Synthetic model token stream: repetitive SSE `data:` frames, no framing.
+    fn sse_events(bytes: usize) -> Vec<u8> {
+        let mut v = Vec::with_capacity(bytes + 128);
+        let mut i = 0u32;
+        while v.len() < bytes {
+            v.extend_from_slice(
+                format!(
+                    "data: {{\"type\":\"delta\",\"idx\":{i:06},\"content\":\"token payload padding padding\"}}\n\n"
+                )
+                .as_bytes(),
+            );
+            i += 1;
+        }
+        v
+    }
+
+    fn sse_response(payload: Vec<u8>) -> Response {
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "text/event-stream; charset=utf-8")
+            .body(Body::from(payload))
+            .unwrap() // no Content-Length — like a live token stream
+    }
+
+    fn decode(codec: Codec, wire: &[u8]) -> Vec<u8> {
+        match codec {
+            Codec::Gzip => {
+                use flate2::read::GzDecoder;
+                use std::io::Read;
+                let mut d = GzDecoder::new(wire);
+                let mut out = Vec::new();
+                d.read_to_end(&mut out).unwrap();
+                out
+            }
+            Codec::Zstd => zstd::decode_all(wire).unwrap(),
+        }
+    }
+
+    #[tokio::test]
+    async fn sse_token_stream_compresses_losslessly() {
+        let payload = sse_events(512 * 1024);
+        for codec in [Codec::Gzip, Codec::Zstd] {
+            let out = maybe_compress_response(
+                sse_response(payload.clone()),
+                Some(codec),
+                &HeaderMap::new(),
+            );
+            assert_eq!(
+                out.headers().get(header::CONTENT_ENCODING).unwrap(),
+                codec.as_str()
+            );
+            assert!(out.headers().get(header::CONTENT_LENGTH).is_none());
+            assert_eq!(out.headers().get(header::VARY).unwrap(), "Accept-Encoding");
+            assert!(out.headers().get("x-uncompressed-content-length").is_none());
+            let wire = body_bytes(out).await;
+            assert!(
+                wire.len() < payload.len() / 2,
+                "{codec:?} must shrink the token stream ({} → {})",
+                payload.len(),
+                wire.len()
+            );
+            assert_eq!(decode(codec, &wire), payload, "lossless {codec:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn tiny_sse_compresses_from_byte_zero_no_size_gate() {
+        let payload = sse_events(200);
+        let out = maybe_compress_response(
+            sse_response(payload.clone()),
+            Some(Codec::Gzip),
+            &HeaderMap::new(),
+        );
+        // Unknown length → the tiny-body gate never applies; encoding starts
+        // at byte 0 so the first token frame is never held back.
+        assert_eq!(out.headers().get(header::CONTENT_ENCODING).unwrap(), "gzip");
+        let wire = body_bytes(out).await;
+        assert_eq!(decode(Codec::Gzip, &wire), payload);
+    }
+
+    #[tokio::test]
+    async fn sse_without_accept_encoding_stays_identity() {
+        let payload = sse_events(4096);
+        let out = maybe_compress_response(sse_response(payload.clone()), None, &HeaderMap::new());
+        assert!(!out.headers().contains_key(header::CONTENT_ENCODING));
+        assert_eq!(body_bytes(out).await, payload);
     }
 }

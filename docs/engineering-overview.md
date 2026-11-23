@@ -138,11 +138,47 @@ React Native 0.86. 32 screens, 32 services.
 
 ### 5. Gateway (`apps/gateway/`)
 
-Rust/Axum reverse proxy (`slough-gateway`, binds `:8080`).
+Rust/Axum reverse proxy (`slough-gateway`) — **the** edge, bound to
+`:8080`. No proxy in front of it: the gateway itself owns the public
+socket, CORS, and every transport policy. (`scripts/edge-proxy.mjs` is an
+optional harness socket only — not part of the serving topology.)
 
 **Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves the **static site document root** when a build exists (`MAN_STATIC_DIR`, default `apps/web/dist-vite`, then `apps/web/.next/static`): file hit → asset, browser navigation (`Accept: text/html`) → `index.html` for SPA routes, data requests → relay. Routing is by **request kind, not path prefix** — the SPA and the API own the same top-level names (`/training`, `/models`, `/chat`), and the only browser _navigation_ onto API surface is `/docs`, `/redoc`, `/openapi.json` (path contract). Result: shell + API + SSE on one origin, and the shell still loads when the sidecar is down.
 
-**Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + filters + compression + health + static files.
+**Three hops, each with one job:**
+
+```
+browser ─► slough-gateway :8080 ─► FastAPI :8000 ─► domain/ + infrastructure/
+           CORS, filters, health,   routers, envelope,
+           compression              error taxonomy
+```
+
+**Edge owns compression — one encoder, one hop, no double-encode.** The relay
+asks the sidecar for `accept-encoding: identity` and re-encodes per _client_
+negotiation (zstd > gzip; streaming — the body is never buffered; identity for
+`Range`/206/`no-transform`/tiny known bodies/HEAD/non-negotiating clients).
+SSE token streams compress from byte 0: no `Content-Length`, so no size gate
+and no first-token hold. Benchmark A/B = omit vs send `Accept-Encoding`;
+ratios live in `scripts/benchmark_gateway_compression.py --class sse`.
+
+**Contract pass-through:** only the 8 RFC 9110 hop-by-hop headers are stripped —
+`Authorization`, `X-Correlation-ID`, `Retry-After`, and the standard envelope
+cross untouched. CORS is allow-any (bearer-token auth, no cookies), matching
+`http-client.ts`.
+
+**Health is a contract passthrough:** `/health` and `/health/detailed` relay
+FastAPI's bodies verbatim — the frontend reads `model_loaded`/`model_type`
+and `path_latencies`/`health_score` from them — with `gateway: "rust"`
+injected only when the body is a plain JSON object. The edge envelope
+(`status: degraded` + `sidecar`) is the unreachable-core fallback.
+
+**Role:** Fast entry point. Generic byte-relay to Python core. Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present. **Self-supervising** (`MAN_GATEWAY_SUPERVISE=1`, default in `host_gateway.sh`): a parent loop in the same binary respawns the worker on crash (1s→30s backoff, resets after 60s healthy); SIGTERM chain-stops; a killed parent leaves the orphan worker serving — no systemd, no OS coupling. One layer above, **`scripts/host_gateway.sh`** supervises the parent itself: when the binary exits (crash or stray TERM) the script relaunches it (1s→30s backoff, reset after a 60s-healthy run), so the public socket never stays down for hours while the launcher runs. **Rate limiting** is a verbatim port of Python's `RateLimitMiddleware`: sliding windows, the GPU-heavy route table (`/chat/stream` 10/60 …), per-client global (`MAN_GATEWAY_RATE_LIMIT`/`MAN_GATEWAY_RATE_WINDOW`, default 300/60) with localhost ×10, best-effort workspace-JWT limits, `X-RateLimit-*` headers, `429 {"detail": …}` — health probes, CORS preflights (CorsLayer is outer), and `/static` bypass. `MAN_GATEWAY_MAX_STREAMS` (default 32, `0` off) additionally caps concurrent SSE streams, held until each body finishes — as an **AIMD controller**: the cap halves when ≥12.5% of streams in a 2s window fail against the core (transport errors, ≥500 relays) and grows +1 per healthy window (floor 1, visible as `gateway.stream_limit`), so a struggling core sheds early while a healthy one returns to the ceiling; the breaker still handles the dead-core case.
+
+**Performance control plane.** The edge is the only place that sees *all* traffic (including what it sheds), so it owns two observations FastAPI structurally cannot have: **stats** (`GET /gateway/stats`, exempt from rate limits and the breaker) — per-route requests/2xx/4xx/5xx, shed counters (`429`/`503`), upstream errors, identity-vs-wire byte totals (compression saved), log2-µs latency histograms with p50/p95, an in-flight SSE gauge, and a **per-client cut** (peer IP, same 32-slot + `(other)` cap, sorted by activity — edge-internal health/stats polls excluded as overhead); and a **circuit breaker** — after N consecutive edge-observed ≥500/transport failures (`MAN_GATEWAY_BREAKER_FAILURES`, default 5, `0` off), the breaker opens and sheds instantly with `503 {"detail":"Upstream unavailable."}` + `Retry-After` for `MAN_GATEWAY_BREAKER_OPEN` seconds (default 5), then admits exactly one half-open probe; a late success while open never masks a failing run, and health-poll results never feed it (masking risk). Complementing the counters, a **JSONL access log** (`MAN_GATEWAY_ACCESS_LOG`, default `logs/gateway-access.jsonl`, `0` off) writes one flushed line per edge-observed request — timestamp, latency, method, path, route, status, shed reason, client — including exempt health/stats probes, so "what consumes the edge, and when" survives restarts — and the file rotates at `MAN_GATEWAY_ACCESS_LOG_MAX_MB` (default 64 MB, `0` one file forever) so the log can never fill the disk.
+
+**Admission benchmark.** `scripts/benchmark_gateway_admission.py` exercises every edge admission decision against a spawned gateway with a dead/hanging core — exempt throughput, stats latency, rate `429`, breaker `503`, stream-cap `429`, and AIMD tuning — and fails if any shed path stops rejecting or loses keep-alive on rejected split-body POSTs. Runs are tracked with `scripts/benchmark_results.py record --kind admission` (per-scenario regression thresholds; nested `scenario.metric` deltas).
+
+**Not a logic layer.** No auth, no error transformation. Rate limiting is the one policy the edge *enforces first* rather than understands — windows are ported verbatim from `apps/api/server/infrastructure/rate_limit_middleware.py`, which still runs behind the gateway but degrades to a no-op (removal pending approval). Otherwise just routing + filters + compression + health + static files.
 
 **Catch-all:** Any allowed route not explicitly defined is proxied to Python core.
 
@@ -237,7 +273,7 @@ docker-compose up -d
 # Local dev
 python -m apps.api.server.main --reload    # API :8000
 cd apps/web && npm run dev                  # Web :5173
-cd apps/gateway && cargo run                # Gateway :8080
+cd apps/gateway && cargo run                # Gateway :8080 (MAN_GATEWAY_PORT to move)
 
 # Or one shot (API + Web; opt-in edge):
 ./scripts/dev-stack.sh

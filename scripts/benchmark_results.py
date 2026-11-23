@@ -17,6 +17,8 @@ Usage:
     python scripts/benchmark_results.py record --kind stability --json-file out.json
     python scripts/benchmark_results.py record --kind latency --json-file out.json
     python scripts/benchmark_results.py record --kind inference --json-file out.json
+    python scripts/benchmark_results.py record --kind admission --json-file out.json
+    python scripts/benchmark_results.py record --kind compression --json-file out.json
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
     python scripts/benchmark_results.py migrate --from <old-checkout>/data/benchmark_results
@@ -79,6 +81,22 @@ REGRESSION_THRESHOLDS = {
         "first_seed_steps.600": (25.0, "rel"),
         "reseed_steps.600": (25.0, "rel"),
     },
+    "admission": {
+        # gateway edge admission (benchmark_gateway_admission.py): shed-path
+        # latencies and exempt throughput on loopback (µs; noisy box → loose)
+        "pass.rps": (30.0, "rel"),
+        "pass.p50_us": (50.0, "rel"),
+        "stats.p50_us": (50.0, "rel"),
+        "rate.p50_us": (50.0, "rel"),
+        "breaker.p50_us": (50.0, "rel"),
+        "streams.p50_us": (50.0, "rel"),
+    },
+    "compression": {
+        # gateway codec quality (benchmark_gateway_compression.py): savings on
+        # synthetic payloads — CPU-invariant, no speed metrics (box load noise)
+        "zstd.savings_pct": (10.0, "rel"),
+        "gzip.savings_pct": (10.0, "rel"),
+    },
     "effects": {
         # show_effects.py engine-level report (card 20261024_095912).
         # Load-sensitive metrics (attention, prefill, decode) get generous
@@ -114,7 +132,6 @@ REGRESSION_THRESHOLDS = {
         "decode_tok_s": (30.0, "rel"),
         "naive_tok_s.32": (30.0, "rel"),
         "naive_tok_s.256": (30.0, "rel"),
-    },
 }
 
 
@@ -265,7 +282,7 @@ def load_result(path: Path) -> dict:
 
 
 # higher-is-better metric names (a drop means regression)
-HIGHER_IS_BETTER = {"overall", "response_rate", "decode_tok_s"}
+HIGHER_IS_BETTER = {"overall", "response_rate", "decode_tok_s", "pass.rps", "zstd.savings_pct", "gzip.savings_pct"}
 
 
 def _threshold(kind: str, metric: str) -> tuple:
@@ -294,12 +311,23 @@ def _regression_deltas(kind: str, new: dict, old: dict) -> dict:
 
 
 def _dig(d: dict, dotted: str):
-    """Fetch nested value by dotted path (e.g. score.overall)."""
+    """Fetch nested value by dotted path (e.g. score.overall, pass.rps)."""
     if dotted in d:
         return d[dotted]
     for container in ("score", "metrics"):
-        if isinstance(d.get(container), dict) and dotted in d[container]:
-            return d[container][dotted]
+        sub = d.get(container)
+        if not isinstance(sub, dict):
+            continue
+        if dotted in sub:
+            return sub[dotted]
+        cur = sub
+        for part in dotted.split("."):
+            if not isinstance(cur, dict) or part not in cur:
+                cur = None
+                break
+            cur = cur[part]
+        if cur is not None:
+            return cur
     cur = d
     for part in dotted.split("."):
         if not isinstance(cur, dict):
@@ -511,6 +539,11 @@ def do_record(args) -> int:
         elif kind == "inference":
             print(
                 "[ERR] inference kind requires --json-file (from benchmark_decode_slope.py --json)",
+            )
+        elif kind == "compression":
+            print(
+                "[ERR] compression kind requires --json-file "
+                "(from benchmark_gateway_compression.py --metrics-out)",
                 file=sys.stderr,
             )
             return 1
@@ -625,6 +658,24 @@ def do_history(args) -> int:
                     final = c.get("final_loss")
                     print(
                         f"  {stamp}  {conf:<10} gate={'✓' if gate else '✗'} final={final}  {p.name}"
+                    )
+                elif kind == "admission":
+                    m = r.get("metrics", {})
+                    shed = " ".join(
+                        f"{k}={m.get(k, {}).get('p50_us', '?')}µs"
+                        for k in ("rate", "breaker", "streams")
+                    )
+                    print(
+                        f"  {stamp}  pass {m.get('pass', {}).get('p50_us', '?')}µs "
+                        f"{m.get('pass', {}).get('rps', '?')} rps | {shed}  {p.name}"
+                    )
+                elif kind == "compression":
+                    m = r.get("metrics", {})
+                    zs = m.get("zstd", {})
+                    gz = m.get("gzip", {})
+                    print(
+                        f"  {stamp}  zstd {zs.get('savings_pct', '?')}% (r={zs.get('ratio', '?')}) "
+                        f"gzip {gz.get('savings_pct', '?')}% (r={gz.get('ratio', '?')})  {p.name}"
                     )
                 elif kind == "startup":
                     print(

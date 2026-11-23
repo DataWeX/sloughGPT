@@ -106,10 +106,80 @@ MAN_GATEWAY_DENY=/shell,/datasets
 
 **Optional** · Rust edge
 
-When `1`/`true`/`yes`/`on`, only the conversation surface is allowed (`/chat`, `/inference`, `/models`, `/session`, `/memory`, `/companion`, `/souls`, `/feedback`, `/conversations`, `/docs`, `/redoc`, `/openapi.json`, `/metrics`, `/system`, `/health*`). Everything else → **403**. Exposure shape only — auth and rate limits stay in Python.
+When `1`/`true`/`yes`/`on`, only the conversation surface is allowed (`/chat`, `/inference`, `/models`, `/session`, `/memory`, `/companion`, `/souls`, `/feedback`, `/conversations`, `/docs`, `/redoc`, `/openapi.json`, `/metrics`, `/system`, `/health*`). Everything else → **403**. Exposure shape only — auth stays in Python; rate limiting is enforced at the gateway first (see below).
 
 ```bash
 MAN_GATEWAY_CHAT_ONLY=1
+```
+
+### MAN_GATEWAY_RATE_LIMIT
+
+**Optional** · Rust edge · default `300`
+
+Sliding-window requests per client per `MAN_GATEWAY_RATE_WINDOW` window. Localhost clients get 10× (matching Python). `0` disables all window checks (route and workspace limits included).
+
+```bash
+MAN_GATEWAY_RATE_LIMIT=300
+```
+
+### MAN_GATEWAY_RATE_WINDOW
+
+**Optional** · Rust edge · default `60`
+
+Window length in seconds for `MAN_GATEWAY_RATE_LIMIT` and workspace limits. Route-specific limits keep their own windows from the Python table.
+
+```bash
+MAN_GATEWAY_RATE_WINDOW=60
+```
+
+### MAN_GATEWAY_MAX_STREAMS
+
+**Optional** · Rust edge · default `32`
+
+Maximum concurrent SSE streams (`*/stream`, `*/regenerate`); the slot is held until each response body finishes. `0` disables the cap *and* its adaptation. This is the **ceiling** of an AIMD controller: the effective limit halves whenever ≥12.5% of streams in a 2-second window fail against the core (transport errors or ≥500 relays) and grows back +1 per healthy window, floor 1 — so a struggling core sheds early instead of queueing, while a healthy one returns to the full cap. Current values visible as `gateway.stream_limit` / `gateway.stream_max` in `/gateway/stats`.
+
+```bash
+MAN_GATEWAY_MAX_STREAMS=32
+```
+
+### MAN_GATEWAY_BREAKER_FAILURES
+
+**Optional** · Rust edge · default `5`
+
+Consecutive edge-observed upstream failures (HTTP ≥500, connect refused, edge timeout) before the circuit breaker opens. While open, requests are shed instantly with `503 {"detail":"Upstream unavailable."}` + `Retry-After` — the edge does not spend an edge timeout on a core it has already watched fail. Health-poll results never feed the breaker. `0` disables the breaker.
+
+```bash
+MAN_GATEWAY_BREAKER_FAILURES=5
+```
+
+### MAN_GATEWAY_BREAKER_OPEN
+
+**Optional** · Rust edge · default `5`
+
+Seconds the breaker stays open after tripping, before exactly one half-open probe is admitted. A probe failure re-opens the window; a probe success closes the breaker. `0` disables the breaker (same as `MAN_GATEWAY_BREAKER_FAILURES=0`).
+
+```bash
+MAN_GATEWAY_BREAKER_OPEN=5
+```
+
+### MAN_GATEWAY_ACCESS_LOG
+
+**Optional** · Rust edge · default `logs/gateway-access.jsonl`
+
+Append-only JSONL access log — one flushed line per request the edge sees (admitted, rate/breaker/stream-shed, and exempt health/stats probes alike): `ts_ms`, `ms` (request → response headers), `method`, `path`, `route`, `status`, `shed` (`rate` | `breaker` | `streams` | `null`), `client`. Parent directories are created; if the file can't be opened the gateway logs a warning and runs without it. This is the history `/gateway/stats` (in-memory) cannot keep. `0` or empty disables. The file rotates at `MAN_GATEWAY_ACCESS_LOG_MAX_MB` so it can never fill the disk.
+
+```bash
+MAN_GATEWAY_ACCESS_LOG=logs/gateway-access.jsonl  # 0 disables
+```
+
+### MAN_GATEWAY_ACCESS_LOG_MAX_MB
+
+**Optional** · Rust edge · default `64`
+
+Size cap for `MAN_GATEWAY_ACCESS_LOG`: once the active file reaches the cap, it is renamed to `<path>.1` (replacing any older generation) and a fresh file starts. `0` disables rotation — one file grows forever. Unparseable values fall back to the default.
+
+```bash
+MAN_GATEWAY_ACCESS_LOG_MAX_MB=64  # 0 = no rotation
 ```
 
 ### SLO_ENV

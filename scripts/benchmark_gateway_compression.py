@@ -2,11 +2,18 @@
 """Benchmark: edge compression gateway — bytes-on-wire vs identity.
 
 Measures gzip/zstd ratio and encode throughput on synthetic multi-MB
-"file download" payloads (the traffic class the passthrough gateway
-targets). Mirrors apps/gateway/src/compression.rs codecs.
+payloads. Mirrors apps/gateway/src/compression.rs codecs.
+
+Two payload classes:
+    download  semi-structured records — file-download traffic (default)
+    sse       model token stream — `data:` frames of generation deltas,
+              the `text/event-stream` traffic the edge compresses from
+              byte 0 (streaming, no Content-Length)
 
 Usage:
+Usage:
     scripts/python scripts/benchmark_gateway_compression.py [--mib 64]
+    scripts/python scripts/benchmark_gateway_compression.py --class sse --mib 8
     scripts/python scripts/benchmark_gateway_compression.py --file checkpoints/step_25.pt
     scripts/python scripts/benchmark_gateway_compression.py --file apps/web/public/v86/v86-fallback.wasm
 """
@@ -35,6 +42,25 @@ def make_payload(mib: int) -> bytes:
     i = 0
     while len(out) < target:
         out.extend((line % (i, i, pad)).encode())
+        i += 1
+    return bytes(out[:target])
+
+
+def make_sse_payload(mib: int) -> bytes:
+    """Synthetic model token stream — SSE `data:` frames of generation deltas.
+
+    The `text/event-stream` traffic class: streaming, no Content-Length,
+    highly redundant JSON lines (repetitive keys, incrementing indices).
+    """
+    frame = (
+        'data: {"type":"delta","idx":%08d,"content":"the quick brown fox jumps '
+        'over the lazy dog token %d padding padding","finish":false}\n\n'
+    )
+    target = mib * 1024 * 1024
+    out = bytearray()
+    i = 0
+    while len(out) < target:
+        out.extend((frame % (i, i)).encode())
         i += 1
     return bytes(out[:target])
 
@@ -86,6 +112,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mib", type=int, default=64, help="payload size in MiB")
     ap.add_argument(
+        "--class",
+        dest="payload_class",
+        choices=["download", "sse"],
+        default="download",
+        help="payload class: download (records) or sse (model token stream)",
+    )
+    ap.add_argument(
         "--file",
         type=Path,
         default=None,
@@ -97,12 +130,22 @@ def main() -> None:
         default=Path("scripts/benchmark_gateway_compression.json"),
         help="result history path",
     )
+    ap.add_argument(
+        "--metrics-out",
+        type=Path,
+        default=None,
+        help="write nested metrics JSON for benchmark_results.py record --kind compression",
+    )
     args = ap.parse_args()
 
     if args.file is not None:
         data = args.file.read_bytes()
         label = str(args.file)
         source = "file"
+    elif args.payload_class == "sse":
+        data = make_sse_payload(args.mib)
+        label = f"{args.mib} MiB synthetic SSE token stream"
+        source = "synthetic"
     else:
         data = make_payload(args.mib)
         label = f"{args.mib} MiB synthetic download records"
@@ -141,13 +184,37 @@ def main() -> None:
             history = json.loads(args.out.read_text())
         except json.JSONDecodeError:
             history = []
-    entry = {"mib": args.mib if args.file is None else None, "results": results}
+    entry = {
+        "mib": args.mib if args.file is None else None,
+        "class": args.payload_class if args.file is None else "file",
+        "results": results,
+    }
     if args.file is not None:
         entry["file"] = str(args.file)
         entry["raw_bytes"] = len(data)
     history.append(entry)
-    args.out.write_text(json.dumps(history, indent=2))
+    args.out.write_text(json.dumps(history, indent=2) + "\n")
     print(f"\nrecorded → {args.out}")
+
+    if args.metrics_out is not None:
+        metrics = {
+            "payload": {
+                "class": entry["class"],
+                "mib": entry["mib"],
+                "raw_bytes": len(data),
+            }
+        }
+        for r in results:
+            # normalise codec keys ("gzip-6"/"zstd-3") so thresholds stay stable
+            metrics[r["codec"].split("-")[0]] = {
+                "ratio": r["ratio"],
+                "savings_pct": r["savings_pct"],
+                "enc_mibs": r["enc_mibs"],
+                "dec_mibs": r["dec_mibs"],
+            }
+        args.metrics_out.parent.mkdir(parents=True, exist_ok=True)
+        args.metrics_out.write_text(json.dumps(metrics, indent=2) + "\n")
+        print(f"metrics → {args.metrics_out}")
 
 
 if __name__ == "__main__":

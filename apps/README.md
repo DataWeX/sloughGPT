@@ -6,6 +6,8 @@ Runnable services and application entrypoints.
 - `web/` — Vite + React frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (_UI vs core engine_).
 - `lib/` — shared frontend TypeScript libraries for the apps (not runnable on its own). Holds the split **http-client** (`lib/*.ts`: verbs, retry/timeout policies, cache/circuit-breaker/throttler, SSE) behind the **`web/lib/http-client.ts`** facade.
 - `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`sloughgpt train`** export naming (**`--save-stem`**) and **`sloughgpt generate`** local `.soul` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias) and the line-mode REPL when run without `--tui`.
+- `gateway/` — Rust/Axum edge (`gateway/target/release/slough-gateway`; design: **`docs/engineering-overview.md`** §5). Owns the public socket `:8080` directly — CORS, path filters, compression, rate limiting, circuit breaker, adaptive stream caps, JSONL access log — then byte-relays to the API. Self-supervising (`MAN_GATEWAY_SUPERVISE=1`, no systemd). Launch: **`scripts/host_gateway.sh`** (also keeps the edge up — relaunches it on exit); dev stack: **`scripts/dev-stack.sh`** (`MAN_DEV_GATEWAY=1`).
+- `mobile/` — React Native app (own lockfile tree). Its `node_modules` is huge and regenerable — never duplicate or rebuild it (shared-workspace rule, **AGENTS.md**). Talks to the API over HTTP like `web/`.
 
 ### Quick start (repo root)
 
