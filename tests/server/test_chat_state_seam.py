@@ -253,6 +253,43 @@ def test_generate_tracked_delivers_the_registered_stop_event(manager):
     )
 
 
+def test_stream_tracked_delivers_stop_event_and_never_stores(manager):
+    """Regenerate's seam: the cancel channel WITHOUT the history store.
+
+    ``stream_tracked`` is the tracking half of ``generate_stream_tracked``
+    for a re-run (card 20261120_150317): the op must register so
+    ``cancel_session`` can reach it, and the stop event must ride the
+    callable down to the turn — but history must NOT be stored. The
+    original turn already wrote it; a second store would append a
+    duplicate assistant message over the answer being replaced.
+    """
+    import threading
+
+    stop = threading.Event()
+    seen: dict[str, object] = {}
+
+    async def _stream(received):
+        seen["stream_stop"] = received
+        yield "tok"
+
+    async def _drain():
+        async for _ in manager.stream_tracked("s", _stream):
+            pass
+
+    with (
+        patch.object(ChatManager, "_track", return_value=("op-9", stop)),
+        patch.object(ChatManager, "_untrack") as mock_untrack,
+        patch.object(ChatManager, "_store") as mock_store,
+    ):
+        asyncio.run(_drain())
+
+    assert seen["stream_stop"] is stop, (
+        "stream_tracked must deliver the registered stop event"
+    )
+    mock_store.assert_not_called(), "a re-run must not re-store history"
+    mock_untrack.assert_called_once()
+
+
 def test_router_exposes_single_engine_seam():
     """One chat entry point: POST /chat, and it streams.
 
