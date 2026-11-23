@@ -166,8 +166,14 @@ jobs:
       # log rather than hidden in package.json. Re-enable when either the
       # hang-diagnosis card or the Cypress -> domain/testing port series
       # (both filed from 20261121_152656) lands.
+      # The server binary must be pinned: npm exec resolves start-server-and-test
+      # from the ROOT .bin (workspace hoisting), so the spawned PATH finds the
+      # root's transitive vite 7.3.6 first and shadows apps/web's 8.3.1 — 7.3.6
+      # cannot load this rolldown vite.config ("Missing field moduleType" 500s),
+      # wait-on never gets its 200, and cypress never starts (card
+      # 20261123_105722, measured + reproduced locally 2026-11-23).
       - run: >-
-          npm exec -- start-server-and-test "vite" http://localhost:5173
+          npm exec -- start-server-and-test "./node_modules/.bin/vite" http://localhost:5173
           "cypress run --config excludeSpecPattern=**/chat-inference.cy.ts"
         if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
