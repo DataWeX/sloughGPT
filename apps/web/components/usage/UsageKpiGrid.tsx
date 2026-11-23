@@ -18,7 +18,7 @@ export function UsageKpiGrid({ items }: UsageKpiGridProps) {
         <Card key={item.label}>
           <CardContent className="p-3 text-center">
             <div className="text-base font-bold">{item.value}</div>
-            <div className="text-[10px] text-muted-foreground">{item.label}</div>
+            <div className="text-xs text-muted-foreground">{item.label}</div>
           </CardContent>
         </Card>
       ))}

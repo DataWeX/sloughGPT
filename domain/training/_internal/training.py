@@ -224,7 +224,15 @@ class DatasetManager:
 
 
 def detect_dataset_type(path: str) -> DatasetType:
-    """Detect dataset type from file extension and content."""
+    """Detect dataset type from file extension and content.
+
+    Migrated formats are claimed by the sniffer registry first
+    (``format_sniffers`` — each sniff returns the consuming adapter, or
+    declares ``capabilities.unsupported`` for image/video); the
+    grandfathered if-chain below still owns conversation / instruction /
+    audio until their adapters register. It shrinks as sniffers migrate
+    (card 20261114_151505) — never a big-bang rewrite.
+    """
     p = Path(path)
 
     # Handle directories
@@ -235,41 +243,28 @@ def detect_dataset_type(path: str) -> DatasetType:
                 return detect_dataset_type(str(child))
         return DatasetType.TEXT
 
+    # Local import: format_sniffers imports DatasetType from this module,
+    # so the dependency stays one-way at call time (no import cycle).
+    from domain.training._internal.format_sniffers import sniff_dataset
+
+    result = sniff_dataset(p)
+    if result is not None:
+        return result.dataset_type
+
     suffix = p.suffix.lower()
 
-    # Code file extensions (only common ones, others detected by content)
-    code_extensions = {".py", ".js", ".ts", ".java", ".c", ".cpp", ".go", ".rb", ".php"}
-    if suffix in code_extensions:
-        return DatasetType.CODE
-
-    # Files that need content check for code detection
-    content_check_extensions = {".rs", ".jsx", ".tsx", ".txt"}
-    if suffix in content_check_extensions:
-        try:
-            with open(path) as f:
-                content = f.read(1000)
-                code_patterns = ["def ", "class ", "import ", "function ", "const ", "let ", "var "]
-                matches = sum(1 for p in code_patterns if p in content)
-                if matches >= 2:
-                    return DatasetType.CODE
-        except Exception:
-            pass
-
+    # Grandfathered if-chain — instruction / audio / .json-conversation only
+    # (code + image/video + jsonl-conversation migrated to format_sniffers;
+    # their branches are unreachable above and were removed with the migration).
     if suffix == ".jsonl":
         try:
             with open(path) as f:
                 first_line = f.readline()
                 data = json.loads(first_line)
-                if "messages" in data or "conversation" in data:
-                    return DatasetType.CONVERSATION
-                elif "instruction" in data:
+                if "instruction" in data:
                     return DatasetType.INSTRUCTION
                 elif "audio" in data or "speech" in data or "wav" in data:
                     return DatasetType.AUDIO_TEXT
-                elif "image" in data or "jpg" in data or "png" in data:
-                    return DatasetType.IMAGE_TEXT
-                elif "video" in data:
-                    return DatasetType.VIDEO_TEXT
         except (json.JSONDecodeError, KeyError, Exception):
             pass
         return DatasetType.TEXT

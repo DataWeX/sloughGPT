@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { Button } from '@sloughgpt/strui'
@@ -12,7 +12,6 @@ import { extractErrorMessage } from '@/lib/error-utils'
 export function ConsciousnessQuickActions() {
   const router = useRouter()
   const { t } = useLocale()
-  const addToast = notify.toast
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [result, setResult] = useState<{ action: string; data: any } | null>(null)
@@ -62,14 +61,14 @@ export function ConsciousnessQuickActions() {
       try {
         const data = await fn()
         setResult({ action, data })
-        addToast(t(`consciousness_quick_actions.toast_${action}`), 'success')
+        notify.toast(t(`consciousness_quick_actions.toast_${action}`), { type: 'success' })
       } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
+        notify.toast(extractErrorMessage(e), { type: 'error' })
       } finally {
         setLoading(null)
       }
     },
-    [addToast, t],
+    [t],
   )
 
   const handleReflect = useCallback(() => {
@@ -88,11 +87,11 @@ export function ConsciousnessQuickActions() {
     const slice = bootstrap?.members.consciousness_status
     if (slice && !sliceMutatedRef.current) {
       setResult({ action: 'status', data: slice })
-      addToast(t('consciousness_quick_actions.toast_status'), 'success')
+      notify.toast(t('consciousness_quick_actions.toast_status'), { type: 'success' })
       return
     }
     runAction('status', () => apiGet('/consciousness/status'))
-  }, [bootstrap, runAction, addToast, t])
+  }, [bootstrap, runAction, t])
 
   const handleHealth = useCallback(() => {
     runAction('health', () => apiGet('/consciousness/health'))
@@ -103,7 +102,7 @@ export function ConsciousnessQuickActions() {
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-[9999] h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
+        className="fixed bottom-20 right-6 lg:bottom-6 z-[9999] h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
         aria-label={t('consciousness_quick_actions.toggle')}
       >
         <svg
@@ -119,14 +118,14 @@ export function ConsciousnessQuickActions() {
       {open && (
         <div
           ref={panelRef}
-          className="fixed bottom-20 right-6 z-[9999] w-72 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden transition-all"
+          className="fixed bottom-36 right-6 lg:bottom-20 z-[9999] w-72 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden transition-all"
           style={{ animation: 'consciousness-quick-fadein 0.15s ease-out' }}
         >
           <div className="px-4 py-3 border-b border-zinc-700 flex items-center justify-between">
             <span className="text-sm font-semibold text-zinc-100">
               {t('consciousness_quick_actions.title')}
             </span>
-            <span className="text-[10px] text-zinc-500">Ctrl+Shift+Q</span>
+            <span className="text-xs text-zinc-500">Ctrl+Shift+Q</span>
           </div>
 
           <div className="p-2 space-y-1">
@@ -175,7 +174,7 @@ export function ConsciousnessQuickActions() {
 
           {result && (
             <div className="px-4 py-3 border-t border-zinc-700 max-h-48 overflow-auto">
-              <div className="text-[10px] font-medium text-zinc-500 mb-1 uppercase tracking-wider">
+              <div className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">
                 {t(`consciousness_quick_actions.label_${result.action}`)}
               </div>
               <pre className="text-xs text-zinc-400 whitespace-pre-wrap break-all font-mono">

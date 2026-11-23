@@ -18,8 +18,8 @@ export function ImageComparisonCard({ images = [] }: ImageComparisonCardProps) {
   const [sliderPos, setSliderPos] = useState(50)
   const [mode, setMode] = useState<'side-by-side' | 'slider' | 'overlay'>('side-by-side')
 
-  const imgA = images.find(i => i.id === selected[0])
-  const imgB = images.find(i => i.id === selected[1])
+  const imgA = images.find((i) => i.id === selected[0])
+  const imgB = images.find((i) => i.id === selected[1])
 
   return (
     <Card data-testid="image-comparison">
@@ -27,12 +27,12 @@ export function ImageComparisonCard({ images = [] }: ImageComparisonCardProps) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Image Comparison</CardTitle>
           <div className="flex gap-1">
-            {(['side-by-side', 'slider', 'overlay'] as const).map(m => (
+            {(['side-by-side', 'slider', 'overlay'] as const).map((m) => (
               <Button
                 key={m}
                 size="sm"
                 variant={mode === m ? 'default' : 'ghost'}
-                className="text-[10px]"
+                className="text-xs"
                 onClick={() => setMode(m)}
               >
                 {m === 'side-by-side' ? 'SxS' : m === 'slider' ? 'Slider' : 'Overlay'}
@@ -46,18 +46,26 @@ export function ImageComparisonCard({ images = [] }: ImageComparisonCardProps) {
           <select
             className="flex-1 text-xs border border-border rounded px-2 py-1 bg-background"
             value={selected[0] ?? ''}
-            onChange={e => setSelected([e.target.value || null, selected[1]])}
+            onChange={(e) => setSelected([e.target.value || null, selected[1]])}
           >
             <option value="">Select image A</option>
-            {images.map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
+            {images.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.label}
+              </option>
+            ))}
           </select>
           <select
             className="flex-1 text-xs border border-border rounded px-2 py-1 bg-background"
             value={selected[1] ?? ''}
-            onChange={e => setSelected([selected[0], e.target.value || null])}
+            onChange={(e) => setSelected([selected[0], e.target.value || null])}
           >
             <option value="">Select image B</option>
-            {images.map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
+            {images.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -70,12 +78,20 @@ export function ImageComparisonCard({ images = [] }: ImageComparisonCardProps) {
         {imgA && imgB && mode === 'side-by-side' && (
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <div className="text-[10px] text-muted-foreground mb-1">{imgA.label}</div>
-              <img src={imgA.src} alt={imgA.label} className="w-full rounded border border-border" />
+              <div className="text-xs text-muted-foreground mb-1">{imgA.label}</div>
+              <img
+                src={imgA.src}
+                alt={imgA.label}
+                className="w-full rounded border border-border"
+              />
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground mb-1">{imgB.label}</div>
-              <img src={imgB.src} alt={imgB.label} className="w-full rounded border border-border" />
+              <div className="text-xs text-muted-foreground mb-1">{imgB.label}</div>
+              <img
+                src={imgB.src}
+                alt={imgB.label}
+                className="w-full rounded border border-border"
+              />
             </div>
           </div>
         )}
@@ -83,10 +99,7 @@ export function ImageComparisonCard({ images = [] }: ImageComparisonCardProps) {
         {imgA && imgB && mode === 'slider' && (
           <div className="relative overflow-hidden rounded border border-border">
             <img src={imgA.src} alt={imgA.label} className="w-full" />
-            <div
-              className="absolute inset-0 overflow-hidden"
-              style={{ width: `${sliderPos}%` }}
-            >
+            <div className="absolute inset-0 overflow-hidden" style={{ width: `${sliderPos}%` }}>
               <img
                 src={imgB.src}
                 alt={imgB.label}
@@ -99,7 +112,7 @@ export function ImageComparisonCard({ images = [] }: ImageComparisonCardProps) {
               min={0}
               max={100}
               value={sliderPos}
-              onChange={e => setSliderPos(Number(e.target.value))}
+              onChange={(e) => setSliderPos(Number(e.target.value))}
               className="absolute bottom-2 left-0 right-0 w-full accent-primary"
             />
           </div>
@@ -116,8 +129,12 @@ export function ImageComparisonCard({ images = [] }: ImageComparisonCardProps) {
           </div>
         )}
 
-        {imgA && !imgB && <img src={imgA.src} alt={imgA.label} className="w-full rounded border border-border" />}
-        {!imgA && imgB && <img src={imgB.src} alt={imgB.label} className="w-full rounded border border-border" />}
+        {imgA && !imgB && (
+          <img src={imgA.src} alt={imgA.label} className="w-full rounded border border-border" />
+        )}
+        {!imgA && imgB && (
+          <img src={imgB.src} alt={imgB.label} className="w-full rounded border border-border" />
+        )}
       </CardContent>
     </Card>
   )

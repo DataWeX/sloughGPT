@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useRef } from 'react'
 import {
   cn,
@@ -16,8 +16,6 @@ import { knowledgeController } from '@/lib/knowledge-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 export function KnowledgeIntelligenceCard() {
-  const addToast = notify.toast
-
   const [labelText, setLabelText] = useState('')
   const [labelResult, setLabelResult] = useState<{
     label: string
@@ -71,11 +69,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.label(labelTextRef.current)
       setLabelResult(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Labeling failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Labeling failed'), { type: 'error' })
     } finally {
       setLabelLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleCheckDuplicate = useCallback(async () => {
     if (!dupTextRef.current.trim()) return
@@ -84,11 +82,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.checkDuplicate(dupTextRef.current)
       setDupResult(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Duplicate check failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Duplicate check failed'), { type: 'error' })
     } finally {
       setDupLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleCategorize = useCallback(async () => {
     if (!catTextRef.current.trim()) return
@@ -97,11 +95,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.categorize(catTextRef.current)
       setCatResult(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Categorization failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Categorization failed'), { type: 'error' })
     } finally {
       setCatLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleCheckEmbedder = useCallback(async () => {
     setEmbedderLoading(true)
@@ -109,27 +107,27 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.getEmbedderStatus()
       setEmbedderStatus(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not check embedder'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not check embedder'), { type: 'error' })
     } finally {
       setEmbedderLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleTrainEmbedder = useCallback(async () => {
     setTrainingEmbedder(true)
     try {
       const result = await knowledgeController.trainEmbedder()
-      addToast(
+      notify.toast(
         `Embedder trained on ${result.texts_used} texts (loss: ${result.final_loss.toFixed(4)})`,
-        'success',
+        { type: 'success' },
       )
       await handleCheckEmbedder()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Embedder training failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Embedder training failed'), { type: 'error' })
     } finally {
       setTrainingEmbedder(false)
     }
-  }, [addToast, handleCheckEmbedder])
+  }, [handleCheckEmbedder])
 
   const handleGaps = useCallback(async () => {
     setGapsLoading(true)
@@ -137,11 +135,11 @@ export function KnowledgeIntelligenceCard() {
       const result = await knowledgeController.gaps()
       setGaps(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Gap analysis failed'), 'error')
+      notify.toast(extractErrorMessage(err, 'Gap analysis failed'), { type: 'error' })
     } finally {
       setGapsLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   return (
     <Card>
@@ -186,7 +184,7 @@ export function KnowledgeIntelligenceCard() {
                     .map(([k, v]) => (
                       <span
                         key={k}
-                        className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                        className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
                       >
                         {k}: {(v * 100).toFixed(0)}%
                       </span>
@@ -276,7 +274,7 @@ export function KnowledgeIntelligenceCard() {
                   {catResult.suggestions.slice(0, 5).map((s) => (
                     <span
                       key={s.topic}
-                      className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                      className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
                     >
                       {s.topic}: {(s.score * 100).toFixed(0)}%
                     </span>

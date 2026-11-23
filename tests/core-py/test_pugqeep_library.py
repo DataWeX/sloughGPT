@@ -369,12 +369,6 @@ class TestPointLibraryView:
 
 
 class TestPointLibraryStats:
-    def test_empty_stats(self):
-        lib = PointLibrary(name="empty")
-        s = lib.stats()
-        assert s["total_points"] == 0
-        assert s["avg_accuracy"] == 0.0
-
     def test_stats_with_points(self):
         lib = PointLibrary(name="test")
         lib.add(_periodic_point("a", accuracy=0.8))
@@ -603,19 +597,6 @@ class TestPointLibraryRepr:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Duplicate Identity
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestPointLibraryDuplicateIdentity:
-    def test_re_add_overwrites(self):
-        lib = PointLibrary()
-        p1 = _periodic_point("dup")
-        p1.params = {"a": 1.0, "b": 0.0, "w": 0.0}
-        p2 = _periodic_point("dup")
-        p2.params = {"a": 2.0, "b": 0.0, "w": 0.0}
-        lib.add(p1)
-        lib.add(p2)
-        assert lib.get("dup").params["a"] == 2.0
-        assert len(lib.list_all()) == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

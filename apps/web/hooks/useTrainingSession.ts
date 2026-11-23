@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useEffect } from 'react'
 import { trainingFacade } from '@/lib/training-facade'
 
@@ -20,6 +20,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import type { TrainingJob } from '@/lib/training-controller'
 import { useTrainingPolling } from './useTrainingPolling'
 import { useTrainingStream } from './useTrainingStream'
+import { useLiveTraining } from './useLiveTraining'
 
 const _log = logger.child('training-session')
 
@@ -176,6 +177,9 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const training = useShellTraining()
   const { startStandardPoll, startTurboPoll, clearAllPolls } = useTrainingPolling()
   const { startSSETraining, closeStream } = useTrainingStream()
+  // Subscribe-only job-events stream: pushes job state so the polls above
+  // demote to fallback cadence (ref-counted singleton — safe to mount here).
+  useLiveTraining()
 
   const trainingRunning = isTrainingActive(training)
   const turboRunning = training.method === 'turbo' && trainingRunning
@@ -205,13 +209,10 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             // Server has no active training — stale localStorage state, clear it
             _log.info('Shell training is stale (server has no active training), clearing')
             appShellStore.getState().resetTraining()
-            notify.toast(
-              'Previous training session expired — server was restarted',
-              'info',
-              undefined,
-              undefined,
-              'training-session-expired',
-            )
+            notify.toast('Previous training session expired — server was restarted', {
+              type: 'info',
+              key: 'training-session-expired',
+            })
             return
           }
 
@@ -227,7 +228,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           })
           // On verification failure, clear stale state to avoid phantom training
           appShellStore.getState().resetTraining()
-          notify.toast('Could not verify training status — showing idle state', 'info')
+          notify.toast('Could not verify training status — showing idle state', { type: 'info' })
         }
         return
       }

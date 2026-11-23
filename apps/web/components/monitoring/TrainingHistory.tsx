@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { memo, useState, useCallback } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        'text-[9px] px-1.5 py-0.5 rounded font-medium',
+        'text-[11px] px-1.5 py-0.5 rounded font-medium',
         status === 'completed'
           ? 'bg-success/15 text-success'
           : status === 'running'
@@ -47,7 +47,6 @@ export const TrainingHistory = memo(function TrainingHistory({
   onRecovered,
 }: TrainingHistoryProps) {
   const router = useRouter()
-  const addToast = notify.toast
   const [resuming, setResuming] = useState<string | null>(null)
 
   const handleResume = useCallback(
@@ -56,30 +55,30 @@ export const TrainingHistory = memo(function TrainingHistory({
       setResuming(jobId)
       try {
         const result = await trainingJobsController.recover(jobId)
-        addToast(result.message || 'Resume started', 'success')
+        notify.toast(result.message || 'Resume started', { type: 'success' })
         onRecovered?.(result)
       } catch (e) {
-        addToast(formatToastError(e, 'Could not resume job'), 'error')
+        notify.toast(formatToastError(e, 'Could not resume job'), { type: 'error' })
       } finally {
         setResuming(null)
       }
     },
-    [addToast, onRecovered],
+    [onRecovered],
   )
 
   return (
     <Card className="p-2.5">
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
         Training History
       </span>
       <CardContent className="p-0">
         {jobs.length === 0 ? (
-          <div className="text-[10px] text-muted-foreground/60 text-center py-3 space-y-1.5">
+          <div className="text-xs text-muted-foreground/60 text-center py-3 space-y-1.5">
             <div>No training jobs yet</div>
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[9px]"
+              className="h-6 text-[11px]"
               onClick={() => router.push('/training')}
             >
               Go to Training
@@ -99,7 +98,7 @@ export const TrainingHistory = memo(function TrainingHistory({
                     router.push(`/training/job/${job.id}`)
                   }
                 }}
-                className="w-full flex items-center justify-between text-[10px] py-0.5 px-1 rounded hover:bg-muted/20 transition-colors text-left cursor-pointer"
+                className="w-full flex items-center justify-between text-xs py-0.5 px-1 rounded hover:bg-muted/20 transition-colors text-left cursor-pointer"
               >
                 <div className="flex items-center gap-1 min-w-0">
                   <StatusBadge status={job.status} />
@@ -107,12 +106,12 @@ export const TrainingHistory = memo(function TrainingHistory({
                     {job.name || job.id}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground/60 shrink-0 ml-1.5 font-mono tabular-nums">
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 shrink-0 ml-1.5 font-mono tabular-nums">
                   {RESUMABLE.has(job.status) && (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-4 text-[8px] px-1"
+                      className="h-4 text-[11px] px-1"
                       disabled={resuming === job.id}
                       onClick={(e) => {
                         e.stopPropagation()
@@ -130,7 +129,7 @@ export const TrainingHistory = memo(function TrainingHistory({
           </div>
         )}
         {jobs.length > 6 && (
-          <p className="text-[9px] text-muted-foreground/40 mt-1 font-mono tabular-nums">
+          <p className="text-[11px] text-muted-foreground/40 mt-1 font-mono tabular-nums">
             +{jobs.length - 6} more
           </p>
         )}

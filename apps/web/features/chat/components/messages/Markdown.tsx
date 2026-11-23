@@ -302,7 +302,7 @@ function parseBlock(
                 : 'border-muted-foreground/40',
             )}
           >
-            {checked && <span className="text-[10px]">✓</span>}
+            {checked && <span className="text-xs">✓</span>}
           </span>
           {parseInline(taskMatch[2])}
         </li>,
@@ -323,7 +323,7 @@ function parseBlock(
                     : 'border-muted-foreground/40',
                 )}
               >
-                {c && <span className="text-[10px]">✓</span>}
+                {c && <span className="text-xs">✓</span>}
               </span>
               {parseInline(m[2])}
             </li>,

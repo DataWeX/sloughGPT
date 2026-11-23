@@ -93,13 +93,13 @@ export const CodeBlock = memo(function CodeBlock({ language, code, isStreaming }
   return (
     <div className="relative my-3 rounded-xl border border-border/40 bg-muted overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-white/[0.03]">
-        <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">
+        <span className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
           {language || 'code'}
         </span>
         <button
           type="button"
           onClick={handleCopy}
-          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-xs font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
           aria-label="Copy code"
         >
           {copied ? (

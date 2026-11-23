@@ -590,10 +590,6 @@ class TestGenerate:
         result = trainer.generate("/nonexistent/video.mp4")
         assert result == "[failed to process video]"
 
-    def test_default_temperature(self):
-        trainer = VideoCaptionTrainer()
-        assert not trainer._trained
-
 
 # ============================================================================
 # _all_params tests

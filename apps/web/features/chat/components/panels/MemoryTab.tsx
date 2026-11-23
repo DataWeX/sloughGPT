@@ -15,7 +15,6 @@ import { MemoryEditForm } from './MemoryEditForm'
 const MAX_VISIBLE = 8
 
 export const MemoryTab = memo(function MemoryTab() {
-  const addToast = notify.toast
   const {
     stats,
     items,
@@ -151,7 +150,7 @@ export const MemoryTab = memo(function MemoryTab() {
               type="button"
               onClick={handleConsolidate}
               disabled={consolidating}
-              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
               title="Merge near-duplicate facts"
             >
               {consolidating ? 'Consolidating…' : 'Consolidate'}
@@ -160,7 +159,7 @@ export const MemoryTab = memo(function MemoryTab() {
         </div>
         <div className="flex items-center gap-0.5">
           <div className="flex items-center gap-1 mr-1 pr-1.5 border-r border-border/60">
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
               Remember
             </span>
             <Switch
@@ -192,7 +191,7 @@ export const MemoryTab = memo(function MemoryTab() {
         </div>
       </div>
 
-      {consolidateMsg && <p className="text-[10px] text-muted-foreground">{consolidateMsg}</p>}
+      {consolidateMsg && <p className="text-xs text-muted-foreground">{consolidateMsg}</p>}
 
       {enabled && (
         <>
@@ -220,7 +219,7 @@ export const MemoryTab = memo(function MemoryTab() {
             <Button
               size="sm"
               variant="outline"
-              className="h-7 shrink-0 text-[10px] px-2"
+              className="h-7 shrink-0 text-xs px-2"
               onClick={() => {
                 setShowAdd((v) => !v)
                 setEditingItem(null)
@@ -231,7 +230,7 @@ export const MemoryTab = memo(function MemoryTab() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 shrink-0 text-[10px] px-1.5 gap-1"
+              className="h-7 shrink-0 text-xs px-1.5 gap-1"
               onClick={() => setSortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
               disabled={searchResults !== null}
               title={searchResults !== null ? 'Search results use relevance order' : undefined}
@@ -262,7 +261,7 @@ export const MemoryTab = memo(function MemoryTab() {
                 type="button"
                 onClick={() => setActiveTopic(null)}
                 className={cn(
-                  'shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                  'shrink-0 text-xs px-2 py-1 rounded-full font-medium transition-colors',
                   activeTopic === null
                     ? 'bg-primary/15 text-primary'
                     : 'bg-muted text-muted-foreground hover:bg-muted/70',
@@ -277,7 +276,7 @@ export const MemoryTab = memo(function MemoryTab() {
                   type="button"
                   onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
                   className={cn(
-                    'shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                    'shrink-0 text-xs px-2 py-1 rounded-full font-medium transition-colors',
                     activeTopic === topic
                       ? 'bg-primary/15 text-primary'
                       : 'bg-muted text-muted-foreground hover:bg-muted/70',
@@ -304,7 +303,7 @@ export const MemoryTab = memo(function MemoryTab() {
       )}
 
       {loading ? (
-        <p className="text-[10px] text-muted-foreground text-center py-3">Loading memory…</p>
+        <p className="text-xs text-muted-foreground text-center py-3">Loading memory…</p>
       ) : !enabled ? (
         <p className="text-xs text-muted-foreground text-center py-4">
           Memory is off. Flip the Remember switch to start learning again.
@@ -315,7 +314,7 @@ export const MemoryTab = memo(function MemoryTab() {
           <button
             type="button"
             onClick={() => setSearch('')}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-[10px] text-primary hover:underline"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-xs text-primary hover:underline"
             aria-label="Clear search"
           >
             Clear search
@@ -358,25 +357,25 @@ export const MemoryTab = memo(function MemoryTab() {
                       {item.content.length > 160 ? item.content.slice(0, 160) + '…' : item.content}
                     </span>
                     {copiedId === item.id && (
-                      <span className="shrink-0 text-[9px] text-success font-medium pt-0.5">
+                      <span className="shrink-0 text-[11px] text-success font-medium pt-0.5">
                         Copied
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     {item.topic && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                         {item.topic}
                       </span>
                     )}
                     {item.source && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                         {item.source}
                       </span>
                     )}
                     {typeof item.importance === 'number' && (
                       <span
-                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
+                        className="text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
                         title="Importance score"
                       >
                         importance {item.importance.toFixed(1)}
@@ -384,7 +383,7 @@ export const MemoryTab = memo(function MemoryTab() {
                     )}
                     {item.timestamp > 0 && (
                       <span
-                        className="text-[9px] text-muted-foreground font-mono"
+                        className="text-[11px] text-muted-foreground font-mono"
                         title={new Date(item.timestamp * 1000).toLocaleString()}
                       >
                         {formatRelativeTime(item.timestamp)}
@@ -394,7 +393,7 @@ export const MemoryTab = memo(function MemoryTab() {
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
                   {typeof item.score === 'number' && searchResults !== null && (
-                    <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">
+                    <span className="text-xs text-muted-foreground font-mono shrink-0 mr-0.5">
                       {item.score.toFixed(2)}
                     </span>
                   )}
@@ -422,7 +421,7 @@ export const MemoryTab = memo(function MemoryTab() {
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mx-auto mt-1.5 text-xs text-primary hover:underline"
               aria-expanded={showAll}
             >
               {showAll ? 'Show fewer' : `Show all ${topicFiltered.length}`}
@@ -433,19 +432,14 @@ export const MemoryTab = memo(function MemoryTab() {
 
       {pendingClear && (
         <div className="flex items-center gap-1 border-t border-border/30 pt-2">
-          <span className="text-[10px] text-muted-foreground flex-1">Clear all stored memory?</span>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-6 text-[10px] px-2"
-            onClick={clearAll}
-          >
+          <span className="text-xs text-muted-foreground flex-1">Clear all stored memory?</span>
+          <Button variant="destructive" size="sm" className="h-6 text-xs px-2" onClick={clearAll}>
             Clear
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="h-6 text-[10px] px-2"
+            className="h-6 text-xs px-2"
             onClick={() => setPendingClear(false)}
           >
             Cancel
@@ -456,7 +450,7 @@ export const MemoryTab = memo(function MemoryTab() {
       <Link
         href="/knowledge"
         prefetch={false}
-        className="block text-center text-[10px] text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
+        className="block text-center text-xs text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
       >
         Manage memory →
       </Link>

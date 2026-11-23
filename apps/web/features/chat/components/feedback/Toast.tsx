@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { cn, IconX, IconCheckCircle, IconError, IconInfo } from '@sloughgpt/strui'
+import { cn, IconX, IconCheckCircle, IconError, IconInfo, IconPin } from '@sloughgpt/strui'
 
 export type ToastType = 'success' | 'error' | 'info'
 
@@ -12,6 +12,8 @@ export interface Toast {
   type: ToastType
   verbose?: string
   onUndo?: () => void
+  /** Sticky toasts never auto-expire — pinned until the user dismisses them. */
+  sticky?: boolean
 }
 
 interface ToastItemProps {
@@ -62,6 +64,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
   }
 
   useEffect(() => {
+    if (toast.sticky) return // pinned rows have no countdown — no auto-dismiss
     startRef.current = Date.now()
     const id = toast.id
 
@@ -114,6 +117,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       onClick={dismiss}
     >
       <span className="sr-only">
+        {toast.sticky && 'Pinned. '}
         {toast.type === 'success' && 'Success: '}
         {toast.type === 'error' && 'Error: '}
         {toast.type === 'info' && 'Information: '}
@@ -124,6 +128,12 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       <span className="sl-toast__body">
         <ToastIcon type={toast.type} className={cn('sl-toast__icon', styles.icon)} />
         <span className="sl-toast__message">
+          {toast.sticky && (
+            <span className="mr-1 inline-flex shrink-0 items-center align-middle text-xs text-muted-foreground">
+              <IconPin className="h-3 w-3" aria-hidden="true" />
+              <span className="sr-only">Pinned: </span>
+            </span>
+          )}
           {toast.message}
           {toast.verbose && (
             <button
@@ -168,9 +178,11 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         <pre className="sl-toast__verbose-block">{toast.verbose}</pre>
       )}
 
-      <span className="sl-toast__track">
-        <span className={cn('sl-toast__fill', styles.bar)} style={{ width: `${progress}%` }} />
-      </span>
+      {!toast.sticky && (
+        <span className="sl-toast__track">
+          <span className={cn('sl-toast__fill', styles.bar)} style={{ width: `${progress}%` }} />
+        </span>
+      )}
     </div>
   )
 }
@@ -193,7 +205,7 @@ export const ToastContainer = memo(function ToastContainer({
         <button
           type="button"
           onClick={onClearAll}
-          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-1 right-1 z-10 text-[11px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"
         >
           Clear all
@@ -243,7 +255,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
             <button
               type="button"
               onClick={onClearAll}
-              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset fixed bottom-20 right-4 z-[301] text-[11px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
               aria-label="Dismiss all notifications"
             >
               Clear all
@@ -252,7 +264,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
           <div
             role="region"
             aria-label="Notifications"
-            className="fixed bottom-0 right-0 z-[300] flex flex-col-reverse gap-2 p-4 max-h-screen w-full sm:w-[400px] pointer-events-none"
+            className="fixed bottom-20 right-0 z-[300] lg:bottom-0 flex flex-col-reverse gap-2 p-4 max-h-screen w-full sm:w-[400px] pointer-events-none"
           >
             {toasts.map((t) => (
               <Toast key={t.id} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
@@ -267,7 +279,15 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
                     )}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <ToastTitle className="text-sm">{t.message}</ToastTitle>
+                    <ToastTitle className="text-sm">
+                      {t.sticky && (
+                        <span className="mr-1 inline-flex items-center align-middle text-xs font-normal text-muted-foreground">
+                          <IconPin className="h-3 w-3" aria-hidden="true" />
+                          <span className="sr-only">Pinned: </span>
+                        </span>
+                      )}
+                      {t.message}
+                    </ToastTitle>
                     {t.verbose && <ToastDescription className="mt-1">{t.verbose}</ToastDescription>}
                   </div>
                   <ToastClose onClick={() => onDismiss(t.id)} />

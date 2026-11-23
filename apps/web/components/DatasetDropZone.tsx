@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useRef } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconUpload } from '@sloughgpt/strui'
@@ -12,7 +12,6 @@ interface DatasetDropZoneProps {
 }
 
 export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZoneProps) {
-  const addToast = notify.toast
   const uploadFile = useUploadFile()
   const [isDragging, setIsDragging] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -33,15 +32,15 @@ export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZone
           await uploadFile.mutateAsync(formData)
         }
 
-        addToast(`Uploaded ${fileArray.length} file(s)`, 'success')
+        notify.toast(`Uploaded ${fileArray.length} file(s)`, { type: 'success' })
         onUploadComplete()
       } catch {
-        addToast('Upload failed', 'error')
+        notify.toast('Upload failed', { type: 'error' })
       } finally {
         setProgress(null)
       }
     },
-    [addToast, onUploadComplete, uploadFile],
+    [onUploadComplete, uploadFile],
   )
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {

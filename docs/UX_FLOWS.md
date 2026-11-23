@@ -46,6 +46,13 @@ unregistered heading is allowed; register it when the sweep exists.
 - No "New chat" button that resets everything — memory is persistent
 - A sidebar shows recent conversations by topic ("Drafting an email to mom",
   "Planning weekend trip", "Learning about climate change")
+- **Long conversations stay answerable** — the oldest turns quietly scroll
+  out of the AI's working window once the chat grows past the context
+  limit (whole exchanges, oldest first; the current question is never the
+  thing that gets dropped). If it matters later, the user repeats it —
+  the AI never pretends it remembers a turn it can no longer see. The
+  mobile "+ Context" note (See What the AI Sees) is how a pinned fact
+  survives the scroll.
 
 **User flow:**
 
@@ -60,6 +67,10 @@ unregistered heading is allowed; register it when the sweep exists.
 - Sliders for temperature, top-p, etc.
 - Session IDs or chat IDs
 - "New chat" as a primary action
+- Token counts, cap numbers, or "context limit" error codes — the scroll
+  is invisible; a hard failure (a single message larger than the whole
+  window) is a plain-language "That message is too long to send —
+  try a shorter one", never `E_PROMPT_TOO_LONG`
 
 ---
 

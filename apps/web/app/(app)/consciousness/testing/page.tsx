@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { authFetch } from '@/lib/http-client'
@@ -77,7 +77,6 @@ const SAMPLE_INPUTS = [
 ]
 
 export default function ConsciousnessTestingPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
 
   const [selectedEndpoint, setSelectedEndpoint] = useState(0)
@@ -150,7 +149,7 @@ export default function ConsciousnessTestingPage() {
 
   const handleManualProcess = useCallback(async () => {
     if (!manualInput.trim()) {
-      addToast('Please enter input text', 'error')
+      notify.toast('Please enter input text', { type: 'error' })
       return
     }
     setManualLoading(true)
@@ -158,13 +157,13 @@ export default function ConsciousnessTestingPage() {
     try {
       const data = await consciousnessController.reflect()
       setManualResult(data as Record<string, unknown>)
-      addToast('Input processed', 'success')
+      notify.toast('Input processed', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setManualLoading(false)
     }
-  }, [manualInput, addToast])
+  }, [manualInput])
 
   const handleBatchRun = useCallback(async () => {
     setBatchLoading(true)
@@ -203,8 +202,8 @@ export default function ConsciousnessTestingPage() {
       setBatchProgress(i + 1)
     }
     setBatchLoading(false)
-    addToast(`Batch complete: ${batchCount} iterations`, 'success')
-  }, [batchCount, addToast])
+    notify.toast(`Batch complete: ${batchCount} iterations`, { type: 'success' })
+  }, [batchCount])
 
   const loadStateInspector = useCallback(async () => {
     setStateLoading(true)
@@ -221,35 +220,35 @@ export default function ConsciousnessTestingPage() {
       setEpisodesData(((episodesDataResult as any)?.episodes || []).slice(-5))
       setPersonalityData(personalityDataResult as unknown as Record<string, unknown>)
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setStateLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleResetDefaults = useCallback(async () => {
     setResetLoading(true)
     try {
       await consciousnessController.resetPersonality()
-      addToast('Reset to defaults', 'success')
+      notify.toast('Reset to defaults', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setResetLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleSeed50 = useCallback(async () => {
     setSeedLoading(true)
     try {
       const data = await consciousnessController.seedData({ count: 50 })
-      addToast(`Seeded ${(data as any).seeded ?? 50} episodes`, 'success')
+      notify.toast(`Seeded ${(data as any).seeded ?? 50} episodes`, { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeedLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   const handleExportState = useCallback(async () => {
     try {
@@ -261,27 +260,24 @@ export default function ConsciousnessTestingPage() {
       a.download = `consciousness-state-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('State exported', 'success')
+      notify.toast('State exported', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [addToast])
+  }, [])
 
-  const handleImportState = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (!file) return
-      try {
-        const text = await file.text()
-        JSON.parse(text)
-        addToast('State imported successfully', 'success')
-      } catch {
-        addToast('Invalid JSON file', 'error')
-      }
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    },
-    [addToast],
-  )
+  const handleImportState = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      JSON.parse(text)
+      notify.toast('State imported successfully', { type: 'success' })
+    } catch {
+      notify.toast('Invalid JSON file', { type: 'error' })
+    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [])
 
   const batchAvgGrowth =
     batchResults.length > 0
@@ -511,7 +507,7 @@ export default function ConsciousnessTestingPage() {
                           <td className="px-3 py-1.5">
                             <Badge
                               variant={r.growth_delta >= 0 ? 'default' : 'destructive'}
-                              className="text-[10px]"
+                              className="text-xs"
                             >
                               {r.growth_delta >= 0 ? '+' : ''}
                               {(r.growth_delta * 100).toFixed(1)}%

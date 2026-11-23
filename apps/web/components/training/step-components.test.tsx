@@ -271,6 +271,20 @@ describe('TrainStep', () => {
     expect(startTraining).toHaveBeenCalled()
   })
 
+  it('sends the chosen resume checkpoint with the start (card 20261119_133132)', () => {
+    const startTraining = vi.fn()
+    render(
+      <TrainStep
+        form={makeForm({ canStart: true, startTraining, resumeCheckpoint: 'run_555.soul' })}
+        datasets={makeDatasets({ selectedDataset: 'ds-1' })}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    screen.getByText('Start training').closest('button')!.click()
+    expect(startTraining).toHaveBeenCalledWith('run_555.soul')
+  })
+
   it('calls onBack when Back is clicked', () => {
     const onBack = vi.fn()
     render(

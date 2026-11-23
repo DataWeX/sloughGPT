@@ -76,7 +76,7 @@ export const AudioPlayer = memo(function AudioPlayer({
             style={{ width: `${progress}%` }}
           />
         </div>
-        <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+        <div className="flex justify-between mt-1 text-xs text-muted-foreground">
           <span>{formatDuration(currentTime * 1000)}</span>
           <span>{formatDuration(duration * 1000)}</span>
         </div>

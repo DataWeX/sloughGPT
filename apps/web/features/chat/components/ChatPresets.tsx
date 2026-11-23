@@ -118,7 +118,7 @@ export const ChatPresets = memo(function ChatPresets({ onSelect, className }: Ch
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-6"
+              className="text-xs h-6"
               onClick={handleCreate}
               disabled={!name.trim() || !prompt.trim()}
             >
@@ -128,7 +128,7 @@ export const ChatPresets = memo(function ChatPresets({ onSelect, className }: Ch
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-6"
+              className="text-xs h-6"
               onClick={() => setCreating(false)}
             >
               Cancel
@@ -158,7 +158,7 @@ export const ChatPresets = memo(function ChatPresets({ onSelect, className }: Ch
                   onClick={() => handleSelect(preset.prompt)}
                 >
                   <div className="text-xs font-medium truncate">{preset.name}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">
+                  <div className="text-xs text-muted-foreground truncate">
                     {preset.prompt.slice(0, 80)}
                     {preset.prompt.length > 80 ? '…' : ''}
                   </div>

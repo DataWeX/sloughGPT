@@ -1,7 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { IconRefresh, IconDownload } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
@@ -43,7 +53,7 @@ export default function AuditTrailPage() {
       if (typeFilter !== 'all') params.set('type', typeFilter)
       const qs = params.toString()
       const res = await apiGet<{ data: { activities: Activity[] } }>(
-        `/workspaces/${currentWorkspace.id}/activity${qs ? `?${qs}` : ''}`
+        `/workspaces/${currentWorkspace.id}/activity${qs ? `?${qs}` : ''}`,
       )
       setActivities(res?.data?.activities ?? [])
     } catch {
@@ -55,10 +65,12 @@ export default function AuditTrailPage() {
 
   useRefreshShortcut(fetchActivities)
 
-  useEffect(() => { fetchActivities() }, [fetchActivities])
+  useEffect(() => {
+    fetchActivities()
+  }, [fetchActivities])
 
   const filteredActivities = useMemo(() => {
-    return activities.filter(a => {
+    return activities.filter((a) => {
       // Text filter (client-side)
       if (filter) {
         const q = filter.toLowerCase()
@@ -75,7 +87,7 @@ export default function AuditTrailPage() {
 
   const exportCsv = () => {
     const headers = ['timestamp', 'type', 'action', 'detail', 'status', 'user']
-    const rows = filteredActivities.map(a => [
+    const rows = filteredActivities.map((a) => [
       a.timestamp,
       a.type,
       a.action,
@@ -83,7 +95,7 @@ export default function AuditTrailPage() {
       a.status,
       a.user,
     ])
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -95,7 +107,11 @@ export default function AuditTrailPage() {
 
   const formatTime = (ts: string) => {
     if (!ts) return ''
-    try { return new Date(ts).toLocaleString() } catch { return ts }
+    try {
+      return new Date(ts).toLocaleString()
+    } catch {
+      return ts
+    }
   }
 
   const typeCounts = useMemo(() => {
@@ -107,15 +123,16 @@ export default function AuditTrailPage() {
   }, [activities])
 
   const uniqueTypes = useMemo(() => {
-    const types = new Set(activities.map(a => a.type))
+    const types = new Set(activities.map((a) => a.type))
     return Array.from(types).sort()
   }, [activities])
 
   if (loading) {
     return (
-      <PageContainer title="Audit Trail"
-      toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
-    >
+      <PageContainer
+        title="Audit Trail"
+        toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
+      >
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -123,7 +140,8 @@ export default function AuditTrailPage() {
   }
 
   return (
-    <PageContainer title="Audit Trail"
+    <PageContainer
+      title="Audit Trail"
       toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
     >
       <KpiGrid className="mb-6">
@@ -139,56 +157,68 @@ export default function AuditTrailPage() {
           <div className="flex items-center gap-2">
             <Input
               value={filter}
-              onChange={e => setFilter(e.target.value)}
+              onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter by action, type, user..."
-              className="flex-1 h-6 text-[10px]"
+              className="flex-1 h-6 text-xs"
             />
             <select
               value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value)}
-              className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="h-6 text-xs rounded-md border border-border bg-background px-2"
             >
               <option value="all">All types</option>
-              {uniqueTypes.map(t => (
-                <option key={t} value={t}>{t}</option>
+              {uniqueTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              <label className="text-[10px] text-muted-foreground">From:</label>
+              <label className="text-xs text-muted-foreground">From:</label>
               <Input
                 type="date"
                 value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-                className="h-6 text-[10px] w-32"
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-6 text-xs w-32"
               />
             </div>
             <div className="flex items-center gap-1">
-              <label className="text-[10px] text-muted-foreground">To:</label>
+              <label className="text-xs text-muted-foreground">To:</label>
               <Input
                 type="date"
                 value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-                className="h-6 text-[10px] w-32"
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-6 text-xs w-32"
               />
             </div>
             {(dateFrom || dateTo || typeFilter !== 'all') && (
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 text-[10px]"
-                onClick={() => { setDateFrom(''); setDateTo(''); setTypeFilter('all') }}
+                className="h-6 text-xs"
+                onClick={() => {
+                  setDateFrom('')
+                  setDateTo('')
+                  setTypeFilter('all')
+                }}
               >
                 Clear filters
               </Button>
             )}
             <div className="flex-1" />
-            <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={fetchActivities}>
+            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={fetchActivities}>
               <IconRefresh className="h-3 w-3 mr-1" />
               Refresh
             </Button>
-            <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={exportCsv} disabled={filteredActivities.length === 0}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-xs"
+              onClick={exportCsv}
+              disabled={filteredActivities.length === 0}
+            >
               <IconDownload className="h-3 w-3 mr-1" />
               Export CSV
             </Button>
@@ -204,7 +234,9 @@ export default function AuditTrailPage() {
         <CardContent className="space-y-1">
           {filteredActivities.length === 0 ? (
             <p className="text-xs text-muted-foreground py-4 text-center">
-              {filter || dateFrom || dateTo || typeFilter !== 'all' ? 'No events match filters' : 'No events recorded'}
+              {filter || dateFrom || dateTo || typeFilter !== 'all'
+                ? 'No events match filters'
+                : 'No events recorded'}
             </p>
           ) : (
             filteredActivities.map((a, i) => (
@@ -213,41 +245,56 @@ export default function AuditTrailPage() {
                 className="rounded-md border border-transparent hover:border-border/40 transition-colors"
               >
                 <div
-                  className="flex items-center justify-between px-3 py-2 text-[10px] hover:bg-muted/50 cursor-pointer"
+                  className="flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/50 cursor-pointer"
                   onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${expandedIdx === i ? 'rotate-180' : ''}`} />
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                        a.type === 'training' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
-                        a.type === 'audit' ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
+                      <ChevronDown
+                        className={`h-3 w-3 text-muted-foreground transition-transform ${expandedIdx === i ? 'rotate-180' : ''}`}
+                      />
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                          a.type === 'training'
+                            ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
+                            : a.type === 'audit'
+                              ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary'
+                              : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
                         {a.type}
                       </span>
                       <span className="font-medium">{a.action}</span>
                     </div>
-                    {a.detail && <div className="text-muted-foreground mt-0.5 ml-5 truncate">{a.detail}</div>}
+                    {a.detail && (
+                      <div className="text-muted-foreground mt-0.5 ml-5 truncate">{a.detail}</div>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {a.user && <span className="text-muted-foreground">{a.user}</span>}
                     {a.status && (
-                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                        a.status === 'completed' || a.status === 'success' ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success' :
-                        a.status === 'failed' || a.status === 'failure' ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive' :
-                        a.status === 'running' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
+                      <span
+                        className={`px-1.5 py-0.5 rounded-full text-[11px] ${
+                          a.status === 'completed' || a.status === 'success'
+                            ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success'
+                            : a.status === 'failed' || a.status === 'failure'
+                              ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive'
+                              : a.status === 'running'
+                                ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
+                                : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
                         {a.status}
                       </span>
                     )}
-                    <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                    <span className="text-muted-foreground whitespace-nowrap">
+                      {formatTime(a.timestamp)}
+                    </span>
                   </div>
                 </div>
                 {expandedIdx === i && (
                   <div className="px-3 pb-3 pt-1 border-t border-border/30 ml-5">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px]">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                       <div className="flex items-center gap-1.5">
                         <Activity className="h-3 w-3 text-muted-foreground" />
                         <span className="text-muted-foreground">Type:</span>
@@ -270,7 +317,7 @@ export default function AuditTrailPage() {
                       </div>
                     </div>
                     {a.detail && (
-                      <div className="mt-2 p-2 bg-muted/30 rounded text-[10px] font-mono whitespace-pre-wrap">
+                      <div className="mt-2 p-2 bg-muted/30 rounded text-xs font-mono whitespace-pre-wrap">
                         {a.detail}
                       </div>
                     )}

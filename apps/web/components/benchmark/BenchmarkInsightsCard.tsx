@@ -5,7 +5,13 @@ import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 interface BenchmarkInsightsCardProps {
   metrics: BenchmarkResult | null
-  quality: { coherence_score: number; quality_score: number; repetition_rate: number; total_responses?: number; avg_length?: number } | null
+  quality: {
+    coherence_score: number
+    quality_score: number
+    repetition_rate: number
+    total_responses?: number
+    avg_length?: number
+  } | null
   stats: { total: number; avg_tokens: number } | null
 }
 
@@ -20,7 +26,9 @@ function extractMetric(metrics: BenchmarkResult, key: string): number | null {
   const val = (metrics as unknown as Record<string, unknown>)[key]
   if (typeof val === 'number') return val
   if (typeof val === 'object' && val !== null && 'value' in val) {
-    return typeof (val as { value: unknown }).value === 'number' ? (val as { value: number }).value : null
+    return typeof (val as { value: unknown }).value === 'number'
+      ? (val as { value: number }).value
+      : null
   }
   return null
 }
@@ -44,30 +52,44 @@ export function BenchmarkInsightsCard({ metrics, quality, stats }: BenchmarkInsi
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           {quality && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Quality</div>
-              <div className={cn('text-sm font-semibold', qualityInfo?.color)}>{(quality.quality_score * 100).toFixed(0)}%</div>
-              <div className="text-[10px] text-muted-foreground">{qualityInfo?.label}</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                Quality
+              </div>
+              <div className={cn('text-sm font-semibold', qualityInfo?.color)}>
+                {(quality.quality_score * 100).toFixed(0)}%
+              </div>
+              <div className="text-xs text-muted-foreground">{qualityInfo?.label}</div>
             </div>
           )}
           {quality && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Coherence</div>
-              <div className={cn('text-sm font-semibold', coherenceInfo?.color)}>{(quality.coherence_score * 100).toFixed(0)}%</div>
-              <div className="text-[10px] text-muted-foreground">{coherenceInfo?.label}</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                Coherence
+              </div>
+              <div className={cn('text-sm font-semibold', coherenceInfo?.color)}>
+                {(quality.coherence_score * 100).toFixed(0)}%
+              </div>
+              <div className="text-xs text-muted-foreground">{coherenceInfo?.label}</div>
             </div>
           )}
           {perplexity != null && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Perplexity</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                Perplexity
+              </div>
               <div className="text-sm font-semibold">{perplexity.toFixed(2)}</div>
-              <div className="text-[10px] text-muted-foreground">{perplexity < 20 ? 'Low' : perplexity < 50 ? 'Medium' : 'High'}</div>
+              <div className="text-xs text-muted-foreground">
+                {perplexity < 20 ? 'Low' : perplexity < 50 ? 'Medium' : 'High'}
+              </div>
             </div>
           )}
           {throughput != null && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Throughput</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                Throughput
+              </div>
               <div className="text-sm font-semibold">{throughput.toFixed(1)}</div>
-              <div className="text-[10px] text-muted-foreground">tokens/sec</div>
+              <div className="text-xs text-muted-foreground">tokens/sec</div>
             </div>
           )}
         </div>
@@ -75,7 +97,8 @@ export function BenchmarkInsightsCard({ metrics, quality, stats }: BenchmarkInsi
           {quality && quality.repetition_rate > 0.3 && (
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-warning" />
-              High repetition rate ({(quality.repetition_rate * 100).toFixed(0)}%) — consider adjusting temperature
+              High repetition rate ({(quality.repetition_rate * 100).toFixed(0)}%) — consider
+              adjusting temperature
             </div>
           )}
           {quality && quality.repetition_rate <= 0.3 && quality.repetition_rate > 0 && (

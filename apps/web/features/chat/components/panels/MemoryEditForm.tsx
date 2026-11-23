@@ -43,7 +43,7 @@ export function MemoryEditForm({ item, onSaved, onCancelled }: MemoryEditFormPro
 
   return (
     <div className="space-y-1.5 rounded border border-primary/40 p-2">
-      <p className="text-[10px] font-medium text-muted-foreground flex items-center gap-1.5">
+      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
         <IconEdit className="h-3 w-3" />
         Edit memory fact
       </p>
@@ -59,7 +59,7 @@ export function MemoryEditForm({ item, onSaved, onCancelled }: MemoryEditFormPro
           onChange={(e) => setTopic(e.target.value)}
           placeholder={item.topic || 'topic'}
           aria-label="Edit memory fact topic"
-          className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:border-primary/50"
+          className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:border-primary/50"
         />
       </div>
       <div className="flex items-center gap-1.5">
@@ -80,13 +80,13 @@ export function MemoryEditForm({ item, onSaved, onCancelled }: MemoryEditFormPro
       <div className="flex items-center gap-1.5">
         <Button
           size="sm"
-          className="h-6 text-[10px] px-2"
+          className="h-6 text-xs px-2"
           disabled={!content.trim() || saving}
           onClick={handleSave}
         >
           {saving ? 'Saving…' : 'Save'}
         </Button>
-        <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={onCancelled}>
+        <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={onCancelled}>
           Cancel
         </Button>
       </div>

@@ -268,8 +268,26 @@ class ServerState:
         with self._lock:
             return sum(1 for r in self._request_history if r["ts"] > cutoff)
 
-    def record_inference(self, tokens: int, elapsed_ms: float, model: str = "") -> None:
-        """Record a single inference: token count and generation time."""
+    def record_inference(
+        self,
+        tokens: int,
+        elapsed_ms: float,
+        model: str = "",
+        *,
+        cached: bool = False,
+    ) -> None:
+        """Record a single inference: token count and generation time.
+
+        ``cached=True`` marks a prompt-cache hit: the record is kept for
+        lifetime totals and model metrics (the serve really happened and
+        really cost ``elapsed_ms``) but excluded from
+        ``get_tokens_per_second`` — a hit performs no decode, so counting
+        it would report serve speed as generation speed.
+
+        ``elapsed_ms`` must be the decode window measured at the call
+        site, not a whole-turn clock (prompt processing and queue time
+        under-report the generation rate).
+        """
         with self._lock:
             self._inference_count += 1
             self._total_tokens += tokens
@@ -281,6 +299,7 @@ class ServerState:
                     "tokens": tokens,
                     "elapsed_ms": elapsed_ms,
                     "ts": time.time(),
+                    "cached": cached,
                 }
             )
             if model:
@@ -291,18 +310,17 @@ class ServerState:
                 self._model_metrics[model]["count"] += 1
 
     def get_tokens_per_second(self) -> float:
-        """Recent tokens/sec — sliding window of last 10 inferences.
+        """Recent decode tokens/sec — sliding window of last 10 inferences.
 
-        Falls back to lifetime average when fewer than 3 inferences recorded
-        (sliding window needs at least 2 data points for a meaningful rate).
+        Sums only non-cached records: a prompt-cache hit performs no decode
+        work, so including it would report serve speed as generation speed.
+        ``elapsed_ms`` is the decode window supplied by the record site —
+        there is no lifetime fallback, because a whole-lifetime average is
+        one more clock of the wrong shape. Returns 0.0 when no qualifying
+        record has positive time.
         """
         with self._lock:
-            recent = list(self._recent_inferences)[-10:]
-            if len(recent) < 3:
-                # Not enough data — use lifetime average
-                if self._total_inference_ms <= 0:
-                    return 0.0
-                return round(self._total_tokens / (self._total_inference_ms / 1000), 1)
+            recent = [r for r in self._recent_inferences if not r["cached"]][-10:]
             total_tokens = sum(r["tokens"] for r in recent)
             total_ms = sum(r["elapsed_ms"] for r in recent)
             if total_ms <= 0:
@@ -356,6 +374,12 @@ class ServerState:
         with self._lock:
             req_count = self._request_count
             err_count = self._error_count
+            inference_count = self._inference_count
+
+        # Engine-declared device (providers set _device in their loaders) —
+        # the slow-band label follows it automatically if a CUDA path lands.
+        provider = self.provider.get()
+        device = str(getattr(provider, "_device", "") or "")
 
         avg_lat = self.get_avg_latency()
         tps = self.get_tokens_per_second()
@@ -374,6 +398,8 @@ class ServerState:
             model_type=model_type,
             cpu_percent=cpu_percent,
             memory_percent=memory_percent,
+            inference_count=inference_count,
+            device=device,
         )
 
         return {

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useCallback, useEffect, useState } from 'react'
 import { cn, Button, Skeleton, EmptyCard } from '@sloughgpt/strui'
 import {
@@ -29,7 +29,6 @@ interface ArchiveDialogProps {
 }
 
 export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialogProps) {
-  const addToast = notify.toast
   const [records, setRecords] = useState<MemoryArchiveRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null)
@@ -41,11 +40,11 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
       const result = await memoryController.archive(20)
       setRecords(result.records || [])
     } catch {
-      addToast('Could not load archive records', 'error')
+      notify.toast('Could not load archive records', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     if (open) loadArchive()
@@ -64,13 +63,13 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
     try {
       const result = await memoryController.archive(1000)
       downloadJson(result.records || [], `memory-archive-${todayDateString()}.json`)
-      addToast(`Exported ${result.records?.length ?? 0} archive record(s)`, 'success')
+      notify.toast(`Exported ${result.records?.length ?? 0} archive record(s)`, { type: 'success' })
     } catch {
-      addToast('Could not export archive', 'error')
+      notify.toast('Could not export archive', { type: 'error' })
     } finally {
       setExporting(false)
     }
-  }, [addToast])
+  }, [])
 
   return (
     <SectionErrorBoundary sectionName="Import dialog">
@@ -116,7 +115,7 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
                       <div className="flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            'text-[9px] px-1.5 py-0.5 rounded-full font-medium',
+                            'text-[11px] px-1.5 py-0.5 rounded-full font-medium',
                             archiveBadgeClass(record.task_type),
                           )}
                         >
@@ -124,7 +123,7 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
                         </span>
                         <div className="flex items-center gap-2">
                           {record.ts > 0 && (
-                            <span className="text-[9px] text-muted-foreground font-mono">
+                            <span className="text-[11px] text-muted-foreground font-mono">
                               {new Date(record.ts * 1000).toLocaleString()}
                             </span>
                           )}
@@ -138,11 +137,11 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
                       </div>
                       <p className="text-sm mt-1 line-clamp-2 break-words">{summary.text || '—'}</p>
                       {summary.detail && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{summary.detail}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{summary.detail}</p>
                       )}
                     </button>
                     {expanded && (
-                      <pre className="text-[10px] font-mono leading-relaxed text-muted-foreground bg-muted/50 rounded-lg mx-3 mb-3 px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words">
+                      <pre className="text-xs font-mono leading-relaxed text-muted-foreground bg-muted/50 rounded-lg mx-3 mb-3 px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words">
                         {JSON.stringify(record, null, 2)}
                       </pre>
                     )}

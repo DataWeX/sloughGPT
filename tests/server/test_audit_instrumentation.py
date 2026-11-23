@@ -21,14 +21,14 @@ from apps.api.server.routers.config import ConfigRouter
 from apps.api.server.routers.datasets import DatasetsRouter
 from apps.api.server.routers.experiments import ExperimentsRouter
 from apps.api.server.routers.kb import KBRouter
-from apps.api.server.training.lora_eval import LoraEvalRouter
 from apps.api.server.routers.models import ModelsRouter
 from apps.api.server.routers.multimodal import MultimodalRouter
-from apps.api.server.training.self_train import SelfTrainRouter
 from apps.api.server.routers.souls import SoulsRouter
 from apps.api.server.routers.system import SystemRouter
 from apps.api.server.routers.tokenizer import TokenizerRouter
 from apps.api.server.routers.user_adapters import UserAdaptersRouter
+from apps.api.server.training.lora_eval import LoraEvalRouter
+from apps.api.server.training.self_train import SelfTrainRouter
 
 
 @pytest.fixture

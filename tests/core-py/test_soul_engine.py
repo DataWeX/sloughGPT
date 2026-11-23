@@ -245,8 +245,7 @@ class TestTokenizerFromMetadata:
         from domain.core._internal.soul import _tokenizer_from_metadata
 
         assert (
-            _tokenizer_from_metadata({"tokenizer": {"type": "token_tree", "tree": "nope"}})
-            is None
+            _tokenizer_from_metadata({"tokenizer": {"type": "token_tree", "tree": "nope"}}) is None
         )
         assert _tokenizer_from_metadata({"tokenizer": {"type": "other", "tree": {}}}) is None
 

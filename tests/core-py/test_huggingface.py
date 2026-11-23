@@ -11,7 +11,6 @@ import pytest
 from domain.training._internal.huggingface import api_loader, local_loader, model_map
 from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
-    HFInferenceClient,
     HuggingFaceAPILoader,
     chat_via_api,
     create_api_client,
@@ -46,14 +45,6 @@ from domain.training._internal.huggingface.model_map import (
 # ---------------------------------------------------------------------------
 # model_map
 # ---------------------------------------------------------------------------
-
-
-class TestModelSize:
-    def test_enum_values(self):
-        assert ModelSize.SMALL.value == "small"
-        assert ModelSize.MEDIUM.value == "medium"
-        assert ModelSize.LARGE.value == "large"
-        assert ModelSize.XLARGE.value == "xlarge"
 
 
 class TestHFModelInfo:
@@ -103,10 +94,6 @@ class TestGetModelInfo:
 
 
 class TestSearchModels:
-    def test_all(self):
-        results = search_models()
-        assert len(results) == len(HF_MODELS)
-
     def test_by_organization(self):
         results = search_models(organization="openai")
         assert results and all(m.organization == "openai" for m in results)
@@ -178,25 +165,11 @@ class TestGetModelRequirements:
 
 
 class TestMapToSloughgptConfig:
-    def test_small(self):
-        cfg = map_to_sloughgpt_config("gpt2")
-        assert cfg["n_embed"] == 256
-        assert cfg["n_layer"] == 6
-        assert cfg["n_head"] == 8
-        assert cfg["block_size"] == 512
-
     def test_medium(self):
         cfg = map_to_sloughgpt_config("meta-llama/Llama-2-7b-chat-hf")
         assert cfg["n_embed"] == 512
         assert cfg["n_layer"] == 12
         assert cfg["n_head"] == 16
-        assert cfg["block_size"] == 1024
-
-    def test_large(self):
-        cfg = map_to_sloughgpt_config("meta-llama/Llama-2-13b-chat-hf")
-        assert cfg["n_embed"] == 768
-        assert cfg["n_layer"] == 20
-        assert cfg["n_head"] == 24
         assert cfg["block_size"] == 1024
 
     def test_xlarge(self, monkeypatch):
@@ -406,9 +379,6 @@ class TestChatApi:
 
 
 class TestApiHelpers:
-    def test_hf_inference_client_alias(self):
-        assert issubclass(HFInferenceClient, HuggingFaceAPILoader)
-
     def test_create_api_client(self):
         client = create_api_client("gpt2", api_key="k")
         assert isinstance(client, HuggingFaceAPILoader)

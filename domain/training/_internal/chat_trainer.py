@@ -27,6 +27,7 @@ from domain.training._internal.slonet import (
     export_to_sou,
     tensor,
 )
+from domain.training._internal.trace import fingerprint_array
 from domain.training._internal.training_handler import clip_gradients, zero_grads
 
 logger = logging.getLogger("slo.training.chat_trainer")
@@ -270,6 +271,22 @@ def train_chat_model(
     text = _format_pairs_text(good_pairs)
     logger.info("Vocab: %d chars, text: %d chars", vocab_size, len(text), extra={"tag": "TRAIN"})
 
+    # Dataset identity over the corpus this run actually trained on — the
+    # whole ``text`` before the train/val split, mirroring SloughGPTTrainer
+    # (which hashes its full ``self.data``). Token ids, not raw bytes, so the
+    # hash covers the vocabulary too: same text under a different vocab is a
+    # different model. Computed once here, never inside the step loop.
+    #
+    # SCOPE (ruling 2026-11-17): recorded in the nested metadata + provenance
+    # sidecar for humans, deliberately NOT promoted to a top-level identity
+    # key. slonet.export_to_sou writes no top-level identity keys at all and
+    # this saves to checkpoint_dir (models/auto-training) while ModelLoader
+    # scans only models/slonet-native — so loader visibility needs the
+    # chat_trainer → SloughGPTTrainer consolidation, not a schema change here.
+    dataset_signature = fingerprint_array(
+        np.asarray([stoi.get(c, 0) for c in text], dtype=np.int64)
+    )
+
     # Split train/val — pairs are newest-first from extractor, so validate
     # on the oldest (tail) and train on the newer (head).
     val_size = max(1, int(len(good_pairs) * config.val_split))
@@ -447,6 +464,8 @@ def train_chat_model(
         str(ckpt_path),
         metadata={
             "soul_name": config.soul_name,
+            "dataset_signature": dataset_signature,
+            "dataset_signature_recipe": "blake2b256/tokens/v1",
             "vocab_size": vocab_size,
             "n_embed": config.n_embed,
             "n_layer": config.n_layer,

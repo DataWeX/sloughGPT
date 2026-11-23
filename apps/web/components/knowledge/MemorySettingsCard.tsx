@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -10,7 +10,6 @@ import { memoryController, type MemoryConfigResult } from '@/lib/memory-controll
 import { extractErrorMessage } from '@/lib/error-utils'
 
 export function MemorySettingsCard() {
-  const addToast = notify.toast
   const [config, setConfig] = useState<MemoryConfigResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
@@ -20,11 +19,11 @@ export function MemorySettingsCard() {
       const c = await memoryController.getConfig()
       setConfig(c)
     } catch {
-      addToast('Could not load memory config', 'error')
+      notify.toast('Could not load memory config', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -33,7 +32,7 @@ export function MemorySettingsCard() {
         const c = await memoryController.getConfig()
         if (active) setConfig(c)
       } catch {
-        if (active) addToast('Could not load memory config', 'error')
+        if (active) notify.toast('Could not load memory config', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }
@@ -42,16 +41,16 @@ export function MemorySettingsCard() {
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
   const handleToggle = async (enabled: boolean) => {
     setToggling(true)
     try {
       const updated = await memoryController.setEnabled(enabled)
       setConfig(updated)
-      addToast(enabled ? 'Auto-memory enabled' : 'Auto-memory disabled', 'success')
+      notify.toast(enabled ? 'Auto-memory enabled' : 'Auto-memory disabled', { type: 'success' })
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Could not update memory settings'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not update memory settings'), { type: 'error' })
     } finally {
       setToggling(false)
     }
@@ -116,8 +115,10 @@ export function MemorySettingsCard() {
           onClick={() =>
             memoryController
               .consolidate()
-              .then(() => addToast('Consolidation triggered', 'success'))
-              .catch((e) => addToast(extractErrorMessage(e, 'Could not consolidation'), 'error'))
+              .then(() => notify.toast('Consolidation triggered', { type: 'success' }))
+              .catch((e) =>
+                notify.toast(extractErrorMessage(e, 'Could not consolidation'), { type: 'error' }),
+              )
           }
         >
           Run Consolidation Now

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "description": "EXAMPLE curriculum for `train --curriculum <file>` (card 20261115_081635): 4 ordered stages over ONE SloughGPTTrainer — only the data swaps between stages, model/optimizer/global_step/EWC state carry across boundaries. Corpora are this repo's own docs so the example runs from a fresh checkout; point datasets[].path at your own text (an explicit file path, or a data/<name>/input.txt dataset name; .jsonl files contribute each record's text field). GATE THRESHOLDS (max_eval_loss 3.5, min_quality 2.5, max_toxicity 0.2) are no longer placeholders — calibrated on a real 4-stage run 2026-11-19 (measured: eval_loss 2.95-3.04, quality 3.06-3.83, toxicity 0.00-0.10 at the quick-train shape; margins +15% / floor-18% / 2x). REPLAY (0.15/0.2/0.25), EPOCHS (1) AND DATASET RATIOS REMAIN PLACEHOLDERS — recipe defaults chosen by hand, not calibrated; tune them to your corpus. On gate failure the default policy logs a warning, marks the checkpoint PROVISIONAL, and advances; set a stage's on_gate_fail to abort to stop the run instead. eval_text is held out from every stage.",
+  "eval_text": "docs/UX_FLOWS.md",
+  "stages": [
+    {
+      "name": "foundation",
+      "datasets": [
+        { "path": "docs/AGENT_SYNC.md", "ratio": 1.0 }
+      ],
+      "epochs": 1,
+      "gate": { "max_eval_loss": 3.5 },
+      "on_gate_fail": "continue"
+    },
+    {
+      "name": "realm",
+      "datasets": [
+        { "path": "docs/WORLD_REALM.md", "ratio": 1.0 }
+      ],
+      "epochs": 1,
+      "replay": 0.15,
+      "ewc": true,
+      "gate": { "max_eval_loss": 3.5, "min_quality": 2.5 },
+      "on_gate_fail": "continue"
+    },
+    {
+      "name": "persona",
+      "datasets": [
+        { "path": "docs/USER_PERSONA.md", "ratio": 1.0 }
+      ],
+      "epochs": 1,
+      "replay": 0.2,
+      "ewc": true,
+      "gate": { "min_quality": 2.5, "max_toxicity": 0.2 },
+      "on_gate_fail": "continue"
+    },
+    {
+      "name": "consolidation",
+      "datasets": [
+        { "path": "docs/AGENT_SYNC.md", "ratio": 3.0 },
+        { "path": "docs/WORLD_REALM.md", "ratio": 1.0 },
+        { "path": "docs/USER_PERSONA.md", "ratio": 1.0 }
+      ],
+      "epochs": 1,
+      "replay": 0.25,
+      "ewc": true,
+      "gate": { "max_eval_loss": 3.5, "min_quality": 2.5, "max_toxicity": 0.2 },
+      "on_gate_fail": "continue"
+    }
+  ]
+}

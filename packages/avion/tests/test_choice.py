@@ -65,6 +65,17 @@ class TestCandidates:
             "task cannot be done",
         ]
 
+    def test_fill_card_needs_a_task_that_enters_text(self):
+        tree = {"role": "root", "children": [{"role": "textbox", "name": "Search"}]}
+        assert [c.kind for c in propose_candidates(tree, "click the clear button")] == [
+            "wait",
+            "done",
+            "fail",
+        ]
+        assert propose_candidates(tree, "type hi into Search")[0].label == (
+            "type 'hi' into 'Search'"
+        )
+
     def test_limit(self):
         tree = {
             "role": "root",
@@ -87,8 +98,9 @@ class TestCandidates:
 class TestLoop:
     def test_click_then_done(self):
         s = session_with_tree()
-        # choices: 1 click Start, 2 click More, 3 fill Search, 4 wait, 5 done, 6 fail
-        script = ["1", "5"]
+        # "press start" asks for no text, so the Search field offers no fill
+        # card: 1 click Start, 2 click More, 3 wait, 4 done, 5 fail
+        script = ["1", "4"]
 
         async def fake(prompt):
             return script.pop(0)
@@ -116,7 +128,7 @@ class TestLoop:
         s = session_with_tree()
 
         async def fake(prompt):
-            return "6"  # fail is 6th of 6 choices
+            return "5"  # fail is 5th of 5 choices; no fill card for a textless task
 
         agent = ChoiceAgent(s, generate=fake)
         result = run(agent.run("t"))

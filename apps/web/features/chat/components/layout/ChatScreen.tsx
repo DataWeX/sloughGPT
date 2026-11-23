@@ -64,7 +64,6 @@ interface ChatScreenProps {
   onEdit?: (messageId: string, newContent: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
-  onModeSelect?: (mode: string) => void
   className?: string
   model?: string
   isBookmarked?: (id: string) => boolean
@@ -105,7 +104,6 @@ export const ChatScreen = memo(function ChatScreen({
   onEdit,
   searchQuery,
   onSuggestionClick,
-  onModeSelect,
   className,
   model,
   isBookmarked,
@@ -249,7 +247,6 @@ export const ChatScreen = memo(function ChatScreen({
               hasModel={hasModel}
               suggestions={suggestions}
               onSuggestionClick={onSuggestionClick}
-              onModeSelect={onModeSelect}
             />
           </div>
         )}
@@ -262,7 +259,7 @@ export const ChatScreen = memo(function ChatScreen({
 
         {ragVerification && (
           <div className="w-full px-4 sm:px-6 pb-1">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5">
               <span
                 className={cn(
                   'inline-block h-1.5 w-1.5 rounded-full',
@@ -307,7 +304,6 @@ export const ChatScreen = memo(function ChatScreen({
       hasModel,
       suggestions,
       onSuggestionClick,
-      onModeSelect,
       onRefreshHealth,
       toolEvents,
       ragVerification,
@@ -362,7 +358,7 @@ export const ChatScreen = memo(function ChatScreen({
               aria-label={formatDateLabel(new Date(message.timestamp))}
             >
               <div className="flex-1 border-t border-border/40" />
-              <span className="mx-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest">
+              <span className="mx-3 text-xs font-medium text-muted-foreground/60 uppercase tracking-widest">
                 {formatDateLabel(new Date(message.timestamp))}
               </span>
               <div className="flex-1 border-t border-border/40" />

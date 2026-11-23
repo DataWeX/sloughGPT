@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -9,7 +9,6 @@ type ActionName = 'toggle' | 'dashboard' | 'personality' | 'quickactions' | null
 
 export function useConsciousnessShortcuts(enabled: boolean = true) {
   const router = useRouter()
-  const addToast = notify.toast
   const [lastAction, setLastAction] = useState<ActionName>(null)
   const [registered, setRegistered] = useState(enabled)
   const lastActionRef = useRef<ActionName>(null)
@@ -51,7 +50,7 @@ export function useConsciousnessShortcuts(enabled: boolean = true) {
       setLastAction(action)
 
       if (action === 'toggle') {
-        addToast('Toggling consciousness...', 'info')
+        notify.toast('Toggling consciousness...', { type: 'info' })
         consciousnessController
           .getStatus()
           .then((status) => {
@@ -61,13 +60,13 @@ export function useConsciousnessShortcuts(enabled: boolean = true) {
           })
           .then((result) => {
             const level = (result as any)?.level
-            addToast(
+            notify.toast(
               level ? `Consciousness enabled (level ${level})` : 'Consciousness disabled',
-              'success',
+              { type: 'success' },
             )
           })
           .catch(() => {
-            addToast('Failed to toggle consciousness', 'error')
+            notify.toast('Failed to toggle consciousness', { type: 'error' })
           })
       }
 
@@ -86,7 +85,7 @@ export function useConsciousnessShortcuts(enabled: boolean = true) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [registered, router, addToast])
+  }, [registered, router])
 
   return { registerShortcuts, lastAction } as any
 }

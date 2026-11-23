@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -36,7 +36,6 @@ const RESOURCE_COLORS: Record<string, string> = {
 
 export default function SharedDataPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
   const [shares, setShares] = useState<Share[]>([])
   const [loading, setLoading] = useState(true)
   const [showShareDialog, setShowShareDialog] = useState(false)
@@ -86,11 +85,11 @@ export default function SharedDataPage() {
       )
       setShares(res?.data?.shares ?? [])
     } catch {
-      addToast('Could not load shared data', 'error')
+      notify.toast('Could not load shared data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, addToast])
+  }, [currentWorkspace?.id])
 
   const fetchWorkspaces = useCallback(async () => {
     try {
@@ -118,7 +117,7 @@ export default function SharedDataPage() {
 
   const handleShare = async () => {
     if (!shareResourceId.trim() || !shareTargetWs) {
-      addToast('Fill in all fields', 'error')
+      notify.toast('Fill in all fields', { type: 'error' })
       return
     }
     try {
@@ -128,23 +127,23 @@ export default function SharedDataPage() {
         target_workspace_id: shareTargetWs,
         permission: sharePermission,
       })
-      addToast('Data shared successfully', 'success')
+      notify.toast('Data shared successfully', { type: 'success' })
       setShowShareDialog(false)
       setShareResourceId('')
       setShareTargetWs('')
       fetchShares()
     } catch {
-      addToast('Could not share data', 'error')
+      notify.toast('Could not share data', { type: 'error' })
     }
   }
 
   const handleRevoke = async (shareId: string) => {
     try {
       await apiDelete(`/workspaces/${currentWorkspace?.id}/share/${shareId}`)
-      addToast('Share revoked', 'success')
+      notify.toast('Share revoked', { type: 'success' })
       fetchShares()
     } catch {
-      addToast('Could not revoke share', 'error')
+      notify.toast('Could not revoke share', { type: 'error' })
     }
   }
 
@@ -171,7 +170,7 @@ export default function SharedDataPage() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={() => {
               fetchShares()
               fetchWorkspaces()
@@ -180,7 +179,7 @@ export default function SharedDataPage() {
           >
             <RefreshCw className="h-3 w-3 mr-1" /> Refresh
           </Button>
-          <Button size="sm" className="h-6 text-[10px]" onClick={() => setShowShareDialog(true)}>
+          <Button size="sm" className="h-6 text-xs" onClick={() => setShowShareDialog(true)}>
             Share Data
           </Button>
         </div>
@@ -198,7 +197,7 @@ export default function SharedDataPage() {
               <select
                 value={shareType}
                 onChange={(e) => setShareType(e.target.value)}
-                className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                className="h-6 text-xs rounded-md border border-border bg-background px-2"
               >
                 <option value="dataset">Dataset</option>
                 <option value="knowledge">Knowledge</option>
@@ -208,7 +207,7 @@ export default function SharedDataPage() {
                 <select
                   value={shareResourceId}
                   onChange={(e) => setShareResourceId(e.target.value)}
-                  className="flex-1 h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                  className="flex-1 h-6 text-xs rounded-md border border-border bg-background px-2"
                 >
                   <option value="">Select dataset...</option>
                   {datasets.map((d) => (
@@ -222,7 +221,7 @@ export default function SharedDataPage() {
                   value={shareResourceId}
                   onChange={(e) => setShareResourceId(e.target.value)}
                   placeholder={`${shareType} ID`}
-                  className="flex-1 h-6 text-[10px]"
+                  className="flex-1 h-6 text-xs"
                 />
               )}
             </div>
@@ -230,7 +229,7 @@ export default function SharedDataPage() {
               <select
                 value={shareTargetWs}
                 onChange={(e) => setShareTargetWs(e.target.value)}
-                className="flex-1 h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                className="flex-1 h-6 text-xs rounded-md border border-border bg-background px-2"
               >
                 <option value="">Select workspace...</option>
                 {workspaces.map((w) => (
@@ -242,20 +241,20 @@ export default function SharedDataPage() {
               <select
                 value={sharePermission}
                 onChange={(e) => setSharePermission(e.target.value)}
-                className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                className="h-6 text-xs rounded-md border border-border bg-background px-2"
               >
                 <option value="read">Read only</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" className="h-6 text-[10px]" onClick={handleShare}>
+              <Button size="sm" className="h-6 text-xs" onClick={handleShare}>
                 Share
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
                 onClick={() => setShowShareDialog(false)}
               >
                 Cancel
@@ -275,7 +274,7 @@ export default function SharedDataPage() {
         </CardHeader>
         <CardContent className="space-y-1">
           {incoming.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground text-center py-4">
+            <p className="text-xs text-muted-foreground text-center py-4">
               No data shared with this workspace
             </p>
           ) : (
@@ -284,12 +283,12 @@ export default function SharedDataPage() {
               return (
                 <div
                   key={s.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
+                  className="flex items-center justify-between px-3 py-2 rounded-md text-xs hover:bg-muted/50 border border-transparent hover:border-border/40"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
                       >
                         <Icon className="h-2.5 w-2.5 inline mr-0.5" />
                         {s.resource_type}
@@ -324,7 +323,7 @@ export default function SharedDataPage() {
         </CardHeader>
         <CardContent className="space-y-1">
           {outgoing.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground text-center py-4">
+            <p className="text-xs text-muted-foreground text-center py-4">
               No data shared from this workspace
             </p>
           ) : (
@@ -333,12 +332,12 @@ export default function SharedDataPage() {
               return (
                 <div
                   key={s.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
+                  className="flex items-center justify-between px-3 py-2 rounded-md text-xs hover:bg-muted/50 border border-transparent hover:border-border/40"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
                       >
                         <Icon className="h-2.5 w-2.5 inline mr-0.5" />
                         {s.resource_type}
@@ -360,7 +359,7 @@ export default function SharedDataPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-5 text-[9px] text-destructive"
+                      className="h-5 text-[11px] text-destructive"
                       onClick={() => handleRevoke(s.id)}
                     >
                       Revoke

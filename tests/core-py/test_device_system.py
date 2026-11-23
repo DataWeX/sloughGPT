@@ -159,12 +159,6 @@ class TestBus:
         assert ds.bus is not None
         assert hasattr(ds.bus, "register")
 
-    def test_bus_has_registered_devices(self):
-        ds = DeviceSystem()
-        dev = StubDevice()
-        ds.register("stub", dev)
-        assert ds.bus.open("stub") is dev
-
 
 class TestLenContains:
     def test_len(self):

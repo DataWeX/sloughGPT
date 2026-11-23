@@ -18,7 +18,9 @@ vi.mock('@/lib/auth', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))
@@ -29,14 +31,40 @@ describe('SharedDataPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApiGet.mockImplementation((url: string) => {
-      if (url.includes('/shared')) return Promise.resolve({ data: { shares: [
-        { id: 's1', resource_type: 'dataset', resource_id: 'ds-1', source_workspace_id: 'ws-2', target_workspace_id: 'ws-1', permission: 'read', shared_by: 'u1', shared_at: '2024-01-01T00:00:00Z' },
-        { id: 's2', resource_type: 'knowledge', resource_id: 'kn-1', source_workspace_id: 'ws-1', target_workspace_id: 'ws-3', permission: 'admin', shared_by: 'u1', shared_at: '2024-02-01T00:00:00Z' },
-      ] } })
-      if (url === '/workspaces') return Promise.resolve({ data: [
-        { id: 'ws-1', name: 'Current Workspace' },
-        { id: 'ws-2', name: 'Other Workspace' },
-      ] })
+      if (url.includes('/shared'))
+        return Promise.resolve({
+          data: {
+            shares: [
+              {
+                id: 's1',
+                resource_type: 'dataset',
+                resource_id: 'ds-1',
+                source_workspace_id: 'ws-2',
+                target_workspace_id: 'ws-1',
+                permission: 'read',
+                shared_by: 'u1',
+                shared_at: '2024-01-01T00:00:00Z',
+              },
+              {
+                id: 's2',
+                resource_type: 'knowledge',
+                resource_id: 'kn-1',
+                source_workspace_id: 'ws-1',
+                target_workspace_id: 'ws-3',
+                permission: 'admin',
+                shared_by: 'u1',
+                shared_at: '2024-02-01T00:00:00Z',
+              },
+            ],
+          },
+        })
+      if (url === '/workspaces')
+        return Promise.resolve({
+          data: [
+            { id: 'ws-1', name: 'Current Workspace' },
+            { id: 'ws-2', name: 'Other Workspace' },
+          ],
+        })
       return Promise.resolve({ data: null })
     })
   })

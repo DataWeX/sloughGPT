@@ -31,7 +31,6 @@ never a new module beside it. Descriptions below are each package's own
 | `domain/benchmark`      | benchmark — Benchmark domain for performance testing.                         |
 | `domain/chat`           | chat — Chat domain for message handling.                                      |
 | `domain/cognition`      | cognition — Reasoning, thinking, creativity, RAG, and consciousness.          |
-| `domain/cognitive`      | cognitive — Cognitive architecture domain.                                    |
 | `domain/collections`    | collections — Data collection pipeline: sources, stores, filters, collectors. |
 | `domain/companion`      | companion — AI companion system for natural conversation.                     |
 | `domain/context`        | context — Context managers for model behavior steering.                       |

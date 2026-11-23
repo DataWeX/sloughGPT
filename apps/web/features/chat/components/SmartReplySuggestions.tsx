@@ -64,12 +64,7 @@ const patterns: SuggestionPattern[] = [
   },
 ]
 
-const defaultSuggestions = [
-  'Tell me more',
-  'Can you explain?',
-  'What else?',
-  'Good point',
-]
+const defaultSuggestions = ['Tell me more', 'Can you explain?', 'What else?', 'Good point']
 
 function generateSuggestions(lastMessage: string): string[] {
   if (!lastMessage) return defaultSuggestions
@@ -111,7 +106,7 @@ export const SmartReplySuggestions = memo(function SmartReplySuggestions({
   }, [lastAssistantMessage])
 
   const handleRefresh = useCallback(() => {
-    setCustomCount(prev => prev + 1)
+    setCustomCount((prev) => prev + 1)
   }, [])
 
   const handleDismiss = useCallback(() => {
@@ -127,7 +122,7 @@ export const SmartReplySuggestions = memo(function SmartReplySuggestions({
           key={`${suggestion}-${i}`}
           variant="ghost"
           size="sm"
-          className="text-[10px] h-6 rounded-full border border-border/50 hover:bg-muted/50"
+          className="text-xs h-6 rounded-full border border-border/50 hover:bg-muted/50"
           onClick={() => onSelect(suggestion)}
         >
           {suggestion}

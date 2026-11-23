@@ -12,13 +12,13 @@ import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from 'react-rout
 import AppLayout from '@/components/AppLayout'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { BootstrapProvider } from '@/contexts/BootstrapContext'
-import { ModelProvider } from '@/contexts/ModelContext'
 import { LocaleProvider } from '@/hooks/useLocale'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import { StartupOverlay } from '@/components/startup/StartupOverlay'
 import { ConsciousnessQuickActionsWrapper } from '@/components/consciousness/ConsciousnessQuickActionsWrapper'
 import { RouteDigestBoundary, ViteNavigatorBinder } from '@/vite/next-compat/digest-boundary'
 import { AppReadySentinel } from '@/vite/AppReadySentinel'
+import { RouteErrorBoundary } from '@/vite/RouteErrorBoundary'
 import { discoveredRoutes } from '@/vite/routes'
 import { REDIRECTS, splitTarget } from '@/lib/redirects'
 
@@ -79,7 +79,6 @@ function App() {
   return (
     <ThemeProvider>
       <BootstrapProvider>
-        <ModelProvider>
           <LocaleProvider>
             <ErrorLifecycle />
             <StartupOverlay />
@@ -102,15 +101,17 @@ function App() {
                       children only once its chunk has committed, so the
                       data-app-ready flag can never lead the route content it
                       declares readiness for. */}
-                  {discoveredRoutes.map(({ path, Component }) => (
+                  {discoveredRoutes.map(({ path, Component, Loading, ErrorComponent }) => (
                     <Route
                       key={path}
                       path={path}
                       element={
-                        <Suspense fallback={<PageFallback />}>
-                          <Component />
-                          <AppReadySentinel />
-                        </Suspense>
+                        <RouteErrorBoundary errorComponent={ErrorComponent}>
+                          <Suspense fallback={Loading ? <Loading /> : <PageFallback />}>
+                            <Component />
+                            <AppReadySentinel />
+                          </Suspense>
+                        </RouteErrorBoundary>
                       }
                     />
                   ))}
@@ -133,7 +134,6 @@ function App() {
               </Routes>
             </BrowserRouter>
           </LocaleProvider>
-        </ModelProvider>
       </BootstrapProvider>
     </ThemeProvider>
   )

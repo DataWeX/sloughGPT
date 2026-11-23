@@ -37,9 +37,7 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
 def _tiny_scene():
-    return make_live_scene(
-        grid=(6, 4, 6), population=2, organic_pools=1, day_ticks=12, seed=3
-    )
+    return make_live_scene(grid=(6, 4, 6), population=2, organic_pools=1, day_ticks=12, seed=3)
 
 
 # ── StreamDevice ─────────────────────────────────────────────────────────
@@ -160,9 +158,7 @@ class TestWorldStreamAsm:
         scene = _tiny_scene()
         arena = TensorArena()
         received = []
-        world = WorldDevice(
-            scene, config=RenderConfig(width=24, height=18, samples=1), arena=arena
-        )
+        world = WorldDevice(scene, config=RenderConfig(width=24, height=18, samples=1), arena=arena)
         cycles = CyclesDevice(width=24, height=18, samples=1, arena=arena)
         stream = StreamDevice(frame_fn=lambda data, tag: received.append((tag, data)))
         register_standalone_device("world", world)
@@ -239,8 +235,9 @@ class TestRunStream:
         sentinel = object()
         register_standalone_device("stream", sentinel)
         try:
-            run_stream(1, grid=(6, 4, 6), population=1, pools=1, seed=3,
-                       width=24, height=18, samples=1)
+            run_stream(
+                1, grid=(6, 4, 6), population=1, pools=1, seed=3, width=24, height=18, samples=1
+            )
             assert _STANDALONE_DEVICES["stream"] is sentinel  # restored, not clobbered
             assert "world" not in _STANDALONE_DEVICES
             assert "cycles" not in _STANDALONE_DEVICES

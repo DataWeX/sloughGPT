@@ -347,6 +347,175 @@ def test_cli_click_state_persists_across_invocations(chromium_ws, http_url, caps
     assert asyncio.run(check()) is True
 
 
+def test_cli_click_logs_resolved_element(chromium_ws, http_url, capsys):
+    """click reports the element the resolution site hit — tag#id, content, rect."""
+    from avion.cli import main
+
+    assert main(["--cdp", chromium_ws, "open", http_url]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "click", "#go"]) == 0
+    out = capsys.readouterr().out
+    assert "clicked css: #go → button#go 'Go' @" in out
+    assert " (match" not in out  # unique css match: no ordinal noise
+
+
+def test_cli_fill_logs_resolved_element(chromium_ws, http_url, capsys):
+    from avion.cli import main
+
+    assert main(["--cdp", chromium_ws, "open", http_url]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "fill", "input[name=q]", "hello"]) == 0
+    out = capsys.readouterr().out
+    assert "filled css: input[name=q] → input @" in out
+
+
+def test_cli_text_click_logs_match_ordinal(chromium_ws, tmp_path, capsys):
+    """Two elements match the text: the log says WHICH one was hit (1 of 2)."""
+    from avion.cli import main
+
+    page = tmp_path / "ambig.html"
+    page.write_text(
+        "<!doctype html><title>Ambig</title><body>"
+        "<button id='a'>Go</button><button id='b'>Go</button></body>"
+    )
+    assert main(["--cdp", chromium_ws, "open", page.as_uri()]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "click", "--by", "text", "Go"]) == 0
+    out = capsys.readouterr().out
+    assert "clicked text: Go → button#a 'Go' @" in out
+    assert "(match 1/2)" in out
+
+
+def _eval_js(chromium_ws, expr):
+    """Fresh-session evaluate — the state check after a CLI invocation."""
+    import asyncio
+
+    from avion.backends.cdp import CdpBackend
+
+    async def run():
+        b = CdpBackend(cdp_url=chromium_ws)
+        await b.start()
+        try:
+            return await b.evaluate(expr)
+        finally:
+            await b.stop()
+
+    return asyncio.run(run())
+
+
+def test_cli_click_multi_matches_clicks_all_rendered(chromium_ws, tmp_path, capsys):
+    """Identify the whole match set first, then click every rendered match.
+
+    Hidden ones are skipped with a stderr report; click lines carry the
+    ORIGINAL set ordinals in execution (backward) order.
+    """
+    from avion.cli import main
+
+    page = tmp_path / "multi.html"
+    page.write_text(
+        "<!doctype html><title>Multi</title><body>"
+        "<button id='a' onclick='window.__a=(window.__a||0)+1'>Go</button>"
+        "<button id='b' onclick='window.__b=(window.__b||0)+1'>Go</button>"
+        "<button id='c' style='display:none' onclick='window.__c=(window.__c||0)+1'>Go</button>"
+        "</body>"
+    )
+    assert main(["--cdp", chromium_ws, "open", page.as_uri()]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "click", "--by", "text", "Go"]) == 0
+    out = capsys.readouterr()
+    # identify first: the whole set with ordinals, hidden marked
+    assert "3 matches for text: Go:" in out.out
+    assert "button#a 'Go'" in out.out and "(match 1/3)" in out.out
+    assert "button#c 'Go'" in out.out and "(hidden)" in out.out
+    # hidden skipped with a report
+    assert "skipping hidden match 3/3" in out.err
+    # click lines: original set ordinals, backward execution order
+    lines = [ln for ln in out.out.splitlines() if ln.startswith("clicked text:")]
+    assert len(lines) == 2
+    assert "button#b" in lines[0] and "(match 2/3)" in lines[0]
+    assert "button#a" in lines[1] and "(match 1/3)" in lines[1]
+    # side effects: a and b clicked exactly once, hidden c untouched
+    assert _eval_js(chromium_ws, "[window.__a||0, window.__b||0, window.__c||0]") == [1, 1, 0]
+
+
+def test_cli_click_nth_picks_one_match(chromium_ws, tmp_path, capsys):
+    """--nth N picks one match from the identified set (1-based)."""
+    from avion.cli import main
+
+    page = tmp_path / "nth.html"
+    page.write_text(
+        "<!doctype html><title>Nth</title><body>"
+        "<button id='a' onclick='window.__a=(window.__a||0)+1'>Go</button>"
+        "<button id='b' onclick='window.__b=(window.__b||0)+1'>Go</button>"
+        "</body>"
+    )
+    assert main(["--cdp", chromium_ws, "open", page.as_uri()]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "click", "--by", "text", "Go", "--nth", "2"]) == 0
+    out = capsys.readouterr()
+    assert "2 matches for text: Go:" in out.out  # the set is still identified
+    lines = [ln for ln in out.out.splitlines() if ln.startswith("clicked text:")]
+    assert len(lines) == 1
+    assert "button#b" in lines[0] and "(match 2/2)" in lines[0]
+    assert _eval_js(chromium_ws, "[window.__a||0, window.__b||0]") == [0, 1]
+
+
+def test_cli_click_all_hidden_falls_back_to_first(chromium_ws, tmp_path, capsys):
+    """Nothing rendered: fall back to the first match (pre-multi behaviour)
+    and say so — a silent zero-click would read as success."""
+    from avion.cli import main
+
+    page = tmp_path / "hidden.html"
+    page.write_text(
+        "<!doctype html><title>Hidden</title><body>"
+        "<button id='a' style='display:none' onclick='window.__a=(window.__a||0)+1'>Go</button>"
+        "<button id='b' style='display:none' onclick='window.__b=(window.__b||0)+1'>Go</button>"
+        "</body>"
+    )
+    assert main(["--cdp", chromium_ws, "open", page.as_uri()]) == 0
+    capsys.readouterr()
+    assert main(["--cdp", chromium_ws, "click", "--by", "text", "Go"]) == 0
+    out = capsys.readouterr()
+    assert "all 2 matches are hidden" in out.err
+    assert "clicking the first match anyway" in out.err
+    lines = [ln for ln in out.out.splitlines() if ln.startswith("clicked text:")]
+    assert len(lines) == 1 and "button#a" in lines[0]
+    # JS click() fires on display:none — the first match took the hit
+    assert _eval_js(chromium_ws, "[window.__a||0, window.__b||0]") == [1, 0]
+
+
+def test_cli_miss_prints_near_miss_report(chromium_ws, tmp_path, capsys):
+    """Not-found explains WHY: candidates containing the text + rejection reasons."""
+    from avion.cli import main
+
+    page = tmp_path / "near.html"
+    page.write_text(
+        "<!doctype html><title>Near</title><body>"
+        "<div id='a'>Dismiss <div id='b'>Dismiss b <div id='c'>c</div></div></div>"
+        "<div id='d'>Dismiss here <span id='e'>e</span></div></body>"
+    )
+    assert main(["--cdp", chromium_ws, "open", page.as_uri()]) == 0
+    assert main(["--cdp", chromium_ws, "click", "--by", "text", "Dismiss"]) == 1
+    err = capsys.readouterr().err
+    assert "element not found (text): Dismiss" in err
+    assert "near-miss:" in err
+    # every element containing the needle is a non-leaf — all three listed
+    assert "3 candidate(s), none matched" in err
+    assert "<div#a>" in err and "<div#b>" in err and "<div#d>" in err
+    assert "has child elements (not a leaf)" in err
+
+
+def test_cli_role_strategy_reports_unsupported(chromium_ws, http_url, capsys):
+    """A strategy the backend cannot resolve says so instead of a bare miss."""
+    from avion.cli import main
+
+    assert main(["--cdp", chromium_ws, "open", http_url]) == 0
+    assert main(["--cdp", chromium_ws, "click", "--by", "role", "button"]) == 1
+    err = capsys.readouterr().err
+    assert "element not found (role): button" in err
+    assert "unsupported by this backend" in err
+
+
 def test_cli_module_invocation():
     """python -m avion --help works as a subprocess (packaging check)."""
     src = str(Path(__file__).resolve().parents[1] / "src")

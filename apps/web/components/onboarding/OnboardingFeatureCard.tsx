@@ -109,12 +109,12 @@ export function OnboardingFeatureCard({ onNavigate }: OnboardingFeatureCardProps
               <div className="text-xs font-medium">{f.title}</div>
               {expanded === f.id && (
                 <div className="mt-1.5">
-                  <div className="text-[10px] text-muted-foreground">{f.description}</div>
+                  <div className="text-xs text-muted-foreground">{f.description}</div>
                   {f.link && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="text-[9px] mt-1 h-5"
+                      className="text-[11px] mt-1 h-5"
                       onClick={(e) => {
                         e.stopPropagation()
                         onNavigate?.(f.link!)

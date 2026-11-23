@@ -104,13 +104,13 @@ function ErrorItem({ error, onDismiss }: { error: AppError; onDismiss: (id: stri
       <div className="flex-1 min-w-0">
         <p className="font-semibold leading-tight">{error.title}</p>
         {error.message && error.message !== error.title && (
-          <p className="mt-0.5 opacity-80 leading-tight text-[10px] break-all max-h-16 overflow-y-auto">
+          <p className="mt-0.5 opacity-80 leading-tight text-xs break-all max-h-16 overflow-y-auto">
             {error.message}
           </p>
         )}
-        {error.source && <p className="mt-0.5 opacity-60 text-[9px]">Source: {error.source}</p>}
+        {error.source && <p className="mt-0.5 opacity-60 text-[11px]">Source: {error.source}</p>}
         {error.requestId && (
-          <p className="mt-0.5 text-[8px] font-mono text-muted-foreground/40">
+          <p className="mt-0.5 text-[11px] font-mono text-muted-foreground/40">
             ID: {error.requestId}
           </p>
         )}
@@ -186,7 +186,7 @@ export function ErrorPanel() {
       >
         <div className="w-96 max-w-[calc(100vw-2rem)] space-y-1.5 p-2 bg-background/95 backdrop-blur-sm rounded-lg border border-border shadow-xl">
           <div className="flex items-center justify-between px-1 pb-1">
-            <p className="text-[10px] font-semibold text-muted-foreground">
+            <p className="text-xs font-semibold text-muted-foreground">
               {total} issue{total > 1 ? 's' : ''}
               {errorCount > 0 && ` · ${errorCount} error${errorCount > 1 ? 's' : ''}`}
             </p>
@@ -194,13 +194,13 @@ export function ErrorPanel() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopyAll}
-                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
                 >
                   {copiedAll ? 'Copied' : 'Copy all'}
                 </button>
                 <button
                   onClick={clearErrors}
-                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
                 >
                   Clear all
                 </button>

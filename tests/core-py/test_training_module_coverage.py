@@ -22,13 +22,6 @@ class TestExportModule:
         config = ExportConfig(format="gguf")
         assert config.format == "gguf"
 
-    def test_list_export_formats(self):
-        from domain.training._internal.export import list_export_formats
-
-        formats = list_export_formats()
-        assert isinstance(formats, dict)
-        assert len(formats) > 0
-
     def test_model_metadata_creation(self):
         from domain.training._internal.export import ModelMetadata
 
@@ -45,13 +38,6 @@ class TestPresetsModule:
 
         assert isinstance(PRESETS, dict)
         assert len(PRESETS) > 0
-
-    def test_list_presets(self):
-        from domain.training._internal.presets import list_presets
-
-        presets = list_presets()
-        assert isinstance(presets, list)
-        assert len(presets) > 0
 
     def test_apply_preset(self):
         from domain.training._internal.presets import PRESETS, apply_preset

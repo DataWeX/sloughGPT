@@ -1155,7 +1155,7 @@ export function LossCurve({ className }: LossCurveProps) {
         x="60"
         y="120"
         fill="rgb(var(--muted-foreground))"
-        fontSize="9"
+        fontSize="11"
         fontFamily="var(--font-mono, monospace)"
         opacity="0.5"
       >

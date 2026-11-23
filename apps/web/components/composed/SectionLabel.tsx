@@ -9,10 +9,12 @@ interface SectionLabelProps {
 
 export function SectionLabel({ children, className }: SectionLabelProps) {
   return (
-    <span className={cn(
-      'text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-1.5 block',
-      className
-    )}>
+    <span
+      className={cn(
+        'text-xs font-medium text-muted-foreground/60 uppercase tracking-wider mb-1.5 block',
+        className,
+      )}
+    >
       {children}
     </span>
   )

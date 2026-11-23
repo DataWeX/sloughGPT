@@ -1068,11 +1068,6 @@ class TestMultimodalManager:
         cfg = mgr.get_browser_speech_config()
         assert cfg["language"] == "en-US"
 
-    def test_get_browser_speech_config(self):
-        mgr = MultimodalManager()
-        cfg = mgr.get_browser_speech_config()
-        assert cfg["language"] == "en-US"
-
     def test_caption_image_supervised_path(self):
         engine = _make_engine()
         mgr = _make_manager(engine)

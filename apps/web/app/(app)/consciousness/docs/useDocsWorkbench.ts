@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the Consciousness API docs page.
@@ -7,15 +8,18 @@
  * and the request runner (authFetch, timing, JSON formatting, scroll-into-
  * view). The sidebar and endpoint list own render.
  */
-import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef } from 'react'
 import { authFetch } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import type { Endpoint, Category } from './docs-endpoints'
+// Module scope: `addToast` must keep a stable identity — it sits in
+// useCallback/useEffect dependency arrays, and a per-render arrow would
+// re-fire those effects on every render.
+const addToast = (message: string, type?: string) =>
+  notify.toast(message, { type: type as 'success' | 'error' | 'info' })
 
 export function useDocsWorkbench() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [activeCategory, setActiveCategory] = useState<Category>('core')
   const [responses, setResponses] = useState<

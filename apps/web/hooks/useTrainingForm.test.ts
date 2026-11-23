@@ -386,4 +386,56 @@ describe('useTrainingForm', () => {
       expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
     })
   })
+
+  describe('saved-config sanitization', () => {
+    it('clamps out-of-range hyperparameters when loading the saved config', async () => {
+      // A legacy/persisted config with out-of-range values (e.g. the
+      // reported lr=1-style corruption, or an unbounded epochs entry) must
+      // not re-enter form state verbatim.
+      chatDBMock.getKV.mockResolvedValueOnce({
+        method: 'distill',
+        inputMode: 'dataset',
+        trainingEpochs: 9999,
+        trainingLR: 5,
+        trainingBatchSize: 99999,
+      })
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast),
+      )
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 10))
+      })
+      expect(result.current.trainingEpochs).toBe(1000)
+      expect(result.current.trainingLR).toBe(1)
+      expect(result.current.trainingBatchSize).toBe(512)
+    })
+  })
+
+  describe('startTraining validation limits', () => {
+    it('blocks NaN epochs with a limit toast', async () => {
+      // NaN slipped past the old `< 1 || > 500` guards (NaN comparisons
+      // are always false) and started a garbage job.
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast),
+      )
+      act(() => result.current.setTrainingEpochs(Number.NaN))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(addToast).toHaveBeenCalledWith('Epochs must be 1–1000', 'error')
+      expect(mockTrainingJobsController.startAutoTrain).not.toHaveBeenCalled()
+    })
+
+    it('blocks out-of-range batch size with a limit toast', async () => {
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast),
+      )
+      act(() => result.current.setTrainingBatchSize(99999))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(addToast).toHaveBeenCalledWith('Batch size must be 1–512', 'error')
+      expect(mockTrainingJobsController.startAutoTrain).not.toHaveBeenCalled()
+    })
+  })
 })

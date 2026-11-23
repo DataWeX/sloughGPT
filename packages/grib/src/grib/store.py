@@ -525,10 +525,23 @@ class PlannerStore:
 
     def get_card(self, card_id: str) -> Card | None:
         cards = [Card.from_dict(obj) for obj in self._read_board_lines() if obj.get("title")]
+        return self._resolve_card(cards, card_id)
+
+    @staticmethod
+    def _resolve_card(cards: list[Card], card_id: str) -> Card | None:
+        """Resolve ``card_id``: exact → prefix → substring, most-recent on ties.
+
+        Ids are timestamped (``20261115_081635_uxdatasets-…``), so a user
+        reaching for the human slug never matches a startswith probe — the
+        substring tier is what makes ``grib board move uxdatasets …`` work
+        without spelling out the whole id (card 20261115_081635_ux…).
+        """
         lower = card_id.lower()
         matches = [c for c in cards if c.id.lower() == lower]
         if not matches:
             matches = [c for c in cards if c.id.lower().startswith(lower)]
+        if not matches:
+            matches = [c for c in cards if lower in c.id.lower()]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
@@ -583,29 +596,35 @@ class PlannerStore:
         if "column" in kwargs:
             self.validate_column(kwargs["column"])
         board = self.load_board()
-        for card in board.cards:
-            if card.id == card_id:
-                for key, value in kwargs.items():
-                    if hasattr(card, key):
-                        setattr(card, key, value)
-                card.rev += 1
-                card.updated_at = datetime.now(UTC).isoformat()
-                self._surgical_rewrite({card_id: self._card_line(card)})
-                return card
-        return None
+        target = self._resolve_card(board.cards, card_id)
+        if target is None:
+            return None
+        for key, value in kwargs.items():
+            if hasattr(target, key):
+                setattr(target, key, value)
+        target.rev += 1
+        target.updated_at = datetime.now(UTC).isoformat()
+        self._surgical_rewrite({target.id: self._card_line(target)})
+        return target
 
     def delete_card(self, card_id: str) -> bool:
-        return self._surgical_rewrite({card_id: None}) > 0
+        target = self.get_card(card_id)
+        if target is None:
+            return False
+        return self._surgical_rewrite({target.id: None}) > 0
 
     def move_card(self, card_id: str, to_column: str) -> bool:
         self.validate_column(to_column)
         board = self.load_board()
+        target = self._resolve_card(board.cards, card_id)
+        if target is None:
+            return False
         for card in board.cards:
-            if card.id == card_id:
+            if card.id == target.id:
                 card.column = to_column
                 card.rev += 1
                 card.updated_at = datetime.now(UTC).isoformat()
-                self._surgical_rewrite({card_id: self._card_line(card)})
+                self._surgical_rewrite({target.id: self._card_line(card)})
                 return True
         return False
 
@@ -639,27 +658,39 @@ class PlannerStore:
 
     def block_card(self, card_id: str, blocker_id: str) -> Card | None:
         board = self.load_board()
-        for card in board.cards:
-            if card.id == card_id:
-                if blocker_id not in card.blocked_by:
-                    card.blocked_by.append(blocker_id)
-                    card.rev += 1
-                    card.updated_at = datetime.now(UTC).isoformat()
-                    self._surgical_rewrite({card_id: self._card_line(card)})
-                return card
-        return None
+        target = self._resolve_card(board.cards, card_id)
+        if target is None:
+            return None
+        # Resolve the blocker to its canonical id too (slug → full id), so
+        # blocked_by never stores a key the exact-id readers can't follow.
+        blocker = self.get_card(blocker_id)
+        blocker_key = blocker.id if blocker else blocker_id
+        if blocker_key not in target.blocked_by:
+            target.blocked_by.append(blocker_key)
+            target.rev += 1
+            target.updated_at = datetime.now(UTC).isoformat()
+            self._surgical_rewrite({target.id: self._card_line(target)})
+        return target
 
     def unblock_card(self, card_id: str, blocker_id: str) -> Card | None:
         board = self.load_board()
-        for card in board.cards:
-            if card.id == card_id:
-                if blocker_id in card.blocked_by:
-                    card.blocked_by.remove(blocker_id)
-                    card.rev += 1
-                    card.updated_at = datetime.now(UTC).isoformat()
-                    self._surgical_rewrite({card_id: self._card_line(card)})
-                return card
-        return None
+        target = self._resolve_card(board.cards, card_id)
+        if target is None:
+            return None
+        # Tolerate both spellings: legacy block_card stored the raw string
+        # (possibly a slug), current code stores the canonical id.
+        candidates = {blocker_id}
+        blocker = self.get_card(blocker_id)
+        if blocker is not None:
+            candidates.add(blocker.id)
+        for key in candidates:
+            if key in target.blocked_by:
+                target.blocked_by.remove(key)
+                target.rev += 1
+                target.updated_at = datetime.now(UTC).isoformat()
+                self._surgical_rewrite({target.id: self._card_line(target)})
+                break
+        return target
 
     def is_blocked(self, card_id: str) -> bool:
         card = self.get_card(card_id)
@@ -986,8 +1017,24 @@ class PlannerStore:
 
     # ── Sync ────────────────────────────────────────────────────────────
 
-    def sync(self) -> tuple[int, int, int]:
-        """Reconcile notes ↔ board. Returns (added, updated, total)."""
+    def orphan_cards(self) -> list[Card]:
+        """Cards whose title matches no note — sync drift, reported only.
+
+        Matching mirrors ``sync()`` exactly: by title, with an empty note
+        title normalised to ``(untitled)``. Read-only by design — cards made
+        with ``grib board add`` carry no note either, so anything acting on
+        this list needs an explicit opt-in (``sync(prune=True)``).
+        """
+        titles = {n.title or "(untitled)" for n in self.list_notes(limit=9999)}
+        return [c for c in self.load_board().cards if c.title not in titles]
+
+    def sync(self, prune: bool = False) -> tuple[int, int, int]:
+        """Reconcile notes ↔ board. Returns (added, updated, total).
+
+        The default only ever adds and updates: a card whose note was deleted
+        stays put, because hand-added cards have no note either and deleting
+        one is a data-loss path. ``prune=True`` opts into removing orphans.
+        """
         from .sync import canonical_notes
 
         notes = canonical_notes(self.list_notes(limit=9999))
@@ -1022,6 +1069,12 @@ class PlannerStore:
             if note.assignee and card.assignee != note.assignee:
                 self.update_card(card.id, assignee=note.assignee)
                 updated += 1
+
+        # Opt-in only: drop cards left behind by a deleted note, then reseal.
+        # Computed after the loop so freshly added cards are never candidates.
+        if prune:
+            for card in self.orphan_cards():
+                self.delete_card(card.id)
 
         # Reconcile, then seal the board: chain recomputation is idempotent
         # and rewrites cards in canonical order (blockers before blocked).

@@ -70,7 +70,7 @@ function QualitySparkline({ values }: { values: number[] }) {
           strokeLinejoin="round"
         />
       </svg>
-      <span className={`text-[10px] font-medium ${trend ? 'text-success' : 'text-destructive'}`}>
+      <span className={`text-xs font-medium ${trend ? 'text-success' : 'text-destructive'}`}>
         {trend ? 'Improving' : 'Declining'}
       </span>
     </div>
@@ -131,14 +131,14 @@ export function ResultsStep({
       <CardContent className="space-y-3">
         {qualityTrend.length >= 2 && (
           <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
-            <div className="text-[10px] text-muted-foreground/60 mb-1">Quality trend</div>
+            <div className="text-xs text-muted-foreground/60 mb-1">Quality trend</div>
             <QualitySparkline values={qualityTrend} />
           </div>
         )}
 
         {recentJobs.length > 0 && (
           <div>
-            <div className="text-[10px] text-muted-foreground/60 mb-1.5">Recent runs</div>
+            <div className="text-xs text-muted-foreground/60 mb-1.5">Recent runs</div>
             <div className="space-y-1">
               {recentJobs.map((job) => {
                 const style = jobStatusStyle(job.status)
@@ -150,7 +150,7 @@ export function ResultsStep({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-[11px] font-medium truncate">{job.name}</div>
-                      <div className="text-[9px] text-muted-foreground/60">
+                      <div className="text-[11px] text-muted-foreground/60">
                         {job.method && <span>{job.method}</span>}
                         {job.avg_quality != null && (
                           <span className="ml-1.5">Quality: {job.avg_quality.toFixed(1)}/5</span>
@@ -168,7 +168,7 @@ export function ResultsStep({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-5 text-[9px] px-1.5"
+                          className="h-5 text-[11px] px-1.5"
                           disabled={resuming === job.id}
                           onClick={() => void handleResume(job.id)}
                         >
@@ -192,7 +192,7 @@ export function ResultsStep({
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="text-[10px] text-muted-foreground/60">
+            <div className="text-xs text-muted-foreground/60">
               {checkpoints.checkpoints.length} checkpoint(s) saved
             </div>
             <div className="space-y-1.5">
@@ -219,7 +219,7 @@ export function ResultsStep({
                         </Badge>
                       )}
                     </div>
-                    <div className="text-[9px] text-muted-foreground/60 tabular-nums">
+                    <div className="text-[11px] text-muted-foreground/60 tabular-nums">
                       {cp.loss != null && <span>Loss: {cp.loss.toFixed(4)}</span>}
                       {cp.avg_quality != null && (
                         <span className="ml-2">Quality: {cp.avg_quality.toFixed(1)}/5</span>
@@ -230,7 +230,7 @@ export function ResultsStep({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 text-[10px]"
+                      className="h-6 text-xs"
                       onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast)}
                     >
                       Load
@@ -238,7 +238,7 @@ export function ResultsStep({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 text-[10px] text-destructive"
+                      className="h-6 text-xs text-destructive"
                       onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast)}
                     >
                       Delete

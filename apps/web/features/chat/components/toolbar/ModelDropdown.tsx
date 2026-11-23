@@ -65,18 +65,18 @@ export const ModelDropdown = memo(function ModelDropdown({
     return (
       <div className="rounded-lg border border-border/40 bg-muted/10">
         {panelTitle && (
-          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider px-2.5 py-1.5 border-b border-border/30">
+          <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider px-2.5 py-1.5 border-b border-border/30">
             {panelTitle}
           </div>
         )}
         <div className="max-h-28 overflow-y-auto p-1.5 space-y-0.5">
           {availableModels.length === 0 ? (
-            <div className="px-2 py-3 text-[10px] text-muted-foreground text-center space-y-2">
+            <div className="px-2 py-3 text-xs text-muted-foreground text-center space-y-2">
               <div>No models available</div>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-[10px]"
+                className="h-7 text-xs"
                 onClick={() => router.push('/developer')}
               >
                 Browse models
@@ -106,15 +106,15 @@ export const ModelDropdown = memo(function ModelDropdown({
                       {shortModelName(m)}
                     </span>
                     {modelDescriptions[m] && (
-                      <span className="text-[9px] text-muted-foreground/60 block truncate">
+                      <span className="text-[11px] text-muted-foreground/60 block truncate">
                         {modelDescriptions[m]}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-1">
-                    {sl && <span className="text-[10px] text-muted-foreground/60">{sl}</span>}
+                    {sl && <span className="text-xs text-muted-foreground/60">{sl}</span>}
                     {isCached && !isLoaded(m) && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                      <span className="text-[11px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                         cached
                       </span>
                     )}
@@ -173,7 +173,7 @@ export const ModelDropdown = memo(function ModelDropdown({
           {dlProgress?.status === 'downloading' &&
             dlProgress.percentage != null &&
             dlProgress.percentage > 0 && (
-              <span className="text-[10px] font-medium shrink-0 tabular-nums text-warning">
+              <span className="text-xs font-medium shrink-0 tabular-nums text-warning">
                 {dlProgress.percentage.toFixed(0)}%
               </span>
             )}
@@ -211,14 +211,14 @@ export const ModelDropdown = memo(function ModelDropdown({
               <div className="min-w-0 flex-1">
                 <span className="truncate block">{shortModelName(m)}</span>
                 {modelDescriptions[m] && (
-                  <span className="text-[9px] text-muted-foreground/60 block truncate font-sans">
+                  <span className="text-[11px] text-muted-foreground/60 block truncate font-sans">
                     {modelDescriptions[m]}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sl}</span>
+              <span className="text-xs text-muted-foreground/60 ml-1 shrink-0">{sl}</span>
               {isLoading(m) && modelDl?.status === 'downloading' ? (
-                <span className="text-[9px] text-warning font-medium ml-1 shrink-0 tabular-nums">
+                <span className="text-[11px] text-warning font-medium ml-1 shrink-0 tabular-nums">
                   {modelDl.percentage > 0 ? `${modelDl.percentage.toFixed(0)}%` : '...'}
                 </span>
               ) : isLoading(m) ? (
@@ -226,7 +226,7 @@ export const ModelDropdown = memo(function ModelDropdown({
               ) : isLoaded(m) ? (
                 <IconCheck className="h-3 w-3 shrink-0 text-success ml-1" />
               ) : isCached ? (
-                <span className="text-[9px] text-muted-foreground/40 px-1 ml-1 border border-border/30 rounded leading-none">
+                <span className="text-[11px] text-muted-foreground/40 px-1 ml-1 border border-border/30 rounded leading-none">
                   cached
                 </span>
               ) : (
@@ -238,7 +238,7 @@ export const ModelDropdown = memo(function ModelDropdown({
         {fineTuned && fineTuned.models.length > 0 && (
           <>
             <div className="h-px bg-border/50 mx-2 my-1" />
-            <DropdownMenuLabel className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">
+            <DropdownMenuLabel className="text-[11px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">
               Fine-tuned
             </DropdownMenuLabel>
             {fineTuned.models.map((ft) => {
@@ -255,12 +255,12 @@ export const ModelDropdown = memo(function ModelDropdown({
                   <div className="min-w-0 flex-1">
                     <span className="truncate block">{fineTunedName(ft.name)}</span>
                     {(ft.model || ft.dataset) && (
-                      <span className="text-[9px] text-muted-foreground/60 block truncate">
+                      <span className="text-[11px] text-muted-foreground/60 block truncate">
                         {[ft.model, ft.dataset].filter(Boolean).join(' · ')}
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">
+                  <span className="text-xs text-muted-foreground/60 ml-1 shrink-0">
                     {ft.size_mb ? `${ft.size_mb.toFixed(1)} MB` : 'local'}
                   </span>
                   {isLoading ? (

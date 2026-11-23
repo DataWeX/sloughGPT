@@ -85,7 +85,7 @@ export default function ObjectDetectionSection({
                     height: `${(y2 - y1) * 100}%`,
                   }}
                 >
-                  <span className="absolute -top-4 left-0 text-[9px] leading-none px-1 rounded bg-chart-1 text-white whitespace-nowrap">
+                  <span className="absolute -top-4 left-0 text-[11px] leading-none px-1 rounded bg-chart-1 text-white whitespace-nowrap">
                     {obj.label} {(obj.confidence * 100).toFixed(0)}%
                   </span>
                 </div>

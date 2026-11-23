@@ -114,7 +114,7 @@ export function AgentsListCard({
             variant="ghost"
             onClick={fetchAgents}
             disabled={loading}
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           >
             <IconRefresh className="h-4 w-4 mr-1" />
             Refresh
@@ -158,7 +158,7 @@ export function AgentsListCard({
               />
             )}
             {filteredAgents.length > 0 && (
-              <div className="flex items-center gap-2 text-[10px]">
+              <div className="flex items-center gap-2 text-xs">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <Checkbox
                     checked={
@@ -178,7 +178,7 @@ export function AgentsListCard({
                       size="sm"
                       variant="ghost"
                       onClick={handleBulkExport}
-                      className="h-6 text-[10px]"
+                      className="h-6 text-xs"
                     >
                       Export
                     </Button>
@@ -186,7 +186,7 @@ export function AgentsListCard({
                       size="sm"
                       variant="ghost"
                       onClick={handleBulkDelete}
-                      className="h-6 text-[10px] text-destructive hover:text-destructive"
+                      className="h-6 text-xs text-destructive hover:text-destructive"
                     >
                       Delete
                     </Button>
@@ -196,13 +196,13 @@ export function AgentsListCard({
             )}
             {filteredAgents.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-[10px] text-muted-foreground/60">
+                <p className="text-xs text-muted-foreground/60">
                   No agents matching &quot;{agentSearch}&quot;
                 </p>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px] mt-2"
+                  className="h-6 text-xs mt-2"
                   onClick={() => setAgentSearch('')}
                 >
                   Clear search
@@ -241,7 +241,7 @@ export function AgentsListCard({
                         {editErrors.name && (
                           <p
                             id="edit-name-error"
-                            className="text-[10px] text-destructive mt-1"
+                            className="text-xs text-destructive mt-1"
                             role="alert"
                           >
                             {editErrors.name}
@@ -270,7 +270,7 @@ export function AgentsListCard({
                             onClick={() => toggleTool(t, editTools, setEditTools)}
                             aria-pressed={editTools.includes(t)}
                             className={cn(
-                              'rounded-full px-3 py-1 text-[10px] font-medium border transition-colors',
+                              'rounded-full px-3 py-1 text-xs font-medium border transition-colors',
                               editTools.includes(t)
                                 ? 'bg-primary text-primary-foreground border-primary'
                                 : 'bg-background text-muted-foreground border-border hover:border-primary/50',
@@ -292,7 +292,7 @@ export function AgentsListCard({
                           size="sm"
                           variant="ghost"
                           onClick={cancelEdit}
-                          className="h-6 text-[10px]"
+                          className="h-6 text-xs"
                         >
                           Cancel
                         </Button>
@@ -316,7 +316,7 @@ export function AgentsListCard({
                               {agent.name}
                             </p>
                             {agent.description && (
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                              <p className="text-xs text-muted-foreground mt-0.5">
                                 {agent.description}
                               </p>
                             )}
@@ -328,7 +328,7 @@ export function AgentsListCard({
                             variant="ghost"
                             onClick={() => handleClone(agent)}
                             aria-label={`Clone ${agent.name}`}
-                            className="h-6 text-[10px]"
+                            className="h-6 text-xs"
                           >
                             <IconCopy className="h-4 w-4" />
                           </Button>
@@ -336,7 +336,7 @@ export function AgentsListCard({
                             size="sm"
                             variant="ghost"
                             onClick={() => startEdit(agent)}
-                            className="h-6 text-[10px]"
+                            className="h-6 text-xs"
                           >
                             Edit
                           </Button>
@@ -345,7 +345,7 @@ export function AgentsListCard({
                             variant="destructive"
                             onClick={() => setPendingDelete(agent)}
                             aria-label={`Delete ${agent.name}`}
-                            className="h-6 text-[10px]"
+                            className="h-6 text-xs"
                           >
                             <IconTrash className="h-4 w-4" />
                           </Button>
@@ -356,7 +356,7 @@ export function AgentsListCard({
                           {agent.tools.map((t) => (
                             <span
                               key={t}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium"
+                              className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium"
                             >
                               {t.replace(/_/g, ' ')}
                             </span>
@@ -364,7 +364,7 @@ export function AgentsListCard({
                         </div>
                       )}
                       {agent.instructions && (
-                        <p className="text-[10px] text-muted-foreground/70 line-clamp-2">
+                        <p className="text-xs text-muted-foreground/70 line-clamp-2">
                           {agent.instructions}
                         </p>
                       )}
@@ -398,7 +398,7 @@ export function AgentsListCard({
                               {execErrors.prompt && (
                                 <p
                                   id="exec-prompt-error"
-                                  className="text-[10px] text-destructive mt-1"
+                                  className="text-xs text-destructive mt-1"
                                   role="alert"
                                 >
                                   {execErrors.prompt}
@@ -421,7 +421,7 @@ export function AgentsListCard({
                                   setExecResult(null)
                                   setExecPrompt('')
                                 }}
-                                className="h-6 text-[10px]"
+                                className="h-6 text-xs"
                               >
                                 Close
                               </Button>
@@ -433,14 +433,14 @@ export function AgentsListCard({
                                     {execToolsUsed.map((t, i) => (
                                       <span
                                         key={i}
-                                        className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium"
+                                        className="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium"
                                       >
                                         {t.tool.replace(/_/g, ' ')}
                                       </span>
                                     ))}
                                   </div>
                                 )}
-                                <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                                <p className="text-xs font-medium text-muted-foreground mb-1">
                                   Response
                                 </p>
                                 <p className="text-[11px] whitespace-pre-wrap">{execResult}</p>

@@ -62,7 +62,7 @@ export function SystemHealth({ apiStatus, loading, liveHealth }: SystemHealthPro
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">CPU</p>
+              <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">CPU</p>
               <p
                 className={cn(
                   'text-sm font-semibold tabular-nums',
@@ -73,9 +73,7 @@ export function SystemHealth({ apiStatus, loading, liveHealth }: SystemHealthPro
               </p>
             </div>
             <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                Memory
-              </p>
+              <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">Memory</p>
               <p
                 className={cn(
                   'text-sm font-semibold tabular-nums',
@@ -88,17 +86,13 @@ export function SystemHealth({ apiStatus, loading, liveHealth }: SystemHealthPro
               </p>
             </div>
             <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                Requests
-              </p>
+              <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">Requests</p>
               <p className="text-sm font-semibold tabular-nums text-foreground/80">
                 {(liveHealth.request_count ?? 0).toLocaleString()}
               </p>
             </div>
             <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                Uptime
-              </p>
+              <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">Uptime</p>
               <p className="text-sm font-semibold tabular-nums text-foreground/80">
                 {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
               </p>

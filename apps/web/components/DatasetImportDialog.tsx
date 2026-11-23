@@ -245,11 +245,11 @@ export function DatasetImportDialog({
                       )}
                       <div className="flex items-center gap-2 mt-1">
                         {repo.language && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          <Badge variant="outline" className="text-xs px-1.5 py-0">
                             {repo.language}
                           </Badge>
                         )}
-                        <span className="text-[10px] text-muted-foreground">{repo.stars} ★</span>
+                        <span className="text-xs text-muted-foreground">{repo.stars} ★</span>
                       </div>
                     </div>
                   </Button>
@@ -374,8 +374,8 @@ export function DatasetImportDialog({
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Examples:{' '}
-                    <code className="font-mono text-[10px]">HuggingFaceH4/tinyshakespeare</code>,{' '}
-                    <code className="font-mono text-[10px]">HuggingFaceH4/ultrachat_200k</code>
+                    <code className="font-mono text-xs">HuggingFaceH4/tinyshakespeare</code>,{' '}
+                    <code className="font-mono text-xs">HuggingFaceH4/ultrachat_200k</code>
                   </p>
                 </div>
               </div>
@@ -393,13 +393,13 @@ export function DatasetImportDialog({
                     className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Examples: <code className="font-mono text-[10px]">heptapod/titanic</code>,{' '}
-                    <code className="font-mono text-[10px]">uciml/iris</code>,{' '}
-                    <code className="font-mono text-[10px]">rounakbanik/pokemon</code>
+                    Examples: <code className="font-mono text-xs">heptapod/titanic</code>,{' '}
+                    <code className="font-mono text-xs">uciml/iris</code>,{' '}
+                    <code className="font-mono text-xs">rounakbanik/pokemon</code>
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Requires Kaggle CLI installed and authenticated (
-                    <code className="font-mono text-[10px]">kaggle config</code>)
+                    <code className="font-mono text-xs">kaggle config</code>)
                   </p>
                 </div>
               </div>

@@ -26,22 +26,22 @@ export function TrainingOverviewCard({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="text-center p-2 rounded bg-muted/30">
             <div className="text-base font-bold text-success">{completed}</div>
-            <div className="text-[10px] text-muted-foreground">Completed</div>
+            <div className="text-xs text-muted-foreground">Completed</div>
           </div>
           <div className="text-center p-2 rounded bg-muted/30">
             <div className="text-base font-bold text-info">{running}</div>
-            <div className="text-[10px] text-muted-foreground">Running</div>
+            <div className="text-xs text-muted-foreground">Running</div>
           </div>
           <div className="text-center p-2 rounded bg-muted/30">
             <div className="text-base font-bold text-warning">{queued}</div>
-            <div className="text-[10px] text-muted-foreground">Queued</div>
+            <div className="text-xs text-muted-foreground">Queued</div>
           </div>
           <div className="text-center p-2 rounded bg-muted/30">
             <div className="text-base font-bold text-destructive">{failed}</div>
-            <div className="text-[10px] text-muted-foreground">Failed</div>
+            <div className="text-xs text-muted-foreground">Failed</div>
           </div>
         </div>
-        <div className="mt-3 text-[10px] text-muted-foreground text-center">
+        <div className="mt-3 text-xs text-muted-foreground text-center">
           Total training time: {totalMinutes} minutes
         </div>
       </CardContent>

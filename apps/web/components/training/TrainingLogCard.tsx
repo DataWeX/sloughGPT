@@ -70,7 +70,7 @@ function LogSummaryStrip({ summary }: { summary: LogSummary }) {
           c.value != null && (
             <code
               key={c.label}
-              className="rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
+              className="rounded bg-muted/40 px-1.5 py-0.5 font-mono text-xs tabular-nums"
             >
               <span className="text-muted-foreground/60">{c.label} </span>
               <span className={c.tone ?? 'text-foreground'}>{c.value}</span>
@@ -78,12 +78,12 @@ function LogSummaryStrip({ summary }: { summary: LogSummary }) {
           ),
       )}
       {summary.errors > 0 && (
-        <code className="rounded bg-destructive/10 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-destructive">
+        <code className="rounded bg-destructive/10 px-1.5 py-0.5 font-mono text-xs tabular-nums text-destructive">
           {summary.errors} error{summary.errors === 1 ? '' : 's'}
         </code>
       )}
       {summary.warnings > 0 && summary.errors === 0 && (
-        <code className="rounded bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-warning">
+        <code className="rounded bg-warning/10 px-1.5 py-0.5 font-mono text-xs tabular-nums text-warning">
           {summary.warnings} warning{summary.warnings === 1 ? '' : 's'}
         </code>
       )}
@@ -150,12 +150,12 @@ export const TrainingLogCard = memo(function TrainingLogCard({
       actions={
         <>
           {expanded && trainingRunning && (
-            <span className="text-[9px] text-muted-foreground/60 animate-pulse">live</span>
+            <span className="text-[11px] text-muted-foreground/60 animate-pulse">live</span>
           )}
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={() => {
               if (!expanded) {
                 void fetchLogsLoading()
@@ -186,14 +186,14 @@ export const TrainingLogCard = memo(function TrainingLogCard({
               onRetry={() => void fetchLogsLoading()}
             />
           ) : lines.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground/60">No logs yet.</p>
+            <p className="text-xs text-muted-foreground/60">No logs yet.</p>
           ) : (
             <div
               ref={scrollRef}
-              className="max-h-64 overflow-y-auto rounded-lg bg-muted/20 p-2.5 font-mono text-[10px] leading-relaxed"
+              className="max-h-64 overflow-y-auto rounded-lg bg-muted/20 p-2.5 font-mono text-xs leading-relaxed"
             >
               {lines.length > MAX_VISIBLE_LINES && (
-                <div className="mb-1 text-[9px] text-muted-foreground/60">
+                <div className="mb-1 text-[11px] text-muted-foreground/60">
                   Showing last {MAX_VISIBLE_LINES} of {lines.length} lines
                 </div>
               )}
@@ -207,7 +207,7 @@ export const TrainingLogCard = memo(function TrainingLogCard({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-[10px] mt-1"
+            className="h-6 text-xs mt-1"
             onClick={fetchLogsLoading}
             disabled={loading}
           >

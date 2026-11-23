@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -62,7 +62,6 @@ export default function BenchmarkPage() {
   const [compareResults, setCompareResults] = useState<[string, BenchmarkResult][]>([])
   const [compareLoading, setCompareLoading] = useState(false)
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
-  const addToast = notify.toast
 
   // Shared by the initial mount, the 'r' refresh shortcut and PageContainer's
   // retry — all three re-run this page's own loader instead of reloading the
@@ -113,7 +112,7 @@ export default function BenchmarkPage() {
       const m = await benchmarkController.run({ model: currentModel })
       setMetrics(m)
     } catch {
-      addToast('Could not run benchmark', 'error')
+      notify.toast('Could not run benchmark', { type: 'error' })
     } finally {
       setRunning(false)
     }
@@ -126,7 +125,7 @@ export default function BenchmarkPage() {
       const data = await benchmarkController.history(20)
       setResponses(data)
     } catch {
-      addToast('Could not load responses', 'error')
+      notify.toast('Could not load responses', { type: 'error' })
     }
   }
 
@@ -136,7 +135,7 @@ export default function BenchmarkPage() {
       setResponses([])
       setStats(null)
     } catch {
-      addToast('Could not clear history', 'error')
+      notify.toast('Could not clear history', { type: 'error' })
     }
   }
 
@@ -150,7 +149,7 @@ export default function BenchmarkPage() {
       )
       setPplxResult(data)
     } catch {
-      addToast('Could not calculate perplexity', 'error')
+      notify.toast('Could not calculate perplexity', { type: 'error' })
     } finally {
       setPplxLoading(false)
     }
@@ -167,7 +166,7 @@ export default function BenchmarkPage() {
           const r = await benchmarkController.run({ model })
           results.push([model, r])
         } catch {
-          addToast(`Benchmark failed for ${model}`, 'error')
+          notify.toast(`Benchmark failed for ${model}`, { type: 'error' })
         }
       }
       setCompareResults(results)
@@ -209,7 +208,7 @@ export default function BenchmarkPage() {
               if (t === 'responses') handleLoadResponses()
             }}
             className={cn(
-              'px-3 py-1.5 text-[10px] font-medium rounded-t transition-colors',
+              'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
               tab === t
                 ? 'bg-primary/10 text-primary border-b-2 border-primary'
                 : 'text-muted-foreground hover:text-foreground',
@@ -253,7 +252,7 @@ export default function BenchmarkPage() {
                 disabled={running}
                 aria-label="Refresh metrics"
               >
-                <Spinner className="h-6 w-6 text-[10px]" />
+                <Spinner className="h-6 w-6 text-xs" />
               </Button>
             </CardHeader>
             <CardContent className="px-2.5 pb-2.5">
@@ -279,7 +278,7 @@ export default function BenchmarkPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6 text-[10px] text-muted-foreground/60">
+                <div className="text-center py-6 text-xs text-muted-foreground/60">
                   No metrics available. Is a model loaded?
                   <div className="mt-2">
                     <Button
@@ -341,7 +340,7 @@ export default function BenchmarkPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
+              <div className="text-center py-6 text-xs text-muted-foreground/60 space-y-2">
                 <div>No quality data yet. Chat with the model to generate responses.</div>
                 <Button
                   size="sm"
@@ -383,14 +382,14 @@ export default function BenchmarkPage() {
                   variant="ghost"
                   onClick={handleLoadResponses}
                   aria-label="Refresh responses"
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                 >
                   <IconRefresh className="h-4 w-4" />
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px] text-destructive"
+                  className="h-6 text-xs text-destructive"
                   onClick={handleClearHistory}
                 >
                   Clear
@@ -399,7 +398,7 @@ export default function BenchmarkPage() {
             </CardHeader>
             <CardContent className="px-2.5 pb-2.5">
               {responses.length === 0 ? (
-                <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
+                <div className="text-center py-6 text-xs text-muted-foreground/60 space-y-2">
                   <div>No responses logged yet.</div>
                   <Button
                     size="sm"
@@ -524,7 +523,7 @@ export default function BenchmarkPage() {
             </Button>
             <BenchmarkCompareCard results={compareResults} />
             {compareResults.length === 0 && !compareLoading && (
-              <div className="text-center py-6 text-[10px] text-muted-foreground/60">
+              <div className="text-center py-6 text-xs text-muted-foreground/60">
                 Select models above and click Run to compare them side by side.
               </div>
             )}

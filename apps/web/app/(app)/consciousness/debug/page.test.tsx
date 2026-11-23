@@ -25,7 +25,9 @@ vi.mock('@/hooks/useLocale', () => ({
   })),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: vi.fn(() => ({
     addToast: vi.fn(),
   })),

@@ -102,3 +102,44 @@ def fingerprint_batch(x: np.ndarray) -> str:
     """
     arr = np.ascontiguousarray(x)
     return hashlib.blake2b(arr.tobytes(), digest_size=8).hexdigest()
+
+
+#: Bytes hashed per ``update`` by :func:`fingerprint_array`. Bounds peak
+#: memory to this size instead of a full copy of the array — the whole point
+#: of streaming here, since ``tobytes()`` on a large corpus would allocate
+#: gigabytes just to feed the hash.
+_FINGERPRINT_CHUNK_BYTES = 4 * 1024 * 1024
+
+
+def fingerprint_array(x: np.ndarray) -> str:
+    """Content hash of a whole array — the dataset identity (card 20261104_081626).
+
+    Same contract as :func:`fingerprint_batch` (deterministic, content-
+    addressed, layout-normalised via ``ascontiguousarray``) but sized for a
+    long-lived identity: blake2b with a 32-byte digest → 64 hex chars, which
+    is what ``ModelLoader`` compares when proving two checkpoints were trained
+    on the same data.
+
+    Two deliberate differences from ``fingerprint_batch``:
+
+    - **Digest size 32, not 8.** A step receipt lives in a trace ring and is
+      compared within one run; a dataset signature is compared across runs,
+      across machines, for the life of the artifact. 64 hex chars matches the
+      shape the loader's tests already use (``"a" * 64``).
+    - **Streamed, not copied.** ``tobytes()`` allocates a full copy (8 bytes
+      per int64 token) — ~800 MB for a 100M-token corpus. Hashing through a
+      chunked ``memoryview`` keeps extra memory at 4 MB regardless of corpus
+      size. The chunk boundary must not affect the digest: the bytes fed to
+      blake2b are identical either way, which
+      ``test_chunked_matches_unchunked_reference`` pins.
+
+    Non-contiguous input is normalized first so memory layout never changes
+    the identity — a transposed view hashes the same as its materialised
+    form.
+    """
+    arr = np.ascontiguousarray(x)
+    view = memoryview(arr).cast("B")
+    digest = hashlib.blake2b(digest_size=32)
+    for start in range(0, len(view), _FINGERPRINT_CHUNK_BYTES):
+        digest.update(view[start : start + _FINGERPRINT_CHUNK_BYTES])
+    return digest.hexdigest()

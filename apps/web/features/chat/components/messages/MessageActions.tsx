@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
@@ -142,7 +142,6 @@ export const MessageActions = memo(function MessageActions({
       cancelled = true
     }
   }, [messageId])
-  const addToast = notify.toast
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -208,11 +207,11 @@ export const MessageActions = memo(function MessageActions({
     try {
       await knowledgeController.add(content.slice(0, 500), 'chat-saved', true)
       setSavedToKnowledge(true)
-      addToast('Saved to knowledge', 'success')
+      notify.toast('Saved to knowledge', { type: 'success' })
     } catch {
-      addToast('Failed to save to knowledge', 'error')
+      notify.toast('Failed to save to knowledge', { type: 'error' })
     }
-  }, [content, savedToKnowledge, addToast])
+  }, [content, savedToKnowledge])
 
   const handleToggleReaction = useCallback(
     (emoji: string) => {
@@ -423,7 +422,7 @@ export const MessageActions = memo(function MessageActions({
               key={emoji}
               onClick={() => handleToggleReaction(emoji)}
               className={cn(
-                'inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full border transition-colors',
+                'inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full border transition-colors',
                 users.includes('user')
                   ? 'bg-primary/15 border-primary/30 text-primary'
                   : 'bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80',

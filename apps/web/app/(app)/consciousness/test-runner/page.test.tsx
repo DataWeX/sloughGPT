@@ -15,15 +15,20 @@ vi.mock('@/hooks/useLocale', () => ({
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
-vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-  ok: true,
-  status: 200,
-  text: () => Promise.resolve(JSON.stringify({ data: {} })),
-}))
+vi.stubGlobal(
+  'fetch',
+  vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    text: () => Promise.resolve(JSON.stringify({ data: {} })),
+  }),
+)
 
 const TestWrapper = ({ children }: { children: React.ReactNode }) => (
   <LocaleProvider>{children}</LocaleProvider>
@@ -32,11 +37,14 @@ const TestWrapper = ({ children }: { children: React.ReactNode }) => (
 describe('ConsciousnessTestRunnerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: () => Promise.resolve(JSON.stringify({ data: {} })),
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ data: {} })),
+      }),
+    )
   })
 
   it('renders without crashing', async () => {
@@ -49,7 +57,9 @@ describe('ConsciousnessTestRunnerPage', () => {
   it('shows test suites', async () => {
     render(<ConsciousnessTestRunnerPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_test_runner.suites_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_test_runner.suites_title').length).toBeGreaterThan(
+        0,
+      )
       expect(screen.getAllByText('Core Engine Tests').length).toBeGreaterThan(0)
       expect(screen.getAllByText('Qualia Tests').length).toBeGreaterThan(0)
       expect(screen.getAllByText('API Tests').length).toBeGreaterThan(0)
@@ -66,7 +76,9 @@ describe('ConsciousnessTestRunnerPage', () => {
   it('shows run selected button', async () => {
     render(<ConsciousnessTestRunnerPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_test_runner.run_selected').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_test_runner.run_selected').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -47,7 +47,6 @@ export default function UsersAdminPage() {
   const [editEmail, setEditEmail] = useState('')
   const [editRole, setEditRole] = useState('')
   const [editStatus, setEditStatus] = useState('')
-  const addToast = notify.toast
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -75,9 +74,9 @@ export default function UsersAdminPage() {
       setNewPassword('')
       setNewRole('user')
       await fetchUsers()
-      addToast('User created', 'success')
+      notify.toast('User created', { type: 'success' })
     } catch {
-      addToast('Could not create user', 'error')
+      notify.toast('Could not create user', { type: 'error' })
     } finally {
       setCreating(false)
     }
@@ -88,9 +87,9 @@ export default function UsersAdminPage() {
     try {
       await apiDelete(`/users/${id}`)
       await fetchUsers()
-      addToast('User deleted', 'success')
+      notify.toast('User deleted', { type: 'success' })
     } catch {
-      addToast('Could not delete user', 'error')
+      notify.toast('Could not delete user', { type: 'error' })
     }
   }
 
@@ -111,9 +110,9 @@ export default function UsersAdminPage() {
       })
       setEditingUser(null)
       await fetchUsers()
-      addToast('User updated', 'success')
+      notify.toast('User updated', { type: 'success' })
     } catch {
-      addToast('Could not update user', 'error')
+      notify.toast('Could not update user', { type: 'error' })
     }
   }
 
@@ -146,7 +145,7 @@ export default function UsersAdminPage() {
       title="Users"
       subtitle="Manage user accounts"
       headerRight={
-        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => fetchUsers()}>
+        <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => fetchUsers()}>
           <IconRefresh className="h-3 w-3 mr-1" /> Refresh
         </Button>
       }
@@ -168,26 +167,26 @@ export default function UsersAdminPage() {
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
               placeholder="Username"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
             <Input
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="Email"
               type="email"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
             <Input
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Password (min 8 chars)"
               type="password"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
             <select
               value={newRole}
               onChange={(e) => setNewRole(e.target.value)}
-              className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+              className="h-6 text-xs rounded-md border border-border bg-background px-2"
             >
               <option value="viewer">Viewer</option>
               <option value="user">User</option>
@@ -196,7 +195,7 @@ export default function UsersAdminPage() {
           </div>
           <Button
             size="sm"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={createUser}
             disabled={creating || !newUsername.trim() || !newEmail.trim() || !newPassword.trim()}
           >
@@ -224,12 +223,12 @@ export default function UsersAdminPage() {
                         value={editEmail}
                         onChange={(e) => setEditEmail(e.target.value)}
                         placeholder="Email"
-                        className="h-6 text-[10px]"
+                        className="h-6 text-xs"
                       />
                       <select
                         value={editRole}
                         onChange={(e) => setEditRole(e.target.value)}
-                        className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                        className="h-6 text-xs rounded-md border border-border bg-background px-2"
                       >
                         <option value="viewer">Viewer</option>
                         <option value="user">User</option>
@@ -239,7 +238,7 @@ export default function UsersAdminPage() {
                       <select
                         value={editStatus}
                         onChange={(e) => setEditStatus(e.target.value)}
-                        className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                        className="h-6 text-xs rounded-md border border-border bg-background px-2"
                       >
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
@@ -247,13 +246,13 @@ export default function UsersAdminPage() {
                       </select>
                     </div>
                     <div className="flex gap-1.5">
-                      <Button size="sm" className="h-5 text-[10px]" onClick={saveEdit}>
+                      <Button size="sm" className="h-5 text-xs" onClick={saveEdit}>
                         Save
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-5 text-[10px]"
+                        className="h-5 text-xs"
                         onClick={() => setEditingUser(null)}
                       >
                         Cancel
@@ -267,7 +266,7 @@ export default function UsersAdminPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-xs">{u.username}</span>
                         <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          className={`text-xs px-1.5 py-0.5 rounded-full ${
                             u.role === 'owner'
                               ? 'bg-accent/15 text-accent'
                               : u.role === 'admin'
@@ -278,7 +277,7 @@ export default function UsersAdminPage() {
                           {u.role}
                         </span>
                         <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          className={`text-xs px-1.5 py-0.5 rounded-full ${
                             u.status === 'active'
                               ? 'bg-success/15 text-success dark:bg-success/15 text-success'
                               : 'bg-destructive/15 text-destructive dark:bg-destructive/15 text-destructive'
@@ -287,7 +286,7 @@ export default function UsersAdminPage() {
                           {u.status}
                         </span>
                       </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                      <div className="text-xs text-muted-foreground mt-0.5">
                         {u.email} · {u.display_name || '—'} · Last login:{' '}
                         {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
                       </div>
@@ -296,7 +295,7 @@ export default function UsersAdminPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-5 text-[10px]"
+                        className="h-5 text-xs"
                         onClick={() => startEdit(u)}
                       >
                         Edit

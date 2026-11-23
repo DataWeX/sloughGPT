@@ -20,11 +20,6 @@ from domain.collections._internal.stores import FileStore, MemoryStore
 
 
 class TestRecord:
-    def test_create(self):
-        r = Record(content="hello")
-        assert r.content == "hello"
-        assert "timestamp" in r.metadata
-
     def test_to_dict(self):
         r = Record(content="test", metadata={"a": 1})
         d = r.to_dict()

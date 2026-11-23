@@ -822,6 +822,23 @@ describe('VmTab', () => {
     })
   })
 
+  it('launch clamps out-of-range config to the shared limits', async () => {
+    // epochs=99999 previously sailed straight through to the backend
+    // (which rejects it with a 422) — the boundary must clamp.
+    const { container } = render(<VmTab />)
+    fireEvent.change(within(container).getAllByLabelText('Training epochs')[0], {
+      target: { value: '99999' },
+    })
+    fireEvent.click(within(container).getAllByRole('button', { name: 'Launch training' })[0])
+
+    await waitFor(() => {
+      expect(mockedRun).toHaveBeenCalledWith(
+        expect.stringContaining('"epochs":1000'),
+        expect.any(Object),
+      )
+    })
+  })
+
   it('persists the training config across reloads', async () => {
     const first = render(<VmTab />)
     await act(async () => {})

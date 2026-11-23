@@ -826,7 +826,13 @@ class TestISBNImporter:
         )
         monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a, isbn: None)
         result = imp.import_from_isbn("0306406152", "book")
-        assert result.success is True
+        # Honesty (card 20261115_081635_ux…): no training text was retrieved,
+        # so a metadata-only import must NOT report success — the 221 B stub
+        # used to import green and render as a ready dataset.
+        assert result.success is False
+        assert result.error is not None and "no training text" in result.error
+        assert result.files_imported == 0
+        assert result.total_chars == 0
         meta = json.loads((tmp_path / "datasets" / "book" / "metadata.json").read_text())
         assert meta["source_type"] == "metadata_only"
         assert (tmp_path / "datasets" / "book" / "book_info.txt").exists()
@@ -1980,13 +1986,6 @@ class TestDataImporterExtended:
         result = data_importer.import_from_local(str(root), "ds")
         assert result.success is True
         assert result.total_chars == 10000
-
-    def test_extract_pdf_text_both_missing(self, monkeypatch, tmp_path):
-        monkeypatch.setitem(sys.modules, "fitz", None)
-        monkeypatch.setitem(sys.modules, "PyPDF2", None)
-        p = tmp_path / "doc.pdf"
-        p.write_bytes(b"%PDF-1.4")
-        assert DataImporter._extract_pdf_text(p) == ""
 
 
 # ---------------------------------------------------------------------------

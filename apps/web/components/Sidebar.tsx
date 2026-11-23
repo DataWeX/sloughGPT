@@ -5,6 +5,7 @@ import { usePathname } from '@/vite/next-compat/navigation'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconClose } from '@/components/icons/NavIcons'
 import { ManMark } from '@/components/brand/ManMark'
+import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { TrainingIndicator } from './TrainingIndicator'
@@ -27,7 +28,7 @@ export type SidebarProps = {
 export function Sidebar({
   variant = 'desktop',
   collapsed = false,
-  onToggleCollapse: _onToggleCollapse,
+  onToggleCollapse,
   onNavigate,
   onClose,
 }: SidebarProps) {
@@ -42,7 +43,7 @@ export function Sidebar({
       isCollapsed ? 'justify-center px-2' : 'px-2.5',
       active
         ? 'bg-primary/[0.13] font-medium text-primary dark:bg-primary/[0.11]'
-        : 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
+        : 'text-foreground/80 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
     )
 
   const afterNav = onNavigate ? () => onNavigate() : undefined
@@ -81,13 +82,27 @@ export function Sidebar({
                   {t('app.name')}
                 </span>
                 {!isDrawer && (
-                  <span className="text-[8px] uppercase leading-tight tracking-wider text-muted-foreground">
+                  <span className="text-[11px] uppercase leading-tight tracking-wider text-muted-foreground">
                     {t('app.console')}
                   </span>
                 )}
               </div>
             )}
           </Link>
+        </div>
+
+        {/* Workspace switcher — the inline switcher What's New advertises.
+            Desktop sidebar + mobile drawer both route through here; the
+            mobile header keeps its own instance for small screens. Collapsed
+            rail is only 3rem wide and overflow-hidden, so it renders
+            icon-only and expands the nav on click. */}
+        <div
+          className={cn(
+            'shrink-0 border-b border-border/30 dark:border-border/50 py-2',
+            isCollapsed ? 'flex w-fit justify-center px-2' : 'px-3',
+          )}
+        >
+          <WorkspaceSwitcher collapsed={isCollapsed} onExpand={onToggleCollapse} />
         </div>
 
         <nav
@@ -117,7 +132,7 @@ export function Sidebar({
                     <div className="my-2 border-t border-border/30 dark:border-border/40" />
                   )}
                   {!isCollapsed && (
-                    <p className="mb-1 mt-2.5 px-2.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground first:mt-0.5">
+                    <p className="mb-1 mt-2.5 px-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground first:mt-0.5">
                       {t(section.labelKey)}
                     </p>
                   )}
@@ -151,7 +166,7 @@ export function Sidebar({
                         </li>
                       )
                     })}
-                    {!isCollapsed && t('nav.section.ai') === t(section.labelKey) && (
+                    {!isCollapsed && section.labelKey === 'nav.section.ai' && (
                       <li className="mt-0.5">
                         <ConsciousnessSidebarWidget />
                       </li>

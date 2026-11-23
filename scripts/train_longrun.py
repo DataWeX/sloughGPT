@@ -141,9 +141,7 @@ def run_supervisor(args: argparse.Namespace) -> dict:
     elapsed = time.time() - t0
     rows = recorder.read_all()
     train_losses = [
-        r["train_loss"]
-        for r in rows
-        if r.get("train_loss") is not None and r.get("kind") != "eval"
+        r["train_loss"] for r in rows if r.get("train_loss") is not None and r.get("kind") != "eval"
     ]
     eval_rows = [r for r in rows if r.get("kind") == "eval"]
     evals = len(eval_rows)

@@ -61,7 +61,7 @@ function ContextWindowItemCard({
         <div className="flex items-center gap-2">
           <span
             className={cn(
-              'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+              'text-xs font-medium px-1.5 py-0.5 rounded border',
               TYPE_COLORS[item.type],
             )}
           >
@@ -71,7 +71,7 @@ function ContextWindowItemCard({
         </div>
         <div className="flex items-center gap-2">
           {item.tokenCount && (
-            <span className="text-[10px] text-muted-foreground">~{item.tokenCount} tokens</span>
+            <span className="text-xs text-muted-foreground">~{item.tokenCount} tokens</span>
           )}
           {isExpanded ? (
             <IconChevronDown className="h-3 w-3 text-muted-foreground" />
@@ -153,7 +153,7 @@ export const ContextWindowViewer = memo(function ContextWindowViewer({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground/80">Context Window</span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {items.length} items · ~{estimatedTokens.toLocaleString()} tokens
           </span>
         </div>

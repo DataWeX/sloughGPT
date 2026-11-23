@@ -118,9 +118,10 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 | Numeric (`font-numeric`, `tabular-nums`) | Outfit — same face as body; there is no separate numeral font | `--font-rubik`                                         | system-ui, sans-serif   |
 | Code (`font-mono`)                       | JetBrains Mono — `public/fonts/jetbrains-latin.woff2`         | `--font-jetbrains-mono`                                | ui-monospace, monospace |
 
-- Outfit is loaded with `next/font/local` in `apps/web/app/layout.tsx`; JetBrains Mono also has a raw `@font-face` in `globals.css`.
-- **`--font-rubik` is a rename TODO, not a font.** The variable resolves to Outfit. Do not rename it in passing — consumers are `layout.tsx`, `globals.css`, `tailwind.config.js`, `magazine/page.tsx`, and `vite/index-metadata.test.ts`. Until the rename lands, read it as "the body font".
+- Outfit and JetBrains Mono are each declared with a raw `@font-face` in `apps/web/index.html` (→ `public/fonts/outfit-latin.woff2` and `public/fonts/jetbrains-latin.woff2`, with `--font-rubik` / `--font-jetbrains-mono` set on `:root` right there); JetBrains Mono also has a second `@font-face` in `globals.css`. There is no `next/font/local` and no `app/layout.tsx` — the web app is Vite now, that file went with the Next removal.
+- **`--font-rubik` is a rename TODO, not a font.** The variable resolves to Outfit. Do not rename it in passing — consumers are `globals.css`, `tailwind.config.js`, `magazine/magazine-tokens.ts` and `magazine/magazine-typography.tsx`, plus the pinning tests `vite/index-metadata.test.ts`, `magazine/page.test.tsx` and `components/magazine/TypographyScale.test.tsx`. Until the rename lands, read it as "the body font".
 - **Lato was never loaded.** No `--font-lato`, no Lato file, no `@font-face` — the old Numeric row was doc drift, not the system.
+- **Numeric target is Rubik, pending the font file.** The 2026-10-31 per-glyph verdict assigns digits to Rubik, but no Rubik file ships, so `font-numeric` resolves to Outfit today (the table above states current truth, not the target). Loading Rubik is its own decision — it needs `apps/web/index.html`, `tailwind.config.js` and the font file — and until it lands **no surface may label anything "Rubik"**: a row labelled Rubik while rendering Outfit is exactly the lie this table and the magazine `Font Families` specimen exist to remove.
 - `apps/web/lib/fonts.ts` lists a body-font switcher (Inter / Outfit / Space Grotesk / Plus Jakarta) but ships no font files for it; Outfit is the only body face in use.
 - Mobile maps the same two families through `apps/mobile/tamagui.config.ts` — see **Mobile (React Native / Tamagui)** below.
 
@@ -135,6 +136,20 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 | Label         | `text-xs font-medium uppercase tracking-wider` | 500    | Form labels                  |
 | Badge         | `text-[10px] font-medium`                      | 500    | Status badges, tags          |
 
+### Minimum Size Floor (2026-11-15)
+
+**No content text may render below 11px.** `px`-pinned utilities bypass the rem
+root scale (`html { font-size: 14px mobile / 16px desktop }`), so they can never
+be corrected from the root — they must obey the floor directly.
+
+- Content text (dialog/card/panel copy, metadata, dates, footers): **≥ 11px**.
+  Prefer the scale (`text-xs` = 12px, `text-sm` = 14px) over a `px` pin.
+- **Exempt** (deliberately dense chrome, stays as-is): status bar
+  (`.sl-status-bar*`), bottom-nav labels, badges/tags, `kbd` hints, code
+  gutters, Tufte-style margin notes.
+- Legacy `text-[8px]` / `text-[9px]` on content classes are violations; migrate
+  to `text-[11px]` or the scale on sight.
+
 ### Rules
 
 - Never use `text-lg` in page body content
@@ -142,6 +157,7 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 - Never use `text-3xl` or larger in component content
 - Body text is always `text-sm`
 - Code blocks use `font-mono text-xs`
+- Never pin content text below 11px (see Minimum Size Floor above)
 
 ## Spacing
 
@@ -293,7 +309,7 @@ board (gutter + content + margin):
   the frame footer (`data-message-frame-footer`).
 
 Reference implementations: `features/chat/components/messages/MessageFrame.tsx`
-(composed by `MessageBubble.tsx`, `MessageContent.tsx`, `MessageRenderer.tsx`),
+(composed by `MessageBubble.tsx`, `MessageContent.tsx`),
 `components/planner/CardItem.tsx` + `Tray.tsx` (board entry + column).
 Per-turn chat metrics arrive via `streamChatResponse`'s `onMeta`
 (`{tokens, elapsedMs}`) and live on `ChatMessage.metrics`.
@@ -570,7 +586,7 @@ grep -rn "': '#" apps/web/components apps/web/app --include='*.tsx' | grep -v '.
 grep -rnE 'rounded-(br|bl)-md|chat-bubble' apps/web/features/chat/components/messages/ --include='*.tsx' | grep -v '.test.'   # must be zero
 
 # Chat messages must render through the shared MessageFrame (no hand-rolled chrome)
-grep -rLn 'MessageFrame' apps/web/features/chat/components/messages/MessageBubble.tsx apps/web/features/chat/components/messages/MessageContent.tsx apps/web/features/chat/components/MessageRenderer.tsx   # must print nothing
+grep -rLn 'MessageFrame' apps/web/features/chat/components/messages/MessageBubble.tsx apps/web/features/chat/components/messages/MessageContent.tsx   # must print nothing
 
 # Planner must not pin hues (non-negotiable #1)
 grep -rn 'hsl(' apps/web/components/planner --include='*.tsx' | grep -v '.test.'   # must be zero

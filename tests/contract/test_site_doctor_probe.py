@@ -427,3 +427,63 @@ def test_trend_absent_when_newest_record_lacks_headline(monkeypatch, tmp_path) -
         (d / f"r{i}.json").write_text(json.dumps(rec), encoding="utf-8")
     checks = _trend_checks(monkeypatch)
     assert "inference-trend" not in checks
+
+
+# --- static gates entry (card 20261112_060632) ---------------------------
+
+
+def test_main_runs_the_gates_check() -> None:
+    """Wiring pin: the gates entry exists AND main() invokes it.
+
+    A check nobody calls is dead code — the contract is the invocation, not
+    the function's existence.
+    """
+    import inspect
+
+    src = inspect.getsource(doctor.main)
+    assert "check_gates()" in src, "gates entry defined but main() never runs it"
+
+
+def test_gates_check_names_the_three_static_gates() -> None:
+    """Each in-scope gate surfaces by name on this tree, whatever its verdict.
+
+    The name is carried by the ok/info/high line alike, so presence is
+    independent of whether the tree is green — the operator always sees
+    which gates ran.
+    """
+    checks = {f["check"] for f in doctor.check_gates()}
+    assert {"gate-command-parity", "gate-domain-baseline", "gate-router-manifest"} <= checks, checks
+
+
+def test_gates_check_ranks_new_drift_high_and_known_debt_info(monkeypatch) -> None:
+    """--strict trips on new drift only: baselined debt reads info, not defect.
+
+    Mirrors the missing-journey-report rule — known and tracked is context,
+    new drift is a defect. Seeded reports make the ranking a pure function
+    of the gate verdict, independent of the tree's real state.
+    """
+    from domain import gates as gates_mod
+
+    seeded = [
+        gates_mod.GateReport(name="command-parity", ok=False, findings=["new drift"], known=[]),
+        gates_mod.GateReport(name="domain-baseline", ok=True, findings=[], known=["baselined gap"]),
+        gates_mod.GateReport(name="router-manifest", ok=True, findings=[], known=[]),
+    ]
+    monkeypatch.setattr(gates_mod, "run_gates", lambda *a, **k: seeded)
+
+    findings = doctor.check_gates()
+    by_key = {(f["check"], f["message"]): f["severity"] for f in findings}
+    assert by_key[("gate-command-parity", "new drift")] == "high"
+    assert by_key[("gate-domain-baseline", "known: baselined gap")] == "info"
+    # report() counts critical/high/medium/low — info must not be among them,
+    # or --strict would trip on debt the baseline already tolerates.
+    assert doctor.report(findings) == 1
+
+
+def test_the_gates_check_makes_no_network_calls() -> None:
+    """Static means static: the entry must not touch HTTP or sockets."""
+    import inspect
+
+    src = inspect.getsource(doctor.check_gates)
+    for forbidden in ("get(", "urlopen", "http.client", "requests"):
+        assert forbidden not in src, f"check_gates must be offline, found {forbidden!r}"

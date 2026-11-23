@@ -213,10 +213,6 @@ class TestResolveDeviceIntegration:
         for device in ["cpu", "cuda", "cuda:0", "cuda:1", "mps"]:
             assert _resolve_device(device) == device
 
-    def test_auto_resolves_before_model_load(self):
-        result = _resolve_device("auto")
-        assert result in ("cpu", "cuda", "cuda:0", "cuda:1", "mps")
-
     def test_explicit_preserves_device_index(self):
         for idx in range(8):
             device = f"cuda:{idx}"

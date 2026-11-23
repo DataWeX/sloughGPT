@@ -70,21 +70,11 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   usePathname: () => '/knowledge',
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 
 vi.mock('@/lib/download-utils', () => ({ downloadJson: vi.fn() }))
 vi.mock('@/lib/format-bytes', () => ({
@@ -611,7 +601,7 @@ describe('KnowledgePage — error handling flow', () => {
     mockList.mockRejectedValue(new Error('Network error'))
     render(<KnowledgePage />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not load knowledge', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not load knowledge', { type: 'error' })
     })
   })
 

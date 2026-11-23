@@ -58,9 +58,13 @@ export function BenchmarkCompareCard({ results }: BenchmarkCompareCardProps) {
   if (results.length === 0) {
     return (
       <Card data-testid="benchmark-compare">
-        <CardHeader><CardTitle className="text-base">Model Comparison</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Model Comparison</CardTitle>
+        </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground text-center py-3">Run benchmarks on multiple models to compare.</p>
+          <p className="text-xs text-muted-foreground text-center py-3">
+            Run benchmarks on multiple models to compare.
+          </p>
         </CardContent>
       </Card>
     )
@@ -71,43 +75,60 @@ export function BenchmarkCompareCard({ results }: BenchmarkCompareCardProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Model Comparison</CardTitle>
-          <span className="text-[10px] text-muted-foreground">{results.length} model{results.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs text-muted-foreground">
+            {results.length} model{results.length !== 1 ? 's' : ''}
+          </span>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {METRICS.map(metric => {
-          const values = results.map(([model, r]) => ({
-            model,
-            value: getVal(r, metric.key),
-          })).filter(v => v.value > 0)
+        {METRICS.map((metric) => {
+          const values = results
+            .map(([model, r]) => ({
+              model,
+              value: getVal(r, metric.key),
+            }))
+            .filter((v) => v.value > 0)
 
           if (values.length === 0) return null
 
-          const maxVal = Math.max(...values.map(v => v.value))
+          const maxVal = Math.max(...values.map((v) => v.value))
 
           return (
             <div key={metric.key}>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{metric.label}</span>
-                <span className="text-[9px] text-muted-foreground/60">{metric.unit}</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {metric.label}
+                </span>
+                <span className="text-[11px] text-muted-foreground/60">{metric.unit}</span>
               </div>
               <div className="space-y-1">
-                {values.map(v => {
+                {values.map((v) => {
                   const isBest = bestValues[metric.key]?.model === v.model
                   const pct = maxVal > 0 ? (v.value / maxVal) * 100 : 0
                   return (
                     <div key={v.model} className="flex items-center gap-2">
-                      <span className={cn('text-[9px] w-20 truncate', isBest ? 'text-success font-medium' : 'text-muted-foreground')}>
-                        {v.model}{isBest ? ' ★' : ''}
+                      <span
+                        className={cn(
+                          'text-[11px] w-20 truncate',
+                          isBest ? 'text-success font-medium' : 'text-muted-foreground',
+                        )}
+                      >
+                        {v.model}
+                        {isBest ? ' ★' : ''}
                       </span>
                       <div className="flex-1 h-4 bg-muted/30 rounded-sm overflow-hidden">
                         <div
-                          className={cn('h-full rounded-sm transition-all duration-500', isBest ? 'bg-success/60' : 'bg-primary/30')}
+                          className={cn(
+                            'h-full rounded-sm transition-all duration-500',
+                            isBest ? 'bg-success/60' : 'bg-primary/30',
+                          )}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span className="text-[9px] font-mono text-muted-foreground w-16 text-right">
-                        {v.value >= 1000 ? `${(v.value / 1000).toFixed(1)}k` : v.value.toFixed(v.value < 10 ? 2 : 0)}
+                      <span className="text-[11px] font-mono text-muted-foreground w-16 text-right">
+                        {v.value >= 1000
+                          ? `${(v.value / 1000).toFixed(1)}k`
+                          : v.value.toFixed(v.value < 10 ? 2 : 0)}
                       </span>
                     </div>
                   )
@@ -121,8 +142,8 @@ export function BenchmarkCompareCard({ results }: BenchmarkCompareCardProps) {
           <div className="grid grid-cols-2 gap-2">
             {results.map(([model, r]) => (
               <div key={model} className="rounded-md bg-muted/20 p-2 text-center">
-                <p className="text-[10px] font-medium truncate">{model}</p>
-                <p className="text-[9px] text-muted-foreground">
+                <p className="text-xs font-medium truncate">{model}</p>
+                <p className="text-[11px] text-muted-foreground">
                   {r.total_tokens ?? 0} tokens · {r.inference_count ?? 0} runs
                 </p>
               </div>

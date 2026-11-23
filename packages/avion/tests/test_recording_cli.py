@@ -24,6 +24,11 @@ class FakeElement:
     def __init__(self, box: dict) -> None:
         self.bounding_box = box
 
+    def provenance(self) -> str:
+        """Element-interface double: identity from the box the backend set."""
+        b = self.bounding_box or {}
+        return f"fake @{b.get('x', 0)},{b.get('y', 0)} {b.get('width', 0)}x{b.get('height', 0)}"
+
 
 class FakeBackend:
     """Minimal driving backend for _dispatch: find/click/fill with a box."""
@@ -144,6 +149,36 @@ class TestDispatchRecording:
 
         click = recorder.of_type(EventType.CLICK)[0]
         assert "rect" not in click.data and "_t_ns" not in click.data
+
+    async def test_multi_click_records_one_event_per_hit(self, tmp_path):
+        """A multi-match click records ONE CLICK per hit — replay re-drives
+        each by locator — and every event carries ITS OWN hit rect (a
+        locator-level rect would describe the first match for all of them)."""
+        session = RecordingSession(tmp_path / "rec")
+        recorder = EventRecorder(session_name="d")
+
+        class MultiBackend(FakeBackend):
+            async def find_elements(self, locator):
+                return [
+                    FakeElement({"x": 1, "y": 2, "width": 3, "height": 4}),
+                    FakeElement({"x": 5, "y": 6, "width": 7, "height": 8}),
+                ]
+
+        backend = MultiBackend()
+        code = await _dispatch(backend, ["click", "#go"], recorder=recorder, session=session)
+
+        assert code == 0
+        assert backend.clicked == ["clicked", "clicked"]  # both matches hit
+        clicks = recorder.of_type(EventType.CLICK)
+        assert len(clicks) == 2
+        # execution is backward (mutation safety): second match first —
+        # each event carries the rect of the hit IT clicked
+        assert clicks[0].data["rect"] == {"x": 5.0, "y": 6.0, "width": 7.0, "height": 8.0}
+        assert clicks[1].data["rect"] == {"x": 1.0, "y": 2.0, "width": 3.0, "height": 4.0}
+        assert all(isinstance(c.data["_t_ns"], int) for c in clicks)
+        # ONE evidence barrier for the set: the locator resolved, however
+        # many hits followed it
+        assert len(recorder.of_type(EventType.ELEMENT_FOUND)) == 1
 
     async def test_unresolvable_rect_degrades_not_fails(self, tmp_path):
         """A verb must succeed even when the overlay geometry never resolves."""

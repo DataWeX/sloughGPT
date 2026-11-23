@@ -41,7 +41,7 @@ export const ConsciousnessToggle = memo(function ConsciousnessToggle({
     >
       <IconBrain className="h-3.5 w-3.5" aria-hidden="true" />
       {level !== null && (
-        <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-primary/15 text-primary leading-none">
+        <span className="text-[11px] font-mono px-1 py-0.5 rounded bg-primary/15 text-primary leading-none">
           L{level}
         </span>
       )}

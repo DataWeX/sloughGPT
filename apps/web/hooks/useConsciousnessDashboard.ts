@@ -1,4 +1,5 @@
 'use client'
+import { notify } from '@/lib/notify'
 
 /**
  * Stateful core of the Consciousness Dashboard.
@@ -12,7 +13,6 @@
  * Extracted from app/(app)/consciousness/dashboard/page.tsx (874 lines) to keep
  * that page a composition root.
  */
-import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -51,7 +51,6 @@ export interface EvalReport {
 }
 
 export function useConsciousnessDashboard() {
-  const addToast = notify.toast
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
 
   const [loading, setLoading] = useState(true)
@@ -115,11 +114,11 @@ export function useConsciousnessDashboard() {
         if (statusResult.value.level !== undefined) setConsciousnessLevel(statusResult.value.level)
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -158,17 +157,17 @@ export function useConsciousnessDashboard() {
       })
     }
     if (latestEvent.level !== undefined) setConsciousnessLevel(latestEvent.level)
-    addToast('Consciousness state updated', 'success')
-  }, [latestEvent, isLive, addToast])
+    notify.toast('Consciousness state updated', { type: 'success' })
+  }, [latestEvent, isLive])
 
   const handleSeed = async () => {
     setSeeding(true)
     try {
       await consciousnessController.seedData({ count: 30 })
-      addToast('30 episodes added', 'success')
+      notify.toast('30 episodes added', { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }
@@ -178,10 +177,10 @@ export function useConsciousnessDashboard() {
     setReflecting(true)
     try {
       await consciousnessController.reflect()
-      addToast('New episode recorded', 'success')
+      notify.toast('New episode recorded', { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setReflecting(false)
     }
@@ -191,10 +190,10 @@ export function useConsciousnessDashboard() {
     setRatingEpisode(episodeIndex)
     try {
       await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
-      addToast(`Rated ${rating}/5`, 'success')
+      notify.toast(`Rated ${rating}/5`, { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setRatingEpisode(null)
     }
@@ -204,9 +203,9 @@ export function useConsciousnessDashboard() {
     try {
       await consciousnessController.updateConfig({ level: newLevel })
       setConsciousnessLevel(newLevel)
-      addToast(`Level set to ${newLevel}`, 'success')
+      notify.toast(`Level set to ${newLevel}`, { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }
 
@@ -229,9 +228,9 @@ export function useConsciousnessDashboard() {
       a.download = `consciousness-export-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('Exported consciousness data', 'success')
+      notify.toast('Exported consciousness data', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setExporting(false)
     }
@@ -248,10 +247,10 @@ export function useConsciousnessDashboard() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        addToast(`Imported ${data.episodes?.length ?? 0} episodes`, 'success')
+        notify.toast(`Imported ${data.episodes?.length ?? 0} episodes`, { type: 'success' })
         await fetchAll()
       } catch {
-        addToast('Invalid JSON file', 'error')
+        notify.toast('Invalid JSON file', { type: 'error' })
       } finally {
         setImporting(false)
       }

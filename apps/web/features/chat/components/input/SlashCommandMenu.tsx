@@ -153,10 +153,10 @@ export const SlashCommandMenu = memo(function SlashCommandMenu({
           <div className="flex-1 min-w-0">
             <p className="text-xs truncate">{cmd.description}</p>
             {cmd.usage !== cmd.command && (
-              <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">{cmd.usage}</p>
+              <p className="text-xs text-muted-foreground/60 truncate mt-0.5">{cmd.usage}</p>
             )}
           </div>
-          <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums">
+          <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">
             {Math.round(score)}%
           </span>
         </button>

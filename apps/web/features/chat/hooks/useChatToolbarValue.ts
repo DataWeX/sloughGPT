@@ -12,7 +12,6 @@ import type { useChatMessages } from './useChatMessages'
 import type { ApiHealthSnapshot } from './../../../hooks/useApiHealth'
 import { datasetController } from '@/lib/dataset-controller'
 import { todayDateString } from '@/lib/format-bytes'
-import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
 type HealthStatus = 'loading' | 'offline' | 'ok' | 'loading' | 'degraded'
 
@@ -49,9 +48,6 @@ interface UseChatToolbarValueConfig {
   onSystemPrompt: () => void
   onSearchConversations: () => void
   bookmarkCount: number
-  /** Active behavior-protocol mode — surfaced as a header chip so the toolbar
-   *  identity matches the protocol actually in effect (not the session title). */
-  chatMode: ChatMode
 }
 
 export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatToolbarContextValue {
@@ -71,10 +67,24 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
     showToast,
   } = config
 
+  // ONE active-conversation lookup for the header: the same row object the
+  // sidebar card renders (both read chat.sidebarConversations, keyed by the
+  // same sessionIdRef), so name and count cannot split-source. The count uses
+  // ConvRow's exact formula (persisted row messages) — the old live
+  // chat.messages.length counted the loadSession-filtered list and disagreed
+  // with the card by the empty assistant messages it drops (29 vs 30).
+  const activeConversation = chat.sidebarConversations.find(
+    (c) => c.session_id === chat.sessionIdRef.current,
+  )
+  const activeMessageCount = activeConversation
+    ? (activeConversation.messages?.length ?? activeConversation.message_count ?? 0)
+    : chat.messages.length
+
   return useMemo<ChatToolbarContextValue>(
     () => ({
       conversations: {
         conversations: chat.sidebarConversations,
+        activeName: activeConversation?.name,
         sessionIdRef: chat.sessionIdRef,
         onLoad: chat.loadSession,
         onStar: chat.starSession,
@@ -158,8 +168,8 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
             showToast('Could not save dataset', 'error')
           }
         },
-        hasMessages: chat.messages.length > 0,
-        messageCount: chat.messages.length,
+        hasMessages: activeMessageCount > 0,
+        messageCount: activeMessageCount,
         bookmarkCount: config.bookmarkCount,
       },
       health: {
@@ -168,7 +178,6 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
         modelLoaded: health !== null && health !== 'offline' && health.model_loaded,
         modelType: health !== null && health !== 'offline' ? health.model_type : '',
       },
-      mode: { current: config.chatMode },
       sidebar: {
         open: ui.sidebarOpen,
         onToggle: () => ui.setSidebarOpen((prev) => !prev),
@@ -190,7 +199,6 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       modelDescriptions,
       showToast,
       config.onSearchConversations,
-      config.chatMode,
     ],
   )
 }

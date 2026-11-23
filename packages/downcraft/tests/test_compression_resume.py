@@ -133,9 +133,7 @@ class TestLz4FreshDownload:
 
     def test_identity_total_ignores_lz4_wire_length(self):
         """Wire Content-Length is not an identity total for x-lz4 responses."""
-        assert (
-            _identity_total({"Content-Type": "application/x-lz4", "Content-Length": "999"}) == 0
-        )
+        assert _identity_total({"Content-Type": "application/x-lz4", "Content-Length": "999"}) == 0
         assert (
             _identity_total(
                 {
@@ -154,9 +152,7 @@ class TestLz4FreshDownload:
 
 
 class TestLz4ResumeByteSpace:
-    def test_crash_resume_decompress_end_to_end(
-        self, range_server, tmp_path, monkeypatch
-    ):
+    def test_crash_resume_decompress_end_to_end(self, range_server, tmp_path, monkeypatch):
         """Crash mid-decode, resume with Range=decoded-size, verify both checksums.
 
         This is the provable form of http.py's claim: the N in
@@ -308,9 +304,7 @@ class TestLz4ResumeByteSpace:
             resumed = [e for e in _lz4_gets("/cut.bin") if e["range"]]
             assert resumed and resumed[0]["range"] == f"bytes={prefix_len}-"
 
-    def test_resume_rejects_mismatched_slz4_header_checksum(
-        self, range_server, tmp_path
-    ):
+    def test_resume_rejects_mismatched_slz4_header_checksum(self, range_server, tmp_path):
         """If the relayed SLZ4 header checksum disagrees → discard, never accept.
 
         A mismatch means the server's file changed (version skew) or the
@@ -377,9 +371,7 @@ class TestEdgeCrashResume:
 
 
 class TestMultipartCompressed:
-    def test_download_parts_compressed_decodes_checksums_state(
-        self, range_server, tmp_path
-    ):
+    def test_download_parts_compressed_decodes_checksums_state(self, range_server, tmp_path):
         """download_parts(compressed=True) decodes every part and tracks
         identity bytes in ~/.downcraft/state.json."""
         payloads = {
@@ -415,8 +407,8 @@ class TestMultipartCompressed:
         assert group["status"] == "complete"
         for fp in group["files"]:
             assert fp["complete"] is True
-            assert fp["bytes_downloaded"] == fp["total_bytes"] == len(
-                payloads[Path(fp["path"]).name]
+            assert (
+                fp["bytes_downloaded"] == fp["total_bytes"] == len(payloads[Path(fp["path"]).name])
             )
 
     def test_download_parts_crash_state_matches_sgpart_then_resume(
@@ -461,8 +453,12 @@ class TestMultipartCompressed:
 
         with pytest.raises(SimulatedCrash):
             download_parts(
-                urls, dest_dir, filenames=list(payloads), checksums=checksums,
-                compressed=True, on_progress=_progress,
+                urls,
+                dest_dir,
+                filenames=list(payloads),
+                checksums=checksums,
+                compressed=True,
+                on_progress=_progress,
             )
 
         # -- crash-time consistency: state == disk, both in decoded bytes --
@@ -504,9 +500,7 @@ class TestMultipartCompressed:
 
 
 class TestRangeIsIdentitySpace:
-    def test_download_range_returns_identity_slice_from_lz4_url(
-        self, range_server, tmp_path
-    ):
+    def test_download_range_returns_identity_slice_from_lz4_url(self, range_server, tmp_path):
         """Slices of an SLZ4-served URL are identity bytes (protocol rule:
         Range is answered in decoded byte-space), verified by checksum."""
         payload = os.urandom(80_000)

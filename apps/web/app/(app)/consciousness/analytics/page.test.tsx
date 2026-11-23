@@ -19,7 +19,9 @@ vi.mock('@/hooks/useLocale', () => ({
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
@@ -36,7 +38,15 @@ const mockEpisodes = [
     input: 'Test input 1',
     response: 'Response 1',
     narrative: 'Narrative 1',
-    qualia: { valence: 0.5, arousal: 0.3, novelty: 0.6, coherence: 0.7, salience: 0.4, certainty: 0.8, complexity: 0.3 },
+    qualia: {
+      valence: 0.5,
+      arousal: 0.3,
+      novelty: 0.6,
+      coherence: 0.7,
+      salience: 0.4,
+      certainty: 0.8,
+      complexity: 0.3,
+    },
     growth_delta: 0.05,
     rating: 4,
     timestamp: '2025-01-15T10:00:00Z',
@@ -45,7 +55,15 @@ const mockEpisodes = [
     input: 'Test input 2',
     response: 'Response 2',
     narrative: 'Narrative 2',
-    qualia: { valence: 0.4, arousal: 0.2, novelty: 0.5, coherence: 0.6, salience: 0.3, certainty: 0.7, complexity: 0.4 },
+    qualia: {
+      valence: 0.4,
+      arousal: 0.2,
+      novelty: 0.5,
+      coherence: 0.6,
+      salience: 0.3,
+      certainty: 0.7,
+      complexity: 0.4,
+    },
     growth_delta: -0.02,
     rating: 2,
     timestamp: '2025-01-15T11:00:00Z',
@@ -53,8 +71,26 @@ const mockEpisodes = [
 ]
 
 const mockQualia = [
-  { valence: 0.5, arousal: 0.3, novelty: 0.6, coherence: 0.7, salience: 0.4, certainty: 0.8, complexity: 0.3, timestamp: '2025-01-15T10:00:00Z' },
-  { valence: 0.4, arousal: 0.2, novelty: 0.5, coherence: 0.6, salience: 0.3, certainty: 0.7, complexity: 0.4, timestamp: '2025-01-15T11:00:00Z' },
+  {
+    valence: 0.5,
+    arousal: 0.3,
+    novelty: 0.6,
+    coherence: 0.7,
+    salience: 0.4,
+    certainty: 0.8,
+    complexity: 0.3,
+    timestamp: '2025-01-15T10:00:00Z',
+  },
+  {
+    valence: 0.4,
+    arousal: 0.2,
+    novelty: 0.5,
+    coherence: 0.6,
+    salience: 0.3,
+    certainty: 0.7,
+    complexity: 0.4,
+    timestamp: '2025-01-15T11:00:00Z',
+  },
 ]
 
 const mockBeliefs = {
@@ -84,7 +120,9 @@ describe('ConsciousnessAnalyticsPage', () => {
   it('shows analytics data', async () => {
     render(<ConsciousnessAnalyticsPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_analytics.total_episodes').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_analytics.total_episodes').length).toBeGreaterThan(
+        0,
+      )
       expect(screen.getAllByText('consciousness_analytics.avg_growth').length).toBeGreaterThan(0)
       expect(screen.getAllByText('consciousness_analytics.avg_rating').length).toBeGreaterThan(0)
     })
@@ -121,7 +159,9 @@ describe('ConsciousnessAnalyticsPage', () => {
   it('shows positive ratio', async () => {
     render(<ConsciousnessAnalyticsPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_analytics.positive_ratio').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_analytics.positive_ratio').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 

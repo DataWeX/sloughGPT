@@ -17,7 +17,6 @@ if _core_dir not in sys.path:
 
 from domain.agents._internal.run_history import (
     AgentRunStore,
-    _new_run_id,
     reset_agent_run_store,
     reset_mogdb,
     set_mogdb_path,
@@ -32,18 +31,6 @@ def store(tmp_path):
     yield AgentRunStore(db_path=db_path, max_runs=5)
     reset_agent_run_store()
     reset_mogdb()
-
-
-class TestNewRunId:
-    def test_format(self):
-        rid = _new_run_id()
-        parts = rid.split("_")
-        assert parts[0] == "run"
-        assert len(parts) >= 4
-
-    def test_unique(self):
-        ids = {_new_run_id() for _ in range(50)}
-        assert len(ids) == 50
 
 
 class TestAgentRunStore:

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   cn,
@@ -61,7 +61,6 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
   const [comparing, setComparing] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [result, setResult] = useState<CompareResult | null>(null)
-  const addToast = notify.toast
 
   const load = useCallback(async () => {
     try {
@@ -85,7 +84,9 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       const res = await tokenTreeController.compare(a, b, 10)
       setResult(res)
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not compare token trees', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not compare token trees', {
+        type: 'error',
+      })
     } finally {
       setComparing(false)
     }
@@ -175,19 +176,19 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
                     <div className="text-base font-medium">{result.shared_tokens}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wider">
                       shared tokens
                     </div>
                   </div>
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
                     <div className="text-base font-medium">{result.only_a_tokens}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wider">
                       only in A
                     </div>
                   </div>
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
                     <div className="text-base font-medium">{result.only_b_tokens}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wider">
                       only in B
                     </div>
                   </div>

@@ -317,6 +317,53 @@ describe('Tooltip', () => {
     const content = queryContent()!
     expect(content.classList.contains('bg-card')).toBe(true)
   })
+
+  /* ── Variant set: size axis + tone vocabulary ─────────────── */
+
+  it('renders distinct padding per size, with default unchanged', () => {
+    stubLayout()
+    const sizes = [
+      ['sm', 'px-2'],
+      [undefined, 'px-2.5'],
+      ['lg', 'px-3'],
+    ] as const
+    for (const [size, cls] of sizes) {
+      cleanup()
+      render(
+        <Tooltip defaultOpen>
+          <TooltipTrigger data-testid="trigger">Hover</TooltipTrigger>
+          <TooltipContent size={size} data-testid="content">
+            Tip text
+          </TooltipContent>
+        </Tooltip>,
+      )
+      const content = queryContent()!
+      expect(content.classList.contains(cls), `size=${size} → ${cls}`).toBe(true)
+    }
+  })
+
+  it('renders semantic tone classes for the new variants', () => {
+    stubLayout()
+    const tones = [
+      ['primary', 'text-primary'],
+      ['success', 'text-success'],
+      ['warning', 'text-warning'],
+      ['destructive', 'text-destructive'],
+    ] as const
+    for (const [variant, cls] of tones) {
+      cleanup()
+      render(
+        <Tooltip defaultOpen>
+          <TooltipTrigger data-testid="trigger">Hover</TooltipTrigger>
+          <TooltipContent variant={variant} data-testid="content">
+            Tip text
+          </TooltipContent>
+        </Tooltip>,
+      )
+      const content = queryContent()!
+      expect(content.classList.contains(cls), `variant=${variant} → ${cls}`).toBe(true)
+    }
+  })
 })
 
 describe('SimpleTooltip', () => {
@@ -358,6 +405,23 @@ describe('SimpleTooltip', () => {
     const content = document.body.querySelector('[role="tooltip"]')!
     expect(content).toBeTruthy()
     expect(content.textContent).toContain('Copy')
+  })
+
+  it('forwards variant and size to the content (derived from cva, not a hand-written union)', () => {
+    vi.useFakeTimers()
+    stubLayout()
+    render(
+      <SimpleTooltip content="Copy" variant="warning" size="lg">
+        <span>Button</span>
+      </SimpleTooltip>,
+    )
+    fireEvent.mouseOver(screen.getByText('Button'))
+    act(() => {
+      vi.advanceTimersByTime(400)
+    })
+    const content = document.body.querySelector('[role="tooltip"]')!
+    expect(content.classList.contains('text-warning')).toBe(true)
+    expect(content.classList.contains('px-3')).toBe(true)
   })
 })
 

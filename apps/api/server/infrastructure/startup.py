@@ -28,6 +28,14 @@ from fastapi import FastAPI
 from startup_progress import STARTUP_PHASE
 
 from config import ServerConfig
+from infrastructure.model_state import (
+    DEGRADED,
+    LOADED,
+    MATERIALIZING,
+    reset_model_state,
+    set_model_state,
+)
+from infrastructure.route_registration import register_routers
 
 logger = logging.getLogger("slo.startup")
 
@@ -47,6 +55,7 @@ def _advance_startup_phase(**fields: object) -> None:
 
 # Timeout constants for startup/shutdown hooks (seconds)
 _TIMEOUT_TASK_QUEUE = 10.0
+_TIMEOUT_AGENT_ROUTINES = 10.0
 _TIMEOUT_CONFIG = 5.0
 _TIMEOUT_WANDB = 30.0
 _TIMEOUT_MULTIMODAL = 30.0
@@ -265,6 +274,18 @@ class StartupOrchestrator:
                     profiles=all_profiles,
                 ),
             )
+            # Agent phase 2: background routine runner. Depends on the task
+            # queue because it only ever enqueues; the queue owns execution.
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "agent_routines",
+                    self._phase_agent_routines,
+                    depends_on=["task_queue"],
+                    timeout=_TIMEOUT_AGENT_ROUTINES,
+                    critical=False,
+                    profiles=quick_plus,
+                ),
+            )
 
             # Register shutdown hooks
             self._lifecycle.register_shutdown_hook(
@@ -291,6 +312,16 @@ class StartupOrchestrator:
                     self._shutdown_task_queue,
                     depends_on=[],
                     timeout=_TIMEOUT_TASK_QUEUE,
+                ),
+            )
+            # Ticker stops before the queue drains (shutdown runs the
+            # reverse of startup): no new enqueues once draining begins.
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook(
+                    "agent_routines_shutdown",
+                    self._shutdown_agent_routines,
+                    depends_on=["task_queue_shutdown"],
+                    timeout=_TIMEOUT_AGENT_ROUTINES,
                 ),
             )
             self._lifecycle.register_shutdown_hook(
@@ -663,13 +694,13 @@ class StartupOrchestrator:
                         from domain.shared._internal.feature_flags import is_enabled
 
                         if is_enabled("native_c_inference"):
-                            from domain.infrastructure.model_resolver import get_model_dir as _gmd
+                            from domain.infrastructure.model_resolver import (
+                                resolve_boot_artifact,
+                            )
 
-                            _p = str(_gmd(cfg.autoload_model) / "model.slnc")
-                            import os as _os
-
-                            if _os.path.exists(_p):
-                                _native_slnc = _p
+                            _art = resolve_boot_artifact(cfg.autoload_model)
+                            if _art is not None and _art.format == "slnc":
+                                _native_slnc = str(_art.path)
                     except Exception:
                         pass
 
@@ -892,25 +923,30 @@ class StartupOrchestrator:
         STARTUP_PHASE.update(
             phase="model_registry", step=7, total=9, message="Initializing model registry..."
         )
-        try:
-            from domain.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure._internal.instance_wiring import wire_model_registry
 
-            self._registry = get_model_registry()
-            logger.info("Phase: model registry initialized", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Phase: model registry failed: %s", e, extra={"tag": "START"})
+        self._registry = wire_model_registry(log=logger)
 
     async def _phase6_routers(self):
-        """Register all feature routers.
+        """Register all feature routers through the single assembler.
 
-        Skips any routers already registered before lifespan (e.g.
-        health/status which are needed during model load).
+        ``register_routers`` skips a router only when *every* path it
+        declares is already served (idempotent re-registration for the boot
+        retry and for routers mounted pre-lifespan); a router sharing only a
+        *prefix* with an existing one is always included. The old rule here
+        — skip when any registered path ``startswith(router.prefix)`` —
+        dropped the whole 11-route ``agents`` router because
+        ``agent_routines`` (also ``/agents``) registers first in the
+        manifest: production 404'd ``GET /agents`` while the contract gate
+        and the test harness, which assembled the app unconditionally, kept
+        reporting it served (card ``20261119_105501``).
 
         A first-time import can transiently fail with ``OSError`` errno 9
         (EBADF) or a partial ``ImportError`` if another thread is importing
         concurrently; in that case the whole pass is retried once. Failed
         imports are rolled back out of ``sys.modules`` by importlib, so a
-        retry re-imports cleanly and skips any routers already included.
+        retry re-imports cleanly and registers_routers skips anything a
+        previous attempt already put on the app.
         """
         STARTUP_PHASE.update(
             phase="registering_routers", step=8, total=9, message="Registering routes..."
@@ -920,25 +956,19 @@ class StartupOrchestrator:
             try:
                 from routers import get_all_routers
 
-                # Collect prefixes already registered (health/status are
-                # registered pre-lifespan in main.py).
-                existing = set()
-                for route in self._app.routes:
-                    if hasattr(route, "path") and hasattr(route, "methods"):
-                        existing.add(route.path)
-                for r in get_all_routers():
-                    # Skip if this router's prefix already has routes
-                    prefix = getattr(r, "prefix", "")
-                    if prefix and any(p.startswith(prefix) for p in existing):
-                        logger.debug("Skipping already-registered router: %s", prefix)
-                        continue
-                    self._app.include_router(r)
-                    if prefix:
-                        existing.add(prefix)
+                result = register_routers(self._app, get_all_routers())
+                logger.debug(
+                    "Phase: registered %d routers, skipped %d",
+                    len(result.included),
+                    len(result.skipped),
+                    extra={"tag": "START"},
+                )
                 try:
                     from training.router import router as training_router
 
-                    self._app.include_router(training_router)
+                    # Same assembler: idempotent across the retry loop, so a
+                    # second attempt can't double-register these routes.
+                    register_routers(self._app, [training_router])
                 except Exception as exc:
                     logger.warning("Phase: training router failed: %s", exc, extra={"tag": "START"})
                 logger.info(
@@ -1086,65 +1116,28 @@ class StartupOrchestrator:
         STARTUP_PHASE.update(
             phase="task_queue", step=2, total=9, message="Initializing task queue..."
         )
-        try:
-            from domain.infrastructure.task_queue import get_task_queue
+        # Wiring sequence lives in domain (instance_wiring) — shared with the
+        # embeddable SloughInstance facade so the two boot orders cannot drift.
+        from domain.infrastructure._internal.instance_wiring import wire_task_queue
 
-            self._task_queue = get_task_queue()
-            await self._task_queue.start()
-            logger.info("Task queue initialized and started", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
-        try:
-            from domain.infrastructure.training_queue import register_training_handlers
+        self._task_queue = await wire_task_queue(log=logger)
 
-            register_training_handlers()
-            logger.info("Training handlers registered with task queue", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Training handler registration failed: %s", e, extra={"tag": "START"})
-        try:
-            from domain.memory import register_memory_handlers
+    async def _phase_agent_routines(self):
+        """Register the routine handler and start the background ticker.
 
-            register_memory_handlers()
-            logger.info("Memory handlers registered with task queue", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Memory handler registration failed: %s", e, extra={"tag": "START"})
-        try:
-            from domain.memory._internal.maintenance import start_memory_maintenance
+        Non-critical: the server is fully usable without it, so a failure
+        here only means no scheduled runs (manual execute still works).
+        """
+        from domain.infrastructure._internal.instance_wiring import wire_agent_routines
 
-            start_memory_maintenance()
-            logger.info("Memory maintenance scheduler started", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning(
-                "Memory maintenance scheduler start failed: %s", e, extra={"tag": "START"}
-            )
+        wire_agent_routines(log=logger)
 
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
         STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
-        try:
-            from domain.infrastructure._internal.config import get_config
+        from domain.infrastructure._internal.instance_wiring import wire_config
 
-            cfg = get_config()
-            _ = cfg.model.name
-            logger.info("Config system validated", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Config system init: %s", e, extra={"tag": "START"})
-        # Init ResourceManager — applies BLAS env vars before numpy loads
-        try:
-            from domain.infrastructure.resource_manager import get_resource_manager
-
-            rm = get_resource_manager()
-            rm.apply_blas_env()
-            rm.apply_compute_limits()
-            rm.apply_environment()
-            logger.info(
-                "ResourceManager initialised: mode=%s %s",
-                rm.mode,
-                rm.summary(),
-                extra={"tag": "START"},
-            )
-        except Exception as e:
-            logger.warning("ResourceManager init: %s", e, extra={"tag": "START"})
+        wire_config(log=logger)
 
         # Warn if auth is disabled
         import os
@@ -1183,17 +1176,20 @@ class StartupOrchestrator:
     async def _shutdown_task_queue(self):
         """Gracefully stop the background task queue."""
         if self._task_queue is not None:
-            try:
-                from domain.memory._internal.maintenance import stop_memory_maintenance
+            from domain.infrastructure._internal.instance_wiring import unwire_task_queue
 
-                await stop_memory_maintenance()
-            except Exception as e:
-                logger.warning("Memory maintenance shutdown: %s", e, extra={"tag": "START"})
-            try:
-                await self._task_queue.stop()
-                logger.info("Task queue stopped", extra={"tag": "START"})
-            except Exception as e:
-                logger.warning("Task queue shutdown: %s", e, extra={"tag": "START"})
+            await unwire_task_queue(self._task_queue, log=logger)
+
+    async def _shutdown_agent_routines(self):
+        """Stop the routine ticker only — in-flight runs belong to the queue.
+
+        Deliberately does not await or cancel running tasks: the queue
+        drains them on its own shutdown, and killing a model⇄tool loop
+        mid-step would strand its run record.
+        """
+        from domain.infrastructure._internal.instance_wiring import unwire_agent_routines
+
+        unwire_agent_routines(log=logger)
 
     async def _shutdown_jobs(self):
         """Mark running training jobs as crashed on shutdown."""
@@ -1220,12 +1216,9 @@ class StartupOrchestrator:
 
     async def _shutdown_registry(self):
         """Reset model registry metrics."""
-        try:
-            from domain.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure._internal.instance_wiring import unwire_registry
 
-            get_model_registry().reset_metrics()
-        except Exception as e:
-            logger.debug("Registry reset failed during shutdown: %s", e)
+        unwire_registry(log=logger)
 
     async def _shutdown_inference_engine(self):
         """Terminate the inference engine subprocess if running."""
@@ -1273,14 +1266,9 @@ class StartupOrchestrator:
 
     async def _shutdown_executor(self):
         """Gracefully shut down the TrainingExecutor thread pool."""
-        try:
-            from domain.training._internal.executor import _instance
+        from domain.infrastructure._internal.instance_wiring import shutdown_executor
 
-            if _instance is not None:
-                _instance.shutdown(wait=True)
-                logger.info("TrainingExecutor shut down", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("TrainingExecutor shutdown: %s", e, extra={"tag": "START"})
+        shutdown_executor(log=logger)
 
     async def shutdown(self):
         """Clean up on server shutdown — uses lifecycle drain if available."""
@@ -1447,12 +1435,17 @@ def _preload_parent_weights(model_type: str) -> bool:
         logger.debug("Parent preload: server is shutting down, skipping", extra={"tag": "START"})
         return False
 
+    # The scheduled preload is now executing: weights are landing (card
+    # 20261104_053224 — /health must say materialising during this window).
+    set_model_state(MATERIALIZING)
+
     try:
         provider = getattr(server_state, "provider", None)
         if provider is None:
             logger.debug(
                 "Parent preload: no provider on server_state, skipping", extra={"tag": "START"}
             )
+            set_model_state(DEGRADED)
             return False
 
         # Materialize the parent weights WHILE the guard still serves requests.
@@ -1492,6 +1485,7 @@ def _preload_parent_weights(model_type: str) -> bool:
             logger.debug(
                 "Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"}
             )
+        set_model_state(LOADED if model is not None else DEGRADED)
         return model is not None
     except Exception as e:
         logger.debug(
@@ -1499,6 +1493,7 @@ def _preload_parent_weights(model_type: str) -> bool:
             e,
             extra={"tag": "START"},
         )
+        set_model_state(DEGRADED)
         return False
 
 
@@ -1515,6 +1510,9 @@ def _start_parent_preload(model_type: str, delay_s: float | None = None):
     from domain.infrastructure._internal.pugqeep.singleton import get_engine
 
     _shutting_down.clear()  # a fresh boot is not shutting down
+    # From scheduling to completion the server is materialising: the provider
+    # is installed and the weights have not landed yet (card 20261104_053224).
+    set_model_state(MATERIALIZING)
     logger.info(
         "Parent preload: scheduling in %.0fs (avoid GIL starvation of uvicorn bind)",
         _delay,
@@ -1569,17 +1567,28 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     if not model_type:
         return False
     try:
-        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.model_resolver import resolve_boot_artifact
 
-        slnc_path = str(_get_model_dir(model_type) / "model.slnc")
-        if not os.path.exists(slnc_path):
+        artifact = resolve_boot_artifact(model_type)
+        if artifact is None:
             logger.info(
-                "Lazy-guard autoload skipped: no .slnc at %s", slnc_path, extra={"tag": "START"}
+                "Lazy-guard autoload skipped: no boot artifact for %s",
+                model_type,
+                extra={"tag": "START"},
             )
             return False
+        if artifact.format != "slnc":
+            logger.info(
+                "Lazy-guard autoload skipped: %s resolved to %s (needs .slnc)",
+                model_type,
+                artifact.format,
+                extra={"tag": "START"},
+            )
+            return False
+        slnc_path = str(artifact.path)
     except Exception as e:
         logger.warning(
-            "Lazy-guard autoload: slnc resolution failed (%s)", e, extra={"tag": "START"}
+            "Lazy-guard autoload: artifact resolution failed (%s)", e, extra={"tag": "START"}
         )
         return False
 
@@ -1615,6 +1624,9 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     server_state.provider = provider
     server_state.model = None
     server_state.tokenizer = getattr(provider, "_tokenizer", None)
+    # Lifecycle: header-only handle installed, weights still landing — the
+    # window /health must report as materialising (card 20261104_053224).
+    set_model_state(MATERIALIZING)
 
     try:
         from domain.infrastructure.server_state import get_server_state
@@ -1700,6 +1712,10 @@ def _try_lazy_guard_autoload(cfg) -> bool:
             exc_info=True,
             extra={"tag": "START"},
         )
+        # This path never schedules a preload: fall back with a clean holder
+        # so the eager autoload owns the lifecycle from ``absent`` — otherwise
+        # the state would sit at materialising with nobody to complete it.
+        reset_model_state()
         return False
 
     logger.info(
@@ -1730,15 +1746,18 @@ def _build_guard_for_model(cfg, model_type: str):
 
         if not get_process_guard_enabled():
             return None
-        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.model_resolver import resolve_boot_artifact
         from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
 
-        slnc_path = str(_get_model_dir(model_type) / "model.slnc")
-        if not os.path.exists(slnc_path):
+        artifact = resolve_boot_artifact(model_type)
+        if artifact is None or artifact.format != "slnc":
             logger.info(
-                "ProcessGuard skipped: no .slnc file at %s", slnc_path, extra={"tag": "START"}
+                "ProcessGuard skipped: no .slnc artifact for %s",
+                model_type,
+                extra={"tag": "START"},
             )
             return None
+        slnc_path = str(artifact.path)
         process_guard = ProcessGuard(
             slnc_path=slnc_path,
             model_id=model_type,
@@ -1782,7 +1801,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     import state as server_state
 
     from domain.infrastructure.model_registry import get_model_registry
-    from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+    from domain.infrastructure.model_resolver import resolve_boot_artifact
     from domain.models._internal.provider import setup_providers
 
     registry = get_model_registry()
@@ -1799,10 +1818,10 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
         )
         # Store reload parameters for idle-reload capability
         if cfg.idle_timeout_seconds > 0 and server_state.model_type:
-            _slnc = str(_get_model_dir(server_state.model_type) / "model.slnc")
+            _art = resolve_boot_artifact(server_state.model_type)
             server.set_hf_model_id(
                 server_state.model_type,
-                slnc_path=_slnc if os.path.exists(_slnc) else None,
+                slnc_path=(str(_art.path) if _art is not None and _art.format == "slnc" else None),
                 quantize=cfg.quantize_slonet,
                 quant_bits=cfg.quant_bits,
                 quant_mode=cfg.quant_mode,
@@ -2172,16 +2191,21 @@ def _start_inference_engine(cfg) -> Any | None:
         return None
 
     try:
-        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.model_resolver import resolve_boot_artifact
 
-        slnc_path = _get_model_dir(model_type) / "model.slnc"
-        if not slnc_path.exists():
+        artifact = resolve_boot_artifact(model_type)
+        if artifact is None or artifact.format != "slnc":
             logger.info(
-                "Inference engine skipped: no .slnc at %s", slnc_path, extra={"tag": "START"}
+                "Inference engine skipped: no .slnc artifact for %s",
+                model_type,
+                extra={"tag": "START"},
             )
             return None
+        slnc_path = artifact.path
     except Exception as e:
-        logger.warning("Inference engine: slnc resolution failed: %s", e, extra={"tag": "START"})
+        logger.warning(
+            "Inference engine: artifact resolution failed: %s", e, extra={"tag": "START"}
+        )
         return None
 
     engine_host = getattr(cfg, "inference_engine_host", "127.0.0.1")
@@ -2332,11 +2356,12 @@ def _make_engine_restart_fn(cfg):
             return None
 
         try:
-            from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure.model_resolver import resolve_boot_artifact
 
-            slnc_path = _get_model_dir(model_type) / "model.slnc"
-            if not slnc_path.exists():
+            artifact = resolve_boot_artifact(model_type)
+            if artifact is None or artifact.format != "slnc":
                 return None
+            slnc_path = artifact.path
         except Exception:
             logger.debug("SLNC model path lookup failed", exc_info=True)
             return None

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -169,7 +169,6 @@ function sendNotification(title: string, body: string) {
 }
 
 export default function ConsciousnessAlertsPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [health, setHealth] = useState<HealthData | null>(null)
@@ -196,11 +195,11 @@ export default function ConsciousnessAlertsPage() {
       }
       setLastCheck(Date.now() / 1000)
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     setAlertHistory(loadHistory())
@@ -315,7 +314,7 @@ export default function ConsciousnessAlertsPage() {
         return prev
       })
     }
-  }, [health, episodesData, settings, addToast])
+  }, [health, episodesData, settings])
 
   useEffect(() => {
     generateAlerts()
@@ -462,7 +461,7 @@ export default function ConsciousnessAlertsPage() {
                       <p className="text-xs font-medium">{alert.message}</p>
                       <p className="text-xs opacity-70 mt-0.5">{formatTimeAgo(alert.timestamp)}</p>
                     </div>
-                    <Badge variant="outline" className="shrink-0 text-[10px] capitalize">
+                    <Badge variant="outline" className="shrink-0 text-xs capitalize">
                       {alert.severity}
                     </Badge>
                     <button

@@ -155,21 +155,21 @@ export function WhatsNewDialog({
                           href={item.href}
                           prefetch={false}
                           onClick={() => onOpenChange(false)}
-                          className="text-[11px] font-medium hover:underline"
+                          className="text-sm font-medium hover:underline"
                         >
                           {item.title}
                         </Link>
                       ) : (
-                        <span className="text-[11px] font-medium">{item.title}</span>
+                        <span className="text-sm font-medium">{item.title}</span>
                       )}
-                      <span className="text-[9px] text-muted-foreground/60">{item.date}</span>
+                      <span className="text-xs text-muted-foreground/60">{item.date}</span>
                       {isUnseen && (
-                        <span className="text-[8px] font-medium text-primary bg-primary/10 rounded-full px-1 py-0.5">
+                        <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-1 py-0.5">
                           NEW
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-muted-foreground/60 mt-0.5 leading-relaxed">
                       {item.description}
                     </p>
                     {item.tags && item.tags.length > 0 && (
@@ -187,13 +187,11 @@ export function WhatsNewDialog({
         </div>
 
         <div className="flex items-center justify-between pt-1.5 border-t border-border/30">
-          <span className="text-[9px] text-muted-foreground/60">
-            {whatsNewItems.length} entries
-          </span>
+          <span className="text-xs text-muted-foreground/60">{whatsNewItems.length} entries</span>
           <Button
             size="sm"
             variant="outline"
-            className="h-6 text-[10px]"
+            className="h-7 text-xs"
             onClick={() => onOpenChange(false)}
           >
             Close

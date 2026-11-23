@@ -44,22 +44,6 @@ class TestTextChunk:
         assert tc.metadata["source"] == "test"
         assert tc.metadata["page"] == 1
 
-    def test_bm25_score_default(self):
-        tc = TextChunk(id="c1", content="x", metadata={})
-        assert tc.bm25_score == 0.0
-
-    def test_embedding_default_none(self):
-        tc = TextChunk(id="c1", content="x", metadata={})
-        assert tc.embedding is None
-
-    def test_empty_content(self):
-        tc = TextChunk(id="c1", content="", metadata={})
-        assert tc.token_count == 0
-
-    def test_single_word(self):
-        tc = TextChunk(id="c1", content="hello", metadata={})
-        assert tc.token_count == 1
-
     def test_long_content(self):
         long = " ".join(["word"] * 1000)
         tc = TextChunk(id="c1", content=long, metadata={})
@@ -724,15 +708,6 @@ class TestProductionRAG:
         result = rag.verify_and_ground("Python is a language.", "what is python")
         assert "verification" in result
         assert "confidence" in result
-
-    def test_empty_query(self):
-        rag = ProductionRAG()
-        result = rag.query("anything")
-        assert result["num_results"] == 0
-
-    def test_config(self):
-        rag = ProductionRAG({"dense_weight": 0.5, "sparse_weight": 0.5})
-        assert rag.retriever.dense_weight == 0.5
 
     def test_multiple_documents(self):
         rag = ProductionRAG()

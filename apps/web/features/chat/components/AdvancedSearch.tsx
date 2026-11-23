@@ -124,7 +124,7 @@ export const AdvancedSearch = memo(function AdvancedSearch({
           className="flex-1 text-xs bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50"
         />
         {query && (
-          <span className="text-[10px] text-muted-foreground shrink-0">
+          <span className="text-xs text-muted-foreground shrink-0">
             {results.length > 0 ? `${currentMatch + 1}/${results.length}` : 'No matches'}
           </span>
         )}
@@ -135,7 +135,7 @@ export const AdvancedSearch = memo(function AdvancedSearch({
           type="button"
           onClick={() => toggleOption('caseSensitive')}
           className={cn(
-            'text-[10px] px-1 py-0.5 rounded',
+            'text-xs px-1 py-0.5 rounded',
             options.caseSensitive
               ? 'bg-primary/20 text-primary'
               : 'text-muted-foreground hover:bg-muted/50',
@@ -149,7 +149,7 @@ export const AdvancedSearch = memo(function AdvancedSearch({
           type="button"
           onClick={() => toggleOption('wholeWord')}
           className={cn(
-            'text-[10px] px-1 py-0.5 rounded',
+            'text-xs px-1 py-0.5 rounded',
             options.wholeWord
               ? 'bg-primary/20 text-primary'
               : 'text-muted-foreground hover:bg-muted/50',
@@ -163,7 +163,7 @@ export const AdvancedSearch = memo(function AdvancedSearch({
           type="button"
           onClick={() => toggleOption('useRegex')}
           className={cn(
-            'text-[10px] px-1 py-0.5 rounded',
+            'text-xs px-1 py-0.5 rounded',
             options.useRegex
               ? 'bg-primary/20 text-primary'
               : 'text-muted-foreground hover:bg-muted/50',

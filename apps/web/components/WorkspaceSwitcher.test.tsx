@@ -16,7 +16,9 @@ let mockWorkspaces = [
   { id: 'ws-2', name: 'Beta', description: 'Second workspace' },
 ]
 let mockCurrentWorkspace: { id: string; name: string; description: string } | null = {
-  id: 'ws-1', name: 'Alpha', description: 'First workspace',
+  id: 'ws-1',
+  name: 'Alpha',
+  description: 'First workspace',
 }
 
 vi.mock('@/lib/auth', () => ({
@@ -61,10 +63,21 @@ describe('WorkspaceSwitcher', () => {
     expect(mockSwitchWorkspace).toHaveBeenCalledWith('ws-2')
   })
 
-  it('returns null when there is only one workspace', () => {
+  it('shows a non-interactive label when there is only one workspace', () => {
     mockWorkspaces = [{ id: 'ws-1', name: 'Solo', description: '' }]
     mockCurrentWorkspace = { id: 'ws-1', name: 'Solo', description: '' }
-    const { container } = render(<WorkspaceSwitcher />)
-    expect(container.innerHTML).toBe('')
+    render(<WorkspaceSwitcher />)
+    expect(screen.getByText('Solo')).toBeInTheDocument()
+    // no dropdown chevron, no menu to open
+    expect(screen.queryByTestId('icon-chevron')).toBeNull()
+  })
+
+  it('renders icon-only and calls onExpand when collapsed', () => {
+    const onExpand = vi.fn()
+    render(<WorkspaceSwitcher collapsed onExpand={onExpand} />)
+    expect(screen.getByRole('button', { name: /switch workspace/i })).toBeInTheDocument()
+    expect(screen.queryByText('Alpha')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /switch workspace/i }))
+    expect(onExpand).toHaveBeenCalledTimes(1)
   })
 })

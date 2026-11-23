@@ -5,7 +5,7 @@ import type { DatasetPreview } from '@/lib/dataset-controller'
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-border/50 bg-card px-2.5 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground/70">{label}</p>
       <p className="font-numeric text-xs tabular-nums text-foreground">{value}</p>
     </div>
   )
@@ -27,7 +27,7 @@ export function DatasetPreviewPanel({ preview }: { preview: DatasetPreview }) {
         <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
           Preview
         </h4>
-        <span className="text-[10px] text-muted-foreground/60">
+        <span className="text-xs text-muted-foreground/60">
           first {Math.min(preview.samples.length, 3)} of{' '}
           {(preview.total_samples ?? 0).toLocaleString()} samples
         </span>

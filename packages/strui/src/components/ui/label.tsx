@@ -19,7 +19,8 @@ const Label = forwardRef<HTMLLabelElement, LabelProps>(
         'peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
         variant === 'default' && 'text-sm font-medium text-foreground',
         variant === 'muted' && 'text-xs font-medium text-muted-foreground',
-        variant === 'uppercase' && 'text-[10px] font-semibold uppercase tracking-wider text-muted-foreground',
+        variant === 'uppercase' &&
+          'text-xs font-semibold uppercase tracking-wider text-muted-foreground',
         className,
       )}
       {...props}

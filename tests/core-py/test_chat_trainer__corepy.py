@@ -1028,3 +1028,97 @@ class TestCorruptedMetadata:
         )
         _, meta = train_chat_model(self.PAIRS, config=config)
         assert meta["checkpoint"] != ""
+
+
+# ── dataset signature (card 20261104_081626) ────────────────────────────────
+
+
+class TestChatDatasetSignature:
+    """chat_trainer records *what* it trained on, in its own schema.
+
+    Scope ruling (2026-11-17): record the hash, defer loader visibility.
+    ``slonet.export_to_sou`` nests caller metadata under ``"metadata"`` and
+    writes no top-level identity keys, and chat_trainer saves to
+    ``checkpoint_dir`` (default ``models/auto-training``) while the loader
+    scans only ``models/slonet-native``. So this hash is provenance for
+    humans + the ``.prov.json`` sidecar — it deliberately does NOT reach
+    ``read_soul_identity`` yet. That lands with the consolidation of
+    chat_trainer onto SloughGPTTrainer.
+
+    It must still be content-addressed: same pairs → same hash, changed
+    pairs → changed hash, and never derived from a path.
+    """
+
+    @staticmethod
+    def _sig_from_ckpt(path) -> str:
+        from domain.training._internal.slonet import import_from_sou
+
+        loaded = import_from_sou(str(path))
+        md = loaded.metadata or {}
+        return str(md.get("dataset_signature", ""))
+
+    def _train(self, tmp_path, pairs=None, name="sig-test"):
+        config = ChatTrainConfig(
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=16,
+            dropout=0.0,
+            epochs=1,
+            lr=1e-3,
+            warmup_steps=0,
+            eval_interval=1000,
+            log_interval=1,
+            min_pair_quality=0.0,
+            max_pairs=100,
+            val_split=0.1,
+            checkpoint_dir=str(tmp_path),
+            soul_name=name,
+        )
+        train_chat_model(pairs if pairs is not None else _pairs(6), config=config)
+        return tmp_path / f"{name}.soul"
+
+    def test_signature_recorded_in_nested_metadata(self, tmp_path):
+        sig = self._sig_from_ckpt(self._train(tmp_path))
+        assert sig, "chat_trainer must record a dataset signature"
+        assert len(sig) == 64
+
+    def test_signature_stable_for_same_pairs(self, tmp_path):
+        a = self._sig_from_ckpt(self._train(tmp_path / "a", name="run-a"))
+        b = self._sig_from_ckpt(self._train(tmp_path / "b", name="run-b"))
+        assert a == b, "identical pairs must hash identically across runs"
+
+    def test_signature_changes_with_pairs(self, tmp_path):
+        other = [
+            {
+                "user_msg": f"utterance {i} about an entirely different topic",
+                "assistant_msg": f"reply {i} covering unrelated subject matter",
+            }
+            for i in range(6)
+        ]
+        a = self._sig_from_ckpt(self._train(tmp_path / "a", name="run-a"))
+        b = self._sig_from_ckpt(self._train(tmp_path / "b", pairs=other, name="run-b"))
+        assert a != b, "different training pairs must not claim equivalence"
+
+    def test_signature_never_derived_from_path(self, tmp_path):
+        """Two checkpoint dirs, same pairs → same hash."""
+        a = self._sig_from_ckpt(self._train(tmp_path / "dir-one", name="m"))
+        b = self._sig_from_ckpt(self._train(tmp_path / "dir-two", name="m"))
+        assert a == b
+
+    def test_signature_deferred_from_loader_identity(self, tmp_path):
+        """Pins the scope ruling: NOT visible to read_soul_identity (yet).
+
+        If this starts failing because chat_trainer was migrated onto
+        SloughGPTTrainer, the deferral is over — flip the assertion and
+        update the card, don't silently delete it.
+        """
+        from domain.inference._internal.slo_format import read_soul_identity
+
+        ckpt = self._train(tmp_path)
+        assert self._sig_from_ckpt(ckpt), "hash recorded in nested metadata"
+        identity = read_soul_identity(str(ckpt))
+        assert "dataset_signature" not in identity, (
+            "chat_trainer artifacts carry no top-level identity keys — if this "
+            "assertion fails, the deferral is complete and the card should say so"
+        )

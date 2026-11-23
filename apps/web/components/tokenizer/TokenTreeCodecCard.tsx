@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import {
   Card,
@@ -31,7 +31,6 @@ export function TokenTreeCodecCard() {
   const [idsInput, setIdsInput] = useState('')
   const [decodeText, setDecodeText] = useState('')
   const [decoding, setDecoding] = useState(false)
-  const addToast = notify.toast
 
   const handleEncode = async () => {
     const term = text.trim()
@@ -43,7 +42,7 @@ export function TokenTreeCodecCard() {
       setIdsInput(result.ids.join(', '))
       setDecodeText('')
     } catch {
-      addToast('Could not encode text', 'error')
+      notify.toast('Could not encode text', { type: 'error' })
     } finally {
       setEncoding(false)
     }
@@ -52,7 +51,7 @@ export function TokenTreeCodecCard() {
   const handleDecode = async () => {
     const ids = parseIds(idsInput)
     if (ids.length === 0) {
-      addToast('Enter at least one token id', 'error')
+      notify.toast('Enter at least one token id', { type: 'error' })
       return
     }
     setDecoding(true)
@@ -60,7 +59,7 @@ export function TokenTreeCodecCard() {
       const result = await tokenTreeController.decode(ids)
       setDecodeText(result.text)
     } catch {
-      addToast('Could not decode ids', 'error')
+      notify.toast('Could not decode ids', { type: 'error' })
     } finally {
       setDecoding(false)
     }

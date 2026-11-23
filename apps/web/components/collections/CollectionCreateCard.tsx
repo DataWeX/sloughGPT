@@ -34,7 +34,7 @@ export function CollectionCreateCard({ onCreate }: CollectionCreateCardProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">New Pipeline</CardTitle>
-          <Button size="sm" variant="ghost" className="text-[10px]" onClick={() => setOpen(!open)}>
+          <Button size="sm" variant="ghost" className="text-xs" onClick={() => setOpen(!open)}>
             {open ? 'Cancel' : '+ Create'}
           </Button>
         </div>
@@ -42,43 +42,53 @@ export function CollectionCreateCard({ onCreate }: CollectionCreateCardProps) {
       {open && (
         <CardContent className="space-y-3">
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Name</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+              Name
+            </div>
             <Input
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={(e) => setName(e.target.value)}
               placeholder="my-pipeline"
               data-testid="pipeline-name"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Source</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Source
+              </div>
               <select
                 value={sourceType}
-                onChange={e => setSourceType(e.target.value)}
+                onChange={(e) => setSourceType(e.target.value)}
                 className="w-full text-xs border border-border rounded px-2 py-1.5 bg-background"
                 data-testid="pipeline-source"
               >
-                {SOURCE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                {SOURCE_TYPES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Store</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Store
+              </div>
               <select
                 value={storeType}
-                onChange={e => setStoreType(e.target.value)}
+                onChange={(e) => setStoreType(e.target.value)}
                 className="w-full text-xs border border-border rounded px-2 py-1.5 bg-background"
                 data-testid="pipeline-store"
               >
-                {STORE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                {STORE_TYPES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={handleCreate}
-            disabled={creating || !name.trim()}
-          >
+          <Button size="sm" onClick={handleCreate} disabled={creating || !name.trim()}>
             {creating ? 'Creating...' : 'Create Pipeline'}
           </Button>
         </CardContent>

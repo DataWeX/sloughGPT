@@ -41,6 +41,7 @@ from apps.api.server.infrastructure.startup import (  # noqa: E402
     _build_guard_for_model,
     _preload_model_imports,
 )
+from domain.infrastructure.model_resolver import BootArtifact  # noqa: E402
 
 
 def test_preload_populates_sys_modules_for_all_declared_modules():
@@ -137,23 +138,45 @@ def test_phase6_routers_raises_on_nontransient_error_without_retry():
     assert orch._routers_registered is False
 
 
-def test_phase6_routers_skips_already_registered_prefixes():
-    """Routers whose prefix is already on the app must be skipped."""
+def test_phase6_routers_registers_shared_prefixes_and_skips_fully_registered():
+    """Prefix sharing must NOT skip; full declared-path overlap must.
+
+    The old rule skipped a router when *any* registered path ``startswith``
+    its prefix. The manifest imports ``agent_routines`` (prefix ``/agents``)
+    before ``agents`` (same prefix), so the whole 11-route ``agents`` router
+    was dropped — production 404'd ``GET /agents`` while the contract gate
+    and the test harness, which assembled unconditionally, reported it
+    served (card ``20261119_105501``).
+
+    New invariants: two real routers sharing a prefix both register; a
+    router whose declared paths are *all* already on the app is the only
+    legitimate skip (idempotent boot retry); a pre-lifespan route stays.
+    """
     app = FastAPI()
 
     @app.get("/health")
     def health():
         return {"ok": True}
 
-    included = APIRouter(prefix="/foo")
+    first = APIRouter(prefix="/foo")
 
-    @included.get("/bar")
+    @first.get("/bar")
     def bar():
         return {}
 
-    skipped = types.SimpleNamespace(prefix="/health")
+    second = APIRouter(prefix="/foo")
 
-    get_all = MagicMock(return_value=[skipped, included])
+    @second.get("/baz")
+    def baz():
+        return {}
+
+    duplicate = APIRouter()
+
+    @duplicate.get("/health")
+    def dup_health():
+        return {"dup": True}
+
+    get_all = MagicMock(return_value=[first, second, duplicate])
     orch = StartupOrchestrator(app, ServerConfig())
     with patch.dict(
         sys.modules,
@@ -163,8 +186,14 @@ def test_phase6_routers_skips_already_registered_prefixes():
     assert orch._routers_registered is True
     assert get_all.call_count == 1
     paths = app.openapi()["paths"]
+    # Both shared-prefix routers landed — prefix collision is not a skip.
     assert "/foo/bar" in paths
-    assert not any(p.startswith("/health") for p in paths if p != "/health")
+    assert "/foo/baz" in paths
+    # Pre-lifespan route untouched; the fully-duplicated router skipped
+    # (covered by the single-/health-route assertion — no shadow copy).
+    assert "/health" in paths
+    health_routes = [r for r in app.routes if getattr(r, "path", None) == "/health"]
+    assert len(health_routes) == 1
 
 
 # ── Phase 2: model load ──────────────────────────────────────────────────────
@@ -469,13 +498,12 @@ class TestModelLoadedGuard:
         with (
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/nonexistent-dir"),
-            ) as mock_dir,
-            patch("os.path.exists", return_value=False),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=None,
+            ) as mock_art,
         ):
             assert _build_guard_for_model(cfg, "gpt2") is None
-        mock_dir.assert_called_with("gpt2")
+        mock_art.assert_called_once_with("gpt2")
 
     def test_build_guard_returns_started_guard(self):
         cfg = ServerConfig()
@@ -486,10 +514,9 @@ class TestModelLoadedGuard:
                 "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
             ) as mock_pg,
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake/slnc-dir"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/slnc-dir/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch(
                 "domain.infrastructure.process_guard.resolve_memory_limit_mb",
                 return_value=512.0,
@@ -506,6 +533,14 @@ class TestModelLoadedGuard:
         cfg = ServerConfig()
         with (
             patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
+            ),
+            patch(
+                "domain.infrastructure.process_guard.resolve_memory_limit_mb",
+                return_value=512.0,
+            ),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard",
                 side_effect=RuntimeError("boom"),
@@ -534,8 +569,22 @@ class TestInitLifecycle:
         ):
             asyncio.run(orch._init_lifecycle())
         assert orch._lifecycle is lifecycle
-        assert lifecycle.register_startup_hook.call_count == 7
-        assert lifecycle.register_shutdown_hook.call_count == 7
+        assert lifecycle.register_startup_hook.call_count == 8
+        assert lifecycle.register_shutdown_hook.call_count == 8
+        startup_names = {c.args[0].name for c in lifecycle.register_startup_hook.call_args_list}
+        assert startup_names == {
+            "task_queue",
+            "config",
+            "model_load",
+            "wandb",
+            "multimodal",
+            "model_registry",
+            "routers",
+            "agent_routines",
+        }
+        shutdown_names = {c.args[0].name for c in lifecycle.register_shutdown_hook.call_args_list}
+        assert "agent_routines_shutdown" in shutdown_names
+        assert "task_queue_shutdown" in shutdown_names
         assert lifecycle.register_gate.call_count == 2
         mock_bus.assert_called_once()
         assert orch._profile_enum is not None
@@ -950,10 +999,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/missing"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=None,
             ),
-            patch("os.path.exists", return_value=False),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
 
@@ -965,10 +1013,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
@@ -983,10 +1030,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard",
@@ -1015,10 +1061,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
@@ -1059,10 +1104,9 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
-                return_value=Path("/fake"),
+                "domain.infrastructure.model_resolver.resolve_boot_artifact",
+                return_value=BootArtifact(format="slnc", path=Path("/fake/model.slnc")),
             ),
-            patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch("domain.infrastructure.process_guard.ProcessGuard", return_value=MagicMock()),
             patch(
@@ -1200,3 +1244,23 @@ class TestRunDirectFallback:
         assert mock_reg.call_count == 1
         assert mock_routers.call_count == 1
         mock_ready.assert_awaited()
+
+
+def test_boot_artifact_decision_has_one_home():
+    """startup.py reads ``resolve_boot_artifact`` — it never re-derives the rule.
+
+    Six sites each carried their own ``.slnc``-only artifact rule, divergent
+    from the loader's ``.soul``-first priority (wrong-artifact split-brain,
+    card 20261104_053224). The priority decision lives in the resolver alone.
+    """
+    import re as _re
+
+    from apps.api.server.infrastructure import startup as _startup
+
+    src = Path(_startup.__file__).read_text(encoding="utf-8")
+    assert not _re.search(r"""["']model\.slnc["']""", src), (
+        "startup.py re-derives the .slnc artifact rule inline; read resolve_boot_artifact instead"
+    )
+    assert src.count("resolve_boot_artifact(") >= 6, (
+        "all six boot sites must consult resolve_boot_artifact"
+    )

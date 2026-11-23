@@ -80,7 +80,7 @@ function Tabs({
               <TabsTrigger key={t.value} value={t.value} disabled={t.disabled}>
                 {t.label}
                 {t.count !== undefined && (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {t.count}
                   </span>
                 )}
@@ -115,11 +115,14 @@ const TabsList = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       onKeyDown?.(e)
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End')
+        return
       const list = listRef.current
       if (!list) return
       const tabs = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]'))
-      const enabled = tabs.filter((t) => t.getAttribute('data-disabled') !== 'true' && !t.hasAttribute('disabled'))
+      const enabled = tabs.filter(
+        (t) => t.getAttribute('data-disabled') !== 'true' && !t.hasAttribute('disabled'),
+      )
       if (enabled.length === 0) return
       const currentIndex = enabled.findIndex((t) => t.dataset.value === value)
       const baseIndex = currentIndex >= 0 ? currentIndex : 0

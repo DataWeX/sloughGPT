@@ -143,21 +143,11 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'ds-1' }),
   useRouter: () => stableRouter,
 }))
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mocks.addToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.addToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mocks.addToast }),
+}))
 vi.mock('@/lib/dataset-controller', () => ({
   datasetController: {
     get: mocks.get,
@@ -309,7 +299,7 @@ describe('DatasetDetailPage', () => {
     fireEvent.click(screen.getByText('Create snapshot'))
     await waitFor(() => {
       expect(mocks.createVersion).toHaveBeenCalledWith('ds-1')
-      expect(mocks.addToast).toHaveBeenCalledWith('Snapshot created', 'success')
+      expect(mocks.addToast).toHaveBeenCalledWith('Snapshot created', { type: 'success' })
     })
   })
 
@@ -321,7 +311,7 @@ describe('DatasetDetailPage', () => {
     })
     fireEvent.click(screen.getByText('Create snapshot'))
     await waitFor(() => {
-      expect(mocks.addToast).toHaveBeenCalledWith('Could not snapshot', 'error')
+      expect(mocks.addToast).toHaveBeenCalledWith('Could not snapshot', { type: 'error' })
     })
   })
 
@@ -386,7 +376,7 @@ describe('DatasetDetailPage', () => {
     mocks.get.mockRejectedValue(new Error('boom'))
     render(<Page />)
     await waitFor(() => {
-      expect(mocks.addToast).toHaveBeenCalledWith('Could not load dataset', 'error')
+      expect(mocks.addToast).toHaveBeenCalledWith('Could not load dataset', { type: 'error' })
     })
   })
 

@@ -520,8 +520,10 @@ class TestPersistence:
             snapshot = path / "frame.mogdb"
             snapshot.write_text(
                 '{"_mogdb_meta": {"seq": 1000000000222, "v": 1}}\n'
-                + json.dumps({"id": "warm", "name": "Warm Friend"}) + "\n"
-                + json.dumps({"id": "curious", "name": "Curious Friend"}) + "\n"
+                + json.dumps({"id": "warm", "name": "Warm Friend"})
+                + "\n"
+                + json.dumps({"id": "curious", "name": "Curious Friend"})
+                + "\n"
             )
 
             c = Collection("frame", path)
@@ -540,7 +542,8 @@ class TestPersistence:
             path = Path(tmp)
             snapshot = path / "poison.mogdb"
             snapshot.write_text(
-                json.dumps({"id": "real", "v": 1}) + "\n"
+                json.dumps({"id": "real", "v": 1})
+                + "\n"
                 + json.dumps(
                     {
                         "_mogdb_meta": {"seq": 7, "v": 1},
@@ -563,7 +566,8 @@ class TestPersistence:
             path = Path(tmp)
             journal = path / "jmeta.journal.jsonl"
             journal.write_text(
-                json.dumps({"op": "insert", "data": {"id": "real", "v": 1}}) + "\n"
+                json.dumps({"op": "insert", "data": {"id": "real", "v": 1}})
+                + "\n"
                 + json.dumps(
                     {
                         "op": "insert",

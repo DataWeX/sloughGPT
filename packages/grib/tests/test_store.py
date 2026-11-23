@@ -66,6 +66,24 @@ class TestPlannerStore:
     def test_get_card_missing(self, store):
         assert store.get_card("nonexistent") is None
 
+    def test_get_card_slug_substring(self, store):
+        """Ids are timestamped — the human slug sits mid-string and must match.
+
+        Prefix-only resolution made ``grib board move uxdatasets …`` fail:
+        the id is ``20261115_081635_uxdatasets-…``, which never startswith
+        the slug the user typed.
+        """
+        card = store.add_card("Slug move target")
+        found = store.get_card("move-target")
+        assert found is not None
+        assert found.id == card.id
+
+    def test_get_card_prefix_tier_unaffected(self, store):
+        card = store.add_card("Prefix probe")
+        found = store.get_card(card.id[:8])
+        assert found is not None
+        assert found.id == card.id
+
     def test_update_card(self, store):
         card = store.add_card("Update me")
         updated = store.update_card(card.id, title="Updated", priority="critical")
@@ -78,6 +96,14 @@ class TestPlannerStore:
         assert store.delete_card(card.id) is True
         assert store.get_card(card.id) is None
 
+    def test_delete_and_update_by_slug(self, store):
+        store.add_card("Slug casualty here")
+        updated = store.update_card("casualty", priority="critical")
+        assert updated is not None
+        assert updated.priority == "critical"
+        assert store.delete_card("casualty") is True
+        assert store.get_card("casualty") is None
+
     def test_delete_card_missing(self, store):
         assert store.delete_card("nonexistent") is False
 
@@ -85,6 +111,13 @@ class TestPlannerStore:
         card = store.add_card("Move me", column="todo")
         assert store.move_card(card.id, "done") is True
         assert store.get_card(card.id).column == "done"
+
+    def test_move_card_slug_substring(self, store):
+        card = store.add_card("Slug mover here", column="todo")
+        assert store.move_card("mover", "done") is True
+        found = store.get_card(card.id)
+        assert found is not None
+        assert found.column == "done"
 
     def test_move_card_missing(self, store):
         assert store.move_card("nonexistent", "done") is False
@@ -277,6 +310,22 @@ class TestCLI:
         code, out = _run(tmp_dir, "board", "move", card.id, "done")
         assert code == 0
         assert "Moved" in out
+
+    def test_board_move_by_slug(self, tmp_dir):
+        """`grib board move <slug>` works without spelling the full id.
+
+        The card id is ``<timestamp>_<slug>`` — a startswith-only resolver
+        rejected every slug, forcing 40+ char ids on the CLI.
+        """
+        store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir / "notes")
+        store.add_card("uxdatasets failed empty imports", column="todo")
+        code, out = _run(tmp_dir, "board", "move", "uxdatasets", "wip")
+        assert code == 0
+        assert "Moved" in out
+        # And the write landed: show resolves the same slug back.
+        code, out = _run(tmp_dir, "board", "show", "uxdatasets")
+        assert code == 0
+        assert "Column:      wip" in out
 
     def test_board_delete(self, tmp_dir):
         store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir / "notes")

@@ -102,7 +102,6 @@ export default function HomePage() {
   const router = useRouter()
   const { t } = useLocale()
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
-  const addToast = notify.toast
   const {
     modelCount,
     currentSoul,

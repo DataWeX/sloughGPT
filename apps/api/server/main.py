@@ -424,6 +424,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Browsers can only read cross-origin response headers listed here.
+    # request.ts:192 already reads Retry-After to honor 429 bucket resets;
+    # unexposed it reads null and the client backoff (500ms/1000ms) lands
+    # in the same exhausted bucket — the retry amplification from card
+    # 20261119_091258. X-RateLimit-* is the rest of that header family
+    # (domain/infrastructure/_internal/rate_limiter.py). Card 20261119_124725.
+    expose_headers=["Retry-After", "X-RateLimit-Remaining", "X-RateLimit-Limit"],
     # Explicit so the preflight-amortization contract is documented, not
     # inherited: one OPTIONS per (origin, path, method) per 10 minutes (the
     # measured first-load preflight cost is ~22 round trips per origin and

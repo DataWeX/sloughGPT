@@ -94,7 +94,7 @@ export const ReasoningPanel = memo(function ReasoningPanel({
                   <span
                     key={i}
                     className={cn(
-                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-medium',
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] font-medium',
                       styles.badge,
                     )}
                     title={layer.detail}
@@ -140,7 +140,7 @@ export const ReasoningPanel = memo(function ReasoningPanel({
                         <div className="flex-1 min-w-0">
                           <span className="font-medium text-foreground/80">{layer.label}</span>
                           {layer.detail && (
-                            <span className="text-muted-foreground/50 ml-1.5 font-mono text-[10px]">
+                            <span className="text-muted-foreground/50 ml-1.5 font-mono text-xs">
                               {layer.detail}
                             </span>
                           )}

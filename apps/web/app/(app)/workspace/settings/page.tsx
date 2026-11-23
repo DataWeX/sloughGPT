@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -35,7 +35,6 @@ export default function WorkspaceSettingsPage() {
     allow_sharing: true,
   })
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
 
   const fetchSettings = useCallback(async () => {
     if (!currentWorkspace?.id) {
@@ -74,10 +73,10 @@ export default function WorkspaceSettingsPage() {
     setSaving(true)
     try {
       await apiPut(`/workspaces/${currentWorkspace.id}/settings`, form)
-      addToast('Settings saved', 'success')
+      notify.toast('Settings saved', { type: 'success' })
       await fetchSettings()
     } catch {
-      addToast('Could not save settings', 'error')
+      notify.toast('Could not save settings', { type: 'error' })
     } finally {
       setSaving(false)
     }

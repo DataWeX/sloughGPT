@@ -15,17 +15,25 @@ interface ResourceCardProps {
   loaded: boolean
 }
 
-export const ResourceCard = memo(function ResourceCard({ liveHealth, metrics, detailed, cpuThreshold, memThreshold, loaded }: ResourceCardProps) {
+export const ResourceCard = memo(function ResourceCard({
+  liveHealth,
+  metrics,
+  detailed,
+  cpuThreshold,
+  memThreshold,
+  loaded,
+}: ResourceCardProps) {
   const cpu = liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? null
   const mem = liveHealth?.memory_percent ?? metrics?.memory_percent ?? null
 
   const memUsedGB = metrics?.memory_used_gb ?? null
   const memTotalGB = metrics?.memory_total_gb ?? null
-  const memAvailableGB = memUsedGB != null && memTotalGB != null
-    ? Math.max(0, memTotalGB - memUsedGB)
-    : detailed?.system?.memory_available_mb != null
-      ? detailed.system.memory_available_mb / 1024
-      : null
+  const memAvailableGB =
+    memUsedGB != null && memTotalGB != null
+      ? Math.max(0, memTotalGB - memUsedGB)
+      : detailed?.system?.memory_available_mb != null
+        ? detailed.system.memory_available_mb / 1024
+        : null
 
   return (
     <Card className="p-3">
@@ -46,7 +54,7 @@ export const ResourceCard = memo(function ResourceCard({ liveHealth, metrics, de
           />
         </KpiGrid>
         {memUsedGB != null && memTotalGB != null && (
-          <div className="mt-2 text-[10px] text-muted-foreground text-center">
+          <div className="mt-2 text-xs text-muted-foreground text-center">
             {memUsedGB.toFixed(1)} / {memTotalGB.toFixed(1)} GB
             {memAvailableGB != null ? ` (${memAvailableGB.toFixed(1)} GB free)` : ''}
           </div>

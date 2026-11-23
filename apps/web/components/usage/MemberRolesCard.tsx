@@ -17,13 +17,16 @@ export function MemberRolesCard({ roles }: MemberRolesCardProps) {
       <CardContent>
         <div className="space-y-1">
           {entries.map(([role, count]) => (
-            <div key={role} className="flex items-center justify-between px-2 py-1.5 rounded text-[10px] hover:bg-muted/50">
+            <div
+              key={role}
+              className="flex items-center justify-between px-2 py-1.5 rounded text-xs hover:bg-muted/50"
+            >
               <span className="font-medium capitalize">{role}</span>
               <span className="text-muted-foreground">{count}</span>
             </div>
           ))}
           {entries.length === 0 && (
-            <p className="text-[10px] text-muted-foreground text-center py-2">No members</p>
+            <p className="text-xs text-muted-foreground text-center py-2">No members</p>
           )}
         </div>
       </CardContent>

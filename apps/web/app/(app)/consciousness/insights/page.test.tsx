@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import ConsciousnessInsightsPage from './page'
+import ConsciousnessInsightsPage, { joinSuggestions } from './page'
 import { consciousnessController } from '@/lib/consciousness-controller'
 
 vi.mock('@/lib/consciousness-controller', () => ({
@@ -23,7 +23,9 @@ vi.mock('@/hooks/useLocale', () => ({
   })),
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: vi.fn(() => ({
     addToast: vi.fn(),
   })),
@@ -116,5 +118,18 @@ describe('ConsciousnessInsightsPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('consciousness_insights.export').length).toBeGreaterThan(0)
     })
+  })
+
+  it('joins low-score suggestions without ".;" artifacts', () => {
+    expect(
+      joinSuggestions([
+        'Adjust interactions to better match personality objectives.',
+        'Introduce varied topics and interaction styles to improve diversity.',
+      ]),
+    ).toBe(
+      'Adjust interactions to better match personality objectives; Introduce varied topics and interaction styles to improve diversity.',
+    )
+    expect(joinSuggestions(['One.', 'Two'])).toBe('One; Two.')
+    expect(joinSuggestions([])).toBe('')
   })
 })

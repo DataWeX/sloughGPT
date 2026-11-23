@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -39,7 +39,6 @@ const TRAIT_LABELS: Record<string, string> = {
 }
 
 export default function ConsciousnessPersonalityPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [personality, setPersonality] = useState<{
@@ -81,11 +80,11 @@ export default function ConsciousnessPersonalityPage() {
         setHistory((hResult.value as any).history ?? [])
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -95,11 +94,11 @@ export default function ConsciousnessPersonalityPage() {
     setSaving(true)
     try {
       await consciousnessController.updatePersonality(editTraits)
-      addToast('Personality traits updated', 'success')
+      notify.toast('Personality traits updated', { type: 'success' })
       setIsEditing(false)
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -109,11 +108,11 @@ export default function ConsciousnessPersonalityPage() {
     setResetting(true)
     try {
       await consciousnessController.resetPersonality()
-      addToast('Personality reset to defaults', 'success')
+      notify.toast('Personality reset to defaults', { type: 'success' })
       setIsEditing(false)
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setResetting(false)
     }
@@ -123,10 +122,10 @@ export default function ConsciousnessPersonalityPage() {
     setApplyingPreset(presetName)
     try {
       await consciousnessController.applyPersonalityPreset(presetName)
-      addToast(`Preset "${presetName}" applied`, 'success')
+      notify.toast(`Preset "${presetName}" applied`, { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setApplyingPreset(null)
     }
@@ -308,7 +307,7 @@ export default function ConsciousnessPersonalityPage() {
                     )}
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(entry.traits).map(([k, v]) => (
-                        <span key={k} className="text-[10px] text-muted-foreground">
+                        <span key={k} className="text-xs text-muted-foreground">
                           {TRAIT_LABELS[k] ?? k}: {((v as number) * 100).toFixed(0)}%
                         </span>
                       ))}

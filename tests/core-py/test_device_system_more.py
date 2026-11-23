@@ -351,11 +351,6 @@ class TestDeviceSystemExpanded:
         assert meta["author"] == "a"
         assert meta["tag"] == "t"
 
-    def test_call_with_zero_args(self):
-        ds = DeviceSystem()
-        ds.register("alpha", _FakeDevice())
-        assert ds.call("alpha", "ping") == "pong"
-
     def test_call_result_type_preserved(self):
         ds = DeviceSystem()
         ds.register("echo", _EchoDevice())

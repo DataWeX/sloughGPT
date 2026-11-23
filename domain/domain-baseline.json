@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "3975fc459c1df978ad5066ae2998bd5f81cd870e",
+    "recorded_commit": "db63f9f973b8c36b5a2f944a48dd8be50f7080c7",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -22,7 +22,7 @@
   "ratchet": {
     "misfiled": 0,
     "projection": 0,
-    "debt": 6
+    "debt": 4
   },
   "dirs": {
     "agents": {
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "2f452842a1243a6b1eb88f699a18efa0695f8914"
+      "tree_hash": "48a851439f7cda22dc7a85ca66896f56963e2449"
     },
     "ai_personality": {
       "class": "feature",
@@ -78,7 +78,7 @@
       ],
       "note": "session/token checks at the edge (apps/api)",
       "debt": null,
-      "tree_hash": "3a707067d6b52ad80ad635999bd56bb63624b16b"
+      "tree_hash": "9ff927a2d5b602807ceecc18ce21e6490671bd92"
     },
     "benchmark": {
       "class": "feature",
@@ -134,19 +134,9 @@
         "scripts/",
         "domain/core/"
       ],
-      "note": "reasoning core (24 py) — pair with cognitive/, consolidation card",
-      "debt": "duplicate pair with cognitive/ — merge candidate",
+      "note": "reasoning core (24 py) — absorbed its orphan dup cognitive/ (2026-11-12, card 20261101_045925)",
+      "debt": null,
       "tree_hash": "c97732333719d22b451fd131a30ce812f1327710"
-    },
-    "cognitive": {
-      "class": "core-capability",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [],
-      "note": "orphan duplicate of cognition/: zero external consumers found — first merge candidate",
-      "debt": "duplicate pair with cognition/ — merge candidate",
-      "tree_hash": "45bafe83561f00ae535926f4487b5473aa1b9615"
     },
     "collections": {
       "class": "feature",
@@ -233,7 +223,21 @@
       ],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "3a62a81f489cdd5d520ee702b6f0c94979294575"
+      "tree_hash": "80602571cae4138bc1f7f4bdc3970b0cc7c5012e"
+    },
+    "gates": {
+      "class": "core-capability",
+      "facets": [
+        "core"
+      ],
+      "consumers": [
+        "tests/",
+        "apps/cli/",
+        "scripts/"
+      ],
+      "note": "static gate cores (command parity, domain baseline, router manifest) projected to sloughgpt gates + Site Doctor",
+      "debt": null,
+      "tree_hash": "0b5d24ed601f0f6eabf2b7bd42d29f64cb5256b9"
     },
     "generation": {
       "class": "core-capability",
@@ -260,7 +264,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "032874e0fc1a46f2603e0f10dff7167950becd16"
+      "tree_hash": "0d3038b5b7c498772c290ca9d31cd66161d4fc80"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -276,7 +280,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "4af56d3afa75e61e0649b385e36979e26f68fe77"
+      "tree_hash": "cd9bf01289f5dae0be934b76e5d40ea8cfba0864"
     },
     "knowledge": {
       "class": "core-capability",
@@ -372,7 +376,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "31367651d1e0b805bcc33189f1e3818f8e1d269f"
+      "tree_hash": "eac9d056af24862e61cfa03abdd1b1b43cb54d9b"
     },
     "multimodal": {
       "class": "core-capability",
@@ -389,7 +393,7 @@
       ],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "5f54e51b86e650c89c641e706d2782693c856d11"
+      "tree_hash": "833104def118896989347afd225c2ceccb1e085d"
     },
     "ops": {
       "class": "core-capability",
@@ -402,7 +406,7 @@
       ],
       "note": "operator/health surface — overlap with api/infrastructure under review",
       "debt": "overlap with api/infrastructure — client/core boundary review pending",
-      "tree_hash": "e309c45b2559b3bd26b8a17df1318daa05600248"
+      "tree_hash": "37c61baa5098cc7a607ae0b2cc87a73adc5ec48c"
     },
     "plugins": {
       "class": "core-capability",
@@ -459,7 +463,7 @@
       ],
       "note": "cross-cutting helpers (most-consumed domain)",
       "debt": null,
-      "tree_hash": "f084f8fa6dbaa5e78a7f3eea72cf6b1ce6f28f67"
+      "tree_hash": "84584ac14b5144217e27b3782242852e0b783a50"
     },
     "shell": {
       "class": "core-capability",
@@ -474,7 +478,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "f7ae25e29da970aba5913fc99df1419e1b7821ed"
+      "tree_hash": "2b7b24d8ef44e3d9e1e059c74689a3e17cbc8eb5"
     },
     "slolib": {
       "class": "core-capability",
@@ -546,7 +550,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "83da8e0e32d650a7a36993a39a53c3917e8df85a"
+      "tree_hash": "9e8ed902586277a9fc7672465f1a18ded622ceef"
     },
     "voice": {
       "class": "core-capability",

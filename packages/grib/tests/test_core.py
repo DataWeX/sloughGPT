@@ -210,6 +210,36 @@ class TestCLINotes:
         assert code == 0
         assert "1 new card" in out
 
+    def test_sync_reports_orphan_cards_without_deleting(self, tmp_path):
+        """A deleted note must surface as drift, never as silent data loss."""
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        note = store.create_note("Doomed")
+        store.create_note("Keeper")
+        store.sync()
+        assert store.delete_note(note.id) is True
+
+        code, out = _run(tmp_path, "sync")
+
+        assert code == 0
+        assert "no matching note" in out
+        assert "Doomed" in out
+        assert {c.title for c in store.list_cards()} == {"Doomed", "Keeper"}, (
+            "default sync must only report orphans"
+        )
+
+    def test_sync_prune_deletes_orphan_cards(self, tmp_path):
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        note = store.create_note("Doomed")
+        store.create_note("Keeper")
+        store.sync()
+        assert store.delete_note(note.id) is True
+
+        code, out = _run(tmp_path, "sync", "--prune")
+
+        assert code == 0
+        assert "orphan card(s) removed" in out
+        assert {c.title for c in store.list_cards()} == {"Keeper"}
+
     def test_show_displays_single_note_fields(self, tmp_path):
         """`note show <id>` renders one note's fields — the read side of the
         card-closure journey (handler was uncovered, F5)."""

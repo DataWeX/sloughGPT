@@ -67,6 +67,11 @@ from .live_stream import router as live_stream_router
 
 router.include_router(live_stream_router)
 
+# Include the subscribe-only job-state event stream (SSE, card 20261120_110356)
+from .job_events import router as job_events_router
+
+router.include_router(job_events_router)
+
 
 def _finetuned_dir() -> Path:
     """Absolute path to the HF fine-tuned models directory."""
@@ -661,7 +666,7 @@ async def training_stream(request: Request):
             }
         )
 
-    checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
+    checkpoints_dir = find_repo_root(Path(__file__)) / "models" / "auto-training"
     return await build_training_sse_response(
         request,
         config,
@@ -705,7 +710,7 @@ async def training_from_sessions_stream(request: Request):
             }
         )
 
-    checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
+    checkpoints_dir = find_repo_root(Path(__file__)) / "models" / "auto-training"
     return await build_training_sse_response(
         request,
         config,

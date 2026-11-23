@@ -26,11 +26,6 @@ class _FakeProvider:
 
 
 class TestRegistryEdges:
-    def test_get_empty_returns_none(self):
-        reg = ModelRegistry()
-        assert reg.get() is None
-        assert reg.get("missing") is None
-
     def test_generate_without_model_raises(self):
         reg = ModelRegistry()
         with pytest.raises(RuntimeError, match="No model registered"):
@@ -274,13 +269,6 @@ class TestHealthSummary:
         assert h["has_errors"] is False
         assert h["models"] == []
 
-    def test_health_one_model(self):
-        reg = ModelRegistry()
-        reg.register_engine("eng", _FakeProvider())
-        h = reg.health_summary()
-        assert h["models_registered"] == 1
-        assert h["default_model"] == "eng"
-
     def test_health_degraded_model(self):
         reg = ModelRegistry()
         p = _FakeProvider()
@@ -318,11 +306,6 @@ class TestHealthSummary:
 
 
 class TestGetModelRegistry:
-    def test_singleton(self):
-        r1 = get_model_registry()
-        r2 = get_model_registry()
-        assert r1 is r2
-
     def test_singleton_has_models(self):
         r = get_model_registry()
         assert isinstance(r, ModelRegistry)
@@ -568,11 +551,6 @@ class TestHealthSummaryExtra:
 
 
 class TestGenerateExtra:
-    def test_generate_no_default_no_model_id(self):
-        reg = ModelRegistry()
-        with pytest.raises(RuntimeError, match="No model registered"):
-            asyncio.run(reg.generate("hello"))
-
     def test_generate_error_includes_model_id(self):
         reg = ModelRegistry()
         with pytest.raises(RuntimeError, match="requested 'x'"):

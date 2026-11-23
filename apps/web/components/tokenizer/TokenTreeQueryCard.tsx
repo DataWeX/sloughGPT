@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect } from 'react'
 import {
   Card,
@@ -31,7 +31,6 @@ export function TokenTreeQueryCard() {
   const [expanded, setExpanded] = useState<Neighbor | null>(null)
   const [lineage, setLineage] = useState<LineageResult | null>(null)
   const [loadingLineage, setLoadingLineage] = useState(false)
-  const addToast = notify.toast
 
   useEffect(() => {
     let active = true
@@ -58,7 +57,7 @@ export function TokenTreeQueryCard() {
     try {
       setResult(await tokenTreeController.similar(term, 5))
     } catch {
-      addToast(`Token not found: ${term}`, 'error')
+      notify.toast(`Token not found: ${term}`, { type: 'error' })
     } finally {
       setSearching(false)
     }

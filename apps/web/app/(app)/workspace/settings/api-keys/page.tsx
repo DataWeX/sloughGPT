@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
@@ -51,8 +51,6 @@ interface CreateKeyResponse {
 }
 
 export default function ApiKeysPage() {
-  const addToast = notify.toast
-
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -65,11 +63,11 @@ export default function ApiKeysPage() {
       const res = await apiGet<KeysResponse>('/security/keys')
       setKeys(res?.data?.keys ?? [])
     } catch {
-      addToast('Could not load API keys', 'error')
+      notify.toast('Could not load API keys', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useRefreshShortcut(fetchKeys)
 
@@ -86,9 +84,9 @@ export default function ApiKeysPage() {
       if (key) setNewKey(key)
       setNewName('')
       await fetchKeys()
-      addToast('API key created', 'success')
+      notify.toast('API key created', { type: 'success' })
     } catch {
-      addToast('Could not create API key', 'error')
+      notify.toast('Could not create API key', { type: 'error' })
     } finally {
       setCreating(false)
     }
@@ -98,10 +96,10 @@ export default function ApiKeysPage() {
     setRevokingId(keyId)
     try {
       await apiDelete(`/security/keys/${keyId}`)
-      addToast('API key revoked', 'success')
+      notify.toast('API key revoked', { type: 'success' })
       await fetchKeys()
     } catch {
-      addToast('Could not revoke API key', 'error')
+      notify.toast('Could not revoke API key', { type: 'error' })
     } finally {
       setRevokingId(null)
     }
@@ -112,10 +110,10 @@ export default function ApiKeysPage() {
       const res = await apiPost<CreateKeyResponse>(`/security/keys/${keyId}/rotate`)
       const key = res?.data?.key
       if (key) setNewKey(key)
-      addToast('API key rotated', 'success')
+      notify.toast('API key rotated', { type: 'success' })
       await fetchKeys()
     } catch {
-      addToast('Could not rotate API key', 'error')
+      notify.toast('Could not rotate API key', { type: 'error' })
     }
   }
 
@@ -124,7 +122,7 @@ export default function ApiKeysPage() {
 
   const copyKey = (key: string) => {
     navigator.clipboard.writeText(key)
-    addToast('Key copied to clipboard', 'success')
+    notify.toast('Key copied to clipboard', { type: 'success' })
   }
 
   if (loading) {

@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
+from domain.infrastructure._internal.quant_core.numeric import encode_round_div
 from domain.infrastructure._internal.slnc.spec import (
     FLAG_QUANTIZED_INT8,
     MAGIC,
@@ -298,6 +299,22 @@ class SLNCCompiler:
         # Build tensor list in computation order
         tensor_list = self._order_tensors(config, weights)
 
+        # Tied-head dedup (card 20261122_085516): a byte-identical lm_head is
+        # pure duplication — the loader already reconstructs the tie from
+        # ABSENCE (weight_loader.build_load_plan: "if lm_head.weight not in
+        # loaded_params"), so writing both stored the tied head twice
+        # (measured on the shipped Qwen2.5-0.5B: 630M params vs 494M real,
+        # +0.5 GB disk, +0.64 GB load RAM).
+        #
+        # Detection is a BYTE COMPARISON, never a config flag: a stale
+        # tie_word_embeddings config must never silently drop a genuinely
+        # untied head. Both naming conventions are covered (HF export keys +
+        # native keys); GPT-2's wte pair too.
+        tensor_list, _tied = self._dedup_tied_head(tensor_list)
+        if _tied:
+            # Informational marker so tooling can tell "tied" from "lost".
+            config = {**config, "tied_embeddings": True}
+
         # Validate ndim for all tensors
         for name, tensor in tensor_list:
             if len(tensor.shape) > MAX_NDIM:
@@ -338,7 +355,7 @@ class SLNCCompiler:
                 arr = tensor.astype(np.float32, copy=False)
                 max_abs = float(np.max(np.abs(arr))) if arr.size else 0.0
                 scale = max_abs / 127.0 if max_abs > 0 else 1.0
-                q = np.clip(np.round(arr / scale), -127, 127).astype(np.int8)
+                q = encode_round_div(arr, scale, -127, 127).astype(np.int8)
                 tensor_bytes = q.tobytes()
                 stor_dtype = np.dtype(np.int8)
                 crc = _crc32(tensor_bytes)
@@ -465,6 +482,40 @@ class SLNCCompiler:
                 f.write(data_bytes)
 
         return output
+
+    # (head, embedding) naming conventions carrying a tied LM head.
+    _TIED_HEAD_PAIRS: tuple[tuple[str, str], ...] = (
+        ("model.lm_head.weight", "model.embed_tokens.weight"),  # HF export
+        ("lm_head.weight", "tok_emb.weight"),  # native SloTransformer
+        ("lm_head.weight", "wte.weight"),  # GPT-2
+    )
+
+    def _dedup_tied_head(
+        self, tensor_list: list[tuple[str, np.ndarray]]
+    ) -> tuple[list[tuple[str, np.ndarray]], bool]:
+        """Drop a byte-identical tied LM head (card 20261122_085516).
+
+        Returns (tensor_list, tied). Detection compares the actual tensors —
+        never a config flag — so a stale ``tie_word_embeddings`` can never
+        silently drop a genuinely untied head. The loader reconstructs the
+        tie from the head's absence (``weight_loader.build_load_plan``), so
+        the canonical embedding is all the file needs.
+        """
+        by_name = dict(tensor_list)
+        for head, emb in self._TIED_HEAD_PAIRS:
+            head_t = by_name.get(head)
+            emb_t = by_name.get(emb)
+            if head_t is None or emb_t is None:
+                continue
+            if head_t.shape == emb_t.shape and np.array_equal(head_t, emb_t):
+                logger.info(
+                    "Dropping %s: byte-identical to %s (tied embedding)",
+                    head,
+                    emb,
+                    extra={"tag": "INFRA"},
+                )
+                return [(n, t) for n, t in tensor_list if n != head], True
+        return tensor_list, False
 
     def _order_tensors(
         self, config: dict, weights: dict[str, np.ndarray]

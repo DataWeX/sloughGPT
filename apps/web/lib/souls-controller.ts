@@ -39,6 +39,8 @@ export interface Checkpoint {
   tagline?: string
   description?: string
   born_at?: string
+  /** Checkpoint write time (backend repairs/drops unparseable values → optional) */
+  created_at?: string
   epochs_trained?: number
   final_train_loss?: number
   final_val_loss?: number

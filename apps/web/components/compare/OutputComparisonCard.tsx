@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback } from 'react'
 import { cn, ActionCard } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -28,7 +28,6 @@ interface OutputComparisonCardProps {
 }
 
 export default function OutputComparisonCard({ models }: OutputComparisonCardProps) {
-  const addToast = notify.toast
   const [selectedForOutput, setSelectedForOutput] = useState<Set<string>>(new Set())
   const [outputPrompt, setOutputPrompt] = useState('')
   const [outputResults, setOutputResults] = useState<Record<string, OutputResult>>({})
@@ -84,7 +83,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
 
   const copyOutputResult = (text: string) => {
     navigator.clipboard.writeText(text)
-    addToast('Copied to clipboard', 'success')
+    notify.toast('Copied to clipboard', { type: 'success' })
   }
 
   const clearOutputComparison = () => {
@@ -98,12 +97,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
       title="Output Comparison"
       actions={
         Object.keys(outputResults).length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-[10px]"
-            onClick={clearOutputComparison}
-          >
+          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={clearOutputComparison}>
             <IconX className="h-2.5 w-2.5 mr-0.5" /> Clear
           </Button>
         )
@@ -119,7 +113,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
         aria-label="Comparison prompt"
       />
       <div className="flex flex-wrap items-center gap-1">
-        <span className="text-[10px] text-muted-foreground/60 mr-0.5">Models:</span>
+        <span className="text-xs text-muted-foreground/60 mr-0.5">Models:</span>
         {models.map((m) => (
           <Chip
             key={m.id}
@@ -132,7 +126,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
       <div className="flex items-center gap-1.5">
         <Button
           size="sm"
-          className="h-6 text-[10px]"
+          className="h-6 text-xs"
           onClick={runOutputComparison}
           disabled={outputLoading || !outputPrompt.trim() || selectedForOutput.size < 1}
         >
@@ -147,7 +141,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
           )}
         </Button>
         {outputLoading && (
-          <span className="text-[10px] text-muted-foreground/60 animate-pulse" aria-live="polite">
+          <span className="text-xs text-muted-foreground/60 animate-pulse" aria-live="polite">
             Querying {selectedForOutput.size} model{selectedForOutput.size !== 1 ? 's' : ''}…
           </span>
         )}
@@ -183,7 +177,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
                         )}
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-[9px] text-muted-foreground/60 tabular-nums">
+                        <span className="text-[11px] text-muted-foreground/60 tabular-nums">
                           {(r.elapsedMs / 1000).toFixed(1)}s
                         </span>
                         {!r.error && (
@@ -200,17 +194,17 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
                       </div>
                     </div>
                     {r.error ? (
-                      <p className="text-[10px] text-destructive">{r.error}</p>
+                      <p className="text-xs text-destructive">{r.error}</p>
                     ) : (
                       <div>
-                        <p className="text-[10px] leading-relaxed whitespace-pre-wrap">
+                        <p className="text-xs leading-relaxed whitespace-pre-wrap">
                           {truncated ? r.text.slice(0, OUTPUT_PREVIEW_CHARS) + '…' : r.text}
                         </p>
                         {truncated && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 text-[9px] mt-0.5 px-0"
+                            className="h-5 text-[11px] mt-0.5 px-0"
                             onClick={() =>
                               setOutputExpanded((prev) => {
                                 const n = new Set(prev)

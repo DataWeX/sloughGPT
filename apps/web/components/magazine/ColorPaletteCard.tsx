@@ -24,9 +24,9 @@ function Swatch({ rgb, label, description }: { rgb: string; label: string; descr
         aria-label={`${label}: rgb(${rgb})`}
       />
       <div className="text-center">
-        <div className="text-[10px] font-medium">{label}</div>
-        <div className="font-mono text-[10px] text-muted-foreground">{rgb}</div>
-        {description && <div className="text-[10px] text-muted-foreground">{description}</div>}
+        <div className="text-xs font-medium">{label}</div>
+        <div className="font-mono text-xs text-muted-foreground">{rgb}</div>
+        {description && <div className="text-xs text-muted-foreground">{description}</div>}
       </div>
     </div>
   )
@@ -40,7 +40,7 @@ export function ColorPaletteCard({ title, colors }: ColorPaletteCardProps) {
       </CardHeader>
       <CardContent className="px-2.5 pb-2.5">
         <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-9">
-          {colors.map(c => (
+          {colors.map((c) => (
             <Swatch key={c.name} rgb={c.rgb} label={c.label} description={c.desc} />
           ))}
         </div>

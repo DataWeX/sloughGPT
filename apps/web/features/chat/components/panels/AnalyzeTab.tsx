@@ -77,7 +77,7 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
       {vs.analyzeResult && (
         <div className="space-y-3">
           <div className="p-3 rounded-lg bg-muted/30 border border-border/40">
-            <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">
+            <div className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">
               Caption
             </div>
             <div className="text-sm leading-relaxed">{vs.analyzeResult.caption}</div>
@@ -86,11 +86,11 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="p-2 rounded bg-muted/30 border border-border/40 text-center">
               <div className="text-sm font-semibold">{vs.analyzeResult.confidence.toFixed(2)}</div>
-              <div className="text-[10px] text-muted-foreground">Confidence</div>
+              <div className="text-xs text-muted-foreground">Confidence</div>
             </div>
             <div className="p-2 rounded bg-muted/30 border border-border/40 text-center">
               <div className="text-sm font-semibold">{vs.analyzeResult.images_learned}</div>
-              <div className="text-[10px] text-muted-foreground">Images learned</div>
+              <div className="text-xs text-muted-foreground">Images learned</div>
             </div>
             <div className="p-2 rounded bg-muted/30 border border-border/40 text-center">
               <div
@@ -105,7 +105,7 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
               >
                 {vs.analyzeResult.mean_accuracy.toFixed(1)}%
               </div>
-              <div className="text-[10px] text-muted-foreground">Mean accuracy</div>
+              <div className="text-xs text-muted-foreground">Mean accuracy</div>
             </div>
           </div>
 
@@ -114,7 +114,7 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
               {vs.analyzeResult.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="px-1.5 py-0.5 rounded-full bg-muted/50 text-[10px] border border-border/30"
+                  className="px-1.5 py-0.5 rounded-full bg-muted/50 text-xs border border-border/30"
                 >
                   {tag}
                 </span>

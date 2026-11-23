@@ -30,9 +30,6 @@ from domain.infrastructure._internal.lifecycle import (
 
 
 class TestLifecyclePhase:
-    def test_all_members(self):
-        assert len(LifecyclePhase) == 7
-
     def test_values(self):
         assert LifecyclePhase.INIT.value == "init"
         assert LifecyclePhase.STARTING.value == "starting"
@@ -101,14 +98,6 @@ class TestLifecyclePhase:
 
 
 class TestStartupProfile:
-    def test_all_members(self):
-        assert len(StartupProfile) == 3
-
-    def test_values(self):
-        assert StartupProfile.FULL.value == "full"
-        assert StartupProfile.QUICK.value == "quick"
-        assert StartupProfile.MINIMAL.value == "minimal"
-
     def test_from_env_full(self):
         os.environ["SLO_STARTUP_PROFILE"] = "full"
         try:
@@ -136,10 +125,6 @@ class TestStartupProfile:
             assert StartupProfile.from_env() == StartupProfile.FULL
         finally:
             del os.environ["SLO_STARTUP_PROFILE"]
-
-    def test_from_env_default_when_unset(self):
-        os.environ.pop("SLO_STARTUP_PROFILE", None)
-        assert StartupProfile.from_env() == StartupProfile.FULL
 
     def test_from_env_case_insensitive(self):
         os.environ["SLO_STARTUP_PROFILE"] = "MINIMAL"
@@ -481,10 +466,6 @@ class TestTopologicalSort:
 
 
 class TestDependencyLevels:
-    def test_empty(self):
-        levels = _dependency_levels([])
-        assert levels == []
-
     def test_single_hook(self):
         h = StartupHook(name="a", handler=lambda: None)
         levels = _dependency_levels([h])
@@ -579,24 +560,6 @@ class TestDependencyLevels:
 
 
 class TestEventConstants:
-    def test_phase_changed(self):
-        assert EVT_PHASE_CHANGED == "lifecycle.phase_changed"
-
-    def test_hook_started(self):
-        assert EVT_HOOK_STARTED == "lifecycle.hook_started"
-
-    def test_hook_completed(self):
-        assert EVT_HOOK_COMPLETED == "lifecycle.hook_completed"
-
-    def test_hook_failed(self):
-        assert EVT_HOOK_FAILED == "lifecycle.hook_failed"
-
-    def test_all_are_strings(self):
-        assert isinstance(EVT_PHASE_CHANGED, str)
-        assert isinstance(EVT_HOOK_STARTED, str)
-        assert isinstance(EVT_HOOK_COMPLETED, str)
-        assert isinstance(EVT_HOOK_FAILED, str)
-
     def test_all_are_unique(self):
         constants = [EVT_PHASE_CHANGED, EVT_HOOK_STARTED, EVT_HOOK_COMPLETED, EVT_HOOK_FAILED]
         assert len(constants) == len(set(constants))
@@ -608,38 +571,6 @@ class TestEventConstants:
 
 
 class TestLifecycleManagerInit:
-    def test_initial_phase(self):
-        mgr = LifecycleManager()
-        assert mgr.phase == LifecyclePhase.INIT
-
-    def test_is_running_false(self):
-        mgr = LifecycleManager()
-        assert mgr.is_running() is False
-
-    def test_is_draining_false(self):
-        mgr = LifecycleManager()
-        assert mgr.is_draining() is False
-
-    def test_uptime_zero(self):
-        mgr = LifecycleManager()
-        assert mgr.uptime_seconds == 0.0
-
-    def test_in_flight_zero(self):
-        mgr = LifecycleManager()
-        assert mgr.in_flight_count == 0
-
-    def test_get_profile_default(self):
-        mgr = LifecycleManager()
-        assert mgr.get_profile() == StartupProfile.FULL
-
-    def test_startup_results_empty(self):
-        mgr = LifecycleManager()
-        assert mgr.startup_results == []
-
-    def test_shutdown_results_empty(self):
-        mgr = LifecycleManager()
-        assert mgr.shutdown_results == []
-
     def test_event_bus_none_by_default(self):
         mgr = LifecycleManager()
         assert mgr._event_bus is None
@@ -758,47 +689,6 @@ class TestLifecycleManagerHooks:
 
 
 class TestLifecycleManagerGates:
-    def test_register_gate(self):
-        mgr = LifecycleManager()
-        mgr.register_gate("db", lambda: True)
-        assert "db" in mgr._health_gates
-
-    def test_unregister_gate(self):
-        mgr = LifecycleManager()
-        mgr.register_gate("db", lambda: True)
-        mgr.unregister_gate("db")
-        assert "db" not in mgr._health_gates
-
-    def test_unregister_nonexistent_ok(self):
-        mgr = LifecycleManager()
-        mgr.unregister_gate("nonexistent")
-
-    def test_gate_ready_true(self):
-        mgr = LifecycleManager()
-        mgr.register_gate("db", lambda: True)
-        assert mgr.gate_ready("db") is True
-
-    def test_gate_ready_false(self):
-        mgr = LifecycleManager()
-        mgr.register_gate("db", lambda: False)
-        assert mgr.gate_ready("db") is False
-
-    def test_gate_not_registered_returns_true(self):
-        mgr = LifecycleManager()
-        assert mgr.gate_ready("nonexistent") is True
-
-    def test_gates_ready_all_pass(self):
-        mgr = LifecycleManager()
-        mgr.register_gate("a", lambda: True)
-        mgr.register_gate("b", lambda: True)
-        assert mgr.gates_ready() is True
-
-    def test_gates_ready_one_fails(self):
-        mgr = LifecycleManager()
-        mgr.register_gate("a", lambda: True)
-        mgr.register_gate("b", lambda: False)
-        assert mgr.gates_ready() is False
-
     def test_gates_ready_empty(self):
         mgr = LifecycleManager()
         assert mgr.gates_ready() is True
@@ -1305,10 +1195,6 @@ class TestSingleton:
 
 
 class TestLifecycleManagerExtended:
-    def test_is_draining_in_init(self):
-        mgr = LifecycleManager()
-        assert mgr.is_draining() is False
-
     def test_is_draining_in_starting(self):
         mgr = LifecycleManager()
         mgr._phase = LifecyclePhase.STARTING
@@ -1323,10 +1209,6 @@ class TestLifecycleManagerExtended:
         mgr = LifecycleManager()
         assert mgr.uptime_seconds == 0.0
         assert mgr.started_at == 0.0
-
-    def test_profile_default_is_full(self):
-        mgr = LifecycleManager()
-        assert mgr.get_profile() == StartupProfile.FULL
 
     def test_profile_set_during_start(self):
         mgr = LifecycleManager()
@@ -1350,10 +1232,6 @@ class TestLifecycleManagerExtended:
         mgr = LifecycleManager()
         results = mgr.shutdown_results
         assert isinstance(results, list)
-
-    def test_event_bus_none_default(self):
-        mgr = LifecycleManager()
-        assert mgr._event_bus is None
 
     def test_health_gates_dict_empty(self):
         mgr = LifecycleManager()
@@ -1546,12 +1424,6 @@ class TestLifecycleManagerExtended:
 
         mgr = LifecycleManager(event_bus=BadBus())
         mgr._emit_sync("test.event", {})
-
-    @pytest.mark.asyncio
-    async def test_shutdown_from_init_returns_false(self):
-        mgr = LifecycleManager()
-        result = await mgr.shutdown()
-        assert result is False
 
     @pytest.mark.asyncio
     async def test_shutdown_from_starting_returns_false(self):

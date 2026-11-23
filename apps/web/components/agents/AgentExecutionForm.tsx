@@ -49,7 +49,7 @@ export function AgentExecutionForm({
           aria-describedby={errors.prompt ? 'exec-prompt-error' : undefined}
         />
         {errors.prompt && (
-          <p id="exec-prompt-error" className="text-[10px] text-destructive mt-1" role="alert">
+          <p id="exec-prompt-error" className="text-xs text-destructive mt-1" role="alert">
             {errors.prompt}
           </p>
         )}
@@ -58,7 +58,7 @@ export function AgentExecutionForm({
         <Button size="sm" onClick={onExecute} disabled={running || !prompt.trim()}>
           {running ? 'Running...' : 'Execute'}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onClose} className="h-6 text-[10px]">
+        <Button size="sm" variant="ghost" onClick={onClose} className="h-6 text-xs">
           Close
         </Button>
       </div>
@@ -67,13 +67,16 @@ export function AgentExecutionForm({
           {toolsUsed.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1">
               {toolsUsed.map((t, i) => (
-                <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                <span
+                  key={i}
+                  className="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium"
+                >
                   {t.tool.replace(/_/g, ' ')}
                 </span>
               ))}
             </div>
           )}
-          <p className="text-[10px] font-medium text-muted-foreground mb-1">Response</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">Response</p>
           <p className="text-[11px] whitespace-pre-wrap">{result}</p>
         </div>
       )}

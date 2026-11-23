@@ -38,35 +38,35 @@ export function UserCreateFormCard({
         <div className="grid grid-cols-2 gap-1.5">
           <Input
             value={username}
-            onChange={e => onUsernameChange(e.target.value)}
+            onChange={(e) => onUsernameChange(e.target.value)}
             placeholder="Username"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
           <Input
             value={email}
-            onChange={e => onEmailChange(e.target.value)}
+            onChange={(e) => onEmailChange(e.target.value)}
             placeholder="Email"
             type="email"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
           <Input
             value={password}
-            onChange={e => onPasswordChange(e.target.value)}
+            onChange={(e) => onPasswordChange(e.target.value)}
             placeholder="Password (min 8 chars)"
             type="password"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           />
           <select
             value={role}
-            onChange={e => onRoleChange(e.target.value)}
-            className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+            onChange={(e) => onRoleChange(e.target.value)}
+            className="h-6 text-xs rounded-md border border-border bg-background px-2"
           >
             <option value="viewer">Viewer</option>
             <option value="user">User</option>
             <option value="admin">Admin</option>
           </select>
         </div>
-        <Button size="sm" className="h-6 text-[10px]" onClick={onCreate} disabled={!canCreate}>
+        <Button size="sm" className="h-6 text-xs" onClick={onCreate} disabled={!canCreate}>
           {creating ? 'Creating...' : 'Create User'}
         </Button>
       </CardContent>

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Chip } from '@sloughgpt/strui'
 import { IconSearch } from '@sloughgpt/strui'
@@ -12,7 +12,6 @@ export function TokenTreePathCard() {
   const [text, setText] = useState('the quick brown fox')
   const [result, setResult] = useState<PathResult | null>(null)
   const [tracing, setTracing] = useState(false)
-  const addToast = notify.toast
 
   const handleTrace = async () => {
     const term = text.trim()
@@ -22,7 +21,7 @@ export function TokenTreePathCard() {
     try {
       setResult(await tokenTreeController.path(term))
     } catch {
-      addToast('Could not trace the token path', 'error')
+      notify.toast('Could not trace the token path', { type: 'error' })
     } finally {
       setTracing(false)
     }

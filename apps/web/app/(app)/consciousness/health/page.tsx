@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -83,7 +83,6 @@ function saveHistory(history: Array<{ timestamp: number; score: number }>) {
 }
 
 export default function ConsciousnessHealthPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [health, setHealth] = useState<HealthData | null>(null)
@@ -130,11 +129,11 @@ export default function ConsciousnessHealthPage() {
       }
       setLastUpdated(Date.now() / 1000)
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     setHistory(loadHistory())
@@ -283,7 +282,7 @@ export default function ConsciousnessHealthPage() {
                 y="68"
                 textAnchor="middle"
                 className="fill-muted-foreground"
-                fontSize="8"
+                fontSize="11"
               >
                 {t('consciousness_health.out_of_100')}
               </text>
@@ -291,7 +290,7 @@ export default function ConsciousnessHealthPage() {
                 x="60"
                 y="82"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="500"
                 fill={scoreColor}
               >
@@ -533,7 +532,7 @@ export default function ConsciousnessHealthPage() {
                         x="35"
                         y={y + 3}
                         textAnchor="end"
-                        fontSize="8"
+                        fontSize="11"
                         className="fill-muted-foreground"
                       >
                         {v}

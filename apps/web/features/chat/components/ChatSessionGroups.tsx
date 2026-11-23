@@ -80,7 +80,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-6"
+              className="text-xs h-6"
               onClick={handleCreate}
               disabled={!newName.trim()}
             >
@@ -90,7 +90,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-6"
+              className="text-xs h-6"
               onClick={() => setCreating(false)}
             >
               Cancel
@@ -104,7 +104,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
           type="button"
           onClick={() => setSelectedColor(null)}
           className={cn(
-            'text-[10px] px-2 py-0.5 rounded transition-colors',
+            'text-xs px-2 py-0.5 rounded transition-colors',
             selectedColor === null
               ? 'bg-primary/20 text-primary'
               : 'text-muted-foreground hover:bg-muted/50',
@@ -119,7 +119,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
             type="button"
             onClick={() => setSelectedColor(group.color)}
             className={cn(
-              'text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1',
+              'text-xs px-2 py-0.5 rounded transition-colors flex items-center gap-1',
               selectedColor === group.color
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50',
@@ -148,7 +148,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                       style={{ backgroundColor: group.color }}
                     />
                     <span className="text-xs font-medium">{group.name}</span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       ({group.sessionIds.length})
                     </span>
                   </div>
@@ -189,7 +189,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
 
       {sessionsByGroup.ungrouped.length > 0 && (
         <div className="p-2 border-t">
-          <div className="text-[10px] text-muted-foreground mb-1">
+          <div className="text-xs text-muted-foreground mb-1">
             Ungrouped ({sessionsByGroup.ungrouped.length})
           </div>
           <div className="space-y-1 max-h-[100px] overflow-y-auto">

@@ -10,10 +10,10 @@ import {
   DEFAULT_TRAIN_CONFIG,
   buildTrainSource,
   clampTrainConfig,
-  num,
   trainConfigHints,
   type TrainConfig,
 } from '../vm-data'
+import { TRAINING_LIMITS, parseTrainingField } from '@/lib/sanitize'
 
 interface VmTrainingLaunchProps {
   trainConfig: TrainConfig
@@ -131,14 +131,15 @@ export function VmTrainingLaunch({
           <label className="text-xs font-medium text-muted-foreground">Epochs</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.epochs.min}
+            max={TRAINING_LIMITS.epochs.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={trainConfig.epochs}
             aria-label="Training epochs"
             onChange={(e) =>
               setTrainConfig((c) => ({
                 ...c,
-                epochs: num(e.target.value),
+                epochs: parseTrainingField('epochs', e.target.value),
               }))
             }
           />
@@ -150,63 +151,67 @@ export function VmTrainingLaunch({
             onChange={(e) =>
               setTrainConfig((c) => ({
                 ...c,
-                lr: num(e.target.value),
+                lr: parseTrainingField('learning_rate', e.target.value),
               }))
             }
           />
           <label className="text-xs font-medium text-muted-foreground">Batch size</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.batch_size.min}
+            max={TRAINING_LIMITS.batch_size.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={trainConfig.batch_size}
             aria-label="Training batch size"
             onChange={(e) =>
               setTrainConfig((c) => ({
                 ...c,
-                batch_size: num(e.target.value),
+                batch_size: parseTrainingField('batch_size', e.target.value),
               }))
             }
           />
           <label className="text-xs font-medium text-muted-foreground">Layers</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.n_layer.min}
+            max={TRAINING_LIMITS.n_layer.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={trainConfig.n_layer}
             aria-label="Training layers"
             onChange={(e) =>
               setTrainConfig((c) => ({
                 ...c,
-                n_layer: num(e.target.value),
+                n_layer: parseTrainingField('n_layer', e.target.value),
               }))
             }
           />
           <label className="text-xs font-medium text-muted-foreground">Heads</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.n_head.min}
+            max={TRAINING_LIMITS.n_head.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={trainConfig.n_head}
             aria-label="Training heads"
             onChange={(e) =>
               setTrainConfig((c) => ({
                 ...c,
-                n_head: num(e.target.value),
+                n_head: parseTrainingField('n_head', e.target.value),
               }))
             }
           />
           <label className="text-xs font-medium text-muted-foreground">Embed size</label>
           <input
             type="number"
-            min={1}
+            min={TRAINING_LIMITS.n_embed.min}
+            max={TRAINING_LIMITS.n_embed.max}
             className="px-2 py-1 text-xs border rounded bg-background focus-visible:ring-2 focus-visible:ring-ring"
             value={trainConfig.embed_dim}
             aria-label="Training embed size"
             onChange={(e) =>
               setTrainConfig((c) => ({
                 ...c,
-                embed_dim: num(e.target.value),
+                embed_dim: parseTrainingField('n_embed', e.target.value),
               }))
             }
           />

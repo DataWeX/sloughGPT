@@ -680,25 +680,6 @@ class TestSetResolution:
 
 
 class TestInvalidation:
-    def test_add_sphere_invalidates(self):
-        d = CyclesDevice(width=4, height=4, samples=1)
-        d.call("render")
-        assert d._renderer is not None
-        d.call("add_sphere")
-        assert d._renderer is None
-
-    def test_add_cube_invalidates(self):
-        d = CyclesDevice(width=4, height=4, samples=1)
-        d.call("render")
-        d.call("add_cube")
-        assert d._renderer is None
-
-    def test_add_plane_invalidates(self):
-        d = CyclesDevice(width=4, height=4, samples=1)
-        d.call("render")
-        d.call("add_plane")
-        assert d._renderer is None
-
     def test_set_camera_invalidates(self):
         d = CyclesDevice(width=4, height=4, samples=1)
         d.call("render")
@@ -715,12 +696,6 @@ class TestInvalidation:
         d = CyclesDevice(width=4, height=4, samples=1)
         d.call("render")
         d.call("set_samples", 8)
-        assert d._renderer is None
-
-    def test_set_resolution_invalidates(self):
-        d = CyclesDevice(width=4, height=4, samples=1)
-        d.call("render")
-        d.call("set_resolution", 8, 8)
         assert d._renderer is None
 
     def test_add_light_does_not_invalidate(self):

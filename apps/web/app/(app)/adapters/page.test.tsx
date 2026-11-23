@@ -133,21 +133,11 @@ vi.mock('@/lib/lora-eval-controller', () => ({
   loraEvalController: { runEval: mockRunEval, getHistory: mockGetHistory },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://test-api' }))
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ title, children, loading, error, onRetry, headerRight }: any) => (
@@ -455,7 +445,7 @@ describe('AdaptersPage', () => {
       fireEvent.click(resetBtn)
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not reset adapter', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not reset adapter', { type: 'error' })
     })
   })
 
@@ -471,7 +461,7 @@ describe('AdaptersPage', () => {
     await waitFor(() => {
       expect(mockRunEval).toHaveBeenCalledWith('data/user_adapters/best_aggregated.npz')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Evaluation complete', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Evaluation complete', { type: 'success' })
     await waitFor(() => {
       expect(screen.getAllByText('better').length).toBeGreaterThan(0)
     })
@@ -487,7 +477,7 @@ describe('AdaptersPage', () => {
       screen.getByText('Run LoRA Eval').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Could not eval', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not eval', { type: 'error' })
     })
   })
 

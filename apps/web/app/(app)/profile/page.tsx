@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -41,7 +41,6 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
-  const addToast = notify.toast
   const { user, setUser } = useAuthStore()
 
   const fetchProfile = useCallback(async () => {
@@ -75,10 +74,10 @@ export default function ProfilePage() {
         if (user) {
           setUser({ ...user, email: p.email })
         }
-        addToast('Profile updated', 'success')
+        notify.toast('Profile updated', { type: 'success' })
       }
     } catch {
-      addToast('Could not update profile', 'error')
+      notify.toast('Could not update profile', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -86,11 +85,11 @@ export default function ProfilePage() {
 
   const changePassword = async () => {
     if (newPassword !== confirmPassword) {
-      addToast('Passwords do not match', 'error')
+      notify.toast('Passwords do not match', { type: 'error' })
       return
     }
     if (newPassword.length < 8) {
-      addToast('Password must be at least 8 characters', 'error')
+      notify.toast('Password must be at least 8 characters', { type: 'error' })
       return
     }
     setChangingPassword(true)
@@ -102,9 +101,9 @@ export default function ProfilePage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      addToast('Password changed', 'success')
+      notify.toast('Password changed', { type: 'success' })
     } catch {
-      addToast('Could not change password — check current password', 'error')
+      notify.toast('Could not change password — check current password', { type: 'error' })
     } finally {
       setChangingPassword(false)
     }
@@ -150,33 +149,29 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Username</label>
-            <Input
-              value={profile?.username ?? ''}
-              disabled
-              className="h-6 text-[10px] opacity-60"
-            />
+            <label className="text-xs text-muted-foreground">Username</label>
+            <Input value={profile?.username ?? ''} disabled className="h-6 text-xs opacity-60" />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Display Name</label>
+            <label className="text-xs text-muted-foreground">Display Name</label>
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your display name"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Email</label>
+            <label className="text-xs text-muted-foreground">Email</label>
             <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               placeholder="your@email.com"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
-          <Button size="sm" className="h-6 text-[10px]" onClick={updateProfile} disabled={saving}>
+          <Button size="sm" className="h-6 text-xs" onClick={updateProfile} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </CardContent>
@@ -189,38 +184,38 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Current Password</label>
+            <label className="text-xs text-muted-foreground">Current Password</label>
             <Input
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               type="password"
               placeholder="Current password"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">New Password</label>
+            <label className="text-xs text-muted-foreground">New Password</label>
             <Input
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               type="password"
               placeholder="New password (min 8 characters)"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">Confirm New Password</label>
+            <label className="text-xs text-muted-foreground">Confirm New Password</label>
             <Input
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               type="password"
               placeholder="Confirm new password"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
             />
           </div>
           <Button
             size="sm"
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
             onClick={changePassword}
             disabled={changingPassword || !currentPassword || !newPassword}
           >
@@ -235,7 +230,7 @@ export default function ProfilePage() {
           <CardTitle className="text-xs">Account Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
               <span className="text-muted-foreground">User ID: </span>
               <span className="font-mono">{profile?.id}</span>

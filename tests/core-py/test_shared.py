@@ -320,18 +320,7 @@ class TestFindServerPython:
 # ===================================================================
 
 
-class TestFlagStatus:
-    def test_values(self):
-        assert FlagStatus.ENABLED.value == "enabled"
-        assert FlagStatus.DISABLED.value == "disabled"
-        assert FlagStatus.EXPERIMENTAL.value == "experimental"
-
-
 class TestFeatureFlag:
-    def test_auto_env_var(self):
-        f = FeatureFlag(name="my_flag", description="test")
-        assert f.env_var == "SLO_FF_MY_FLAG"
-
     def test_custom_env_var(self):
         f = FeatureFlag(name="x", description="", env_var="CUSTOM")
         assert f.env_var == "CUSTOM"

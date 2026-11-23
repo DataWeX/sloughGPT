@@ -85,7 +85,7 @@
   --destructive: 220 80 90;
   --destructive-foreground: 250 248 255;
   --success: 52 176 125;
-  --warning: 236 168 60;
+  --warning: 245 158 11;
   --border: 228 224 242;
   --input: 228 224 242;
   --ring: 124 82 196;
@@ -93,7 +93,7 @@
   --chart-1: 124 82 196;
   --chart-2: 52 176 125;
   --chart-3: 236 145 95;
-  --chart-4: 90 150 220;
+  --chart-4: 104 142 226;
   --chart-5: 220 80 90;
   --shadow-sm: 0 1px 2px rgba(25, 22, 36, 0.06);
   --shadow-md: 0 4px 12px rgba(25, 22, 36, 0.08);
@@ -120,14 +120,14 @@ html.dark {
   --destructive: 235 100 110;
   --destructive-foreground: 25 22 36;
   --success: 72 192 140;
-  --warning: 240 192 80;
+  --warning: 251 191 36;
   --border: 52 46 72;
   --input: 52 46 72;
   --ring: 192 170 244;
   --chart-1: 192 170 244;
   --chart-2: 72 192 140;
   --chart-3: 240 176 130;
-  --chart-4: 100 165 240;
+  --chart-4: 138 166 242;
   --chart-5: 235 100 110;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);

@@ -41,12 +41,6 @@ class TestSpecializedAgent:
         assert d["role"] == "research"
         assert "description" in d
 
-    def test_default_agents_exist(self):
-        assert "researcher" in DEFAULT_AGENTS
-        assert "writer" in DEFAULT_AGENTS
-        assert "coder" in DEFAULT_AGENTS
-        assert "critic" in DEFAULT_AGENTS
-
     def test_to_dict_truncates_prompt(self):
         long_prompt = "x" * 200
         a = SpecializedAgent(name="A", role="r", system_prompt=long_prompt)
@@ -182,12 +176,6 @@ class TestAgentTask:
 
 
 class TestTaskStatus:
-    def test_values(self):
-        assert TaskStatus.PENDING == "pending"
-        assert TaskStatus.LIVE == "live"
-        assert TaskStatus.COMPLETED == "completed"
-        assert TaskStatus.FAILED == "failed"
-
     def test_all_values_are_strings(self):
         assert isinstance(TaskStatus.PENDING, str)
         assert isinstance(TaskStatus.LIVE, str)
@@ -403,16 +391,6 @@ class TestOrchestratorListAgents:
         orch = MultiAgentOrchestrator()
         agents = orch.list_agents()
         assert len(agents) >= 4
-
-    def test_get_agent(self):
-        orch = MultiAgentOrchestrator()
-        a = orch.get_agent("researcher")
-        assert a is not None
-        assert a.name == "Researcher"
-
-    def test_get_missing_agent(self):
-        orch = MultiAgentOrchestrator()
-        assert orch.get_agent("nonexistent") is None
 
     def test_list_agents_returns_dicts(self):
         orch = MultiAgentOrchestrator()

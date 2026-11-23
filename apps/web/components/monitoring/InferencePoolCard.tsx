@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { memo, useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, Button, StatCard, KpiGrid, Spinner } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -16,7 +16,6 @@ export const InferencePoolCard = memo(function InferencePoolCard({
   const [status, setStatus] = useState<InferencePoolStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const addToast = notify.toast
 
   const fetchStatus = useCallback(async () => {
     setLoading(true)
@@ -25,12 +24,12 @@ export const InferencePoolCard = memo(function InferencePoolCard({
       const s = await systemController.getInferencePoolStatus()
       setStatus(s)
     } catch {
-      addToast('Could not load inference pool status', 'error')
+      notify.toast('Could not load inference pool status', { type: 'error' })
       setError('Failed to load')
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -42,7 +41,7 @@ export const InferencePoolCard = memo(function InferencePoolCard({
         if (active) setStatus(s)
       } catch {
         if (active) {
-          addToast('Could not load inference pool status', 'error')
+          notify.toast('Could not load inference pool status', { type: 'error' })
           setError('Failed to load')
         }
       } finally {
@@ -53,7 +52,7 @@ export const InferencePoolCard = memo(function InferencePoolCard({
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
   return (
     <Card data-testid="inference-pool">

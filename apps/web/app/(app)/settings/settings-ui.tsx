@@ -13,7 +13,7 @@ export function VersionBadge({ label, version }: { label: string; version?: stri
   return (
     <Badge
       variant="outline"
-      className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/40"
+      className="text-xs font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/40"
     >
       {label} {version}
     </Badge>

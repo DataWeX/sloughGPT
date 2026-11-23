@@ -17,11 +17,12 @@ interface AgentRunCardProps {
 }
 
 function StatusDot({ status }: { status: AgentRun['status'] }) {
-  const color = status === 'completed'
-    ? 'bg-success'
-    : status === 'failed'
-      ? 'bg-destructive'
-      : 'bg-warning animate-pulse'
+  const color =
+    status === 'completed'
+      ? 'bg-success'
+      : status === 'failed'
+        ? 'bg-destructive'
+        : 'bg-warning animate-pulse'
 
   return <span className={cn('inline-block h-2 w-2 rounded-full', color)} />
 }
@@ -44,7 +45,7 @@ export function AgentRunCard({ runs }: AgentRunCardProps) {
           <div className="text-sm text-muted-foreground">No runs yet.</div>
         ) : (
           <div className="space-y-2">
-            {runs.map(run => (
+            {runs.map((run) => (
               <div
                 key={run.id}
                 className="flex items-start gap-3 p-2.5 rounded border border-border"
@@ -53,20 +54,22 @@ export function AgentRunCard({ runs }: AgentRunCardProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium truncate">{run.task}</span>
-                    <Badge variant="secondary" className="text-[9px] shrink-0">{run.status}</Badge>
+                    <Badge variant="secondary" className="text-[11px] shrink-0">
+                      {run.status}
+                    </Badge>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[9px] text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground">
                       Started {formatTimestamp(run.started_at)}
                     </span>
                     {run.completed_at && (
-                      <span className="text-[9px] text-muted-foreground">
+                      <span className="text-[11px] text-muted-foreground">
                         Completed {formatTimestamp(run.completed_at)}
                       </span>
                     )}
                   </div>
                   {run.result && (
-                    <div className="mt-1 text-[10px] text-muted-foreground line-clamp-2 font-mono">
+                    <div className="mt-1 text-xs text-muted-foreground line-clamp-2 font-mono">
                       {run.result}
                     </div>
                   )}

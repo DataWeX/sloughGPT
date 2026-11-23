@@ -128,7 +128,7 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 text-[10px]"
+            className="h-7 text-xs"
             onClick={fetchPreview}
             disabled={loading}
             aria-label="Refresh preview"
@@ -147,7 +147,7 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({
 
           <div className="space-y-2">
             {metrics.emptyLines > 0 && (
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground/60">Empty lines</span>
                 <span className="font-mono tabular-nums">
                   {metrics.emptyLines} ({(metrics.emptyRatio * 100).toFixed(1)}%)
@@ -155,7 +155,7 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({
               </div>
             )}
             {metrics.duplicateLines > 0 && (
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground/60">Duplicates</span>
                 <span className="font-mono tabular-nums">
                   {metrics.duplicateLines} ({(metrics.duplicateRatio * 100).toFixed(1)}%)
@@ -163,19 +163,19 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({
               </div>
             )}
             {metrics.shortLines > 0 && (
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground/60">Short lines (&lt;10 chars)</span>
                 <span className="font-mono tabular-nums">{metrics.shortLines}</span>
               </div>
             )}
             {metrics.longLines > 0 && (
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground/60">Long lines (&gt;1K chars)</span>
                 <span className="font-mono tabular-nums">{metrics.longLines}</span>
               </div>
             )}
             {metrics.nonAsciiLines > 0 && (
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground/60">Non-ASCII</span>
                 <span className="font-mono tabular-nums">{metrics.nonAsciiLines}</span>
               </div>
@@ -184,7 +184,7 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({
 
           {issues.length > 0 && (
             <div className="pt-2 border-t border-border/40">
-              <p className="text-[10px] text-muted-foreground/60 mb-1">Issues</p>
+              <p className="text-xs text-muted-foreground/60 mb-1">Issues</p>
               <div className="flex flex-wrap gap-1">
                 {issues.map((issue, i) => (
                   <Badge key={i} label={issue} variant="outline" size="sm" />

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -70,7 +70,6 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessMasterDashboardPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const { stats, loading: statsLoading } = useConsciousnessStats()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
@@ -120,11 +119,11 @@ export default function ConsciousnessMasterDashboardPage() {
         setBeliefsHistory(bResult.value.beliefs ?? [])
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -146,10 +145,10 @@ export default function ConsciousnessMasterDashboardPage() {
     setSeeding(true)
     try {
       await consciousnessController.seedData({ count: 30 })
-      addToast('30 episodes added', 'success')
+      notify.toast('30 episodes added', { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }
@@ -159,10 +158,10 @@ export default function ConsciousnessMasterDashboardPage() {
     setReflecting(true)
     try {
       await consciousnessController.reflect()
-      addToast('New episode recorded', 'success')
+      notify.toast('New episode recorded', { type: 'success' })
       await fetchAll()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setReflecting(false)
     }
@@ -187,9 +186,9 @@ export default function ConsciousnessMasterDashboardPage() {
       a.download = `consciousness-master-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('Exported master dashboard data', 'success')
+      notify.toast('Exported master dashboard data', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setExporting(false)
     }
@@ -283,7 +282,7 @@ export default function ConsciousnessMasterDashboardPage() {
               : t('consciousness_master.no_updates')}
           </Badge>
           {isLive && (
-            <Badge variant="default" className="text-[10px] px-1.5 py-0">
+            <Badge variant="default" className="text-xs px-1.5 py-0">
               <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
               {t('consciousness_master.live')}
             </Badge>
@@ -400,9 +399,9 @@ export default function ConsciousnessMasterDashboardPage() {
                     <PolarGrid stroke="rgb(var(--border))" />
                     <PolarAngleAxis
                       dataKey="dimension"
-                      tick={{ fontSize: 10, fill: 'rgb(var(--muted-foreground))' }}
+                      tick={{ fontSize: 11, fill: 'rgb(var(--muted-foreground))' }}
                     />
-                    <PolarRadiusAxis angle={30} domain={[-1, 1]} tick={{ fontSize: 9 }} />
+                    <PolarRadiusAxis angle={30} domain={[-1, 1]} tick={{ fontSize: 11 }} />
                     <Radar
                       name="Current"
                       dataKey="value"
@@ -433,13 +432,13 @@ export default function ConsciousnessMasterDashboardPage() {
                     <XAxis
                       type="number"
                       domain={[0, 100]}
-                      tick={{ fontSize: 10 }}
+                      tick={{ fontSize: 11 }}
                       stroke="rgb(var(--muted-foreground))"
                     />
                     <YAxis
                       type="category"
                       dataKey="name"
-                      tick={{ fontSize: 10 }}
+                      tick={{ fontSize: 11 }}
                       stroke="rgb(var(--muted-foreground))"
                       width={80}
                     />
@@ -479,10 +478,10 @@ export default function ConsciousnessMasterDashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                   <XAxis
                     dataKey="rating"
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 11 }}
                     stroke="rgb(var(--muted-foreground))"
                   />
-                  <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="rgb(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'rgb(var(--card))',
@@ -509,10 +508,10 @@ export default function ConsciousnessMasterDashboardPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                     <XAxis
                       dataKey="time"
-                      tick={{ fontSize: 9 }}
+                      tick={{ fontSize: 11 }}
                       stroke="rgb(var(--muted-foreground))"
                     />
-                    <YAxis tick={{ fontSize: 9 }} stroke="rgb(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="rgb(var(--muted-foreground))" />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: 'rgb(var(--card))',
@@ -578,7 +577,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span className="text-lg font-bold">{Math.round(healthScore)}</span>
-                      <span className="text-[9px] text-muted-foreground">/100</span>
+                      <span className="text-[11px] text-muted-foreground">/100</span>
                     </div>
                   </div>
                 </div>
@@ -697,7 +696,7 @@ export default function ConsciousnessMasterDashboardPage() {
                       key={i}
                       className="flex gap-3 rounded-lg border p-2 sm:p-3 text-xs sm:text-sm"
                     >
-                      <div className="flex flex-col items-center gap-1 text-[10px] sm:text-xs text-muted-foreground min-w-[48px]">
+                      <div className="flex flex-col items-center gap-1 text-xs sm:text-xs text-muted-foreground min-w-[48px]">
                         <span>{formatTimeAgo(ep.timestamp)}</span>
                         <span
                           className={`font-mono ${(ep.growth_delta ?? 0) >= 0 ? 'text-success' : 'text-destructive'}`}
@@ -707,7 +706,7 @@ export default function ConsciousnessMasterDashboardPage() {
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                        <div className="text-xs sm:text-xs text-muted-foreground truncate">
                           {ep.input_text}
                         </div>
                         <div className="mt-1 text-xs sm:text-sm">{ep.self_insight}</div>
@@ -715,7 +714,7 @@ export default function ConsciousnessMasterDashboardPage() {
                           {Object.entries(ep.qualia ?? {})
                             .slice(0, 4)
                             .map(([k, v]) => (
-                              <span key={k} className="text-[10px] text-muted-foreground">
+                              <span key={k} className="text-xs text-muted-foreground">
                                 {k}: {(v as number).toFixed(2)}
                               </span>
                             ))}

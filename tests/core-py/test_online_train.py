@@ -147,10 +147,6 @@ class TestOnlineLoRAUpdater:
         assert result.shape == logits.shape
         assert np.all(np.isfinite(result))
 
-    def test_adaptation_strength_zero_when_empty(self):
-        u = OnlineLoRAUpdater()
-        assert u.get_adaptation_strength() == 0.0
-
     def test_adaptation_strength_positive_when_init(self):
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=16)
@@ -309,10 +305,6 @@ class TestApplyToLogits:
 
 
 class TestAdaptationStrength:
-    def test_zero_initially(self):
-        u = OnlineLoRAUpdater()
-        assert u.get_adaptation_strength() == 0.0
-
     def test_positive_after_init(self):
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=16)

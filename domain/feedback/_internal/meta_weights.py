@@ -33,12 +33,20 @@ class MetaWeights:
     confidence_boost: float = 0.0  # increase for more confident responses
 
 
+# THE single authority for generation-safe meta-weight bounds (card
+# 20261101_182428). Every layer that lets feedback move a sampling param
+# clamps against THIS dict — ``get_adjustment()`` at the producer AND the
+# transport's ``_apply_meta_weights()`` at the use seam — so the invariant
+# survives cache hits, mocks and refactors that bypass the producer.
+# Exported via the ``domain.feedback`` facade; routers must never reach
+# into ``_internal`` for it.
+#
 # Tight operating window (lo, hi) each feedback-adjusted param may reach.
 # These sit well inside the param's hard range so accumulated history can
 # bias a value but never pin it to a hard-range corner. The repetition
 # floor is 1.0: below that the model is *rewarded* for repeating tokens,
 # which is how a saturated boost drove /chat into an infinite loop.
-_SAFE_BAND: dict[str, tuple[float, float]] = {
+SAFE_BAND: dict[str, tuple[float, float]] = {
     "temperature": (0.3, 1.1),
     "repetition_penalty": (1.0, 1.25),
     "top_p": (0.6, 1.0),
@@ -287,12 +295,12 @@ class MetaWeightManager:
             # verbatim replay loop that never emits its turn-end token
             # (card 20261102_001621). Feedback may bias a param within the
             # band; it can never drive it to the corner of its range.
-            weights.temperature = _band(weights.temperature, *_SAFE_BAND["temperature"])
+            weights.temperature = _band(weights.temperature, *SAFE_BAND["temperature"])
             weights.repetition_penalty = _band(
-                weights.repetition_penalty, *_SAFE_BAND["repetition_penalty"]
+                weights.repetition_penalty, *SAFE_BAND["repetition_penalty"]
             )
-            weights.top_p = _band(weights.top_p, *_SAFE_BAND["top_p"])
-            weights.top_k = int(_band(weights.top_k, *_SAFE_BAND["top_k"]))
+            weights.top_p = _band(weights.top_p, *SAFE_BAND["top_p"])
+            weights.top_k = int(_band(weights.top_k, *SAFE_BAND["top_k"]))
 
             # Hard backstop (normally unreachable once the band is applied).
             weights.temperature = max(0.1, min(1.5, weights.temperature))

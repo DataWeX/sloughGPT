@@ -45,7 +45,7 @@ export function IncomingSharesCard({
       </CardHeader>
       <CardContent className="space-y-1">
         {shares.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground text-center py-4">
+          <p className="text-xs text-muted-foreground text-center py-4">
             No data shared with this workspace
           </p>
         ) : (
@@ -54,12 +54,12 @@ export function IncomingSharesCard({
             return (
               <div
                 key={s.id}
-                className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50"
+                className="flex items-center justify-between px-3 py-2 rounded-md text-xs hover:bg-muted/50 border border-transparent hover:border-border/50"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
+                      className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
                     >
                       <Icon className="h-2.5 w-2.5 inline mr-0.5" />
                       {s.resource_type}

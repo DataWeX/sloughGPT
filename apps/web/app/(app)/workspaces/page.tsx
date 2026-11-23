@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -59,7 +59,6 @@ export default function WorkspacesPage() {
   const [editingWs, setEditingWs] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
-  const addToast = notify.toast
   const { currentWorkspace, switchWorkspace } = useAuthStore()
 
   const fetchWorkspaces = useCallback(async () => {
@@ -81,9 +80,9 @@ export default function WorkspacesPage() {
       setNewName('')
       setNewDesc('')
       await fetchWorkspaces()
-      addToast('Workspace created', 'success')
+      notify.toast('Workspace created', { type: 'success' })
     } catch {
-      addToast('Could not create workspace', 'error')
+      notify.toast('Could not create workspace', { type: 'error' })
     } finally {
       setCreating(false)
     }
@@ -95,9 +94,9 @@ export default function WorkspacesPage() {
       await apiDelete(`/workspaces/${id}`)
       if (selectedWs === id) setSelectedWs(null)
       await fetchWorkspaces()
-      addToast('Workspace deleted', 'success')
+      notify.toast('Workspace deleted', { type: 'success' })
     } catch {
-      addToast('Could not delete workspace', 'error')
+      notify.toast('Could not delete workspace', { type: 'error' })
     }
   }
 
@@ -113,10 +112,10 @@ export default function WorkspacesPage() {
         a.download = `${name.replace(/\s+/g, '_')}_export.json`
         a.click()
         URL.revokeObjectURL(url)
-        addToast('Workspace exported', 'success')
+        notify.toast('Workspace exported', { type: 'success' })
       }
     } catch {
-      addToast('Could not export workspace', 'error')
+      notify.toast('Could not export workspace', { type: 'error' })
     }
   }
 
@@ -132,9 +131,9 @@ export default function WorkspacesPage() {
       await apiPut(`/workspaces/${editingWs}`, { name: editName, description: editDesc })
       setEditingWs(null)
       await fetchWorkspaces()
-      addToast('Workspace updated', 'success')
+      notify.toast('Workspace updated', { type: 'success' })
     } catch {
-      addToast('Could not update workspace', 'error')
+      notify.toast('Could not update workspace', { type: 'error' })
     }
   }
 
@@ -150,9 +149,9 @@ export default function WorkspacesPage() {
         const data = JSON.parse(text)
         await apiPost('/workspaces/import', { workspace_data: data })
         await fetchWorkspaces()
-        addToast('Workspace imported', 'success')
+        notify.toast('Workspace imported', { type: 'success' })
       } catch {
-        addToast('Could not import workspace', 'error')
+        notify.toast('Could not import workspace', { type: 'error' })
       }
     }
     input.click()
@@ -179,9 +178,9 @@ export default function WorkspacesPage() {
       })
       setAddMemberId('')
       await fetchMembers(selectedWs)
-      addToast('Member added', 'success')
+      notify.toast('Member added', { type: 'success' })
     } catch {
-      addToast('Could not add member', 'error')
+      notify.toast('Could not add member', { type: 'error' })
     }
   }
 
@@ -190,9 +189,9 @@ export default function WorkspacesPage() {
     try {
       await apiDelete(`/workspaces/${selectedWs}/members/${userId}`)
       await fetchMembers(selectedWs)
-      addToast('Member removed', 'success')
+      notify.toast('Member removed', { type: 'success' })
     } catch {
-      addToast('Could not remove member', 'error')
+      notify.toast('Could not remove member', { type: 'error' })
     }
   }
 
@@ -234,12 +233,7 @@ export default function WorkspacesPage() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xs">Create Workspace</CardTitle>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 text-[10px]"
-              onClick={importWorkspace}
-            >
+            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={importWorkspace}>
               Import from JSON
             </Button>
           </div>
@@ -250,17 +244,17 @@ export default function WorkspacesPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Workspace name"
-              className="flex-1 h-6 text-[10px]"
+              className="flex-1 h-6 text-xs"
             />
             <Input
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
               placeholder="Description (optional)"
-              className="flex-1 h-6 text-[10px]"
+              className="flex-1 h-6 text-xs"
             />
             <Button
               size="sm"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={createWorkspace}
               disabled={creating || !newName.trim()}
             >
@@ -296,23 +290,23 @@ export default function WorkspacesPage() {
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         placeholder="Name"
-                        className="flex-1 h-6 text-[10px]"
+                        className="flex-1 h-6 text-xs"
                       />
                       <Input
                         value={editDesc}
                         onChange={(e) => setEditDesc(e.target.value)}
                         placeholder="Description"
-                        className="flex-1 h-6 text-[10px]"
+                        className="flex-1 h-6 text-xs"
                       />
                     </div>
                     <div className="flex gap-1.5">
-                      <Button size="sm" className="h-5 text-[10px]" onClick={saveEdit}>
+                      <Button size="sm" className="h-5 text-xs" onClick={saveEdit}>
                         Save
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-5 text-[10px]"
+                        className="h-5 text-xs"
                         onClick={() => setEditingWs(null)}
                       >
                         Cancel
@@ -328,24 +322,24 @@ export default function WorkspacesPage() {
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">{ws.name}</div>
                       {ws.description && (
-                        <div className="text-[10px] text-muted-foreground truncate">
+                        <div className="text-xs text-muted-foreground truncate">
                           {ws.description}
                         </div>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {ws.member_count ?? 0} members
                       </span>
                       {ws.id === currentWorkspace?.id && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                           Active
                         </span>
                       )}
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-5 text-[10px]"
+                        className="h-5 text-xs"
                         onClick={(e) => {
                           e.stopPropagation()
                           startEdit(ws)
@@ -356,7 +350,7 @@ export default function WorkspacesPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-5 text-[10px]"
+                        className="h-5 text-xs"
                         onClick={(e) => {
                           e.stopPropagation()
                           exportWorkspace(ws.id, ws.name)
@@ -398,12 +392,12 @@ export default function WorkspacesPage() {
                 value={addMemberId}
                 onChange={(e) => setAddMemberId(e.target.value)}
                 placeholder="User ID"
-                className="flex-1 h-6 text-[10px]"
+                className="flex-1 h-6 text-xs"
               />
               <select
                 value={addMemberRole}
                 onChange={(e) => setAddMemberRole(e.target.value)}
-                className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                className="h-6 text-xs rounded-md border border-border bg-background px-2"
               >
                 <option value="viewer">Viewer</option>
                 <option value="member">Member</option>
@@ -411,7 +405,7 @@ export default function WorkspacesPage() {
               </select>
               <Button
                 size="sm"
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
                 onClick={addMember}
                 disabled={!addMemberId.trim()}
               >
@@ -422,13 +416,13 @@ export default function WorkspacesPage() {
             {loadingMembers ? (
               <div className="h-16 animate-pulse bg-muted/50 rounded" />
             ) : members.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground py-2 text-center">No members</p>
+              <p className="text-xs text-muted-foreground py-2 text-center">No members</p>
             ) : (
               <div className="space-y-0.5">
                 {members.map((m) => (
                   <div
                     key={m.user_id}
-                    className="flex items-center justify-between px-2 py-1.5 rounded text-[10px] hover:bg-muted/50"
+                    className="flex items-center justify-between px-2 py-1.5 rounded text-xs hover:bg-muted/50"
                   >
                     <div className="min-w-0 flex-1">
                       <span className="font-medium">{m.username}</span>

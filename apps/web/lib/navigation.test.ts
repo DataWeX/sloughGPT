@@ -26,6 +26,7 @@ describe('navigation', () => {
 
   it('SHORTCUT_TO_PATH maps shortcuts to correct paths', () => {
     expect(SHORTCUT_TO_PATH['1']).toBe('/chat')
+    expect(SHORTCUT_TO_PATH['4']).toBe('/knowledge')
     expect(SHORTCUT_TO_PATH['5']).toBe('/agents')
     expect(SHORTCUT_TO_PATH['6']).toBe('/souls')
     expect(SHORTCUT_TO_PATH['shift+A']).toBe('/settings')
@@ -41,6 +42,13 @@ describe('navigation', () => {
   it('SIDEBAR_ICONS has an entry for every sidebar route', () => {
     for (const route of ALL_ROUTES) {
       expect(SIDEBAR_ICONS[route.path]).toBeDefined()
+    }
+  })
+
+  it('SIDEBAR_ICONS has no entries beyond sidebar routes (reverse coverage)', () => {
+    const navPaths = new Set(ALL_ROUTES.map((r) => r.path))
+    for (const path of Object.keys(SIDEBAR_ICONS)) {
+      expect(navPaths.has(path), `${path} is a dead SIDEBAR_ICONS entry`).toBe(true)
     }
   })
 

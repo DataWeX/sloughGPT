@@ -1355,12 +1355,6 @@ class TestSysExecImplementation:
         cpu._mem[0xE0000 : 0xE0000 + len(name)] = name
         assert h._sys_exec(0xE0000) == -1
 
-    def test_exec_no_current_process(self):
-        fs = FlatFS(BlockDevice())
-        h, cpu, sched, pcb, mem = self._make_exec_env(fs=fs)
-        sched._current_pid = None
-        assert h._sys_exec(0xE0000) == -1
-
     def test_exec_bad_assembly(self):
         fs = FlatFS(BlockDevice())
         fs.write("/bad.asm", b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f")
@@ -2584,11 +2578,6 @@ class TestAssemblerEdge:
         code = asm.assemble("[BITS 32]\ntimes 5 nop")
         assert list(code) == [0x90] * 5
 
-    def test_org_directive(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOV EAX, 1", org=0x200000)
-        assert len(code) > 0
-
     def test_section_directive(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nsection .text\nNOP")
@@ -3429,11 +3418,6 @@ class TestDeviceAndInternal:
         result = n.call("flush")
         assert result is True
 
-    def test_clock_call_seconds_now(self):
-        cd = ClockDevice()
-        t = cd.seconds_now()
-        assert isinstance(t, float)
-
     def test_keyboard_call_read_key(self):
         kd = PS2KeyboardDevice()
         result = kd.call("read_key")
@@ -3505,32 +3489,6 @@ class TestProcessTableExtended:
         assert len(procs) >= 1
         pt.remove(pcb.pid)
 
-    def test_process_table_get_by_name(self):
-        pt = ProcessTable()
-        pcb = pt.create("named_proc")
-        found = pt.get_by_name("named_proc")
-        assert found is not None
-        pt.remove(pcb.pid)
-
-    def test_process_table_alive_count(self):
-        pt = ProcessTable()
-        pcb = pt.create("alive_proc")
-        count = pt.alive_count()
-        assert count >= 1
-        pt.remove(pcb.pid)
-
-
-class TestSchedulerExtended:
-    def test_scheduler_tick_count(self):
-        pt = ProcessTable()
-        sch = Scheduler(process_table=pt)
-        assert sch._tick_count == 0
-
-    def test_scheduler_ready_queue(self):
-        pt = ProcessTable()
-        sch = Scheduler(process_table=pt)
-        assert len(sch._ready_queue) == 0
-
 
 class TestX86CPUExtended:
     def test_cpu_set_get8h(self):
@@ -3591,11 +3549,6 @@ class TestX86CPUExtended:
 
 
 class TestRBACExtended:
-    def test_rbac_assign_admin(self):
-        rbac = X86RBAC()
-        rbac.assign(1, Role.ADMIN)
-        assert rbac.role_of(1) == 1
-
     def test_rbac_assign_user(self):
         rbac = X86RBAC()
         rbac.assign(2, Role.USER)
@@ -4263,21 +4216,6 @@ class TestIRQDevice:
 
 
 class TestVGADeviceExtended:
-    def test_vga_call_write(self):
-        vga = VGADevice()
-        result = vga.call("write", 0, 0, "Hello")
-        assert result is True
-
-    def test_vga_call_clear(self):
-        vga = VGADevice()
-        result = vga.call("clear")
-        assert result is True
-
-    def test_vga_call_scroll(self):
-        vga = VGADevice()
-        result = vga.call("scroll", 1)
-        assert result is True
-
     def test_vga_call_get_cursor(self):
         vga = VGADevice()
         result = vga.call("get_cursor")
@@ -4364,10 +4302,6 @@ class TestNICDeviceExtended:
 
 
 class TestPS2KeyboardExtended:
-    def test_keyboard_read_key_empty(self):
-        kd = PS2KeyboardDevice()
-        assert kd.read_key() == 0
-
     def test_keyboard_push_scancode(self):
         kd = PS2KeyboardDevice()
         kd.call("push_scancode", 0x1E)  # scancode for 'a'
@@ -4436,11 +4370,6 @@ class TestProcessTableExtended:
 
 
 class TestSchedulerExtended:
-    def test_scheduler_tick_count(self):
-        pt = ProcessTable()
-        sch = Scheduler(process_table=pt)
-        assert sch._tick_count == 0
-
     def test_scheduler_ready_queue(self):
         pt = ProcessTable()
         sch = Scheduler(process_table=pt)

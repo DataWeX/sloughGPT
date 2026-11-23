@@ -138,11 +138,11 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
         <span className="text-xs font-medium">Session Notes</span>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">{notes.length}</span>
+          <span className="text-xs text-muted-foreground">{notes.length}</span>
           <Button
             variant="ghost"
             size="sm"
-            className="text-[10px] h-5"
+            className="text-xs h-5"
             onClick={() => setShowNew(!showNew)}
           >
             {showNew ? 'Cancel' : '+ New'}
@@ -167,7 +167,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-5"
+              className="text-xs h-5"
               onClick={handleAdd}
               disabled={!newNote.trim()}
             >
@@ -176,7 +176,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
             <Button
               variant="ghost"
               size="sm"
-              className="text-[10px] h-5"
+              className="text-xs h-5"
               onClick={() => setShowNew(false)}
             >
               Cancel
@@ -211,7 +211,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-[10px] h-5"
+                        className="text-xs h-5"
                         onClick={handleSaveEdit}
                         disabled={!draft.trim()}
                       >
@@ -220,7 +220,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-[10px] h-5"
+                        className="text-xs h-5"
                         onClick={handleCancelEdit}
                       >
                         Cancel
@@ -231,7 +231,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-xs whitespace-pre-wrap">{note.content}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {formatDate(note.updatedAt)}
                       </p>
                     </div>
@@ -244,7 +244,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                         title="Edit"
                         aria-label="Edit note"
                       >
-                        <span className="text-[10px]">✏</span>
+                        <span className="text-xs">✏</span>
                       </Button>
                       <Button
                         variant="ghost"
@@ -254,7 +254,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                         title="Delete"
                         aria-label="Delete note"
                       >
-                        <span className="text-destructive text-[10px]">×</span>
+                        <span className="text-destructive text-xs">×</span>
                       </Button>
                     </div>
                   </div>

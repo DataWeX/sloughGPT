@@ -16,6 +16,13 @@ vi.mock('./error-store', () => ({
   useErrorStore: { getState: () => ({ addError: vi.fn() }) },
 }))
 
+// Host-wiring isolation (card 20261108_222308): the facade also installs the
+// config-drift guard; this suite tests the TRANSPORT, and the guard's request
+// sequencing has its own suite (runtime-config.test.ts 'config-drift guards').
+vi.mock('./runtime-config', () => ({
+  installRuntimeConfigGuards: vi.fn(),
+}))
+
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 

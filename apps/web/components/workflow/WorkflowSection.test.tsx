@@ -20,21 +20,11 @@ vi.mock('@/lib/workflow-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (selector: any) => selector({ addToast: mocks.mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mocks.mockAddToast, banner: vi.fn() },
+
+  useToastStore: (selector: any) => selector({ addToast: mocks.mockAddToast }),
+}))
 
 vi.mock('@/components/workflow/WorkflowHealthCard', () => ({
   WorkflowHealthCard: ({ status }: any) => <div data-testid="health-card" />,
@@ -182,7 +172,9 @@ describe('WorkflowSection', () => {
     mocks.mockStatus.mockRejectedValue(new Error('down'))
     render(<WorkflowSection />)
     expect(await screen.findByText('Feedback Pipeline')).toBeDefined()
-    expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not load workflow status', 'error')
+    expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not load workflow status', {
+      type: 'error',
+    })
   })
 
   it('runs a manual trigger and shows the result message', async () => {

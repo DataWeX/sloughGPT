@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -95,7 +95,6 @@ function StarRating({
 }
 
 export default function ConsciousnessHistoryPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const { selectedIds, toggleSelect, clearSelection } = useSelection()
   const [loading, setLoading] = useState(true)
@@ -115,25 +114,22 @@ export default function ConsciousnessHistoryPage() {
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
 
-  const fetchEpisodes = useCallback(
-    async (off: number, append: boolean) => {
-      try {
-        const data = await consciousnessController.getEpisodeHistory(PAGE_SIZE)
-        const newEps: Episode[] = data.episodes ?? []
-        const total: number = data.total ?? 0
-        if (append) {
-          setEpisodes((prev) => [...prev, ...newEps])
-        } else {
-          setEpisodes(newEps)
-        }
-        setTotalEpisodes(total)
-        setHasMore(off + newEps.length < total)
-      } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
+  const fetchEpisodes = useCallback(async (off: number, append: boolean) => {
+    try {
+      const data = await consciousnessController.getEpisodeHistory(PAGE_SIZE)
+      const newEps: Episode[] = data.episodes ?? []
+      const total: number = data.total ?? 0
+      if (append) {
+        setEpisodes((prev) => [...prev, ...newEps])
+      } else {
+        setEpisodes(newEps)
       }
-    },
-    [addToast],
-  )
+      setTotalEpisodes(total)
+      setHasMore(off + newEps.length < total)
+    } catch (e) {
+      notify.toast(extractErrorMessage(e), { type: 'error' })
+    }
+  }, [])
 
   const initialLoad = useCallback(async () => {
     setLoading(true)
@@ -153,21 +149,18 @@ export default function ConsciousnessHistoryPage() {
     setLoadingMore(false)
   }, [offset, fetchEpisodes])
 
-  const handleFeedback = useCallback(
-    async (episodeIndex: number, rating: number) => {
-      setRatingEpisode(episodeIndex)
-      try {
-        await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
-        addToast(`Rated ${rating}/5`, 'success')
-        setEpisodes((prev) => prev.map((ep, i) => (i === episodeIndex ? { ...ep, rating } : ep)))
-      } catch (e) {
-        addToast(extractErrorMessage(e), 'error')
-      } finally {
-        setRatingEpisode(null)
-      }
-    },
-    [addToast],
-  )
+  const handleFeedback = useCallback(async (episodeIndex: number, rating: number) => {
+    setRatingEpisode(episodeIndex)
+    try {
+      await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
+      notify.toast(`Rated ${rating}/5`, { type: 'success' })
+      setEpisodes((prev) => prev.map((ep, i) => (i === episodeIndex ? { ...ep, rating } : ep)))
+    } catch (e) {
+      notify.toast(extractErrorMessage(e), { type: 'error' })
+    } finally {
+      setRatingEpisode(null)
+    }
+  }, [])
 
   const filteredEpisodes = useMemo(() => {
     let result = [...episodes]
@@ -225,13 +218,13 @@ export default function ConsciousnessHistoryPage() {
       a.download = `consciousness-history-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('Exported history', 'success')
+      notify.toast('Exported history', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setExporting(false)
     }
-  }, [episodes, addToast])
+  }, [episodes])
 
   const handleImport = useCallback(async () => {
     const input = document.createElement('input')
@@ -244,16 +237,18 @@ export default function ConsciousnessHistoryPage() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        addToast(`Imported ${Array.isArray(data) ? data.length : 0} episodes`, 'success')
+        notify.toast(`Imported ${Array.isArray(data) ? data.length : 0} episodes`, {
+          type: 'success',
+        })
         await initialLoad()
       } catch {
-        addToast('Invalid JSON file', 'error')
+        notify.toast('Invalid JSON file', { type: 'error' })
       } finally {
         setImporting(false)
       }
     }
     input.click()
-  }, [addToast, initialLoad])
+  }, [initialLoad])
 
   if (loading) {
     return (
@@ -348,14 +343,14 @@ export default function ConsciousnessHistoryPage() {
                           opacity: 0.8,
                         }}
                       />
-                      <span className="text-[10px] text-muted-foreground">{count}</span>
+                      <span className="text-xs text-muted-foreground">{count}</span>
                     </div>
                   )
                 })}
               </div>
               <div className="flex gap-2 mt-1">
                 {['1', '2', '3', '4', '5'].map((r) => (
-                  <span key={r} className="flex-1 text-center text-[10px] text-muted-foreground">
+                  <span key={r} className="flex-1 text-center text-xs text-muted-foreground">
                     {r}\u2605
                   </span>
                 ))}
@@ -498,7 +493,7 @@ export default function ConsciousnessHistoryPage() {
                                 <div className="flex items-center gap-2 mt-1.5">
                                   <Badge
                                     variant={ep.growth_delta >= 0 ? 'default' : 'destructive'}
-                                    className="text-[10px] px-1.5 py-0"
+                                    className="text-xs px-1.5 py-0"
                                   >
                                     {ep.growth_delta >= 0 ? '+' : ''}
                                     {(ep.growth_delta * 100).toFixed(1)}%
@@ -560,7 +555,7 @@ export default function ConsciousnessHistoryPage() {
                                               }}
                                             />
                                           </div>
-                                          <span className="text-[10px] text-muted-foreground w-8 text-right">
+                                          <span className="text-xs text-muted-foreground w-8 text-right">
                                             {(val as number).toFixed(2)}
                                           </span>
                                         </div>

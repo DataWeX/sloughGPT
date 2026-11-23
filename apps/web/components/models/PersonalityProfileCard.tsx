@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -31,7 +31,6 @@ export default function PersonalityProfileCard({
   onTraitsSaved,
   onTraitsChanged,
 }: PersonalityProfileCardProps) {
-  const addToast = notify.toast
   const [editingTraits, setEditingTraits] = useState(false)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [snapshotName, setSnapshotName] = useState('')
@@ -41,7 +40,7 @@ export default function PersonalityProfileCard({
       const list = await soulsController.listWeightSnapshots()
       setSnapshots(list)
     } catch {
-      addToast('Could not load weight snapshots', 'info')
+      notify.toast('Could not load weight snapshots', { type: 'info' })
     }
   }
 
@@ -51,20 +50,20 @@ export default function PersonalityProfileCard({
     try {
       await soulsController.saveWeightSnapshot(name)
       setSnapshotName('')
-      addToast(`Saved "${name}"`, 'success')
+      notify.toast(`Saved "${name}"`, { type: 'success' })
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not save'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not save'), { type: 'error' })
     }
   }
 
   const handleLoadSnapshot = async (name: string) => {
     try {
       const count = await soulsController.loadWeightSnapshot(name)
-      addToast(`Loaded "${name}" (${count} traits)`, 'success')
+      notify.toast(`Loaded "${name}" (${count} traits)`, { type: 'success' })
       await onTraitsChanged()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not load'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not load'), { type: 'error' })
     }
   }
 
@@ -72,10 +71,10 @@ export default function PersonalityProfileCard({
     if (!confirm(`Delete snapshot "${name}"? This cannot be undone.`)) return
     try {
       await soulsController.deleteWeightSnapshot(name)
-      addToast(`Deleted "${name}"`, 'success')
+      notify.toast(`Deleted "${name}"`, { type: 'success' })
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not delete'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not delete'), { type: 'error' })
     }
   }
 
@@ -90,14 +89,14 @@ export default function PersonalityProfileCard({
           <button
             type="button"
             onClick={() => setEditingTraits(!editingTraits)}
-            className="text-[10px] px-2 py-1 rounded-md border border-border/60 hover:bg-muted/50 transition-colors"
+            className="text-xs px-2 py-1 rounded-md border border-border/60 hover:bg-muted/50 transition-colors"
           >
             {editingTraits ? 'View' : 'Edit'}
           </button>
         </div>
       </CardHeader>
       <CardContent className="relative">
-        <p className="text-[10px] text-muted-foreground mb-3">
+        <p className="text-xs text-muted-foreground mb-3">
           Traits shape how your personality responds &mdash; like a character sheet for your AI.
         </p>
         {editingTraits ? (
@@ -112,7 +111,7 @@ export default function PersonalityProfileCard({
 
         <div className="mt-4 pt-3 border-t border-border/40">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Snapshots ({snapshots.length})
             </span>
           </div>
@@ -136,7 +135,7 @@ export default function PersonalityProfileCard({
             </Button>
           </div>
           {snapshots.length === 0 ? (
-            <div className="text-[10px] text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               Save weight presets to switch between personalities quickly
             </div>
           ) : (
@@ -149,7 +148,7 @@ export default function PersonalityProfileCard({
                   <div className="min-w-0 flex-1">
                     <span className="text-[11px] font-medium">{s.label || s.name}</span>
                     {formatMonthDay(s.saved_at) && (
-                      <span className="text-[9px] text-muted-foreground ml-2">
+                      <span className="text-[11px] text-muted-foreground ml-2">
                         {formatMonthDay(s.saved_at)}
                       </span>
                     )}
@@ -157,14 +156,14 @@ export default function PersonalityProfileCard({
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button
                       type="button"
-                      className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10"
+                      className="text-xs text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10"
                       onClick={() => handleLoadSnapshot(s.name)}
                     >
                       Load
                     </button>
                     <button
                       type="button"
-                      className="text-[10px] text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10"
+                      className="text-xs text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10"
                       onClick={() => handleDeleteSnapshot(s.name)}
                     >
                       Delete

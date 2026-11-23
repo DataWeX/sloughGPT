@@ -128,11 +128,12 @@ class InteractionBackend(Protocol):
     """Backend protocol for low-level interactions."""
 
     async def mouse_move(self, x: float, y: float) -> None: ...
-    async def mouse_down(self, button: MouseButton = MouseButton.LEFT) -> None: ...
-    async def mouse_up(self, button: MouseButton = MouseButton.LEFT) -> None: ...
-    async def mouse_click(
-        self, x: float, y: float, button: MouseButton = MouseButton.LEFT
-    ) -> None: ...
+    # Button names cross this boundary as strings ("left"), because that is
+    # what every backend forwards to: Playwright, CDP and pyautogui all take
+    # the string. Callers holding a MouseButton convert at Mouse, below.
+    async def mouse_down(self, button: str = "left") -> None: ...
+    async def mouse_up(self, button: str = "left") -> None: ...
+    async def mouse_click(self, x: float, y: float, button: str = "left") -> None: ...
     async def mouse_double_click(self, x: float, y: float) -> None: ...
     async def mouse_scroll(self, x: float, y: float, delta_x: int, delta_y: int) -> None: ...
     async def keyboard_down(self, key: str) -> None: ...
@@ -181,7 +182,7 @@ class Mouse:
         target = coord or self._position
         if coord:
             await self.move_to(coord)
-        await self._backend.mouse_click(target.x, target.y, button)
+        await self._backend.mouse_click(target.x, target.y, button.value)
         self._history.append(("click", target, time.time()))
 
     async def double_click(self, coord: Coordinate | None = None) -> None:
@@ -200,9 +201,9 @@ class Mouse:
     async def drag(self, start: Coordinate, end: Coordinate, steps: int = 20) -> None:
         """Drag from start to end."""
         await self.move_to(start, steps=1)
-        await self._backend.mouse_down(MouseButton.LEFT)
+        await self._backend.mouse_down(MouseButton.LEFT.value)
         await self.move_to(end, steps=steps)
-        await self._backend.mouse_up(MouseButton.LEFT)
+        await self._backend.mouse_up(MouseButton.LEFT.value)
         self._history.append(("drag", start, time.time()))
 
     async def scroll(self, x: float, y: float, delta_x: int = 0, delta_y: int = -3) -> None:

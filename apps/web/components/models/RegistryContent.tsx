@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   cn,
@@ -31,17 +31,16 @@ export default function RegistryContent() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
-  const addToast = notify.toast
 
   const fetchData = useCallback(async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
         registryController.list().catch((e) => {
-          addToast('Could not load models', 'error')
+          notify.toast('Could not load models', { type: 'error' })
           return []
         }),
         registryController.stats().catch((e) => {
-          addToast('Could not load registry stats', 'error')
+          notify.toast('Could not load registry stats', { type: 'error' })
           return null
         }),
         registryController.best().catch(() => null),
@@ -50,11 +49,11 @@ export default function RegistryContent() {
       setStats(statsRes)
       setBestModel(bestRes)
     } catch {
-      addToast('Could not load registry data', 'error')
+      notify.toast('Could not load registry data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -62,11 +61,11 @@ export default function RegistryContent() {
       try {
         const [modelsRes, statsRes, bestRes] = await Promise.all([
           registryController.list().catch((e) => {
-            addToast('Could not load models', 'error')
+            notify.toast('Could not load models', { type: 'error' })
             return []
           }),
           registryController.stats().catch((e) => {
-            addToast('Could not load registry stats', 'error')
+            notify.toast('Could not load registry stats', { type: 'error' })
             return null
           }),
           registryController.best().catch(() => null),
@@ -77,7 +76,7 @@ export default function RegistryContent() {
           setBestModel(bestRes)
         }
       } catch {
-        if (active) addToast('Could not load registry data', 'error')
+        if (active) notify.toast('Could not load registry data', { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }

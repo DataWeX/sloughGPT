@@ -127,7 +127,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
         <div className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-base font-medium text-foreground">Edit Card</h2>
-            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{card.id}</p>
+            <p className="text-xs font-mono text-muted-foreground mt-0.5">{card.id}</p>
           </div>
           <Button
             variant="ghost"
@@ -300,7 +300,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           >
             <div className="flex items-center justify-between">
               <span className={label}>Notes</span>
-              <span className="text-[10px] font-mono text-muted-foreground">{notes.length}</span>
+              <span className="text-xs font-mono text-muted-foreground">{notes.length}</span>
             </div>
 
             {notes.length > 0 && (
@@ -342,7 +342,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                           {n.text}
                         </p>
                         <div className="flex items-center justify-between mt-1.5">
-                          <span className="text-[10px] font-mono text-muted-foreground">
+                          <span className="text-xs font-mono text-muted-foreground">
                             {n.author} · {n.created_at.slice(0, 10)}
                           </span>
                           <span className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -351,7 +351,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                                 setEditingNote(n.id)
                                 setEditDraft(n.text)
                               }}
-                              className="px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              className="px-1.5 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               aria-label="Edit note"
                             >
                               edit
@@ -359,7 +359,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                             <button
                               onClick={() => handleDeleteNote(n.id)}
                               disabled={noteBusy}
-                              className="px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-destructive hover:bg-[rgb(var(--destructive)/0.12)] disabled:opacity-40 transition-colors"
+                              className="px-1.5 py-0.5 rounded text-xs text-muted-foreground hover:text-destructive hover:bg-[rgb(var(--destructive)/0.12)] disabled:opacity-40 transition-colors"
                               aria-label="Delete note"
                             >
                               delete
@@ -401,7 +401,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                 >
                   {noteBusy ? 'saving…' : 'Add note'}
                 </button>
-                <span className="text-[9px] font-mono text-muted-foreground ml-auto">⌘↵</span>
+                <span className="text-[11px] font-mono text-muted-foreground ml-auto">⌘↵</span>
               </div>
               {noteError && (
                 <p className="text-[11px] text-destructive font-mono" role="alert">

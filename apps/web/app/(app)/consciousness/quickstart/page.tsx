@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
@@ -71,7 +71,6 @@ const LINKS = [
 
 export default function ConsciousnessQuickstartPage() {
   const router = useRouter()
-  const addToast = notify.toast
   const { t } = useLocale()
   const [progress, setProgress] = useState<Progress>(DEFAULT_PROGRESS)
   const [enabling, setEnabling] = useState(false)
@@ -99,9 +98,9 @@ export default function ConsciousnessQuickstartPage() {
     try {
       await consciousnessController.updateConfig({ level: 1 })
       updateProgress({ enabled: true, levelChosen: true })
-      addToast('Consciousness enabled at Basic level', 'success')
+      notify.toast('Consciousness enabled at Basic level', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setEnabling(false)
     }
@@ -112,9 +111,9 @@ export default function ConsciousnessQuickstartPage() {
     try {
       await consciousnessController.applyPersonalityPreset('default')
       updateProgress({ personalitySet: true })
-      addToast('Default personality applied', 'success')
+      notify.toast('Default personality applied', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setApplying(false)
     }
@@ -125,9 +124,9 @@ export default function ConsciousnessQuickstartPage() {
     try {
       await consciousnessController.seedData({ count: 10 })
       updateProgress({ seeded: true })
-      addToast('Seeded 10 episodes', 'success')
+      notify.toast('Seeded 10 episodes', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setSeeding(false)
     }
@@ -273,9 +272,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_enable')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">
-                  PATCH /consciousness/config
-                </span>
+                <span className="text-xs text-muted-foreground">PATCH /consciousness/config</span>
               </Button>
               <Button
                 variant="outline"
@@ -286,7 +283,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_personality')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   POST /consciousness/personality/presets/apply
                 </span>
               </Button>
@@ -301,7 +298,7 @@ export default function ConsciousnessQuickstartPage() {
                     ? t('consciousness_quickstart.seeding')
                     : t('consciousness_quickstart.action_seed')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   POST /consciousness/seed?count=10
                 </span>
               </Button>
@@ -313,7 +310,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_chat')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">/chat</span>
+                <span className="text-xs text-muted-foreground">/chat</span>
               </Button>
               <Button
                 variant="outline"
@@ -323,7 +320,7 @@ export default function ConsciousnessQuickstartPage() {
                 <span className="text-sm font-medium">
                   {t('consciousness_quickstart.action_dashboard')}
                 </span>
-                <span className="text-[10px] text-muted-foreground">/consciousness/dashboard</span>
+                <span className="text-xs text-muted-foreground">/consciousness/dashboard</span>
               </Button>
             </div>
           </CardContent>
@@ -367,7 +364,7 @@ export default function ConsciousnessQuickstartPage() {
                   className="rounded-md border p-3 text-left text-sm hover:bg-muted transition-colors"
                 >
                   <p className="font-medium">{t(link.labelKey)}</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">{link.path}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{link.path}</p>
                 </button>
               ))}
             </div>

@@ -10,7 +10,12 @@ interface ExperimentLogCardProps {
   onComplete?: (id: string) => Promise<void>
 }
 
-export function ExperimentLogCard({ experimentId, onLogMetric, onLogParam, onComplete }: ExperimentLogCardProps) {
+export function ExperimentLogCard({
+  experimentId,
+  onLogMetric,
+  onLogParam,
+  onComplete,
+}: ExperimentLogCardProps) {
   const [metricName, setMetricName] = useState('')
   const [metricValue, setMetricValue] = useState('')
   const [paramName, setParamName] = useState('')
@@ -26,7 +31,9 @@ export function ExperimentLogCard({ experimentId, onLogMetric, onLogParam, onCom
       await onLogMetric(experimentId, metricName.trim(), parseFloat(metricValue))
       setMetricName('')
       setMetricValue('')
-    } finally { setLoading(null) }
+    } finally {
+      setLoading(null)
+    }
   }
 
   const handleLogParam = async () => {
@@ -36,13 +43,19 @@ export function ExperimentLogCard({ experimentId, onLogMetric, onLogParam, onCom
       await onLogParam(experimentId, paramName.trim(), paramValue.trim())
       setParamName('')
       setParamValue('')
-    } finally { setLoading(null) }
+    } finally {
+      setLoading(null)
+    }
   }
 
   const handleComplete = async () => {
     if (!onComplete) return
     setLoading('complete')
-    try { await onComplete(experimentId) } finally { setLoading(null) }
+    try {
+      await onComplete(experimentId)
+    } finally {
+      setLoading(null)
+    }
   }
 
   return (
@@ -51,7 +64,13 @@ export function ExperimentLogCard({ experimentId, onLogMetric, onLogParam, onCom
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Log Data</CardTitle>
           {onComplete && (
-            <Button size="sm" variant="ghost" className="text-success text-[10px]" onClick={handleComplete} disabled={loading === 'complete'}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-success text-xs"
+              onClick={handleComplete}
+              disabled={loading === 'complete'}
+            >
               {loading === 'complete' ? 'Completing...' : 'Complete'}
             </Button>
           )}
@@ -61,24 +80,30 @@ export function ExperimentLogCard({ experimentId, onLogMetric, onLogParam, onCom
         <div className="space-y-3">
           {onLogMetric && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Metric</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Metric
+              </div>
               <div className="flex gap-1.5">
                 <Input
                   value={metricName}
-                  onChange={e => setMetricName(e.target.value)}
+                  onChange={(e) => setMetricName(e.target.value)}
                   placeholder="name"
                   className="flex-1"
                   data-testid="metric-name"
                 />
                 <Input
                   value={metricValue}
-                  onChange={e => setMetricValue(e.target.value)}
+                  onChange={(e) => setMetricValue(e.target.value)}
                   placeholder="value"
                   type="number"
                   className="w-20"
                   data-testid="metric-value"
                 />
-                <Button size="sm" onClick={handleLogMetric} disabled={loading === 'metric' || !metricName.trim() || !metricValue.trim()}>
+                <Button
+                  size="sm"
+                  onClick={handleLogMetric}
+                  disabled={loading === 'metric' || !metricName.trim() || !metricValue.trim()}
+                >
                   Log
                 </Button>
               </div>
@@ -86,23 +111,29 @@ export function ExperimentLogCard({ experimentId, onLogMetric, onLogParam, onCom
           )}
           {onLogParam && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Parameter</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Parameter
+              </div>
               <div className="flex gap-1.5">
                 <Input
                   value={paramName}
-                  onChange={e => setParamName(e.target.value)}
+                  onChange={(e) => setParamName(e.target.value)}
                   placeholder="name"
                   className="flex-1"
                   data-testid="param-name"
                 />
                 <Input
                   value={paramValue}
-                  onChange={e => setParamValue(e.target.value)}
+                  onChange={(e) => setParamValue(e.target.value)}
                   placeholder="value"
                   className="flex-1"
                   data-testid="param-value"
                 />
-                <Button size="sm" onClick={handleLogParam} disabled={loading === 'param' || !paramName.trim() || !paramValue.trim()}>
+                <Button
+                  size="sm"
+                  onClick={handleLogParam}
+                  disabled={loading === 'param' || !paramName.trim() || !paramValue.trim()}
+                >
                   Log
                 </Button>
               </div>

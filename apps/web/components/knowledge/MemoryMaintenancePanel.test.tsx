@@ -7,7 +7,12 @@ vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Input: (props: any) => <input {...props} />,
-  FoldSection: ({ heading, children }: any) => <div><div>{heading}</div>{children}</div>,
+  FoldSection: ({ heading, children }: any) => (
+    <div>
+      <div>{heading}</div>
+      {children}
+    </div>
+  ),
   IconFilter: (props: any) => <span data-testid="icon-filter" {...props} />,
   IconFolder: (props: any) => <span data-testid="icon-folder" {...props} />,
   IconClock: (props: any) => <span data-testid="icon-clock" {...props} />,
@@ -24,7 +29,9 @@ vi.mock('@/lib/memory-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => vi.fn(),
 }))
 
@@ -52,7 +59,14 @@ afterEach(() => cleanup())
 
 const defaultProps = {
   itemCount: 5,
-  archiveStats: { records: 10, bytes: 5120, path: 'mem:/archive', task_types: {}, oldest_ts: null, newest_ts: null },
+  archiveStats: {
+    records: 10,
+    bytes: 5120,
+    path: 'mem:/archive',
+    task_types: {},
+    oldest_ts: null,
+    newest_ts: null,
+  },
   loading: false,
   fetchData: vi.fn().mockResolvedValue(undefined),
   openArchive: vi.fn(),
@@ -95,7 +109,19 @@ describe('MemoryMaintenancePanel', () => {
   })
 
   it('disables prune when no archive records', async () => {
-    render(<MemoryMaintenancePanel {...defaultProps} archiveStats={{ records: 0, bytes: 0, path: 'mem:/archive', task_types: {}, oldest_ts: null, newest_ts: null }} />)
+    render(
+      <MemoryMaintenancePanel
+        {...defaultProps}
+        archiveStats={{
+          records: 0,
+          bytes: 0,
+          path: 'mem:/archive',
+          task_types: {},
+          oldest_ts: null,
+          newest_ts: null,
+        }}
+      />,
+    )
     await waitFor(() => {
       const btn = screen.getByRole('button', { name: /Prune old/ })
       expect(btn).toHaveProperty('disabled', true)

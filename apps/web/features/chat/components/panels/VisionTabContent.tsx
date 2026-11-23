@@ -44,29 +44,41 @@ export const VisionTabContent = memo(function VisionTabContent({
           <span
             className={cn(
               'inline-block h-1.5 w-1.5 rounded-full',
-              visionTrained ? 'bg-success' : (visionImagesLearned ?? 0) > 0 ? 'bg-warning' : 'bg-muted-foreground/30',
+              visionTrained
+                ? 'bg-success'
+                : (visionImagesLearned ?? 0) > 0
+                  ? 'bg-warning'
+                  : 'bg-muted-foreground/30',
             )}
           />
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div className="p-2 rounded bg-muted/30 border border-border/40">
-            <div className="text-[10px] text-muted-foreground">Images learned</div>
+            <div className="text-xs text-muted-foreground">Images learned</div>
             <div className="text-sm font-medium">{visionImagesLearned ?? 0}</div>
           </div>
           <div className="p-2 rounded bg-muted/30 border border-border/40">
-            <div className="text-[10px] text-muted-foreground">Status</div>
-            <div className="text-sm font-medium capitalize">{visionStatus || statusLabel || 'ready'}</div>
+            <div className="text-xs text-muted-foreground">Status</div>
+            <div className="text-sm font-medium capitalize">
+              {visionStatus || statusLabel || 'ready'}
+            </div>
           </div>
         </div>
 
         {meanAccuracy !== undefined && meanAccuracy > 0 && (
           <div className="p-2 rounded bg-muted/30 border border-border/40 flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground">Mean accuracy</span>
-            <span className={cn(
-              'text-sm font-medium',
-              meanAccuracy >= 80 ? 'text-success' : meanAccuracy >= 40 ? 'text-warning' : 'text-muted-foreground',
-            )}>
+            <span className="text-xs text-muted-foreground">Mean accuracy</span>
+            <span
+              className={cn(
+                'text-sm font-medium',
+                meanAccuracy >= 80
+                  ? 'text-success'
+                  : meanAccuracy >= 40
+                    ? 'text-warning'
+                    : 'text-muted-foreground',
+              )}
+            >
               {meanAccuracy.toFixed(1)}%
             </span>
           </div>
@@ -74,16 +86,12 @@ export const VisionTabContent = memo(function VisionTabContent({
 
         {visionVocabSize !== undefined && visionVocabSize > 0 && (
           <div className="p-2 rounded bg-muted/30 border border-border/40 flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground">Vocabulary</span>
+            <span className="text-xs text-muted-foreground">Vocabulary</span>
             <span className="text-sm font-medium">{visionVocabSize} words</span>
           </div>
         )}
 
-        <Button
-          size="sm"
-          className="w-full text-xs"
-          onClick={() => setStudioOpen(true)}
-        >
+        <Button size="sm" className="w-full text-xs" onClick={() => setStudioOpen(true)}>
           Open Vision Studio
         </Button>
       </div>

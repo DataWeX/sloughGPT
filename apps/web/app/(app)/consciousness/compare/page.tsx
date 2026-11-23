@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -117,7 +117,6 @@ function buildFakeData(name: string): HealthData {
 }
 
 export default function ConsciousnessComparePage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [configA, setConfigA] = useState<ConfigKey>('current')
@@ -145,16 +144,16 @@ export default function ConsciousnessComparePage() {
         setCurrentEpisodes(episodesData.value as unknown as EpisodesData)
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [addToast])
+  }, [])
 
   const fetchPresets = useCallback(async () => {
     try {
       const data = await consciousnessController.getPersonalityPresets()
       setPresets((data as any).presets ?? data)
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
   }, [])
 
@@ -198,10 +197,10 @@ export default function ConsciousnessComparePage() {
       await consciousnessController.applyPersonalityPreset(
         configA === 'current' ? 'default' : configA,
       )
-      addToast(t('consciousness_compare.toast_applied'), 'success')
+      notify.toast(t('consciousness_compare.toast_applied'), { type: 'success' })
       fetchCurrent()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setApplying(false)
     }
@@ -357,7 +356,7 @@ export default function ConsciousnessComparePage() {
                         y="58"
                         textAnchor="middle"
                         className="fill-muted-foreground"
-                        fontSize="6"
+                        fontSize="11"
                       >
                         {t('consciousness_compare.out_of_100')}
                       </text>
@@ -372,10 +371,10 @@ export default function ConsciousnessComparePage() {
                       return (
                         <div key={dim} className="space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] sm:text-xs text-muted-foreground capitalize">
+                            <span className="text-xs sm:text-xs text-muted-foreground capitalize">
                               {dim}
                             </span>
-                            <span className={`text-[10px] tabular-nums ${diffClass}`}>
+                            <span className={`text-xs tabular-nums ${diffClass}`}>
                               {val.toFixed(2)} {getDiffIcon(val, otherVal)}
                             </span>
                           </div>
@@ -401,8 +400,8 @@ export default function ConsciousnessComparePage() {
                         return (
                           <div key={belief} className="flex items-center gap-2">
                             <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                            <span className="flex-1 text-[10px] sm:text-xs truncate">{belief}</span>
-                            <span className={`text-[10px] tabular-nums ${diffClass}`}>
+                            <span className="flex-1 text-xs sm:text-xs truncate">{belief}</span>
+                            <span className={`text-xs tabular-nums ${diffClass}`}>
                               {(confidence * 100).toFixed(0)}% {getDiffIcon(confidence, otherVal)}
                             </span>
                           </div>
@@ -414,7 +413,7 @@ export default function ConsciousnessComparePage() {
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
                       <div className="text-lg font-bold">{data?.episodes ?? '—'}</div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {t('consciousness_compare.episodes')}
                       </div>
                     </div>
@@ -426,7 +425,7 @@ export default function ConsciousnessComparePage() {
                           ? `${data.avg_growth >= 0 ? '+' : ''}${avgGrowthA || (data.avg_growth * 100).toFixed(1)}%`
                           : '—'}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {t('consciousness_compare.avg_growth')}
                       </div>
                     </div>
@@ -434,7 +433,7 @@ export default function ConsciousnessComparePage() {
                       <div className="text-lg font-bold">
                         {data ? `${(data.positive_ratio * 100).toFixed(0)}%` : '—'}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {t('consciousness_compare.positive_ratio')}
                       </div>
                     </div>
@@ -484,7 +483,7 @@ export default function ConsciousnessComparePage() {
                       x={x + barWidth + 2}
                       y={155}
                       textAnchor="middle"
-                      fontSize="7"
+                      fontSize="11"
                       className="fill-muted-foreground"
                     >
                       {m.label.length > 10 ? m.label.slice(0, 10) + '…' : m.label}
@@ -493,7 +492,7 @@ export default function ConsciousnessComparePage() {
                       x={x + barWidth / 2}
                       y={138 - hA}
                       textAnchor="middle"
-                      fontSize="7"
+                      fontSize="11"
                       className="fill-foreground"
                     >
                       {m.valueA.toFixed(1)}
@@ -502,7 +501,7 @@ export default function ConsciousnessComparePage() {
                       x={x + barWidth + 4 + barWidth / 2}
                       y={138 - hB}
                       textAnchor="middle"
-                      fontSize="7"
+                      fontSize="11"
                       className="fill-foreground"
                     >
                       {m.valueB.toFixed(1)}
@@ -602,7 +601,7 @@ export default function ConsciousnessComparePage() {
                       textAnchor="middle"
                       dominantBaseline="middle"
                       className="fill-muted-foreground"
-                      fontSize="7"
+                      fontSize="11"
                     >
                       {dim.slice(0, 3).toUpperCase()}
                     </text>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import {
   Card,
   CardContent,
@@ -24,20 +24,97 @@ import {
   trainingJobsController,
   type TrainingRecommendationResponse,
 } from '@/lib/training-controller'
+import {
+  TRAINING_LIMITS,
+  clampTrainingField,
+  parseTrainingField,
+  validateTrainingField,
+} from '@/lib/sanitize'
+import type { Checkpoint } from '@/lib/souls-controller'
 import type { StepProps } from './DataStep'
+
+/**
+ * Is this checkpoint a continuation of `dataset`? (card 20261119_133132)
+ *
+ * `training_dataset` records the trainer's **data_path**
+ * (`datasets/shakespeare/input.txt`) while the select's value is a dataset
+ * **id** (`shakespeare`) — a raw `===` would essentially never match, so the
+ * comparison is over path components. When the field is absent (most stored
+ * rows carry no metadata) the `<dataset>_<unix-ts>.soul` filename is the
+ * provenance. The recorded field is authoritative: a row that names another
+ * corpus is never a match, filename or not.
+ */
+function isTrainedOnDataset(c: Checkpoint, dataset: string): boolean {
+  const recorded = c.training_dataset
+  if (recorded) {
+    return recorded === dataset || recorded.split(/[\\/]/).includes(dataset)
+  }
+  const match = /^(.*)_(\d+)\.(?:soul|slo)$/.exec(c.name)
+  return match !== null && match[1] === dataset
+}
+
+/** Newest of the candidates: `created_at` when every dated row can speak,
+ *  otherwise list order — the API already returns mtime-desc per directory. */
+function latestCheckpoint(list: Checkpoint[]): Checkpoint {
+  const dated = list.filter((c) => Boolean(c.created_at))
+  if (dated.length === 0) return list[0]
+  return dated.reduce((a, b) => ((b.created_at as string) > (a.created_at as string) ? b : a))
+}
 
 export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: StepProps) {
   const [recommendation, setRecommendation] = useState<TrainingRecommendationResponse | null>(null)
   const [loadingRec, setLoadingRec] = useState(false)
 
-  const hpErrors = useMemo(() => {
-    const errors: string[] = []
-    if (form.trainingEpochs < 1 || form.trainingEpochs > 500) errors.push('Epochs must be 1–500')
-    if (form.trainingBatchSize < 1 || form.trainingBatchSize > 256)
-      errors.push('Batch size must be 1–256')
-    if (form.trainingLR <= 0 || form.trainingLR > 1) errors.push('Learning rate must be 0–1')
-    return errors
-  }, [form.trainingEpochs, form.trainingBatchSize, form.trainingLR])
+  // Validation derives from TRAINING_LIMITS (single source of truth).
+  // NaN is explicitly invalid: every old-style `< min || > max` comparison
+  // against NaN is false, so a cleared field used to pass validation.
+  const hp = useMemo(
+    () => ({
+      epochs: validateTrainingField('epochs', form.trainingEpochs, 'Epochs'),
+      batch: validateTrainingField('batch_size', form.trainingBatchSize, 'Batch size'),
+      lr: validateTrainingField('learning_rate', form.trainingLR, 'Learning rate'),
+    }),
+    [form.trainingEpochs, form.trainingBatchSize, form.trainingLR],
+  )
+  const hpErrors = useMemo(
+    () => [hp.epochs, hp.batch, hp.lr].filter((e): e is string => e !== null),
+    [hp],
+  )
+
+  // The hyperparameter inputs hold a local draft string so typing never
+  // fights the controlled value — `0.001` stays typeable — and the parsed,
+  // clamped commit happens exactly once, on blur (reported bug: the old
+  // `Number(x) || 1e-3` onChange snapped the field on every keystroke).
+  const [epochsDraft, setEpochsDraft] = useState(String(form.trainingEpochs))
+  const [batchDraft, setBatchDraft] = useState(String(form.trainingBatchSize))
+  const [lrDraft, setLrDraft] = useState(String(form.trainingLR))
+
+  useEffect(() => {
+    setEpochsDraft(String(form.trainingEpochs))
+  }, [form.trainingEpochs])
+  useEffect(() => {
+    setBatchDraft(String(form.trainingBatchSize))
+  }, [form.trainingBatchSize])
+  useEffect(() => {
+    setLrDraft(String(form.trainingLR))
+  }, [form.trainingLR])
+
+  const commitField = (
+    key: 'epochs' | 'batch_size' | 'learning_rate',
+    raw: string,
+    current: number,
+    setDraft: (s: string) => void,
+    set: (n: number) => void,
+  ) => {
+    const next = parseTrainingField(key, raw)
+    if (Number.isFinite(next)) {
+      setDraft(String(next))
+      if (next !== current) set(next)
+    } else {
+      // Empty or unparseable — revert the draft to the last valid value.
+      setDraft(String(current))
+    }
+  }
 
   const canAdvance = form.canStart && hpErrors.length === 0
 
@@ -53,12 +130,38 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
     }
   }, [datasets?.selectedDataset, form.method])
 
+  // ── Resume default (card 20261119_133132) ──────────────────────────────
+  // One-shot: fill an EMPTY resume select with the newest checkpoint trained
+  // on the same dataset, then never again. `resumeTouchedRef` latches on the
+  // select's own onValueChange — which fires for the explicit "" = "Start
+  // fresh" option too — so an explicit choice is never stolen back by a later
+  // checkpoint fetch; `resumeDefaultedRef` keeps a single mount from
+  // re-defaulting when the dataset or list changes underneath it.
+  const checkpointList = checkpoints?.checkpoints
+  const resumeValue = form.resumeCheckpoint
+  const setResume = form.setResumeCheckpoint
+  const resumeDefaultedRef = useRef(false)
+  const resumeTouchedRef = useRef(false)
+
+  useEffect(() => {
+    if (resumeTouchedRef.current || resumeDefaultedRef.current) return
+    if (!datasets.selectedDataset || resumeValue !== '') return
+    const matches = (checkpointList ?? []).filter((c) =>
+      isTrainedOnDataset(c, datasets.selectedDataset),
+    )
+    if (matches.length === 0) return
+    resumeDefaultedRef.current = true
+    setResume(latestCheckpoint(matches).name)
+  }, [datasets.selectedDataset, checkpointList, resumeValue, setResume])
+
   const applyRecommendation = () => {
     if (!recommendation) return
     const rec = recommendation.recommendation
-    form.setTrainingLR(rec.learning_rate)
-    form.setTrainingBatchSize(rec.batch_size)
-    form.setTrainingEpochs(rec.epochs)
+    // Clamp: backend recommendations must not smuggle out-of-range values
+    // into the form (single source of truth = TRAINING_LIMITS).
+    form.setTrainingLR(clampTrainingField('learning_rate', rec.learning_rate))
+    form.setTrainingBatchSize(clampTrainingField('batch_size', rec.batch_size))
+    form.setTrainingEpochs(clampTrainingField('epochs', rec.epochs))
   }
 
   return (
@@ -91,7 +194,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
           </ToggleGroup>
         </div>
 
-        <div className="text-[10px] text-muted-foreground/60">
+        <div className="text-xs text-muted-foreground/60">
           {form.method === 'vlm'
             ? 'Teach the AI to understand images and text'
             : 'Train a model on text data'}
@@ -149,7 +252,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               </ToggleGroup>
             </div>
 
-            <div className="text-[10px] text-muted-foreground/60">
+            <div className="text-xs text-muted-foreground/60">
               {form.method === 'distill' &&
                 'Train a small model from text data — no teacher needed'}
               {form.method === 'finetune' && 'Continue training an existing model on new data'}
@@ -192,7 +295,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   aria-label="Training text input"
                 />
                 <span
-                  className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums"
+                  className="absolute bottom-1.5 right-2 text-xs text-muted-foreground/50 tabular-nums"
                   aria-live="polite"
                   aria-atomic="true"
                 >
@@ -207,7 +310,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="train-base-model"
-                  className="text-[10px] text-muted-foreground uppercase tracking-wider"
+                  className="text-xs text-muted-foreground uppercase tracking-wider"
                 >
                   Base model
                 </label>
@@ -236,7 +339,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                 {/* Tokenizer selection */}
                 {form.method !== 'finetune' && (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    <label className="text-xs text-muted-foreground uppercase tracking-wider">
                       Tokenizer
                     </label>
                     <div
@@ -265,7 +368,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                         </ToggleGroupItem>
                       </ToggleGroup>
                     </div>
-                    <p className="text-[10px] text-muted-foreground/60">
+                    <p className="text-xs text-muted-foreground/60">
                       {form.algo === 'bpe' &&
                         'Byte Pair Encoding — fast, deterministic tokenization. Best for most use cases.'}
                       {form.algo === 'unigram' &&
@@ -282,12 +385,21 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     <Input
                       id="train-epochs"
                       type="number"
-                      min={1}
-                      max={500}
-                      value={form.trainingEpochs}
-                      onChange={(e) => form.setTrainingEpochs(Number(e.target.value))}
-                      error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
-                      aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                      min={TRAINING_LIMITS.epochs.min}
+                      max={TRAINING_LIMITS.epochs.max}
+                      value={epochsDraft}
+                      onChange={(e) => setEpochsDraft(e.target.value)}
+                      onBlur={() =>
+                        commitField(
+                          'epochs',
+                          epochsDraft,
+                          form.trainingEpochs,
+                          setEpochsDraft,
+                          form.setTrainingEpochs,
+                        )
+                      }
+                      error={hp.epochs !== null}
+                      aria-invalid={hp.epochs !== null}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
@@ -299,12 +411,21 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     <Input
                       id="train-batch"
                       type="number"
-                      min={1}
-                      max={256}
-                      value={form.trainingBatchSize}
-                      onChange={(e) => form.setTrainingBatchSize(Number(e.target.value))}
-                      error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
-                      aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                      min={TRAINING_LIMITS.batch_size.min}
+                      max={TRAINING_LIMITS.batch_size.max}
+                      value={batchDraft}
+                      onChange={(e) => setBatchDraft(e.target.value)}
+                      onBlur={() =>
+                        commitField(
+                          'batch_size',
+                          batchDraft,
+                          form.trainingBatchSize,
+                          setBatchDraft,
+                          form.setTrainingBatchSize,
+                        )
+                      }
+                      error={hp.batch !== null}
+                      aria-invalid={hp.batch !== null}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
@@ -317,10 +438,19 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                       id="train-lr"
                       type="text"
                       inputMode="decimal"
-                      value={form.trainingLR}
-                      onChange={(e) => form.setTrainingLR(Number(e.target.value) || 1e-3)}
-                      error={form.trainingLR <= 0 || form.trainingLR > 1}
-                      aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
+                      value={lrDraft}
+                      onChange={(e) => setLrDraft(e.target.value)}
+                      onBlur={() =>
+                        commitField(
+                          'learning_rate',
+                          lrDraft,
+                          form.trainingLR,
+                          setLrDraft,
+                          form.setTrainingLR,
+                        )
+                      }
+                      error={hp.lr !== null}
+                      aria-invalid={hp.lr !== null}
                       aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                       className="h-7 text-[11px] font-mono"
                     />
@@ -375,11 +505,20 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   <div className="flex flex-col gap-1.5">
                     <label
                       htmlFor="resume-checkpoint"
-                      className="text-[10px] text-muted-foreground uppercase tracking-wider"
+                      className="text-xs text-muted-foreground uppercase tracking-wider"
                     >
                       Resume from checkpoint (optional)
                     </label>
-                    <Select value={form.resumeCheckpoint} onValueChange={form.setResumeCheckpoint}>
+                    <Select
+                      value={form.resumeCheckpoint}
+                      onValueChange={(next) => {
+                        // Any explicit pick — including "Start fresh" ("") —
+                        // latches the guard so the one-shot default above can
+                        // never overwrite it.
+                        resumeTouchedRef.current = true
+                        form.setResumeCheckpoint(next)
+                      }}
+                    >
                       <SelectTrigger
                         id="resume-checkpoint"
                         className="h-8 text-xs font-mono"
@@ -419,13 +558,13 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={applyRecommendation}
                   >
                     Apply
                   </Button>
                 </div>
-                <div className="text-[10px] text-muted-foreground/60 space-y-0.5">
+                <div className="text-xs text-muted-foreground/60 space-y-0.5">
                   <div>Dataset: {recommendation.dataset_size.toLocaleString()} examples</div>
                   <div>Reason: {recommendation.recommendation.reason}</div>
                   <div className="flex gap-3 tabular-nums">
@@ -440,7 +579,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               </div>
             )}
             {loadingRec && (
-              <div className="text-[10px] text-muted-foreground animate-pulse">
+              <div className="text-xs text-muted-foreground animate-pulse">
                 Loading recommendation...
               </div>
             )}

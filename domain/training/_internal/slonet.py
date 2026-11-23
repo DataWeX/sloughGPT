@@ -26,6 +26,8 @@ import numpy as np
 from domain.inference._internal.forward_pass import ForwardPassResult
 from domain.inference._internal.soul_meta_slim import externalize_optimizer_state
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
+from domain.infrastructure._internal.constants import prefill_max_tokens
+from domain.infrastructure._internal.errors import PromptTooLongError
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.infrastructure._internal.kv_cache.prefix_cache import PrefixCache
 from domain.shared import align_dim_ff, find_repo_root  # noqa: F401 — kept for compatibility
@@ -122,6 +124,29 @@ def _check_numba():
         except ImportError:
             _NUMBA_AVAILABLE = False
     return _NUMBA_AVAILABLE
+
+
+def _check_prefill_cap(prompt_len: int) -> None:
+    """Engine backstop for the prefill token cap (card 20261102_001622).
+
+    Called by BOTH ``generate_numpy`` and ``generate_numpy_stream`` before any
+    prefill work starts — one check, every caller inherits it (chat,
+    chat_stream, generate, CLI, API, engine). Measured: prefill wall-clock is
+    near-quadratic (2k=37s, 3.84k=100s, 4k=127-138s vs the 120s request
+    budget; 8k OOM-kills a 23 GB box), so an over-cap prompt must fail loud
+    and instant instead of burning the budget or dying of memory.
+
+    Trimming is NOT done here: kernels never rewrite the user's prompt. Chat
+    drops oldest turns at its own seam (announced via ``omitted_count``);
+    callers with nothing to trim (CLI, raw API prompts) get this error.
+    ``SLO_PREFILL_MAX_TOKENS`` tunes the cap per machine (default 3072).
+    """
+    cap = prefill_max_tokens()
+    if prompt_len > cap:
+        raise PromptTooLongError(
+            f"prompt is {prompt_len} tokens, prefill cap is {cap} (SLO_PREFILL_MAX_TOKENS)",
+            details={"prompt_tokens": prompt_len, "prefill_cap": cap},
+        )
 
 
 # Numba-accelerated inference kernels (lazy import, graceful fallback)
@@ -1393,32 +1418,52 @@ def relu(x):
     return out
 
 
+# GELU constants, hoisted: np.sqrt(2/pi) was recomputed on every call
+# (forward, backward cache, and again inside each closure).
+_GELU_C = float(np.sqrt(2 / np.pi))
+_GELU_K = 0.044715
+
+
+def _gelu_tv(d: np.ndarray) -> np.ndarray:
+    """tanh term of the GELU — one pass, shared by forward and backward."""
+    return np.tanh(_GELU_C * (d + _GELU_K * (d * d * d)))
+
+
 def gelu_np(d: np.ndarray) -> np.ndarray:
     """NumPy-only GELU (no Tensor wrapping)."""
-    return 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
+    return 0.5 * d * (1 + _gelu_tv(d))
 
 
 def gelu(x):
     d = x.data if isinstance(x, Tensor) else x
     acc = _get_accelerator()
-    if acc is not None and acc.name != "cpu":
+    on_acc = acc is not None and acc.name != "cpu"
+    # The tanh term feeds the CPU value and always the backward closure;
+    # skip it only on the pure-GPU non-Tensor path.
+    tv = None if (on_acc and not isinstance(x, Tensor)) else _gelu_tv(d)
+    if on_acc:
         try:
             t = acc.gelu(d)
         except Exception:
-            t = 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
+            if tv is None:
+                tv = _gelu_tv(d)
+            t = 0.5 * d * (1.0 + tv)
     else:
-        t = 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
+        t = 0.5 * d * (1.0 + tv)
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-        # Cache tanh value for backward (avoids 3x recomputation)
-        _tanh_val = np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3))
-        _sqrt_2_pi = np.sqrt(2 / np.pi)
+        if tv is None:  # accelerator produced t; backward still needs tv
+            tv = _gelu_tv(d)
+        # Elementwise derivative, computed ONCE here and cached. bk and fwd
+        # previously each rebuilt this full expression per call — cProfile
+        # attributed ~50% of step wall time to gelu fwd+bwd (card
+        # 20261107_113837, 1.4 steps/s investigation).
+        d_gelu = 0.5 * (1.0 + tv) + 0.5 * d * (1.0 - tv * tv) * _GELU_C * (
+            1.0 + 3.0 * _GELU_K * (d * d)
+        )
 
         def bk(g):
             if x.requires_grad:
-                d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (
-                    1 + 3 * 0.044715 * d**2
-                )
                 grad_val = d_gelu * g
                 if x.grad is None:
                     x.grad = Tensor(grad_val, _copy=False)
@@ -1432,9 +1477,6 @@ def gelu(x):
         def fwd(t_x):
             if t_x is None:
                 return np.zeros(out_shape, dtype=out_dtype)
-            d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (
-                1 + 3 * 0.044715 * d**2
-            )
             return d_gelu * t_x
 
         out._forward_fn = fwd
@@ -5157,7 +5199,14 @@ def _sanitize(obj):
     return obj
 
 
-def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict = None) -> str:
+def export_to_sou(
+    net: SloNet,
+    path: str,
+    include_weights=True,
+    metadata: dict = None,
+    *,
+    keep_optimizer: bool = False,
+) -> str:
     base_metadata = {
         "version": 3,
         "soul_name": net.soul_name,
@@ -5172,7 +5221,18 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
     if metadata:
         base_metadata["metadata"] = {**(base_metadata.get("metadata") or {}), **metadata}
     metadata = base_metadata
-    json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
+
+    # Externalize FIRST: the state file is fsynced before either document can
+    # reference it (WAL — a published ref never dangles), then the header
+    # embeds the slim doc — a re-export stops shipping 40+ MB of inline float
+    # text (the qt_trained-class 92 MB header). keep_optimizer keeps the
+    # phase-1 self-contained header (inline state); the sidecar is slim
+    # either way.
+    sidecar_path = path + ".meta.json"
+    raw_doc = _sanitize(metadata)
+    slim_doc, _moved = externalize_optimizer_state(raw_doc, sidecar_path)
+    embed_doc = raw_doc if keep_optimizer else slim_doc
+    json_bytes = json.dumps(embed_doc, allow_nan=False).encode()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
     # WAL order: weights first, then the sidecar that describes them. The old
@@ -5204,12 +5264,11 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
     # A round-tripped net can carry training_state moments in net.metadata;
-    # externalize them so a re-export never re-fattens the sidecar.
-    sidecar_path = path + ".meta.json"
-    sidecar_doc, _externalized = externalize_optimizer_state(_sanitize(metadata), sidecar_path)
+    # they left BOTH docs above (externalize ran before the header embed), so
+    # a re-export never re-fattens the header or the sidecar.
     atomic_write(
         sidecar_path,
-        json.dumps(sidecar_doc, indent=2),
+        json.dumps(slim_doc, indent=2),
     )
 
     # Provenance sidecar — records which dataset/model produced this file so
@@ -6293,6 +6352,7 @@ class SloTransformer(SloNet):
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         prompt_len = input_ids.shape[1]
+        _check_prefill_cap(prompt_len)
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
 
@@ -6460,6 +6520,7 @@ class SloTransformer(SloNet):
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         prompt_len = input_ids.shape[1]
+        _check_prefill_cap(prompt_len)
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
 
@@ -7179,6 +7240,7 @@ class SloTransformer(SloNet):
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         prompt_len = input_ids.shape[1]
+        _check_prefill_cap(prompt_len)
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
 

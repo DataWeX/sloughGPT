@@ -104,7 +104,7 @@ export function QuickActionsTab() {
             <div className="flex items-center gap-2 w-full mb-1">
               <span
                 className={cn(
-                  'text-[10px] font-mono font-medium px-1.5 py-0.5 rounded',
+                  'text-xs font-mono font-medium px-1.5 py-0.5 rounded',
                   METHOD_COLORS[action.method] ?? 'bg-muted text-muted-foreground',
                 )}
               >
@@ -112,7 +112,7 @@ export function QuickActionsTab() {
               </span>
               <span className="text-sm font-medium text-border">{action.label}</span>
               {running === action.label && (
-                <span className="ml-auto flex items-center gap-1.5 text-[10px] text-warning">
+                <span className="ml-auto flex items-center gap-1.5 text-xs text-warning">
                   <StatusDot tone="warning" pulse />
                   running
                 </span>
@@ -120,7 +120,7 @@ export function QuickActionsTab() {
               {results[action.label] && running !== action.label && (
                 <span
                   className={cn(
-                    'ml-auto text-[10px] font-mono',
+                    'ml-auto text-xs font-mono',
                     results[action.label]!.status >= 200 && results[action.label]!.status < 300
                       ? 'text-success'
                       : results[action.label]!.status >= 400
@@ -133,7 +133,7 @@ export function QuickActionsTab() {
               )}
             </div>
             <span className="text-[11px] text-muted-foreground/80">{action.description}</span>
-            <span className="text-[10px] text-muted-foreground/40 font-mono mt-1.5">
+            <span className="text-xs text-muted-foreground/40 font-mono mt-1.5">
               {action.endpoint}
             </span>
           </button>
@@ -149,7 +149,7 @@ export function QuickActionsTab() {
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      'text-[10px] font-mono',
+                      'text-xs font-mono',
                       result.status >= 200 && result.status < 300
                         ? 'text-success'
                         : result.status >= 400
@@ -159,7 +159,7 @@ export function QuickActionsTab() {
                   >
                     {result.status || 'ERR'}
                   </span>
-                  <span className="text-[10px] text-muted-foreground/60 font-mono">
+                  <span className="text-xs text-muted-foreground/60 font-mono">
                     {result.timeMs}ms
                   </span>
                 </div>

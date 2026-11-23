@@ -17,7 +17,9 @@ function loadActivity(): AuthEvent[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 function saveActivity(events: AuthEvent[]) {
@@ -48,12 +50,15 @@ export function AuthActivityCard() {
   const [events, setEvents] = useState<AuthEvent[]>(() => loadActivity())
   const [filter, setFilter] = useState<string | null>(null)
 
-  const filtered = filter ? events.filter(e => e.type === filter) : events
+  const filtered = filter ? events.filter((e) => e.type === filter) : events
 
-  const typeCounts = events.reduce((acc, e) => {
-    acc[e.type] = (acc[e.type] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
+  const typeCounts = events.reduce(
+    (acc, e) => {
+      acc[e.type] = (acc[e.type] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
 
   const handleClear = () => {
     setEvents([])
@@ -69,7 +74,12 @@ export function AuthActivityCard() {
             <span className="text-muted-foreground font-normal ml-2">({events.length})</span>
           </CardTitle>
           {events.length > 0 && (
-            <Button size="sm" variant="ghost" className="text-destructive text-[10px]" onClick={handleClear}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive text-xs"
+              onClick={handleClear}
+            >
               Clear
             </Button>
           )}
@@ -84,7 +94,7 @@ export function AuthActivityCard() {
               <Button
                 size="sm"
                 variant={filter === null ? 'default' : 'ghost'}
-                className="text-[9px]"
+                className="text-[11px]"
                 onClick={() => setFilter(null)}
               >
                 All ({events.length})
@@ -94,7 +104,7 @@ export function AuthActivityCard() {
                   key={type}
                   size="sm"
                   variant={filter === type ? 'default' : 'ghost'}
-                  className="text-[9px]"
+                  className="text-[11px]"
                   onClick={() => setFilter(type)}
                 >
                   {type} ({count})
@@ -102,18 +112,27 @@ export function AuthActivityCard() {
               ))}
             </div>
             <div className="space-y-1 max-h-64 overflow-y-auto">
-              {filtered.map(evt => {
+              {filtered.map((evt) => {
                 const meta = EVENT_ICONS[evt.type] ?? { icon: '•', color: 'text-muted-foreground' }
                 return (
-                  <div key={evt.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50">
-                    <span className={cn('text-xs font-mono w-4 text-center', meta.color)}>{meta.icon}</span>
+                  <div
+                    key={evt.id}
+                    className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50"
+                  >
+                    <span className={cn('text-xs font-mono w-4 text-center', meta.color)}>
+                      {meta.icon}
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium capitalize">{evt.type.replace('_', ' ')}</div>
+                      <div className="text-xs font-medium capitalize">
+                        {evt.type.replace('_', ' ')}
+                      </div>
                       {evt.details && (
-                        <div className="text-[10px] text-muted-foreground truncate">{evt.details}</div>
+                        <div className="text-xs text-muted-foreground truncate">{evt.details}</div>
                       )}
                     </div>
-                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">{timeAgo(evt.timestamp)}</span>
+                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                      {timeAgo(evt.timestamp)}
+                    </span>
                   </div>
                 )
               })}

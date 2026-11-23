@@ -1,6 +1,6 @@
 'use client'
+import { notify, useToastStore, useBannerStore } from '@/lib/notify'
 
-import { notify } from '@/lib/notify'
 import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -21,9 +21,7 @@ import { NotificationDock } from '@/components/NotificationDock'
 import { loadProcessSnapshot } from '@/lib/process-notifications'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
-import { useToastStore } from '@/lib/toast-store'
-import { useAppStore } from '@/lib/store'
-import { useBannerStore } from '@/lib/banner-store'
+import { useAppStore, syncWithBackend } from '@/lib/store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
@@ -82,6 +80,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     void loadProcessSnapshot()
   }, [])
 
+  // Global defaults are server truth (Phase 2): pull them once at boot so the
+  // chat dialog can resolve an effective value per conversation
+  // (conversation AppScope delta ?? this global default).
+  useEffect(() => {
+    void syncWithBackend()
+  }, [])
+
   useEffect(() => {
     const handler = () => setShowShortcuts((v) => !v)
     window.addEventListener('toggle-shortcuts', handler)
@@ -117,7 +122,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
       if (detail?.message) {
-        notify.toast(detail.message, detail.type || 'info')
+        notify.toast(detail.message, { type: detail.type || 'info' })
       }
     }
     window.addEventListener('show-toast', handler)

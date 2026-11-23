@@ -34,13 +34,15 @@ export function RolePermissionMatrix({ roles, allPermissions }: RolePermissionMa
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <table className="w-full text-[10px]">
+          <table className="w-full text-xs">
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 pr-4 font-medium">Permission</th>
-                {roleKeys.map(role => (
+                {roleKeys.map((role) => (
                   <th key={role} className="text-center py-2 px-2 font-medium">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ROLE_COLORS[role] || 'bg-muted'}`}>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${ROLE_COLORS[role] || 'bg-muted'}`}
+                    >
                       {role}
                     </span>
                   </th>
@@ -51,14 +53,17 @@ export function RolePermissionMatrix({ roles, allPermissions }: RolePermissionMa
               {Object.entries(allPermissions).map(([category, perms]) => (
                 <>
                   <tr key={`cat-${category}`} className="border-b bg-muted/30">
-                    <td colSpan={roleKeys.length + 1} className="py-1.5 font-medium text-muted-foreground">
+                    <td
+                      colSpan={roleKeys.length + 1}
+                      className="py-1.5 font-medium text-muted-foreground"
+                    >
                       {CATEGORY_LABELS[category] || category}
                     </td>
                   </tr>
-                  {perms.map(perm => (
+                  {perms.map((perm) => (
                     <tr key={perm} className="border-b border-border/50">
                       <td className="py-1.5 pr-4 text-muted-foreground">{perm}</td>
-                      {roleKeys.map(role => (
+                      {roleKeys.map((role) => (
                         <td key={role} className="text-center py-1.5 px-2">
                           {roles[role].permissions.includes(perm) ? (
                             <span className="text-success">✓</span>

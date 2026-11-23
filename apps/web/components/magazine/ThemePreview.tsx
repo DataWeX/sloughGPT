@@ -32,9 +32,7 @@ export function ThemePreview({ themes, onApply }: ThemePreviewProps) {
               />
               <div className="min-w-0">
                 <div className="text-xs font-medium">{t.label}</div>
-                <div className="font-mono text-[10px] text-muted-foreground">
-                  html.theme-{t.name}
-                </div>
+                <div className="font-mono text-xs text-muted-foreground">html.theme-{t.name}</div>
               </div>
               <Button
                 size="sm"

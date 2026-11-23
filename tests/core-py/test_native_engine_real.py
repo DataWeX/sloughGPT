@@ -632,15 +632,6 @@ class TestNativeEngine:
         engine = _loaded_engine()
         assert engine._tokenize_simple("hi") == list(b"hi")
 
-    def test_detokenize_fallback_when_tokenizer_missing(self, monkeypatch):
-        import domain.inference._internal.tokenizer as T
-
-        monkeypatch.setattr(
-            T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
-        )
-        engine = _loaded_engine()
-        assert engine._detokenize_simple([0, 255]) == "??"
-
 
 class TestTokenizerWiring:
     @_NEEDS_NATIVE_LIB

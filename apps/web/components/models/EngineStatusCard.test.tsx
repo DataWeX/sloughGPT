@@ -12,7 +12,9 @@ vi.mock('@/lib/model-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
@@ -20,11 +22,17 @@ import { modelController } from '@/lib/model-controller'
 
 describe('EngineStatusCard', () => {
   afterEach(cleanup)
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders engine status', async () => {
     vi.mocked(modelController.getEngineStatus).mockResolvedValue({
-      engine: 'slo', version: '1.0.0', models_loaded: 1, uptime_s: 3600, memory_usage_mb: 512,
+      engine: 'slo',
+      version: '1.0.0',
+      models_loaded: 1,
+      uptime_s: 3600,
+      memory_usage_mb: 512,
     })
     render(<EngineStatusCard />)
     await vi.waitFor(() => {
@@ -38,7 +46,11 @@ describe('EngineStatusCard', () => {
 
   it('shows reload button', async () => {
     vi.mocked(modelController.getEngineStatus).mockResolvedValue({
-      engine: 'slo', version: '1.0.0', models_loaded: 0, uptime_s: 0, memory_usage_mb: 0,
+      engine: 'slo',
+      version: '1.0.0',
+      models_loaded: 0,
+      uptime_s: 0,
+      memory_usage_mb: 0,
     })
     render(<EngineStatusCard />)
     await vi.waitFor(() => {
@@ -48,7 +60,11 @@ describe('EngineStatusCard', () => {
 
   it('formats uptime in minutes', async () => {
     vi.mocked(modelController.getEngineStatus).mockResolvedValue({
-      engine: 'slo', version: '1.0.0', models_loaded: 0, uptime_s: 120, memory_usage_mb: 0,
+      engine: 'slo',
+      version: '1.0.0',
+      models_loaded: 0,
+      uptime_s: 120,
+      memory_usage_mb: 0,
     })
     render(<EngineStatusCard />)
     await vi.waitFor(() => {
@@ -58,7 +74,11 @@ describe('EngineStatusCard', () => {
 
   it('formats uptime in seconds', async () => {
     vi.mocked(modelController.getEngineStatus).mockResolvedValue({
-      engine: 'slo', version: '1.0.0', models_loaded: 0, uptime_s: 30, memory_usage_mb: 0,
+      engine: 'slo',
+      version: '1.0.0',
+      models_loaded: 0,
+      uptime_s: 30,
+      memory_usage_mb: 0,
     })
     render(<EngineStatusCard />)
     await vi.waitFor(() => {

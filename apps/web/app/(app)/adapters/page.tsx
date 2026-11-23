@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect } from 'react'
 import {
@@ -38,7 +38,6 @@ export default function AdaptersPage() {
   const [adapters, setAdapters] = useState<UserAdapterInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const addToast = notify.toast
   const [aggregating, setAggregating] = useState(false)
   const [aggregateResult, setAggregateResult] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)
@@ -53,7 +52,7 @@ export default function AdaptersPage() {
       setStats(listRes.stats)
       setAdapters(listRes.adapters ?? [])
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Could not refresh adapters'), 'error')
+      notify.toast(extractErrorMessage(e, 'Could not refresh adapters'), { type: 'error' })
     }
   }
 
@@ -120,9 +119,9 @@ export default function AdaptersPage() {
       await loraEvalController.runEval('data/user_adapters/best_aggregated.npz')
       const evalResults = await loraEvalController.getHistory(10)
       setEvalHistory(evalResults)
-      addToast('Evaluation complete', 'success')
+      notify.toast('Evaluation complete', { type: 'success' })
     } catch {
-      addToast('Could not eval', 'error')
+      notify.toast('Could not eval', { type: 'error' })
     } finally {
       setRunningEval(false)
     }
@@ -186,7 +185,7 @@ export default function AdaptersPage() {
                 { label: 'Avg/User', value: `${stats.avg_size_per_user_kb?.toFixed(1) ?? 0} KB` },
               ].map((s) => (
                 <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                  <div className="text-xs text-muted-foreground">{s.label}</div>
                   <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
                 </div>
               ))}
@@ -223,7 +222,7 @@ export default function AdaptersPage() {
         <CardContent className="px-2.5 pb-2.5">
           {adapters.length === 0 ? (
             <div className="text-center py-6 space-y-2">
-              <p className="text-[10px] text-muted-foreground/60">No adapters yet.</p>
+              <p className="text-xs text-muted-foreground/60">No adapters yet.</p>
               <Button
                 size="sm"
                 variant="outline"
@@ -232,7 +231,7 @@ export default function AdaptersPage() {
               >
                 Start a chat
               </Button>
-              <p className="text-[10px] text-muted-foreground/60">
+              <p className="text-xs text-muted-foreground/60">
                 and give feedback to create adapters.
               </p>
             </div>
@@ -286,7 +285,7 @@ export default function AdaptersPage() {
                     <span className="font-medium truncate">{String(r.adapter_path ?? '—')}</span>
                     <span
                       className={cn(
-                        'rounded-full text-[9px] px-1.5 py-0.5 font-medium',
+                        'rounded-full text-[11px] px-1.5 py-0.5 font-medium',
                         r.verdict === 'accept'
                           ? 'bg-success/15 text-success'
                           : r.verdict === 'reject'
@@ -340,9 +339,9 @@ export default function AdaptersPage() {
                   try {
                     await userAdaptersController.reset(userId)
                     await refreshData()
-                    addToast(`Adapter for ${userId} reset`, 'success')
+                    notify.toast(`Adapter for ${userId} reset`, { type: 'success' })
                   } catch {
-                    addToast('Could not reset adapter', 'error')
+                    notify.toast('Could not reset adapter', { type: 'error' })
                   }
                 }
               }}

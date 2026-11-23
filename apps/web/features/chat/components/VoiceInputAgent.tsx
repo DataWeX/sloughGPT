@@ -166,9 +166,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
             {isRecording ? (isPaused ? 'Paused' : 'Recording') : 'Voice Input'}
           </span>
         </div>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-          {model}
-        </span>
+        <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">{model}</span>
       </div>
 
       {/* Main area */}
@@ -256,21 +254,21 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
         <div className="flex items-center justify-between px-3 py-2 border-t bg-muted/20">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">Duration:</span>
-              <span className="text-[10px] font-medium">{formatSeconds(audioStats.duration)}</span>
+              <span className="text-xs text-muted-foreground">Duration:</span>
+              <span className="text-xs font-medium">{formatSeconds(audioStats.duration)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">Words:</span>
-              <span className="text-[10px] font-medium">{audioStats.words}</span>
+              <span className="text-xs text-muted-foreground">Words:</span>
+              <span className="text-xs font-medium">{audioStats.words}</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">Tokens:</span>
-              <span className="text-[10px] font-medium">{audioStats.tokens}</span>
+              <span className="text-xs text-muted-foreground">Tokens:</span>
+              <span className="text-xs font-medium">{audioStats.tokens}</span>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-muted-foreground">Est. cost:</span>
-            <span className="text-[10px] font-medium text-primary">
+            <span className="text-xs text-muted-foreground">Est. cost:</span>
+            <span className="text-xs font-medium text-primary">
               {formatCost(audioStats.estimatedCost)}
             </span>
           </div>
@@ -282,12 +280,12 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
         <Button
           variant="ghost"
           size="sm"
-          className="text-[10px] h-6"
+          className="text-xs h-6"
           onClick={() => setShowStats(!showStats)}
         >
           {showStats ? 'Hide Stats' : 'Stats'}
         </Button>
-        <div className="text-[10px] text-muted-foreground/40">
+        <div className="text-xs text-muted-foreground/40">
           {isRecording ? 'Click stop to end recording' : 'Click mic to start recording'}
         </div>
       </div>

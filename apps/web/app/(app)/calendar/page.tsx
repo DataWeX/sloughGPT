@@ -5,6 +5,8 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
+import { apiGet } from '@/lib/http-client'
+import { MiniCalendar } from '@/components/calendar/MiniCalendar'
 
 interface CalendarEvent {
   id: string
@@ -94,8 +96,12 @@ export default function CalendarPage() {
     setLoading(true)
     try {
       const dateStr = formatDate(currentDate)
-      const res = await fetch(`/api/calendar/events?date=${dateStr}`)
-      const data = await res.json()
+      // Through the http-client facade (single source of truth): _resolveUrl
+      // already whitelists /api/calendar as same-origin, so this stays on the
+      // web origin — no raw fetch() bypass (card 20261113_153000).
+      const data = await apiGet<{ events: CalendarEvent[] }>('/api/calendar/events', {
+        date: dateStr,
+      })
       setEvents(data.events || [])
     } catch (err) {
       addGlobalError(err, 'Calendar')
@@ -189,6 +195,10 @@ export default function CalendarPage() {
       loadingCards={4}
       maxWidth="max-w-5xl"
     >
+      <div className="mb-4">
+        <MiniCalendar selected={currentDate} onSelect={setCurrentDate} />
+      </div>
+
       <div className="space-y-2">
         {HOURS.map((hour) => {
           const hourEvents = getEventsForHour(hour)
@@ -240,7 +250,7 @@ export default function CalendarPage() {
                                   </p>
                                 )}
                               </div>
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                              <span className="shrink-0 text-xs text-muted-foreground">
                                 {event.start_time} - {event.end_time}
                               </span>
                             </div>

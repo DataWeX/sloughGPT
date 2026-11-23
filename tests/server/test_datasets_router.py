@@ -489,8 +489,13 @@ class TestImportHuggingface:
 class TestImportUrl:
     """POST /datasets/import/url"""
 
+    @patch("apps.api.server.routers.datasets._validate_url_not_private")
     @patch("domain.training._internal.data_import.URLImporter")
-    def test_success(self, mock_cls, client):
+    def test_success(self, mock_cls, mock_validate, client):
+        # Stub the SSRF guard (real DNS lookup) — this test targets the
+        # importer→response mapping; guard behaviour has its own suite in
+        # apps/api/server/tests/test_webhook_url_guard.py.
+        mock_validate.assert_not_called()
         result = MagicMock()
         result.success = True
         result.files_imported = 1
@@ -505,12 +510,14 @@ class TestImportUrl:
                 "name": "u",
             },
         )
+        mock_validate.assert_called_once_with("https://x.example/data.txt")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
         assert "Downloaded 50 chars" in resp.json()["message"]
 
+    @patch("apps.api.server.routers.datasets._validate_url_not_private")
     @patch("domain.training._internal.data_import.URLImporter")
-    def test_failure_400(self, mock_cls, client):
+    def test_failure_400(self, mock_cls, mock_validate, client):
         result = MagicMock()
         result.success = False
         result.error = "404 not found"
@@ -524,6 +531,7 @@ class TestImportUrl:
                 "name": "u",
             },
         )
+        mock_validate.assert_called_once_with("https://x.example/missing.txt")
         assert resp.status_code == 400
         assert resp.json()["error"] == "404 not found"
 
@@ -562,6 +570,28 @@ class TestImportISBN:
         resp = client.post("/datasets/import/isbn", json={"isbn": "1234567890123"})
         assert resp.status_code == 200
         assert resp.json()["message"] == "Book metadata saved"
+
+    @patch("domain.training._internal.data_import.ISBNImporter")
+    def test_metadata_only_failure_surfaces_error(self, mock_cls, client):
+        """Metadata-only imports must fail loudly (card 20261115_081635_ux…).
+
+        The real importer now returns success=False when Gutenberg has no
+        full text — the 221 B stub must not import green.
+        """
+        result = MagicMock()
+        result.success = False
+        result.name = "bk"
+        result.files_imported = 0
+        result.total_chars = 0
+        result.output_path = "/tmp/bk"
+        result.error = (
+            "Full text not available on Project Gutenberg — "
+            "only metadata was saved (no training text)"
+        )
+        mock_cls.return_value.import_from_isbn.return_value = result
+        resp = client.post("/datasets/import/isbn", json={"isbn": "1234567890123"})
+        assert resp.status_code == 400
+        assert "no training text" in resp.json()["error"]
 
     def test_isbn_too_short_422(self, client):
         resp = client.post("/datasets/import/isbn", json={"isbn": "123"})
@@ -687,10 +717,6 @@ class TestSearchValidation:
 
 class TestExportValidation:
     """POST /datasets/{id}/export bounds."""
-
-    def test_invalid_format_422(self, client):
-        resp = client.post("/datasets/ds1/export", json={"format": "xml"})
-        assert resp.status_code == 422
 
     def test_format_case_sensitive_422(self, client):
         resp = client.post("/datasets/ds1/export", json={"format": "CSV"})

@@ -67,14 +67,18 @@
   --input: 228 224 242;
   --radius: 6px;
   --success: 52 176 125;
-  --warning: 236 168 60;
+  /* Scheme-derived: amber dot from the reference render (hue-shifted golden
+     → true amber, slightly deeper for contrast). */
+  --warning: 245 158 11;
   --destructive: 220 80 90;
   --destructive-foreground: 250 248 255;
-  --info: 90 150 220;
+  /* Periwinkle from the reference render — azure pulled toward violet;
+     contrast kept ≥ the old azure (3.2:1 vs 3.1:1 on white). */
+  --info: 104 142 226;
   --chart-1: 124 82 196;
   --chart-2: 52 176 125;
   --chart-3: 236 145 95;
-  --chart-4: 90 150 220;
+  --chart-4: 104 142 226;
   --chart-5: 220 80 90;
   /*
    * Session-group identity colours — deliberately THEME-CONSTANT (like the
@@ -152,14 +156,17 @@ html.dark {
   --border: 52 46 72;
   --input: 52 46 72;
   --success: 72 192 140;
-  --warning: 240 192 80;
+  /* Same scheme, dark-adapted: amber-400 pops on the charcoal canvas. */
+  --warning: 251 191 36;
   --destructive: 235 100 110;
   --destructive-foreground: 25 22 36;
-  --info: 100 165 240;
+  /* Periwinkle dark counterpart — sky→periwinkle to match the light hue,
+     lightened for the dark canvas; pairs with the lilac primary. */
+  --info: 138 166 242;
   --chart-1: 192 170 244;
   --chart-2: 72 192 140;
   --chart-3: 240 176 130;
-  --chart-4: 100 165 240;
+  --chart-4: 138 166 242;
   --chart-5: 235 100 110;
 }
 
@@ -193,7 +200,9 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Responsive root scale: 14px base (mobile) → 16px on md+ (desktop) */
+/* Responsive root scale: root stays at the 16px default below md
+   (the old "14px base" comment was doc drift — no such rule exists),
+   explicitly 16px on md+ (desktop). */
 @media (min-width: 768px) {
   html {
     font-size: 16px;
@@ -617,6 +626,15 @@ html {
 }
 .sl-badge-destructive:hover {
   background-color: color-mix(in srgb, rgb(var(--destructive)) 20%, transparent);
+}
+/* Degraded-but-connected verdicts (health_flow 'Slow/Very slow'): amber
+   between success green and destructive red. */
+.sl-badge-warning {
+  background-color: color-mix(in srgb, rgb(var(--warning)) 12%, transparent);
+  color: rgb(var(--warning));
+}
+.sl-badge-warning:hover {
+  background-color: color-mix(in srgb, rgb(var(--warning)) 20%, transparent);
 }
 .sl-badge-primary {
   background-color: color-mix(in srgb, rgb(var(--primary)) 10%, transparent);
@@ -1899,4 +1917,60 @@ html.light .token.variable {
   50% {
     opacity: calc(0.6 + var(--voice-intensity, 0) * 0.3);
   }
+}
+
+/**
+ * High Contrast — an accessibility canvas layered on the dark one.
+ *
+ * Selector is `html.dark.high-contrast` (0,2,1) and the block is LAST in this
+ * file on purpose: it has to out-rank the accent-theme blocks
+ * (`html.dark.theme-*`, also 0,2,1) and the palette blocks
+ * (`html.palette-*`), which would otherwise re-tint the canvas back to their
+ * own hues. Both classes are always applied together by `syncHtmlTheme` and
+ * the `index.html` bootstrap, so every `html.dark` rule still lands first and
+ * this block overrides it.
+ *
+ * AAA-targeted: body text is pure white on pure black (21:1), borders are hard
+ * white so every surface edge is defined without relying on soft depth, and
+ * yellow is the action colour (19.6:1 as ink on black, 19.6:1 as black on
+ * yellow). `--muted`/`--secondary` stay a near-black grey rather than pure
+ * black: their foregrounds are white, and a white-on-black muted surface would
+ * be indistinguishable from the canvas (the pairing bug globals-chrome.test.ts
+ * exists to prevent).
+ */
+html.dark.high-contrast {
+  color-scheme: dark;
+  --chat-bg: 0 0 0;
+  --background: 0 0 0;
+  --foreground: 255 255 255;
+  --card: 0 0 0;
+  --card-foreground: 255 255 255;
+  --popover: 0 0 0;
+  --popover-foreground: 255 255 255;
+  --primary: 255 255 0;
+  --primary-foreground: 0 0 0;
+  --secondary: 40 40 40;
+  --secondary-foreground: 255 255 255;
+  --muted: 40 40 40;
+  --muted-foreground: 255 255 255;
+  --accent: 255 255 0;
+  --accent-foreground: 0 0 0;
+  --ring: 255 255 0;
+  --border: 255 255 255;
+  --input: 255 255 255;
+  --success: 0 255 128;
+  --warning: 255 255 0;
+  --destructive: 255 80 80;
+  --destructive-foreground: 0 0 0;
+  --info: 0 214 255;
+  --chart-1: 255 255 0;
+  --chart-2: 0 255 128;
+  --chart-3: 255 128 0;
+  --chart-4: 0 214 255;
+  --chart-5: 255 80 80;
+  /* No soft depth on pure black — elevation becomes a hard outline. */
+  --shadow-sm: 0 0 0 1px rgb(var(--border));
+  --shadow-md: 0 0 0 1px rgb(var(--border));
+  --shadow-lg: 0 0 0 1px rgb(var(--border));
+  --shadow-xl: 0 0 0 1px rgb(var(--border));
 }

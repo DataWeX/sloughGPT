@@ -74,12 +74,10 @@ const {
   mockSetConvSidebarOpen,
   mockAddToast,
   mockKnowledgeAdd,
-  mockImageGenerate,
   mockAddBookmark,
   mockRemoveBookmark,
   mockIsBookmarked,
   mockClipboardWrite,
-  mockChatSetInput,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockReplace: vi.fn(),
@@ -97,12 +95,10 @@ const {
   mockSetConvSidebarOpen: vi.fn(),
   mockAddToast: vi.fn(),
   mockKnowledgeAdd: vi.fn(),
-  mockImageGenerate: vi.fn(),
   mockAddBookmark: vi.fn(),
   mockRemoveBookmark: vi.fn(),
   mockIsBookmarked: vi.fn(),
   mockClipboardWrite: vi.fn(),
-  mockChatSetInput: vi.fn(),
 }))
 
 const state = vi.hoisted(() => ({
@@ -112,7 +108,7 @@ const state = vi.hoisted(() => ({
     newChat: null as null | (() => void),
     sidebarConversations: [] as unknown[],
   },
-  mode: { chatMode: 'chat' },
+  mode: {} as Record<string, never>,
   ui: { showSettings: false, toolPanelOpen: false },
 }))
 
@@ -143,7 +139,6 @@ vi.mock('@/lib/feedback-store', () => ({
     fetchAdapterStats: mockFetchAdapterStats,
   }),
 }))
-vi.mock('@/lib/images-controller', () => ({ imagesController: { generate: mockImageGenerate } }))
 vi.mock('@/lib/files-controller', () => ({ filesController: { extract: vi.fn() } }))
 vi.mock('@/lib/knowledge-controller', () => ({ knowledgeController: { add: mockKnowledgeAdd } }))
 vi.mock('@/lib/store', () => ({
@@ -198,7 +193,6 @@ vi.mock('@/features/chat/hooks/useChatContextValue', () => ({
 vi.mock('@/features/chat/components/toolbar/ChatToolbar', () => ({
   ChatToolbar: () => <div data-testid="chat-toolbar" />,
 }))
-vi.mock('@/features/chat/components/toolbar/ModeBar', () => ({ ModeBar: () => null }))
 vi.mock('@/features/chat/components/layout/ImageDropZone', () => ({
   ImageDropZone: ({ children }: any) => <div>{children}</div>,
 }))
@@ -277,61 +271,26 @@ vi.mock('@/features/chat/hooks/useChatUI', async () => {
   }
 })
 
-vi.mock('@/features/chat/hooks/useChatMode', async () => {
-  const React = await import('react')
-  return {
-    useChatMode: () => {
-      const [chatMode, setChatMode] = React.useState(state.mode.chatMode)
-      return {
-        chatMode,
-        setChatMode,
-        writeTone: 'Friendly',
-        setWriteTone: vi.fn(),
-        writeType: 'Email',
-        setWriteType: vi.fn(),
-        rewriteStyle: 'Fix Grammar',
-        setRewriteStyle: vi.fn(),
-        decideStructure: 'Pro/Con',
-        setDecideStructure: vi.fn(),
-        explainDifficulty: 'Beginner',
-        setExplainDifficulty: vi.fn(),
-        translateLangPair: 'English→Spanish',
-        setTranslateLangPair: vi.fn(),
-        brainstormTopic: 'Ideas',
-        setBrainstormTopic: vi.fn(),
-        wellnessType: 'Meditation',
-        setWellnessType: vi.fn(),
-        createStyle: 'Watercolor',
-        setCreateStyle: vi.fn(),
-        placeholder: 'Type...',
-        handleSend: async (readFileData?: { text: string; filename: string } | null) => {
-          if (chatMode === 'read' && !readFileData) {
-            mockAddToast('Upload a file first, then ask your question', 'info')
-            return
-          }
-          if (chatMode === 'create') {
-            const input =
-              (document.querySelector('[aria-label="Chat input"]') as HTMLTextAreaElement)?.value ||
-              ''
-            if (input) await mockImageGenerate(input, 'watercolor')
-            return
-          }
-          mockSendMessage()
-        },
-      }
+vi.mock('@/features/chat/hooks/useChatMode', () => ({
+  useChatMode: () => ({
+    handleSend: () => {
+      mockSendMessage()
+      return Promise.resolve()
     },
-  }
-})
+  }),
+}))
 
 vi.mock('@/features/chat/hooks/useChatMessages', async () => {
   const React = await import('react')
   const { useChatStore } = await import('@/lib/chat-store')
   return {
     useChatMessages: () => {
-      const [messages, setMessages] = React.useState(state.chat.messages)
-      // Production wires the input through useChatStore (ChatPageSections
-      // passes store input into ChatInput) — mirror that here so typed text
-      // reaches handleWriteSend instead of a disconnected local state.
+      // Production useChatMessages declares ALL of this state as ChatStore
+      // selectors (card 20261116_124020 store authority) — mirror that here so
+      // ChatPageSections' store reads (messages) and the controller's writes
+      // (setMessages) hit the same state instead of a disconnected local copy.
+      const messages = useChatStore((s: any) => s.messages)
+      const setMessages = useChatStore((s: any) => s.setMessages)
       const storeInput = useChatStore((s: any) => s.input)
       const storeSetInput = useChatStore((s: any) => s.setInput)
       const [loading, setLoading] = React.useState(false)
@@ -341,12 +300,8 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
         messages,
         setMessages,
         input: storeInput,
-        // Record hook-side writes separately so tests can assert the
-        // dual-write contract (store for display, hook for send paths).
-        setInput: (...args: [string]) => {
-          ;(storeSetInput as (...a: [string]) => void)(...args)
-          mockChatSetInput(...args)
-        },
+        // Single write path: the controller's setInput IS the store action.
+        setInput: storeSetInput,
         loading,
         setLoading,
         images,
@@ -373,6 +328,8 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
         archivedCount: 0,
         renameSession: vi.fn(),
         duplicateSession: vi.fn(),
+        // Stage 3 seam: the store's send/auto-save calls back through this.
+        saveSessionToStorage: vi.fn(async () => {}),
         handleRegenerate: vi.fn(),
         handleThumbsUp: vi.fn(),
         handleThumbsDown: vi.fn(),
@@ -489,7 +446,12 @@ const { useToastStore, toastState } = vi.hoisted(() => {
   return { useToastStore: { getState: () => toastState }, toastState }
 })
 
-vi.mock('@/lib/toast-store', () => ({ useToastStore }))
+vi.mock('@/lib/notify', () => ({
+  // The component writes toasts through `notify.toast`; bind it to the
+  // same spy the tests assert on (previously the store's addToast).
+  notify: { toast: mockAddToast, banner: vi.fn() },
+  useToastStore,
+}))
 
 import { LocaleProvider } from '@/hooks/useLocale'
 import { useChatStore } from '@/lib/chat-store'
@@ -502,18 +464,19 @@ afterEach(() => {
 beforeEach(() => {
   vi.clearAllMocks()
   useChatStore.getState().setInput('')
+  // ChatStore is the single state authority — clear messages too so a prior
+  // test's transcript doesn't leak into the next render's store selectors.
+  useChatStore.setState({ messages: [] })
   state.health = { model_loaded: true, model_type: 'gpt2' }
   state.chat.messages = []
   state.chat.newChat = mockNewChat
   state.chat.sidebarConversations = []
-  state.mode.chatMode = 'chat'
   state.ui.showSettings = false
   state.ui.toolPanelOpen = false
   mockSearchParamsGet.mockReturnValue(null)
   mockModelList.mockResolvedValue([{ id: 'gpt2', description: 'A small model' }])
   mockGetSuggestions.mockResolvedValue([{ text: 'Tell me a story', icon: '🧠' }])
   mockIsBookmarked.mockReturnValue(false)
-  mockImageGenerate.mockResolvedValue({ image: 'data:image/png;base64,AAAA' })
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText: mockClipboardWrite },
     configurable: true,
@@ -523,6 +486,10 @@ beforeEach(() => {
 })
 
 async function renderChat() {
+  // Tests seed fixtures via state.chat.messages (the controller-facing shape);
+  // production useChatMessages reads messages from the store, so push the
+  // fixture into the store before mounting.
+  useChatStore.setState({ messages: state.chat.messages as any })
   render(
     <LocaleProvider>
       <ChatPage />
@@ -538,7 +505,8 @@ describe('ChatPage', () => {
     expect(screen.getByLabelText('Chat')).toBeTruthy()
     expect(screen.getByTestId('chat-toolbar')).toBeTruthy()
     expect(screen.getByTestId('chat-provider')).toBeTruthy()
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    // 7 base dynamics + the always-mounted ReadFileSection attach flow.
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 
   it('opens the sidebar and fetches initial data on mount', async () => {
@@ -613,13 +581,13 @@ describe('ChatPage', () => {
   it('renders ChatSettings when showSettings is enabled', async () => {
     state.ui.showSettings = true
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(8)
+    expect(screen.getAllByTestId('dynamic').length).toBe(9)
   })
 
   it('renders the tool panel when toolPanelOpen is enabled', async () => {
     state.ui.toolPanelOpen = true
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 
   it('opens the conversation search panel on the search-conversations window event', async () => {
@@ -627,7 +595,7 @@ describe('ChatPage', () => {
     await act(async () => {
       window.dispatchEvent(new Event('search-conversations'))
     })
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 
   it('starts a new chat on the new-chat window event', async () => {
@@ -650,7 +618,7 @@ describe('ChatPage', () => {
       expect(mockClipboardWrite).toHaveBeenCalledWith('the last answer')
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Last response copied', 'info')
+      expect(mockAddToast).toHaveBeenCalledWith('Last response copied', { type: 'info' })
     })
   })
 
@@ -666,41 +634,18 @@ describe('ChatPage', () => {
     expect(mockSendMessage).toHaveBeenCalled()
   })
 
-  it('writes typed text to both the store (display) and hook (send paths)', async () => {
-    // Regression: ChatInput displays store state while every send path reads
-    // hook state — typing must update both or messages silently never send.
+  it('writes typed text through the ChatStore (single write path)', async () => {
+    // Card 20261116_124020: the old dual-write (store for display, hook for
+    // send paths) was replaced — the controller's setInput IS the store
+    // action, so one write reaches composer, drafts, and every send path.
     await renderChat()
     const textarea = screen.getByLabelText('Chat input')
     await act(async () => {
       fireEvent.change(textarea, { target: { value: 'hello' } })
     })
     expect(useChatStore.getState().input).toBe('hello')
-    expect(mockChatSetInput).toHaveBeenCalledWith('hello')
-  })
-
-  it('toasts an upload prompt when sending in read mode without a file', async () => {
-    state.mode.chatMode = 'read'
-    await renderChat()
-    await act(async () => {
-      screen.getByTestId('send-btn').click()
-    })
-    expect(mockAddToast).toHaveBeenCalledWith('Upload a file first, then ask your question', 'info')
-    expect(mockSendMessage).not.toHaveBeenCalled()
-  })
-
-  it('generates an image in create mode', async () => {
-    state.mode.chatMode = 'create'
-    await renderChat()
-    const textarea = screen.getByLabelText('Chat input')
-    await act(async () => {
-      fireEvent.change(textarea, { target: { value: 'a sunset' } })
-    })
-    await act(async () => {
-      screen.getByTestId('send-btn').click()
-    })
-    await waitFor(() => {
-      expect(mockImageGenerate).toHaveBeenCalledWith('a sunset', 'watercolor')
-    })
+    // Send paths read the same store state (covered end-to-end by
+    // 'sends a message from the chat input' above).
   })
 
   it('deletes a message and toasts', async () => {
@@ -711,7 +656,7 @@ describe('ChatPage', () => {
       screen.getByTestId('delete-btn').click()
     })
     expect(screen.getByTestId('msg-count').textContent).toBe('0')
-    expect(mockAddToast).toHaveBeenCalledWith('Message deleted', 'info')
+    expect(mockAddToast).toHaveBeenCalledWith('Message deleted', { type: 'info' })
   })
 
   it('adds a bookmark for an existing message', async () => {
@@ -737,11 +682,17 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(mockKnowledgeAdd).toHaveBeenCalledWith('some content', 'chat-saved', true)
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Saved to knowledge', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Saved to knowledge', { type: 'success' })
   })
 
-  it('enables the voice overlay in talk mode', async () => {
-    state.mode.chatMode = 'talk'
+  it('opens the voice overlay from a ?mode=talk deep link', async () => {
+    mockSearchParamsGet.mockImplementation((key: string) => (key === 'mode' ? 'talk' : null))
+    await renderChat()
+    expect(screen.getAllByTestId('dynamic').length).toBe(9)
+  })
+
+  it('ignores legacy non-talk mode params (no mode UI to drive)', async () => {
+    mockSearchParamsGet.mockImplementation((key: string) => (key === 'mode' ? 'write' : null))
     await renderChat()
     expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })

@@ -123,21 +123,11 @@ vi.mock('@/lib/feedback-conversations-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 
 vi.mock('@/lib/format-bytes', () => ({
   todayDateString: () => '2026-08-07',
@@ -561,7 +551,7 @@ describe('FeedbackPage — workflow actions', () => {
       await act(async () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0])
       })
-      expect(mockAddToast).toHaveBeenCalledWith('Aggregation triggered', 'success')
+      expect(mockAddToast).toHaveBeenCalledWith('Aggregation triggered', { type: 'success' })
     }
   })
 
@@ -584,7 +574,7 @@ describe('FeedbackPage — workflow actions', () => {
       await act(async () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0])
       })
-      expect(mockAddToast).toHaveBeenCalledWith('aggregation', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('aggregation', { type: 'error' })
     }
   })
 })

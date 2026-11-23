@@ -23,28 +23,48 @@ export const ModelEventsCard = memo(function ModelEventsCard({ liveHealth }: Mod
 
   return (
     <Card className="p-2.5">
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Model events</span>
-      <CardContent className="p-0 max-h-[200px] overflow-y-auto space-y-1" role="log" aria-live="polite" aria-label="Model event log">
+      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+        Model events
+      </span>
+      <CardContent
+        className="p-0 max-h-[200px] overflow-y-auto space-y-1"
+        role="log"
+        aria-live="polite"
+        aria-label="Model event log"
+      >
         {events.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground/60 text-center py-3">No model events yet</p>
-        ) : events.map((e, i) => (
-          <div key={`${e.ts}-${i}`} className="border border-border/40 hover:bg-muted/20 transition-colors rounded-md p-1.5">
-            <div className="flex items-center justify-between gap-1.5">
-              <span
-                className={cn('shrink-0 text-[8px] px-1 py-0.5 rounded font-medium uppercase', EVENT_STYLES[e.type] ?? 'bg-muted text-muted-foreground')}
-              >
-                {e.type}
-              </span>
-              <span className="truncate text-[10px] font-medium font-mono">{e.model}</span>
-            </div>
-            {e.detail && (
-              <div className="text-[9px] text-muted-foreground/60 mt-0.5 truncate" title={e.detail}>
-                {e.detail}
+          <p className="text-xs text-muted-foreground/60 text-center py-3">No model events yet</p>
+        ) : (
+          events.map((e, i) => (
+            <div
+              key={`${e.ts}-${i}`}
+              className="border border-border/40 hover:bg-muted/20 transition-colors rounded-md p-1.5"
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <span
+                  className={cn(
+                    'shrink-0 text-[11px] px-1 py-0.5 rounded font-medium uppercase',
+                    EVENT_STYLES[e.type] ?? 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {e.type}
+                </span>
+                <span className="truncate text-xs font-medium font-mono">{e.model}</span>
               </div>
-            )}
-            <div className="text-[9px] text-muted-foreground/40 mt-0.5 font-mono tabular-nums">{timeAgo(e.ts)}</div>
-          </div>
-        ))}
+              {e.detail && (
+                <div
+                  className="text-[11px] text-muted-foreground/60 mt-0.5 truncate"
+                  title={e.detail}
+                >
+                  {e.detail}
+                </div>
+              )}
+              <div className="text-[11px] text-muted-foreground/40 mt-0.5 font-mono tabular-nums">
+                {timeAgo(e.ts)}
+              </div>
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   )

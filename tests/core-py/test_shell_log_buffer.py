@@ -312,14 +312,6 @@ class TestLogBufferThreadSafety:
 
 
 class TestLogBufferSingleton:
-    def test_singleton_returns_same_instance(self):
-        a = get_log_buffer()
-        b = get_log_buffer()
-        assert a is b
-
-    def test_singleton_is_logbuffer(self):
-        assert isinstance(get_log_buffer(), LogBuffer)
-
     def test_singleton_has_reasonable_default_size(self):
         buf = get_log_buffer()
         assert buf._max_size >= 100

@@ -2,67 +2,146 @@
 
 import { memo, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  Legend,
+} from 'recharts'
 
 interface VisualComparisonCardProps {
   chartData: { name: string; throughput: number; latency: number; memory: number }[]
 }
 
 export default memo(function VisualComparisonCard({ chartData }: VisualComparisonCardProps) {
-  const maxThroughput = Math.max(...chartData.map(d => d.throughput))
-  const maxLatency = Math.max(...chartData.map(d => d.latency))
-  const maxMemory = Math.max(...chartData.map(d => d.memory))
+  const maxThroughput = Math.max(...chartData.map((d) => d.throughput))
+  const maxLatency = Math.max(...chartData.map((d) => d.latency))
+  const maxMemory = Math.max(...chartData.map((d) => d.memory))
 
-  const radarData = useMemo(() => chartData.map(d => ({
-    name: d.name,
-    throughput: maxThroughput > 0 ? (d.throughput / maxThroughput) * 100 : 0,
-    latency: maxLatency > 0 ? ((maxLatency - d.latency) / maxLatency) * 100 : 0,
-    memory: maxMemory > 0 ? ((maxMemory - d.memory) / maxMemory) * 100 : 0,
-  })), [chartData, maxThroughput, maxLatency, maxMemory])
+  const radarData = useMemo(
+    () =>
+      chartData.map((d) => ({
+        name: d.name,
+        throughput: maxThroughput > 0 ? (d.throughput / maxThroughput) * 100 : 0,
+        latency: maxLatency > 0 ? ((maxLatency - d.latency) / maxLatency) * 100 : 0,
+        memory: maxMemory > 0 ? ((maxMemory - d.memory) / maxMemory) * 100 : 0,
+      })),
+    [chartData, maxThroughput, maxLatency, maxMemory],
+  )
 
   if (chartData.length < 2) return null
 
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-xs">Visual Comparison</CardTitle></CardHeader>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs">Visual Comparison</CardTitle>
+      </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <p className="text-[10px] text-muted-foreground/60 mb-1.5">Throughput (tok/s) — higher is better</p>
+          <p className="text-xs text-muted-foreground/60 mb-1.5">
+            Throughput (tok/s) — higher is better
+          </p>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
-                <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
-                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val: any) => [Number(val).toFixed(1) + ' tok/s', 'Throughput']} />
+                <XAxis type="number" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={80}
+                  tick={{ fontSize: 11 }}
+                  stroke="var(--muted-foreground)"
+                />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 11,
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                  }}
+                  formatter={(val: any) => [Number(val).toFixed(1) + ' tok/s', 'Throughput']}
+                />
                 <Bar dataKey="throughput" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
         <div>
-          <p className="text-[10px] text-muted-foreground/60 mb-1.5">Average latency (ms) — lower is better</p>
+          <p className="text-xs text-muted-foreground/60 mb-1.5">
+            Average latency (ms) — lower is better
+          </p>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
-                <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" hide />
-                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val: any) => [Number(val).toFixed(0) + ' ms', 'Latency']} />
+                <XAxis type="number" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={80}
+                  tick={{ fontSize: 11 }}
+                  stroke="var(--muted-foreground)"
+                  hide
+                />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 11,
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                  }}
+                  formatter={(val: any) => [Number(val).toFixed(0) + ' ms', 'Latency']}
+                />
                 <Bar dataKey="latency" fill="var(--warning)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
         <div>
-          <p className="text-[10px] text-muted-foreground/60 mb-1.5">Memory usage (MB) — lower is better</p>
+          <p className="text-xs text-muted-foreground/60 mb-1.5">
+            Memory usage (MB) — lower is better
+          </p>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
-                <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" hide />
-                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val: any) => [Number(val).toFixed(0) + ' MB', 'Memory']} />
+                <XAxis type="number" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={80}
+                  tick={{ fontSize: 11 }}
+                  stroke="var(--muted-foreground)"
+                  hide
+                />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 11,
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                  }}
+                  formatter={(val: any) => [Number(val).toFixed(0) + ' MB', 'Memory']}
+                />
                 <Bar dataKey="memory" fill="var(--accent)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -70,17 +149,37 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
         </div>
         {chartData.length >= 3 && (
           <div>
-            <p className="text-[10px] text-muted-foreground/60 mb-1.5">Overall profile (normalized, higher is better)</p>
+            <p className="text-xs text-muted-foreground/60 mb-1.5">
+              Overall profile (normalized, higher is better)
+            </p>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="var(--border)" />
-                  <PolarAngleAxis dataKey="name" tick={{ fontSize: 9 }} />
-                  <PolarRadiusAxis tick={{ fontSize: 8 }} domain={[0, 100]} />
-                  <Radar name="Throughput" dataKey="throughput" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.15} />
-                  <Radar name="Latency" dataKey="latency" stroke="var(--warning)" fill="var(--warning)" fillOpacity={0.15} />
-                  <Radar name="Memory" dataKey="memory" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.15} />
-                  <Legend wrapperStyle={{ fontSize: 9 }} />
+                  <PolarAngleAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <PolarRadiusAxis tick={{ fontSize: 11 }} domain={[0, 100]} />
+                  <Radar
+                    name="Throughput"
+                    dataKey="throughput"
+                    stroke="var(--primary)"
+                    fill="var(--primary)"
+                    fillOpacity={0.15}
+                  />
+                  <Radar
+                    name="Latency"
+                    dataKey="latency"
+                    stroke="var(--warning)"
+                    fill="var(--warning)"
+                    fillOpacity={0.15}
+                  />
+                  <Radar
+                    name="Memory"
+                    dataKey="memory"
+                    stroke="var(--accent)"
+                    fill="var(--accent)"
+                    fillOpacity={0.15}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>

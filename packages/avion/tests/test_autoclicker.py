@@ -32,6 +32,10 @@ class FakeBackend:
         self.pressed: list[str] = []
         self.typed: list[str] = []
         self.mouse_clicks: list[tuple[float, float]] = []
+        # (method, button) as received: the backend contract is button *names*
+        # ("left"), not MouseButton enums — Playwright/CDP/pyautogui choke on
+        # the enum when they serialize the call.
+        self.buttons: list[tuple[str, object]] = []
         self.page_text = ""
         self._elements = {
             ElementLocator.text("Start").describe(): Element(
@@ -104,13 +108,14 @@ class FakeBackend:
         pass
 
     async def mouse_down(self, button=None) -> None:
-        pass
+        self.buttons.append(("down", button))
 
     async def mouse_up(self, button=None) -> None:
-        pass
+        self.buttons.append(("up", button))
 
     async def mouse_click(self, x: float, y: float, button=None) -> None:
         self.mouse_clicks.append((x, y))
+        self.buttons.append(("click", button))
 
     async def mouse_double_click(self, x: float, y: float) -> None:
         pass
@@ -250,6 +255,19 @@ class TestCoordinates:
         b = FakeBackend()
         run(Mouse(b).click(Coordinate(10, 20)))
         assert b.mouse_clicks == [(10, 20)]
+
+    def test_button_names_cross_the_backend_boundary_as_strings(self):
+        b = FakeBackend()
+        mouse = Mouse(b)
+        run(mouse.click(Coordinate(10, 20)))
+        run(mouse.right_click(Coordinate(30, 40)))
+        run(mouse.middle_click(Coordinate(50, 60)))
+        assert b.buttons == [("click", "left"), ("click", "right"), ("click", "middle")]
+
+    def test_drag_presses_and_releases_by_button_name(self):
+        b = FakeBackend()
+        run(Mouse(b).drag(Coordinate(1, 1), Coordinate(9, 9), steps=2))
+        assert b.buttons == [("down", "left"), ("up", "left")]
 
     def test_keyboard_type_records_text(self):
         b = FakeBackend()

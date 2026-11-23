@@ -47,6 +47,10 @@ vi.mock('@/lib/store', () => ({
   useUpdateSettings: () => vi.fn(),
 }))
 
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+}))
+
 import { CommandPalette } from './CommandPalette'
 
 describe('CommandPalette', () => {
@@ -93,6 +97,16 @@ describe('CommandPalette', () => {
     fireEvent.change(input, { target: { value: 'New' } })
     expect(screen.getByText('New Chat')).toBeDefined()
     expect(screen.queryByText('Export Chat')).toBeNull()
+  })
+
+  it('nav rows use the translated labelKey, not the description', () => {
+    // mock useLocale t() is the identity function, so a labelKey-driven row
+    // renders 'nav.chat'; a description-driven row would render 'Open chat'.
+    render(<CommandPalette />)
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    const input = screen.getByPlaceholderText('Search pages, models, actions...')
+    fireEvent.change(input, { target: { value: 'chat' } })
+    expect(screen.getByText('nav.chat')).toBeDefined()
   })
 
   it('shows "No results" for unmatched query', () => {

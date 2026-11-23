@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 import { Skeleton } from '@sloughgpt/strui'
@@ -35,7 +35,6 @@ export default function WorkspaceSearchPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
   // Deep link: /workspace/data/search?q=... seeds the query (palette jumps).
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
@@ -58,12 +57,12 @@ export default function WorkspaceSearchPage() {
           setPartial(res.partial ?? [])
         }
       } catch {
-        addToast('Search failed', 'error')
+        notify.toast('Search failed', { type: 'error' })
       } finally {
         setLoading(false)
       }
     },
-    [currentWorkspace?.id, addToast],
+    [currentWorkspace?.id],
   )
 
   useEffect(() => {

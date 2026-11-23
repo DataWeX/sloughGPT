@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { authFetch } from '@/lib/http-client'
@@ -121,7 +121,6 @@ function computeHistogramBins(times: number[], bins: number): { start: number; c
 }
 
 export default function ConsciousnessBenchmarkPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
 
   const [iterations, setIterations] = useState(50)
@@ -185,7 +184,7 @@ export default function ConsciousnessBenchmarkPage() {
 
     if (times.length === 0) {
       setRunning(false)
-      addToast(t('consciousness_benchmark.toast_aborted'), 'error')
+      notify.toast(t('consciousness_benchmark.toast_aborted'), { type: 'error' })
       return
     }
 
@@ -214,8 +213,8 @@ export default function ConsciousnessBenchmarkPage() {
     saveRun(benchmarkResult)
     setResult(benchmarkResult)
     setRunning(false)
-    addToast(t('consciousness_benchmark.toast_complete'), 'success')
-  }, [running, testType, iterations, warmup, addToast, t])
+    notify.toast(t('consciousness_benchmark.toast_complete'), { type: 'success' })
+  }, [running, testType, iterations, warmup, t])
 
   const stopBenchmark = useCallback(() => {
     abortRef.current = true
@@ -230,8 +229,8 @@ export default function ConsciousnessBenchmarkPage() {
     a.download = `consciousness-benchmark-${result.testType}-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast(t('consciousness_benchmark.toast_exported'), 'success')
-  }, [result, addToast, t])
+    notify.toast(t('consciousness_benchmark.toast_exported'), { type: 'success' })
+  }, [result, t])
 
   const progressPct = warmup + iterations > 0 ? (progress / (warmup + iterations)) * 100 : 0
 
@@ -445,7 +444,7 @@ export default function ConsciousnessBenchmarkPage() {
                             y={198}
                             textAnchor="middle"
                             className="fill-muted-foreground"
-                            fontSize={10}
+                            fontSize={11}
                           >
                             {bin.start}
                           </text>
@@ -498,10 +497,10 @@ export default function ConsciousnessBenchmarkPage() {
                             stroke="rgb(var(--border))"
                             strokeWidth={0.5}
                           />
-                          <text x={5} y={12} className="fill-muted-foreground" fontSize={10}>
+                          <text x={5} y={12} className="fill-muted-foreground" fontSize={11}>
                             {maxVal}ms
                           </text>
-                          <text x={5} y={188} className="fill-muted-foreground" fontSize={10}>
+                          <text x={5} y={188} className="fill-muted-foreground" fontSize={11}>
                             {minVal}ms
                           </text>
                         </>

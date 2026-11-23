@@ -8,6 +8,7 @@ from typing import Any
 
 from .protocols import ChatMessage, MessageProcessor, ModelCapabilities
 from .registry import get_provider
+from .vision import MULTIMODAL, get_vision_model_name, get_vision_provider
 
 logger = logging.getLogger("slo.models.provider")
 
@@ -127,16 +128,7 @@ class ProviderRouter:
         if cancel_event is not None and cancel_event.is_set():
             return "[cancelled]"
         if tool_name == "describe_image":
-            provider = get_provider("multimodal")
-            if provider is None:
-                try:
-                    from domain.multimodal._internal.manager import get_multimodal_manager
-
-                    mgr = get_multimodal_manager()
-                    mgr.initialize(vision_model="slonet")
-                    provider = get_provider("multimodal")
-                except Exception as e:
-                    logger.debug("Failed to init multimodal for tool: %s", e)
+            provider = get_vision_provider(init=True)
             if provider is not None:
                 try:
                     result = ""
@@ -155,6 +147,10 @@ class ProviderRouter:
                     return result.strip() or "[no description]"
                 except Exception as e:
                     return f"[tool error: {e}]"
+            if get_vision_model_name() != MULTIMODAL:
+                # Configured a non-multimodal provider that is not registered:
+                # say so instead of quietly captioning with the built-in one.
+                return "[vision model not available]"
             try:
                 import base64
                 import io

@@ -38,7 +38,9 @@ describe('ReadFileSection', () => {
   it('calls onRemove when Remove button clicked', () => {
     const onRemove = vi.fn()
     const data = { text: 'hello', filename: 'test.pdf', pages: 1 }
-    const { container } = render(<ReadFileSection {...defaultProps} readFileData={data} onRemove={onRemove} />)
+    const { container } = render(
+      <ReadFileSection {...defaultProps} readFileData={data} onRemove={onRemove} />,
+    )
     const btn = container.querySelector('button')
     expect(btn).toBeTruthy()
     fireEvent.click(btn!)
@@ -47,7 +49,9 @@ describe('ReadFileSection', () => {
 
   it('calls onFileSelected when file input changes', () => {
     const onFileSelected = vi.fn()
-    const { container } = render(<ReadFileSection {...defaultProps} onFileSelected={onFileSelected} />)
+    const { container } = render(
+      <ReadFileSection {...defaultProps} onFileSelected={onFileSelected} />,
+    )
     const input = container.querySelector('input[type="file"]') as HTMLInputElement
     expect(input).toBeTruthy()
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
@@ -67,5 +71,40 @@ describe('ReadFileSection', () => {
     const data = { text: 'content', filename: 'report.csv', pages: 3 }
     render(<ReadFileSection {...defaultProps} readFileData={data} />)
     expect(screen.getByText('report.csv')).toBeTruthy()
+  })
+
+  it('expands to the full dropzone while dragging and collapses on leave', () => {
+    const { container } = render(<ReadFileSection {...defaultProps} />)
+    const zone = container.firstChild as HTMLElement
+    fireEvent.dragOver(zone)
+    expect(screen.getByText('Release to upload')).toBeTruthy()
+    // Leaving the section entirely collapses back to the slim idle bar.
+    fireEvent.dragLeave(zone, { relatedTarget: document.body })
+    expect(screen.queryByText('Release to upload')).toBeNull()
+    expect(screen.getByText(/Drop a file here or click to upload/)).toBeTruthy()
+  })
+
+  it('keeps the dropzone open on child-to-child drag leave', () => {
+    const { container } = render(<ReadFileSection {...defaultProps} />)
+    const zone = container.firstChild as HTMLElement
+    fireEvent.dragOver(zone)
+    const label = zone.querySelector('label')!
+    // A dragleave FROM the child bubbles with the child as target — the
+    // section only collapses when it is the target itself.
+    fireEvent.dragLeave(label)
+    expect(screen.getByText('Release to upload')).toBeTruthy()
+  })
+
+  it('delivers a dropped file without opening the picker', () => {
+    const onFileSelected = vi.fn()
+    const { container } = render(
+      <ReadFileSection {...defaultProps} onFileSelected={onFileSelected} />,
+    )
+    const zone = container.firstChild as HTMLElement
+    const file = new File(['x'], 'dropped.md', { type: 'text/markdown' })
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } })
+    expect(onFileSelected).toHaveBeenCalledWith(file)
+    // Drop consumed: dragging state cleared, back to the idle bar.
+    expect(screen.queryByText('Release to upload')).toBeNull()
   })
 })

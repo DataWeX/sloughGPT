@@ -52,23 +52,23 @@ export function MemoryItemList({
                 {item.content.length > 160 ? item.content.slice(0, 160) + '…' : item.content}
               </span>
               {copiedId === item.id && (
-                <span className="shrink-0 text-[9px] text-success font-medium pt-0.5">Copied</span>
+                <span className="shrink-0 text-[11px] text-success font-medium pt-0.5">Copied</span>
               )}
             </div>
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {item.topic && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                   {item.topic}
                 </span>
               )}
               {item.source && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                   {item.source}
                 </span>
               )}
               {typeof item.importance === 'number' && (
                 <span
-                  className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
+                  className="text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
                   title="Importance score"
                 >
                   importance {item.importance.toFixed(1)}
@@ -76,7 +76,7 @@ export function MemoryItemList({
               )}
               {item.timestamp > 0 && (
                 <span
-                  className="text-[9px] text-muted-foreground font-mono"
+                  className="text-[11px] text-muted-foreground font-mono"
                   title={new Date(item.timestamp * 1000).toLocaleString()}
                 >
                   {formatRelativeTime(item.timestamp)}
@@ -86,7 +86,7 @@ export function MemoryItemList({
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
             {typeof item.score === 'number' && searchResults !== null && (
-              <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">
+              <span className="text-xs text-muted-foreground font-mono shrink-0 mr-0.5">
                 {item.score.toFixed(2)}
               </span>
             )}

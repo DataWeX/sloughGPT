@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { cn, ActionCard, Progress, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -25,18 +25,17 @@ function formatSpeed(bps: number): string {
 export default function DownloadsCard() {
   const [downloads, setDownloads] = useState<Download[]>([])
   const [loading, setLoading] = useState(true)
-  const addToast = notify.toast
 
   const fetchDownloads = useCallback(async () => {
     try {
       const result = await modelController.listDownloads()
       setDownloads(result.downloads ?? [])
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not load downloads'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not load downloads'), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -47,7 +46,7 @@ export default function DownloadsCard() {
         if (active) setDownloads(result.downloads ?? [])
       } catch {
         if (active) {
-          addToast('Could not load downloads', 'error')
+          notify.toast('Could not load downloads', { type: 'error' })
           setDownloads([])
         }
       } finally {
@@ -58,7 +57,7 @@ export default function DownloadsCard() {
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     const hasActive = downloads.some((d) => d.status === 'downloading' || d.status === 'queued')
@@ -70,20 +69,20 @@ export default function DownloadsCard() {
   const handleCancel = async (modelId: string) => {
     try {
       await modelController.cancelDownload(modelId)
-      addToast(`Cancelled download: ${modelId}`, 'success')
+      notify.toast(`Cancelled download: ${modelId}`, { type: 'success' })
       await fetchDownloads()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not cancel'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not cancel'), { type: 'error' })
     }
   }
 
   const handleRetry = async (modelId: string) => {
     try {
       await modelController.retryDownload(modelId)
-      addToast(`Retrying download: ${modelId}`, 'success')
+      notify.toast(`Retrying download: ${modelId}`, { type: 'success' })
       await fetchDownloads()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not retry'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not retry'), { type: 'error' })
     }
   }
 
@@ -91,12 +90,14 @@ export default function DownloadsCard() {
     try {
       const result = await modelController.verifyDownload(modelId)
       if (result.verified) {
-        addToast(`${modelId} verified`, 'success')
+        notify.toast(`${modelId} verified`, { type: 'success' })
       } else {
-        addToast(`${modelId} verification failed: ${result.error || 'unknown'}`, 'error')
+        notify.toast(`${modelId} verification failed: ${result.error || 'unknown'}`, {
+          type: 'error',
+        })
       }
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not verify'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not verify'), { type: 'error' })
     }
   }
 
@@ -128,7 +129,7 @@ export default function DownloadsCard() {
                   <span className="font-medium truncate text-[11px]">{d.model_id}</span>
                   <span
                     className={cn(
-                      'text-[9px] px-1.5 py-0.5 rounded-full font-medium',
+                      'text-[11px] px-1.5 py-0.5 rounded-full font-medium',
                       isActive
                         ? 'bg-primary/10 text-primary'
                         : isFailed
@@ -141,7 +142,7 @@ export default function DownloadsCard() {
                     {d.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 text-[9px] text-muted-foreground/60 shrink-0 tabular-nums">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 shrink-0 tabular-nums">
                   <span>
                     {formatBytes(d.bytes_downloaded)} / {formatBytes(d.total_bytes)}
                   </span>
@@ -156,7 +157,7 @@ export default function DownloadsCard() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={() => handleRetry(d.model_id)}
                   >
                     Retry
@@ -164,7 +165,7 @@ export default function DownloadsCard() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[10px]"
+                    className="h-6 text-xs"
                     onClick={() => handleVerify(d.model_id)}
                   >
                     Verify
@@ -175,7 +176,7 @@ export default function DownloadsCard() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px] mt-1"
+                  className="h-6 text-xs mt-1"
                   onClick={() => handleCancel(d.model_id)}
                 >
                   Cancel

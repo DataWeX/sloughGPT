@@ -1,7 +1,7 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
-import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import {
@@ -46,7 +46,6 @@ export default function AgentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const agentId = params.id as string
-  const addToast = notify.toast
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [runs, setRuns] = useState<AgentRun[]>([])
@@ -71,18 +70,18 @@ export default function AgentDetailPage() {
       if (found) {
         setAgent(found)
       } else {
-        addToast('Agent not found', 'error')
+        notify.toast('Agent not found', { type: 'error' })
         router.push('/agents')
       }
 
       const runsData = await agentsController.listRuns(10)
       setRuns(runsData.runs.filter((r) => r.tasks.some((t) => t.agent === agentId)))
     } catch {
-      addToast('Failed to load agent', 'error')
+      notify.toast('Failed to load agent', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [agentId, addToast, router])
+  }, [agentId, router])
 
   useEffect(() => {
     fetchAgent()
@@ -106,9 +105,9 @@ export default function AgentDetailPage() {
         tools: editTools,
       })
       setEditing(false)
-      addToast('Updated', 'success')
+      notify.toast('Updated', { type: 'success' })
     } catch {
-      addToast('Update failed', 'error')
+      notify.toast('Update failed', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -118,10 +117,10 @@ export default function AgentDetailPage() {
     if (!agent) return
     try {
       await agentsController.delete(agent.id)
-      addToast('Deleted', 'success')
+      notify.toast('Deleted', { type: 'success' })
       router.push('/agents')
     } catch {
-      addToast('Delete failed', 'error')
+      notify.toast('Delete failed', { type: 'error' })
     }
   }
 
@@ -132,9 +131,9 @@ export default function AgentDetailPage() {
     try {
       const result = await agentsController.execute(agent.id, execPrompt)
       setExecResult(result.response)
-      addToast('Execution complete', 'success')
+      notify.toast('Execution complete', { type: 'success' })
     } catch {
-      addToast('Execution failed', 'error')
+      notify.toast('Execution failed', { type: 'error' })
     } finally {
       setExecuting(false)
     }
@@ -177,14 +176,14 @@ export default function AgentDetailPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 text-[10px]"
+                        className="h-6 text-xs"
                         onClick={() => setEditing(false)}
                       >
                         Cancel
                       </Button>
                       <Button
                         size="sm"
-                        className="h-6 text-[10px]"
+                        className="h-6 text-xs"
                         onClick={handleSave}
                         disabled={saving}
                       >
@@ -195,7 +194,7 @@ export default function AgentDetailPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 text-[10px]"
+                      className="h-6 text-xs"
                       onClick={() => {
                         setEditing(true)
                         setEditName(agent.name)

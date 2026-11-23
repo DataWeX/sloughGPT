@@ -211,7 +211,7 @@ export default function KanbanPage() {
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               {selected?.priority && (
                 <span
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium capitalize"
+                  className="rounded px-1.5 py-0.5 text-xs font-medium capitalize"
                   style={{
                     backgroundColor: 'rgb(var(--muted) / 0.15)',
                     color: 'rgb(var(--muted-foreground))',
@@ -223,7 +223,7 @@ export default function KanbanPage() {
               {(selected?.tags ?? []).slice(0, 4).map((tag) => (
                 <span
                   key={tag}
-                  className="rounded px-1.5 py-0.5 text-[10px]"
+                  className="rounded px-1.5 py-0.5 text-xs"
                   style={{
                     backgroundColor: 'rgb(var(--primary) / 0.15)',
                     color: 'rgb(var(--primary))',
@@ -336,7 +336,7 @@ function BoardColumns({
                   {col.label || col.name.replace(/_/g, ' ')}
                 </span>
                 <span
-                  className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                  className="rounded-full px-1.5 py-0.5 text-xs font-medium"
                   style={{
                     backgroundColor: overWip
                       ? 'rgb(var(--destructive) / 0.15)'
@@ -383,7 +383,7 @@ function BoardColumns({
                           {card.tags.map((tag) => (
                             <span
                               key={tag}
-                              className="rounded px-1.5 py-0.5 text-[10px]"
+                              className="rounded px-1.5 py-0.5 text-xs"
                               style={{
                                 backgroundColor: 'rgb(var(--primary) / 0.15)',
                                 color: 'rgb(var(--primary))',

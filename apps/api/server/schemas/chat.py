@@ -46,6 +46,17 @@ class ChatRequest(BaseModel):
     use_rag: bool = Field(
         default=True, description="Use production RAG for document-grounded responses"
     )
+    use_consciousness: bool = Field(
+        default=False,
+        description=(
+            "Run the consciousness reflection pipeline for this turn. OFF by "
+            "default (card 20261114_092948): when ON, the reflection "
+            "narrative rides the volatile tail — attached to the last user "
+            "turn, framed as context — while it previously prepended as a "
+            "SYSTEM message and the model answered the narrative instead of "
+            "the user (probed live 2026-11-14). Clients opt in per turn."
+        ),
+    )
     agent_id: str | None = Field(default=None, description="Agent ID for role-play instructions")
 
     def model_post_init(self, __context: Any) -> None:
@@ -66,6 +77,14 @@ class ChatRequest(BaseModel):
         and passes it down through the router; this translation is the one place
         it crosses into the turn so the provider's token loop can observe it.
         """
+        # ``max_new_tokens`` resolves into ``max_tokens`` (model_post_init), so
+        # the alias must carry the SAME precedence as the field it resolves to:
+        # otherwise an explicit turn value looks unset to the AppScope seam
+        # (``apply_scope`` reads ``model_fields_set``) and gets swallowed by the
+        # conversation/global layer — breaking turn > delta > global per field.
+        fields_set = set(self.model_fields_set)
+        if "max_new_tokens" in fields_set:
+            fields_set.add("max_tokens")
         return TurnRequest(
             messages=[{"role": m.role, "content": m.content} for m in self.messages],
             model=self.model,
@@ -82,8 +101,9 @@ class ChatRequest(BaseModel):
             agent_id=self.agent_id,
             use_context_core=self.use_context_core,
             use_rag=self.use_rag,
+            use_consciousness=self.use_consciousness,
             cancel_event=cancel_event,
-            model_fields_set=set(self.model_fields_set),
+            model_fields_set=fields_set,
         )
 
 

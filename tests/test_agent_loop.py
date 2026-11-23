@@ -90,6 +90,209 @@ def test_encode_roundtrip_single_and_multi():
     assert calls == multi
 
 
+# ── json-tagged fences (the model's informal variant) ────────────────
+# The 0.5B model spontaneously tags its tool block ``json`` instead of
+# ``tool_call`` (observed live during the Phase 2 journey walk, card
+# 20261116_090332). The contract keeps ``tool_call`` canonical, but a
+# tool-SHAPED json block must execute — and only that: any other json
+# block is a code snippet and stays prose, never a call and never an
+# error.
+
+
+def test_decode_json_tagged_single_call():
+    text = 'Sure.\n```json\n{"name": "calculator", "args": {"expression": "2+2"}}\n```'
+    calls, residual = decode(text)
+    assert calls == [ToolCall(name="calculator", args={"expression": "2+2"})]
+    assert "Sure." in residual
+    assert "```" not in residual
+
+
+def test_decode_json_tagged_multi_call_tolerates_trailing_comma():
+    # The model's real output from the journey walk: a trailing comma
+    # before the closing brace. Informal tag → lenient parse.
+    text = '```json\n{"tool_calls": [{"name": "calculator", "args": {"expression": "2+2"}},],}\n```'
+    calls, residual = decode(text)
+    assert [c.name for c in calls] == ["calculator"]
+    assert residual == ""
+
+
+def test_decode_json_tagged_non_tool_payload_stays_prose():
+    text = 'Result:\n```json\n{"answer": 42}\n```'
+    calls, residual = decode(text)
+    assert calls == [], "a plain JSON snippet is code, not a tool call"
+    assert '{"answer": 42}' in residual
+    assert "```" in residual, "the code block must survive intact as prose"
+
+
+def test_decode_json_tagged_invalid_json_stays_prose_not_error():
+    # Informal tag carries no contract: broken json is degraded prose,
+    # never ProtocolError (that strictness belongs to ``tool_call`` only —
+    # pinned by test_decode_invalid_json_raises_protocol_error).
+    text = "```json\n{broken: }\n```"
+    calls, residual = decode(text)
+    assert calls == []
+    assert "{broken: }" in residual
+
+
+# ── unclosed fences (model stops before the closing backticks) ────────
+# Live walk evidence (card 20261116_090332): the model emitted
+# "```tool_call\n{...}" and hit finish_reason=stop — no closing fence.
+# The canonical RE requires one, so decode saw no call and the guard's
+# terminal flush leaked the raw block to the user with zero TOOL frames.
+
+
+def test_decode_unclosed_tool_call_fence_at_eof():
+    text = 'Sure.\n```tool_call\n{"name": "calculator", "args": {"expression": "2+2"}}'
+    calls, residual = decode(text)
+    assert calls == [ToolCall(name="calculator", args={"expression": "2+2"})]
+    assert "```" not in residual
+    assert "Sure." in residual
+
+
+def test_decode_unclosed_json_fence_executes_when_tool_shaped():
+    text = '```json\n{"tool_calls": [{"name": "calculator", "args": {"expression": "2+2"}}]}'
+    calls, residual = decode(text)
+    assert [c.name for c in calls] == ["calculator"]
+    assert residual == ""
+
+
+def test_decode_unclosed_non_tool_json_stays_prose():
+    text = 'Result:\n```json\n{"answer": 42}'
+    calls, residual = decode(text)
+    assert calls == [], "an unclosed non-tool json block is code, not a call"
+    assert '{"answer": 42}' in residual
+
+
+def test_decode_unclosed_tool_call_truncated_json_is_protocol_error():
+    # Truncated mid-JSON (max_tokens cut): canonical strictness holds —
+    # the agentic degradation path (pinned in test_agentic_turn) flushes.
+    text = '```tool_call\n{"name": "image_gen", "args": {"prompt": "blu'
+    with pytest.raises(ProtocolError):
+        decode(text)
+
+
+# ── flat call shape (siblings of name ARE the args) ───────────────────
+# Live walk evidence: {"name": "image_gen", "query": "..."} — no args
+# wrapper. Silently dropping to {} hides the model's intent from
+# validate_args; carrying the siblings lets the error name them and the
+# round-2 feedback correct it (file_qa's declared `query` validates as-is).
+
+
+def test_decode_flat_call_carries_sibling_keys_as_args():
+    text = '```tool_call\n{"name": "image_gen", "query": "a blue circle"}\n```'
+    calls, _ = decode(text)
+    assert calls == [ToolCall(name="image_gen", args={"query": "a blue circle"})]
+
+
+def test_decode_explicit_args_still_wins_over_siblings():
+    text = '```tool_call\n{"name": "a", "args": {"x": 1}, "query": "ignored"}\n```'
+    calls, _ = decode(text)
+    assert calls == [ToolCall(name="a", args={"x": 1})]
+
+
+# ── repair ladder for the canonical tag (live walk #3) ────────────────
+# walk_img7 bytes: a CLOSED fence whose payload is missing the outer
+# brace — {"tool_calls": [{...}]  (the 0.5B's systematic sloppiness,
+# same class as the trailing comma). Strictness means UNREPAIRABLE
+# garbage raises, not byte-perfect JSON: punctuation repair applies to
+# tool_call too, or every near-miss call degrades to a raw leak with
+# zero TOOL frames.
+
+
+def test_decode_missing_outer_brace_repairs_and_executes():
+    text = (
+        'Sure.\n```tool_call\n{"tool_calls": [{"name": "image_gen", "query": "blue circle"}]\n```'
+    )
+    calls, residual = decode(text)
+    assert calls == [ToolCall(name="image_gen", args={"query": "blue circle"})]
+    assert "Sure." in residual
+    assert "```" not in residual
+
+
+def test_decode_trailing_comma_in_canonical_tag_repairs():
+    text = '```tool_call\n{"tool_calls": [{"name": "a", "args": {"x": 1}},],}\n```'
+    calls, _ = decode(text)
+    assert calls == [ToolCall(name="a", args={"x": 1})]
+
+
+def test_decode_unrepairable_canonical_json_still_raises():
+    # The ladder's floor: bareword keys survive every repair step, so
+    # the pinned ProtocolError contract holds (no keyword guessing).
+    text = "```tool_call\n{not valid json}\n```"
+    with pytest.raises(ProtocolError):
+        decode(text)
+
+
+# ── tool-named fence (model invents its own tag, live walk #4) ────────
+# walk_img10 bytes: ```image_gen — the tag NAMES the registered tool —
+# with a key: value body (prompt: "..." / style: "..."), not JSON, and a
+# mangled closer (```image). The guard holds any tag naming a registered
+# tool; decode parses the body JSON-first, then key: value lines. Tags
+# that name nothing (python, js) stay prose — a code block is never a call.
+
+
+def test_decode_tool_named_fence_yaml_body():
+    text = (
+        "```image_gen\n"
+        'prompt: "A blue circle"\n'
+        'style: "cyberpunk"\n'
+        'output: {"name": "image_gen", "args": {"filename": "", "url": ""}}\n'
+        "```"
+    )
+    calls, residual = decode(text, tool_names={"image_gen"})
+    assert calls == [
+        ToolCall(
+            name="image_gen",
+            args={
+                "prompt": "A blue circle",
+                "style": "cyberpunk",
+                "output": {"name": "image_gen", "args": {"filename": "", "url": ""}},
+            },
+        )
+    ]
+    assert "```" not in residual
+
+
+def test_decode_tool_named_fence_json_body():
+    text = '```image_gen\n{"prompt": "a blue circle"}\n```'
+    calls, residual = decode(text, tool_names={"image_gen"})
+    assert calls == [ToolCall(name="image_gen", args={"prompt": "a blue circle"})]
+    assert residual == ""
+
+
+def test_decode_tool_named_fence_requires_registered_tag():
+    # A code block is not a call, even with a key: value body: the tag
+    # must name a registered tool (python isn't one).
+    text = "```python\nfoo: bar\n```"
+    calls, residual = decode(text, tool_names={"echo"})
+    assert calls == []
+    assert "```python" in residual
+
+
+def test_decode_tool_named_fence_unparseable_body_stays_prose():
+    text = "```echo\nnot parameters at all\n```"
+    calls, residual = decode(text, tool_names={"echo"})
+    assert calls == []
+    assert "```echo" in residual
+
+
+def test_decode_tool_named_fence_without_tool_names_is_prose():
+    # Default callers (no registry) keep today's behaviour: only the two
+    # protocol tags are calls.
+    text = '```echo\ntext: "hi"\n```'
+    calls, residual = decode(text)
+    assert calls == []
+    assert "```echo" in residual
+
+
+def test_decode_tool_named_unclosed_fence_at_eof():
+    text = 'Sure.\n```image_gen\nprompt: "x"'
+    calls, residual = decode(text, tool_names={"image_gen"})
+    assert calls == [ToolCall(name="image_gen", args={"prompt": "x"})]
+    assert "Sure." in residual
+    assert "```" not in residual
+
+
 # ── loop helpers ─────────────────────────────────────────────────────
 
 
@@ -201,6 +404,66 @@ async def test_loop_missing_required_arg_is_rejected_before_execute():
     result = events[2]
     assert result.payload["success"] is False
     assert "missing required parameter 'expression'" in result.payload["error"]
+
+
+async def test_loop_alias_maps_to_canonical_before_validate():
+    """Aliases are applied at the seam where args are transformed, so the
+    same normalized args reach both validate_args and execute."""
+    registry = ToolRegistry()
+
+    async def _echo(text: str) -> dict[str, Any]:
+        return {"output": text}
+
+    registry.register(
+        ToolSpec(
+            name="echo",
+            description="echo",
+            parameters=[
+                ToolParam("text", "string", "text", required=True, aliases=("word", "input")),
+            ],
+            execute=_echo,
+        )
+    )
+    script = [
+        encode_tool_block([ToolCall(name="echo", args={"input": "hi"})]),
+        "ok",
+    ]
+    events = await _run(script, tools=registry)
+    result = events[2]
+    assert result.payload["success"] is True, result.payload.get("error")
+    assert result.payload["output"] == "hi"
+
+
+async def test_loop_canonical_wins_over_alias_and_unknown_still_rejected():
+    registry = ToolRegistry()
+
+    async def _echo(text: str) -> dict[str, Any]:
+        return {"output": text}
+
+    registry.register(
+        ToolSpec(
+            name="echo",
+            description="echo",
+            parameters=[
+                ToolParam("text", "string", "text", required=True, aliases=("input",)),
+            ],
+            execute=_echo,
+        )
+    )
+    # canonical + alias together → canonical wins, alias dropped
+    both = await _run(
+        [encode_tool_block([ToolCall(name="echo", args={"text": "a", "input": "b"})]), "ok"],
+        tools=registry,
+    )
+    assert both[2].payload["success"] is True, both[2].payload.get("error")
+    assert both[2].payload["output"] == "a"
+    # a key that is neither canonical nor an alias still fails loudly
+    bad = await _run(
+        [encode_tool_block([ToolCall(name="echo", args={"nope": 1})]), "ok"],
+        tools=registry,
+    )
+    assert bad[2].payload["success"] is False
+    assert "nope" in bad[2].payload["error"]
 
 
 async def test_loop_unknown_and_mistyped_args_rejected():

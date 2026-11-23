@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   ActionCard,
@@ -30,18 +30,17 @@ export default function EngineStatusCard() {
   const [status, setStatus] = useState<EngineStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [reloading, setReloading] = useState(false)
-  const addToast = notify.toast
 
   const fetchStatus = useCallback(async () => {
     try {
       const result = await modelController.getEngineStatus()
       setStatus(result)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not load engine status'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not load engine status'), { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -50,7 +49,8 @@ export default function EngineStatusCard() {
         const result = await modelController.getEngineStatus()
         if (active) setStatus(result)
       } catch (err) {
-        if (active) addToast(extractErrorMessage(err, 'Could not load engine status'), 'error')
+        if (active)
+          notify.toast(extractErrorMessage(err, 'Could not load engine status'), { type: 'error' })
       } finally {
         if (active) setLoading(false)
       }
@@ -59,16 +59,16 @@ export default function EngineStatusCard() {
     return () => {
       active = false
     }
-  }, [addToast])
+  }, [])
 
   const handleReload = async () => {
     setReloading(true)
     try {
       await modelController.reloadEngine()
-      addToast('Engine reloaded', 'success')
+      notify.toast('Engine reloaded', { type: 'success' })
       await fetchStatus()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not reload engine'), 'error')
+      notify.toast(extractErrorMessage(err, 'Could not reload engine'), { type: 'error' })
     } finally {
       setReloading(false)
     }

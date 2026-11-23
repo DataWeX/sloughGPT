@@ -100,7 +100,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium">Bookmarks</span>
-          <span className="text-[10px] text-muted-foreground">({stats.total})</span>
+          <span className="text-xs text-muted-foreground">({stats.total})</span>
         </div>
         <Button
           variant="ghost"
@@ -141,7 +141,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
           type="button"
           onClick={() => setFilter('all')}
           className={cn(
-            'text-[10px] px-2 py-0.5 rounded transition-colors',
+            'text-xs px-2 py-0.5 rounded transition-colors',
             filter === 'all'
               ? 'bg-primary/20 text-primary'
               : 'text-muted-foreground hover:bg-muted/50',
@@ -156,7 +156,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
             type="button"
             onClick={() => setFilter(cat)}
             className={cn(
-              'text-[10px] px-2 py-0.5 rounded transition-colors',
+              'text-xs px-2 py-0.5 rounded transition-colors',
               filter === cat
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50',
@@ -184,16 +184,16 @@ export const MessageBookmarking = memo(function MessageBookmarking({
                     onClick={() => onJumpToMessage(bookmark.messageId)}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                         {bookmark.category}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {new Date(bookmark.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                     <p className="text-xs truncate">{bookmark.content.slice(0, 80)}</p>
                     {bookmark.note && (
-                      <p className="text-[10px] text-muted-foreground mt-1">{bookmark.note}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{bookmark.note}</p>
                     )}
                   </button>
                   <Button

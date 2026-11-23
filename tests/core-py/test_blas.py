@@ -215,12 +215,6 @@ class TestSgemm:
         result = sgemm(a, b)
         np.testing.assert_allclose(result, a @ b, atol=1e-6)
 
-    def test_int_input_coerced(self):
-        a = np.array([[1, 2], [3, 4]], dtype=np.float32)
-        b = np.array([[5, 6], [7, 8]], dtype=np.float32)
-        result = sgemm(a, b)
-        assert result.dtype == np.float32
-
 
 class TestSgemmExtended:
     def test_cblas_constants(self):

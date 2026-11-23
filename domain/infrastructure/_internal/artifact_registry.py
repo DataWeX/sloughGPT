@@ -111,7 +111,11 @@ def _find_corpus(entry: Path) -> Path | None:
         if candidate.is_file():
             return candidate
     for pattern in ("*.txt", "*.jsonl", "*.csv"):
-        hits = sorted(entry.glob(pattern))
+        # ``*_info.txt`` is the bibliographic sidecar ISBNImporter writes for
+        # metadata-only imports (card 20261115_081635_ux…): 221 B of title/
+        # author, never training text — the glob must not promote it to
+        # corpus or empty imports render as ready datasets.
+        hits = sorted(p for p in entry.glob(pattern) if not p.name.endswith("_info.txt"))
         if hits:
             return hits[0]
     return None

@@ -76,14 +76,6 @@ class TestCUDAAccelerator:
         acc = _CUDAAccelerator()
         assert isinstance(acc.is_available(), bool)
 
-    def test_matmul_cpu_fallback(self):
-        acc = _CPUAccelerator()
-        a = np.array([[1.0, 2.0], [3.0, 4.0]])
-        b = np.array([[5.0, 6.0], [7.0, 8.0]])
-        result = acc.matmul(a, b)
-        expected = np.array([[19.0, 22.0], [43.0, 50.0]])
-        assert np.allclose(result, expected)
-
 
 # ── get_accelerator ────────────────────────────────────────────────────────
 

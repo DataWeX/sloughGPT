@@ -1,122 +1,17 @@
 'use client'
 
-import { useEffect, useState, memo, useCallback } from 'react'
+import { useState, memo } from 'react'
 import { useLocale } from '@/hooks/useLocale'
-import {
-  IconChat,
-  IconEdit,
-  IconBrain,
-  IconBolt,
-  IconSearch,
-  IconVision,
-  IconSparkle,
-  IconDocument,
-  cn,
-} from '@sloughgpt/strui'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { IconChat, IconEdit, IconBrain, IconBolt } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { Waves, Lightbulb, Mic } from 'lucide-react'
+import { FolderOpen, GraduationCap, LayoutDashboard, Lightbulb } from 'lucide-react'
 
 interface EmptyStateProps {
   hasModel: boolean
   suggestions?: { text: string; icon: React.ReactNode }[]
   onSuggestionClick?: (text: string) => void
-  onModeSelect?: (mode: string) => void
 }
-
-interface ToolModeCardProps {
-  mode: string
-  label: string
-  description: string
-  icon: React.ReactNode
-  color: string
-  onClick: () => void
-}
-
-function ToolModeCard({ mode, label, description, icon, color, onClick }: ToolModeCardProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'group relative flex flex-col items-start gap-1.5 p-3 rounded-xl border border-border/30 bg-card/30',
-        'hover:border-primary/30 hover:bg-primary/[0.03] hover:shadow-sm hover:shadow-primary/5',
-        'hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 cursor-pointer text-left',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <div
-          className={cn(
-            'flex items-center justify-center h-7 w-7 rounded-lg transition-colors duration-200',
-            color,
-          )}
-        >
-          {icon}
-        </div>
-        <span className="text-xs font-medium text-foreground/90 group-hover:text-foreground transition-colors">
-          {label}
-        </span>
-      </div>
-      <p className="text-[11px] text-muted-foreground leading-snug group-hover:text-muted-foreground transition-colors">
-        {description}
-      </p>
-    </button>
-  )
-}
-
-// Single-accent tiles — same MODE_ACCENT hue language as the tab bar and
-// composer chip (this icon-tile composition just drops the border).
-const TOOL_MODES = [
-  {
-    mode: 'write',
-    label: 'Write',
-    description: 'Emails, stories, posts',
-    icon: <IconEdit className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'translate',
-    label: 'Translate',
-    description: 'Across languages',
-    icon: <IconVision className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'rewrite',
-    label: 'Rewrite',
-    description: 'Polish your text',
-    icon: <IconSparkle className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'brainstorm',
-    label: 'Brainstorm',
-    description: 'Generate ideas',
-    icon: <IconBolt className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'decide',
-    label: 'Decide',
-    description: 'Compare options',
-    icon: <IconBrain className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'explain',
-    label: 'Explain',
-    description: 'Simplify topics',
-    icon: <IconSearch className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-  {
-    mode: 'wellness',
-    label: 'Wellness',
-    description: 'Calm your mind',
-    icon: <Waves className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary/70',
-  },
-]
 
 const QUICK_STARTERS = [
   { text: 'Explain quantum computing simply', icon: <Lightbulb className="h-3.5 w-3.5" /> },
@@ -125,28 +20,46 @@ const QUICK_STARTERS = [
   { text: 'Brainstorm weekend activities', icon: <IconBolt className="h-3.5 w-3.5" /> },
 ]
 
+// First-impression showcase: the journeys beyond this screen, mapped to the
+// UX_FLOWS charter (Train My AI, Read My Files, Manage My Work).
+const CAPABILITIES = [
+  {
+    title: 'Teach it',
+    caption: 'Train on your data in 3 clicks',
+    href: '/training',
+    icon: GraduationCap,
+  },
+  {
+    title: 'Bring your files',
+    caption: 'Drop docs — it reads and answers',
+    href: '/knowledge',
+    icon: FolderOpen,
+  },
+  {
+    title: 'Plan & track',
+    caption: 'A kanban board that stays local',
+    href: '/planner',
+    icon: LayoutDashboard,
+  },
+]
+
+function computeGreeting(): string {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export const EmptyState = memo(function EmptyState({
   hasModel,
   suggestions,
   onSuggestionClick,
-  onModeSelect,
 }: EmptyStateProps) {
   const { t } = useLocale()
-  const [greeting, setGreeting] = useState('')
-
-  useEffect(() => {
-    const h = new Date().getHours()
-    if (h < 12) setGreeting('Good morning')
-    else if (h < 18) setGreeting('Good afternoon')
-    else setGreeting('Good evening')
-  }, [])
-
-  const handleModeClick = useCallback(
-    (mode: string) => {
-      onModeSelect?.(mode)
-    },
-    [onModeSelect],
-  )
+  const router = useRouter()
+  // Lazy initializer: the greeting word is correct at first paint (the old
+  // ''-then-effect version flashed "Ready!" before swapping to the real word).
+  const [greeting] = useState(computeGreeting)
 
   const displayStarters = hasModel
     ? suggestions && suggestions.length > 0
@@ -162,8 +75,8 @@ export const EmptyState = memo(function EmptyState({
     >
       {/* Hero */}
       <div className="relative" aria-hidden="true">
-        <div className="absolute inset-0 rounded-2xl bg-primary/8 blur-2xl" />
-        <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/8 to-accent/10 flex items-center justify-center border border-primary/10 shadow-sm">
+        <div className="absolute inset-0 rounded-2xl bg-primary/10 blur-2xl" />
+        <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-accent/10 flex items-center justify-center border border-primary/10 shadow-sm">
           <IconChat className="h-6 w-6 sm:h-7 sm:w-7 text-primary/40" />
         </div>
       </div>
@@ -171,41 +84,41 @@ export const EmptyState = memo(function EmptyState({
       {/* Greeting */}
       <div className="space-y-1.5">
         <p className="text-base font-semibold text-foreground tracking-tight">
-          {hasModel ? (greeting || 'Ready') + '!' : t('common.starting')}
+          {hasModel ? greeting + '!' : t('common.starting')}
         </p>
         <p className="text-xs text-muted-foreground max-w-[280px] leading-relaxed">
           {hasModel
-            ? 'Chat, write, translate, or brainstorm — pick a tool or just ask.'
+            ? 'Just ask — writing, translation, ideas, explanations, or a plain chat.'
             : t('common.starting_sub')}
         </p>
       </div>
 
-      {/* Tool Mode Cards */}
-      {hasModel && (
-        <div className="w-full max-w-lg space-y-3">
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.12em]">
-            Quick tools
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {TOOL_MODES.map((tool) => (
-              <ToolModeCard
-                key={tool.mode}
-                mode={tool.mode}
-                label={tool.label}
-                description={tool.description}
-                icon={tool.icon}
-                color={tool.color}
-                onClick={() => handleModeClick(tool.mode)}
+      {/* Capability rail — what sloughGPT does beyond this chat */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 w-full max-w-lg">
+        {CAPABILITIES.map((c) => {
+          const Icon = c.icon
+          return (
+            <button
+              key={c.href}
+              type="button"
+              onClick={() => router.push(c.href)}
+              className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex flex-col items-center gap-1 px-3 py-3 rounded-xl border border-border/30 bg-card/30 hover:border-primary/20 hover:bg-primary/[0.03] hover:shadow-sm transition-all duration-200 cursor-pointer"
+            >
+              <Icon
+                className="h-4 w-4 text-primary/60 group-hover:text-primary transition-colors"
+                aria-hidden="true"
               />
-            ))}
-          </div>
-        </div>
-      )}
+              <span className="text-sm font-medium text-foreground">{c.title}</span>
+              <span className="text-xs text-muted-foreground leading-relaxed">{c.caption}</span>
+            </button>
+          )
+        })}
+      </div>
 
       {/* Quick Starters */}
       {displayStarters && (
         <div className="w-full max-w-lg space-y-2.5 pt-1">
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.12em]">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.12em]">
             Or try asking
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -239,25 +152,25 @@ export const EmptyState = memo(function EmptyState({
 
       {/* Keyboard hints */}
       <div
-        className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] text-muted-foreground"
+        className="flex flex-wrap items-center justify-center gap-2.5 text-xs text-muted-foreground"
         aria-label="Keyboard shortcuts"
       >
         <span className="flex items-center gap-1">
-          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
+          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] border border-border/20">
             ↵
           </kbd>
           <span>{t('chat.send')}</span>
         </span>
         <span className="text-muted-foreground">·</span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
+          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] border border-border/20">
             /
           </kbd>
           <span>commands</span>
         </span>
         <span className="text-muted-foreground">·</span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] border border-border/20">
+          <kbd className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] border border-border/20">
             ?
           </kbd>
           <span>shortcuts</span>

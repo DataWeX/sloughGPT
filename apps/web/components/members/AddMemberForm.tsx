@@ -27,20 +27,25 @@ export function AddMemberForm({ onAdd, disabled }: AddMemberFormProps) {
         <div className="flex gap-2">
           <Input
             value={userId}
-            onChange={e => setUserId(e.target.value)}
+            onChange={(e) => setUserId(e.target.value)}
             placeholder="User ID"
-            className="flex-1 h-6 text-[10px]"
+            className="flex-1 h-6 text-xs"
           />
           <select
             value={role}
-            onChange={e => setRole(e.target.value)}
-            className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+            onChange={(e) => setRole(e.target.value)}
+            className="h-6 text-xs rounded-md border border-border bg-background px-2"
           >
             <option value="viewer">Viewer</option>
             <option value="member">Member</option>
             <option value="admin">Admin</option>
           </select>
-          <Button size="sm" className="h-6 text-[10px]" onClick={handleSubmit} disabled={!userId.trim() || disabled}>
+          <Button
+            size="sm"
+            className="h-6 text-xs"
+            onClick={handleSubmit}
+            disabled={!userId.trim() || disabled}
+          >
             Add
           </Button>
         </div>

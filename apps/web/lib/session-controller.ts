@@ -4,7 +4,7 @@
 
 import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
 import { logger } from './dev-log'
-import type { SessionMeta } from './protocol/contracts.gen'
+import type { SessionMeta, AppScopeDelta } from './protocol/contracts.gen'
 
 const _log = logger.child('session-controller')
 
@@ -154,6 +154,8 @@ export const sessionController = {
       pinned?: boolean
       archived?: boolean
       unread?: boolean
+      /** Conversation AppScope delta — replaces the stored delta wholesale. */
+      scope?: AppScopeDelta | null
     },
   ): Promise<void> {
     if (!id) return

@@ -62,7 +62,7 @@ export function RunHistoryCard({
                 type="button"
                 onClick={() => setRunViewMode('list')}
                 className={cn(
-                  'text-[10px] px-2 py-1 rounded transition-colors',
+                  'text-xs px-2 py-1 rounded transition-colors',
                   runViewMode === 'list'
                     ? 'bg-primary/15 text-primary'
                     : 'text-muted-foreground hover:bg-muted/80',
@@ -74,7 +74,7 @@ export function RunHistoryCard({
                 type="button"
                 onClick={() => setRunViewMode('timeline')}
                 className={cn(
-                  'text-[10px] px-2 py-1 rounded transition-colors',
+                  'text-xs px-2 py-1 rounded transition-colors',
                   runViewMode === 'timeline'
                     ? 'bg-primary/15 text-primary'
                     : 'text-muted-foreground hover:bg-muted/80',
@@ -87,7 +87,7 @@ export function RunHistoryCard({
                 variant="ghost"
                 onClick={fetchRuns}
                 disabled={runsLoading}
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
               >
                 <IconRefresh className="h-4 w-4 mr-1" />
                 Refresh
@@ -129,7 +129,7 @@ export function RunHistoryCard({
                           type="button"
                           onClick={() => setRunStatusFilter(s)}
                           className={cn(
-                            'text-[10px] px-2 py-1 rounded-full border transition-colors',
+                            'text-xs px-2 py-1 rounded-full border transition-colors',
                             runStatusFilter === s
                               ? 'bg-primary/15 text-primary border-primary/30'
                               : 'border-border/40 text-muted-foreground hover:bg-muted/80',
@@ -140,7 +140,7 @@ export function RunHistoryCard({
                       ))}
                     </div>
                     <div className="flex-1" />
-                    <div className="flex gap-1.5 text-[10px] text-muted-foreground/60">
+                    <div className="flex gap-1.5 text-xs text-muted-foreground/60">
                       <span>{runs.filter((r) => r.status === 'completed').length} completed</span>
                       <span>{runs.filter((r) => r.status === 'failed').length} failed</span>
                       <span>
@@ -163,7 +163,7 @@ export function RunHistoryCard({
                           type="button"
                           onClick={() => setRunAgentFilter(null)}
                           className={cn(
-                            'text-[10px] px-2 py-1 rounded border transition-colors',
+                            'text-xs px-2 py-1 rounded border transition-colors',
                             runAgentFilter === null
                               ? 'bg-primary/15 text-primary border-primary/30'
                               : 'border-border/40 text-muted-foreground hover:bg-muted/80',
@@ -181,7 +181,7 @@ export function RunHistoryCard({
                                 setRunAgentFilter(runAgentFilter === name ? null : name)
                               }
                               className={cn(
-                                'text-[10px] px-2 py-1 rounded border transition-colors',
+                                'text-xs px-2 py-1 rounded border transition-colors',
                                 runAgentFilter === name
                                   ? 'bg-primary/15 text-primary border-primary/30'
                                   : 'border-border/40 text-muted-foreground hover:bg-muted/80',
@@ -226,15 +226,15 @@ export function RunHistoryCard({
                               )}
                             />
                             <span className="flex-1 truncate text-[11px]">{run.goal}</span>
-                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                            <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                               {run.completed_count}/{run.completed_count + run.failed_count} tasks
                             </span>
                             {run.started_at && (
-                              <span className="shrink-0 text-[10px] text-muted-foreground/70">
+                              <span className="shrink-0 text-xs text-muted-foreground/70">
                                 {formatElapsed(run.started_at, run.finished_at)}
                               </span>
                             )}
-                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                            <span className="shrink-0 text-xs text-muted-foreground">
                               {run.started_at ? new Date(run.started_at).toLocaleString() : ''}
                             </span>
                           </button>
@@ -260,7 +260,7 @@ export function RunHistoryCard({
                                             return (
                                               <span
                                                 key={name}
-                                                className="text-[10px] px-2 py-1 rounded bg-muted text-muted-foreground font-medium"
+                                                className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground font-medium"
                                               >
                                                 {name}: {s.completed}/{s.total}
                                                 {s.failed > 0 && (
@@ -274,7 +274,7 @@ export function RunHistoryCard({
                                         </div>
                                       )}
                                       <div className="space-y-1.5">
-                                        <p className="text-[10px] font-medium text-muted-foreground">
+                                        <p className="text-xs font-medium text-muted-foreground">
                                           Tasks ({run.tasks.length})
                                         </p>
                                         {run.tasks.map((task) => (
@@ -292,14 +292,14 @@ export function RunHistoryCard({
                                                     : 'bg-muted-foreground/30',
                                               )}
                                             />
-                                            <span className="font-medium text-[10px] min-w-[64px] text-muted-foreground">
+                                            <span className="font-medium text-xs min-w-[64px] text-muted-foreground">
                                               {task.agent}
                                             </span>
                                             <span className="flex-1 truncate">
                                               {task.description}
                                             </span>
                                             {task.result_preview && (
-                                              <span className="text-[10px] text-muted-foreground/50 truncate max-w-[200px]">
+                                              <span className="text-xs text-muted-foreground/50 truncate max-w-[200px]">
                                                 {task.result_preview}
                                               </span>
                                             )}
@@ -311,7 +311,7 @@ export function RunHistoryCard({
                                 })()}
                               {run.response && (
                                 <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-                                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                                  <p className="text-xs font-medium text-muted-foreground mb-1">
                                     Result
                                   </p>
                                   <p className="text-[11px] whitespace-pre-wrap line-clamp-4">
@@ -321,10 +321,10 @@ export function RunHistoryCard({
                               )}
                               {run.logs.length > 0 && (
                                 <div className="rounded-lg bg-muted/20 p-3">
-                                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                                  <p className="text-xs font-medium text-muted-foreground mb-1">
                                     Logs ({run.logs.length})
                                   </p>
-                                  <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
+                                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
                                     {run.logs.join('\n')}
                                   </pre>
                                 </div>
@@ -347,18 +347,16 @@ export function RunHistoryCard({
                       return (
                         <div key={run.id} className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <span
-                              className={cn('text-[10px] font-medium rounded-full', statusColor)}
-                            >
+                            <span className={cn('text-xs font-medium rounded-full', statusColor)}>
                               {run.status}
                             </span>
                             <span className="text-[11px] flex-1 truncate">{run.goal}</span>
                             {run.started_at && (
-                              <span className="text-[10px] text-muted-foreground/70">
+                              <span className="text-xs text-muted-foreground/70">
                                 {formatElapsed(run.started_at, run.finished_at)}
                               </span>
                             )}
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {run.started_at ? new Date(run.started_at).toLocaleString() : ''}
                             </span>
                           </div>
@@ -373,18 +371,18 @@ export function RunHistoryCard({
                                       taskColor,
                                     )}
                                   />
-                                  <span className="text-[10px] text-muted-foreground w-8 shrink-0">
+                                  <span className="text-xs text-muted-foreground w-8 shrink-0">
                                     #{i + 1}
                                   </span>
-                                  <span className="text-[10px] text-muted-foreground min-w-[64px] shrink-0">
+                                  <span className="text-xs text-muted-foreground min-w-[64px] shrink-0">
                                     {task.agent}
                                   </span>
-                                  <span className="text-[10px] flex-1 truncate">
+                                  <span className="text-xs flex-1 truncate">
                                     {task.description}
                                   </span>
                                   <span
                                     className={cn(
-                                      'text-[10px] px-1.5 py-0.5 rounded-full',
+                                      'text-xs px-1.5 py-0.5 rounded-full',
                                       taskBadgeStyle(task.status),
                                     )}
                                   >
@@ -394,7 +392,7 @@ export function RunHistoryCard({
                               )
                             })}
                             {run.tasks.length === 0 && (
-                              <p className="text-[10px] text-muted-foreground/60 italic">
+                              <p className="text-xs text-muted-foreground/60 italic">
                                 No tasks recorded
                               </p>
                             )}

@@ -7,7 +7,6 @@ import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { useBootstrap } from '@/contexts/BootstrapContext'
 import { normalizeHfModels } from '@/lib/bootstrap-controller'
-import { useSettings, useUpdateSettings } from '@/lib/store'
 import { NAV_SECTIONS } from '@/lib/navigation'
 import { chatDB } from '@/lib/db'
 import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
@@ -15,6 +14,7 @@ import { revalidateAll } from '@/lib/cache'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { SEARCH_STORES } from '@/lib/search-stores'
+import { useLocale } from '@/hooks/useLocale'
 
 interface SystemSearchHit {
   id: string
@@ -53,9 +53,8 @@ export function CommandPalette() {
   const [dataHits, setDataHits] = useState<SystemSearchHit[]>([])
   const [dataPartial, setDataPartial] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
-  const settings = useSettings()
-  const updateSettings = useUpdateSettings()
   const currentWorkspaceId = useAuthStore((s) => s.currentWorkspace?.id)
+  const { t } = useLocale()
 
   // Sessions/models/souls for the palette come from the /bootstrap payload
   // (the same slices the landing consumes) — no mount prewarm fetches.
@@ -106,7 +105,7 @@ export function CommandPalette() {
     const nav: CommandAction[] = NAV_SECTIONS.flatMap((section) =>
       section.routes.map((route) => ({
         id: `nav-${route.path}`,
-        label: route.description || route.path,
+        label: t(route.labelKey) || route.description || route.path,
         description: route.description || '',
         icon: route.icon || '📄',
         category: 'navigation' as const,
@@ -168,11 +167,14 @@ export function CommandPalette() {
       },
       {
         id: 'act-theme',
-        label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`,
-        description: 'Toggle theme',
+        label: 'Toggle Light/Dark Mode',
+        description: 'Switch between light and dark',
         icon: '🌓',
         category: 'action',
-        run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }),
+        // The DOM transition belongs to ThemeProvider — the same
+        // `toggle-dark-mode` seam Ctrl+Shift+D uses. Writing settings.theme
+        // alone never reached <html>, so this command used to be a no-op.
+        run: () => window.dispatchEvent(new CustomEvent('toggle-dark-mode')),
       },
       {
         id: 'act-clear',
@@ -225,7 +227,7 @@ export function CommandPalette() {
     }))
 
     return [...nav, ...modelActs, ...soulActs, ...acts, ...conv]
-  }, [router, recentSessions, models, souls, settings, updateSettings])
+  }, [router, recentSessions, models, souls, t])
 
   const dataActions = useMemo<CommandAction[]>(() => {
     const toAction = (h: SystemSearchHit): CommandAction => {
@@ -349,7 +351,7 @@ export function CommandPalette() {
               placeholder="Search pages, models, actions..."
               className="flex-1 bg-transparent py-3 text-sm outline-none focus:ring-2 focus:ring-ring/30 rounded placeholder:text-muted-foreground/50"
             />
-            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -373,7 +375,7 @@ export function CommandPalette() {
                 return (
                   <div key={action.id}>
                     {showHeader && (
-                      <p className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                      <p className="px-3 pt-2 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
                         {catLabel}
                       </p>
                     )}
@@ -402,10 +404,7 @@ export function CommandPalette() {
             )}
           </div>
           {dataPartial.length > 0 && (
-            <p
-              className="border-t border-border/30 px-4 py-1.5 text-[10px] text-warning"
-              role="status"
-            >
+            <p className="border-t border-border/30 px-4 py-1.5 text-xs text-warning" role="status">
               Partial results — some sources are unavailable: {dataPartial.join(', ')}
             </p>
           )}

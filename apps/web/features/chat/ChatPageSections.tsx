@@ -4,16 +4,15 @@ import dynamicNext from '@/vite/next-compat/dynamic'
 import { memo, useCallback, useMemo } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
-import { generationConfigController } from '@/lib/generation-config-controller'
 import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ToolApprovalDialog } from '@/features/chat/components/ToolApprovalDialog'
 import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
-import { ModeBar } from '@/features/chat/components/toolbar/ModeBar'
 import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
 import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
 import { useAppStore } from '@/lib/store'
+import { useConversationScope, saveConversationScope } from '@/lib/conversation-scope-store'
 import { useChatStore } from '@/lib/chat-store'
 
 const VoiceChatMode = dynamicNext(
@@ -152,27 +151,34 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
   controller,
 }: ChatPageSectionProps) {
   const { ui, model, chat, clearChat } = controller
+  const messages = useChatStore((s) => s.messages)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
+  // Effective value for THIS conversation: its AppScope delta over the global
+  // default — the same per-field precedence the server applies at the turn
+  // seam. The dialog edits the conversation instance, never the globals.
+  const scope = useConversationScope((state) => state.scopes[chat.sessionIdRef.current])
 
   const handleTemperatureChange = useCallback(
     (temp: number) => {
-      model.setTemperature(temp)
-      generationConfigController.update({ temperature: temp }).catch((e) => {
-        logger.warning('Could not generation config temperature save', { exception: String(e) })
+      const sid = chat.sessionIdRef.current
+      if (!sid) return
+      saveConversationScope(sid, { temperature: temp }).catch((e) => {
+        logger.warning('Could not conversation scope temperature save', { exception: String(e) })
       })
     },
-    [model],
+    [chat],
   )
 
   const handleMaxTokensChange = useCallback(
     (tokens: number) => {
-      model.setMaxTokens(tokens)
-      generationConfigController.update({ max_new_tokens: tokens }).catch((e) => {
-        logger.warning('Could not generation config max_tokens save', { exception: String(e) })
+      const sid = chat.sessionIdRef.current
+      if (!sid) return
+      saveConversationScope(sid, { max_tokens: tokens }).catch((e) => {
+        logger.warning('Could not conversation scope max_tokens save', { exception: String(e) })
       })
     },
-    [model],
+    [chat],
   )
 
   const handleAutoApproveToolsChange = useCallback(
@@ -187,8 +193,8 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
     <ChatSettings
       isOpen={true}
       model={model.model}
-      temperature={model.temperature}
-      maxTokens={model.maxTokens}
+      temperature={scope?.temperature ?? settings.defaultTemp}
+      maxTokens={scope?.max_tokens ?? settings.defaultMaxTokens}
       autoApproveTools={settings.autoApproveTools}
       onModelChange={model.setModel}
       availableModels={model.availableModels}
@@ -196,7 +202,7 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({
       onMaxTokensChange={handleMaxTokensChange}
       onAutoApproveToolsChange={handleAutoApproveToolsChange}
       onClear={clearChat}
-      hasMessages={chat.messages.length > 0}
+      hasMessages={messages.length > 0}
     />
   )
 })
@@ -225,26 +231,6 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     suggestions,
     refreshHealth,
     showToast,
-    chatMode,
-    setChatMode,
-    writeTone,
-    setWriteTone,
-    writeType,
-    setWriteType,
-    rewriteStyle,
-    setRewriteStyle,
-    decideStructure,
-    setDecideStructure,
-    explainDifficulty,
-    setExplainDifficulty,
-    translateLangPair,
-    setTranslateLangPair,
-    brainstormTopic,
-    setBrainstormTopic,
-    wellnessType,
-    setWellnessType,
-    createStyle,
-    setCreateStyle,
     readFileData,
     setReadFileData,
     readLoading,
@@ -279,14 +265,9 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     storeStop()
   }, [chat, storeStop])
 
-  const handleCancel = useCallback(async () => {
-    const sessionId = chat.sessionIdRef.current
-    if (sessionId) {
-      const { chatController } = await import('@/lib/chat-controller')
-      chatController.cancelStream(sessionId).catch(() => {})
-    }
-    handleStop()
-  }, [chat, handleStop])
+  // No separate handleCancel: store.stop() is already the superset ChatInputRow
+  // documents for onCancel (backend cancelStream + abort + state reset) — a
+  // second chatController.cancelStream here cancelled the same session twice.
 
   const handleAudioRecorded = useCallback(
     async (blob: Blob) => {
@@ -388,13 +369,6 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     [storeHandleToolApproval],
   )
 
-  const handleModeSelect = useCallback(
-    (mode: string) => {
-      setChatMode(mode as any)
-    },
-    [setChatMode],
-  )
-
   return (
     <>
       {currentError && (
@@ -405,38 +379,17 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
         />
       )}
 
-      <ModeBar
-        mode={chatMode}
-        tone={writeTone}
-        type={writeType}
-        rewriteStyle={rewriteStyle}
-        decideStructure={decideStructure}
-        difficulty={explainDifficulty}
-        langPair={translateLangPair}
-        brainstormTopic={brainstormTopic}
-        wellnessType={wellnessType}
-        createStyle={createStyle}
-        onModeChange={setChatMode}
-        onToneChange={setWriteTone}
-        onTypeChange={setWriteType}
-        onRewriteStyleChange={setRewriteStyle}
-        onDecideStructureChange={setDecideStructure}
-        onDifficultyChange={setExplainDifficulty}
-        onLangPairChange={setTranslateLangPair}
-        onBrainstormTopicChange={setBrainstormTopic}
-        onWellnessTypeChange={setWellnessType}
-        onCreateStyleChange={setCreateStyle}
+      {/* File-QA attach flow — always available, never mode-gated. */}
+      <ReadFileSection
+        readLoading={readLoading}
+        readFileData={readFileData}
+        onFileSelected={handleReadFile}
+        onRemove={handleRemoveReadFile}
       />
 
-      {chatMode === 'read' && (
-        <ReadFileSection
-          readLoading={readLoading}
-          readFileData={readFileData}
-          onFileSelected={handleReadFile}
-          onRemove={handleRemoveReadFile}
-        />
-      )}
-
+      {/* ChatStore is the single write path for input since card
+          20261116_124020: the controller's setInput IS the store action, so
+          one write here reaches every reader (composer, drafts, send). */}
       <ImageDropZone
         onImageDropped={handleImageDropped}
         onTextDropped={handleTextDropped}
@@ -462,7 +415,6 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           sessionLoading={sessionLoading}
           model={model.model}
           health={health}
-          chatMode={chatMode}
           suggestions={suggestions}
           onRefreshHealth={refreshHealth}
           onCopy={controller.chat.handleCopy}
@@ -473,23 +425,15 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           onEdit={controller.chat.handleEditMessage}
           searchQuery={ui.searchQuery}
           onSuggestionClick={controller.chat.handleSuggestionClick}
-          onModeSelect={handleModeSelect}
           toolEvents={toolEvents}
           streamingStatus={pendingToolApproval ? 'tool_call' : 'generating'}
           streamingToolName={pendingToolApproval?.toolName}
           ragVerification={ragVerification}
           value={input}
-          // Dual-write: ChatInput displays store state, but every send path
-          // (handleWriteSend, useChatMode, drafts) still reads hook state.
-          // The bridge syncs hook → store; without this, typed text never
-          // reaches send and messages silently fail to send.
-          onChange={(v: string) => {
-            storeSetInput(v)
-            chat.setInput(v)
-          }}
+          onChange={(v: string) => storeSetInput(v)}
           onSend={handleWriteSend}
           onStop={handleStop}
-          onCancel={handleCancel}
+          onCancel={handleStop}
           images={images}
           onAddImage={controller.chat.handleAddImage}
           onRemoveImage={controller.chat.handleRemoveImage}
@@ -526,16 +470,17 @@ export const ChatSearchSection = memo(function ChatSearchSection({
   controller,
 }: ChatPageSectionProps) {
   const { chat, ui } = controller
+  const messages = useChatStore((s) => s.messages)
   const viewerMessages = useMemo(
     () =>
-      chat.messages.map((m) => ({
+      messages.map((m) => ({
         id: m.id,
         role: m.role,
         content: m.content,
         timestamp:
           typeof m.timestamp === 'number' ? m.timestamp : m.timestamp?.getTime() || Date.now(),
       })),
-    [chat.messages],
+    [messages],
   )
   return (
     <>
@@ -559,6 +504,7 @@ export const ChatToolPanelInline = memo(function ChatToolPanelInline({
   controller,
 }: ChatPageSectionProps) {
   const { ui, chat, bookmarks, removeBookmark, clearAll } = controller
+  const messages = useChatStore((s) => s.messages)
   return (
     <ChatToolPanel
       open={ui.toolPanelOpen}
@@ -567,7 +513,7 @@ export const ChatToolPanelInline = memo(function ChatToolPanelInline({
       bookmarks={bookmarks}
       onRemoveBookmark={removeBookmark}
       onClearBookmarks={clearAll}
-      messages={chat.messages}
+      messages={messages}
     />
   )
 })
@@ -575,6 +521,7 @@ export const ChatToolPanelInline = memo(function ChatToolPanelInline({
 export const ChatDialogSection = memo(function ChatDialogSection({
   controller,
 }: ChatPageSectionProps) {
+  const messages = useChatStore((s) => s.messages)
   const {
     ui,
     chat,
@@ -586,7 +533,6 @@ export const ChatDialogSection = memo(function ChatDialogSection({
     setSystemPromptOpen,
     customSystemPrompt,
     handleSaveSystemPrompt,
-    setChatMode,
     noteDialogOpen,
     setNoteDialogOpen,
     noteDialogNote,
@@ -629,7 +575,6 @@ export const ChatDialogSection = memo(function ChatDialogSection({
           }}
           onClose={() => {
             ui.setVoiceMode(false)
-            setChatMode('chat')
           }}
         />
       )}
@@ -655,7 +600,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
 
       {activeThreadMessageId && activeThread && (
         <ThreadPanel
-          parentMessage={chat.messages.find((m) => m.id === activeThreadMessageId)!}
+          parentMessage={messages.find((m) => m.id === activeThreadMessageId)!}
           threadMessages={activeThreadMessages}
           onSend={(content) => onReplyInThread(activeThread.id, content)}
           onClose={onCloseThread}
@@ -674,11 +619,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
         }}
       />
 
-      <ChatStatsPanel
-        open={statsOpen}
-        onClose={() => setStatsOpen(false)}
-        messages={chat.messages}
-      />
+      <ChatStatsPanel open={statsOpen} onClose={() => setStatsOpen(false)} messages={messages} />
     </>
   )
 })

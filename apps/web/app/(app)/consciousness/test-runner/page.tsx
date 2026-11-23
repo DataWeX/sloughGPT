@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { authFetch } from '@/lib/http-client'
@@ -130,7 +130,6 @@ function buildTests(): Omit<TestCase, 'status' | 'duration'>[] {
 }
 
 export default function ConsciousnessTestRunnerPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
 
   const [suites, setSuites] = useState<TestSuite[]>(() => SUITES.map((s) => ({ ...s })))
@@ -427,9 +426,11 @@ export default function ConsciousnessTestRunnerPage() {
       const final = results
       const p = final.filter((t) => t.status === 'pass').length
       const f = final.filter((t) => t.status === 'fail').length
-      addToast(`Tests complete: ${p} passed, ${f} failed`, f > 0 ? 'error' : 'success')
+      notify.toast(`Tests complete: ${p} passed, ${f} failed`, {
+        type: f > 0 ? 'error' : 'success',
+      })
     },
-    [running, addToast],
+    [running],
   )
 
   const stopTests = useCallback(() => {
@@ -445,15 +446,15 @@ export default function ConsciousnessTestRunnerPage() {
     a.download = `consciousness-tests-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast('Results exported', 'success')
-  }, [tests, addToast])
+    notify.toast('Results exported', { type: 'success' })
+  }, [tests])
 
   const copyResults = useCallback(() => {
     navigator.clipboard.writeText(JSON.stringify(tests, null, 2)).then(
-      () => addToast('Results copied to clipboard', 'success'),
-      () => addToast('Failed to copy', 'error'),
+      () => notify.toast('Results copied to clipboard', { type: 'success' }),
+      () => notify.toast('Failed to copy', { type: 'error' }),
     )
-  }, [tests, addToast])
+  }, [tests])
 
   const statusColor = (s: TestStatus) => {
     switch (s) {
@@ -601,7 +602,7 @@ export default function ConsciousnessTestRunnerPage() {
                     {tests.map((tc) => (
                       <tr key={tc.id} className="border-t border-border/30">
                         <td className="px-3 py-1.5">
-                          <Badge className={`text-[10px] ${statusColor(tc.status)}`}>
+                          <Badge className={`text-xs ${statusColor(tc.status)}`}>
                             {statusLabel(tc.status)}
                           </Badge>
                         </td>

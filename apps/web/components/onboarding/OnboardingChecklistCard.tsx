@@ -118,7 +118,7 @@ export function OnboardingChecklistCard({ onNavigate }: OnboardingChecklistCardP
             >
               <div
                 className={cn(
-                  'w-4 h-4 rounded border flex items-center justify-center text-[10px] shrink-0',
+                  'w-4 h-4 rounded border flex items-center justify-center text-xs shrink-0',
                   item.completed
                     ? 'bg-success border-success text-white'
                     : 'border-muted-foreground/30',
@@ -135,13 +135,13 @@ export function OnboardingChecklistCard({ onNavigate }: OnboardingChecklistCardP
                 >
                   {item.label}
                 </div>
-                <div className="text-[10px] text-muted-foreground">{item.description}</div>
+                <div className="text-xs text-muted-foreground">{item.description}</div>
               </div>
               {item.link && !item.completed && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-[9px] shrink-0"
+                  className="text-[11px] shrink-0"
                   onClick={(e) => {
                     e.stopPropagation()
                     onNavigate?.(item.link!)

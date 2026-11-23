@@ -1,7 +1,7 @@
 'use client'
+import { notify } from '@/lib/notify'
 export const dynamic = 'force-dynamic'
 
-import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
@@ -35,7 +35,6 @@ import { isTrainingCorpus } from '@/lib/dataset-controller'
 
 export default function DatasetsPage() {
   const router = useRouter()
-  const addToast = notify.toast
   const { data: allDatasets = [], isLoading: loading, refetch: refetchDatasets } = useDatasetList()
   const deleteDataset = useDeleteDataset()
   const [search, setSearch] = useState('')
@@ -52,9 +51,9 @@ export default function DatasetsPage() {
       await refetchDatasets()
     } catch {
       setFetchError(true)
-      addToast('Could not load files', 'error')
+      notify.toast('Could not load files', { type: 'error' })
     }
-  }, [refetchDatasets, addToast])
+  }, [refetchDatasets])
 
   const searchMatch = (ds: Dataset) =>
     !search ||
@@ -75,9 +74,9 @@ export default function DatasetsPage() {
     setPendingDelete(null)
     try {
       await deleteDataset.mutateAsync(deleted.id)
-      addToast(`Deleted "${deleted.name}"`, 'info')
+      notify.toast(`Deleted "${deleted.name}"`, { type: 'info' })
     } catch {
-      addToast('Could not delete', 'error')
+      notify.toast('Could not delete', { type: 'error' })
     }
   }
 
@@ -93,7 +92,7 @@ export default function DatasetsPage() {
       const preview = await datasetController.preview(ds.id, 3)
       setPreviewData(preview)
     } catch {
-      addToast('Could not load preview', 'error')
+      notify.toast('Could not load preview', { type: 'error' })
     } finally {
       setPreviewLoading(false)
     }
@@ -109,9 +108,9 @@ export default function DatasetsPage() {
       a.download = `${ds.name || ds.id}.jsonl`
       a.click()
       URL.revokeObjectURL(url)
-      addToast(`Exported "${ds.name}"`, 'success')
+      notify.toast(`Exported "${ds.name}"`, { type: 'success' })
     } catch {
-      addToast('Could not export', 'error')
+      notify.toast('Could not export', { type: 'error' })
     }
   }
 
@@ -209,7 +208,7 @@ export default function DatasetsPage() {
                         {ds.tags.slice(0, 3).map((t) => (
                           <span
                             key={t}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
+                            className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
                           >
                             {t}
                           </span>
@@ -328,7 +327,7 @@ export default function DatasetsPage() {
                       <p className="text-xs font-medium truncate text-muted-foreground">
                         {ds.name}
                       </p>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                         <span>{ds.kind}</span>
                         {ds.has_corpus === false ? (
                           <span>no corpus</span>

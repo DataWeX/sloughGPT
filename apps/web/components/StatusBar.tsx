@@ -124,24 +124,6 @@ export function StatusBar() {
     clearFailures()
   }, [clearFailures])
 
-  const score = health?.health_score
-  const dotColor =
-    connectionStatus === 'connecting'
-      ? 'bg-muted-foreground/50'
-      : connectionStatus === 'offline'
-        ? 'bg-destructive'
-        : connectionStatus === 'error'
-          ? 'bg-destructive'
-          : connectionStatus === 'reloading'
-            ? 'bg-destructive animate-pulse'
-            : score != null && score < 50
-              ? 'bg-destructive'
-              : score != null && score < 80
-                ? 'bg-warning'
-                : health?.model_loaded
-                  ? 'bg-success'
-                  : 'bg-warning'
-
   let statusText: string
   if (connectionStatus === 'connecting' && health === null) {
     statusText = 'Connecting...'
@@ -168,6 +150,30 @@ export function StatusBar() {
       health?.health_summary || (health?.model_loaded ? health.model_type || 'Loaded' : 'No model')
   }
 
+  // health_flow's throughput verdict ('Slow — 12 tok/s.', possibly
+  // model-prefixed) rides the same summary line as a perfectly healthy
+  // CONNECTION — so a green dot + green "live" badge next to "Slow" read as
+  // a contradiction. Amber follows the verdict wherever it is shown.
+  const isSlow = /\b(?:very\s+)?slow\b/i.test(statusText)
+
+  const score = health?.health_score
+  const dotColor =
+    connectionStatus === 'connecting'
+      ? 'bg-muted-foreground/50'
+      : connectionStatus === 'offline'
+        ? 'bg-destructive'
+        : connectionStatus === 'error'
+          ? 'bg-destructive'
+          : connectionStatus === 'reloading'
+            ? 'bg-destructive animate-pulse'
+            : score != null && score < 50
+              ? 'bg-destructive'
+              : isSlow || (score != null && score < 80)
+                ? 'bg-warning'
+                : health?.model_loaded
+                  ? 'bg-success'
+                  : 'bg-warning'
+
   const hasFailures = failureCount > 0 && connectionStatus !== 'connected'
   const isOffline = connectionStatus === 'offline'
   const isOnline = connectionStatus === 'connected' && health !== null
@@ -187,7 +193,14 @@ export function StatusBar() {
           <span className="truncate max-w-[180px] sm:max-w-none" title={statusText}>
             {statusText}
           </span>
-          {isOnline && <span className="sl-badge sl-badge-success">live</span>}
+          {isOnline && (
+            <span
+              className={cn('sl-badge', isSlow ? 'sl-badge-warning' : 'sl-badge-success')}
+              title={isSlow ? 'Connected, but throughput is degraded' : undefined}
+            >
+              live
+            </span>
+          )}
         </Link>
 
         {/* Right: Actions + metrics */}
@@ -275,7 +288,13 @@ export function StatusBar() {
           {/* Token rate or inference count */}
           {isOnline && health?.tokens_per_sec ? (
             <span className="sl-status-bar-metric tabular-nums">
-              <span className="h-1 w-1 rounded-full bg-success animate-pulse" aria-hidden="true" />
+              <span
+                className={cn(
+                  'h-1 w-1 rounded-full animate-pulse',
+                  isSlow ? 'bg-warning' : 'bg-success',
+                )}
+                aria-hidden="true"
+              />
               {health.tokens_per_sec.toFixed(0)} tok/s
             </span>
           ) : isOnline && health?.inference_count != null ? (

@@ -64,7 +64,7 @@ export function OrchestrationCard({
           <CardTitle className="text-[11px] font-medium">Multi-Agent Orchestration</CardTitle>
         </CardHeader>
         <CardContent className="px-2.5 pb-2.5 space-y-3">
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Decompose a goal into subtasks and execute them across multiple agents in parallel.
           </p>
           <div>
@@ -87,7 +87,7 @@ export function OrchestrationCard({
               aria-describedby={orchErrors.goal ? 'orch-goal-error' : undefined}
             />
             {orchErrors.goal && (
-              <p id="orch-goal-error" className="text-[10px] text-destructive mt-1" role="alert">
+              <p id="orch-goal-error" className="text-xs text-destructive mt-1" role="alert">
                 {orchErrors.goal}
               </p>
             )}
@@ -101,7 +101,7 @@ export function OrchestrationCard({
           />
           {agents.length > 0 && (
             <div>
-              <p className="text-[10px] font-medium text-muted-foreground mb-1.5">
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">
                 Agents (optional — leave empty for all)
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -115,7 +115,7 @@ export function OrchestrationCard({
                       )
                     }}
                     className={cn(
-                      'rounded-full px-2.5 py-1 text-[10px] font-medium border transition-colors',
+                      'rounded-full px-2.5 py-1 text-xs font-medium border transition-colors',
                       orchAgentIds.includes(a.id)
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'bg-background text-muted-foreground border-border hover:border-primary/50',
@@ -146,7 +146,7 @@ export function OrchestrationCard({
                   setOrchTasks([])
                   setOrchTaskStatuses({})
                 }}
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
               >
                 Clear
               </Button>
@@ -155,7 +155,7 @@ export function OrchestrationCard({
 
           {/* Phase indicator */}
           {orchPhase && (
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span
                 className={cn(
                   'inline-block h-2 w-2 rounded-full',
@@ -177,7 +177,7 @@ export function OrchestrationCard({
           {/* Task status */}
           {orchTasks.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-muted-foreground">
+              <p className="text-xs font-medium text-muted-foreground">
                 Tasks ({orchTasks.length})
               </p>
               {orchTasks.map((task) => {
@@ -199,12 +199,12 @@ export function OrchestrationCard({
                               : 'bg-muted-foreground/30',
                       )}
                     />
-                    <span className="font-medium text-[10px] min-w-[64px] text-muted-foreground">
+                    <span className="font-medium text-xs min-w-[64px] text-muted-foreground">
                       {task.agent}
                     </span>
                     <span className="flex-1 truncate">{task.description}</span>
                     {task.depends_on && task.depends_on.length > 0 && (
-                      <span className="text-[10px] text-muted-foreground/50">
+                      <span className="text-xs text-muted-foreground/50">
                         after: {task.depends_on.join(', ')}
                       </span>
                     )}
@@ -217,7 +217,7 @@ export function OrchestrationCard({
           {/* Final response */}
           {orchResponse && (
             <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-              <p className="text-[10px] font-medium text-muted-foreground mb-1">Result</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Result</p>
               <p className="text-[11px] whitespace-pre-wrap">{orchResponse}</p>
             </div>
           )}

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useEffect, useState } from 'react'
 import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
 import { ManMark } from '@/components/brand/ManMark'
@@ -265,7 +265,7 @@ export function StartupOverlay() {
       {activeHooks.length > 0 && (
         <div className="flex flex-col items-center gap-1.5 mb-4">
           {activeHooks.map((hook: HookStatus) => (
-            <div key={hook.name} className="flex items-center gap-2 text-[10px]">
+            <div key={hook.name} className="flex items-center gap-2 text-xs">
               <span className="w-1 h-1 rounded-full bg-term-minimize animate-pulse" />
               <span className="text-term-text-muted">{HOOK_LABELS[hook.name] ?? hook.name}</span>
             </div>
@@ -278,7 +278,7 @@ export function StartupOverlay() {
         <button
           type="button"
           onClick={() => setShowDetails(!showDetails)}
-          className="pointer-events-auto text-[9px] text-term-text-dim hover:text-term-text-muted transition-colors mb-4"
+          className="pointer-events-auto text-[11px] text-term-text-dim hover:text-term-text-muted transition-colors mb-4"
         >
           {showDetails ? 'Hide details' : 'Show timing'}
         </button>
@@ -287,7 +287,7 @@ export function StartupOverlay() {
       {showDetails && completedHooks.length > 0 && (
         <div className="w-48 space-y-1 mb-4">
           {completedHooks.map((hook: HookStatus) => (
-            <div key={hook.name} className="flex items-center justify-between text-[9px]">
+            <div key={hook.name} className="flex items-center justify-between text-[11px]">
               <span className="text-term-text-muted truncate">
                 {HOOK_LABELS[hook.name] ?? hook.name}
               </span>

@@ -26,7 +26,7 @@ export function SoulSelectorDropdown() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-1.5 sm:px-2.5 text-xs gap-1 sm:gap-1.5 rounded-full bg-primary/8 text-primary hover:bg-primary/15 border border-primary/15"
+          className="h-7 px-1.5 sm:px-2.5 text-xs gap-1 sm:gap-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/15 border border-primary/15"
           title={currentSoul?.traits?.join(', ')}
         >
           <IconHeart className="h-3 w-3 shrink-0" />
@@ -43,7 +43,7 @@ export function SoulSelectorDropdown() {
               {currentSoul?.name || 'Default'}
             </span>
             {currentSoul?.traits && currentSoul.traits.length > 0 && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                 {currentSoul.traits[0]}
               </span>
             )}
@@ -54,7 +54,7 @@ export function SoulSelectorDropdown() {
               setOpen(false)
               router.push('/souls')
             }}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors mt-1"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-1"
           >
             View full profile
             <IconChevronRight className="h-2.5 w-2.5" />
@@ -72,7 +72,7 @@ export function SoulSelectorDropdown() {
                 onSelect={() => onSelect(s)}
                 className={cn(
                   'flex items-start gap-2 px-3 py-2 text-xs',
-                  isActive ? 'bg-primary/8' : '',
+                  isActive ? 'bg-primary/10' : '',
                 )}
               >
                 <IconHeart
@@ -84,7 +84,7 @@ export function SoulSelectorDropdown() {
                 <div className="min-w-0 flex-1">
                   <div className="font-medium capitalize truncate">{s.name}</div>
                   {s.description && (
-                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
                       {s.description}
                     </div>
                   )}
@@ -93,13 +93,13 @@ export function SoulSelectorDropdown() {
                       {s.traits.slice(0, 3).map((t) => (
                         <span
                           key={t}
-                          className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground"
+                          className="text-[11px] px-1 py-0 rounded bg-muted text-muted-foreground"
                         >
                           {t}
                         </span>
                       ))}
                       {s.traits.length > 3 && (
-                        <span className="text-[9px] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                           +{s.traits.length - 3}
                         </span>
                       )}

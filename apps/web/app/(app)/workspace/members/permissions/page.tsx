@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -39,7 +39,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function PermissionsPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = notify.toast
   const [roles, setRoles] = useState<Record<string, { name: string; permissions: string[] }>>({})
   const [allPermissions, setAllPermissions] = useState<Record<string, string[]>>({})
   const [memberPerms, setMemberPerms] = useState<
@@ -63,11 +62,11 @@ export default function PermissionsPage() {
         setMemberPerms(res.data.member_permissions)
       }
     } catch {
-      addToast('Could not load permissions', 'error')
+      notify.toast('Could not load permissions', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, addToast])
+  }, [currentWorkspace?.id])
 
   useRefreshShortcut(fetchPermissions)
 
@@ -99,14 +98,14 @@ export default function PermissionsPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-[10px]">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b">
                   <th className="text-left py-2 pr-4 font-medium">Permission</th>
                   {Object.keys(roles).map((role) => (
                     <th key={role} className="text-center py-2 px-2 font-medium">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ROLE_COLORS[role] || 'bg-muted'}`}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${ROLE_COLORS[role] || 'bg-muted'}`}
                       >
                         {role}
                       </span>
@@ -154,19 +153,19 @@ export default function PermissionsPage() {
         </CardHeader>
         <CardContent className="space-y-1">
           {memberPerms.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground text-center py-4">No members</p>
+            <p className="text-xs text-muted-foreground text-center py-4">No members</p>
           ) : (
             memberPerms.map((m) => (
               <div
                 key={m.user_id}
-                className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40 cursor-pointer"
+                className="flex items-center justify-between px-3 py-2 rounded-md text-xs hover:bg-muted/50 border border-transparent hover:border-border/40 cursor-pointer"
                 onClick={() => setSelectedRole(selectedRole === m.user_id ? null : m.user_id)}
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{m.username || m.user_id}</div>
                 </div>
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ROLE_COLORS[m.role] || 'bg-muted'}`}
+                  className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${ROLE_COLORS[m.role] || 'bg-muted'}`}
                 >
                   {m.role}
                 </span>
@@ -177,14 +176,17 @@ export default function PermissionsPage() {
           {/* Expanded permission details */}
           {selectedRole && memberPerms.find((m) => m.user_id === selectedRole) && (
             <div className="mt-2 p-3 rounded-md bg-muted/30 border">
-              <p className="text-[10px] font-medium mb-2">
+              <p className="text-xs font-medium mb-2">
                 {memberPerms.find((m) => m.user_id === selectedRole)?.username} permissions:
               </p>
               <div className="flex flex-wrap gap-1">
                 {memberPerms
                   .find((m) => m.user_id === selectedRole)
                   ?.permissions.map((p) => (
-                    <span key={p} className="px-1.5 py-0.5 rounded bg-background text-[9px] border">
+                    <span
+                      key={p}
+                      className="px-1.5 py-0.5 rounded bg-background text-[11px] border"
+                    >
                       {p}
                     </span>
                   ))}

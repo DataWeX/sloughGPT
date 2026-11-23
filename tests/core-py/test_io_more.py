@@ -115,10 +115,6 @@ class TestConsoleIOReadline:
         c = ConsoleIO()
         c.setup_completion(lambda text, state: None)
 
-    def test_setup_completion_missing(self, _no_readline):
-        c = ConsoleIO()
-        c.setup_completion(lambda text, state: None)
-
     def test_setup_completion_readline_error(self, monkeypatch):
         c = ConsoleIO()
         monkeypatch.setattr(
@@ -188,9 +184,6 @@ class TestMemoryIO:
         m.write("x")
         m.clear()
         assert m.get_output() == ""
-
-    def test_flush_is_noop(self):
-        MemoryIO().flush()
 
 
 class TestCapture:

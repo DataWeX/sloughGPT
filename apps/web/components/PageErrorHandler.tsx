@@ -65,19 +65,17 @@ export function PageErrorHandler({ error, reset, title }: PageErrorHandlerProps)
               <CardTitle className="text-xs flex items-center gap-1.5">
                 {title || 'Something went wrong'}
                 {errorType && (
-                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
+                  <span className="text-[11px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
                     {errorType}
                   </span>
                 )}
               </CardTitle>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5 break-words">
-                {errorMessage}
-              </p>
+              <p className="text-xs text-muted-foreground/60 mt-0.5 break-words">{errorMessage}</p>
             </div>
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}
-              className="text-[9px] text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
+              className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
             >
               {showDetails ? 'Hide' : 'Details'}
             </button>
@@ -85,17 +83,23 @@ export function PageErrorHandler({ error, reset, title }: PageErrorHandlerProps)
         </CardHeader>
         <CardContent className="space-y-3">
           {showDetails && (
-            <div className="rounded-md bg-muted p-2 text-[10px] font-mono space-y-2 max-h-56 overflow-y-auto">
+            <div className="rounded-md bg-muted p-2 text-xs font-mono space-y-2 max-h-56 overflow-y-auto">
               {digest && (
                 <div>
-                  <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">Digest</span>
-                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">{digest}</pre>
+                  <span className="text-muted-foreground/60 text-[11px] uppercase tracking-wider">
+                    Digest
+                  </span>
+                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">
+                    {digest}
+                  </pre>
                 </div>
               )}
               {stackFrames.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">Stack Trace</span>
+                    <span className="text-muted-foreground/60 text-[11px] uppercase tracking-wider">
+                      Stack Trace
+                    </span>
                     <button
                       type="button"
                       onClick={copyToClipboard}
@@ -114,8 +118,12 @@ export function PageErrorHandler({ error, reset, title }: PageErrorHandlerProps)
               )}
               {error.stack && stackFrames.length === 0 && (
                 <div>
-                  <span className="text-muted-foreground/60 text-[9px] uppercase tracking-wider">Raw Stack</span>
-                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">{error.stack}</pre>
+                  <span className="text-muted-foreground/60 text-[11px] uppercase tracking-wider">
+                    Raw Stack
+                  </span>
+                  <pre className="whitespace-pre-wrap break-all text-muted-foreground/60 mt-0.5">
+                    {error.stack}
+                  </pre>
                 </div>
               )}
             </div>
@@ -128,7 +136,7 @@ export function PageErrorHandler({ error, reset, title }: PageErrorHandlerProps)
             </Button>
             <Button
               variant="outline"
-              onClick={() => window.location.href = '/'}
+              onClick={() => (window.location.href = '/')}
               className="flex-1 h-7 text-[11px]"
               size="sm"
             >

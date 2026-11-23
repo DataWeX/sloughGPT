@@ -61,6 +61,7 @@ class ErrorCode(StrEnum):
     E_VAL_REQUEST = "E_VAL_REQUEST"
     E_VAL_FIELD = "E_VAL_FIELD"
     E_NOT_IMPLEMENTED = "E_NOT_IMPLEMENTED"
+    E_PROMPT_TOO_LONG = "E_PROMPT_TOO_LONG"
 
     # Auth
     E_AUTH_MISSING = "E_AUTH_MISSING"
@@ -97,6 +98,7 @@ class ErrorCode(StrEnum):
     # Config / environment
     E_CONFIG = "E_CONFIG"
     E_ENV_MISSING = "E_ENV_MISSING"
+    E_CONFIG_DRIFT = "E_CONFIG_DRIFT"
 
     # Network
     E_NETWORK = "E_NETWORK"
@@ -107,8 +109,12 @@ class ErrorCode(StrEnum):
     # Docstore
     E_UNKNOWN_COLLECTION = "E_UNKNOWN_COLLECTION"
 
-    # Legacy aliases (mapped to canonical codes)
-    E_CREATE_FAILED = "E_BAD_REQUEST"
+    # NOTE: no value-alias members here (e.g. a "legacy" FOO = "BAR"): Python
+    # binds an equal-valued member to the SAME enum object, so a later
+    # ERROR_REGISTRY[ErrorCode.FOO] write silently CLOBBERS BAR's entry — that
+    # exact bug hid "Resource creation failed." under E_BAD_REQUEST until
+    # 2026-11-13 (card 20261113_153000); guarded by
+    # tests/test_error_handler.py::test_no_duplicate_enum_values.
 
 
 # ── Error Registry ──
@@ -258,6 +264,28 @@ class ValidationError(AppError):
     user_message: str = "Invalid request."
 
 
+class PromptTooLongError(AppError):
+    """Prompt exceeds the prefill token cap (card 20261102_001622).
+
+    Raised by the engine backstop in ``generate_numpy`` BEFORE any prefill
+    work starts — the 120s request budget and the box's RAM both scale with
+    prompt length, so an over-cap prompt must fail loud and instant rather
+    than burn the budget or OOM the process. Never raised for trimming:
+    chat drops oldest turns at its own seam and announces ``omitted_count``;
+    callers with nothing to trim (CLI, raw API prompts) get this error.
+
+    ``recoverable`` is True: the caller can shorten the prompt and retry.
+    """
+
+    code: str = "E_PROMPT_TOO_LONG"
+    recoverable: bool = True
+    http_status: int = 413
+    user_message: str = (
+        "Prompt is too long for the configured prefill limit. "
+        "Shorten the conversation or start a new one."
+    )
+
+
 class ConfigError(AppError):
     """Misconfiguration — missing env, bad file, invalid value."""
 
@@ -405,6 +433,13 @@ ERROR_REGISTRY[ErrorCode.E_FATAL] = (
     "A critical error occurred. Please restart the server.",
 )
 ERROR_REGISTRY[ErrorCode.E_BAD_REQUEST] = ("ValidationError", 400, False, "Invalid request.")
+ERROR_REGISTRY[ErrorCode.E_PROMPT_TOO_LONG] = (
+    "PromptTooLongError",
+    413,
+    True,
+    "Prompt is too long for the configured prefill limit. "
+    "Shorten the conversation or start a new one.",
+)
 ERROR_REGISTRY[ErrorCode.E_VAL_REQUEST] = (
     "ValidationError",
     422,
@@ -473,6 +508,13 @@ ERROR_REGISTRY[ErrorCode.E_STATE_IDLE] = (
     "No active training session.",
 )
 ERROR_REGISTRY[ErrorCode.E_CONFIG] = ("ConfigError", 500, False, "Server configuration error.")
+ERROR_REGISTRY[ErrorCode.E_CONFIG_DRIFT] = (
+    "ConflictError",
+    412,
+    True,
+    "This page and the server disagree about the active configuration, "
+    "so nothing was sent. Reload the page to continue.",
+)
 ERROR_REGISTRY[ErrorCode.E_NETWORK] = ("RecoverableError", 503, True, "Network connection failed.")
 ERROR_REGISTRY[ErrorCode.E_SHELL_SECURITY] = (
     "AuthError",
@@ -497,12 +539,6 @@ ERROR_REGISTRY[ErrorCode.E_UNKNOWN_COLLECTION] = (
     404,
     False,
     "Unknown collection or store.",
-)
-ERROR_REGISTRY[ErrorCode.E_CREATE_FAILED] = (
-    "ValidationError",
-    400,
-    False,
-    "Resource creation failed.",
 )
 
 

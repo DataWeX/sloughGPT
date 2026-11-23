@@ -25,7 +25,9 @@ vi.mock('@/lib/memory-controller', () => ({
   memoryController: { archive: vi.fn().mockResolvedValue({ records: [] }) },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => vi.fn(),
 }))
 

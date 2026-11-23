@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -39,7 +39,6 @@ export default function FeedbackPage() {
   const [tab, setTab] = useState<Tab>('stats')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const addToast = notify.toast
 
   const [stats, setStats] = useState<FeedbackStats | null>(null)
   const [workflow, setWorkflow] = useState<WorkflowStatus | null>(null)
@@ -95,11 +94,11 @@ export default function FeedbackPage() {
   const handleExport = useCallback(async () => {
     try {
       const resp = await feedbackController.exportTrainingData('json')
-      addToast(`Exported ${resp.count} items to ${resp.path ?? 'server'}`, 'success')
+      notify.toast(`Exported ${resp.count} items to ${resp.path ?? 'server'}`, { type: 'success' })
     } catch {
-      addToast('Could not export training data', 'error')
+      notify.toast('Could not export training data', { type: 'error' })
     }
-  }, [addToast])
+  }, [])
 
   const handleRefreshStats = async () => {
     const [s, w, t] = await Promise.all([
@@ -125,7 +124,7 @@ export default function FeedbackPage() {
     try {
       setConversations(await feedbackConversationsController.list())
     } catch {
-      addToast('Could not load conversations', 'error')
+      notify.toast('Could not load conversations', { type: 'error' })
     }
   }
 
@@ -137,7 +136,7 @@ export default function FeedbackPage() {
       setNewConvName('')
       await handleLoadConversations()
     } catch {
-      addToast('Could not create conversation', 'error')
+      notify.toast('Could not create conversation', { type: 'error' })
     } finally {
       setCreating(false)
     }
@@ -148,7 +147,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.delete(id)
       await handleLoadConversations()
     } catch {
-      addToast('Could not delete conversation', 'error')
+      notify.toast('Could not delete conversation', { type: 'error' })
     }
   }
 
@@ -157,7 +156,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.togglePin(conv.id, !conv.pinned)
       await handleLoadConversations()
     } catch {
-      addToast('Could not update pin', 'error')
+      notify.toast('Could not update pin', { type: 'error' })
     }
   }
 
@@ -166,7 +165,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.toggleStar(conv.id, !conv.starred)
       await handleLoadConversations()
     } catch {
-      addToast('Could not update star', 'error')
+      notify.toast('Could not update star', { type: 'error' })
     }
   }
 
@@ -176,7 +175,7 @@ export default function FeedbackPage() {
         {/* Tab bar skeleton */}
         <div className="flex gap-0.5 border-b border-border/20 pb-0 mb-4">
           {['stats', 'conversations', 'training'].map((t) => (
-            <div key={t} className="px-2.5 py-1 text-[10px]">
+            <div key={t} className="px-2.5 py-1 text-xs">
               <Skeleton className="h-3 w-16" />
             </div>
           ))}
@@ -231,7 +230,7 @@ export default function FeedbackPage() {
               if (t === 'conversations') handleLoadConversations()
             }}
             className={cn(
-              'px-2.5 py-1 text-[10px] font-medium rounded-t transition-colors',
+              'px-2.5 py-1 text-xs font-medium rounded-t transition-colors',
               tab === t
                 ? 'bg-primary/10 text-primary border-b-2 border-primary'
                 : 'text-muted-foreground/60 hover:text-foreground',
@@ -266,9 +265,9 @@ export default function FeedbackPage() {
                   assistantResponse: '',
                   rating: fb.rating,
                 })
-                addToast('Feedback submitted', 'success')
+                notify.toast('Feedback submitted', { type: 'success' })
               } catch {
-                addToast('Could not submit feedback', 'error')
+                notify.toast('Could not submit feedback', { type: 'error' })
               }
             }}
           />
@@ -296,7 +295,7 @@ export default function FeedbackPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={handleLoadConversations}
               aria-label="Refresh conversations"
             >
@@ -331,7 +330,7 @@ export default function FeedbackPage() {
               />
             )}
             {conversations.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground/60">No conversations yet.</p>
+              <p className="text-xs text-muted-foreground/60">No conversations yet.</p>
             ) : (
               <div className="space-y-0.5 max-h-96 overflow-y-auto">
                 {conversations
@@ -347,17 +346,17 @@ export default function FeedbackPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium truncate">{conv.name}</span>
                           {conv.pinned && (
-                            <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                            <span className="text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
                               pinned
                             </span>
                           )}
                           {conv.starred && (
-                            <span className="text-[9px] bg-warning/10 text-warning px-1.5 py-0.5 rounded-full">
+                            <span className="text-[11px] bg-warning/10 text-warning px-1.5 py-0.5 rounded-full">
                               starred
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
+                        <div className="text-xs text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
                           {conv.message_count} messages · {formatLocaleDate(conv.created_at) || '—'}
                         </div>
                       </div>
@@ -365,7 +364,7 @@ export default function FeedbackPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 text-[10px]"
+                          className="h-6 text-xs"
                           onClick={() => handleTogglePin(conv)}
                         >
                           {conv.pinned ? 'Unpin' : 'Pin'}
@@ -373,7 +372,7 @@ export default function FeedbackPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 text-[10px]"
+                          className="h-6 text-xs"
                           onClick={() => handleToggleStar(conv)}
                         >
                           {conv.starred ? 'Unstar' : 'Star'}
@@ -381,7 +380,7 @@ export default function FeedbackPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 text-[10px] text-destructive"
+                          className="h-6 text-xs text-destructive"
                           onClick={() => handleDeleteConversation(conv.id)}
                         >
                           Delete
@@ -417,13 +416,13 @@ export default function FeedbackPage() {
                   />
                 </KpiGrid>
               ) : (
-                <div className="text-center py-3 text-[10px] text-muted-foreground/60">
+                <div className="text-center py-3 text-xs text-muted-foreground/60">
                   No training data available.
                   <div className="mt-1.5">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-6 text-[10px]"
+                      className="h-6 text-xs"
                       onClick={() => router.push('/training')}
                     >
                       Go to Training
@@ -441,7 +440,7 @@ export default function FeedbackPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px]"
+                  className="h-6 text-xs"
                   onClick={handleRefreshStats}
                   aria-label="Refresh stats"
                 >
@@ -464,7 +463,7 @@ export default function FeedbackPage() {
                     { label: 'Prunes', value: String(workflow.stats?.prunes_performed ?? 0) },
                   ].map((s) => (
                     <div key={s.label} className="rounded-lg bg-muted/20 p-2 text-center">
-                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">
+                      <div className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">
                         {s.label}
                       </div>
                       <div
@@ -479,7 +478,7 @@ export default function FeedbackPage() {
                   ))}
                 </div>
                 {workflow.stats?.feedback_recorded != null && (
-                  <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground/60">
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground/60">
                     <span>Feedback recorded: {workflow.stats.feedback_recorded}</span>
                     <span>Exports: {workflow.stats.exports_performed ?? 0}</span>
                   </div>
@@ -493,10 +492,10 @@ export default function FeedbackPage() {
                       setWorkflowBusy(true)
                       try {
                         await feedbackController.triggerWorkflowAction('aggregate')
-                        addToast('Aggregation triggered', 'success')
+                        notify.toast('Aggregation triggered', { type: 'success' })
                         handleRefreshStats()
                       } catch {
-                        addToast('aggregation', 'error')
+                        notify.toast('aggregation', { type: 'error' })
                       } finally {
                         setWorkflowBusy(false)
                       }
@@ -513,10 +512,10 @@ export default function FeedbackPage() {
                       setWorkflowBusy(true)
                       try {
                         await feedbackController.triggerWorkflowAction('prune')
-                        addToast('Prune triggered', 'success')
+                        notify.toast('Prune triggered', { type: 'success' })
                         handleRefreshStats()
                       } catch {
-                        addToast('prune', 'error')
+                        notify.toast('prune', { type: 'error' })
                       } finally {
                         setWorkflowBusy(false)
                       }
@@ -533,9 +532,9 @@ export default function FeedbackPage() {
                       setWorkflowBusy(true)
                       try {
                         await feedbackController.triggerWorkflowAction('export')
-                        addToast('Export triggered', 'success')
+                        notify.toast('Export triggered', { type: 'success' })
                       } catch {
-                        addToast('export', 'error')
+                        notify.toast('export', { type: 'error' })
                       } finally {
                         setWorkflowBusy(false)
                       }

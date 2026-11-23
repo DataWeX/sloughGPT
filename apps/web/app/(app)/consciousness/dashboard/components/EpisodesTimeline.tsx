@@ -13,7 +13,12 @@ interface EpisodesTimelineProps {
   onSelect: (episode: Episode) => void
 }
 
-export function EpisodesTimeline({ episodes, ratingEpisode, onRate, onSelect }: EpisodesTimelineProps) {
+export function EpisodesTimeline({
+  episodes,
+  ratingEpisode,
+  onRate,
+  onSelect,
+}: EpisodesTimelineProps) {
   return (
     <>
       {/* Timeline */}
@@ -38,7 +43,7 @@ export function EpisodesTimeline({ episodes, ratingEpisode, onRate, onSelect }: 
                     className="flex gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 text-xs sm:text-sm cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={() => onSelect(ep)}
                   >
-                    <div className="flex flex-col items-center gap-1 text-[10px] sm:text-xs text-muted-foreground min-w-[48px] sm:min-w-[60px]">
+                    <div className="flex flex-col items-center gap-1 text-xs sm:text-xs text-muted-foreground min-w-[48px] sm:min-w-[60px]">
                       <span>{formatTimeAgo(ep.timestamp)}</span>
                       <span
                         className={`font-mono ${ep.growth_delta >= 0 ? 'text-success' : 'text-destructive'}`}
@@ -48,7 +53,7 @@ export function EpisodesTimeline({ episodes, ratingEpisode, onRate, onSelect }: 
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                      <div className="text-xs sm:text-xs text-muted-foreground truncate">
                         {ep.input_text}
                       </div>
                       <div className="mt-1 text-xs sm:text-sm">{ep.self_insight}</div>
@@ -56,7 +61,7 @@ export function EpisodesTimeline({ episodes, ratingEpisode, onRate, onSelect }: 
                         {Object.entries(ep.qualia)
                           .slice(0, 4)
                           .map(([k, v]) => (
-                            <span key={k} className="text-[10px] text-muted-foreground">
+                            <span key={k} className="text-xs text-muted-foreground">
                               {k}: {(v as number).toFixed(2)}
                             </span>
                           ))}
@@ -67,16 +72,14 @@ export function EpisodesTimeline({ episodes, ratingEpisode, onRate, onSelect }: 
                             key={r}
                             size="sm"
                             variant={ratingEpisode === realIndex ? 'default' : 'outline'}
-                            className="h-6 px-2 text-[10px]"
+                            className="h-6 px-2 text-xs"
                             onClick={() => onRate(realIndex, r)}
                             disabled={ratingEpisode === realIndex}
                           >
                             {r}
                           </Button>
                         ))}
-                        <span className="text-[10px] text-muted-foreground ml-1 self-center">
-                          rate
-                        </span>
+                        <span className="text-xs text-muted-foreground ml-1 self-center">rate</span>
                       </div>
                     </div>
                   </div>

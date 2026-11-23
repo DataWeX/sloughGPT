@@ -235,6 +235,53 @@ def _parse_grid(value: str) -> tuple[int, int, int]:
     return dims  # type: ignore[return-value]
 
 
+# ── Stage-B flag declaration (Command Rule) ──────────────────────────────────
+#
+# Flags below are declared ONCE; ``_add_stage_b_flags`` derives their argparse
+# rows from this tuple so help text and parsing cannot drift apart. The
+# pre-Stage-B flags in ``main`` remain hand-written argparse calls
+# (grandfathered until this command's full CommandSpec migration).
+_STAGE_B_FLAGS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "--model-backend",
+        "type": str,
+        "default": "local",
+        "choices": ("local", "api"),
+        "help": "model client for --brain llm: local (served InferenceEngine "
+        "TCP, --model-url host:port; default), "
+        "api (OpenAI-compatible HTTP, --model-url base URL). "
+        "No mock backend — the brain talks to real models only",
+    },
+    {
+        "name": "--model-url",
+        "type": str,
+        "default": None,
+        "help": "backend endpoint: host:port for local (default 127.0.0.1:9100), "
+        "base URL for api (default $SLO_WORLD_API_BASE or http://127.0.0.1:8000/v1)",
+    },
+    {
+        "name": "--runs",
+        "type": int,
+        "default": 1,
+        "help": "independent seeded runs to execute; 1 (default) runs inline exactly "
+        "as before, >1 fans the sweep out across --workers (ticks or --evolution only)",
+    },
+    {
+        "name": "--workers",
+        "type": int,
+        "default": 0,
+        "help": "worker processes for --runs (0 = min(runs, CPU count)); each run "
+        "seeds its own RNG in its own process, so seed S matches an inline run",
+    },
+)
+
+
+def _add_stage_b_flags(parser: argparse.ArgumentParser) -> None:
+    """Derive argparse rows from :data:`_STAGE_B_FLAGS` (one declaration)."""
+    for flag in _STAGE_B_FLAGS:
+        parser.add_argument(flag["name"], **{k: v for k, v in flag.items() if k != "name"})
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     CLI entry point. Runs a world headlessly and prints a tick table + summary.
@@ -304,12 +351,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--brain",
-        choices=("perceptron", "model", "slonet", "random"),
+        choices=("perceptron", "model", "slonet", "random", "llm"),
         default="perceptron",
         help="brain class for babies: perceptron (default), model (numpy "
         "ModelBrain — trainable hidden projection, genome-compatible), slonet "
         "(native SloNet stack trained in-world by backprop; breeds via "
-        "spawn_child, not the genome), random (coin-flip baseline)",
+        "spawn_child, not the genome), random (coin-flip baseline), llm "
+        "(token-space: observation serialized to a prompt, answered by the "
+        "--model-backend client; breeds via spawn_child, not the genome)",
     )
     parser.add_argument(
         "--brain-n-embed",
@@ -426,6 +475,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--structures", action="store_true", help="enable durable structures / nests (Stage 7)"
     )
+    _add_stage_b_flags(parser)
     try:
         args = parser.parse_args(argv)
     except SystemExit:
@@ -463,6 +513,14 @@ def main(argv: list[str] | None = None) -> int:
         brain_optimizer=args.brain_optimizer,
     )
 
+    if args.brain == "llm":
+        # Stage B: the token-space brain reads its process-wide model client.
+        # Set BEFORE WorldDriver constructs babies — they build their brains
+        # in __init__, and each brain binds the client at construction.
+        from .llm_brain import make_client, set_default_client
+
+        set_default_client(make_client(args.model_backend, args.model_url))
+
     driver = WorldDriver(params, seed=args.seed)
 
     generations = (
@@ -484,6 +542,46 @@ def main(argv: list[str] | None = None) -> int:
             else 5
         )
     )
+
+    if args.runs > 1:
+        # Stage-B sweep: independent seeded runs fanned out across worker
+        # processes (world_workers). Benchmarks above are controlled A/B
+        # experiments and stay single-run; --runs covers tick sweeps and
+        # --evolution sweeps. One summary line per run — raw logs stay one
+        # click away, never dumped inline.
+        from .world_workers import run_world_runs
+
+        runs: list[dict[str, Any]] = []
+        for i in range(args.runs):
+            spec: dict[str, Any] = {"seed": args.seed + i, "params": params}
+            if args.evolution:
+                spec.update(
+                    kind="evolution",
+                    generations=generations,
+                    population=args.population,
+                    ticks_per_generation=args.ticks_per_gen,
+                )
+            else:
+                spec.update(kind="ticks", ticks=args.ticks)
+            runs.append(spec)
+        for result in run_world_runs(runs, max_workers=args.workers):
+            if result["kind"] == "evolution":
+                summary = result["summary"]
+                history = summary.get("history", [])
+                print(
+                    f"{result['seed']:<6d} evolution best_fitness="
+                    f"{summary.get('best_fitness', -1.0):.4f} "
+                    f"generations={len(history)} "
+                    f"population={summary.get('population_size', 0)}"
+                )
+            else:
+                snap = result["snapshot"]
+                print(
+                    f"{result['seed']:<6d} ticks     total_energy="
+                    f"{snap['total_energy']:.1f} alive={snap['alive_babies']} "
+                    f"tick={snap['tick']}"
+                )
+        return 0
 
     if args.culture:
         result = benchmark_culture(

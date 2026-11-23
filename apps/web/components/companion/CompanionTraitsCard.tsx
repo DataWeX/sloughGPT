@@ -23,24 +23,30 @@ export function CompanionTraitsCard({ traits, onSave, onReset }: CompanionTraits
   const [saving, setSaving] = useState(false)
   const current = draft ?? traits
 
-  const handleChange = useCallback((key: string, value: number) => {
-    if (!current) return
-    setDraft({ ...current, [key]: value })
-  }, [current])
+  const handleChange = useCallback(
+    (key: string, value: number) => {
+      if (!current) return
+      setDraft({ ...current, [key]: value })
+    },
+    [current],
+  )
 
   const handleSave = async () => {
     if (!draft) return
     setSaving(true)
-    try { onSave?.(draft) } finally { setSaving(false) }
+    try {
+      onSave?.(draft)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const traitEntries = current
     ? (Object.entries(current) as [string, number][]).filter(([k]) => k !== 'name')
     : []
 
-  const avg = traitEntries.length > 0
-    ? traitEntries.reduce((s, [, v]) => s + v, 0) / traitEntries.length
-    : 0
+  const avg =
+    traitEntries.length > 0 ? traitEntries.reduce((s, [, v]) => s + v, 0) / traitEntries.length : 0
 
   return (
     <Card data-testid="companion-traits">
@@ -49,12 +55,17 @@ export function CompanionTraitsCard({ traits, onSave, onReset }: CompanionTraits
           <CardTitle className="text-base">Personality Traits</CardTitle>
           <div className="flex gap-1">
             {onReset && (
-              <Button size="sm" variant="ghost" className="text-destructive text-[10px]" onClick={onReset}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive text-xs"
+                onClick={onReset}
+              >
                 Reset
               </Button>
             )}
             {draft && (
-              <Button size="sm" className="text-[10px]" onClick={handleSave} disabled={saving}>
+              <Button size="sm" className="text-xs" onClick={handleSave} disabled={saving}>
                 {saving ? 'Saving...' : 'Save'}
               </Button>
             )}
@@ -66,9 +77,14 @@ export function CompanionTraitsCard({ traits, onSave, onReset }: CompanionTraits
         {current && (
           <>
             <div className="flex items-center gap-3 mb-4">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Overall</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                Overall
+              </div>
               <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${avg * 100}%` }} />
+                <div
+                  className="h-full bg-primary rounded-full transition-all"
+                  style={{ width: `${avg * 100}%` }}
+                />
               </div>
               <div className="text-xs font-medium">{(avg * 100).toFixed(0)}%</div>
             </div>
@@ -82,7 +98,9 @@ export function CompanionTraitsCard({ traits, onSave, onReset }: CompanionTraits
                         <span className="text-xs">{meta.icon}</span>
                         <span className="text-xs font-medium">{meta.label}</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{(value * 100).toFixed(0)}%</span>
+                      <span className="text-xs text-muted-foreground">
+                        {(value * 100).toFixed(0)}%
+                      </span>
                     </div>
                     <input
                       type="range"
@@ -90,7 +108,7 @@ export function CompanionTraitsCard({ traits, onSave, onReset }: CompanionTraits
                       max={1}
                       step={0.01}
                       value={value}
-                      onChange={e => handleChange(key, parseFloat(e.target.value))}
+                      onChange={(e) => handleChange(key, parseFloat(e.target.value))}
                       className="w-full h-1.5 accent-primary"
                       data-testid={`trait-${key}`}
                     />

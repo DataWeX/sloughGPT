@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -59,7 +59,6 @@ interface EvalReport {
 }
 
 export default function ConsciousnessTrainingPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const { isTraining: liveTraining, connected: trainingConnected } = useLiveTraining()
   const [loading, setLoading] = useState(true)
@@ -94,10 +93,10 @@ export default function ConsciousnessTrainingPage() {
     setTraining(true)
     try {
       await consciousnessController.startTraining({ model_path: modelPath })
-      addToast(t('consciousness_training.toast_started'), 'success')
+      notify.toast(t('consciousness_training.toast_started'), { type: 'success' })
       await Promise.all([fetchTrainStatus(), fetchEval()])
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setTraining(false)
     }

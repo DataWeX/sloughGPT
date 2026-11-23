@@ -27,9 +27,21 @@ const METRICS: { key: MetricKey; label: string; color: string; unit: string }[] 
   { key: 'quality', label: 'Quality', color: 'rgb(var(--warning))', unit: '%' },
 ]
 
-function SimpleLineChart({ data, dataKey, color, height = 60 }: { data: BenchmarkHistoryEntry[]; dataKey: string; color: string; height?: number }) {
+function SimpleLineChart({
+  data,
+  dataKey,
+  color,
+  height = 60,
+}: {
+  data: BenchmarkHistoryEntry[]
+  dataKey: string
+  color: string
+  height?: number
+}) {
   const points = useMemo(() => {
-    const values = data.map(d => Number((d as unknown as Record<string, unknown>)[dataKey] ?? 0)).filter(v => !isNaN(v) && v > 0)
+    const values = data
+      .map((d) => Number((d as unknown as Record<string, unknown>)[dataKey] ?? 0))
+      .filter((v) => !isNaN(v) && v > 0)
     if (values.length === 0) return ''
     const max = Math.max(...values)
     const min = Math.min(...values)
@@ -38,10 +50,22 @@ function SimpleLineChart({ data, dataKey, color, height = 60 }: { data: Benchmar
     return values.map((v, i) => `${i * step},${100 - ((v - min) / range) * 100}`).join(' ')
   }, [data, dataKey])
 
-  if (!points) return <div className="h-[60px] flex items-center justify-center text-[9px] text-muted-foreground">No data</div>
+  if (!points)
+    return (
+      <div className="h-[60px] flex items-center justify-center text-[11px] text-muted-foreground">
+        No data
+      </div>
+    )
 
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full" style={{ height }} role="img" aria-label={`${dataKey} chart`}>
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className="w-full"
+      style={{ height }}
+      role="img"
+      aria-label={`${dataKey} chart`}
+    >
       <polyline fill="none" stroke={color} strokeWidth="1.5" points={points} />
     </svg>
   )
@@ -72,9 +96,13 @@ export function BenchmarkChartCard({ history }: BenchmarkChartCardProps) {
   if (history.length === 0) {
     return (
       <Card data-testid="benchmark-chart">
-        <CardHeader><CardTitle className="text-base">Metrics Over Time</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Metrics Over Time</CardTitle>
+        </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground text-center py-3">No benchmark history yet.</p>
+          <p className="text-xs text-muted-foreground text-center py-3">
+            No benchmark history yet.
+          </p>
         </CardContent>
       </Card>
     )
@@ -85,24 +113,28 @@ export function BenchmarkChartCard({ history }: BenchmarkChartCardProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Metrics Over Time</CardTitle>
-          <span className="text-[10px] text-muted-foreground">{history.length} runs · {models.length} model{models.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs text-muted-foreground">
+            {history.length} runs · {models.length} model{models.length !== 1 ? 's' : ''}
+          </span>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {METRICS.map(metric => {
-          const hasData = history.some(h => h[metric.key] != null && Number(h[metric.key]) > 0)
+        {METRICS.map((metric) => {
+          const hasData = history.some((h) => h[metric.key] != null && Number(h[metric.key]) > 0)
           if (!hasData) return null
 
           return (
             <div key={metric.key}>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{metric.label}</span>
-                <span className="text-[9px] text-muted-foreground/60">{metric.unit}</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {metric.label}
+                </span>
+                <span className="text-[11px] text-muted-foreground/60">{metric.unit}</span>
               </div>
               <div className="rounded-md bg-muted/20 p-2">
-                {models.map(model => (
+                {models.map((model) => (
                   <div key={model} className="flex items-center gap-2 mb-1 last:mb-0">
-                    <span className="text-[9px] text-muted-foreground w-16 truncate">{model}</span>
+                    <span className="text-[11px] text-muted-foreground w-16 truncate">{model}</span>
                     <div className="flex-1">
                       <SimpleLineChart
                         data={byModel[model]}
@@ -119,10 +151,13 @@ export function BenchmarkChartCard({ history }: BenchmarkChartCardProps) {
         })}
 
         <div>
-          <p className="text-[9px] text-muted-foreground/60 mb-1">Recent runs</p>
+          <p className="text-[11px] text-muted-foreground/60 mb-1">Recent runs</p>
           <div className="flex gap-1 overflow-x-auto pb-1">
             {history.slice(-10).map((h, i) => (
-              <div key={i} className="shrink-0 text-[9px] text-muted-foreground/60 border border-border/30 rounded px-1.5 py-0.5">
+              <div
+                key={i}
+                className="shrink-0 text-[11px] text-muted-foreground/60 border border-border/30 rounded px-1.5 py-0.5"
+              >
                 {h.model} · {formatTime(h.timestamp)}
               </div>
             ))}

@@ -48,8 +48,8 @@ export function ShareDialog({
         <div className="flex gap-2">
           <select
             value={shareType}
-            onChange={e => onShareTypeChange(e.target.value)}
-            className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+            onChange={(e) => onShareTypeChange(e.target.value)}
+            className="h-6 text-xs rounded-md border border-border bg-background px-2"
           >
             <option value="dataset">Dataset</option>
             <option value="knowledge">Knowledge</option>
@@ -58,46 +58,54 @@ export function ShareDialog({
           {shareType === 'dataset' ? (
             <select
               value={shareResourceId}
-              onChange={e => onResourceIdChange(e.target.value)}
-              className="flex-1 h-6 text-[10px] rounded-md border border-border bg-background px-2"
+              onChange={(e) => onResourceIdChange(e.target.value)}
+              className="flex-1 h-6 text-xs rounded-md border border-border bg-background px-2"
             >
               <option value="">Select dataset...</option>
-              {datasets.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+              {datasets.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           ) : (
             <Input
               value={shareResourceId}
-              onChange={e => onResourceIdChange(e.target.value)}
+              onChange={(e) => onResourceIdChange(e.target.value)}
               placeholder={`${shareType} ID`}
-              className="flex-1 h-6 text-[10px]"
+              className="flex-1 h-6 text-xs"
             />
           )}
         </div>
         <div className="flex gap-2">
           <select
             value={shareTargetWs}
-            onChange={e => onTargetWsChange(e.target.value)}
-            className="flex-1 h-6 text-[10px] rounded-md border border-border bg-background px-2"
+            onChange={(e) => onTargetWsChange(e.target.value)}
+            className="flex-1 h-6 text-xs rounded-md border border-border bg-background px-2"
           >
             <option value="">Select workspace...</option>
-            {workspaces.map(w => (
-              <option key={w.id} value={w.id}>{w.name}</option>
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
             ))}
           </select>
           <select
             value={sharePermission}
-            onChange={e => onPermissionChange(e.target.value)}
-            className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+            onChange={(e) => onPermissionChange(e.target.value)}
+            className="h-6 text-xs rounded-md border border-border bg-background px-2"
           >
             <option value="read">Read only</option>
             <option value="admin">Admin</option>
           </select>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" className="h-6 text-[10px]" onClick={onShare}>Share</Button>
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={onCancel}>Cancel</Button>
+          <Button size="sm" className="h-6 text-xs" onClick={onShare}>
+            Share
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={onCancel}>
+            Cancel
+          </Button>
         </div>
       </CardContent>
     </Card>

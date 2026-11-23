@@ -354,9 +354,7 @@ class TestTokenAccountResets:
         # month boundary (Oct 15 -> Nov 15 saw `15 == 15` and skipped reset).
         from datetime import datetime
 
-        account = TokenAccount(
-            user_id="rd2", balance=10_000, daily_used=450, daily_limit=500
-        )
+        account = TokenAccount(user_id="rd2", balance=10_000, daily_used=450, daily_limit=500)
         account.last_daily_reset = datetime(2026, 10, 15, 8, 0, 0).timestamp()
         account.last_monthly_reset = datetime(2026, 11, 1, 0, 0, 0).timestamp()
 

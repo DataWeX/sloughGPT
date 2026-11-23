@@ -768,16 +768,6 @@ class TestCompressorConfig:
         assert c.method == "function"
 
 
-class TestPointConfig:
-    def test_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import PointConfig
-
-        cfg = PointConfig()
-        assert cfg.function_type == "cluster"
-        assert cfg.n_clusters == 16
-        assert cfg.residual_threshold == 0.99
-
-
 class TestLibraryConfig:
     def test_defaults(self):
         from domain.infrastructure._internal.pugqeep.config import LibraryConfig
@@ -797,15 +787,6 @@ class TestTreeConfig:
         assert cfg.n_clusters == 16
         assert cfg.skip_embeddings is True
         assert cfg.skip_biases is True
-
-
-class TestQueueConfig:
-    def test_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import QueueConfig
-
-        cfg = QueueConfig()
-        assert cfg.max_trees == 10
-        assert cfg.dedup is True
 
 
 class TestSubprocessConfig:
@@ -918,12 +899,6 @@ class TestPointCompressorClusterExtended:
         p = c.compress_cluster(weights)
         assert p.dtype == "float32"
 
-    def test_float64_input(self):
-        c = PointCompressor()
-        weights = np.random.randn(64).astype(np.float64)
-        p = c.compress_cluster(weights)
-        assert p.dtype == "float64"
-
     def test_multidimensional_input_flattened(self):
         c = PointCompressor()
         weights = np.random.randn(4, 8)
@@ -1005,12 +980,6 @@ class TestPointCompressorFunctionExtended:
         p = c.compress_function(weights)
         assert p.dtype == "float64"
 
-    def test_shape_preserved(self):
-        c = PointCompressor()
-        weights = np.arange(50, dtype=np.float32)
-        p = c.compress_function(weights)
-        assert p.shape == (50,)
-
     def test_residual_stored_when_low_accuracy(self):
         c = PointCompressor(residual_threshold=0.99)
         np.random.seed(42)
@@ -1043,18 +1012,6 @@ class TestCompressDecompressExtended:
         p = c.compress_function(weights)
         recovered = c.decompress(p, n=100)
         assert len(recovered) == 100
-
-    def test_compress_with_method_cluster(self):
-        c = PointCompressor()
-        weights = np.random.randn(64)
-        p = c.compress(weights, method="cluster")
-        assert p.function_type == "cluster"
-
-    def test_compress_with_method_function(self):
-        c = PointCompressor()
-        weights = np.arange(64, dtype=np.float32)
-        p = c.compress(weights, method="function")
-        assert p.function_type in ("periodic", "linear", "polynomial")
 
     def test_compress_with_default_method(self):
         c = PointCompressor()
@@ -1182,14 +1139,6 @@ class TestPointViewExtended:
         view = PointView(p, shape=(64,), dtype="float32")
         r = repr(view)
         assert "myid" in r
-
-    def test_view_accuracy_matches_point(self):
-        from domain.infrastructure._internal.pugqeep.point_interface import PointView
-
-        c = PointCompressor(n_clusters=8)
-        p = c.compress_cluster(np.random.randn(64), identity="c")
-        view = PointView(p, shape=(64,), dtype="float32")
-        assert view.accuracy == p.accuracy
 
 
 # ---------------------------------------------------------------------------

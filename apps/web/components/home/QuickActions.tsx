@@ -1,8 +1,9 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useRef } from 'react'
 import { Card, CardContent, Button } from '@sloughgpt/strui'
+import { StreamingCursor } from '@/components/StreamingCursor'
 import { chatController } from '@/lib/chat-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -28,7 +29,6 @@ export function QuickActions({
   knowledgeCount,
   setKnowledgeCount,
 }: QuickActionsProps) {
-  const addToast = notify.toast
   const [streaming, setStreaming] = useState(false)
   const streamingRef = useRef(false)
 
@@ -86,6 +86,14 @@ export function QuickActions({
                 try {
                   for await (const token of chatController.stream('Hello!', {
                     waitForModel: true,
+                    // Bare probe: no consciousness reflection, ContextCore
+                    // frame or RAG narrative — and its own session so the
+                    // probe stops polluting the shared 'default' history,
+                    // KV and caches (card 20261112_140010).
+                    session_id: 'quick-test',
+                    use_consciousness: false,
+                    use_context_core: false,
+                    use_rag: false,
                   })) {
                     if (!streamingRef.current) break
                     accumulated += token
@@ -106,9 +114,7 @@ export function QuickActions({
           {testResponse && (
             <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono leading-relaxed">
               {testResponse}
-              {streaming && (
-                <span className="inline-block w-1.5 h-3 bg-primary/70 animate-pulse ml-0.5" />
-              )}
+              {streaming && <StreamingCursor />}
             </div>
           )}
         </CardContent>
@@ -129,9 +135,9 @@ export function QuickActions({
                 await knowledgeController.add(text, 'general')
                 input.value = ''
                 setKnowledgeCount((k) => k + 1)
-                addToast('Fact saved', 'success')
+                notify.toast('Fact saved', { type: 'success' })
               } catch {
-                addToast('Could not save', 'error')
+                notify.toast('Could not save', { type: 'error' })
               }
             }}
             className="flex gap-2"

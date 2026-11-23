@@ -57,11 +57,6 @@ class TestQuantumState:
 
 
 class TestQuantumCognitiveEngine:
-    def test_superposition_count(self):
-        engine = QuantumCognitiveEngine()
-        engine.create_superposition(["a", "b", "c"])
-        assert len(engine.superposition) == 3
-
     def test_superposition_empty(self):
         engine = QuantumCognitiveEngine()
         engine.create_superposition([])
@@ -91,10 +86,6 @@ class TestQuantumCognitiveEngine:
         engine.create_superposition(["a", "b"])
         result = engine.measure()
         assert result in ("a", "b")
-
-    def test_measure_empty_returns_empty(self):
-        engine = QuantumCognitiveEngine()
-        assert engine.measure() == ""
 
     def test_entangle_stores_pair(self):
         engine = QuantumCognitiveEngine()
@@ -135,10 +126,6 @@ class TestQuantumParallelProcessor:
     def test_default_capacity(self):
         qpp = QuantumParallelProcessor()
         assert qpp.get_parallel_capacity() == 8
-
-    def test_custom_capacity(self):
-        qpp = QuantumParallelProcessor(num_streams=4)
-        assert qpp.get_parallel_capacity() == 4
 
     def test_parallel_process_distributes(self):
         qpp = QuantumParallelProcessor(num_streams=3)
@@ -272,11 +259,6 @@ class TestHyperdimensionalProcessor:
 
 
 class TestTemporalReasoningEngine:
-    def test_default_depth(self):
-        tre = TemporalReasoningEngine()
-        assert tre.timeline_depth == 5
-        assert len(tre.timelines) == 5
-
     def test_add_event_to_current_timeline(self):
         tre = TemporalReasoningEngine()
         tre.add_event({"action": "speak"})

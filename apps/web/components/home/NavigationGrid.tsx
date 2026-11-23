@@ -16,7 +16,7 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
       <Link
         href="/chat"
-        className="group relative overflow-hidden rounded-lg border border-accent/25 bg-gradient-to-br from-accent/8 via-accent/3 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-accent/8 hover:border-accent/40"
+        className="group relative overflow-hidden rounded-lg border border-accent/25 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-accent/10 hover:border-accent/40"
       >
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
@@ -128,7 +128,7 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
         className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
       >
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
+          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
           <div className="min-w-0">

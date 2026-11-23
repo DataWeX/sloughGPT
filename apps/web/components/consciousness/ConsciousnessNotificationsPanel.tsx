@@ -130,7 +130,7 @@ export function ConsciousnessNotificationsPanel() {
           />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -180,7 +180,7 @@ export function ConsciousnessNotificationsPanel() {
                         {!notif.read && (
                           <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-primary" />
                         )}
-                        <span className="flex-shrink-0 text-[10px] text-zinc-500 ml-auto">
+                        <span className="flex-shrink-0 text-xs text-zinc-500 ml-auto">
                           {timeAgo(notif.timestamp)}
                         </span>
                       </div>

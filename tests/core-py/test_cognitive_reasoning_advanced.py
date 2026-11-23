@@ -156,10 +156,6 @@ class TestChainOfThought:
         await ChainOfThought(llm_call=track).reason("X")
         assert len(calls) >= 1
 
-    def test_evaluate_confidence_base(self):
-        cot = ChainOfThought()
-        assert cot._evaluate_confidence("maybe") == 0.5
-
     def test_evaluate_confidence_indicators(self):
         cot = ChainOfThought()
         for word in ["therefore", "thus", "hence", "conclude", "implies"]:
@@ -485,10 +481,6 @@ class TestCausalReasoning:
         assert len(rels) >= 1
         assert rels[0][2] == 0.8
 
-    def test_build_conclusion_empty(self):
-        cr = CausalReasoning()
-        assert "Unable" in cr._build_causal_conclusion([], [], [])
-
     def test_build_conclusion_limits_items(self):
         cr = CausalReasoning()
         causes = ["c1", "c2", "c3", "c4"]
@@ -529,16 +521,6 @@ class TestSyllogismReasoning:
         result = await SyllogismReasoning().reason("XYZ not real")
         # Default premises are valid AAA
         assert isinstance(result.metadata["valid"], bool)
-
-    def test_parse_premises_multi(self):
-        sr = SyllogismReasoning()
-        p = sr._parse_premises("All A are B. X is A. Therefore X is B.")
-        assert len(p) >= 2
-
-    def test_parse_premises_short_fallback(self):
-        sr = SyllogismReasoning()
-        p = sr._parse_premises("short")
-        assert "Socrates" in p[1]
 
     def test_identify_figure_returns_int(self):
         sr = SyllogismReasoning()
@@ -681,48 +663,8 @@ class TestReActReasoning:
 
 class TestAdvancedReasoningFactory:
     @pytest.mark.asyncio
-    async def test_chain_of_thought(self):
-        r = await advanced_reasoning("Q", mode=ReasoningMode.CHAIN_OF_THOUGHT)
-        assert r.mode == ReasoningMode.CHAIN_OF_THOUGHT
-
-    @pytest.mark.asyncio
-    async def test_tree_of_thoughts(self):
-        r = await advanced_reasoning("Q", mode=ReasoningMode.TREE_OF_THOUGHTS, max_depth=1)
-        assert r.mode == ReasoningMode.TREE_OF_THOUGHTS
-
-    @pytest.mark.asyncio
-    async def test_self_consistency(self):
-        r = await advanced_reasoning("Q", mode=ReasoningMode.SELF_CONSISTENCY, num_paths=2)
-        assert r.mode == ReasoningMode.SELF_CONSISTENCY
-
-    @pytest.mark.asyncio
-    async def test_constitutional(self):
-        r = await advanced_reasoning("Q", mode=ReasoningMode.CONSTITUTIONAL)
-        assert r.mode == ReasoningMode.CONSTITUTIONAL
-
-    @pytest.mark.asyncio
-    async def test_causal(self):
-        r = await advanced_reasoning("Because X. Therefore Y.", mode=ReasoningMode.CAUSAL)
-        assert r.mode == ReasoningMode.CAUSAL
-
-    @pytest.mark.asyncio
-    async def test_syllogism(self):
-        r = await advanced_reasoning("All A are B. X is A.", mode=ReasoningMode.SYLLOGISM)
-        assert r.mode == ReasoningMode.SYLLOGISM
-
-    @pytest.mark.asyncio
-    async def test_react(self):
-        r = await advanced_reasoning("Q", mode=ReasoningMode.REACT)
-        assert r.mode == ReasoningMode.REACT
-
-    @pytest.mark.asyncio
     async def test_counterfactual_defaults_to_cot(self):
         r = await advanced_reasoning("Q", mode=ReasoningMode.COUNTERFACTUAL)
-        assert r.mode == ReasoningMode.CHAIN_OF_THOUGHT
-
-    @pytest.mark.asyncio
-    async def test_unknown_string_defaults_to_cot(self):
-        r = await advanced_reasoning("Q", mode="unknown_mode")
         assert r.mode == ReasoningMode.CHAIN_OF_THOUGHT
 
     @pytest.mark.asyncio

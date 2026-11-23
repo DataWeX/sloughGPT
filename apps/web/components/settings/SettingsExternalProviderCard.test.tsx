@@ -16,22 +16,12 @@ vi.mock('@/lib/settings-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel?: (s: { addToast: typeof mockAddToast }) => unknown) =>
-      sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel?: (s: { addToast: typeof mockAddToast }) => unknown) =>
+    sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+}))
 
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: (err: unknown, fallback = 'error') =>
@@ -178,7 +168,9 @@ describe('SettingsExternalProviderCard', () => {
     expect(body.api_url).toBe('https://openrouter.ai/api/v1')
     expect(body.model).toBe('gpt-4o-mini')
     expect('api_key' in body).toBe(false)
-    expect(mockAddToast).toHaveBeenCalledWith('External provider settings saved', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('External provider settings saved', {
+      type: 'success',
+    })
   })
 
   it('includes api_key when user types a new key', async () => {
@@ -205,7 +197,7 @@ describe('SettingsExternalProviderCard', () => {
     expect(mockUpdateProviderApi).not.toHaveBeenCalled()
     expect(mockAddToast).toHaveBeenCalledWith(
       'API key required before enabling the external provider',
-      'error',
+      { type: 'error' },
     )
   })
 
@@ -236,7 +228,7 @@ describe('SettingsExternalProviderCard', () => {
     await waitFor(() => expect(screen.getByText('Clear key')).toBeTruthy())
     fireEvent.click(screen.getByText('Clear key'))
     await waitFor(() => expect(mockUpdateProviderApi).toHaveBeenCalledWith({ api_key: '' }))
-    expect(mockAddToast).toHaveBeenCalledWith('API key cleared', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('API key cleared', { type: 'success' })
   })
 
   it('surfaces load errors', async () => {

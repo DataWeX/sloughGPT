@@ -7,7 +7,6 @@ from domain.shared._internal.test_framework import (
     TestFramework,
     TestResult,
     TestSuite,
-    mark_test,
 )
 
 
@@ -56,15 +55,6 @@ class TestTestFramework:
         summary = fw.get_summary(suite)
         assert summary["passed"] == 1
         assert summary["pass_rate"] == 100.0
-
-
-class TestMarkTest:
-    def test_marks_function(self):
-        @mark_test
-        def my_test():
-            pass
-
-        assert getattr(my_test, "_is_test", False) is True
 
 
 class TestBenchmarkRunner:

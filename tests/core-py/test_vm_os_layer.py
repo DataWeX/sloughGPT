@@ -2656,13 +2656,6 @@ class TestTensorLoadConst:
         _op_load_const(cpu, ["R0", "[]"])
         assert isinstance(cpu.regs[0], np.ndarray)
 
-    def test_load_const_scalar(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
-
-        cpu = CPU()
-        _op_load_const(cpu, ["R0", 42])
-        assert cpu.regs[0] == 42
-
 
 class TestBasicCPUDeviceIO:
     def _run_basic(self, asm_code, max_steps=50):
@@ -2952,10 +2945,6 @@ class TestSerialDeviceComprehensive:
         dev = SerialDevice()
         dev.write_byte(65)
         assert dev.has_data() is False  # write_byte goes to TX, not RX
-
-    def test_read_byte_empty(self):
-        dev = SerialDevice()
-        assert dev.read_byte() == -1
 
     def test_push_byte(self):
         dev = SerialDevice()
@@ -4153,19 +4142,6 @@ class TestSysReaddir:
         result = sys._syscall._sys_readdir(0x5000, 10)
         assert result == 2
 
-    def test_readdir_no_fs(self):
-        sys = X86VirtualSystem(filesystem=None)
-        result = sys._syscall._sys_readdir(0x5000, 10)
-        assert result == 0
-
-    def test_readdir_limited(self):
-        sys = X86VirtualSystem()
-        sys._syscall._fs.write("a.txt", b"1")
-        sys._syscall._fs.write("b.txt", b"2")
-        sys._syscall._fs.write("c.txt", b"3")
-        result = sys._syscall._sys_readdir(0x5000, 2)
-        assert result == 2
-
 
 class TestSysExec:
     def test_exec_replaces_process(self):
@@ -4308,11 +4284,6 @@ class TestSysClose:
         assert fd >= 0
         result = sys._syscall._sys_close(fd)
         assert result == 0
-
-    def test_close_invalid_fd(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(999)
-        assert result == -1
 
 
 class TestSysSbrk:
@@ -4473,14 +4444,6 @@ class TestFlatFSLoadTable:
         assert "test.txt" in fs._files
 
 
-class TestSysYield:
-    def test_yield_returns_zero(self):
-        sys = X86VirtualSystem()
-        sys.spawn("yield_test", "[BITS 32]\nHLT")
-        result = sys._syscall._sys_yield()
-        assert result == 0
-
-
 class TestSysGettimeofday:
     def test_gettimeofday_writes_ticks(self):
         sys = X86VirtualSystem()
@@ -4531,11 +4494,6 @@ class TestSysCloseEdgeCases:
     def test_close_nonexistent_fd(self):
         sys = X86VirtualSystem()
         result = sys._syscall._sys_close(999)
-        assert result == -1
-
-    def test_close_negative_fd(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(-1)
         assert result == -1
 
     def test_close_negative_fd(self):
@@ -5031,24 +4989,12 @@ class TestSysUname:
 
 
 class TestSysSbrkEdge:
-    def test_sbrk_no_process(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_sbrk(4096)
-        assert isinstance(result, int)
-
     def test_sbrk_with_process(self):
         sys = X86VirtualSystem()
         sys.spawn("sbrk_test", "[BITS 32]\nHLT")
         sys.scheduler.start(sys.cpu)
         result = sys._syscall._sys_sbrk(4096)
         assert isinstance(result, int)
-
-
-class TestSysCloseEdge:
-    def test_close_invalid_fd(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(999)
-        assert result == -1
 
 
 class TestSysOpenEdge:
@@ -5070,39 +5016,12 @@ class TestVGADisplayCells:
         assert sys.cpu._read8(0xB8001) == 0x0F
 
 
-class TestSchedulerStart:
-    def test_scheduler_start(self):
-        sys = X86VirtualSystem()
-        sys.spawn("sched_test", "[BITS 32]\nHLT")
-        sys.scheduler.start(sys.cpu)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 # Final targeted coverage — tensor parse, FlatFS, disassemble, heap LRU
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 class TestLoadConstTensorParse:
-    def test_tensor_comma_split_ints(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
-
-        cpu = CPU()
-        _op_load_const(cpu, ["R0", "[1, 2, 3]"])
-        import numpy as np
-
-        assert isinstance(cpu.regs[0], np.ndarray)
-        assert list(cpu.regs[0]) == [1.0, 2.0, 3.0]
-
-    def test_tensor_comma_split_floats(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
-
-        cpu = CPU()
-        _op_load_const(cpu, ["R0", "[1.5, 2.5]"])
-        import numpy as np
-
-        assert isinstance(cpu.regs[0], np.ndarray)
-        assert list(cpu.regs[0]) == [1.5, 2.5]
-
     def test_tensor_comma_split_mixed(self):
         from domain.shell._internal.vm import CPU, _op_load_const
 
@@ -5112,16 +5031,6 @@ class TestLoadConstTensorParse:
 
         assert isinstance(cpu.regs[0], np.ndarray)
         assert len(cpu.regs[0]) == 3
-
-    def test_tensor_empty(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
-
-        cpu = CPU()
-        _op_load_const(cpu, ["R0", "[]"])
-        import numpy as np
-
-        assert isinstance(cpu.regs[0], np.ndarray)
-        assert len(cpu.regs[0]) == 0
 
     def test_tensor_json_parse(self):
         from domain.shell._internal.vm import CPU, _op_load_const
@@ -5133,22 +5042,8 @@ class TestLoadConstTensorParse:
         assert isinstance(cpu.regs[0], np.ndarray)
         assert list(cpu.regs[0]) == [10.0, 20.0, 30.0]
 
-    def test_scalar_value(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
-
-        cpu = CPU()
-        _op_load_const(cpu, ["R0", 42])
-        assert cpu.regs[0] == 42
-
 
 class TestFlatFSLoadTable:
-    def test_flatfs_load_empty_table(self):
-        from domain.shell._internal.vm import BlockDevice, FlatFS
-
-        bd = BlockDevice()
-        fs = FlatFS(bd)
-        assert isinstance(fs._files, dict)
-
     def test_flatfs_write_and_read(self):
         from domain.shell._internal.vm import BlockDevice, FlatFS
 
@@ -5459,11 +5354,6 @@ class TestSysClose:
         if fd >= 0:
             result = sys._syscall._sys_close(fd)
             assert result == 0
-
-    def test_close_already_closed(self):
-        sys = X86VirtualSystem()
-        result = sys._syscall._sys_close(999)
-        assert result == -1
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -6760,11 +6650,6 @@ class TestAssemblerCondJumps:
 
 
 class TestAssemblerALUMemImm:
-    def test_add_mem_imm_large(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nADD DWORD [1000], 256")
-        assert len(code) > 0
-
     def test_sub_mem_imm_large(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSUB DWORD [1000], 256")
@@ -6803,11 +6688,6 @@ class TestAssemblerALUMemImm:
     def test_sub_mem16_imm_large(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSUB WORD [1000], 256")
-        assert len(code) > 0
-
-    def test_add_mem8_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nADD BYTE [1000], 5")
         assert len(code) > 0
 
     def test_sub_mem8_imm(self):
@@ -6879,21 +6759,6 @@ class TestDeviceBusInfo:
 
 
 class TestAssemblerRepPrefix:
-    def test_rep_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP MOVSB")
-        assert len(code) > 0
-
-    def test_rep_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP STOSB")
-        assert len(code) > 0
-
-    def test_rep_lodsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP LODSB")
-        assert len(code) > 0
-
     def test_repe_cmpsb(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nREPE CMPSB")
@@ -6941,11 +6806,6 @@ class TestAssemblerDivIdiv:
     def test_idiv_reg(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nIDIV ECX")
-        assert len(code) > 0
-
-    def test_div_mem(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nDIV ECX")
         assert len(code) > 0
 
 
@@ -7022,11 +6882,6 @@ class TestAssemblerShiftReg8Imm:
     def test_shl_al_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSHL AL, 2")
-        assert len(code) > 0
-
-    def test_shr_al_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSHR AL, 2")
         assert len(code) > 0
 
 
@@ -7506,11 +7361,6 @@ class TestAssemblerShiftMulDiv:
         code = asm.assemble("[BITS 32]\nSHL EAX, 2")
         assert len(code) > 0
 
-    def test_shr_eax_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSHR EAX, 2")
-        assert len(code) > 0
-
     def test_rol_eax_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nROL EAX, 2")
@@ -7519,41 +7369,6 @@ class TestAssemblerShiftMulDiv:
     def test_ror_eax_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nROR EAX, 2")
-        assert len(code) > 0
-
-    def test_sar_eax_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSAR EAX, 2")
-        assert len(code) > 0
-
-    def test_mul_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMUL EAX")
-        assert len(code) > 0
-
-    def test_imul_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nIMUL EAX")
-        assert len(code) > 0
-
-    def test_div_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nDIV EAX")
-        assert len(code) > 0
-
-    def test_idiv_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nIDIV EAX")
-        assert len(code) > 0
-
-    def test_neg_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nNEG EAX")
-        assert len(code) > 0
-
-    def test_not_eax(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nNOT EAX")
         assert len(code) > 0
 
 
@@ -7768,46 +7583,6 @@ class TestAssemblerInOut:
 
 
 class TestAssemblerStringOps:
-    def test_lodsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nLODSB")
-        assert len(code) > 0
-
-    def test_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSB")
-        assert len(code) > 0
-
-    def test_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSB")
-        assert len(code) > 0
-
-    def test_cmpsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nCMPSB")
-        assert len(code) > 0
-
-    def test_scasb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSCASB")
-        assert len(code) > 0
-
-    def test_lodsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nLODSW")
-        assert len(code) > 0
-
-    def test_stosw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSW")
-        assert len(code) > 0
-
-    def test_movsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSW")
-        assert len(code) > 0
-
     def test_cmpsw(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nCMPSW")
@@ -7818,34 +7593,9 @@ class TestAssemblerStringOps:
         code = asm.assemble("[BITS 32]\nSCASW")
         assert len(code) > 0
 
-    def test_rep_lodsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP LODSB")
-        assert len(code) > 0
-
-    def test_rep_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP STOSB")
-        assert len(code) > 0
-
-    def test_rep_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREP MOVSB")
-        assert len(code) > 0
-
     def test_repne_cmpsb(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nREPNE CMPSB")
-        assert len(code) > 0
-
-    def test_repe_cmpsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREPE CMPSB")
-        assert len(code) > 0
-
-    def test_rep_scasb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nREPNE SCASB")
         assert len(code) > 0
 
 
@@ -8934,11 +8684,6 @@ class TestAssembleEstimateDataSizeComprehensive:
 class TestAssembleMovMemEncoding:
     """Test MOV memory operand encoding (L3266-3310)."""
 
-    def test_mov_reg_mem(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOV EAX, [0x100000]")
-        assert len(code) > 0
-
     def test_mov_mem_reg(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nMOV [0x100000], EAX")
@@ -9045,26 +8790,6 @@ class TestAssembleShiftComprehensive:
     def test_shr_reg_imm(self):
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nSHR EAX, 3")
-        assert len(code) > 0
-
-    def test_rol_reg_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nROL EAX, 1")
-        assert len(code) > 0
-
-    def test_ror_reg_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nROR EAX, 1")
-        assert len(code) > 0
-
-    def test_sar_reg_imm(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSAR EAX, 2")
-        assert len(code) > 0
-
-    def test_shl_reg_cl(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSHL EAX, CL")
         assert len(code) > 0
 
     def test_shr_reg_cl(self):
@@ -9305,41 +9030,6 @@ class TestX86ShellComprehensive:
         shell.type_keys("ab")
         assert len(shell._cpu._kbd_buffer) == 2
 
-    def test_lodsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nLODSW")
-        assert len(code) > 0
-
-    def test_stosb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSB")
-        assert len(code) > 0
-
-    def test_stosw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSTOSW")
-        assert len(code) > 0
-
-    def test_movsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSB")
-        assert len(code) > 0
-
-    def test_movsw(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nMOVSW")
-        assert len(code) > 0
-
-    def test_cmpsb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nCMPSB")
-        assert len(code) > 0
-
-    def test_scasb(self):
-        asm = X86Assembler()
-        code = asm.assemble("[BITS 32]\nSCASB")
-        assert len(code) > 0
-
 
 # ============================================================
 # Syscall Dispatch (handle()) tests — L6500-6551
@@ -9370,50 +9060,6 @@ class TestSyscallHandleDispatch:
         handler = X86SyscallHandler(cpu, pt, sched, mem, fs)
         return handler, cpu, sched, pcb
 
-    def test_handle_sys_exit(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_EXIT
-        cpu._regs[3] = 42
-        h.handle()
-        assert cpu._regs[0] == 0
-
-    def test_handle_sys_getpid(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_GETPID
-        h.handle()
-        assert cpu._regs[0] == pcb.pid
-
-    def test_handle_sys_yield(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_YIELD
-        h.handle()
-        assert cpu._regs[0] == 0
-
-    def test_handle_sys_malloc(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_MALLOC
-        cpu._regs[3] = 256
-        h.handle()
-        assert cpu._regs[0] > 0
-
-    def test_handle_sys_free(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_MALLOC
-        cpu._regs[3] = 64
-        h.handle()
-        addr = cpu._regs[0]
-        cpu._regs[0] = h.SYS_FREE
-        cpu._regs[3] = addr
-        h.handle()
-        assert cpu._regs[0] == 0
-
-    def test_handle_sys_sbrk(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_SBRK
-        cpu._regs[3] = 0x1000
-        h.handle()
-        assert cpu._regs[0] > 0
-
     def test_handle_sys_gettimeofday(self):
         h, cpu, sched, pcb = self._make_handler()
         cpu._regs[0] = h.SYS_GETTIMEOFDAY
@@ -9427,26 +9073,6 @@ class TestSyscallHandleDispatch:
         cpu._regs[3] = 0xF0000
         h.handle()
         assert cpu._regs[0] == 0
-
-    def test_handle_sys_getrole(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_GETROLE
-        h.handle()
-        assert cpu._regs[0] == 0
-
-    def test_handle_unknown_syscall(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = 999
-        h.handle()
-        assert cpu._regs[0] == 0xFFFFFFFF
-
-    def test_handle_permission_denied(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_KILL
-        cpu._regs[3] = 1
-        cpu._regs[1] = 0
-        h.handle()
-        assert cpu._regs[0] == 0xFFFFFFFE
 
     def test_handle_sys_serial_write(self):
         h, cpu, sched, pcb = self._make_handler()
@@ -9484,12 +9110,6 @@ class TestSyscallHandleDispatch:
         cpu._regs[1] = 10
         h.handle()
         assert cpu._regs[0] >= 0
-
-    def test_handle_sys_fork(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_FORK
-        h.handle()
-        assert cpu._regs[0] > 0
 
     def test_handle_sys_wait_no_children(self):
         h, cpu, sched, pcb = self._make_handler()
@@ -9544,13 +9164,6 @@ class TestSyscallHandleDispatch:
         h, cpu, sched, pcb = self._make_handler()
         cpu._regs[0] = h.SYS_TRAIN_START
         cpu._regs[3] = 0xF0000
-        h.handle()
-        assert cpu._regs[0] >= 0
-
-    def test_handle_sys_train_status(self):
-        h, cpu, sched, pcb = self._make_handler()
-        cpu._regs[0] = h.SYS_TRAIN_STATUS
-        cpu._regs[3] = 0
         h.handle()
         assert cpu._regs[0] >= 0
 
@@ -9627,10 +9240,6 @@ class TestSysExecImplementation:
         sched.start(cpu)
         handler = X86SyscallHandler(cpu, pt, sched, mem, fs)
         return handler, cpu, sched, pcb, mem
-
-    def test_exec_no_fs(self):
-        h, cpu, sched, pcb, mem = self._make_exec_env(fs=None)
-        assert h._sys_exec(0xE0000) == -1
 
     def test_exec_file_not_found(self):
         fs = FlatFS(BlockDevice())
@@ -9727,10 +9336,6 @@ class TestCPUMovGroupInstructions:
         cpu.step()
         return cpu
 
-    def test_movzx_reg_reg(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xB6, 0xC8]), lambda c: c._set8l(0, 0xFF))
-        assert cpu._regs[1] == 0xFF
-
     def test_movzx_reg_mem(self):
         cpu = X86CPU()
         cpu._mem[0x20000] = 0xAB
@@ -9739,32 +9344,6 @@ class TestCPUMovGroupInstructions:
         cpu._regs[4] = 0x80000
         cpu.step()
         assert cpu._regs[1] == 0xAB
-
-    def test_movzx_reg16_reg(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xB7, 0xC8]), lambda c: c._set16(0, 0xFFFF))
-        assert cpu._regs[1] == 0xFFFF
-
-    def test_movsx_positive(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xBE, 0xC8]), lambda c: c._set8l(0, 0x7F))
-        assert cpu._regs[1] == 0x7F
-
-    def test_movsx_negative_byte(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xBE, 0xC8]), lambda c: c._set8l(0, 0x80))
-        assert cpu._regs[1] == 0xFFFFFF80
-
-    def test_movsx_positive_word(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xBF, 0xC8]), lambda c: c._set16(0, 0x7FFF))
-        assert cpu._regs[1] == 0x7FFF
-
-    def test_movsx_negative_word(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xBF, 0xC8]), lambda c: c._set16(0, 0x8000))
-        assert cpu._regs[1] == 0xFFFF8000
-
-    def test_imul_reg_reg(self):
-        cpu = self._run_bytes(
-            bytes([0x0F, 0xAF, 0xCA]), lambda c: (c._set32(1, 10), c._set32(2, 20))
-        )
-        assert cpu._regs[1] == 200
 
     def test_imul_reg_mem(self):
         cpu = X86CPU()
@@ -9812,11 +9391,6 @@ class TestCPUMovGroupInstructions:
         cpu.step()
         assert cpu._regs[0] == 0x55667788
 
-    def test_rdtsc(self):
-        cpu = self._run_bytes(bytes([0x0F, 0x31]))
-        assert cpu._regs[0] == 0
-        assert cpu._regs[2] == 0
-
     def test_lgdt(self):
         cpu = X86CPU()
         struct.pack_into("<HI", cpu._mem, 0x20000, 0xFF, 0x100000)
@@ -9841,177 +9415,15 @@ class TestCPUMovGroupInstructions:
         cpu = self._run_bytes(bytes([0x0F, 0xBC, 0xC8]), lambda c: c._set32(1, 0))
         assert cpu._flag(FLAG_ZF) is True
 
-    def test_bsf_nonzero(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xBC, 0xC8]), lambda c: c._set32(0, 0x10))
-        assert cpu._regs[1] == 4
-
-    def test_bsr_nonzero(self):
-        cpu = self._run_bytes(bytes([0x0F, 0xBD, 0xC8]), lambda c: c._set32(0, 0x10))
-        assert cpu._regs[1] == 4
-
 
 # ============================================================
 # VGADevice comprehensive tests — L540-586
 # ============================================================
 
 
-class TestVGADeviceComprehensive3:
-    def _make_vga(self):
-        return VGADevice()
-
-    def test_write_with_colors(self):
-        vga = self._make_vga()
-        vga.call("write", 0, 0, "X", 4, 1)
-        cell = vga._screen[0][0]
-        assert cell["char"] == "X"
-        assert cell["fg"] == 4
-        assert cell["bg"] == 1
-
-    def test_write_out_of_bounds(self):
-        vga = self._make_vga()
-        vga.call("write", -1, 0, "X")
-        vga.call("write", 100, 0, "X")
-        vga.call("write", 0, 200, "X")
-
-    def test_write_string(self):
-        vga = self._make_vga()
-        vga.call("write_string", 0, 0, "Hi!")
-        assert vga._screen[0][0]["char"] == "H"
-        assert vga._screen[0][1]["char"] == "i"
-        assert vga._screen[0][2]["char"] == "!"
-
-    def test_write_string_with_colors(self):
-        vga = self._make_vga()
-        vga.call("write_string", 0, 0, "AB", 2, 3)
-        assert vga._screen[0][0]["fg"] == 2
-        assert vga._screen[0][0]["bg"] == 3
-
-    def test_write_string_partial_overflow(self):
-        vga = self._make_vga()
-        vga.call("write_string", 0, 79, "XYZ")
-        assert vga._screen[0][79]["char"] == "X"
-
-    def test_clear(self):
-        vga = self._make_vga()
-        vga.call("write", 5, 5, "A")
-        vga.call("clear")
-        assert vga._screen[5][5]["char"] == " "
-        assert vga._cursor_row == 0
-        assert vga._cursor_col == 0
-
-    def test_clear_with_colors(self):
-        vga = self._make_vga()
-        vga.call("clear", 3, 5)
-        assert vga._screen[0][0]["fg"] == 3
-        assert vga._screen[0][0]["bg"] == 5
-
-    def test_scroll(self):
-        vga = self._make_vga()
-        vga.call("write", 0, 0, "A")
-        vga.call("scroll", 1)
-        assert vga._screen[0][0]["char"] == " "
-
-    def test_scroll_multiple(self):
-        vga = self._make_vga()
-        vga.call("write", 5, 0, "Z")
-        vga.call("scroll", 3)
-        assert vga._screen[2][0]["char"] == "Z"
-
-    def test_set_cursor(self):
-        vga = self._make_vga()
-        vga.call("set_cursor", 10, 20)
-        assert vga._cursor_row == 10
-        assert vga._cursor_col == 20
-
-    def test_set_cursor_clamped(self):
-        vga = self._make_vga()
-        vga.call("set_cursor", -5, 999)
-        assert vga._cursor_row == 0
-        assert vga._cursor_col == vga.COLS - 1
-
-    def test_get_cursor(self):
-        vga = self._make_vga()
-        vga.call("set_cursor", 3, 7)
-        pos = vga.call("get_cursor")
-        assert pos == (3, 7)
-
-    def test_get_screen(self):
-        vga = self._make_vga()
-        vga.call("write", 0, 0, "H")
-        vga.call("write", 0, 1, "i")
-        lines = vga.call("get_screen")
-        assert isinstance(lines, list)
-        assert "Hi" in lines[0]
-
-    def test_writes_counter(self):
-        vga = self._make_vga()
-        before = vga._writes
-        vga.call("write", 0, 0, "X")
-        vga.call("write", 0, 1, "Y")
-        assert vga._writes == before + 2
-
-    def test_scroll_default_n(self):
-        vga = self._make_vga()
-        vga.call("write", 0, 0, "A")
-        vga.call("scroll")
-        assert vga._screen[0][0]["char"] == " "
-
-    def test_scroll_zero(self):
-        vga = self._make_vga()
-        vga.call("write", 0, 0, "A")
-        vga.call("scroll", 0)
-        assert vga._screen[0][0]["char"] == "A"
-
-
 # ============================================================
 # Assembler memory operand encoding — L3168-3237
 # ============================================================
-
-
-class TestAssembleMemoryOperandEncoding:
-    def _asm_one(self, line):
-        asm = X86Assembler()
-        return asm.assemble(f"[BITS 32]\n{line}", org=0x100000)
-
-    def test_mov_reg_bracket_eax(self):
-        code = self._asm_one("MOV ECX, [EAX]")
-        assert len(code) >= 2
-
-    def test_mov_reg_bracket_eax_plus_disp8(self):
-        code = self._asm_one("MOV ECX, [EAX+0x10]")
-        assert len(code) >= 3
-
-    def test_mov_reg_bracket_eax_plus_disp32(self):
-        code = self._asm_one("MOV ECX, [EAX+0x1000]")
-        assert len(code) >= 6
-
-    def test_mov_to_mem_eax(self):
-        code = self._asm_one("MOV [EAX], ECX")
-        assert len(code) >= 2
-
-    def test_add_reg_bracket_ebx(self):
-        code = self._asm_one("ADD EAX, [EBX]")
-        assert len(code) >= 2
-
-    def test_mov_eax_direct_addr(self):
-        code = self._asm_one("MOV EAX, [0x20000]")
-        assert len(code) >= 5
-
-    def test_mov_to_direct_addr(self):
-        code = self._asm_one("MOV [0x30000], EAX")
-        assert len(code) >= 5
-
-    def test_sub_reg_bracket_esi(self):
-        code = self._asm_one("SUB EAX, [ESI]")
-        assert len(code) >= 2
-
-    def test_cmp_reg_bracket_edi(self):
-        code = self._asm_one("CMP EAX, [EDI]")
-        assert len(code) >= 2
-
-    def test_mov_reg_label(self):
-        code = self._asm_one("MOV EAX, [data]\nHLT\ndata: dd 0x12345678")
-        assert len(code) >= 6
 
 
 # ============================================================

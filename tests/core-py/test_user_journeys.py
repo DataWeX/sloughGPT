@@ -27,6 +27,11 @@ from pathlib import Path
 
 import pytest
 
+# Shared env gate (card 20261104_085623): skip honestly when the served tree
+# is foreign/stale or playwright's chromium build is missing, instead of
+# failing content asserts against the wrong checkout.
+from tests.skip_gate_identity import environment_gate
+
 # File-local source bootstrap: under --import-mode=importlib the two `tests/`
 # packages collide on the `tests.*` module name (cwd's repo-root tests/ wins),
 # so packages/core-py/tests/conftest.py never executes its avion insert in
@@ -121,6 +126,9 @@ def ensure_servers_ready():
             f"API at {API} not ready — journey tests need a live stack "
             "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
         )
+    # After the waits (a booting stack gets its chance to come up), verify
+    # identity: foreign/stale tree or missing chromium build → honest skip.
+    environment_gate(BASE)
     # Give the web server a moment to compile after API is up
     time.sleep(3)
 

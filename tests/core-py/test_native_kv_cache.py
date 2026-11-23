@@ -24,6 +24,20 @@ def native_cache() -> NativeKVState:
     return NativeKVState(n_layers=2, n_kv_heads=4, head_dim=8, seq_capacity=32)
 
 
+def _force_lib_unavailable(monkeypatch) -> None:
+    """Pin ``load_lib`` to fail so fallback-contract tests run identically in
+    every checkout — a locally built ``libtransformer_forward.so`` would
+    otherwise engage the C path and change the premise these tests document
+    (module docstring: the C path is only meant to be exercised when a
+    loadable library is explicitly configured)."""
+    import domain.inference._internal.native.bindings as bindings
+
+    def _raise():
+        raise RuntimeError("forced: lib unavailable for this test")
+
+    monkeypatch.setattr(bindings, "load_lib", _raise)
+
+
 # ── numpy backend (internal to native) ──────────────────────────────────────────────────────────────
 
 
@@ -69,7 +83,9 @@ class TestNumpyBackend:
 
 
 class TestNativeKVState:
-    def test_falls_back_to_numpy_when_lib_unavailable(self, native_cache):
+    def test_falls_back_to_numpy_when_lib_unavailable(self, monkeypatch):
+        _force_lib_unavailable(monkeypatch)
+        native_cache = NativeKVState(n_layers=2, n_kv_heads=4, head_dim=8, seq_capacity=32)
         assert native_cache.is_c is False
         assert native_cache.n_layers == 2
 
@@ -101,8 +117,14 @@ class TestNativeKVState:
         batch2 = np.random.randn(2, 3, 4, 8).astype(np.float32)
         k, v = native_cache.update(0, batch2, batch2)
         assert k.shape == (2, 3, 4, 8)
+        # The deviated layer's data must stay visible: with the C buffer
+        # allocated, get() must not read the (empty) native lens.
+        got = native_cache.get(0)
+        assert got is not None
+        assert got[0].shape == (2, 3, 4, 8)
 
-    def test_fallback_ignores_seq_capacity_cap(self):
+    def test_fallback_ignores_seq_capacity_cap(self, monkeypatch):
+        _force_lib_unavailable(monkeypatch)
         cache = NativeKVState(n_layers=1, n_kv_heads=2, head_dim=4, seq_capacity=8)
         for _ in range(10):
             cache.update(0, _kv(1, 2, 4), _kv(1, 2, 4))

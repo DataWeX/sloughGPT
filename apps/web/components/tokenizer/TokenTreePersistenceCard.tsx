@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { ActionCard, Input, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -30,7 +30,6 @@ export function TokenTreePersistenceCard({
   const [saving, setSaving] = useState(false)
   const [busyName, setBusyName] = useState<string | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
-  const addToast = notify.toast
 
   const load = useCallback(async (isCancelled?: () => boolean) => {
     try {
@@ -66,10 +65,12 @@ export function TokenTreePersistenceCard({
     try {
       await tokenTreeController.saveTree(trimmed)
       setName('')
-      addToast(`Saved token tree "${trimmed}"`, 'success')
+      notify.toast(`Saved token tree "${trimmed}"`, { type: 'success' })
       await load()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not save token tree', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not save token tree', {
+        type: 'error',
+      })
     } finally {
       setSaving(false)
     }
@@ -79,10 +80,12 @@ export function TokenTreePersistenceCard({
     setBusyName(tree.name)
     try {
       await tokenTreeController.loadTree(tree.name)
-      addToast(`Loaded token tree "${tree.name}"`, 'success')
+      notify.toast(`Loaded token tree "${tree.name}"`, { type: 'success' })
       onLoaded?.()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not load token tree', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not load token tree', {
+        type: 'error',
+      })
     } finally {
       setBusyName(null)
     }
@@ -92,10 +95,12 @@ export function TokenTreePersistenceCard({
     setBusyName(tree.name)
     try {
       await tokenTreeController.deleteSavedTree(tree.name)
-      addToast(`Deleted token tree "${tree.name}"`, 'success')
+      notify.toast(`Deleted token tree "${tree.name}"`, { type: 'success' })
       await load()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not delete token tree', 'error')
+      notify.toast(err instanceof Error ? err.message : 'Could not delete token tree', {
+        type: 'error',
+      })
     } finally {
       setBusyName(null)
     }
@@ -173,11 +178,11 @@ export function TokenTreePersistenceCard({
                       <Chip label={`Vocab ${tree.vocab_size}`} />
                       <Chip label={`Merged ${tree.num_merges}`} />
                       {tree.trained && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-success/10 text-success">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-success/10 text-success">
                           Trained
                         </span>
                       )}
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         saved {formatDate(tree.saved_at)}
                       </span>
                     </div>

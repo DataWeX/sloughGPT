@@ -20,13 +20,15 @@ export function AdapterHealthCard({ adapters }: AdapterHealthCardProps) {
   }
   const sortedRanks = Object.entries(byRank).sort((a, b) => Number(b[0]) - Number(a[0]))
 
-  const withFeedback = adapters.filter(a => (a.feedback_count ?? 0) > 0)
-  const topFeedback = [...adapters].sort((a, b) => (b.feedback_count ?? 0) - (a.feedback_count ?? 0)).slice(0, 5)
+  const withFeedback = adapters.filter((a) => (a.feedback_count ?? 0) > 0)
+  const topFeedback = [...adapters]
+    .sort((a, b) => (b.feedback_count ?? 0) - (a.feedback_count ?? 0))
+    .slice(0, 5)
 
   const now = Date.now()
   const ages = adapters
-    .filter(a => a.created_at)
-    .map(a => Math.floor((now - new Date(a.created_at!).getTime()) / 86400000))
+    .filter((a) => a.created_at)
+    .map((a) => Math.floor((now - new Date(a.created_at!).getTime()) / 86400000))
   const avgAge = ages.length > 0 ? Math.round(ages.reduce((a, b) => a + b, 0) / ages.length) : null
 
   return (
@@ -44,10 +46,18 @@ export function AdapterHealthCard({ adapters }: AdapterHealthCardProps) {
 
         {sortedRanks.length > 0 && (
           <div className="mb-3">
-            <div className="text-[10px] text-muted-foreground mb-1">By Rank</div>
+            <div className="text-xs text-muted-foreground mb-1">By Rank</div>
             <div className="flex flex-wrap gap-1.5">
               {sortedRanks.map(([rank, count]) => (
-                <span key={rank} className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', Number(rank) > 0 ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>
+                <span
+                  key={rank}
+                  className={cn(
+                    'text-[11px] px-1.5 py-0.5 rounded font-medium',
+                    Number(rank) > 0
+                      ? 'bg-success/15 text-success'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                >
                   Rank {rank} ({count})
                 </span>
               ))}
@@ -57,10 +67,13 @@ export function AdapterHealthCard({ adapters }: AdapterHealthCardProps) {
 
         {withFeedback.length > 0 && (
           <div>
-            <div className="text-[10px] text-muted-foreground mb-1">Most Active</div>
+            <div className="text-xs text-muted-foreground mb-1">Most Active</div>
             <div className="space-y-1">
-              {topFeedback.map(a => (
-                <div key={a.user_id} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0">
+              {topFeedback.map((a) => (
+                <div
+                  key={a.user_id}
+                  className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0"
+                >
                   <span className="font-medium truncate">{a.user_id}</span>
                   <span className="font-mono text-muted-foreground">{a.feedback_count} fb</span>
                 </div>

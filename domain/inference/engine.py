@@ -57,6 +57,23 @@ class TurnRequest:
     agent_id: str | None = None
     use_context_core: bool = True
     use_rag: bool = True
+    use_consciousness: bool = False
+    """Run the consciousness reflection pipeline for this turn.
+
+    OFF by default (card 20261114_092948). When ON, the narrative rides the
+    volatile tail — attached to the last user turn, framed as advisory
+    context — instead of prepending as a SYSTEM message ahead of the
+    persona, where the 0.5B model answered it ("Self-Reflection Context:
+    you have processed N experiences…") instead of the user's message
+    (probe-proven live 2026-11-14). Tail placement keeps the prompt head
+    byte-identical (cross-turn KV reuse) and stops the head-of-prompt
+    hijack — strong questions ("What is 2+2?") answer cleanly with the
+    narrative present. Residual (8-variant probe, same day): open questions
+    on a tiny model can still latch in-context narrative regardless of
+    position/framing, so default-OFF is the safety boundary, not the
+    placement. Quick probes (QuickActions "Test model") keep setting it
+    false explicitly.
+    """
     cancel_event: threading.Event | None = None
     """Cooperative cancellation for this turn.
 
@@ -68,6 +85,21 @@ class TurnRequest:
     engine never imports the registry; it only reads the flag.
     """
     model_fields_set: set[str] = field(default_factory=set)
+
+
+@dataclass(slots=True)
+class TurnEvent:
+    """Out-of-band turn event — the engine pushes these BETWEEN tokens.
+
+    Edges project them as they arrive (the chat SSE surface renders
+    ``kind="tool"`` as ``phase: TOOL`` frames); ``fold`` deliberately ignores
+    them — a folding caller gets tokens + the final ``TurnResult``, never a
+    crash on the new yieldable. Carries lifecycle data only (small strings) —
+    attachments stay in-process and never ride this type to a client.
+    """
+
+    kind: str = "tool"
+    data: dict = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -94,11 +126,12 @@ class TurnResult:
 class ChatEngine(Protocol):
     """The generate engine's public seam.
 
-    ``stream`` is the single engine method: it yields raw tokens, then a
-    final ``TurnResult``. Non-streaming surfaces fold this stream at the edge.
+    ``stream`` is the single engine method: it yields raw tokens (and
+    ``TurnEvent`` out-of-band events), then a final ``TurnResult``.
+    Non-streaming surfaces fold this stream at the edge.
     """
 
-    def stream(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]: ...
+    def stream(self, req: TurnRequest) -> AsyncIterator[TurnResult | TurnEvent | str]: ...
 
 
 def fold(stream: AsyncIterator[TurnResult | str]) -> Awaitable[TurnResult]:

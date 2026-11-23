@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -55,7 +55,6 @@ function formatTimestamp(ts: number): string {
 }
 
 export default function ConsciousnessMonitorPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
 
@@ -201,8 +200,8 @@ export default function ConsciousnessMonitorPage() {
     setGrowthStream([])
     setRatingStream([])
     setEvents([])
-    addToast(t('consciousness_monitor.toast_cleared'), 'success')
-  }, [addToast, t])
+    notify.toast(t('consciousness_monitor.toast_cleared'), { type: 'success' })
+  }, [t])
 
   const qualiaSvg = useMemo(() => {
     const w = 400
@@ -360,7 +359,7 @@ export default function ConsciousnessMonitorPage() {
                 }
                 className="w-20 h-1 accent-primary"
               />
-              <span className="text-[10px] text-muted-foreground w-8">{refreshInterval}s</span>
+              <span className="text-xs text-muted-foreground w-8">{refreshInterval}s</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -397,7 +396,7 @@ export default function ConsciousnessMonitorPage() {
                   <CardDescription>{t('consciousness_monitor.live_status_desc')}</CardDescription>
                 </div>
                 {isLive && (
-                  <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                  <Badge variant="default" className="text-xs px-1.5 py-0">
                     <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                     {t('consciousness_monitor.live')}
                   </Badge>
@@ -406,7 +405,7 @@ export default function ConsciousnessMonitorPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <div className="text-[10px] font-medium text-muted-foreground mb-2">
+                <div className="text-xs font-medium text-muted-foreground mb-2">
                   {t('consciousness_monitor.qualia')}
                 </div>
                 <div className="space-y-1.5">
@@ -415,16 +414,14 @@ export default function ConsciousnessMonitorPage() {
                     const pct = Math.max(0, Math.min(100, ((val + 1) / 2) * 100))
                     return (
                       <div key={dim} className="flex items-center gap-2">
-                        <span className="text-[10px] capitalize w-16 text-muted-foreground">
-                          {dim}
-                        </span>
+                        <span className="text-xs capitalize w-16 text-muted-foreground">{dim}</span>
                         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{ width: `${pct}%`, backgroundColor: QUALIA_COLORS[dim] }}
                           />
                         </div>
-                        <span className="text-[10px] text-muted-foreground w-10 text-right font-mono">
+                        <span className="text-xs text-muted-foreground w-10 text-right font-mono">
                           {val.toFixed(2)}
                         </span>
                       </div>
@@ -433,7 +430,7 @@ export default function ConsciousnessMonitorPage() {
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-medium text-muted-foreground mb-2">
+                <div className="text-xs font-medium text-muted-foreground mb-2">
                   {t('consciousness_monitor.beliefs')}
                 </div>
                 <div className="space-y-1.5">
@@ -442,16 +439,14 @@ export default function ConsciousnessMonitorPage() {
                     const pct = Math.max(0, Math.min(100, val * 100))
                     return (
                       <div key={dim} className="flex items-center gap-2">
-                        <span className="text-[10px] capitalize w-16 text-muted-foreground">
-                          {dim}
-                        </span>
+                        <span className="text-xs capitalize w-16 text-muted-foreground">{dim}</span>
                         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{ width: `${pct}%`, backgroundColor: BELIEF_COLORS[dim] }}
                           />
                         </div>
-                        <span className="text-[10px] text-muted-foreground w-10 text-right font-mono">
+                        <span className="text-xs text-muted-foreground w-10 text-right font-mono">
                           {(val * 100).toFixed(0)}%
                         </span>
                       </div>
@@ -461,7 +456,7 @@ export default function ConsciousnessMonitorPage() {
               </div>
               <div className="flex gap-4 pt-2 border-t border-border/30">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {t('consciousness_monitor.growth')}
                   </span>
                   <span
@@ -472,7 +467,7 @@ export default function ConsciousnessMonitorPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {t('consciousness_monitor.episodes')}
                   </span>
                   <span className="text-xs font-mono font-bold">{episodeCount}</span>
@@ -511,8 +506,8 @@ export default function ConsciousnessMonitorPage() {
               ].map((item) => (
                 <div key={item.label}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-muted-foreground">{item.label}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">{item.label}</span>
+                    <span className="text-xs font-mono text-muted-foreground">
                       {item.value.toFixed(0)}%
                     </span>
                   </div>
@@ -525,28 +520,26 @@ export default function ConsciousnessMonitorPage() {
                 </div>
               ))}
               <div className="flex items-center justify-between pt-2 border-t border-border/30">
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {t('consciousness_monitor.response_time')}
                 </span>
-                <span className="text-[10px] font-mono text-muted-foreground">
-                  {responseTime}ms
-                </span>
+                <span className="text-xs font-mono text-muted-foreground">{responseTime}ms</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {t('consciousness_monitor.error_rate')}
                 </span>
                 <span
-                  className={`text-[10px] font-mono ${errorRate > 20 ? 'text-destructive' : 'text-muted-foreground'}`}
+                  className={`text-xs font-mono ${errorRate > 20 ? 'text-destructive' : 'text-muted-foreground'}`}
                 >
                   {errorRate.toFixed(0)}%
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {t('consciousness_monitor.last_update')}
                 </span>
-                <span className="text-[10px] font-mono text-muted-foreground">
+                <span className="text-xs font-mono text-muted-foreground">
                   {lastUpdate ? formatTimestamp(lastUpdate) : '—'}
                 </span>
               </div>
@@ -568,7 +561,7 @@ export default function ConsciousnessMonitorPage() {
                         className="w-2 h-2 rounded-full"
                         style={{ backgroundColor: QUALIA_COLORS[dim] }}
                       />
-                      <span className="text-[9px] text-muted-foreground capitalize">{dim}</span>
+                      <span className="text-[11px] text-muted-foreground capitalize">{dim}</span>
                     </div>
                   ))}
                 </div>
@@ -617,7 +610,7 @@ export default function ConsciousnessMonitorPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={!eventsPaused} onCheckedChange={(v) => setEventsPaused(!v)} />
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {eventsPaused
                     ? t('consciousness_monitor.events_paused')
                     : t('consciousness_monitor.events_live')}
@@ -628,14 +621,14 @@ export default function ConsciousnessMonitorPage() {
           <CardContent>
             <div className="max-h-60 overflow-y-auto space-y-1">
               {events.length === 0 && (
-                <p className="text-[10px] text-muted-foreground text-center py-4">
+                <p className="text-xs text-muted-foreground text-center py-4">
                   {t('consciousness_monitor.no_events')}
                 </p>
               )}
               {events.map((ev) => (
                 <div
                   key={ev.id}
-                  className="flex items-start gap-2 rounded border border-border/30 bg-muted/10 px-2 py-1.5 text-[10px]"
+                  className="flex items-start gap-2 rounded border border-border/30 bg-muted/10 px-2 py-1.5 text-xs"
                 >
                   <IconClock className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
                   <span className="text-muted-foreground font-mono shrink-0">
@@ -643,7 +636,7 @@ export default function ConsciousnessMonitorPage() {
                   </span>
                   <Badge
                     variant="outline"
-                    className="text-[8px] font-mono border px-1 py-0 shrink-0"
+                    className="text-[11px] font-mono border px-1 py-0 shrink-0"
                   >
                     {ev.type}
                   </Badge>

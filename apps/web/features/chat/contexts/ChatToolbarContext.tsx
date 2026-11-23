@@ -5,7 +5,6 @@ import type { Soul } from '@/lib/souls-controller'
 import type { AgentDef } from '@/lib/agents'
 import type { Conversation } from '@/lib/session-controller'
 import type { FineTunedModel } from '@/lib/training-controller'
-import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
 type DownloadProgressInfo = {
   percentage: number
@@ -21,6 +20,11 @@ type DownloadProgressInfo = {
 
 interface ConversationsGroup {
   conversations: Conversation[]
+  /** Display name of the ACTIVE conversation — the exact string the sidebar
+   *  card renders for the same row (single lookup in useChatToolbarValue),
+   *  so header and card can never disagree on the title. Undefined when no
+   *  row exists yet (unsaved new chat → header shows 'New chat'). */
+  activeName?: string
   sessionIdRef: React.MutableRefObject<string>
   onLoad: (id: string) => Promise<void>
   onStar: (id: string, starred: boolean) => Promise<void>
@@ -112,11 +116,6 @@ interface HealthGroup {
   modelType: string
 }
 
-interface ModeGroup {
-  /** Active behavior-protocol mode (chat/write/rewrite/…). */
-  current: ChatMode
-}
-
 export interface ChatToolbarContextValue {
   conversations: ConversationsGroup
   search: SearchGroup
@@ -128,8 +127,6 @@ export interface ChatToolbarContextValue {
   actions: ActionsGroup
   health: HealthGroup
   sidebar: SidebarGroup
-  /** Optional — test fixtures and older callers may not supply it. */
-  mode?: ModeGroup
 }
 
 const ChatToolbarContext = createContext<ChatToolbarContextValue | null>(null)

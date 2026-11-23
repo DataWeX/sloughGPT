@@ -6,6 +6,7 @@ import threading
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from domain.multimodal._internal.manager import (
     MultimodalCapabilities,
@@ -13,6 +14,24 @@ from domain.multimodal._internal.manager import (
     get_multimodal_manager,
     initialize_multimodal,
 )
+
+
+@pytest.fixture(autouse=True)
+def _restore_provider_registry():
+    """Snapshot the provider registry around each test.
+
+    ``MultimodalManager.initialize(vision_model=...)`` registers the engine
+    (a MagicMock in these tests) as provider ``"multimodal"`` and nothing
+    cleared it, leaking into later suites — a registered trio-capable mock
+    made ``analyze_image`` "succeed" (card 20261116_144837).
+    """
+    from domain.models._internal.provider.registry import _providers
+
+    saved = dict(_providers)
+    yield
+    _providers.clear()
+    _providers.update(saved)
+
 
 # ── MultimodalCapabilities ─────────────────────────────────────────────────
 

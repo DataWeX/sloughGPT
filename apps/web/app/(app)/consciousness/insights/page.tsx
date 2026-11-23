@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -35,8 +35,19 @@ function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v))
 }
 
+/**
+ * Join per-insight suggestions into the Recommendation card's single line.
+ * Every source suggestion is a complete sentence ending in '.', so the
+ * terminator is stripped before the '; ' join — otherwise the aggregate
+ * renders as "…objectives.; Introduce varied topics…".
+ */
+export function joinSuggestions(suggestions: string[]): string {
+  const parts = suggestions.map((s) => s.trim().replace(/\.$/, '')).filter(Boolean)
+  if (parts.length === 0) return ''
+  return `${parts.join('; ')}.`
+}
+
 export default function ConsciousnessInsightsPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -75,12 +86,12 @@ export default function ConsciousnessInsightsPage() {
         setStatsData(statsResult.value)
       }
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [addToast])
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -248,7 +259,7 @@ export default function ConsciousnessInsightsPage() {
         title: t('consciousness_insights.recommendation'),
         severity: lowScoreInsights.length > 2 ? 'warning' : 'info',
         description: t('consciousness_insights.recommendation_desc'),
-        suggestion: lowScoreInsights.map((i) => i.suggestion).join('; '),
+        suggestion: joinSuggestions(lowScoreInsights.map((i) => i.suggestion)),
         detail: lowScoreInsights.map((i) => `${i.title}: ${i.score}/100`).join(' | '),
         score: Math.max(...lowScoreInsights.map((i) => i.score)),
       })
@@ -275,11 +286,11 @@ export default function ConsciousnessInsightsPage() {
       a.download = `consciousness-insights-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-      addToast(t('consciousness_insights.toast_exported'), 'success')
+      notify.toast(t('consciousness_insights.toast_exported'), { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     }
-  }, [episodes, healthData, evalData, personalityData, statsData, computedInsights, addToast, t])
+  }, [episodes, healthData, evalData, personalityData, statsData, computedInsights, t])
 
   const overallScore = useMemo(() => {
     if (computedInsights.length === 0) return 0
@@ -392,7 +403,7 @@ export default function ConsciousnessInsightsPage() {
                             ? 'outline'
                             : 'secondary'
                       }
-                      className="text-[10px]"
+                      className="text-xs"
                     >
                       {insight.severity}
                     </Badge>
@@ -405,7 +416,7 @@ export default function ConsciousnessInsightsPage() {
                   <div className="text-xs text-muted-foreground">{insight.description}</div>
                   <div className="text-xs font-medium">{insight.suggestion}</div>
                   {expandedCard === insight.id && (
-                    <div className="mt-2 rounded border border-border/30 bg-muted/10 p-2 text-[10px] text-muted-foreground font-mono">
+                    <div className="mt-2 rounded border border-border/30 bg-muted/10 p-2 text-xs text-muted-foreground font-mono">
                       {insight.detail}
                     </div>
                   )}

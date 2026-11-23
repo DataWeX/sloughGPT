@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
@@ -45,7 +45,6 @@ export interface UseTrainingJobReturn {
 export function useTrainingJob(): UseTrainingJobReturn {
   const params = useParams()
   const router = useRouter()
-  const addToast = notify.toast
   const jobId = (params.id as string) || ''
 
   const [job, setJob] = useState<TrainingJob | null>(null)
@@ -67,7 +66,7 @@ export function useTrainingJob(): UseTrainingJobReturn {
     } finally {
       setLoading(false)
     }
-  }, [jobId, addToast])
+  }, [jobId])
 
   const fetchSummary = useCallback(async () => {
     if (!jobId) return
@@ -103,12 +102,12 @@ export function useTrainingJob(): UseTrainingJobReturn {
         consecutiveErrors++
         if (consecutiveErrors >= 5) {
           clearInterval(id)
-          addToast('Lost connection to training service', 'error')
+          notify.toast('Lost connection to training service', { type: 'error' })
         }
       }
     }, 3000)
     return () => clearInterval(id)
-  }, [job?.status, fetchJob, addToast])
+  }, [job?.status, fetchJob])
 
   const badge = job ? STATUS_BADGE[job.status] || { label: job.status, variant: 'outline' } : null
 
@@ -116,9 +115,9 @@ export function useTrainingJob(): UseTrainingJobReturn {
     if (!job?.checkpoint) return
     try {
       await modelController.loadModelPath(job.checkpoint)
-      addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
+      notify.toast(`Loaded trained version: ${job.checkpoint}`, { type: 'success' })
     } catch (e) {
-      addToast(formatToastError(e, 'Could not load trained version'), 'error')
+      notify.toast(formatToastError(e, 'Could not load trained version'), { type: 'error' })
     }
   }
 
@@ -126,10 +125,10 @@ export function useTrainingJob(): UseTrainingJobReturn {
     if (!job) return
     try {
       await trainingJobsController.delete(job.id)
-      addToast('Job deleted', 'info')
+      notify.toast('Job deleted', { type: 'info' })
       router.push('/training')
     } catch (e) {
-      addToast(formatToastError(e, 'Something went wrong deleting the job'), 'error')
+      notify.toast(formatToastError(e, 'Something went wrong deleting the job'), { type: 'error' })
     } finally {
       setShowDelete(false)
     }
@@ -153,21 +152,21 @@ export function useTrainingJob(): UseTrainingJobReturn {
       loss_history: job.loss_history,
     }
     downloadJson(data, `training-job-${job.id}.json`)
-    addToast('Job details exported', 'success')
+    notify.toast('Job details exported', { type: 'success' })
   }
 
   const handleResume = async () => {
     if (!job) return
     try {
       const result = await trainingJobsController.recover(job.id)
-      addToast(result.message || 'Resume started', 'success')
+      notify.toast(result.message || 'Resume started', { type: 'success' })
       if (result.recovery_job_id && result.recovery_job_id !== job.id) {
         router.push(`/training/job/${result.recovery_job_id}`)
       } else {
         await fetchJob()
       }
     } catch (e) {
-      addToast(formatToastError(e, 'Could not resume job'), 'error')
+      notify.toast(formatToastError(e, 'Could not resume job'), { type: 'error' })
     }
   }
 
@@ -175,10 +174,10 @@ export function useTrainingJob(): UseTrainingJobReturn {
     if (!job) return
     try {
       await trainingJobsController.stop(job.id)
-      addToast('Training stopped', 'info')
+      notify.toast('Training stopped', { type: 'info' })
       await fetchJob()
     } catch (e) {
-      addToast(formatToastError(e, 'Could not stop training'), 'error')
+      notify.toast(formatToastError(e, 'Could not stop training'), { type: 'error' })
     }
   }
 
@@ -187,9 +186,9 @@ export function useTrainingJob(): UseTrainingJobReturn {
     try {
       const blob = await trainingJobsController.downloadTrainingJob(job.id)
       downloadBlob(blob, `${job.id}.checkpoint`)
-      addToast('Checkpoint downloaded', 'success')
+      notify.toast('Checkpoint downloaded', { type: 'success' })
     } catch (e) {
-      addToast(formatToastError(e, 'Could not download'), 'error')
+      notify.toast(formatToastError(e, 'Could not download'), { type: 'error' })
     }
   }
 
@@ -197,9 +196,9 @@ export function useTrainingJob(): UseTrainingJobReturn {
     if (job?.checkpoint) {
       try {
         await modelController.loadModelPath(job.checkpoint)
-        addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
+        notify.toast(`Loaded trained version: ${job.checkpoint}`, { type: 'success' })
       } catch (e) {
-        addToast(formatToastError(e, 'Could not load model'), 'error')
+        notify.toast(formatToastError(e, 'Could not load model'), { type: 'error' })
       }
     }
     router.push('/chat')

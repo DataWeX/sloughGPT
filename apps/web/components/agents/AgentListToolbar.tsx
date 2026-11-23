@@ -64,7 +64,7 @@ export function AgentListToolbar({
             variant="ghost"
             onClick={onRefresh}
             disabled={loading}
-            className="h-6 text-[10px]"
+            className="h-6 text-xs"
           >
             <IconRefresh className="h-4 w-4 mr-1" />
             Refresh
@@ -107,7 +107,7 @@ export function AgentListToolbar({
               />
             )}
             {filtered.length > 0 && (
-              <div className="flex items-center gap-2 text-[10px]" data-testid="bulk-actions">
+              <div className="flex items-center gap-2 text-xs" data-testid="bulk-actions">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <Checkbox
                     checked={selectedIds.size === filtered.length && filtered.length > 0}
@@ -125,7 +125,7 @@ export function AgentListToolbar({
                       size="sm"
                       variant="ghost"
                       onClick={onBulkExport}
-                      className="h-6 text-[10px]"
+                      className="h-6 text-xs"
                     >
                       Export
                     </Button>
@@ -133,7 +133,7 @@ export function AgentListToolbar({
                       size="sm"
                       variant="ghost"
                       onClick={onBulkDelete}
-                      className="h-6 text-[10px] text-destructive hover:text-destructive"
+                      className="h-6 text-xs text-destructive hover:text-destructive"
                     >
                       Delete
                     </Button>
@@ -143,13 +143,13 @@ export function AgentListToolbar({
             )}
             {filtered.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-[10px] text-muted-foreground/60">
+                <p className="text-xs text-muted-foreground/60">
                   No agents matching &quot;{search}&quot;
                 </p>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-[10px] mt-2"
+                  className="h-6 text-xs mt-2"
                   onClick={() => onSearchChange('')}
                 >
                   Clear search

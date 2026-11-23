@@ -15,6 +15,10 @@ checkpoint was saved.
 
 * ``register``/``sync`` — persist a live job's initial row and then flush its
   progress / terminal state to the store on every update.
+* ``subscribe``/``unsubscribe`` — the single publisher of job-state changes
+  (card ``20261120_110356``): every ``register()``/``sync()`` mutation fans
+  an event out to subscribers, so SSE endpoints (``training/job_events``)
+  subscribe to the store instead of polling the job dict.
 * ``shutdown`` — signal every tracked cancel event (trainer cooperatively
   saves a final checkpoint and exits), set the auto-train cancel events, wait
   a bounded grace period, then mark anything still running as ``interrupted``.
@@ -56,6 +60,94 @@ class TrainingRuntime:
         self._lock = threading.Lock()
         # job_id -> {"job": dict, "cancel_event": threading.Event | None}
         self._jobs: dict[str, dict[str, Any]] = {}
+        # Subscriber callbacks: token -> callable(event). The store is the
+        # single publisher of job-state changes (card 20261120_110356): every
+        # register()/sync() mutation fans out here so SSE endpoints subscribe
+        # instead of polling the job dict.
+        self._subscribers: dict[int, Any] = {}
+        self._sub_seq = 0
+
+    # ── Publisher (subscribe-only live state) ─────────────────────────────
+
+    # Stable key set pushed per job — the client aggregates these deltas live
+    # (loss/global_step/eta/steps-per-sec were previously poll-only).
+    _PUBLISH_FIELDS = (
+        "name",
+        "model",
+        "dataset",
+        "status",
+        "progress",
+        "current_epoch",
+        "epochs",
+        "total_steps",
+        "global_step",
+        "loss",
+        "train_loss",
+        "eval_loss",
+        "steps_per_sec",
+        "eta_s",
+        "elapsed_s",
+        "avg_quality",
+        "checkpoint",
+        "error",
+    )
+
+    def _job_view(self, job_id: str, rec: dict[str, Any]) -> dict[str, Any]:
+        """Project a job record onto the published field set (stable shape)."""
+        view = {k: rec.get(k) for k in self._PUBLISH_FIELDS}
+        view["id"] = rec.get("id") or job_id
+        return view
+
+    def subscribe(self, callback: Any) -> tuple[int, list[dict[str, Any]]]:
+        """Register a subscriber and atomically snapshot the tracked jobs.
+
+        The snapshot is taken under the same lock as registration, so the
+        caller can emit it as an ``init`` frame before any published event —
+        a client attaching mid-run never sees progress before the baseline.
+
+        Args:
+            callback: Called as ``callback(event)`` from whichever thread
+                mutated the store. ``event`` is ``{"phase": str, "job": dict}``
+                where phase ∈ started | progress | <terminal status>.
+
+        Returns:
+            ``(token, jobs)`` — token for :meth:`unsubscribe` and the init
+            snapshot (one projected view per tracked job).
+        """
+        with self._lock:
+            self._sub_seq += 1
+            token = self._sub_seq
+            self._subscribers[token] = callback
+            jobs = [self._job_view(jid, entry["job"]) for jid, entry in self._jobs.items()]
+        return token, jobs
+
+    def unsubscribe(self, token: int) -> None:
+        """Drop a subscriber (idempotent)."""
+        with self._lock:
+            self._subscribers.pop(token, None)
+
+    def _publish(self, phase: str, job_id: str, rec: dict[str, Any]) -> None:
+        """Fan a job-state event out to every subscriber.
+
+        Called from ``register()``/``sync()`` on worker threads. Callbacks run
+        outside the lock; a raising subscriber is dropped (a dead client must
+        never wedge training progress persistence).
+        """
+        with self._lock:
+            if not self._subscribers:
+                return
+            subs = list(self._subscribers.items())
+            view = self._job_view(job_id, rec)
+        event = {"phase": phase, "job": view}
+        for token, cb in subs:
+            try:
+                cb(event)
+            except Exception as e:
+                logger.debug(
+                    "Dropping job-event subscriber %s: %s", token, e, extra={"tag": "TRAIN"}
+                )
+                with self._lock:
+                    self._subscribers.pop(token, None)
 
     def _get_store(self):
         """Resolve the JobStore lazily (injectable for tests)."""
@@ -89,6 +181,7 @@ class TrainingRuntime:
         with self._lock:
             self._jobs[job_id] = {"job": job, "cancel_event": cancel_event}
         self._ensure_row(job_id, job, config)
+        self._publish("started", job_id, job)
 
     def _ensure_row(self, job_id: str, job: dict[str, Any], config: dict[str, Any] | None) -> None:
         """Create a store row for the job if it does not already exist."""
@@ -182,6 +275,10 @@ class TrainingRuntime:
             store.update(job_id, **{k: v for k, v in fields.items() if v is not None})
         except Exception as e:
             logger.warning("JobStore update failed for %s: %s", job_id, e, extra={"tag": "TRAIN"})
+        # Publish after the store flush so a subscriber that reads through the
+        # store sees the same state it was just told about.
+        phase = status if status in _TERMINAL_STATUSES else "progress"
+        self._publish(phase, job_id, rec)
 
     # ── Shutdown ──────────────────────────────────────────────────────────
 

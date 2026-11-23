@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -97,7 +97,6 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessPlaygroundPage() {
-  const addToast = notify.toast
   const { t } = useLocale()
   const [input, setInput] = useState('')
   const [reflecting, setReflecting] = useState(false)
@@ -132,7 +131,7 @@ export default function ConsciousnessPlaygroundPage() {
 
   const handleReflect = async () => {
     if (!input.trim()) {
-      addToast('Please enter some text first', 'error')
+      notify.toast('Please enter some text first', { type: 'error' })
       return
     }
     setReflecting(true)
@@ -140,9 +139,9 @@ export default function ConsciousnessPlaygroundPage() {
     try {
       const data = await consciousnessController.reflect()
       setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
-      addToast('Reflection generated', 'success')
+      notify.toast('Reflection generated', { type: 'success' })
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setReflecting(false)
     }
@@ -150,7 +149,7 @@ export default function ConsciousnessPlaygroundPage() {
 
   const handleProcess = async () => {
     if (!input.trim()) {
-      addToast('Please enter some text first', 'error')
+      notify.toast('Please enter some text first', { type: 'error' })
       return
     }
     setProcessing(true)
@@ -158,10 +157,10 @@ export default function ConsciousnessPlaygroundPage() {
       const data = await consciousnessController.reflect()
       setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
       await Promise.all([fetchStatus(), fetchEpisodes()])
-      addToast('Input processed through consciousness', 'success')
+      notify.toast('Input processed through consciousness', { type: 'success' })
       setInput('')
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setProcessing(false)
     }
@@ -171,10 +170,10 @@ export default function ConsciousnessPlaygroundPage() {
     setRatingEpisode(episodeIndex)
     try {
       await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
-      addToast(`Rated ${rating}/5`, 'success')
+      notify.toast(`Rated ${rating}/5`, { type: 'success' })
       await fetchEpisodes()
     } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
+      notify.toast(extractErrorMessage(e), { type: 'error' })
     } finally {
       setRatingEpisode(null)
     }
@@ -334,7 +333,7 @@ export default function ConsciousnessPlaygroundPage() {
                   return (
                     <div key={realIndex} className="rounded-lg border p-3 text-sm">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className="text-[10px] font-mono text-muted-foreground">
+                        <span className="text-xs font-mono text-muted-foreground">
                           #{realIndex} — {formatTimeAgo(ep.timestamp)}
                         </span>
                         <div className="flex items-center gap-1">
@@ -343,7 +342,7 @@ export default function ConsciousnessPlaygroundPage() {
                               key={r}
                               size="sm"
                               variant={r === (ep as any).rating ? 'default' : 'outline'}
-                              className="h-6 px-2 text-[10px]"
+                              className="h-6 px-2 text-xs"
                               onClick={() => handleFeedback(realIndex, r)}
                               disabled={ratingEpisode === realIndex}
                             >
@@ -366,7 +365,7 @@ export default function ConsciousnessPlaygroundPage() {
                       <div className="flex items-center gap-2 mt-1">
                         <Badge
                           variant={ep.growth_delta >= 0 ? 'default' : 'destructive'}
-                          className="text-[10px]"
+                          className="text-xs"
                         >
                           {ep.growth_delta >= 0 ? '+' : ''}
                           {(ep.growth_delta * 100).toFixed(1)}%
@@ -375,7 +374,7 @@ export default function ConsciousnessPlaygroundPage() {
                           Object.entries(ep.qualia)
                             .slice(0, 3)
                             .map(([k, v]) => (
-                              <span key={k} className="text-[10px] text-muted-foreground">
+                              <span key={k} className="text-xs text-muted-foreground">
                                 {k}: {(v as number).toFixed(2)}
                               </span>
                             ))}

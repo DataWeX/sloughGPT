@@ -23,9 +23,24 @@ interface SmartContextSuggestionsProps {
 function extractConcepts(messages: ChatMessage[]): string[] {
   const concepts = new Set<string>()
   const keywords = [
-    'react', 'javascript', 'typescript', 'python', 'api', 'database',
-    'function', 'component', 'state', 'hook', 'props', 'error',
-    'test', 'deploy', 'build', 'install', 'config', 'server',
+    'react',
+    'javascript',
+    'typescript',
+    'python',
+    'api',
+    'database',
+    'function',
+    'component',
+    'state',
+    'hook',
+    'props',
+    'error',
+    'test',
+    'deploy',
+    'build',
+    'install',
+    'config',
+    'server',
   ]
 
   for (const msg of messages) {
@@ -118,7 +133,11 @@ export const SmartContextSuggestions = memo(function SmartContextSuggestions({
     const urls = extractUrls(messages)
     for (const url of urls) {
       let domain: string | null = null
-      try { domain = new URL(url).hostname } catch { continue }
+      try {
+        domain = new URL(url).hostname
+      } catch {
+        continue
+      }
       if (domain && lower.includes(domain)) {
         results.push({
           id: `url-${url}`,
@@ -144,9 +163,7 @@ export const SmartContextSuggestions = memo(function SmartContextSuggestions({
       }
     }
 
-    return results
-      .sort((a, b) => b.relevance - a.relevance)
-      .slice(0, 5)
+    return results.sort((a, b) => b.relevance - a.relevance).slice(0, 5)
   }, [messages, currentInput])
 
   const handleDismiss = useCallback(() => {
@@ -157,19 +174,25 @@ export const SmartContextSuggestions = memo(function SmartContextSuggestions({
 
   return (
     <div className={cn('flex flex-wrap items-center gap-1', className)}>
-      <span className="text-[10px] text-muted-foreground">Context:</span>
-      {suggestions.map(suggestion => (
+      <span className="text-xs text-muted-foreground">Context:</span>
+      {suggestions.map((suggestion) => (
         <Button
           key={suggestion.id}
           variant="ghost"
           size="sm"
-          className="text-[10px] h-5 rounded-full border border-border/50"
+          className="text-xs h-5 rounded-full border border-border/50"
           onClick={() => onSelect(suggestion.value)}
         >
-          <span className="text-[10px] text-muted-foreground mr-1">
-            {suggestion.type === 'file' ? <IconFile className="inline h-3 w-3" /> :
-             suggestion.type === 'url' ? <IconExternalLink className="inline h-3 w-3" /> :
-             suggestion.type === 'concept' ? <IconInfo className="inline h-3 w-3" /> : <IconChat className="inline h-3 w-3" />}
+          <span className="text-xs text-muted-foreground mr-1">
+            {suggestion.type === 'file' ? (
+              <IconFile className="inline h-3 w-3" />
+            ) : suggestion.type === 'url' ? (
+              <IconExternalLink className="inline h-3 w-3" />
+            ) : suggestion.type === 'concept' ? (
+              <IconInfo className="inline h-3 w-3" />
+            ) : (
+              <IconChat className="inline h-3 w-3" />
+            )}
           </span>
           {suggestion.label}
         </Button>

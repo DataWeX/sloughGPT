@@ -42,8 +42,8 @@ function computeStats(messages: ChatMessage[]): Stats {
     }
   }
 
-  const userMessages = messages.filter(m => m.role === 'user').length
-  const assistantMessages = messages.filter(m => m.role === 'assistant').length
+  const userMessages = messages.filter((m) => m.role === 'user').length
+  const assistantMessages = messages.filter((m) => m.role === 'assistant').length
 
   return {
     totalMessages: messages.length,
@@ -61,8 +61,12 @@ function computeStats(messages: ChatMessage[]): Stats {
 function StatItem({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="space-y-0.5">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{label}</div>
-      <div className="text-sm font-medium">{typeof value === 'number' ? value.toLocaleString() : value}</div>
+      <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+        {label}
+      </div>
+      <div className="text-sm font-medium">
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
     </div>
   )
 }

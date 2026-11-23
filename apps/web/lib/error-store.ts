@@ -1,6 +1,6 @@
 'use client'
+import { notify, useToastStore } from '@/lib/notify'
 
-import { notify } from '@/lib/notify'
 import { serverNow } from '../../lib/clock'
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
@@ -151,7 +151,7 @@ function fanOut(error: AppError, fp: string, opts: { banner?: boolean; toast?: b
   }
 
   if (opts.toast) {
-    notify.toast(error.title, 'error')
+    notify.toast(error.title, { type: 'error' })
   }
 
   if (typeof window !== 'undefined') {

@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useRef, memo } from 'react'
 import {
   Dialog,
@@ -29,7 +29,6 @@ export const NoteDialog = memo(function NoteDialog({
 }: NoteDialogProps) {
   const [draft, setDraft] = useState(note)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const addToast = notify.toast
 
   useEffect(() => {
     setDraft(note)
@@ -43,13 +42,13 @@ export const NoteDialog = memo(function NoteDialog({
 
   const handleSave = () => {
     onSave(draft.trim())
-    addToast('Note saved', 'success')
+    notify.toast('Note saved', { type: 'success' })
     onOpenChange(false)
   }
 
   const handleDelete = () => {
     onDelete?.()
-    addToast('Note deleted', 'success')
+    notify.toast('Note deleted', { type: 'success' })
     onOpenChange(false)
   }
 
@@ -84,7 +83,7 @@ export const NoteDialog = memo(function NoteDialog({
               onKeyDown={handleKeyDown}
               aria-label="Message note"
             />
-            <p className="text-[10px] text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground/60">
               Press Ctrl+Enter to save, Escape to cancel
             </p>
             <div className="flex items-center justify-between gap-2">

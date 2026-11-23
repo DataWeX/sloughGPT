@@ -11,7 +11,9 @@ vi.mock('@/hooks/useLiveStatus', () => ({
 vi.mock('@/lib/dev-log', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }))
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: (selector: (s: { addToast: (m: string) => void }) => unknown) =>
     selector({ addToast: vi.fn() }),
 }))

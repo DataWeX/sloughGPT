@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -31,7 +31,6 @@ interface DisplayState {
 }
 
 export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: QuantizeCardProps) {
-  const addToast = notify.toast
   const [quantizing, setQuantizing] = useState(false)
   const [dequantizing, setDequantizing] = useState(false)
   const [lastResult, setLastResult] = useState<QuantizationResult | null>(null)
@@ -46,15 +45,17 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
       try {
         const result = await modelController.quantize(bits, 'symmetric')
         setLastResult(result)
-        addToast(`Quantized to ${bits}-bit (${result.summary?.tensors ?? 0} tensors)`, 'success')
+        notify.toast(`Quantized to ${bits}-bit (${result.summary?.tensors ?? 0} tensors)`, {
+          type: 'success',
+        })
         onQuantized?.()
       } catch {
-        addToast('Could not quantize model', 'error')
+        notify.toast('Could not quantize model', { type: 'error' })
       } finally {
         setQuantizing(false)
       }
     },
-    [quantizing, dequantizing, addToast, onQuantized],
+    [quantizing, dequantizing, onQuantized],
   )
 
   const handleDequantize = useCallback(async () => {
@@ -63,14 +64,14 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
     try {
       await modelController.dequantize()
       setLastResult(null)
-      addToast('Model restored to full precision', 'success')
+      notify.toast('Model restored to full precision', { type: 'success' })
       onQuantized?.()
     } catch {
-      addToast('Could not dequantize model', 'error')
+      notify.toast('Could not dequantize model', { type: 'error' })
     } finally {
       setDequantizing(false)
     }
-  }, [quantizing, dequantizing, addToast, onQuantized])
+  }, [quantizing, dequantizing, onQuantized])
 
   if (!isLoaded) return null
 
@@ -106,7 +107,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={() => handleQuantize(8)}
               disabled={quantizing || dequantizing}
             >
@@ -115,7 +116,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px]"
+              className="h-6 text-xs"
               onClick={() => handleQuantize(4)}
               disabled={quantizing || dequantizing}
             >
@@ -125,7 +126,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 text-[10px]"
+                className="h-6 text-xs"
                 onClick={handleDequantize}
                 disabled={quantizing || dequantizing}
               >
@@ -137,11 +138,11 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
       </CardHeader>
       <CardContent>
         {!display ? (
-          <p className="text-[10px] text-muted-foreground/60 text-center py-1.5">
+          <p className="text-xs text-muted-foreground/60 text-center py-1.5">
             Quantize to reduce memory at the cost of slight quality loss.
           </p>
         ) : (
-          <div className="space-y-1 text-[10px]">
+          <div className="space-y-1 text-xs">
             {display.bits != null && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground/60">Precision</span>

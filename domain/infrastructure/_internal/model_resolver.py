@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +86,53 @@ def get_model_dir(model_id: str) -> Path:
             )
             return candidate
     return candidates[0]
+
+
+@dataclass(frozen=True)
+class BootArtifact:
+    """The artifact boot fast-paths should use for a model id."""
+
+    format: str  # "soul" | "slnc"
+    path: Path
+
+
+def resolve_boot_artifact(model_id: str, *, native_dir: Path | None = None) -> BootArtifact | None:
+    """Single source of truth for boot artifact priority — soul-first.
+
+    Reads the same ``.soul``-first rule as ``ModelLoader._load_inner``
+    (via ``resolve_soul_candidate``), so the fast paths can never boot a
+    different artifact than the eager loader serves (wrong-artifact
+    split-brain, card 20261104_053224).
+
+    Fast paths that need ``.slnc`` machinery (ProcessGuard, lazy provider,
+    inference engine) must additionally require ``format == "slnc"`` — that
+    capability constraint stays theirs; only the *priority* decision lives
+    here.
+
+    Returns:
+        The winning artifact, or ``None`` when neither format exists — the
+        eager autoload still runs; it owns conversion and loud refusals.
+    """
+    # Local import: model_loader imports this module inside its functions, and
+    # its top-level numpy import must not burden get_model_dir consumers.
+    from domain.infrastructure._internal.model_loader import (
+        SoulRefusal,
+        resolve_soul_candidate,
+    )
+
+    soul = resolve_soul_candidate(model_id, native_dir)
+    if isinstance(soul, SoulRefusal):
+        # A refused soul request must fail loudly in the eager loader — boot
+        # must not slip past it into a .slnc fast path.
+        logger.debug("resolve_boot_artifact(%s): soul request refused", model_id)
+        return None
+    if soul is not None:
+        return BootArtifact(format="soul", path=soul.path)
+
+    slnc_path = get_model_dir(model_id) / "model.slnc"
+    if slnc_path.exists():
+        return BootArtifact(format="slnc", path=slnc_path)
+    return None
 
 
 def find_safetensors(model_dir: Path) -> Path | None:

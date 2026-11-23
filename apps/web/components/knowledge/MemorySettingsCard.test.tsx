@@ -9,21 +9,11 @@ vi.mock('@/lib/memory-controller', () => ({
     consolidate: vi.fn(),
   },
 }))
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (s: any) => s({ addToast: vi.fn() }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
+  useToastStore: (s: any) => s({ addToast: vi.fn() }),
+}))
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: (e: any) => e?.message || 'Unknown error',
 }))

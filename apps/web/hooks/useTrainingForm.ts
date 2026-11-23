@@ -11,6 +11,7 @@ import { chatDB } from '@/lib/db'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { trackEvent } from '@/lib/dev-log'
 import { appShellStore, writeTraining } from '@/lib/app-shell'
+import { clampTrainingField, validateTrainingField } from '@/lib/sanitize'
 
 // Pre-flight ETA guard: at the ~1.4 steps/s observed on native jobs, a
 // projection beyond this many steps is measured in days — ask before starting.
@@ -192,9 +193,11 @@ export function useTrainingForm(
         if (saved.method) setMethod(saved.method)
         if (saved.inputMode) setInputMode(saved.inputMode)
         if (saved.algo) setAlgo(saved.algo)
-        if (saved.trainingEpochs) setTrainingEpochs(saved.trainingEpochs)
-        if (saved.trainingLR) setTrainingLR(saved.trainingLR)
-        if (saved.trainingBatchSize) setTrainingBatchSize(saved.trainingBatchSize)
+        if (saved.trainingEpochs)
+          setTrainingEpochs(clampTrainingField('epochs', saved.trainingEpochs))
+        if (saved.trainingLR) setTrainingLR(clampTrainingField('learning_rate', saved.trainingLR))
+        if (saved.trainingBatchSize)
+          setTrainingBatchSize(clampTrainingField('batch_size', saved.trainingBatchSize))
         if (saved.selectedModel) setSelectedModel(saved.selectedModel)
         if (saved.useLoRA !== undefined) setUseLoRA(saved.useLoRA)
         if (saved.loraRank) setLoraRank(saved.loraRank)
@@ -323,16 +326,19 @@ export function useTrainingForm(
     async (checkpointName?: string) => {
       trackEvent('training_started', { method, input_mode: inputMode })
 
-      if (trainingEpochs < 1 || trainingEpochs > 500) {
-        addToast('Epochs must be 1–500', 'error')
+      const epochsError = validateTrainingField('epochs', trainingEpochs, 'Epochs')
+      if (epochsError) {
+        addToast(epochsError, 'error')
         return
       }
-      if (trainingBatchSize < 1 || trainingBatchSize > 256) {
-        addToast('Batch size must be 1–256', 'error')
+      const batchError = validateTrainingField('batch_size', trainingBatchSize, 'Batch size')
+      if (batchError) {
+        addToast(batchError, 'error')
         return
       }
-      if (trainingLR <= 0 || trainingLR > 1) {
-        addToast('Learning rate must be 0–1', 'error')
+      const lrError = validateTrainingField('learning_rate', trainingLR, 'Learning rate')
+      if (lrError) {
+        addToast(lrError, 'error')
         return
       }
 

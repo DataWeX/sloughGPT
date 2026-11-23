@@ -346,11 +346,16 @@ class RuleBasedModel:
         if accessibility_tree:
             element = _find_clickable(accessibility_tree)
             if element:
-                bbox = element.get("bbox", {})
-                if bbox:
+                # "pos" is where every backend puts a control's box; the old
+                # page.accessibility snapshot called it bbox, and nothing emits
+                # that shape any more.
+                from avion.backends.axtree import parse_pos
+
+                box = parse_pos(element.get("pos"))
+                if box:
                     return Action(
                         action_type=ActionType.MOUSE_CLICK,
-                        params={"x": bbox.get("x", 0), "y": bbox.get("y", 0)},
+                        params={"x": box[0], "y": box[1]},
                         reasoning=f"Rule-based: clicked {element.get('role', 'element')}",
                     )
         return Action(

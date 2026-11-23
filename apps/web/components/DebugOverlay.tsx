@@ -203,7 +203,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
   return (
     <div className="fixed bottom-16 right-4 z-[300] w-80 rounded-lg border border-border/60 bg-background/95 backdrop-blur-md shadow-2xl text-xs font-mono">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/30">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Debug
         </span>
         <div className="flex items-center gap-2">
@@ -212,14 +212,14 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
               className="flex items-center gap-1"
               title={`Error rate: ${errorRateHistory[errorRateHistory.length - 1]} errors/5s`}
             >
-              <span className="text-[8px] text-muted-foreground/40">err</span>
+              <span className="text-[11px] text-muted-foreground/40">err</span>
               <Sparkline data={errorRateHistory} width={40} height={10} />
             </div>
           )}
           {debugApiStatus !== 'ok' && (
             <span
               className={cn(
-                'text-[8px] flex items-center gap-0.5',
+                'text-[11px] flex items-center gap-0.5',
                 debugApiStatus === 'error' ? 'text-warning/70' : 'text-destructive/70',
               )}
               title={
@@ -236,12 +236,12 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             </span>
           )}
           {streamConnected && (
-            <span className="text-[8px] text-success/70 flex items-center gap-0.5">
+            <span className="text-[11px] text-success/70 flex items-center gap-0.5">
               <span className="inline-block h-1 w-1 rounded-full bg-success animate-pulse" />
               live
             </span>
           )}
-          <span className="text-[8px] text-muted-foreground/50">⌘⇧\</span>
+          <span className="text-[11px] text-muted-foreground/50">⌘⇧\</span>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
@@ -256,7 +256,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         {healthScore && (
           <div className={cn('rounded-md border p-2 mb-1', scoreBg(healthScore.score))}>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold text-muted-foreground">HEALTH</span>
+              <span className="text-xs font-semibold text-muted-foreground">HEALTH</span>
               <div className="flex items-center gap-2">
                 {healthHistory.length >= 2 && (
                   <Sparkline data={healthHistory.map((h) => h.score)} width={60} height={12} />
@@ -276,8 +276,8 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
                 { label: 'up', score: healthScore.uptime_score },
               ].map(({ label, score: s }) => (
                 <div key={label} className="text-center">
-                  <div className="text-[8px] text-muted-foreground/60">{label}</div>
-                  <div className={cn('text-[10px] tabular-nums', scoreColor(s))}>{s}</div>
+                  <div className="text-[11px] text-muted-foreground/60">{label}</div>
+                  <div className={cn('text-xs tabular-nums', scoreColor(s))}>{s}</div>
                 </div>
               ))}
             </div>
@@ -299,10 +299,10 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         ))}
         {modelMetrics.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/30">
-            <div className="text-muted-foreground/50 text-[9px] mb-1">Models</div>
+            <div className="text-muted-foreground/50 text-[11px] mb-1">Models</div>
             <div className="space-y-0.5">
               {modelMetrics.map((m, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-[10px]">
+                <div key={i} className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-muted-foreground/60 truncate">{m.model}</span>
                   <span className="text-muted-foreground/40 tabular-nums shrink-0">
                     {m.tokens_per_sec.toFixed(1)} t/s
@@ -315,10 +315,10 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         )}
         {modelEvents.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/30">
-            <div className="text-muted-foreground/50 text-[9px] mb-1">Model events</div>
+            <div className="text-muted-foreground/50 text-[11px] mb-1">Model events</div>
             <div className="space-y-0.5">
               {modelEvents.slice(0, 5).map((e, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-[10px]">
+                <div key={i} className="flex items-center justify-between gap-2 text-xs">
                   <span
                     className={cn(
                       'shrink-0',
@@ -344,10 +344,10 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         )}
         {pathLats.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/30">
-            <div className="text-muted-foreground/50 text-[9px] mb-1">Slowest endpoints</div>
+            <div className="text-muted-foreground/50 text-[11px] mb-1">Slowest endpoints</div>
             <div className="space-y-0.5">
               {pathLats.map((p, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-[10px]">
+                <div key={i} className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-muted-foreground/60 truncate">{p.path}</span>
                   <span className="text-muted-foreground/40 tabular-nums shrink-0">
                     {p.avg_ms.toFixed(0)}ms
@@ -361,10 +361,10 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         {memoryHistory.length >= 2 && (
           <div className="mt-2 pt-2 border-t border-border/30">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-muted-foreground/50 text-[9px]">Memory (RSS)</span>
+              <span className="text-muted-foreground/50 text-[11px]">Memory (RSS)</span>
               <Sparkline data={memoryHistory.map((m) => m.rss_mb)} width={60} height={10} />
             </div>
-            <div className="text-[10px] text-muted-foreground/60">
+            <div className="text-xs text-muted-foreground/60">
               {memoryHistory[memoryHistory.length - 1]?.rss_mb.toFixed(0)} MB
               {memoryHistory[memoryHistory.length - 1]?.system_percent
                 ? ` (${memoryHistory[memoryHistory.length - 1]?.system_percent}% system)`
@@ -374,10 +374,10 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         )}
         {rateViolations.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/30">
-            <div className="text-muted-foreground/50 text-[9px] mb-1">Rate limit hits</div>
+            <div className="text-muted-foreground/50 text-[11px] mb-1">Rate limit hits</div>
             <div className="space-y-0.5">
               {rateViolations.slice(0, 3).map((v, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-[10px]">
+                <div key={i} className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-warning truncate">{v.path}</span>
                   <span className="text-muted-foreground/40 tabular-nums shrink-0">
                     {v.count}/{v.limit}/s
@@ -389,10 +389,10 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         )}
         {recentErrs.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/30">
-            <div className="text-muted-foreground/50 text-[9px] mb-1">Server errors</div>
+            <div className="text-muted-foreground/50 text-[11px] mb-1">Server errors</div>
             <div className="space-y-0.5">
               {recentErrs.map((e, i) => (
-                <div key={i} className="text-[10px] break-all leading-tight">
+                <div key={i} className="text-xs break-all leading-tight">
                   <span className="text-destructive">{e.error_type}</span>
                   <span className="text-muted-foreground/40"> {e.path}</span>
                 </div>
@@ -402,10 +402,10 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         )}
         {recentReqs.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/30">
-            <div className="text-muted-foreground/50 text-[9px] mb-1">Recent requests</div>
+            <div className="text-muted-foreground/50 text-[11px] mb-1">Recent requests</div>
             <div className="space-y-0.5">
               {recentReqs.map((r, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-[10px]">
+                <div key={i} className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-muted-foreground/60 truncate">
                     {r.method} {r.path}
                   </span>
@@ -436,8 +436,8 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         )}
         {streamErrors.length === 0 && lastError && (
           <div className="mt-2 pt-2 border-t border-border/30">
-            <div className="text-muted-foreground/50 text-[9px] mb-1">Last FE error</div>
-            <div className="text-destructive text-[10px] break-all leading-tight">
+            <div className="text-muted-foreground/50 text-[11px] mb-1">Last FE error</div>
+            <div className="text-destructive text-xs break-all leading-tight">
               {lastError.title}
               {lastError.requestId ? ` [${lastError.requestId}]` : ''}
             </div>
@@ -445,12 +445,12 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         )}
         {/* Quick diagnostic actions */}
         <div className="mt-2 pt-2 border-t border-border/30">
-          <div className="text-muted-foreground/50 text-[9px] mb-1">Quick actions</div>
+          <div className="text-muted-foreground/50 text-[11px] mb-1">Quick actions</div>
           <div className="flex flex-wrap gap-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              className="h-5 px-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground"
               onClick={async () => {
                 try {
                   const r = await authFetch('/health', { signal: AbortSignal.timeout(3000) })
@@ -473,7 +473,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              className="h-5 px-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground"
               onClick={() => {
                 const data = {
                   health: health
@@ -514,7 +514,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              className="h-5 px-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground"
               onClick={() => {
                 clearStreamErrors()
                 clearFrontendErrors()

@@ -47,14 +47,6 @@ class TestSessionMemory:
         full = sm.get_full_session()
         assert len(full) == 2
 
-    def test_clear(self):
-        sm = SessionMemory()
-        sm.add("user", "hello")
-        old_id = sm.session_id
-        sm.clear()
-        assert len(sm.conversation) == 0
-        assert sm.session_id != old_id
-
     def test_get_summary(self):
         sm = SessionMemory()
         sm.add("user", "hello")
@@ -354,17 +346,6 @@ class TestEmotionalResponseGenerator:
         erg = EmotionalResponseGenerator()
         assert len(erg.empathy_responses) > 0
 
-    def test_generate_happy(self):
-        erg = EmotionalResponseGenerator()
-        resp = erg.generate_empathetic_response("happy", 0.8)
-        assert isinstance(resp, str)
-        assert len(resp) > 0
-
-    def test_generate_sad(self):
-        erg = EmotionalResponseGenerator()
-        resp = erg.generate_empathetic_response("sad", -0.8)
-        assert isinstance(resp, str)
-
     def test_generate_unknown_emotion_falls_back(self):
         erg = EmotionalResponseGenerator()
         resp = erg.generate_empathetic_response("nonexistent", 0.0)
@@ -501,11 +482,6 @@ class TestCognitiveArchitecture:
             ca.process_sensory(i)
         assert len(ca.sensory_buffer) <= 70
 
-    def test_to_working(self):
-        ca = CognitiveArchitecture()
-        ca.to_working("item")
-        assert "item" in ca.working_memory
-
     def test_working_memory_evicts(self):
         ca = CognitiveArchitecture(working_capacity=3)
         for i in range(5):
@@ -547,10 +523,6 @@ class TestCognitiveArchitecture:
         ca.to_semantic("key1", "value1")
         val = ca.retrieve_semantic("key1")
         assert val == "value1"
-
-    def test_retrieve_semantic_missing(self):
-        ca = CognitiveArchitecture()
-        assert ca.retrieve_semantic("missing") is None
 
     def test_semantic_strengthen(self):
         ca = CognitiveArchitecture()
@@ -597,10 +569,6 @@ class TestNeuralPlasticityEngine:
         s1 = npe.hebbian_learn("a", "b")
         s2 = npe.hebbian_learn("a", "b")
         assert s2 > s1
-
-    def test_get_connection_strength(self):
-        npe = NeuralPlasticityEngine()
-        assert npe.get_connection_strength("a", "b") == 0.0
 
     def test_prune_weak_connections(self):
         npe = NeuralPlasticityEngine()

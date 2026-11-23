@@ -3,4 +3,7 @@ if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
   echo "⚠️  Direct commits to main are discouraged — land via PR, or push HEAD:main from a lane branch"
   ./scripts/check-main-sync.sh || exit 1
 fi
+# Surface Rule advisory (AGENTS.md) — prints the shipping surfaces this range
+# spans; never fails (advisory-first, ratchet later).
+./scripts/check_surface_scope.py || true
 exit 0

@@ -88,21 +88,47 @@ def _check_latency(avg_ms: float) -> Diagnosis:
     return Diagnosis("latency", severity, score, msg)
 
 
-def _check_throughput(tokens_per_sec: float) -> Diagnosis:
-    """Check generation speed."""
+# Minimum sample for a throughput verdict: server_state's sliding window
+# holds the LAST 10 inferences, so a full window is the smallest honest
+# basis for a red badge. A partial window earned a CRITICAL "Very slow"
+# verdict from 6 lifetime inferences (card 20261119_091258 Phase 1).
+_THROUGHPUT_SAMPLE_FLOOR = 10
+
+
+def _check_throughput(
+    tokens_per_sec: float, inference_count: int = 0, device: str = ""
+) -> Diagnosis:
+    """Check generation speed.
+
+    ``inference_count`` 0 means "unknown" (caller didn't supply) and keeps
+    the band logic as before; a known partial sample below the full window
+    reports Warming up (INFO) instead of a red verdict. ``device`` is the
+    engine's own declared device — the slow bands name it so the verdict
+    is self-explaining (CPU-only engine by design, card 20261119_124725).
+    """
     if tokens_per_sec == 0:
         return Diagnosis("throughput", Severity.INFO, 50, "No generation data yet.")
 
+    if 0 < inference_count < _THROUGHPUT_SAMPLE_FLOOR:
+        return Diagnosis(
+            "throughput",
+            Severity.INFO,
+            50,
+            f"Warming up — {tokens_per_sec:.0f} tok/s over {inference_count} generations.",
+        )
+
     score = min(1.0, max(0.0, (tokens_per_sec - 5) / 45)) * 100
+
+    engine = f" ({device} inference)" if device and tokens_per_sec < 10 else ""
 
     if tokens_per_sec >= 30:
         msg = f"Fast — {tokens_per_sec:.0f} tok/s."
     elif tokens_per_sec >= 10:
         msg = f"OK — {tokens_per_sec:.0f} tok/s."
     elif tokens_per_sec >= 5:
-        msg = f"Slow — {tokens_per_sec:.0f} tok/s."
+        msg = f"Slow — {tokens_per_sec:.0f} tok/s{engine}."
     else:
-        msg = f"Very slow — {tokens_per_sec:.0f} tok/s."
+        msg = f"Very slow — {tokens_per_sec:.0f} tok/s{engine}."
 
     severity = Severity.OK if score >= 80 else Severity.WARN if score >= 50 else Severity.CRITICAL
     return Diagnosis("throughput", severity, score, msg)
@@ -185,6 +211,8 @@ def run_health_flow(
     model_type: str = "",
     cpu_percent: float = 0.0,
     memory_percent: float = 0.0,
+    inference_count: int = 0,
+    device: str = "",
 ) -> HealthFlowResult:
     """Run all checks in order, aggregate into a single health verdict.
 
@@ -194,7 +222,7 @@ def run_health_flow(
     diagnoses = [
         _check_errors(req_count, err_count),
         _check_latency(avg_latency_ms),
-        _check_throughput(tokens_per_sec),
+        _check_throughput(tokens_per_sec, inference_count, device),
         _check_model(model_loaded, model_type),
         _check_uptime(uptime_seconds),
         _check_resources(cpu_percent, memory_percent),

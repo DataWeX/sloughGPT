@@ -66,10 +66,3 @@ class TestTokenizerManager:
         mgr = TokenizerManager()
         mgr.train(["hello world"], vocab_size=32)
         assert mgr.vocab_size > 0
-
-    def test_encode_decode(self):
-        mgr = TokenizerManager()
-        mgr.train(["hello world"], vocab_size=32)
-        ids = mgr.tokenize("hello world")
-        text = mgr.detokenize(ids)
-        assert isinstance(text, str)

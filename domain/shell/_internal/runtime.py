@@ -394,7 +394,12 @@ class DaitRuntime:
         from .device_system import reset_device_system
 
         self._boot_complete = False
-        shutdown_log = self._init.shutdown()
+        if self._init is None:
+            # Never booted: shutdown()/exit() must still be a no-op success,
+            # not an AttributeError (guard parity with status + _cmd_svc).
+            shutdown_log = "Not booted — init system never started.\n"
+        else:
+            shutdown_log = self._init.shutdown()
         self.kernel.shutdown()
         reset_device_system()
         return shutdown_log

@@ -48,6 +48,14 @@ Registered kinds:
     ``spawn_child``.
 ``random``
     :class:`RandomBrain` — the coin-flip emergence baseline.
+``llm``
+    :class:`LLMBrain` (``llm_brain.py``) — Stage B token-space tier: the
+    observation is serialized into a prompt and answered by a model client
+    (local InferenceEngine / OpenAI-compatible HTTP API — no mock backend;
+    tests run against a real engine). NOT
+    genome-compatible for the same reason as ``slonet`` — there are no flat
+    ``W``/``b`` tensors to carry — so breeding raises ``NotImplementedError``
+    (``evolution.py``) and offspring inherit whole via ``spawn_child``.
 """
 
 from __future__ import annotations
@@ -55,6 +63,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+from .llm_brain import LLMBrain
 
 if TYPE_CHECKING:
     # Annotation-only: keeps ``-> Perceptron`` resolvable for type checkers
@@ -572,6 +582,8 @@ def brain_from_dict(payload: dict[str, Any]) -> Any:
         return Perceptron.from_dict(payload)
     if kind == "model":
         return ModelBrain.from_dict(payload)
+    if kind == "llm":
+        return LLMBrain.from_dict(payload)
     if kind == "slonet":
         return SloNetBrain.from_dict(payload)
     if kind == "random":
@@ -622,6 +634,14 @@ def _make_random(input_dim: int, output_dim: int, hidden_units: int = 0, **_: An
     return RandomBrain(input_dim, output_dim)
 
 
+def _make_llm(input_dim: int, output_dim: int, hidden_units: int = 0, **_: Any) -> LLMBrain:
+    # Token-space tier: hidden_units is a weight-space concept and is
+    # deliberately dropped — an LLM brain has no projection tensor. The
+    # model backend comes from the process-wide default (set at CLI start
+    # or by tests via llm_brain.set_default_client).
+    return LLMBrain(input_dim, output_dim)
+
+
 #: brain kind -> factory(input_dim, output_dim, hidden_units=0, **params). Every
 #: factory returns an object honouring the forward/update/to_dict duck-type.
 BRAIN_KINDS: dict[str, Any] = {
@@ -629,6 +649,7 @@ BRAIN_KINDS: dict[str, Any] = {
     "model": _make_model,
     "slonet": _make_slonet,
     "random": _make_random,
+    "llm": _make_llm,
 }
 
 

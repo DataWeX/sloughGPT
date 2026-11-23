@@ -154,6 +154,61 @@ class TestPrepareData:
         with pytest.raises(ValueError, match="No valid datasets found"):
             prepare_data([("missing", 1.0)], block_size=8)
 
+    def test_list_with_ratios_accepts_explicit_file_paths(self, tmp_path, monkeypatch):
+        """Curriculum mixes carry file paths, not dataset names (card 20261115_081635).
+
+        The tuple branch used to resolve only ``data/<name>/input.txt``, so
+        every explicit path warned "not found" and a real curriculum run died
+        with "No valid datasets found". Explicit path wins, dataset-dir
+        fallback second — same precedence as the str branch.
+        """
+        monkeypatch.chdir(tmp_path)
+        a = tmp_path / "corpus_a.txt"
+        b = tmp_path / "corpus_b.txt"
+        a_text = "".join(chr(65 + i) for i in range(12)) * 40
+        b_text = "".join(chr(75 + i) for i in range(12)) * 40
+        a.write_text(a_text, encoding="utf-8")
+        b.write_text(b_text, encoding="utf-8")
+        data, n_chars, stoi, itos = prepare_data(
+            [("corpus_a.txt", 0.5), ("corpus_b.txt", 1.0)], block_size=8
+        )
+        assert len(data) == int(len(a_text) * 0.5) + len(b_text)
+        assert n_chars == len(set(a_text + b_text))
+
+    def test_list_with_ratios_mixes_dataset_dir_and_file_path(self, tmp_path, monkeypatch):
+        """Replay mixes join completed-stage file paths with dataset names."""
+        monkeypatch.chdir(tmp_path)
+        d = tmp_path / "data" / "a"
+        d.mkdir(parents=True)
+        a_text = DATA_TEXT
+        (d / "input.txt").write_text(a_text, encoding="utf-8")
+        f = tmp_path / "stage1.txt"
+        b_text = DATA_TEXT[:256]
+        f.write_text(b_text, encoding="utf-8")
+        data, _n, _stoi, _itos = prepare_data([("a", 0.5), ("stage1.txt", 0.5)], block_size=8)
+        assert len(data) == int(len(a_text) * 0.5) + int(len(b_text) * 0.5)
+
+    def test_list_with_ratios_jsonl_extracts_text_field(self, tmp_path, monkeypatch):
+        """A .jsonl member of a mix contributes its records' text, not JSON."""
+        import json as _json
+
+        monkeypatch.chdir(tmp_path)
+        recs = [{"text": "hello world " * 20}, {"other": "skip"}, {"text": "tail"}]
+        f = tmp_path / "corpus.jsonl"
+        f.write_text("\n".join(_json.dumps(r) for r in recs) + "\n", encoding="utf-8")
+        data, n_chars, stoi, _itos = prepare_data([("corpus.jsonl", 1.0)], block_size=8)
+        chars = set(stoi)
+        assert {"h", "e", "l", "o", " ", "w", "r", "d", "t", "a", "i"} <= chars
+        assert "{" not in chars and '"' not in chars  # never the JSON syntax
+        assert len(data) == len("hello world " * 20 + "\n" + "tail")
+
+    def test_plain_list_accepts_explicit_file_paths(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        f = tmp_path / "direct_list.txt"
+        f.write_text(DATA_TEXT, encoding="utf-8")
+        data, n_chars, stoi, itos = prepare_data(["direct_list.txt"], block_size=8)
+        assert len(data) == len(DATA_TEXT)
+
     def test_plain_list(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         a = tmp_path / "data" / "a"
@@ -426,6 +481,80 @@ class TestLoadSoulCheckpoint:
         result = _load_soul_checkpoint(str(tmp_path / "x.soul"))
         assert result["step"] == 0
         assert result["epoch"] == 0
+
+    def test_real_save_resolves_state_ref_via_base_dir(self, tmp_path):
+        """Phase-2 default write: the header only holds a ``state_ref`` — the
+        loader must resolve it from the soul's own directory (base_dir) or the
+        resume silently degrades to fresh momentum."""
+        from domain.inference._internal.slo_format import SloProfile, save_soul
+        from domain.training._internal.slonet import SloLinear, SloNet
+
+        fat_state = {
+            "step": 7,
+            "epoch": 1,
+            "completed_epochs": 1,
+            "accumulation_step": 0,
+            "optimizer": {
+                "type": "SloAdamW",
+                "hyperparameters": {"lr": 0.001, "betas": [0.9, 0.999]},
+                "state": {
+                    "0": {
+                        "exp_avg": [[0.25, -0.5], [0.125, 0.75]],
+                        "exp_avg_sq": [[0.0625, 0.015625], [0.00390625, 0.5]],
+                    },
+                },
+            },
+            "scheduler": {"type": "cosine", "initial_lr": 0.001},
+        }
+        net = SloNet(layers=[SloLinear(2, 2)], soul_name="RefRes")
+        profile = SloProfile(name="RefRes")
+        profile.metadata = {"training_state": fat_state}
+        soul_path = tmp_path / "ref.soul"
+        save_soul(net, str(soul_path), soul_profile=profile)
+
+        result = _load_soul_checkpoint(str(soul_path))
+        assert result["step"] == 7
+        state = result["optimizer_state_dict"]["state"]
+        np.testing.assert_allclose(state["0"]["exp_avg"], [[0.25, -0.5], [0.125, 0.75]])
+        np.testing.assert_allclose(
+            state["0"]["exp_avg_sq"], [[0.0625, 0.015625], [0.00390625, 0.5]]
+        )
+        # the ref itself proves the default write stripped the header
+        from domain.inference._internal.slo_format import load_soul
+
+        prof, _ = load_soul(str(soul_path))
+        opt = prof.metadata["training_state"]["optimizer"]
+        assert not opt.get("state") and "state_ref" in opt
+
+    def test_periodic_save_resume_carries_moments(self, data_path, tmp_path):
+        """End-to-end journey: a periodic save (moments on) ships a stripped
+        header + sibling bytes; the resume bundle resolves the exact moments
+        and a real resume continues from them."""
+        cfg = tiny_config(tmp_path, max_steps=2, checkpoint_interval=1)
+        t1 = make_trainer(data_path, cfg)
+        t1.train()
+        # non-final save → include_optimizer_state=True (the periodic shape)
+        t1.save(str(tmp_path / "periodic"), include_optimizer_state=True)
+        periodic = str(tmp_path / "periodic.soul")
+
+        from domain.inference._internal.slo_format import load_soul
+
+        prof, _ = load_soul(periodic)
+        opt = prof.metadata["training_state"]["optimizer"]
+        assert not opt.get("state"), "periodic header still embeds moments"
+        assert "state_ref" in opt
+        assert os.path.exists(periodic + ".optimizer.dat")
+
+        bundle = CheckpointManager.load_from_path(periodic)
+        moments = bundle["optimizer_state_dict"]["state"]
+        flat = [v for entry in moments.values() for v in entry.values()]
+        assert flat, "moments lost on the stripped-header save"
+        assert any(np.any(np.asarray(v) != 0) for v in flat), "moments all zero"
+
+        t2 = make_trainer(data_path, tiny_config(tmp_path, max_steps=4))
+        r = t2.train(resume=True, resume_path=periodic)
+        assert r.global_step == 4
+        assert t2.global_step == 4
 
 
 # =============================================================================
@@ -2065,3 +2194,294 @@ class TestLoadCorpusText:
         text = load_corpus_text(source)
         assert sorted(stoi) == sorted(set(text))
         assert len(data) == len(text)
+
+
+# =============================================================================
+# dataset_signature — content-addressed dataset identity (card 20261104_081626)
+# =============================================================================
+
+
+class TestDatasetSignature:
+    """The trainer records *what it trained on*, not *where the file was*.
+
+    ``ModelLoader`` already implements the consumer half: family aliases
+    (``sloughgpt``/``slonet``/…) require the same ``base_model`` AND the same
+    non-empty ``dataset_signature``. These tests pin the missing producer half.
+    """
+
+    def test_static_file_records_nonempty_signature(self, data_path, tmp_path):
+        """A static corpus yields a signature in the written identity."""
+        from domain.inference._internal.slo_format import read_soul_identity
+
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        assert t.dataset_signature, "signature must be computed at init, not at save"
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        identity = read_soul_identity(out + ".soul")
+        assert identity.get("dataset_signature") == t.dataset_signature
+        assert len(identity["dataset_signature"]) == 64
+
+    def test_signature_ignores_path(self, tmp_path):
+        """Same bytes at two paths → same signature; the path is never hashed."""
+        a = tmp_path / "one" / "corpus.txt"
+        b = tmp_path / "two" / "renamed_corpus.txt"
+        a.parent.mkdir()
+        b.parent.mkdir()
+        a.write_text(DATA_TEXT, encoding="utf-8")
+        b.write_text(DATA_TEXT, encoding="utf-8")
+
+        ta = make_trainer(str(a), tiny_config(tmp_path))
+        tb = make_trainer(str(b), tiny_config(tmp_path))
+        assert ta.dataset_signature == tb.dataset_signature
+
+    def test_signature_discriminates_content(self, tmp_path):
+        """Different bytes → different signature (no false interchangeability)."""
+        a = tmp_path / "a.txt"
+        b = tmp_path / "b.txt"
+        a.write_text(DATA_TEXT, encoding="utf-8")
+        b.write_text(DATA_TEXT + " and distinctly more text", encoding="utf-8")
+
+        ta = make_trainer(str(a), tiny_config(tmp_path))
+        tb = make_trainer(str(b), tiny_config(tmp_path))
+        assert ta.dataset_signature != tb.dataset_signature
+
+    def test_signature_stable_across_runs(self, data_path, tmp_path):
+        """Two trainers over the same file agree — retraining proves equivalence."""
+        t1 = make_trainer(data_path, tiny_config(tmp_path))
+        t2 = make_trainer(data_path, tiny_config(tmp_path))
+        assert t1.dataset_signature == t2.dataset_signature
+
+    def test_integrity_hash_covers_signature(self, data_path, tmp_path):
+        """The artifact hash must include the signature, or identity lies."""
+        from domain.inference._internal.slo_format import read_soul_identity
+
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        identity = read_soul_identity(out + ".soul")
+        assert identity.get("integrity_hash"), "integrity_hash must be recorded"
+
+        # A profile WITHOUT the signature must hash differently.
+        from domain.inference import create_soul_profile
+
+        with_sig = create_soul_profile(name="x", dataset_signature=t.dataset_signature)
+        without = create_soul_profile(name="x", dataset_signature="")
+        assert with_sig.compute_hash() != without.compute_hash()
+
+    def test_recipe_recorded_in_metadata(self, data_path, tmp_path):
+        """The hashing recipe is stamped so a future change can't silently
+        invalidate every recorded signature."""
+        from domain.inference._internal.slo_format import load_soul
+
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        profile, _ = load_soul(out + ".soul")
+        assert profile.metadata.get("dataset_signature_recipe") == "blake2b256/tokens/v1"
+
+    def test_live_feed_source_records_no_signature(self, tmp_path, monkeypatch):
+        """A live stream can't be proven equivalent — refuse, don't guess.
+
+        Two runs over the same feed URL ingest different records, so a
+        signature would claim interchangeability that doesn't hold. The
+        loader already treats ``""`` as *refuse*, which is the honest answer.
+        """
+        from domain.inference._internal.slo_format import load_soul
+        from domain.training._internal import training_feed as tf
+
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        # validate_training_data enforces a 200-char floor, so the seed record
+        # has to be a real conversation rather than "ping"/"pong".
+        corpus.write_text(
+            json.dumps(
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": (
+                                "Can the training flow read from a live feed and keep "
+                                "ingesting records while the run is still going?"
+                            ),
+                        },
+                        {
+                            "role": "assistant",
+                            "content": (
+                                "Yes — the feed sampler refreshes on a timer and pulls "
+                                "new records in, so the corpus can grow mid-training "
+                                "without restarting the job."
+                            ),
+                        },
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+
+        t = make_trainer("feed:api-conversations", tiny_config(tmp_path))
+        assert t.dataset_signature == "", "live source must not claim an identity"
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        profile, _ = load_soul(out + ".soul")
+        assert profile.dataset_signature == ""
+        assert profile.metadata.get("dataset_signature_reason") == ("live-source-not-reproducible")
+
+    def test_signature_recipe_is_versioned(self, data_path, tmp_path):
+        """The recipe string carries a version so a bump is a visible event."""
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        assert "/v1" in t.dataset_signature_recipe
+
+
+# =============================================================================
+# backfill_soul_dataset_signature — repair pre-card souls (card 20261117_111044)
+# =============================================================================
+
+
+class TestDatasetSignatureBackfill:
+    """A soul saved BEFORE card 20261104_081626 carries no signature, so the
+    loader refuses it for dataset/family lookups. This repairs it honestly:
+    recompute from the recorded ``training_dataset``, back up first, never
+    overwrite an existing signature, never sign a live stream.
+    """
+
+    class _DummyModel:
+        def state_dict(self):
+            return {"w": np.zeros(4, dtype=np.float32)}
+
+    @staticmethod
+    def _legacy_soul(tmp_path, *, dataset: str, signature: str = "") -> str:
+        from domain.inference import create_soul_profile, save_soul
+
+        profile = create_soul_profile(
+            name="legacy",
+            base_model="sloughgpt",
+            training_dataset=dataset,
+            dataset_signature=signature,
+        )
+        path = str(tmp_path / "legacy.soul")
+        save_soul(TestDatasetSignatureBackfill._DummyModel(), path, soul_profile=profile)
+        return path
+
+    def test_backfill_matches_producer_signature(self, data_path, tmp_path):
+        """The core claim: the back-filled value equals what the trainer
+        records fresh for the same corpus — otherwise the loader would be
+        comparing two different hash conventions."""
+        from domain.inference._internal.slo_format import load_soul, read_soul_identity
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset=data_path)
+        result = backfill_soul_dataset_signature(soul)
+
+        identity = read_soul_identity(soul)
+        producer = make_trainer(data_path, tiny_config(tmp_path))
+        assert result["dataset_signature"] == producer.dataset_signature
+        assert identity["dataset_signature"] == producer.dataset_signature
+        assert len(identity["dataset_signature"]) == 64
+
+        profile, _ = load_soul(soul)
+        assert profile.metadata.get("dataset_signature_recipe") == "blake2b256/tokens/v1"
+
+    def test_backfill_creates_restorable_backup(self, data_path, tmp_path):
+        from pathlib import Path
+
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset=data_path)
+        original = Path(soul).read_bytes()
+        result = backfill_soul_dataset_signature(soul)
+
+        backup = Path(result["backup_path"])
+        assert backup.is_file()
+        assert backup.read_bytes() == original  # byte-identical restore point
+
+    def test_backfill_refuses_live_source(self, tmp_path):
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset="feed:api-conversations")
+        with pytest.raises(ValueError, match="live source"):
+            backfill_soul_dataset_signature(soul)
+
+    def test_backfill_refuses_existing_signature(self, data_path, tmp_path):
+        from pathlib import Path
+
+        from domain.training._internal.train_pipeline import backfill_soul_dataset_signature
+
+        soul = self._legacy_soul(tmp_path, dataset=data_path, signature="d" * 64)
+        before = Path(soul).read_bytes()
+        with pytest.raises(ValueError, match="already"):
+            backfill_soul_dataset_signature(soul)
+        assert Path(soul).read_bytes() == before  # refusal leaves the file alone
+
+
+class TestSaveCheckpointMixDataPath:
+    """``save_checkpoint`` must accept the curriculum's mix spec.
+
+    A stage mix is ``[(path, ratio), ...]`` (what ``compute_stage_mix``
+    hands the trainer); checkpoint naming assumed ``str`` and raised
+    ``TypeError: argument should be a str ... not 'list'`` — found by the
+    calibration run, which uses the real trainer end-to-end
+    (card 20261115_081635).
+    """
+
+    def test_mix_list_produces_checkpoint_named_after_first_corpus(self, tmp_path):
+        corpus = tmp_path / "mixdir" / "corpus.txt"
+        corpus.parent.mkdir()
+        corpus.write_text(DATA_TEXT, encoding="utf-8")
+        t = make_trainer(str(corpus), tiny_config(tmp_path))
+        # exactly what compute_stage_mix / run_curriculum pass as data_path
+        t.data_path = [(str(corpus), 1.0)]
+
+        t.save_checkpoint({}, is_final=True)
+
+        saved = list((tmp_path / "ckpts").glob("*.soul"))
+        assert saved, "mix data_path must still produce a .soul checkpoint"
+        assert saved[0].name.startswith("mixdir_")  # named after first corpus dir
+
+    def test_str_data_path_naming_unchanged(self, tmp_path):
+        """The str path is the historical behaviour — byte-identical."""
+        corpus = tmp_path / "singledir" / "corpus.txt"
+        corpus.parent.mkdir()
+        corpus.write_text(DATA_TEXT, encoding="utf-8")
+        t = make_trainer(str(corpus), tiny_config(tmp_path))
+
+        t.save_checkpoint({}, is_final=True)
+
+        saved = list((tmp_path / "ckpts").glob("*.soul"))
+        assert saved and saved[0].name.startswith("singledir_")
+
+
+class TestSaveEwcSnapshot:
+    """``save_ewc_snapshot`` must honour ewc.py's ``loss_fn(outputs, targets)``.
+
+    The closure handed to ``save_task_snapshot`` declared
+    ``_loss_fn(model, batch)`` and unpacked the batch itself, but ewc.py
+    calls ``loss_fn(outputs, targets)`` at every site (Fisher estimate,
+    optimal-loss pass, ``forward_and_ewc``): a ``(batch, block)`` target
+    array unpacked into two names raised ``too many values to unpack
+    (expected 2)``, the exception was swallowed by ``except Exception``,
+    and every trainer EWC snapshot silently failed — curriculum stage
+    boundaries and the default post-run snapshot alike (found by the
+    calibration run, card 20261115_081635 follow-up).
+
+    ``batch_size`` must exceed 2 in this test: at batch_size=2 the unpack
+    silently succeeds with the wrong x/y instead of raising.
+    """
+
+    def test_snapshot_saved_and_recorded(self, tmp_path, data_path):
+        cfg = tiny_config(tmp_path, use_ewc=True, batch_size=4, ewc_num_samples=4)
+        t = make_trainer(data_path, cfg)
+        assert t._ewc is not None
+
+        ok = t.save_ewc_snapshot("stage1", "stage one")
+
+        assert ok is True, (
+            "save_ewc_snapshot failed — _loss_fn must match ewc.py's "
+            "loss_fn(outputs, targets) contract"
+        )
+        assert t._ewc.current_task == "stage1"
+        assert "stage1" in t._ewc.task_snapshots
+        snap = t._ewc.task_snapshots["stage1"]
+        assert snap.num_samples > 0
+        assert np.isfinite(snap.optimal_loss)

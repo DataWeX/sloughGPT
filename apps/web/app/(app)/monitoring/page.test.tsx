@@ -183,7 +183,9 @@ vi.mock('@/lib/session-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: vi.fn(), banner: vi.fn() },
+
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
@@ -286,6 +288,13 @@ vi.mock('@/components/monitoring/WorkflowCard', () => ({
 }))
 vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => mockUseLiveStatus,
+  // api-monitor-store.ts does a module-level import('@/hooks/useLiveStatus')
+  // .then(({liveStatusStore}) => ...) in jsdom — the mock must expose it or
+  // the property access becomes an unhandled rejection (vitest exits 1).
+  liveStatusStore: {
+    getState: () => ({ health: null, connectionStatus: 'connected' }),
+    subscribe: () => () => {},
+  },
 }))
 
 import MonitoringPage from './page'

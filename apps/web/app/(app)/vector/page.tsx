@@ -1,6 +1,6 @@
 'use client'
-
 import { notify } from '@/lib/notify'
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
@@ -19,7 +19,6 @@ import { vectorController, type VectorSearchResult } from '@/lib/vector-controll
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function VectorPage() {
-  const addToast = notify.toast
   const [provider, setProvider] = useState('in_memory')
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -38,11 +37,11 @@ export default function VectorPage() {
       setProvider(stats.provider)
       setCount(stats.count)
     } catch {
-      addToast('Could not load vector store data', 'error')
+      notify.toast('Could not load vector store data', { type: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [])
 
   useRefreshShortcut(fetchStats)
 
@@ -55,10 +54,12 @@ export default function VectorPage() {
     try {
       const result = await vectorController.init(prov)
       setProvider(result.provider)
-      addToast(result.note || `Initialized ${result.provider} vector store`, 'success')
+      notify.toast(result.note || `Initialized ${result.provider} vector store`, {
+        type: 'success',
+      })
       await fetchStats()
     } catch {
-      addToast('Could not initialize vector store', 'error')
+      notify.toast('Could not initialize vector store', { type: 'error' })
     } finally {
       setInitializing(false)
     }
@@ -72,7 +73,7 @@ export default function VectorPage() {
       setSearchResults(result.results)
       setSearchTime(result.elapsed_ms)
     } catch {
-      addToast('Could not search vector store', 'error')
+      notify.toast('Could not search vector store', { type: 'error' })
     } finally {
       setSearching(false)
     }
@@ -84,11 +85,11 @@ export default function VectorPage() {
     setUpserting(true)
     try {
       const result = await vectorController.upsert(texts)
-      addToast(`Added ${result.count} entries in ${result.elapsed_ms}ms`, 'success')
+      notify.toast(`Added ${result.count} entries in ${result.elapsed_ms}ms`, { type: 'success' })
       setUpsertText('')
       await fetchStats()
     } catch {
-      addToast('Could not add entries', 'error')
+      notify.toast('Could not add entries', { type: 'error' })
     } finally {
       setUpserting(false)
     }
@@ -138,7 +139,7 @@ export default function VectorPage() {
           <CardTitle className="text-[11px] font-medium">Initialize</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 px-2.5 pb-2.5">
-          <p className="text-[10px] text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/60">
             Choose a vector store backend. ChromaDB persists to disk; in-memory is faster but does
             not survive restarts.
           </p>
@@ -170,7 +171,7 @@ export default function VectorPage() {
           <CardTitle className="text-[11px] font-medium">Add Entries</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 px-2.5 pb-2.5">
-          <p className="text-[10px] text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/60">
             Add text entries to the vector store. Each line becomes one entry.
           </p>
           <textarea
@@ -183,7 +184,7 @@ export default function VectorPage() {
             aria-label="Vector store entries"
           />
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">
+            <span className="text-xs text-muted-foreground/60 font-mono tabular-nums">
               {upsertText.split('\n').filter((t) => t.trim()).length} entries
             </span>
             <Button
@@ -223,7 +224,7 @@ export default function VectorPage() {
 
           {searchResults.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] text-muted-foreground/60">
+              <p className="text-xs text-muted-foreground/60">
                 {searchResults.length} results in {searchTime?.toFixed(1)}ms
               </p>
               {searchResults.map((r, i) => (
@@ -233,20 +234,18 @@ export default function VectorPage() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[11px]">{r.text}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-primary/10 text-primary tabular-nums">
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-primary/10 text-primary tabular-nums">
                       {(r.score * 100).toFixed(1)}%
                     </span>
                   </div>
-                  {r.id && <p className="text-[10px] text-muted-foreground/60 font-mono">{r.id}</p>}
+                  {r.id && <p className="text-xs text-muted-foreground/60 font-mono">{r.id}</p>}
                 </div>
               ))}
             </div>
           )}
 
           {searchResults.length === 0 && !searching && searchQuery && (
-            <p className="text-[10px] text-muted-foreground/60 text-center py-3">
-              No results found
-            </p>
+            <p className="text-xs text-muted-foreground/60 text-center py-3">No results found</p>
           )}
         </CardContent>
       </Card>

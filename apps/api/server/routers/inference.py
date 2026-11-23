@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 from collections.abc import AsyncIterator, Collection
@@ -27,23 +28,24 @@ from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
 from infrastructure.contract import REGISTRY, RouteEntry
+from infrastructure.inference_metrics import count_tokens, record
 from infrastructure.sse_fallback import sse_error, sse_event, sse_token
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
+from domain.agents import ToolParam, ToolSpec, agentic_stream, get_agent_system, get_tool_registry
 from domain.cognition import get_rag_service
-from domain.feedback import get_response_tracker
+from domain.feedback import SAFE_BAND, get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
-from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
 from domain.models import ConsciousnessProcessor, apply_processors, get_provider
+from domain.settings import get_settings
 
 logger = logging.getLogger("slo.inference")
 
@@ -319,6 +321,31 @@ class CreateSessionRequest(BaseModel):
     model: str | None = None
 
 
+class AppScopeDelta(BaseModel):
+    """Per-conversation configuration delta — the mini-app's own settings.
+
+    Pydantic twin of ``domain.inference.app_scope.AppScope`` (the frozen
+    domain value object; ``tests/test_app_scope.py`` pins field parity
+    between the two). Persisted wholesale on the session record under
+    ``scope`` via ``PUT /chat/sessions/{id}``; ``None`` on any field means
+    "unset — inherit the layer below" (presence-based, never value-based).
+    Bounds mirror ``ChatRequest`` so a delta can never hold a value the wire
+    would reject.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_k: int | None = Field(default=None, ge=0, le=500)
+    repetition_penalty: float | None = Field(default=None, ge=0.5, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=2048)
+    system_prompt: str | None = Field(default=None, max_length=100000)
+    knowledge: list[str] | None = Field(default=None, max_length=100)
+    use_context_core: bool | None = None
+    use_rag: bool | None = None
+
+
 class UpsertSessionRequest(BaseModel):
     """Schema for updating session metadata."""
 
@@ -326,6 +353,8 @@ class UpsertSessionRequest(BaseModel):
     archived: bool | None = None
     starred: bool | None = None
     pinned: bool | None = None
+    scope: AppScopeDelta | None = None
+    """Conversation AppScope delta — replaces the stored delta wholesale."""
 
 
 class BranchSessionRequest(BaseModel):
@@ -347,7 +376,7 @@ class SessionModel(BaseModel):
     ``SessionMeta`` interface both derive from this model
     (``scripts/gen_ts_contracts.py``). Mirrors
     ``InferenceRouter._build_session_metadata_index`` output — exactly these
-    five keys, always present. ``extra="allow"`` so indexed rows may grow
+    keys, always present. ``extra="allow"`` so indexed rows may grow
     without breaking consumers.
     """
 
@@ -358,6 +387,8 @@ class SessionModel(BaseModel):
     created_at: str
     updated_at: str
     message_count: int
+    scope: AppScopeDelta | None = None
+    """This conversation's AppScope delta (``None`` = inherits global only)."""
 
 
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
@@ -370,12 +401,23 @@ from schemas.chat import (  # noqa: E402
     Message,
 )
 
+from domain.inference.app_scope import (  # noqa: E402
+    apply_scope,
+    resolve_scope,
+)
 from domain.inference.engine import (  # noqa: E402
+    TurnEvent,
     TurnRequest,
     TurnResult,
     fold,
     register_chat_engine,
 )
+
+# The kernel-appended image markdown (agentic_stream's attachment append:
+# ``\n\n![alt](data:image/…;base64,…)``) rides the token stream so cache and
+# history keep the image. Memory/ingest must not see the blob, so the clean
+# pre-append text is this pattern stripped off the collected stream.
+_ATTACH_MD = re.compile(r"\n\n!\[[^\]]*\]\(data:image/[^)]*\)")
 
 # In-memory store for pending control requests per session
 _chat_control_store: dict[str, dict] = {}
@@ -384,11 +426,14 @@ _CHAT_CONTROL_TTL = 300  # 5 minutes
 
 
 async def _apply_consciousness_reflection(messages: list, corr_id: str) -> list:
-    """CONSCIOUSNESS_PROC — prepend the reflection narrative (build order #6).
+    """CONSCIOUSNESS_PROC — attach the reflection narrative as tail context.
 
     Pulls ``engine.reflect(apply=False)`` (propose-only: never commits belief
-    deltas) and prepends its narrative as a system message via
-    ConsciousnessProcessor. Advisory by design: a disabled engine, an empty
+    deltas) and hands the narrative to ConsciousnessProcessor, which attaches
+    it to the LAST user turn — after the question, framed as context. It used
+    to prepend as a system message, where it outranked the question and the
+    0.5B model answered the narrative instead of the user (card
+    20261114_092948). Advisory by design: a disabled engine, an empty
     narrative, or ANY failure skips injection and returns messages unchanged
     (try/except skip — chat never errors on reflection).
     """
@@ -479,22 +524,8 @@ class GenerateResponse(BaseModel):
 
 
 def _count_tokens(text: str, server_state) -> int:
-    """Count real tokens using the loaded tokenizer, falling back to word count.
-
-    Args:
-        text: generated text
-        server_state: module exposing ``tokenizer`` / ``model_type`` attributes
-
-    Returns:
-        token count (via tokenizer.encode when available, else len(text.split()))
-    """
-    try:
-        tokenizer = getattr(server_state, "tokenizer", None)
-        if tokenizer is not None and hasattr(tokenizer, "encode"):
-            return len(tokenizer.encode(text))
-    except Exception as e:
-        logger.debug("tokenizer encode fallback failed: %s", e)
-    return len(text.split())
+    """Count real tokens — thin delegate to the shared recording seam."""
+    return count_tokens(text, state=server_state)
 
 
 def _extract_user_message(messages: list[Message]) -> str | None:
@@ -509,12 +540,19 @@ _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
 
-# Bounds mirroring GenerateRequest's Field constraints (:temperature ge=0 le=2,
-# :top_p ge=0 le=1, :top_k ge=0 le=500, :repetition_penalty ge=0.5 le=2). Nudged
-# values are clamped here so a feedback-derived adjustment can never push a
-# defaulted param outside the schema the request itself is validated against
-# (drift-gated by tests/test_meta_weights_clamp.py).
-_META_WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
+# SCHEMA bounds only — what the wire accepts (GenerateRequest Field
+# constraints: :temperature ge=0 le=2, :top_p ge=0 le=1, :top_k ge=0 le=500,
+# :repetition_penalty ge=0.5 le=2). Nudged values are clamped here so a
+# feedback-derived adjustment can never push a defaulted param outside the
+# schema the request itself is validated against (drift-gated by
+# tests/test_meta_weights_clamp.py).
+#
+# This is NOT the generation-safety bound (card 20261101_182428): schema
+# validity and generation safety are different facts written twice at one
+# seam. rep 0.5 is schema-valid and actively REWARDS repetition — safety
+# lives in ONE place, ``domain.feedback.SAFE_BAND``, applied to every
+# feedback-moved value in the merge loop below (cache hit or not).
+_SCHEMA_BOUNDS: dict[str, tuple[float, float]] = {
     "temperature": (0.0, 2.0),
     "top_p": (0.0, 1.0),
     "top_k": (0.0, 500.0),
@@ -566,7 +604,11 @@ def _apply_meta_weights(
     default, because an explicitly-set value is user intent and outranks a
     derived one.
 
-    Returns a dict of parameters to pass to the provider.
+    Returns a dict of parameters to pass to the provider. Non-explicit
+    params that feedback moved are clamped into ``domain.feedback.SAFE_BAND``
+    (the one generation-safe bounds authority, card 20261101_182428) before
+    the schema clamp — so a cache-hit or unbanded nudge can never restore
+    the repetition-loop hazard the band exists to prevent.
 
     Disabled by default: ``SLO_META_WEIGHT_NUDGE=0`` returns the caller's
     parameters untouched. Feedback steering belongs to the context stack
@@ -655,8 +697,22 @@ def _apply_meta_weights(
             # request schema — pass through verbatim.
             merged[param] = value
             continue
-        nudged = value + nudge.get(param, 0)
-        lo, hi = _META_WEIGHT_BOUNDS[param]
+        n = nudge.get(param, 0)
+        nudged = value + n
+        if n:
+            # Generation safety at the USE seam (card 20261101_182428): the
+            # band must hold for every path a nudge can arrive on — a cache
+            # hit, a mock, an unbanded producer — not just inside
+            # get_adjustment(). Two rules:
+            #   base inside the band  -> the merged value is clamped into it;
+            #   base outside the band -> the caller (scope/global config)
+            #     chose a value feedback may not touch: feedback ABSTAINS
+            #     rather than dragging a user-configured value around.
+            # n == 0 (no feedback signal) never bands: a silent feedback
+            # layer must not clamp user configuration at all.
+            lo_b, hi_b = SAFE_BAND[param]
+            nudged = min(max(nudged, lo_b), hi_b) if lo_b <= value <= hi_b else value
+        lo, hi = _SCHEMA_BOUNDS[param]
         nudged = min(max(nudged, lo), hi)
         if param == "top_k":
             nudged = int(round(nudged))
@@ -818,7 +874,7 @@ def _run_post_gen_tasks(
     from domain.cognition import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
-    tokens = len(full_response.split())
+    tokens = count_tokens(full_response, state=_pgs_state)
 
     def _track(task_name):
         def _cb(fut):
@@ -886,15 +942,13 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("ResponseTracker.log failed: %s", e)
 
-    # Inference metrics
-    try:
-        get_server_state().record_inference(
-            tokens=tokens,
-            elapsed_ms=duration_ms,
-            model=_pgs_state.model_type or req.model,
-        )
-    except Exception as e:
-        logger.warning("Failed to record inference metrics: %s", e)
+    # Inference metrics — whole-turn clock: the chat handler does not plumb
+    # the decode window this far (clock rule, card 20261119_132133).
+    record(
+        tokens=tokens,
+        elapsed_ms=duration_ms,
+        model=_pgs_state.model_type or req.model,
+    )
 
     # ContextCore response
     if ctx_core and req.use_context_core:
@@ -923,7 +977,11 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("Entity extraction failed: %s", e)
 
-    # Consciousness post-processing (narrative surfaced by the caller)
+    # Consciousness post-processing (narrative surfaced by the caller).
+    # Same use_consciousness gate as the pre-gen narrative: a bare probe must
+    # not ingest its exchange into the episode store nor surface a reflection.
+    if not req.use_consciousness:
+        return {"narrative": "", "level": 0}
     return _consciousness_post_process(user_msg, full_response)
 
 
@@ -1186,6 +1244,7 @@ class InferenceRouter:
                             "created_at": data.get("created_at") or "",
                             "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
                             "message_count": msg_count,
+                            "scope": data.get("scope"),
                         }
                     )
                 except (json.JSONDecodeError, OSError):
@@ -1312,14 +1371,11 @@ class InferenceRouter:
             )
             tokens = _count_tokens(result, _gen_state)
             actual_model = _gen_state.model_type or req.model
-            try:
-                get_server_state().record_inference(
-                    tokens=tokens,
-                    elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
-                    model=actual_model,
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
+            record(
+                tokens=tokens,
+                elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+                model=actual_model,
+            )
             try:
                 capture(
                     req.prompt,
@@ -1429,6 +1485,7 @@ class InferenceRouter:
             _BATCH_MAX = 5
             _BATCH_INTERVAL_S = 0.005
             _token_count = 0
+            _decode_start: float | None = None
             gen_params = _apply_meta_weights(
                 temperature=req.temperature,
                 top_p=req.top_p,
@@ -1442,6 +1499,7 @@ class InferenceRouter:
             _coalesce_key = _coalescer.hash(
                 provider_messages, gen_params, req.max_new_tokens, _stream_state.model_type
             )
+            _cache_lookup_t0 = time.monotonic()
             existing = await _coalescer.start(_coalesce_key)
             if existing is not None:
                 await existing.event.wait()
@@ -1458,11 +1516,20 @@ class InferenceRouter:
                 for chunk in _chunk_replay(cached):
                     yield sse_token("generate", chunk)
                 _mgr.finish(_op_id)
+                _hit_tokens = count_tokens(cached, state=_stream_state)
+                # Cache hit: counted honestly, flagged cached so PR 1's window
+                # excludes it — a replay performs no decode work.
+                record(
+                    tokens=_hit_tokens,
+                    elapsed_ms=(time.monotonic() - _cache_lookup_t0) * 1000,
+                    model=_stream_state.model_type or req.model,
+                    cached=True,
+                )
                 yield sse_token(
                     "generate",
                     "",
                     done=True,
-                    meta={"tokens": len(cached.split()), "cached": True},
+                    meta={"tokens": _hit_tokens, "cached": True},
                 )
                 return
 
@@ -1482,6 +1549,7 @@ class InferenceRouter:
                         return
                     if token:
                         if _token_count == 0:
+                            _decode_start = time.monotonic()
                             _first_token_ms = (time.time() - _token_gen_start) * 1000
                             logger.info(
                                 "GEN_FIRST_TOKEN corr=%s after=%.1fms",
@@ -1557,14 +1625,14 @@ class InferenceRouter:
                 http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
                 yield sse_error("generate", "ERROR", str(e), code=err_code, http_status=http_status)
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
-            try:
-                get_server_state().record_inference(
-                    tokens=token_count,
-                    elapsed_ms=elapsed,
-                    model=_stream_state.model_type or req.model,
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
+            record(
+                tokens=count_tokens("".join(collected), state=_stream_state),
+                # Decode window: first token -> last (0 when nothing decoded).
+                elapsed_ms=(time.monotonic() - _decode_start) * 1000
+                if _decode_start is not None
+                else 0.0,
+                model=_stream_state.model_type or req.model,
+            )
             try:
                 capture(
                     req.prompt,
@@ -1754,6 +1822,7 @@ class InferenceRouter:
             )
 
             collected: list[str] = []
+            _ws_decode_start: float | None = None
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
@@ -1761,6 +1830,8 @@ class InferenceRouter:
                     **gen_params,
                 ):
                     if token:
+                        if _ws_decode_start is None:
+                            _ws_decode_start = time.monotonic()
                         collected.append(token)
                         try:
                             await websocket.send_json({"token": token})
@@ -1784,14 +1855,14 @@ class InferenceRouter:
 
                 token_count = _count_tokens(full_text, _ws_gen_state)
                 actual_model = _ws_gen_state.model_type or msg.get("model", "default")
-                try:
-                    get_server_state().record_inference(
-                        tokens=token_count,
-                        elapsed_ms=0,
-                        model=actual_model,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to record inference metrics: %s", e)
+                record(
+                    tokens=token_count,
+                    # Decode window: first token -> last (0 when nothing decoded).
+                    elapsed_ms=(time.monotonic() - _ws_decode_start) * 1000
+                    if _ws_decode_start is not None
+                    else 0.0,
+                    model=actual_model,
+                )
                 try:
                     capture(
                         prompt,
@@ -1988,6 +2059,47 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
 
+    def _resolve_turn_scope(self, session_id: str, req: TurnRequest) -> frozenset[str]:
+        """Resolve this conversation's AppScope over global settings; apply to ``req``.
+
+        The turn seam: the below-turn layers are loaded here (conversation
+        delta from the session record, global defaults from
+        ``domain.settings``), while resolution itself stays the pure
+        ``resolve_scope``. Applied in place on ``req`` — transport fields only
+        where the wire left them unset (``apply_scope``), plus the additive
+        ``system_prompt``/``knowledge`` composition.
+
+        Returns the conversation-won field names: the caller passes them to
+        ``_apply_meta_weights`` alongside ``model_fields_set`` so a
+        server-side heuristic may not move a value the user deliberately
+        scoped to this conversation.
+        """
+        session = self._get_session(session_id)
+        raw = session.get("scope")
+        delta: dict[str, Any] | None = None
+        if isinstance(raw, dict):
+            try:
+                # Re-validate on read: the session file is a trust boundary
+                # (hand-edited / foreign-version data). Corrupt or out-of-
+                # bounds deltas fail safe — inherit the layers below.
+                delta = AppScopeDelta.model_validate(raw).model_dump(exclude_none=True)
+            except ValidationError:
+                logger.debug("Dropping invalid scope delta on session %s", session_id)
+        scope = resolve_scope(
+            conversation=delta,
+            global_settings=get_settings().settings.generation,
+        )
+        applied = apply_scope(req, scope, conversation=delta)
+        if scope.system_prompt:
+            req.system_prompt = (
+                f"{req.system_prompt}\n\n{scope.system_prompt}"
+                if req.system_prompt
+                else scope.system_prompt
+            )
+        if scope.knowledge:
+            req.knowledge = [*scope.knowledge, *(req.knowledge or [])]
+        return applied
+
     async def stream_turn(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]:
         """The single inference method: yield raw tokens, then the final ``TurnResult``.
 
@@ -2040,6 +2152,11 @@ class InferenceRouter:
         if not user_msg:
             raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
+        # Instance seam: resolve this conversation's AppScope (delta over
+        # global defaults) once, before anything reads the transport fields.
+        session_id = req.session_id or "default"
+        scope_applied = self._resolve_turn_scope(session_id, req)
+
         system_prompt = req.system_prompt or ""
 
         if req.images:
@@ -2066,18 +2183,19 @@ class InferenceRouter:
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
 
-        session_id = req.session_id or "default"
-
-        # Context frame — memory/rag layers via ContextCore, gated on the memory
-        # service holding at least one fact (the gate travels with the frame
-        # builder: empty memory means skip the frame entirely).
+        # Context frame — memory/rag layers via ContextCore, gated on the wire
+        # flag first (use_context_core was previously honored only by the
+        # non-streaming chat(); stream_turn ignored it — card 20261112_140010),
+        # then on the memory service holding at least one fact (the gate travels
+        # with the frame builder: empty memory means skip the frame entirely).
         frame = None
-        try:
-            frame, _context_info = await _build_context_frame(
-                self._get_context_core(), session_id, user_msg, corr_id="stream"
-            )
-        except Exception as e:
-            logger.debug("Context frame build failed: %s", e)
+        if req.use_context_core:
+            try:
+                frame, _context_info = await _build_context_frame(
+                    self._get_context_core(), session_id, user_msg, corr_id="stream"
+                )
+            except Exception as e:
+                logger.debug("Context frame build failed: %s", e)
 
         frame_context = []
         if frame:
@@ -2096,9 +2214,11 @@ class InferenceRouter:
             )
 
         # Knowledge enrichment — only when the frame carried no memory/rag
-        # layer content; facts learned live feed the prompt otherwise.
+        # layer content; facts learned live feed the prompt otherwise. Shares
+        # the use_context_core gate: with context off there is no frame to
+        # fall back from, and a bare probe must not pull learned facts either.
         knowledge_retrieved = []
-        if not frame_context:
+        if req.use_context_core and not frame_context:
             try:
                 enrichment = await asyncio.wait_for(
                     asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
@@ -2145,7 +2265,15 @@ class InferenceRouter:
 
         # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
         # main's chat-pipeline wiring onto the stream_turn restructure).
-        messages = await _apply_consciousness_reflection(messages, "-")
+        # Gated on the wire flag: a bare probe (QuickActions "Test model",
+        # use_consciousness=false) must not receive the reflection narrative
+        # at all (card 20261112_140010). When ON it rides the volatile tail —
+        # ConsciousnessProcessor attaches it to the last user turn, framed as
+        # context, the same placement class as the RAG/knowledge blocks below
+        # — never the system head, where the 0.5B model answered it instead
+        # of the user (card 20261114_092948).
+        if req.use_consciousness:
+            messages = await _apply_consciousness_reflection(messages, "-")
 
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
@@ -2154,7 +2282,7 @@ class InferenceRouter:
             repetition_penalty=req.repetition_penalty,
             user_message=user_msg,
             user_id=req.user_id or "default",
-            explicit=req.model_fields_set,
+            explicit=req.model_fields_set | scope_applied,
         )
         # Attach per-turn context to the last user turn BEFORE the budget trim,
         # so the trimmer counts those tokens instead of the block arriving
@@ -2173,27 +2301,47 @@ class InferenceRouter:
 
         model = _chat_state.model_type or req.model
 
-        collected: list[str] = []
-        try:
-            async for token in provider.chat_stream(
-                messages,
+        # ONE provider round, params bound right here: agentic_stream drives
+        # the loop (fenced tool protocol — model-driven intent routing, card
+        # 20261116_090332) and calls this closure once per round with the
+        # contract-injected messages. The turn's stop flag rides every round:
+        # minted by whoever owns the registry (chat's manager) and delivered
+        # with the request. The provider polls is_set() each token, so a
+        # cancel fired mid-stream stops generation here. None only when the
+        # caller has no registry.
+        def _round_stream(prepared: list) -> AsyncIterator[str]:
+            return provider.chat_stream(
+                prepared,
                 max_tokens=req.max_tokens,
-                # The turn's stop flag: minted by whoever owns the registry
-                # (chat's manager) and delivered with the request. The provider
-                # polls is_set() each token, so a cancel fired mid-stream stops
-                # generation here. None only when the caller has no registry.
                 cancel_event=req.cancel_event,
                 session_id=session_id,
                 **gen_params,
+            )
+
+        collected: list[str] = []
+        try:
+            async for item in agentic_stream(
+                messages, tools=get_tool_registry(), stream_fn=_round_stream
             ):
-                if token:
-                    collected.append(token)
-                    yield token
+                if isinstance(item, dict):
+                    # Loop tool events ride out-of-band BETWEEN tokens; edges
+                    # project them (chat maps them to phase: TOOL frames).
+                    # Never tokens — the raw fence stays in-process.
+                    yield TurnEvent(kind=str(item.get("kind", "tool")), data=item.get("data") or {})
+                elif item:
+                    collected.append(item)
+                    yield item
         except Exception as e:
             logger.error("chat stream failed: %s", e, exc_info=True)
             raise
 
-        text = "".join(collected)
+        # Augmented = tokens as streamed, INCLUDING the kernel-appended image
+        # markdown (chat's cache is built from these tokens and TurnResult.text
+        # is what history stores — a reload must keep the image). Clean =
+        # pre-append text, for token counting and memory ingest, which must
+        # never see the base64 blob.
+        text_augmented = "".join(collected)
+        text = _ATTACH_MD.sub("", text_augmented)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
             tokens = _count_tokens(text, _chat_state)
@@ -2210,12 +2358,17 @@ class InferenceRouter:
         _post_gen: dict[str, Any] = {}
         try:
             _post_gen = _run_post_gen_tasks(
-                text,
+                text_augmented,
                 user_msg or "",
                 session_id,
                 _chat_start_dt,
                 req,
-                self._get_context_core(),
+                # Resolve only when the turn opted into the context stack:
+                # first resolution wires ContextCore (incl. its consciousness
+                # engine) — a bare probe must not drag that in (quick-test
+                # card). None changes nothing downstream: add_response is
+                # gated on req.use_context_core anyway.
+                self._get_context_core() if req.use_context_core else None,
                 self._bg_tasks_lock,
                 self._BG_TASKS,
                 self._bg_tasks_lock_discard,
@@ -2280,7 +2433,7 @@ class InferenceRouter:
             )
 
         yield TurnResult(
-            text=text,
+            text=text_augmented,
             session_id=session_id,
             done=True,
             model=model,
@@ -2994,6 +3147,64 @@ def _register_sessions_spec(spec: ToolSpec, method: str, path: str) -> None:
 
 
 _register_sessions_spec(SESSIONS_SPEC, "GET", "/chat/sessions")
+
+
+# ── Descriptor for PUT /chat/sessions/{session_id} ──────────────────────────
+# Same grandfathering as above: the route is hand-built (baseline untouched);
+# this descriptor declares its contract, including the ``scope`` field that
+# persists a conversation's AppScope delta — the mini-app instance config
+# resolved at the turn seam (``InferenceRouter._resolve_turn_scope``).
+
+SESSIONS_UPDATE_SPEC = ToolSpec(
+    name="chat.sessions.update",
+    description=(
+        "Update session metadata (name/archived/starred/pinned) and/or replace "
+        "the conversation's AppScope delta (scope: model settings, system "
+        "prompt, knowledge, context toggles) — the per-conversation config "
+        "resolved over global defaults on each turn."
+    ),
+    parameters=[
+        ToolParam(
+            name="name",
+            type="string",
+            description="New session name",
+        ),
+        ToolParam(
+            name="archived",
+            type="boolean",
+            description="Archive/unarchive the session",
+        ),
+        ToolParam(
+            name="starred",
+            type="boolean",
+            description="Star/unstar the session",
+        ),
+        ToolParam(
+            name="pinned",
+            type="boolean",
+            description="Pin/unpin the session",
+        ),
+        ToolParam(
+            name="scope",
+            type="object",
+            description=(
+                "AppScope delta for this conversation — replaces the stored "
+                "delta wholesale (omit to leave it unchanged)"
+            ),
+        ),
+    ],
+    execute=_instance.upsert_session,
+    auth_scope="authenticated",
+    idempotent=True,
+    result={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": ["session_id"],
+    },
+    version="1",
+)
+
+_register_sessions_spec(SESSIONS_UPDATE_SPEC, "PUT", "/chat/sessions/{session_id}")
 
 
 class _GenerationEngine:

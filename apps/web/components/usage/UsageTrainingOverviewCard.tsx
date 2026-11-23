@@ -35,11 +35,11 @@ export function UsageTrainingOverviewCard({
           {stats.map((s) => (
             <div key={s.label} className="text-center p-2 rounded bg-muted/30">
               <div className={`text-base font-bold ${s.color}`}>{s.value}</div>
-              <div className="text-[10px] text-muted-foreground">{s.label}</div>
+              <div className="text-xs text-muted-foreground">{s.label}</div>
             </div>
           ))}
         </div>
-        <div className="mt-3 text-[10px] text-muted-foreground text-center">
+        <div className="mt-3 text-xs text-muted-foreground text-center">
           Total training time: {totalMinutes} minutes
         </div>
       </CardContent>

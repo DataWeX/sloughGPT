@@ -22,12 +22,12 @@
   velocity table (last row 2026-07-13) live in that file's pre-restructure
   git revision — a metric nothing regenerates is retired, not maintained.
 
-## Current state (last truth-up 2026-10-09)
+## Current state (last truth-up 2026-11-15)
 
 ### Model — owned machinery, bootstrap weights
 
 - Machinery is owned: SloNet pure-NumPy autograd (full DAG, 25 ops), SloTransformer, TokenTree tokenizer, `.soul`/`.slnc` formats with mmap loading. `NativeEngine` (RoPE/RMSNorm/GQA/KV-cache/top-p/top-k) loads real `.slnc` weights with the matching real tokenizer, wired via `setup_providers(native_slnc_path=...)` (opt-in).
-- Weights are still borrowed (Qwen2.5-0.5B-Instruct via CPU; distillation GPT2 → LSTM; HF fine-tuning + LoRA) — bootstrap, not destination. Fully-owned loop (own init → own data → own objective) exists only as `SloChatTrainer` on chat pairs.
+- Weights are still borrowed (Qwen2.5-0.5B-Instruct via CPU; distillation GPT2 → LSTM; HF fine-tuning + LoRA) — bootstrap, not destination; what is borrowed is the starting weights, not the machinery. The fully-owned loop is no longer chat-pairs-only: `SloughGPTTrainer` runs own init → own data → own objective end to end (goals 12–14: native `.soul`→`.slnc` with no HF in the default path, `OwnedObjective`, `data_path="experience"`), gated by the convergence proof and backed by long-run checkpoint/resume + the fourth-loop scatter gate (goals 15–19).
 
 ### Engine (hardened first)
 

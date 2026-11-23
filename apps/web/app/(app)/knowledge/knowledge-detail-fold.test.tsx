@@ -57,21 +57,11 @@ vi.mock('@/lib/knowledge-controller', () => ({
     delete: mockKnowledgeDelete,
   },
 }))
-vi.mock('@/lib/toast-store', () => {
-  const mod = {
-    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-  }
-  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
-    getState?: () => unknown
-  }
-  if (typeof sink.getState !== 'function') {
-    sink.getState = () => {
-      const st = sink((x) => x)
-      return typeof st === 'object' && st !== null ? st : mod
-    }
-  }
-  return mod
-})
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: mockAddToast, banner: vi.fn() },
+
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/conversations-utils', () => ({ formatDate: vi.fn(() => 'Jan 1, 2026') }))
 import { KnowledgeDetailFold } from './knowledge-detail-fold'
 
@@ -137,7 +127,7 @@ describe('KnowledgeDetailFold', () => {
     mockKnowledgeList.mockResolvedValue([])
     render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Knowledge item not found', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Knowledge item not found', { type: 'error' })
     })
   })
 
@@ -146,7 +136,7 @@ describe('KnowledgeDetailFold', () => {
     mockKnowledgeList.mockRejectedValue(new Error('network'))
     render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge item', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge item', { type: 'error' })
     })
   })
 
@@ -173,7 +163,7 @@ describe('KnowledgeDetailFold', () => {
     await waitFor(() => {
       expect(mockKnowledgeDelete).toHaveBeenCalledWith('kb-1')
     })
-    expect(mockAddToast).toHaveBeenCalledWith('Deleted', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Deleted', { type: 'success' })
     expect(mockPush).toHaveBeenCalledWith('/knowledge')
   })
 
@@ -187,7 +177,7 @@ describe('KnowledgeDetailFold', () => {
       screen.getByText('Delete').click()
     })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Delete failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Delete failed', { type: 'error' })
     })
   })
 

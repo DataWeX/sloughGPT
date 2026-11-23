@@ -197,7 +197,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                     >
                       <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
                       <span className="text-xs font-medium">{folder.name}</span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         ({folderSessions.length})
                       </span>
                     </button>
@@ -239,7 +239,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                 className={cn(dragOverFolder === '__unfiled__' && 'bg-primary/10')}
               >
                 <div className="px-3 py-2">
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     Unfiled ({sessionsByFolder.unfiled.length})
                   </span>
                 </div>
