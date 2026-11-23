@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 CANONICAL_RE = re.compile(r"```(tool_call|json)\s*\n(.*?)\n\s*```", re.DOTALL)
@@ -41,6 +42,24 @@ CANONICAL_RE = re.compile(r"```(tool_call|json)\s*\n(.*?)\n\s*```", re.DOTALL)
 UNCLOSED_RE = re.compile(r"```(tool_call|json)\s*\n(.*)\Z", re.DOTALL)
 LEGACY_TOOL_RE = re.compile(r"\[\[TOOL:\s*(\w+)\s*\]\]\s*([^\n]+)")
 _TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
+# One ``key: value`` line of the informal body walk_img10 carried
+# (``prompt: "A blue circle"`` — YAML-ish, not JSON).
+_KV_LINE_RE = re.compile(r"^\s*([A-Za-z_][\w-]*)\s*:\s*(.*?)\s*$")
+
+
+@lru_cache(maxsize=64)
+def _toolnamed_re(tool_names: frozenset[str], unclosed: bool) -> re.Pattern[str]:
+    """Fence pattern for tags naming a REGISTERED tool (walk_img10:
+    `` ```image_gen ``). Built per registry — a tag only counts as wire
+    format when it names a tool this loop can actually run, so `` ```python
+    `` never matches here. The closer tolerates a mangled tail word
+    (`` ```image `` — the live walk's missing ``_gen``) so it does not
+    leak into the residual. Longest tag first so a tool named ``image``
+    cannot shadow ``image_gen``."""
+    tags = "|".join(sorted((re.escape(t) for t in tool_names), key=len, reverse=True))
+    if unclosed:
+        return re.compile(rf"```({tags})\s*\n(.*)\Z", re.DOTALL)
+    return re.compile(rf"```({tags})\s*\n(.*?)\n\s*```\w*", re.DOTALL)
 
 
 class ProtocolError(ValueError):
@@ -154,6 +173,109 @@ def _looks_like_tool_call(payload: Any) -> bool:
     return bool(payload.get("name") or payload.get("tool"))
 
 
+def _parse_kv_body(raw: str) -> dict[str, Any] | None:
+    """Parse an informal ``key: value`` body (walk_img10's YAML-ish block).
+
+    Every non-empty line must be a pair — prose that merely starts with a
+    word returns None (no keyword guessing: the block stays code, never a
+    call). Values are JSON when they parse (quoted strings, nested objects
+    like the walk's hallucinated ``output: {...}`` line), verbatim text
+    otherwise (``style: cyberpunk``).
+    """
+    args: dict[str, Any] = {}
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        m = _KV_LINE_RE.match(line)
+        if not m:
+            return None
+        key, val = m.group(1), m.group(2)
+        if not val:
+            return None
+        parsed = _parse_repairing(val)
+        args[key] = parsed if parsed is not None else val
+    return args or None
+
+
+def _parse_tool_named_payload(tag: str, payload: Any) -> list[ToolCall] | None:
+    """Turn a parsed body from a tool-named fence into calls.
+
+    ``None`` = not call-shaped (stays prose). The tag names the tool, so a
+    flat body is that tool's args; an explicit ``name``/``tool_calls``
+    still wins where present.
+    """
+    if isinstance(payload, dict) and "tool_calls" in payload:
+        items = payload["tool_calls"]
+        if not isinstance(items, list):
+            return None
+        out: list[ToolCall] = []
+        for item in items:
+            if not isinstance(item, dict):
+                return None
+            name = item.get("name") or item.get("tool") or tag
+            if not isinstance(name, str) or not name:
+                return None
+            args = item.get("args", item.get("arguments"))
+            if args is None:
+                args = {k: v for k, v in item.items() if k not in ("name", "tool")}
+            if not isinstance(args, dict):
+                return None
+            out.append(ToolCall(name=name, args=dict(args)))
+        return out
+    if not isinstance(payload, dict):
+        return None
+    name = payload.get("name") or payload.get("tool") or tag
+    if not isinstance(name, str) or not name:
+        return None
+    if "args" in payload or "arguments" in payload:
+        args = payload.get("args", payload.get("arguments"))
+        if args is None:
+            args = {}
+    else:
+        args = {k: v for k, v in payload.items() if k not in ("name", "tool")}
+    if not isinstance(args, dict):
+        return None
+    return [ToolCall(name=name, args=dict(args))]
+
+
+def _decode_tool_named(text: str, calls: list[ToolCall], tool_names: frozenset[str]) -> str:
+    """Decode fences whose tag names a registered tool (walk_img10:
+    `` ```image_gen `` + a key: value body + a mangled `` ```image ``
+    closer). Body is JSON-first, then key: value lines; anything
+    unparseable stays prose — an informal tag never raises."""
+    if not tool_names:
+        return text
+
+    def _handle(tag: str, raw: str) -> list[ToolCall] | None:
+        if not raw:
+            return None  # bare header — prose
+        payload = _parse_repairing(raw)
+        if payload is not None:
+            return _parse_tool_named_payload(tag, payload)
+        kv = _parse_kv_body(raw)
+        if kv is None:
+            return None
+        return [ToolCall(name=tag, args=kv)]
+
+    def _sub(m: re.Match[str]) -> str:
+        parsed = _handle(m.group(1), m.group(2).strip())
+        if parsed is None:
+            return m.group(0)
+        calls.extend(parsed)
+        return ""
+
+    residual = _toolnamed_re(tool_names, unclosed=False).sub(_sub, text)
+
+    def _sub_unclosed(m: re.Match[str]) -> str:
+        parsed = _handle(m.group(1), m.group(2).strip())
+        if parsed is None:
+            return m.group(0)
+        calls.extend(parsed)
+        return ""
+
+    return _toolnamed_re(tool_names, unclosed=True).sub(_sub_unclosed, residual)
+
+
 def _decode_canonical(text: str, calls: list[ToolCall]) -> str:
     def _consume(m: re.Match[str], payload: Any) -> str:
         if m.group(1) == "json" and not _looks_like_tool_call(payload):
@@ -232,15 +354,23 @@ def _decode_legacy(text: str, calls: list[ToolCall]) -> str:
     return LEGACY_TOOL_RE.sub(_sub, text)
 
 
-def decode(text: str) -> tuple[list[ToolCall], str]:
+def decode(
+    text: str, tool_names: set[str] | frozenset[str] | None = None
+) -> tuple[list[ToolCall], str]:
     """Extract tool calls from model text.
 
     Returns ``(calls, residual)`` where ``residual`` is the text with both
     codec blocks stripped (what the user should see as prose). Raises
     :class:`ProtocolError` on a canonical block that does not parse.
+
+    ``tool_names`` — the registry this loop resolves against — additionally
+    accepts fences whose TAG names a registered tool (the model inventing
+    `` ```image_gen `` instead of `` ```tool_call ``, live walk #4, card
+    20261116_090332). Without it, only the two protocol tags are calls.
     """
     calls: list[ToolCall] = []
     residual = _decode_canonical(text, calls)
+    residual = _decode_tool_named(residual, calls, frozenset(tool_names or ()))
     residual = _decode_legacy(residual, calls)
     return calls, residual.strip()
 

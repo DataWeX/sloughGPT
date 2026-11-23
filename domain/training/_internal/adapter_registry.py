@@ -33,7 +33,10 @@ KNOWN_RECORD_CONTRACTS = frozenset({"text-records"})
 #: Boot list — imported once by :func:`boot`; a broken module fails here,
 #: before anything trains. The trainer's real boot calls this at the spine
 #: trigger (first real training task, deferred per ADR-002 §4).
-BOOT_MODULES = ("domain.training._internal.text_pretrain_adapter",)
+BOOT_MODULES = (
+    "domain.training._internal.text_pretrain_adapter",
+    "domain.training._internal.chat_sft_adapter",
+)
 
 _BATCH_ARRAY_SHAPE = ("__len__", "__getitem__", "__iter__")
 

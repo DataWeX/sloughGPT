@@ -4,7 +4,7 @@ import { create } from '@storybook/theming/create'
 const struiTheme = create({
   base: 'light',
   brandTitle: 'strui',
-  brandUrl: 'https://github.com/iamtowbee/sloughGPT',
+  brandUrl: 'https://github.com/DataWeX/sloughGPT',
   brandTarget: '_blank',
 
   colorPrimary: '#8b7bc4',

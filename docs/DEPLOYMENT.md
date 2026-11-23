@@ -8,7 +8,7 @@ Compose examples use **Docker Compose V2** and the stack file at **`infra/docker
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 
 # 2. Start with Docker Compose
@@ -243,5 +243,5 @@ The default model checkpoint is ~2.5GB unquantized. Free tiers cannot hold that 
 
 ## Support
 
-- Issues: https://github.com/iamtowbee/sloughGPT/issues
-- Docs: https://github.com/iamtowbee/sloughGPT/docs
+- Issues: https://github.com/DataWeX/sloughGPT/issues
+- Docs: https://github.com/DataWeX/sloughGPT/docs

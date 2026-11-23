@@ -16,6 +16,7 @@ from domain.infrastructure._internal.slnc.compiler import (
     _crc32,
     _xxhash64,
 )
+from domain.infrastructure._internal.slnc.parser import SLNCParser
 from domain.infrastructure._internal.slnc.spec import (
     ALIGNMENT,
     DTYPE_FLOAT32,
@@ -558,3 +559,83 @@ class TestArchLayouts:
     def test_llama_block_no_bias(self):
         block, _, _ = _ARCH_LAYOUTS["llama"]
         assert not any(".bias" in t for t in block)
+
+
+class TestTiedHeadDedup:
+    """Byte-identical tied lm_head must not be written (card 20261122_085516).
+
+    The loader already reconstructs the tie from ABSENCE
+    (weight_loader.build_load_plan: 'if lm_head.weight not in loaded_params'),
+    so the file only needs the canonical tensor. Writing both cost 0.5 GB on
+    disk + 0.64 GB load RAM per copy of the tied head (measured on the shipped
+    Qwen2.5-0.5B: 630M params stored vs 494M real).
+    """
+
+    @staticmethod
+    def _native_cfg() -> dict:
+        return {
+            "n_layer": 1,
+            "n_embd": 16,
+            "n_head": 2,
+            "n_inner": 32,
+            "vocab_size": 100,
+            "n_positions": 128,
+        }
+
+    @staticmethod
+    def _native_weights(tied: bool) -> dict:
+        emb = np.random.randn(100, 16).astype(np.float32)
+        head = emb.copy() if tied else np.random.randn(100, 16).astype(np.float32)
+        return {"tok_emb.weight": emb, "lm_head.weight": head}
+
+    @staticmethod
+    def _compile(weights: dict, config: dict) -> str:
+        out = str(Path(tempfile.mkdtemp()) / "m.slnc")
+        SLNCCompiler().compile_from_dict(config, weights, out)
+        return out
+
+    def test_identical_native_head_deduped(self):
+        weights = self._native_weights(tied=True)
+        out = self._compile(weights, self._native_cfg())
+        loaded = SLNCParser(out).get_weights_dict()
+        assert "tok_emb.weight" in loaded
+        assert "lm_head.weight" not in loaded  # tied -> reconstructed at load
+        assert len(loaded) == len(weights) - 1
+
+    def test_untied_native_head_still_written(self):
+        weights = self._native_weights(tied=False)
+        out = self._compile(weights, self._native_cfg())
+        loaded = SLNCParser(out).get_weights_dict()
+        assert "lm_head.weight" in loaded
+        assert "tok_emb.weight" in loaded
+        assert not np.array_equal(loaded["lm_head.weight"], loaded["tok_emb.weight"])
+
+    def test_identical_hf_head_deduped(self):
+        emb = np.random.randn(100, 16).astype(np.float32)
+        weights = {
+            "model.embed_tokens.weight": emb,
+            "model.lm_head.weight": emb.copy(),
+            "model.layers.0.self_attn.q_proj.weight": np.random.randn(16, 16).astype(np.float32),
+        }
+        config = {"num_hidden_layers": 1, "n_embd": 16, "n_head": 2, "vocab_size": 100}
+        out = self._compile(weights, config)
+        loaded = SLNCParser(out).get_weights_dict()
+        assert "model.embed_tokens.weight" in loaded
+        assert "model.lm_head.weight" not in loaded
+
+    def test_config_records_tied_embeddings(self):
+        out_tied = self._compile(self._native_weights(tied=True), self._native_cfg())
+        assert SLNCParser(out_tied).config.get("tied_embeddings") is True
+        out_plain = self._compile(self._native_weights(tied=False), self._native_cfg())
+        assert "tied_embeddings" not in SLNCParser(out_plain).config
+
+    def test_deduped_file_fires_loader_tie(self):
+        """The whole point: absence -> build_load_plan reconstructs lm_head."""
+        from domain.infrastructure._internal.weight_loader import build_load_plan
+
+        weights = self._native_weights(tied=True)
+        out = self._compile(weights, self._native_cfg())
+        state = SLNCParser(out).get_weights_dict()
+        assert "lm_head.weight" not in state
+        plan = build_load_plan(state, n_layer=1, config=SLNCParser(out).config)
+        assert ("lm_head.weight", "tok_emb.weight") in plan.tied_weights

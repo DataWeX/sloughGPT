@@ -223,6 +223,76 @@ def test_decode_unrepairable_canonical_json_still_raises():
         decode(text)
 
 
+# ── tool-named fence (model invents its own tag, live walk #4) ────────
+# walk_img10 bytes: ```image_gen — the tag NAMES the registered tool —
+# with a key: value body (prompt: "..." / style: "..."), not JSON, and a
+# mangled closer (```image). The guard holds any tag naming a registered
+# tool; decode parses the body JSON-first, then key: value lines. Tags
+# that name nothing (python, js) stay prose — a code block is never a call.
+
+
+def test_decode_tool_named_fence_yaml_body():
+    text = (
+        "```image_gen\n"
+        'prompt: "A blue circle"\n'
+        'style: "cyberpunk"\n'
+        'output: {"name": "image_gen", "args": {"filename": "", "url": ""}}\n'
+        "```"
+    )
+    calls, residual = decode(text, tool_names={"image_gen"})
+    assert calls == [
+        ToolCall(
+            name="image_gen",
+            args={
+                "prompt": "A blue circle",
+                "style": "cyberpunk",
+                "output": {"name": "image_gen", "args": {"filename": "", "url": ""}},
+            },
+        )
+    ]
+    assert "```" not in residual
+
+
+def test_decode_tool_named_fence_json_body():
+    text = '```image_gen\n{"prompt": "a blue circle"}\n```'
+    calls, residual = decode(text, tool_names={"image_gen"})
+    assert calls == [ToolCall(name="image_gen", args={"prompt": "a blue circle"})]
+    assert residual == ""
+
+
+def test_decode_tool_named_fence_requires_registered_tag():
+    # A code block is not a call, even with a key: value body: the tag
+    # must name a registered tool (python isn't one).
+    text = "```python\nfoo: bar\n```"
+    calls, residual = decode(text, tool_names={"echo"})
+    assert calls == []
+    assert "```python" in residual
+
+
+def test_decode_tool_named_fence_unparseable_body_stays_prose():
+    text = "```echo\nnot parameters at all\n```"
+    calls, residual = decode(text, tool_names={"echo"})
+    assert calls == []
+    assert "```echo" in residual
+
+
+def test_decode_tool_named_fence_without_tool_names_is_prose():
+    # Default callers (no registry) keep today's behaviour: only the two
+    # protocol tags are calls.
+    text = '```echo\ntext: "hi"\n```'
+    calls, residual = decode(text)
+    assert calls == []
+    assert "```echo" in residual
+
+
+def test_decode_tool_named_unclosed_fence_at_eof():
+    text = 'Sure.\n```image_gen\nprompt: "x"'
+    calls, residual = decode(text, tool_names={"image_gen"})
+    assert calls == [ToolCall(name="image_gen", args={"prompt": "x"})]
+    assert "Sure." in residual
+    assert "```" not in residual
+
+
 # ── loop helpers ─────────────────────────────────────────────────────
 
 
@@ -334,6 +404,66 @@ async def test_loop_missing_required_arg_is_rejected_before_execute():
     result = events[2]
     assert result.payload["success"] is False
     assert "missing required parameter 'expression'" in result.payload["error"]
+
+
+async def test_loop_alias_maps_to_canonical_before_validate():
+    """Aliases are applied at the seam where args are transformed, so the
+    same normalized args reach both validate_args and execute."""
+    registry = ToolRegistry()
+
+    async def _echo(text: str) -> dict[str, Any]:
+        return {"output": text}
+
+    registry.register(
+        ToolSpec(
+            name="echo",
+            description="echo",
+            parameters=[
+                ToolParam("text", "string", "text", required=True, aliases=("word", "input")),
+            ],
+            execute=_echo,
+        )
+    )
+    script = [
+        encode_tool_block([ToolCall(name="echo", args={"input": "hi"})]),
+        "ok",
+    ]
+    events = await _run(script, tools=registry)
+    result = events[2]
+    assert result.payload["success"] is True, result.payload.get("error")
+    assert result.payload["output"] == "hi"
+
+
+async def test_loop_canonical_wins_over_alias_and_unknown_still_rejected():
+    registry = ToolRegistry()
+
+    async def _echo(text: str) -> dict[str, Any]:
+        return {"output": text}
+
+    registry.register(
+        ToolSpec(
+            name="echo",
+            description="echo",
+            parameters=[
+                ToolParam("text", "string", "text", required=True, aliases=("input",)),
+            ],
+            execute=_echo,
+        )
+    )
+    # canonical + alias together → canonical wins, alias dropped
+    both = await _run(
+        [encode_tool_block([ToolCall(name="echo", args={"text": "a", "input": "b"})]), "ok"],
+        tools=registry,
+    )
+    assert both[2].payload["success"] is True, both[2].payload.get("error")
+    assert both[2].payload["output"] == "a"
+    # a key that is neither canonical nor an alias still fails loudly
+    bad = await _run(
+        [encode_tool_block([ToolCall(name="echo", args={"nope": 1})]), "ok"],
+        tools=registry,
+    )
+    assert bad[2].payload["success"] is False
+    assert "nope" in bad[2].payload["error"]
 
 
 async def test_loop_unknown_and_mistyped_args_rejected():

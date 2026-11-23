@@ -26,6 +26,8 @@ import numpy as np
 from domain.inference._internal.forward_pass import ForwardPassResult
 from domain.inference._internal.soul_meta_slim import externalize_optimizer_state
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
+from domain.infrastructure._internal.constants import prefill_max_tokens
+from domain.infrastructure._internal.errors import PromptTooLongError
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.infrastructure._internal.kv_cache.prefix_cache import PrefixCache
 from domain.shared import align_dim_ff, find_repo_root  # noqa: F401 — kept for compatibility
@@ -122,6 +124,29 @@ def _check_numba():
         except ImportError:
             _NUMBA_AVAILABLE = False
     return _NUMBA_AVAILABLE
+
+
+def _check_prefill_cap(prompt_len: int) -> None:
+    """Engine backstop for the prefill token cap (card 20261102_001622).
+
+    Called by BOTH ``generate_numpy`` and ``generate_numpy_stream`` before any
+    prefill work starts — one check, every caller inherits it (chat,
+    chat_stream, generate, CLI, API, engine). Measured: prefill wall-clock is
+    near-quadratic (2k=37s, 3.84k=100s, 4k=127-138s vs the 120s request
+    budget; 8k OOM-kills a 23 GB box), so an over-cap prompt must fail loud
+    and instant instead of burning the budget or dying of memory.
+
+    Trimming is NOT done here: kernels never rewrite the user's prompt. Chat
+    drops oldest turns at its own seam (announced via ``omitted_count``);
+    callers with nothing to trim (CLI, raw API prompts) get this error.
+    ``SLO_PREFILL_MAX_TOKENS`` tunes the cap per machine (default 3072).
+    """
+    cap = prefill_max_tokens()
+    if prompt_len > cap:
+        raise PromptTooLongError(
+            f"prompt is {prompt_len} tokens, prefill cap is {cap} (SLO_PREFILL_MAX_TOKENS)",
+            details={"prompt_tokens": prompt_len, "prefill_cap": cap},
+        )
 
 
 # Numba-accelerated inference kernels (lazy import, graceful fallback)
@@ -6327,6 +6352,7 @@ class SloTransformer(SloNet):
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         prompt_len = input_ids.shape[1]
+        _check_prefill_cap(prompt_len)
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
 
@@ -6494,6 +6520,7 @@ class SloTransformer(SloNet):
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         prompt_len = input_ids.shape[1]
+        _check_prefill_cap(prompt_len)
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
 
@@ -7213,6 +7240,7 @@ class SloTransformer(SloNet):
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         prompt_len = input_ids.shape[1]
+        _check_prefill_cap(prompt_len)
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
 

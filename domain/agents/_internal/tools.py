@@ -34,6 +34,10 @@ class ToolParam:
     type: str
     description: str
     required: bool = False
+    #: alternate input names accepted for THIS param (silent repair, not
+    #: contract — the JSON Schema projection teaches the canonical name
+    #: only). Declared here so the alias lives next to the param it maps to.
+    aliases: tuple[str, ...] = ()
 
 
 @dataclass
@@ -74,6 +78,39 @@ class ToolResult:
     error: str | None = None
     duration_ms: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def normalize_args(spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
+    """Map declared param aliases to their canonical names (silent repair).
+
+    Aliases live on the ToolParam declaration (one source of truth) and are
+    applied where args are TRANSFORMED — the normalized view is what both
+    ``validate_args`` and ``ToolRegistry.execute`` receive, so a tool can
+    never be validated against one shape and executed with another.
+    Canonical names win when both are present; keys that are neither
+    canonical nor a declared alias pass through untouched so validation
+    still rejects them loudly. Idempotent: normalizing an already-canonical
+    arg dict returns it unchanged.
+    """
+    if not args:
+        return args
+    declared = {p.name for p in spec.parameters}
+    alias_map = {a: p.name for p in spec.parameters for a in p.aliases}
+    if not alias_map:
+        return args
+    out: dict[str, Any] = {}
+    for key, value in args.items():
+        if key in declared:
+            out[key] = value
+    for key, value in args.items():
+        if key in declared:
+            continue
+        target = alias_map.get(key)
+        if target is None:
+            out[key] = value
+        elif target not in out:
+            out[target] = value
+    return out
 
 
 class ToolRegistry:
@@ -229,10 +266,21 @@ class ToolRegistry:
             ToolSpec(
                 name="image_gen",
                 description=(
-                    "Generate an image from a text description and attach it to the reply"
+                    "Generate an image from a text description and attach it to the reply. "
+                    "Arguments: prompt (required — what to depict), style (optional — "
+                    "realistic, cartoon, watercolor, sketch, or fantasy)."
                 ),
                 parameters=[
-                    ToolParam("prompt", "string", "What to depict in the image", required=True),
+                    ToolParam(
+                        "prompt",
+                        "string",
+                        'What to depict in the image — the ONE required argument; '
+                        'always pass it under the key "prompt" (never "query")',
+                        required=True,
+                        # walk_img11: the model reused file_qa's input key —
+                        # declared alias repairs it at the loop + execute seams.
+                        aliases=("query",),
+                    ),
                     ToolParam(
                         "style",
                         "string",
@@ -370,7 +418,10 @@ class ToolRegistry:
             )
         start = asyncio.get_event_loop().time()
         try:
-            result = await spec.execute(**args)
+            # alias normalization happens HERE too (not only in the loop):
+            # every direct caller — scripts, tests, orchestration — gets the
+            # same repaired args, one enforcement point per seam.
+            result = await spec.execute(**normalize_args(spec, args))
             elapsed = (asyncio.get_event_loop().time() - start) * 1000
             if result.get("error"):
                 return ToolResult(

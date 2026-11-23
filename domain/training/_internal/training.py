@@ -253,17 +253,15 @@ def detect_dataset_type(path: str) -> DatasetType:
 
     suffix = p.suffix.lower()
 
-    # Grandfathered if-chain — conversation / instruction / audio only
-    # (code + image/video migrated to format_sniffers; their branches are
-    # unreachable above and were removed with the migration).
+    # Grandfathered if-chain — instruction / audio / .json-conversation only
+    # (code + image/video + jsonl-conversation migrated to format_sniffers;
+    # their branches are unreachable above and were removed with the migration).
     if suffix == ".jsonl":
         try:
             with open(path) as f:
                 first_line = f.readline()
                 data = json.loads(first_line)
-                if "messages" in data or "conversation" in data:
-                    return DatasetType.CONVERSATION
-                elif "instruction" in data:
+                if "instruction" in data:
                     return DatasetType.INSTRUCTION
                 elif "audio" in data or "speech" in data or "wav" in data:
                     return DatasetType.AUDIO_TEXT
