@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "5fcb0b8c6ba1aacc3ad763271424290f167772bb",
+    "recorded_commit": "7796095f23791b613026883e3171c2668d8a8390",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -69,7 +69,7 @@
       "consumers": ["tests/", "scripts/", "apps/api/"],
       "note": "chat journey domain glue (feedback + context wiring)",
       "debt": null,
-      "tree_hash": "7876de4c80617d9f613af19329429ad5eae23c9d"
+      "tree_hash": "163b9b1c6df896f430294bb7e88972d843237634"
     },
     "cognition": {
       "class": "core-capability",
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "94abb5cc4f43e942a06dd6b61ccedad5563b8ec1"
+      "tree_hash": "7f347482b0827d33232f1b6c7509b1806d4fde19"
     },
     "infrastructure": {
       "class": "core-capability",

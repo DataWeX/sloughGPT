@@ -254,3 +254,153 @@ def test_cli_check_baseline_rejects_a_stale_entry(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "STALE" in out
     assert "delete" in out
+
+
+# --- seal: the ledger's hash trail (entries seal the entry below them) ------
+
+_SEAL = "⟨seal:"
+
+
+def _sealed(tmp_path, date_s, text, name="s.md"):
+    """Build a doc whose top entry was written by the helper (or raise in
+    test bodies that the helper is missing — that IS the red)."""
+    p = tmp_path / name
+    p.write_text("", encoding="utf-8")  # explicit --doc requires an existing file
+    rc = main(["ledger", "entry", "--doc", str(p), "--date", date_s, "--text", text])
+    assert rc == 0, "entry helper must exist and succeed"
+    return p
+
+
+def test_entry_helper_prepends_a_sealed_entry_at_line_one(tmp_path):
+    p = tmp_path / "s.md"
+    p.write_text("**2026-11-10 — OPENCODE (old lane): first entry.**\n", encoding="utf-8")
+    rc = main(
+        [
+            "ledger",
+            "entry",
+            "--doc",
+            str(p),
+            "--date",
+            "2026-11-24",
+            "--text",
+            "OPENCODE (seal lane): second entry.",
+        ]
+    )
+    assert rc == 0
+    lines = p.read_text(encoding="utf-8").splitlines()
+    assert lines[0].startswith("**2026-11-24 — OPENCODE (seal lane)")
+    assert _SEAL in lines[0]
+    assert lines[1] == ""  # blank separator, prepended not appended
+    assert lines[2].startswith("**2026-11-10")  # history untouched below
+    ok, violations = check(p)
+    assert ok is True, violations
+
+
+def test_entry_helper_seals_from_genesis_on_an_empty_doc(tmp_path):
+    p = tmp_path / "e.md"
+    p.write_text("", encoding="utf-8")
+    assert main(["ledger", "entry", "--doc", str(p), "--date", "2026-11-24", "--text", "x."]) == 0
+    ok, violations = check(p)
+    assert ok is True, violations
+
+
+def test_post_cut_entry_without_a_seal_is_a_violation(tmp_path):
+    p = tmp_path / "n.md"
+    p.write_text("**2026-11-24 — OPENCODE (bare lane): no seal here.**\n", encoding="utf-8")
+    ok, violations = check(p)
+    assert ok is False
+    v = violations[0]
+    assert v["kind"] == "seal"
+    assert v["date"] == "2026-11-24"  # date-anchored identity, never line-anchored
+    assert "seal" in v["msg"]
+    assert "entry" in v["msg"]  # actionable: points at the helper
+
+
+def test_grandfathered_entries_need_no_seal(tmp_path):
+    p = tmp_path / "o.md"
+    p.write_text(
+        "**2026-11-22 — OPENCODE (also-old lane): still grandfathered.**\n\n"
+        "**2026-11-10 — OPENCODE (old lane): predates the seal cut.**\n",
+        encoding="utf-8",
+    )
+    ok, violations = check(p)
+    assert ok is True, violations
+
+
+def test_tampered_sealed_entry_is_flagged(tmp_path):
+    p = _sealed(tmp_path, "2026-11-24", "OPENCODE (edit lane): steady.")
+    p.write_text(
+        p.read_text(encoding="utf-8").replace("steady.", "steady EDITED."),
+        encoding="utf-8",
+    )
+    ok, violations = check(p)
+    assert ok is False
+    assert any(v["kind"] == "seal" and v["date"] == "2026-11-24" for v in violations)
+
+
+def test_tampered_grandfathered_content_below_breaks_the_sealed_entry_above(tmp_path):
+    # The tripwire reaches past the grandfather line: a sealed entry hashes
+    # the content below it, so editing an UNSEALED entry is caught by the
+    # first sealed entry above.
+    p = tmp_path / "u.md"
+    p.write_text("**2026-11-10 — OPENCODE (old lane): soft target.**\n", encoding="utf-8")
+    assert (
+        main(
+            [
+                "ledger",
+                "entry",
+                "--doc",
+                str(p),
+                "--date",
+                "2026-11-24",
+                "--text",
+                "OPENCODE (seal lane): watcher.",
+            ]
+        )
+        == 0
+    )
+    p.write_text(
+        p.read_text(encoding="utf-8").replace("soft target.", "soft target TAMPERED."),
+        encoding="utf-8",
+    )
+    ok, violations = check(p)
+    assert ok is False
+    assert any(v["kind"] == "seal" and v["date"] == "2026-11-24" for v in violations)
+
+
+def test_reordered_entries_break_their_seals(tmp_path):
+    p = tmp_path / "r.md"
+    p.write_text("", encoding="utf-8")
+    assert (
+        main(["ledger", "entry", "--doc", str(p), "--date", "2026-11-23", "--text", "older."]) == 0
+    )
+    assert (
+        main(["ledger", "entry", "--doc", str(p), "--date", "2026-11-24", "--text", "newer."]) == 0
+    )
+    lines = p.read_text(encoding="utf-8").splitlines()
+    # swap the two entries physically (each still holds its original seal):
+    # [newer, "", older] -> [older, "", newer]
+    top, sep, below, *rest = lines
+    assert sep == ""
+    p.write_text("\n".join([below, "", top, *rest]) + "\n", encoding="utf-8")
+    ok, violations = check(p)
+    assert any(v["kind"] == "seal" for v in violations), violations
+
+
+def test_cli_check_exits_1_on_a_seal_violation(tmp_path, capsys):
+    p = tmp_path / "c.md"
+    p.write_text("**2026-11-24 — OPENCODE (bare lane): no seal.**\n", encoding="utf-8")
+    rc = main(["ledger", "check", "--doc", str(p)])
+    assert rc == 1
+    assert "seal" in capsys.readouterr().out
+
+
+def test_parse_and_query_do_not_leak_the_seal_token(tmp_path):
+    p = _sealed(tmp_path, "2026-11-24", "OPENCODE (idx lane): short entry.")
+    entries = parse(p)
+    assert len(entries) == 1
+    assert _SEAL not in entries[0]["head"]
+    assert _SEAL not in json.dumps(entries)
+    hits = query(p, grep="short entry")
+    assert len(hits) == 1
+    assert _SEAL not in hits[0]["head"]

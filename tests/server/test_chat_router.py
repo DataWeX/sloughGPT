@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from apps.api.server.routers.chat import router
 from domain.chat import reset_chat_manager
+from domain.inference.engine import TurnEvent, TurnResult
 
 
 def _make_app():
@@ -40,8 +41,23 @@ def client(app):
     return TestClient(app, raise_server_exceptions=False)
 
 
+def _engine_yielding(*items):
+    """Fake engine port value: ``stream`` yields scripted turn items.
+
+    Regenerate rides the engine (card 20261120_150317), so the pins frame
+    what the ENGINE returns — raw tokens, out-of-band ``TurnEvent``s, the
+    final ``TurnResult`` — the same shape POST /chat consumes.
+    """
+
+    async def stream(req):
+        for item in items:
+            yield item
+
+    return SimpleNamespace(stream=stream)
+
+
 class TestRegenerateChat:
-    """POST /chat/{session_id}/regenerate"""
+    """POST /chat/{session_id}/regenerate — rides the engine port (card 20261120_150317)."""
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
     def test_regenerate_no_context(self, mock_get, client):
@@ -51,23 +67,19 @@ class TestRegenerateChat:
         assert "No session context found" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models._internal.provider.get_provider")
     @patch("domain.models.get_provider")
-    def test_regenerate_success(self, mock_facade, mock_internal, mock_get, client):
+    def test_regenerate_success(self, mock_get_provider, mock_get, client):
         mock_get.return_value = [
             {"role": "user", "content": "Hello"},
         ]
-        mock_prov = MagicMock()
-
-        async def _stream(*a, **kw):
-            yield "Regenerated"
-            yield " response"
-
-        mock_prov.chat_stream = _stream
-        mock_facade.return_value = mock_prov
-        mock_internal.return_value = mock_prov
-
-        resp = client.post("/chat/sess-1/regenerate")
+        mock_get_provider.return_value = MagicMock()
+        engine = _engine_yielding(
+            "Regenerated",
+            " response",
+            TurnResult(text="Regenerated response", session_id="sess-1"),
+        )
+        with patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine):
+            resp = client.post("/chat/sess-1/regenerate")
         assert resp.status_code == 200
         assert "Regenerated" in resp.text
 
@@ -81,86 +93,62 @@ class TestRegenerateChat:
         assert "Model not loaded" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models._internal.provider.get_provider")
     @patch("domain.models.get_provider")
-    def test_regenerate_streams_multiple_tokens(self, mock_facade, mock_internal, mock_get, client):
+    def test_regenerate_streams_multiple_tokens(self, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
-        mock_prov = MagicMock()
-
-        async def _stream(*a, **kw):
-            for token in ["Hello", " ", "world", "!"]:
-                yield token
-
-        mock_prov.chat_stream = _stream
-        mock_facade.return_value = mock_prov
-        mock_internal.return_value = mock_prov
-
-        resp = client.post("/chat/sess-1/regenerate")
+        mock_get_provider.return_value = MagicMock()
+        engine = _engine_yielding(
+            "Hello", " ", "world", "!", TurnResult(text="Hello world!", session_id="sess-1")
+        )
+        with patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine):
+            resp = client.post("/chat/sess-1/regenerate")
         assert resp.status_code == 200
         assert "Hello" in resp.text
         assert "world" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models._internal.provider.get_provider")
     @patch("domain.models.get_provider")
-    def test_regenerate_stream_emits_errors_as_sse(
-        self, mock_facade, mock_internal, mock_get, client
-    ):
+    def test_regenerate_stream_emits_errors_as_sse(self, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
-        mock_prov = MagicMock()
+        mock_get_provider.return_value = MagicMock()
 
-        async def _stream(*a, **kw):
+        async def _stream(req):
             raise RuntimeError("tokenizer broke")
             yield  # pragma: no cover — makes _stream an async generator
 
-        mock_prov.chat_stream = _stream
-        mock_facade.return_value = mock_prov
-        mock_internal.return_value = mock_prov
-
-        resp = client.post("/chat/sess-1/regenerate")
+        engine = SimpleNamespace(stream=_stream)
+        with patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine):
+            resp = client.post("/chat/sess-1/regenerate")
         assert resp.status_code == 200
         assert "error" in resp.text
         assert "tokenizer broke" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models._internal.provider.get_provider")
     @patch("domain.models.get_provider")
     @patch("fastapi.Request.is_disconnected")
-    def test_regenerate_stops_on_disconnect(
-        self, mock_disc, mock_facade, mock_internal, mock_get, client
-    ):
+    def test_regenerate_stops_on_disconnect(self, mock_disc, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
-        mock_prov = MagicMock()
-
-        async def _stream(*a, **kw):
-            yield "First"
-            yield "Second"
-
-        mock_prov.chat_stream = _stream
-        mock_facade.return_value = mock_prov
-        mock_internal.return_value = mock_prov
+        mock_get_provider.return_value = MagicMock()
+        engine = _engine_yielding(
+            "First", "Second", TurnResult(text="FirstSecond", session_id="sess-1")
+        )
         mock_disc.side_effect = [False, True]
 
-        resp = client.post("/chat/sess-1/regenerate")
+        with patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine):
+            resp = client.post("/chat/sess-1/regenerate")
         assert resp.status_code == 200
         assert "Regenerating" in resp.text
         assert "First" in resp.text
         assert "Second" not in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models._internal.provider.get_provider")
     @patch("domain.models.get_provider")
-    def test_regenerate_emits_thinking_event(self, mock_facade, mock_internal, mock_get, client):
+    def test_regenerate_emits_thinking_event(self, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
-        mock_prov = MagicMock()
-
-        async def _stream(*a, **kw):
-            yield "Token"
-
-        mock_prov.chat_stream = _stream
-        mock_facade.return_value = mock_prov
-        mock_internal.return_value = mock_prov
-        resp = client.post("/chat/sess-1/regenerate")
+        mock_get_provider.return_value = MagicMock()
+        engine = _engine_yielding("Token", TurnResult(text="Token", session_id="sess-1"))
+        with patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine):
+            resp = client.post("/chat/sess-1/regenerate")
         assert resp.status_code == 200
         assert "thinking" in resp.text
         assert "Token" in resp.text
@@ -168,6 +156,92 @@ class TestRegenerateChat:
     def test_regenerate_get_405(self, client):
         resp = client.get("/chat/sess-1/regenerate")
         assert resp.status_code == 405
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.models.get_provider")
+    def test_regenerate_projects_tool_events(self, mock_get_provider, mock_get, client):
+        """The Phase 2 journey on a re-run: TOOL frames, prose, then done."""
+        mock_get.return_value = [{"role": "user", "content": "draw a blue circle"}]
+        mock_get_provider.return_value = MagicMock()
+        engine = _engine_yielding(
+            TurnEvent(
+                kind="tool_call",
+                data={"name": "image_gen", "args": {"prompt": "blue circle"}},
+            ),
+            TurnEvent(
+                kind="tool_result",
+                data={"name": "image_gen", "output": "Image attached.", "success": True},
+            ),
+            "prose answer",
+            TurnResult(
+                text="prose answer",
+                session_id="sess-1",
+                usage={"completion_tokens": 3, "total_tokens": 3},
+                model="m",
+                finish_reason="stop",
+                elapsed_ms=5.0,
+            ),
+        )
+        with patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine):
+            resp = client.post("/chat/sess-1/regenerate")
+        assert resp.status_code == 200
+
+        events = [
+            json.loads(line[6:]) for line in resp.text.splitlines() if line.startswith("data: ")
+        ]
+        tool_frames = [e for e in events if e.get("phase") == "TOOL"]
+        assert [f["status"] for f in tool_frames] == ["working", "complete"]
+        assert tool_frames[0]["data"]["tool"] == "image_gen"
+        assert tool_frames[0]["data"]["args"] == {"prompt": "blue circle"}
+        assert tool_frames[1]["data"]["success"] is True
+        streamed = "".join(e.get("data", {}).get("token", "") for e in events)
+        assert "prose answer" in streamed
+        done = [
+            e for e in events if e.get("phase") == "STREAMING" and e.get("status") == "complete"
+        ]
+        assert done, "regenerate must close with the done frame"
+        assert done[-1]["meta"]["usage_tokens"] == {
+            "completion_tokens": 3,
+            "total_tokens": 3,
+        }
+
+    @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.models.get_provider")
+    def test_regenerate_rides_engine_with_recount_semantics(
+        self, mock_get_provider, mock_get, client
+    ):
+        """The re-run contract: engine port + regenerate flag, no cache replay.
+
+        - the turn handed to the engine carries ``regenerate=True`` (the
+          engine then skips counting-side post-gen — pinned there),
+        - messages come from the stored context through the SAME
+          ChatRequest → to_turn translation POST /chat uses, and
+        - the response cache is untouched: a re-run must re-generate, never
+          replay the very answer it is replacing.
+        """
+        mock_get.return_value = [{"role": "user", "content": "Hello"}]
+        mock_get_provider.return_value = MagicMock()
+        captured: dict = {}
+
+        async def _stream(req):
+            captured["turn"] = req
+            yield "ok"
+            yield TurnResult(text="ok", session_id="sess-1")
+
+        engine = SimpleNamespace(stream=_stream)
+        with (
+            patch("apps.api.server.routers.chat.get_chat_engine", return_value=engine),
+            patch("apps.api.server.routers.chat.get_chat_response_cache") as mock_cache,
+            patch("apps.api.server.routers.chat.set_chat_response_cache") as mock_set,
+        ):
+            resp = client.post("/chat/sess-1/regenerate")
+        assert resp.status_code == 200
+        turn = captured["turn"]
+        assert turn.regenerate is True, "a re-run must be marked so the engine skips recount"
+        assert turn.messages == [{"role": "user", "content": "Hello"}]
+        assert turn.session_id == "sess-1"
+        mock_cache.assert_not_called()
+        mock_set.assert_not_called()
 
 
 class TestStreamReconnectReplay:
