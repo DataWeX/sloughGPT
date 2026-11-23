@@ -2,7 +2,7 @@
 
 import dataclasses
 import threading
-import typing
+from typing import get_type_hints
 
 import numpy as np
 import pytest
@@ -65,7 +65,7 @@ class TestMessageData:
 
     def test_dataclass_fields(self):
         fields = {f.name for f in dataclasses.fields(MessageData)}
-        assert fields == {"role", "content", "id"}
+        assert fields == {"role", "content"}
 
     def test_not_hashable(self):
         md = MessageData(role="user", content="hello")
@@ -726,15 +726,13 @@ class TestMetaWeights:
         assert mw1 != mw2
 
     def test_all_float_fields(self):
-        # The dataclass modules carry `from __future__ import annotations`
-        # (code-hygiene ratchet), so dataclasses.fields().type records the
-        # STRING "float" — resolve the real types via get_type_hints.
-        hints = typing.get_type_hints(MetaWeights)
-        for f in dataclasses.fields(MetaWeights):
-            if f.name == "top_k":
-                assert hints[f.name] is int
+        # get_type_hints resolves string annotations from `from __future__ import annotations`.
+        hints = get_type_hints(MetaWeights)
+        for name, typ in hints.items():
+            if name == "top_k":
+                assert typ is int
             else:
-                assert hints[f.name] is float
+                assert typ is float
 
     def test_copy_via_replace(self):
         mw1 = MetaWeights()
@@ -875,9 +873,7 @@ class TestHealthSnapshot:
         assert hs1 == hs2
 
     def test_dataclass_field_types(self):
-        # PEP 563 strings from `from __future__ import annotations` — see
-        # TestMetaWeights.test_all_float_fields; get_type_hints resolves them.
-        hints = typing.get_type_hints(HealthSnapshot)
+        hints = get_type_hints(HealthSnapshot)
         assert hints["timestamp"] is float
         assert hints["perplexity"] is float
         assert hints["loss"] is float

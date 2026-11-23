@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, _server_dir)
 from routers.health import HealthRouter  # noqa: E402
 
-from tests.conftest import build_test_app
+from conftest import build_test_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -162,9 +162,9 @@ class TestHealth:
         mock_mon.get_stats.return_value = {"accuracy": 0.9}
         with (
             patch("routers.health.get_health_controller", mock_get_ctrl),
-            patch(
-                "domain.feedback._internal.model_health.get_health_monitor", return_value=mock_mon
-            ),
+            # Router reads the package attribute (bound at first import of domain.feedback),
+            # so patch there — not the _internal definition.
+            patch("domain.feedback.get_health_monitor", return_value=mock_mon),
         ):
             resp = client.get("/health/model")
         assert resp.status_code == 200
@@ -176,11 +176,6 @@ class TestHealth:
         hr = _make_health_router()
         client = TestClient(_app(hr), raise_server_exceptions=False)
         with patch(
-            # The handler does `from domain.feedback import get_health_monitor`
-            # — an EAGER re-binding in domain/feedback/__init__.py — so
-            # patching the defining submodule never reached the call site and
-            # the endpoint answered 200. Patch the package attribute the
-            # call site actually reads.
             "domain.feedback.get_health_monitor",
             side_effect=RuntimeError("boom"),
         ):

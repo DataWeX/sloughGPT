@@ -138,7 +138,7 @@ class TestFlattenForWandbConfig:
 
 
 class FakeTrackingModule:
-    """In-memory stand-in for domain.training._internal.tracking to avoid wandb/network."""
+    """In-memory stand-in for domain.training.tracking to avoid wandb/network."""
 
     def __init__(self):
         self.runs = []
@@ -155,6 +155,7 @@ class FakeTrackingModule:
 @pytest.fixture
 def fake_tracking(monkeypatch):
     fake = FakeTrackingModule()
+    # Production imports domain.training._internal.tracking (not domain.training.tracking)
     monkeypatch.setitem(sys.modules, "domain.training._internal.tracking", fake)
     return fake
 

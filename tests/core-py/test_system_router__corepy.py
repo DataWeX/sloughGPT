@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, _server_dir)
 from routers.system import SystemRouter  # noqa: E402
 
-from tests.conftest import build_test_app
+from conftest import build_test_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -91,10 +91,8 @@ class TestLifecycle:
         sr = _make_system_router()
         mock_mgr = MagicMock()
         mock_mgr.get_results.return_value = {"phase": "ready", "profile": "default"}
-        # Patch the consumer read point: the handler does a function-local
-        # `from domain.infrastructure import get_lifecycle_manager`, and the
-        # facade binds the name eagerly, so patching _internal.lifecycle
-        # never reaches it (the real manager's "init" phase leaked through).
+        # Router does function-local `from domain.infrastructure import ...`
+        # so patch the package attribute, not the _internal definition.
         with patch("domain.infrastructure.get_lifecycle_manager", return_value=mock_mgr):
             client = TestClient(_app(sr))
             resp = client.get("/system/lifecycle")
@@ -128,12 +126,8 @@ class TestExecutor:
         sr = _make_system_router()
         mock_inst = MagicMock()
         mock_inst.active_count.return_value = 2
-        # The handler reads the public .max_workers (the TrainingExecutor
-        # property); the private _max_workers alone leaves it as an
-        # auto-MagicMock that the envelope serializes to [].
         mock_inst.max_workers = 4
-        mock_inst._max_workers = 4
-        mock_inst._jobs = {"j1": {}, "j2": {}}
+        mock_inst.job_count = 2
         mock_inst.list_jobs.return_value = [{"id": "j1"}, {"id": "j2"}]
         with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
@@ -230,11 +224,9 @@ class TestTailOutput:
         mock_buf.tail_dicts.return_value = [{"text": "line1"}]
         mock_buf.count = 1
         mock_buf.seq = 1
-        # Consumer read point: the handler does `from domain.infrastructure
-        # import get_server_buffer`, and the facade binds it eagerly — the
-        # _internal-level patch never installed this fake (real empty
-        # buffer leaked through, lines == []).
-        with patch("domain.infrastructure.get_server_buffer", return_value=mock_buf):
+        with patch(
+            "domain.infrastructure._internal.output_buffer.get_server_buffer", return_value=mock_buf
+        ):
             client = TestClient(_app(sr))
             resp = client.get("/system/output")
         assert resp.status_code == 200

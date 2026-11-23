@@ -1,7 +1,11 @@
 """Tests for LoRA numpy inference bridge and HF LoRA fine-tuning."""
 
 import tempfile
+
+# HFLoraConfig.__post_init__ requires existing model_path + data_path files.
+import tempfile as _tempfile
 from pathlib import Path
+from pathlib import Path as _Path
 
 import numpy as np
 import pytest
@@ -13,6 +17,28 @@ from domain.training._internal.hf_lora_finetune import (
     load_lora_adapter,
     merge_lora_adapter,
 )
+
+_CFG_DIR = _Path(_tempfile.mkdtemp(prefix="hf_lora_cfg_"))
+
+
+def _realize(path_str: str) -> str:
+    """Return an existing file path, preserving the original stem under a temp dir."""
+    p = _Path(path_str)
+    if p.is_file():
+        return str(p.resolve())
+    dest = _CFG_DIR / p.name
+    if not dest.is_file():
+        dest.write_bytes(b"x")
+    return str(dest)
+
+
+def _cfg(model_path: str = "model.slnc", data_path: str = "data.txt", **kwargs) -> HFLoraConfig:
+    """HFLoraConfig with required real files; overrides keep their filename/stem."""
+    kwargs["model_path"] = _realize(model_path)
+    kwargs["data_path"] = _realize(data_path)
+    return HFLoraConfig(**kwargs)
+
+
 from domain.training._internal.lora import (
     LoRAConfig,
     LoRAEmbedding,
@@ -160,7 +186,7 @@ class TestHFLoraConfig:
     """Tests for HFLoraConfig dataclass."""
 
     def test_default_config(self):
-        config = HFLoraConfig()
+        config = _cfg()
         assert config.rank == 8
         assert config.alpha == 16.0
         assert config.epochs == 3
@@ -169,46 +195,46 @@ class TestHFLoraConfig:
         assert config.learning_rate == 1e-4
 
     def test_adapter_name_auto_generated(self):
-        config = HFLoraConfig(model_path="models/gpt2.slnc")
+        config = _cfg(model_path="models/gpt2.slnc")
         assert config.adapter_name == "gpt2_lora_r8"
 
     def test_adapter_name_custom(self):
-        config = HFLoraConfig(model_path="models/gpt2.slnc", adapter_name="my_adapter")
+        config = _cfg(model_path="models/gpt2.slnc", adapter_name="my_adapter")
         assert config.adapter_name == "my_adapter"
 
     def test_adapter_name_with_rank(self):
-        config = HFLoraConfig(model_path="models/llama.slnc", rank=16)
+        config = _cfg(model_path="models/llama.slnc", rank=16)
         assert "r16" in config.adapter_name
 
     def test_default_target_modules(self):
-        config = HFLoraConfig()
+        config = _cfg()
         assert "W_q" in config.target_modules
         assert "W_k" in config.target_modules
         assert "W_v" in config.target_modules
         assert "W_o" in config.target_modules
 
     def test_weight_decay(self):
-        config = HFLoraConfig(weight_decay=0.05)
+        config = _cfg(weight_decay=0.05)
         assert config.weight_decay == 0.05
 
     def test_grad_clip(self):
-        config = HFLoraConfig(grad_clip=0.5)
+        config = _cfg(grad_clip=0.5)
         assert config.grad_clip == 0.5
 
     def test_warmup_steps(self):
-        config = HFLoraConfig(warmup_steps=100)
+        config = _cfg(warmup_steps=100)
         assert config.warmup_steps == 100
 
     def test_log_interval(self):
-        config = HFLoraConfig(log_interval=5)
+        config = _cfg(log_interval=5)
         assert config.log_interval == 5
 
     def test_progress_callback_none(self):
-        config = HFLoraConfig()
+        config = _cfg()
         assert config.progress_callback is None
 
     def test_grad_accumulation_steps(self):
-        config = HFLoraConfig(grad_accumulation_steps=4)
+        config = _cfg(grad_accumulation_steps=4)
         assert config.grad_accumulation_steps == 4
 
 
@@ -221,42 +247,43 @@ class TestHFLoraTrainer:
     """Tests for HFLoraTrainer that don't require model/data files."""
 
     def test_init(self):
-        config = HFLoraConfig(model_path="m.slnc")
+        config = _cfg(model_path="m.slnc")
         trainer = HFLoraTrainer(config)
         assert trainer.config is config
         assert trainer.model is None
         assert trainer.lora_params == {}
 
     def test_is_training_default(self):
-        config = HFLoraConfig(model_path="m.slnc")
+        config = _cfg(model_path="m.slnc")
         trainer = HFLoraTrainer(config)
         assert not trainer.is_training
 
     def test_stop(self):
-        config = HFLoraConfig(model_path="m.slnc")
+        config = _cfg(model_path="m.slnc")
         trainer = HFLoraTrainer(config)
         trainer.stop()
         assert not trainer.is_training
 
     def test_apply_lora_without_model_raises(self):
-        config = HFLoraConfig(model_path="m.slnc")
+        config = _cfg(model_path="m.slnc")
         trainer = HFLoraTrainer(config)
         with pytest.raises(RuntimeError, match="Model not loaded"):
             trainer.apply_lora()
 
     def test_load_model_nonexistent_raises(self):
-        config = HFLoraConfig(model_path="/nonexistent/model.slnc")
+        config = _cfg()
         trainer = HFLoraTrainer(config)
+        config.model_path = "/nonexistent/model.slnc"
         with pytest.raises(FileNotFoundError):
             trainer.load_model()
 
     def test_cancel_event_none(self):
-        config = HFLoraConfig()
+        config = _cfg()
         trainer = HFLoraTrainer(config)
         assert trainer._training_thread is None
 
     def test_stop_without_cancel_event(self):
-        config = HFLoraConfig()
+        config = _cfg()
         trainer = HFLoraTrainer(config)
         trainer.stop()
         assert not trainer.is_training

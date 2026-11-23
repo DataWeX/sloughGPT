@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("fastapi")
 
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
@@ -22,12 +22,7 @@ class TestGetMetaWeightsRequest:
         assert req.user_id == "u1"
 
     def test_defaults(self):
-        # k defaults to 5, not 10: the schema (routers/meta_weights.py),
-        # the web controller (k = 5) and meta-weights-controller.test.ts
-        # all agree on 5 — this assertion was the stale one.
         req = GetMetaWeightsRequest(user_message="hi")
-        # Default top-k shipped as 5 since 4a4616b15 (May); the 10 came from
-        # the pre-consolidation test root that stopped running.
         assert req.k == 5
         assert req.user_id == "default"
 
@@ -67,34 +62,37 @@ class TestMetaWeightsRouter:
 
     def test_router_has_routes(self):
         router = MetaWeightsRouter()
-        # APIRouter(prefix=...) prepends to route.path at registration time,
-        # so the paths carry the prefix (matching test_router_has_prefix).
+        # FastAPI folds the router prefix into route.path.
+        prefix = router.router.prefix
         routes = [r.path for r in router.router.routes]
-        assert "/meta-weights/ping" in routes
-        assert "/meta-weights/get" in routes
-        assert "/meta-weights/stats" in routes
+        assert f"{prefix}/ping" in routes
+        assert f"{prefix}/get" in routes
+        assert f"{prefix}/stats" in routes
 
     def test_ping_route_exists(self):
         router = MetaWeightsRouter()
+        target = f"{router.router.prefix}/ping"
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/meta-weights/ping":
+            if hasattr(route, "path") and route.path == target:
                 methods.extend(route.methods)
         assert "GET" in methods
 
     def test_get_route_exists(self):
         router = MetaWeightsRouter()
+        target = f"{router.router.prefix}/get"
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/meta-weights/get":
+            if hasattr(route, "path") and route.path == target:
                 methods.extend(route.methods)
         assert "POST" in methods
 
     def test_stats_route_exists(self):
         router = MetaWeightsRouter()
+        target = f"{router.router.prefix}/stats"
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/meta-weights/stats":
+            if hasattr(route, "path") and route.path == target:
                 methods.extend(route.methods)
         assert "GET" in methods
 

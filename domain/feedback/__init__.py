@@ -3,14 +3,11 @@
 Public API:
     FeedbackDB, get_feedback_db, Message, Feedback, SimilarPattern
     MetaWeightManager, MetaWeights, get_meta_weight_manager
-    SAFE_BAND — the one generation-safe bounds authority (card 20261101_182428)
     ResponseTracker, get_response_tracker
     WorkflowConfig, get_feedback_workflow
     get_per_user_lora, create_training_pipeline
     get_health_monitor, get_message_feedback, HFDPOTrainer
 """
-
-from __future__ import annotations
 
 from domain.feedback._internal.database import (
     Feedback,
@@ -19,9 +16,9 @@ from domain.feedback._internal.database import (
     SimilarPattern,
     get_feedback_db,
 )
+from domain.feedback._internal.hf_dpo import HFDPOTrainer
 from domain.feedback._internal.message_feedback import get_message_feedback
 from domain.feedback._internal.meta_weights import (
-    SAFE_BAND,
     MetaWeightManager,
     MetaWeights,
     get_meta_weight_manager,
@@ -33,19 +30,7 @@ from domain.feedback._internal.response_tracker import (
     get_response_tracker,
 )
 from domain.feedback._internal.training import create_training_pipeline
-from domain.feedback._internal.workflow import WorkflowConfig
-
-
-def __getattr__(name):
-    _lazy = {
-        "get_lora_evaluator": "domain.feedback._internal.lora_eval",
-    }
-    if name in _lazy:
-        import importlib
-
-        return getattr(importlib.import_module(_lazy[name]), name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
+from domain.feedback._internal.workflow import WorkflowConfig, get_feedback_workflow
 
 __all__ = [
     "FeedbackDB",
@@ -56,7 +41,6 @@ __all__ = [
     "MetaWeightManager",
     "MetaWeights",
     "get_meta_weight_manager",
-    "SAFE_BAND",
     "ResponseTracker",
     "get_response_tracker",
     "WorkflowConfig",
@@ -66,27 +50,4 @@ __all__ = [
     "get_health_monitor",
     "get_message_feedback",
     "HFDPOTrainer",
-    "get_online_lora_updater",
-    # Route-surface read (card 20261101_140447)
-    "FeedbackTrainer",
 ]
-
-_LAZY_IMPORTS = {
-    "get_lora_evaluator": ("._internal.lora_eval", "get_lora_evaluator"),
-    "HFDPOTrainer": ("._internal.hf_dpo", "HFDPOTrainer"),
-    "get_feedback_workflow": ("._internal.workflow", "get_feedback_workflow"),
-    "get_online_lora_updater": ("._internal.online_train", "get_online_lora_updater"),
-    # Route-surface read (card 20261101_140447) — from_feedback.py imports
-    # through the facade, mapped to the module it reads today.
-    "FeedbackTrainer": ("._internal.training", "FeedbackTrainer"),
-}
-
-
-def __getattr__(name):
-    if name in _LAZY_IMPORTS:
-        module_path, attr = _LAZY_IMPORTS[name]
-        import importlib
-
-        mod = importlib.import_module(module_path, package=__name__)
-        return getattr(mod, attr)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

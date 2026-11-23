@@ -19,16 +19,16 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path setup
 # ---------------------------------------------------------------------------
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 import routers.user_adapters as ua_module  # noqa: E402
 from routers.user_adapters import router  # noqa: E402
+from conftest import build_test_app  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,15 +62,9 @@ def _make_store(**overrides):
 
 
 def _app():
-    # Without this handler the AppError that _get_store raises (503 when the
-    # per-user LoRA store is unavailable) escapes as an unhandled 500 —
-    # main.py registers the full handler set, and sibling router tests do too.
-    from infrastructure.exception_handlers import register_app_error_handler
-
-    app = FastAPI()
-    app.include_router(router)
-    register_app_error_handler(app)
-    return app
+    # build_test_app registers AppError handlers so raise_error(..., 503)
+    # becomes an HTTP 503 instead of an unhandled 500.
+    return build_test_app(router)
 
 
 @pytest.fixture(autouse=True)
@@ -84,15 +78,6 @@ def _clear_list_cache():
 # ---------------------------------------------------------------------------
 # Tests — patch domain.feedback.get_per_user_lora (package attr the router binds)
 # ---------------------------------------------------------------------------
-#
-# The handler runs `from domain.feedback import get_per_user_lora` inside
-# _get_store(), so it resolves the PACKAGE attribute on every call.
-# domain/feedback/__init__.py:27 is an *eager* re-export
-#   from domain.feedback._internal.per_user_lora import get_per_user_lora
-# which binds the name once at package-import time. Patching the _internal
-# module therefore never reaches the name the router reads, and these tests
-# were silently exercising the real store (live rows such as user_id
-# 'default' instead of the fake's u1/u2).
 
 MOCK_TARGET = "domain.feedback.get_per_user_lora"
 

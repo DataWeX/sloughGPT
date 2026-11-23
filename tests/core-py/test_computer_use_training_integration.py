@@ -32,6 +32,8 @@ BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = "http://localhost:8000"
 RESULTS = []
 
+pytestmark = [pytest.mark.slow, pytest.mark.integration]
+
 
 def _api_is_ready() -> bool:
     try:

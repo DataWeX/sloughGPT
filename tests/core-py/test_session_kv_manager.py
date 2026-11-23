@@ -102,17 +102,10 @@ class TestSessionKVManager:
         assert mgr.get_or_create("s1", factory) == "kv-state"
         assert calls == [1]  # hit reuses the cached state, factory not called again
 
-    def test_get_or_create_requires_factory(self):
+    def test_get_session_miss_returns_none(self):
         mgr = SessionKVManager()
-        calls = []
-
-        def factory():
-            calls.append(1)
-            return "v"
-
-        assert mgr.get_or_create("s1", factory) == "v"
-        assert calls == [1]
-        # miss still returns a state; the factory is the creation mechanism
+        assert mgr.get_session("s1") is None
+        assert mgr.remove_session("s1") is False
 
     def test_get_or_create_evicts_lru_when_over_cap(self):
         mgr = SessionKVManager(kv_max_sessions=2)
@@ -123,21 +116,29 @@ class TestSessionKVManager:
         assert mgr.get_session("s2") == "v"
         assert mgr.get_session("s3") == "v"
 
-    def test_get_stats_shape(self):
+    def test_get_stats_reports_state_types(self):
         class State:
-            def __init__(self, kv_len):
-                self.kv_len = kv_len
+            pass
 
-        mgr = SessionKVManager(kv_max_sessions=8, kv_ttl=300)
+        mgr = SessionKVManager()
+        mgr.set_session("a", State())
         stats = mgr.get_stats()
-        assert stats["active_sessions"] == 0
-        assert stats["max_sessions"] == 8
-        assert stats["ttl_seconds"] == 300
-        assert stats["oldest_session_age"] == 0.0
-        mgr.set_session("a", State([5, 3]))
-        summary = mgr.get_stats()
-        assert summary["active_sessions"] == 1
-        assert set(summary) == {
+        assert stats["session_sizes"]["a"] == {"type": "State"}
+        assert stats["active_sessions"] == 1
+
+    def test_get_stats_shape(self):
+        mgr = SessionKVManager(kv_max_sessions=8, kv_ttl=300)
+        assert mgr.get_stats() == {
+            "active_sessions": 0,
+            "session_sizes": {},
+            "max_sessions": 8,
+            "ttl_seconds": 300,
+            "oldest_session_age": 0.0,
+        }
+        mgr.set_session("a", "v1")
+        stats = mgr.get_stats()
+        assert stats["active_sessions"] == 1
+        assert set(stats) == {
             "active_sessions",
             "session_sizes",
             "max_sessions",

@@ -12,6 +12,8 @@ _server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -26,6 +28,17 @@ def _app(sr: StatusRouter) -> FastAPI:
 
     register_all_handlers(app)
     return app
+
+
+def _mock_ready():
+    """Stub subsystem checks so ready=True without native lib / live DB."""
+    return (
+        patch("domain.feedback.get_feedback_db", return_value=MagicMock()),
+        patch(
+            "domain.inference._internal.native.engine.get_engine",
+            return_value=MagicMock(),
+        ),
+    )
 
 
 class TestStatus:
@@ -49,9 +62,14 @@ class TestStatus:
         )
         sr = StatusRouter()
         client = TestClient(_app(sr))
-        resp = client.get("/ready")
-        assert resp.status_code == 200
-        assert resp.json()["data"]["ready"] is True
+        db_p, eng_p = _mock_ready()
+        with db_p, eng_p:
+            resp = client.get("/ready")
+            assert resp.status_code == 200
+            data = resp.json()["data"]
+            assert data["ready"] is True
+            assert data["checks"]["database"] is True
+            assert data["checks"]["inference"] is True
 
     def test_live(self):
         sr = StatusRouter()

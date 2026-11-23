@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
@@ -26,6 +26,7 @@ def _mock_ctrl(**overrides) -> MagicMock:
         "feedback_id": "fb-1",
         "message_id": "msg-1",
         "rating": "thumbs_up",
+        "timestamp": "2026-01-01T00:00:00",
         **overrides,
     }
     ctrl.get_stats.return_value = {
@@ -78,7 +79,7 @@ def _app(fr: FeedbackRouter) -> FastAPI:
 
 
 class TestWorkflowFeedback:
-    @patch("routers.feedback.get_feedback_controller")
+    @patch("controllers.feedback.get_feedback_controller")
     def test_record_workflow_feedback(self, mock_get):
         mock_get.return_value = _mock_ctrl()
         fr = FeedbackRouter()
@@ -93,9 +94,35 @@ class TestWorkflowFeedback:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "ok"
-        assert data["feedback_id"]
+        body = resp.json()
+        # response_model=FeedbackResponse — flat body, not success_response envelope
+        assert body["status"] == "ok"
+        assert body["feedback_id"] == "fb-1"
+        assert body["message_id"] == "conv-1"
+        assert body["rating"] == "thumbs_up"
+
+    @patch("controllers.feedback.get_feedback_controller")
+    def test_record_workflow_feedback_down(self, mock_get):
+        mock_get.return_value = _mock_ctrl()
+        fr = FeedbackRouter()
+        client = TestClient(_app(fr))
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={"conversation_id": "conv-1", "rating": "thumbs_down"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["rating"] == "thumbs_down"
+
+    @patch("controllers.feedback.get_feedback_controller")
+    def test_record_workflow_feedback_invalid_rating(self, mock_get):
+        mock_get.return_value = _mock_ctrl()
+        fr = FeedbackRouter()
+        client = TestClient(_app(fr))
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={"conversation_id": "conv-1", "rating": "invalid"},
+        )
+        assert resp.status_code == 422
 
 
 class TestFeedbackStats:

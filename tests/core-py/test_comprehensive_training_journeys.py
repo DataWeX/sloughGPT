@@ -48,6 +48,8 @@ API_NETLOC = API.split("://", 1)[-1]
 RESULTS: list[dict[str, Any]] = []
 DEVTOOLS_LOG: list[dict[str, Any]] = []
 
+pytestmark = [pytest.mark.slow, pytest.mark.integration]
+
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 

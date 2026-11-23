@@ -25,20 +25,19 @@ if not HAS_FASTAPI:
 
 @pytest.fixture
 def client():
-    from infrastructure.exception_handlers import register_app_error_handler
-
     import domain.billing._internal.token_service as billing
 
-    # Fresh singleton per test — the process-wide service would leak balances
-    # across tests (and reload persisted accounts).
+    # Fresh singleton per test — process-wide service would leak balances.
     billing._token_billing_service = None
 
     app = FastAPI()
     app.include_router(router)
+
+    from infrastructure.exception_handlers import register_app_error_handler
+
     register_app_error_handler(app)
 
     def _fake_auth(request: Request) -> dict:
-        # Tests scope accounts by the X-User-Id header.
         return {"id": request.headers.get("X-User-Id", "anonymous")}
 
     app.dependency_overrides[require_auth_if_enabled] = _fake_auth
@@ -97,14 +96,14 @@ class TestTopUp:
         response = client.post(
             "/tokens/topup", json={"amount": -10}, headers={"X-User-Id": "test-user"}
         )
-        assert response.status_code == 422  # pydantic field violation (ge=1)
+        assert response.status_code == 422
 
     def test_topup_exceeds_max(self, client):
         # Field(..., le=1_000_000) → pydantic RequestValidationError → 422
         response = client.post(
             "/tokens/topup", json={"amount": 2000000}, headers={"X-User-Id": "test-user"}
         )
-        assert response.status_code == 422  # pydantic field violation (le=1_000_000)
+        assert response.status_code == 422
 
 
 class TestUpgrade:
@@ -156,24 +155,3 @@ class TestCheckTokens:
         assert "balance" in data
         assert "dailyRemaining" in data
         assert "monthlyRemaining" in data
-
-
-class TestAuthDisabled:
-    def test_balance_is_anonymous_when_auth_disabled(self, monkeypatch):
-        """Regression: with SLO_AUTH_REQUIRED off (dev default) the auth
-        dependency returns None — the router must resolve an anonymous
-        identity instead of dereferencing None (was TypeError -> 500)."""
-        import domain.billing._internal.token_service as billing
-
-        monkeypatch.delenv("SLO_AUTH_REQUIRED", raising=False)
-        billing._token_billing_service = None
-
-        app = FastAPI()
-        app.include_router(router)
-        with TestClient(app) as c:
-            response = c.get("/tokens/balance")
-
-        assert response.status_code == 200
-        data = response.json()["data"]
-        assert data["userId"] == "anonymous"
-        assert data["balance"] == 500

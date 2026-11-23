@@ -1,7 +1,6 @@
 """Tests for the session API router (routers/session.py).
 
-Covers: set_session_context, get_session_messages, get_session_inspector.
-Regenerate lives on the chat router (`POST /chat/{session_id}/regenerate`).
+Covers: set_session_context, get_session_messages, get_session_inspector, regenerate_session.
 Domain deps are mocked; only HTTP-level behavior is tested.
 """
 
@@ -11,7 +10,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
@@ -19,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.system import SessionRouter  # noqa: E402
+from routers.session import SessionRouter  # noqa: E402
 
 
 def _app(sr: SessionRouter) -> FastAPI:
@@ -94,14 +93,17 @@ class TestGetSessionInspector:
             "episodic_count": 0,
         }
         with (
+            # Patch the modules the router binds from at call time (shims /
+            # package re-exports), not the deep _internal definitions — a
+            # function-local `from X import Y` reads X's attr, so patching the
+            # source module leaves the shim binding untouched.
             patch("domain.infrastructure.session_core.SessionCore", mock_sc),
-            patch("domain.feedback.get_message_feedback", return_value=mock_fb),
-            patch("domain.knowledge.get_knowledge_memory", return_value=mock_km),
+            patch(
+                "domain.feedback.get_message_feedback",
+                return_value=mock_fb,
+            ),
+            patch("domain.learner.get_knowledge_memory", return_value=mock_km),
             patch("domain.context.get_trait_config", return_value=mock_tc),
-            patch("domain.context.PersonalityManager"),
-            patch("domain.context.MemoryManager"),
-            patch("domain.context.StyleManager"),
-            patch("domain.context.TaskManager"),
             patch(
                 "domain.infrastructure.context_core.get_context_core",
                 return_value=mock_cc,
