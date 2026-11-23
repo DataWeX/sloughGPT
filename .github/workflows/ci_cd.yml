@@ -79,7 +79,14 @@ jobs:
     # A hung step fails the job instead of holding the
     # concurrency group for GitHub's 6-hour default
     # (card 20261102_025758 — test-root hung 6 h on main).
-    timeout-minutes: 60
+    # 120 (was 90): main's run is now TWO passes (coverage gate, then
+    # testmon record — the CTracer LIFO clash, run 44542985298). Measured
+    # on run 44748601711 (contended runner): pass 1 = 47m27s, pass 2 was
+    # at 99% after 15.5m with the same ~31m slow-test tail pass 1 had →
+    # ~97m need vs the 90m budget; the timeout killed pass 2 ~5 min
+    # before completion (record + save skipped). Uncontended baseline:
+    # 35m51s + 19m15s ≈ 55m (card 20261104_085623).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -97,11 +104,82 @@ jobs:
           # pyyaml: transformers used to supply it transitively —
           # domain/benchmark/weighted.py imports it at module level.
           python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow pyyaml
-          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist pytest-timeout
+          # pytest-testmon: PRs select the affected closure against main's
+          # recording; main's full run records it (card 20261104_085623).
+          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist pytest-timeout pytest-testmon
           # test_vfs_addon.py imports lz4 at module scope -> collection error
           python -m pip install lz4
 
-      - name: Run core-py tests
+      # ── seam gate: command parity always runs on PRs (card 20261104_085623) ──
+      # Testmon selection is dependency-based, so for most diffs the parity
+      # test isn't selected — yet a Command Rule gate must not ride on
+      # selection (Test Rule clause 4: seam gates run when their surface is
+      # touched). Seconds: 7 passed / 4 xfailed baseline, ~1.5s. Main's full
+      # run below covers it anyway (same tests/core-py/ scope); this step
+      # only closes the PR-mode gap — duplicate run on selection is noise-free.
+      - name: Command parity (seam gate, always on PRs)
+        if: github.event_name == 'pull_request'
+        run: python -m pytest tests/core-py/test_command_parity.py -q --tb=short
+
+      # ── PR mode: affected closure (Test Rule clause 3, card 20261104_085623) ──
+      # The testmon DB is written ONLY by main's full runs (single writer: a
+      # partial PR record would poison the canonical selection state). PRs
+      # restore main's freshest recording and select against it; a cache miss
+      # (first run after this card lands) degrades to run_affected's
+      # documented full-record fallback — unknown state is a full run, never
+      # a guess. Coverage is deliberately absent here: a % measured on the
+      # affected closure measures the subset, not the codebase — the 50%
+      # floor stays on main's full run, where it measures the whole tree.
+      # The seam gates (contract, feature tags, board, lint) are separate
+      # seconds-jobs and run unchanged on every PR; command parity runs as
+      # the always-on step above (in-job — the env is already set up).
+      - name: Restore testmon DB (PR selection basis)
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: .testmondata
+          key: testmon-v1-${{ github.sha }}
+          restore-keys: |
+            testmon-v1-
+
+      - name: Run affected core-py tests (PR)
+        if: github.event_name == 'pull_request'
+        env:
+          # A runner tears down at job end: phase 2 must run before exit
+          # (else the deferred slow paths would silently never run —
+          # deselected tests), and its red must fail THIS job rather than
+          # warn the next invocation.
+          RUN_AFFECTED_FOREGROUND_SLOW: "1"
+        run: |
+          # Same scope + ignores as the full run below; selection is
+          # pytest-testmon over main's recording (mechanical, not filename
+          # guessing — shared utils and transitive imports are picked up).
+          ./scripts/run_affected.sh tests/core-py/ \
+            --ignore=tests/core-py/test_server_integration.py \
+            --ignore=tests/core-py/test_process_isolation.py \
+            --ignore=tests/core-py/test_numpy_engine.py \
+            --ignore=tests/core-py/test_safetensors_loader.py \
+            --ignore=tests/core-py/test_morph_tokenizer.py \
+            --ignore=tests/core-py/test_point_library.py \
+            --ignore=tests/core-py/test_slonet_compute_sensitivity.py \
+            --ignore=tests/core-py/test_slonet_provider.py \
+            --ignore=tests/core-py/test_shell_repl.py \
+            -q --tb=short -n auto
+
+      # ── merge to main: the full suite — unchanged, the backstop ──
+      # TWO separate pytest passes, deliberately. Main run 44542985298
+      # (2026-11-19) proved the single-pass unification crashes: pytest-cov
+      # and pytest-testmon each drive coverage's CTracer, and under xdist
+      # their collectors stop OUT of LIFO order at session end
+      # (coverage/collector.py: assert self._collectors[-1] is self) →
+      # INTERNALERROR exit 3 AFTER all 42596 tests had passed
+      # ("Expected current collector to be <CTracer>, but it's <CTracer>").
+      # Each pass alone is CI-proven: pass 1 is the pre-card behavior; pass
+      # 2 with --testmon-noselect and NO coverage is every PR run of #353
+      # (19m15s for the full record). tests/test_workflow_testmon_split.py
+      # pins the split — never re-merge them into one command.
+      - name: Run core-py tests (full suite backstop)
+        if: github.event_name != 'pull_request'
         run: |
           # 2026-10-25 test-tree consolidation: tests moved from
           # packages/core-py/tests/ to the unified tests/ root (tests/core-py/).
@@ -117,6 +195,8 @@ jobs:
           # distributed coverage natively — the 50% floor still measures
           # the whole run). Serial test-core-py was 50m19s on 2026-11-11;
           # this is the duration lever (card 20261112_062436).
+          # PASS 1 = the coverage gate ONLY. No testmon here: see the
+          # two-pass comment above (collector clash, run 44542985298).
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -129,6 +209,45 @@ jobs:
             --ignore=tests/core-py/test_shell_repl.py \
             --cov=domain --cov-report=term-missing --cov-fail-under=50 \
             -q --tb=short -n auto
+
+      - name: Record testmon DB (full suite, no coverage)
+        if: github.event_name != 'pull_request'
+        run: |
+          # PASS 2 = the recording ONLY, no coverage (same 9 ignores as
+          # pass 1 — the recorded closure must match the gated closure).
+          # --testmon-noselect: run EVERYTHING (nothing deselected) while
+          # RECORDING each test's file dependencies — this recording is the
+          # DB PRs select against; plain pytest writes no testmon data.
+          # No --cov here by design: the two CTracers clash under xdist
+          # (run 44542985298, traceback in the comment above). Measured on
+          # #353's PR runs: full record without coverage = 19m15s; on main
+          # run 44748601711 (contended) pass 2 hit 99% after 15.5m and
+          # needed the same ~31m slow-test tail pass 1 had → budget 120m.
+          python -m pytest tests/core-py/ \
+            --ignore=tests/core-py/test_server_integration.py \
+            --ignore=tests/core-py/test_process_isolation.py \
+            --ignore=tests/core-py/test_numpy_engine.py \
+            --ignore=tests/core-py/test_safetensors_loader.py \
+            --ignore=tests/core-py/test_morph_tokenizer.py \
+            --ignore=tests/core-py/test_point_library.py \
+            --ignore=tests/core-py/test_slonet_compute_sensitivity.py \
+            --ignore=tests/core-py/test_slonet_provider.py \
+            --ignore=tests/core-py/test_shell_repl.py \
+            --testmon-noselect \
+            -q --tb=short -n auto
+
+      # Single-writer discipline: only main's full runs persist the DB PRs
+      # restore (a PR record would be partial — poisoning selection state).
+      # continue-on-error: a re-run's key already exists; the next main push
+      # refreshes it either way, and a missed save merely over-selects on
+      # PRs (safe direction — never under-selects).
+      - name: "Save testmon DB (single writer: main only)"
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .testmondata
+          key: testmon-v1-${{ github.sha }}
 
   # ─── Server API tests ───────────────────────────────────────────
   test-server:
@@ -228,7 +347,11 @@ jobs:
           # pyyaml + setuptools: transitive deps of the removed torch tree (run
           # 43180934654) — 4 root suites import yaml top-level;
           # test_packaging_config.py imports setuptools.
-          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pyyaml setuptools
+          # pillow: tests/test_gallery_generators.py (c5a3b45e9) generates
+          # real PNGs via domain.multimodal — without it 5 tests raise
+          # "Pillow library required" (main runs 44712585390/44708416860;
+          # test-core-py already installs pillow).
+          python -m pip install fastapi uvicorn pydantic httpx numpy scipy psutil python-multipart requests pillow pyyaml setuptools
           python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist pytest-timeout
           python -m pip install -e packages/mogdb
 
@@ -465,7 +588,16 @@ jobs:
             ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-cli:latest
             ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-cli:${{ github.sha }}
 
-  # ─── Deploy to K8s (release only) ──────────────────────────────
+  # ─── Deploy: pull-based compose on the host (release only) ──────
+  # USER RULING 2026-10-27: "fastest + cheapest target = pull-based
+  # compose deploy on the host." The job that used to live here only
+  # ECHOED `kubectl set image ...` while reporting a green run — the
+  # second-writer anti-pattern this replaces: it deployed nothing.
+  # The Helm chart (infra/helm/sloughgpt/) is deliberately NOT used:
+  # the user declined that direction.
+  #
+  # It stays release-only (github.event_name == 'release'). Widening it
+  # to fire on every main push is a product decision, not this card's.
   deploy:
     runs-on: ubuntu-latest
     # A hung step fails the job instead of holding the
@@ -480,17 +612,95 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to Kubernetes
+      # Secrets live on the `production` environment, so they are checked in
+      # a STEP — the `secrets` context is not readable from a job-level
+      # `if:`. Missing credentials must FAIL the release, never skip it
+      # silently and never report success without deploying.
+      - name: Verify deploy credentials
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          echo "Deploying release ${{ github.event.release.tag_name }}..."
-          echo "Images:"
-          echo "  API:  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "  Web:  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ github.sha }}"
-          echo "  CLI:  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-cli:${{ github.sha }}"
-          echo ""
-          echo "To deploy, run:"
-          echo "  kubectl set image deployment/sloughgpt-api api=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n sloughgpt"
-          echo "  kubectl set image deployment/sloughgpt-web web=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ github.sha }} -n sloughgpt"
+          missing=""
+          [ -n "$TS_AUTHKEY" ]     || missing="$missing TS_AUTHKEY"
+          [ -n "$DEPLOY_HOST" ]    || missing="$missing DEPLOY_HOST"
+          [ -n "$DEPLOY_SSH_KEY" ] || missing="$missing DEPLOY_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::release deploy cannot run — missing secrets:$missing"
+            exit 1
+          fi
+          echo "credentials present (host=$DEPLOY_HOST)"
+
+      # Same transport as deploy-git-sync.yml: Tailscale + SSH + rsync.
+      # Ported, not rebuilt.
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      # Ship the compose project at its REPO-RELATIVE path (/opt/sloughgpt/
+      # infra/docker/) so the compose file's `context: ../..` and its
+      # `./prometheus.prod.yml`, `./grafana/`, `./docker/nginx/` references
+      # still resolve. Host secrets are NEVER overwritten — every .env* is
+      # excluded; the host owns its own credentials.
+      - name: Sync compose project to host
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER || 'root' }}@${{ secrets.DEPLOY_HOST }} "mkdir -p /opt/sloughgpt/infra/docker"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_rsa" \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude '__pycache__' \
+            infra/docker/ ${{ secrets.DEPLOY_USER || 'root' }}@${{ secrets.DEPLOY_HOST }}:/opt/sloughgpt/infra/docker/
+
+      # Pull the sha-tagged images the build job above actually published
+      # (ghcr.io/datawex/sloughgpt{,-web}), then restart the stack.
+      # `pull` exits non-zero when a tag does not exist, so an unpublished
+      # sha fails here instead of pretending to deploy.
+      - name: Pull sha-tagged images + restart stack
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          VERSION: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/id_rsa "$DEPLOY_USER@$DEPLOY_HOST" \
+            "export VERSION='$VERSION'; bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/sloughgpt/infra/docker
+          if [ ! -f .env ]; then
+            echo "ERROR: /opt/sloughgpt/infra/docker/.env is missing on this host." >&2
+            echo "Provision it first (keys: POSTGRES_PASSWORD, REDIS_PASSWORD," >&2
+            echo "GRAFANA_ADMIN_PASSWORD, SLO_JWT_SECRET, SLO_API_KEY) — see" >&2
+            echo "infra/docker/.env.production in the repo." >&2
+            exit 1
+          fi
+          compose() { docker compose -f docker-compose.prod.yml --env-file .env "$@"; }
+
+          # api/web are the images ci_cd.yml publishes sha-tagged. gateway is
+          # NOT published by CI (no build job for it) — it is excluded so it
+          # cannot silently resolve to a stale or absent registry tag, and
+          # `--no-build` stops compose from quietly building it on the host.
+          # CI coverage for gateway/gpu/dev is a separate card.
+          compose pull api web
+
+          services=$(compose config --services)
+          services=$(printf '%s\n' "$services" | grep -vx gateway || true)
+          [ -n "$services" ] || { echo "ERROR: no deployable services resolved" >&2; exit 1; }
+          compose up -d --no-build $services
+          compose ps
+          echo "deployed VERSION=$VERSION"
+          REMOTE
+
 
   # ─── Benchmark (main only) ─────────────────────────────────────
   benchmark:

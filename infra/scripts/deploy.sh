@@ -14,9 +14,25 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/infra/docker/docker-compose.prod.yml"
 ENV_FILE="$REPO_ROOT/infra/docker/.env"
 
-REGISTRY="${REGISTRY:-ghcr.io/iamtowbee}"
+# ONE registry scheme — the one ci_cd.yml publishes to
+# (ghcr.io/datawex/sloughgpt{,-web,-cli}), sha-tagged from CI. This used to
+# default to the stale fork owner ghcr.io/iamtowbee, whose tags no compose
+# file ever pulled. Override with REGISTRY=.../TAG=... for an experiment.
+REGISTRY="${REGISTRY:-ghcr.io/datawex}"
 TAG="${TAG:-latest}"
 TARGET="${1:-all}"
+
+# infra/docker/.env is gitignored, so a fresh clone has none and compose v2
+# hard-errors on `--env-file <missing>`. Fall back to the tracked
+# .env.production; if neither exists, omit --env-file so compose's own
+# `${VAR:?}` guards report exactly which key to set.
+if [[ ! -f "$ENV_FILE" && -f "$REPO_ROOT/infra/docker/.env.production" ]]; then
+    ENV_FILE="$REPO_ROOT/infra/docker/.env.production"
+fi
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [[ -f "$ENV_FILE" ]]; then
+    COMPOSE_ARGS+=(--env-file "$ENV_FILE")
+fi
 
 log() { echo -e "\033[1;34m[deploy]\033[0m $*"; }
 err() { echo -e "\033[1;31m[deploy]\033[0m $*" >&2; exit 1; }
@@ -27,8 +43,10 @@ check_deps() {
 }
 
 build() {
+    # Names match compose's `image:` (and therefore what `pull` fetches):
+    # the push half and the pull half finally speak the same tag.
     log "Building API image..."
-    docker build -t "$REGISTRY/sloughgpt-api:$TAG" \
+    docker build -t "$REGISTRY/sloughgpt:$TAG" \
         -f "$REPO_ROOT/infra/docker/Dockerfile" "$REPO_ROOT"
 
     log "Building Web image..."
@@ -38,13 +56,16 @@ build() {
 
 push() {
     log "Pushing images to $REGISTRY..."
-    docker push "$REGISTRY/sloughgpt-api:$TAG"
+    docker push "$REGISTRY/sloughgpt:$TAG"
     docker push "$REGISTRY/sloughgpt-web:$TAG"
 }
 
 pull() {
-    log "Pulling images..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
+    log "Pulling published images (api/web only)..."
+    # Only the services CI publishes (ghcr.io/datawex/sloughgpt{,-web}).
+    # gateway/gpu/dev have no CI build job — pulling them would fail on a
+    # registry tag that does not exist (card 20261121_150816).
+    docker compose "${COMPOSE_ARGS[@]}" pull api web
 }
 
 deploy() {
@@ -52,9 +73,9 @@ deploy() {
     # "all" is not a compose service name — omit the selector to bring up
     # the whole project (compose v2 errors on `up -d all`).
     if [[ "$TARGET" == "all" ]]; then
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+        docker compose "${COMPOSE_ARGS[@]}" up -d
     else
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d "$TARGET"
+        docker compose "${COMPOSE_ARGS[@]}" up -d "$TARGET"
     fi
 }
 

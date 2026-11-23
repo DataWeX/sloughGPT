@@ -1600,7 +1600,15 @@ class TestTraitSteeringReachesThePrompt:
             client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
 
         system = next(m for m in captured["messages"] if m["role"] == "system")
-        assert system["content"].strip() == TestTraitSteeringReachesThePrompt.STEERING.strip()
+        # The created system turn leads with the steering and NOTHING may
+        # prepend to it (head placement is the point). The tool contract is
+        # injected after it on every turn (card 20261116_090332), so pin the
+        # exact content up to the contract — the original exact-equality,
+        # with the contract's slot after it made explicit.
+        content = system["content"].strip()
+        contract_at = content.find("You can call tools.")
+        assert contract_at > 0, "tool contract must be injected after the steering"
+        assert content[:contract_at].strip() == (TestTraitSteeringReachesThePrompt.STEERING.strip())
 
 
 class TestFrameBuildsWithoutFacts:

@@ -4,7 +4,7 @@ Mole router — surface the read-only mole report to the UI.
 Contract (the /mole page is built against exactly this):
 
     GET  /mole/report  -> data: {report: object|null, path: str, age_s: float|null}
-    POST /mole/run     -> data: {report: object}
+    POST /mole/run     -> body {window_s?: float, skip?: [str]} -> data: {report: object}
 
 ``GET`` only reads the report file (``$SLO_DOCTOR_REPORT``, default
 ``~/.cache/slog-doctor/findings-report.json``). A missing or corrupt file
@@ -19,6 +19,12 @@ skips ``http``/``sse`` outright when the API is dead) + SSE window 6s (plus
 a best-effort ≤4s ``/errors/stream`` read) + read-only GETs against the
 same API that is serving this request → well inside 15s. No retries, no
 writes to the site.
+
+The POST body is optional and so is every field in it: omitting it preserves
+the historical contract exactly (6s window, nothing skipped). ``window_s`` is
+bounded (1–300s) and ``skip`` must name registered probes only — both enforced
+by pydantic (422), never silently ignored. ``run_sweep`` is deliberately NOT a
+body field: the API never triggers the browser sweep, whatever the caller asks.
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ import time
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field, model_validator
 from schemas.common import endpoint, success_response
 
 logger = logging.getLogger("slo.routers.mole")
@@ -71,6 +78,38 @@ def read_report(path: str) -> tuple[dict | None, float | None]:
     return data, age_s
 
 
+class MoleRunBody(BaseModel):
+    """Optional run parameters for ``POST /mole/run`` (light-run contract).
+
+    Everything is optional — an omitted body (or omitted field) means the
+    historical behaviour: 6s SSE window, nothing skipped, no browser sweep
+    (``run_sweep`` is not expressible here at all).
+    """
+
+    window_s: float | None = Field(
+        None, ge=1, le=300, description="SSE observation window in seconds (default 6.0)"
+    )
+    skip: list[str] | None = Field(
+        None,
+        max_length=6,
+        description=(
+            "Registered probe names to skip — one of: gates, benchmarks, http, sse, journey, system"
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _known_probes_only(self):
+        if self.skip:
+            # Lazy import: validator runs per request, boot stays cheap.
+            from domain.core._internal.mole.probes import PROBES
+
+            known = {entry["name"] for entry in PROBES}
+            unknown = {name.strip() for name in self.skip if name.strip()} - known
+            if unknown:
+                raise ValueError(f"unknown probe(s) in skip: {', '.join(sorted(unknown))}")
+        return self
+
+
 class MoleRouter:
     """Report-surfacing endpoints for the Mole."""
 
@@ -90,18 +129,27 @@ class MoleRouter:
         return success_response(data={"report": report, "path": path, "age_s": age_s})
 
     @endpoint("mole.run")
-    async def run_mole(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def run_mole(
+        self,
+        body: MoleRunBody | None = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Run the light probes (http + sse + journey-from-disk), write the report.
 
         The browser journey sweep is never invoked here — ``run_sweep=False``
-        keeps the journey probe on its read-the-file path.
+        keeps the journey probe on its read-the-file path, whatever ``body``
+        asks for. ``body`` is optional (see :class:`MoleRunBody`): omitting it
+        preserves the historical contract exactly — 6s window, nothing skipped.
         """
         from domain.core import run_mole as _run_mole
 
+        window_s = LIGHT_WINDOW_S if body is None or body.window_s is None else body.window_s
+        skip: tuple[str, ...] = () if body is None or body.skip is None else tuple(body.skip)
         report = await asyncio.to_thread(
             _run_mole,
             run_sweep=False,
-            window_s=LIGHT_WINDOW_S,
+            window_s=window_s,
+            skip=skip,
             write=True,
         )
         return success_response(data={"report": report.to_dict()})

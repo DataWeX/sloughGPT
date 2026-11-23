@@ -50,12 +50,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iamtowbee/sloughGPT.git",
+    "url": "https://github.com/DataWeX/sloughGPT.git",
     "directory": "packages/sdk-ts/typescript-sdk"
   },
-  "homepage": "https://github.com/iamtowbee/sloughGPT/tree/main/packages/sdk-ts/typescript-sdk",
+  "homepage": "https://github.com/DataWeX/sloughGPT/tree/main/packages/sdk-ts/typescript-sdk",
   "bugs": {
-    "url": "https://github.com/iamtowbee/sloughGPT/issues"
+    "url": "https://github.com/DataWeX/sloughGPT/issues"
   },
   "engines": {
     "node": ">=20.0.0"

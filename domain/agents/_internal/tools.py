@@ -34,6 +34,10 @@ class ToolParam:
     type: str
     description: str
     required: bool = False
+    #: alternate input names accepted for THIS param (silent repair, not
+    #: contract — the JSON Schema projection teaches the canonical name
+    #: only). Declared here so the alias lives next to the param it maps to.
+    aliases: tuple[str, ...] = ()
 
 
 @dataclass
@@ -74,6 +78,39 @@ class ToolResult:
     error: str | None = None
     duration_ms: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def normalize_args(spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
+    """Map declared param aliases to their canonical names (silent repair).
+
+    Aliases live on the ToolParam declaration (one source of truth) and are
+    applied where args are TRANSFORMED — the normalized view is what both
+    ``validate_args`` and ``ToolRegistry.execute`` receive, so a tool can
+    never be validated against one shape and executed with another.
+    Canonical names win when both are present; keys that are neither
+    canonical nor a declared alias pass through untouched so validation
+    still rejects them loudly. Idempotent: normalizing an already-canonical
+    arg dict returns it unchanged.
+    """
+    if not args:
+        return args
+    declared = {p.name for p in spec.parameters}
+    alias_map = {a: p.name for p in spec.parameters for a in p.aliases}
+    if not alias_map:
+        return args
+    out: dict[str, Any] = {}
+    for key, value in args.items():
+        if key in declared:
+            out[key] = value
+    for key, value in args.items():
+        if key in declared:
+            continue
+        target = alias_map.get(key)
+        if target is None:
+            out[key] = value
+        elif target not in out:
+            out[target] = value
+    return out
 
 
 class ToolRegistry:
@@ -221,6 +258,63 @@ class ToolRegistry:
                 ),
             )
         )
+        # ── Chat Phase 2 intent routing (card 20261116_090332) ────────────
+        # Internal/model-facing tier: the model picks these via the fenced
+        # tool_call protocol — deliberately NO pattern regex (routing is
+        # model-driven, not a pattern table).
+        self.register(
+            ToolSpec(
+                name="image_gen",
+                description=(
+                    "Generate an image from a text description and attach it to the reply. "
+                    "Arguments: prompt (required — what to depict), style (optional — "
+                    "realistic, cartoon, watercolor, sketch, or fantasy)."
+                ),
+                parameters=[
+                    ToolParam(
+                        "prompt",
+                        "string",
+                        "What to depict in the image — the ONE required argument; "
+                        'always pass it under the key "prompt" (never "query")',
+                        required=True,
+                        # walk_img11: the model reused file_qa's input key —
+                        # declared alias repairs it at the loop + execute seams.
+                        aliases=("query",),
+                    ),
+                    ToolParam(
+                        "style",
+                        "string",
+                        "Art style: realistic, cartoon, watercolor, sketch, or fantasy",
+                        required=False,
+                    ),
+                ],
+                execute=self._run_image_gen,
+            )
+        )
+        self.register(
+            ToolSpec(
+                name="file_qa",
+                description=(
+                    "Answer a question from a specific file (targeted excerpts); "
+                    "omit path to search the knowledge base"
+                ),
+                parameters=[
+                    ToolParam(
+                        "query",
+                        "string",
+                        "What to find in the file or knowledge base",
+                        required=True,
+                    ),
+                    ToolParam(
+                        "path",
+                        "string",
+                        "File to read excerpts from (optional — falls back to knowledge search)",
+                        required=False,
+                    ),
+                ],
+                execute=self._run_file_qa,
+            )
+        )
 
     def register(self, spec: ToolSpec) -> None:
         self._tools[spec.name] = spec
@@ -324,7 +418,10 @@ class ToolRegistry:
             )
         start = asyncio.get_event_loop().time()
         try:
-            result = await spec.execute(**args)
+            # alias normalization happens HERE too (not only in the loop):
+            # every direct caller — scripts, tests, orchestration — gets the
+            # same repaired args, one enforcement point per seam.
+            result = await spec.execute(**normalize_args(spec, args))
             elapsed = (asyncio.get_event_loop().time() - start) * 1000
             if result.get("error"):
                 return ToolResult(
@@ -674,6 +771,89 @@ class ToolRegistry:
                 }
         except Exception as e:
             return {"output": "", "error": str(e)}
+
+    # ── Chat Phase 2 intent routing (card 20261116_090332) ────────────────
+
+    async def _run_image_gen(self, prompt: str, style: str = "realistic") -> dict[str, Any]:
+        """Generate procedural art (same generators as POST /images/generate).
+
+        The bytes travel out-of-band on ``attachment`` (captured by the chat
+        turn adapter, rendered as an inline markdown image) — the model-facing
+        ``output`` stays small text so the base64 never enters the prompt or
+        an SSE frame.
+        """
+        import base64
+
+        from domain.multimodal import IMAGE_STYLES, generate_image, save_image
+
+        text = (prompt or "").strip()
+        if not text:
+            return {"output": "", "error": "Empty prompt"}
+        if style not in IMAGE_STYLES:
+            style = "realistic"
+        try:
+            png = generate_image(text, style)
+            rel = save_image(png, style)
+        except RuntimeError as e:  # Pillow missing — same contract as the endpoint
+            return {"output": "", "error": str(e)}
+        return {
+            "output": (
+                f"Generated a {style} image ({rel}) and attached it to your reply — "
+                "the user already sees it; do not repeat paths or base64."
+            ),
+            "attachment": {
+                "type": "image",
+                "mime": "image/png",
+                "path": rel,
+                "alt": text[:80],
+                "b64": base64.b64encode(png).decode("ascii"),
+            },
+            "style": style,
+        }
+
+    async def _run_file_qa(self, query: str, path: str = "") -> dict[str, Any]:
+        """Question answering over a specific file (excerpts), else knowledge search.
+
+        With ``path``: question-matched lines only — the whole file would blow
+        the model's context (the excerpts, not the document, are the product).
+        Without: the canonical knowledge/docs search, composed not copied.
+        """
+        import os
+
+        from domain.agents._internal.path_guard import path_violation
+
+        if not path:
+            return await self._run_knowledge_retrieval(query)
+
+        violation = path_violation(path)
+        if violation:
+            return {"output": "", "error": violation}
+        try:
+            resolved = os.path.abspath(path)
+            if not os.path.exists(resolved):
+                return {"output": "", "error": f"File not found: {path}"}
+            if os.path.getsize(resolved) > 1_000_000:
+                return {"output": "", "error": "File too large (>1MB limit)"}
+            with open(resolved, errors="replace") as f:
+                content = f.read()
+        except Exception as e:
+            return {"output": "", "error": str(e)}
+
+        terms = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) > 2]
+        lines = content.splitlines()
+        hits = [ln for ln in lines if terms and any(t in ln.lower() for t in terms)]
+        if hits:
+            excerpt = "\n".join(hits[:30])[:4000]
+            return {
+                "output": f"Excerpts from {path} ({len(hits)} matching lines):\n{excerpt}",
+                "path": path,
+                "matches": len(hits),
+            }
+        return {
+            "output": f"No lines matching '{query}' in {path}. Head of the file:\n{content[:2000]}",
+            "path": path,
+            "matches": 0,
+        }
 
 
 _registry: ToolRegistry | None = None

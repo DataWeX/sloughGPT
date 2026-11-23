@@ -18,12 +18,19 @@ real dispatch and restore the suite's convention afterwards.
 
 from __future__ import annotations
 
+import base64
+import json
 import sys
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.rate_limit_middleware import RateLimitMiddleware
+
+from domain.infrastructure.rate_limiter import (
+    RATE_LIMIT_HEADER_LIMIT,
+    RATE_LIMIT_HEADER_REMAINING,
+)
 
 REMOTE_IP = "10.9.8.7"
 LOCAL_IP = "127.0.0.1"
@@ -45,6 +52,12 @@ def _build_app() -> FastAPI:
     async def health():
         return {"ok": "health"}
 
+    @app.get("/status")
+    async def status():
+        # Deliberately matches NO entry in _ROUTE_LIMITS: exercises the
+        # global-quota fallback for the governing-bucket headers.
+        return {"ok": "status"}
+
     app.add_middleware(RateLimitMiddleware)
     return app
 
@@ -53,6 +66,20 @@ def _client(ip: str) -> TestClient:
     # TestClient stamps this tuple into scope["client"], which is exactly
     # what the middleware keys its buckets on.
     return TestClient(_build_app(), client=(ip, 40000))
+
+
+def _workspace_token(workspace_id: str) -> str:
+    """Unsigned JWT-shaped token carrying workspace_id.
+
+    The middleware only base64-decodes the payload (rate limiting, not
+    auth — see ``_extract_workspace_from_token``), so no signature needed.
+    """
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"workspace_id": workspace_id}).encode())
+        .decode()
+        .rstrip("=")
+    )
+    return f"header.{payload}.sig"
 
 
 @pytest.fixture(autouse=True)
@@ -133,3 +160,48 @@ class TestRateLimitMiddleware:
             client.get("/models/downloads")
         resp = client.request("OPTIONS", "/models/downloads")
         assert resp.status_code != 429
+
+
+class TestGoverningBucketHeaders:
+    """Success-path X-RateLimit-* must describe the GOVERNING bucket.
+
+    Card 20261121_080632: a 200 used to report the global budget
+    (max_requests x multiplier) no matter which quota was binding, so
+    X-RateLimit-Limit said 300 while the route bucket that would reject
+    request #121 said 120 — a 429's headers and a 200's headers could
+    never be reconciled. The governing bucket is the tightest (min-limit)
+    quota among route -> workspace -> global, ties resolving to the
+    earlier-checked tier (every request consumes 1 from each applicable
+    bucket, so the smallest-limit bucket always empties first).
+    """
+
+    def test_routed_path_reports_route_budget_not_global(self):
+        """``/models/hf`` (120, 60) remote binds before the 300 global."""
+        client = _client(REMOTE_IP)
+        resp = client.get("/models/hf")
+        assert resp.headers[RATE_LIMIT_HEADER_LIMIT] == "120"
+        assert resp.headers[RATE_LIMIT_HEADER_REMAINING] == "119"
+
+    def test_unrouted_path_falls_back_to_global_budget(self):
+        """No route bucket applies -> the global quota governs (unchanged)."""
+        client = _client(REMOTE_IP)
+        resp = client.get("/status")
+        assert resp.headers[RATE_LIMIT_HEADER_LIMIT] == "300"
+        assert resp.headers[RATE_LIMIT_HEADER_REMAINING] == "299"
+
+    def test_local_route_budget_wins_over_local_global(self):
+        """Local ``/models/hf`` = 1200 binds before the 3000 local global."""
+        client = _client(LOCAL_IP)
+        resp = client.get("/models/hf")
+        assert resp.headers[RATE_LIMIT_HEADER_LIMIT] == "1200"
+        assert resp.headers[RATE_LIMIT_HEADER_REMAINING] == "1199"
+
+    def test_workspace_bucket_governs_when_tighter_than_route(self):
+        """Active workspace quota (300) beats the local route (1200)."""
+        client = _client(LOCAL_IP)
+        resp = client.get(
+            "/models/hf",
+            headers={"Authorization": f"Bearer {_workspace_token('ws-test')}"},
+        )
+        assert resp.headers[RATE_LIMIT_HEADER_LIMIT] == "300"
+        assert resp.headers[RATE_LIMIT_HEADER_REMAINING] == "299"

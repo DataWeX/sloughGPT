@@ -55,7 +55,7 @@ from domain.training._internal.experience_adapter import (
 )
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
-from domain.training._internal.slonet import load_checkpoint_npz
+from domain.training._internal.slonet import Tensor, cross_entropy, load_checkpoint_npz
 from domain.training._internal.step_strategy import (
     EwcStrategy,
     OwnedObjectiveStrategy,
@@ -249,6 +249,33 @@ def _dataset_identity(data_path, data) -> tuple[str, str, str]:
     # A list spec (names / (name, ratio) tuples) is a static blend, so it
     # still hashes — only a str can name a live source.
     return fingerprint_array(np.asarray(data, dtype=np.int64)), "", recipe
+
+
+def _spec_paths(data_path: Any) -> list[str]:
+    """Corpus paths inside a trainer data spec.
+
+    The three shapes ``load_corpus_text`` accepts: a plain ``str``, a plain
+    list of names, and the curriculum's ``[(path, ratio), ...]`` mix. Used
+    wherever a single path is needed from a spec that may be a blend —
+    checkpoint naming and soul metadata (a mix must not leak into either
+    as a python repr).
+
+    Args:
+        data_path: the trainer's data spec.
+
+    Returns:
+        Non-empty corpus paths in spec order (empty for a void spec).
+    """
+    if not data_path:
+        return []
+    if isinstance(data_path, str):
+        return [data_path]
+    paths: list[str] = []
+    for item in data_path:
+        p = item[0] if isinstance(item, (list, tuple)) and item else item
+        if p:
+            paths.append(str(p))
+    return paths
 
 
 def _measure_and_gate(
@@ -2795,10 +2822,17 @@ class SloughGPTTrainer:
         if self._ewc is None:
             return False
 
-        def _loss_fn(model, batch):
-            x, y = batch
-            _, loss = model(x, y)
-            return loss
+        def _loss_fn(outputs, targets):
+            # ewc.py's contract: loss_fn(logits, targets) — it calls this
+            # after `outputs = self.model(inputs)`, so the CE is computed
+            # straight from logits (the trainer's model(x, y) signature
+            # never reaches this path; using it unpacked the (batch, block)
+            # target array into two names and every snapshot silently failed).
+            if not isinstance(outputs, Tensor):
+                outputs = Tensor(np.asarray(outputs, dtype=np.float32))
+            if not isinstance(targets, Tensor):
+                targets = Tensor(np.asarray(targets, dtype=np.int64))
+            return cross_entropy(outputs, targets)
 
         try:
             self._ewc.save_task_snapshot(
@@ -2980,7 +3014,10 @@ class SloughGPTTrainer:
         data_path = getattr(self, "data_path", "")
         if data_path:
             # e.g. "/Users/mac/sloughGPT/datasets/python_flask/corpus.jsonl" -> "python_flask"
-            ds_name = Path(data_path).parent.name
+            # A curriculum mix [(path, ratio), ...] names the checkpoint
+            # after its first corpus entry (Path() rejects the list).
+            paths = _spec_paths(data_path)
+            ds_name = Path(paths[0]).parent.name if paths else soul_name
         else:  # pragma: no cover (trainer always has data_path)
             ds_name = soul_name
 
@@ -3168,7 +3205,11 @@ class SloughGPTTrainer:
         soul = create_soul_profile(
             name=self.soul_name,
             base_model="sloughgpt",
-            training_dataset=self.data_path,
+            training_dataset=(
+                self.data_path
+                if isinstance(self.data_path, str)
+                else ", ".join(_spec_paths(self.data_path))
+            ),
             epochs_trained=epochs_trained,
             final_train_loss=final_train_loss,
             final_val_loss=final_val_loss,

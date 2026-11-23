@@ -8,6 +8,7 @@ Public API:
     AgentLoop, Event, ToolCall, ProtocolError, decode, encode_tool_block,
     validate_args
     make_provider_infer, resolve_provider, render_tool_contract
+    agentic_stream
 """
 
 from __future__ import annotations
@@ -46,6 +47,8 @@ _LAZY_IMPORTS = {
     "resolve_provider": ("._internal.provider_infer", "resolve_provider"),
     "render_tool_contract": ("._internal.provider_infer", "render_tool_contract"),
     "NO_PROVIDER_MSG": ("._internal.provider_infer", "NO_PROVIDER_MSG"),
+    # agentic chat turn (loop + live token stream behind the engine port)
+    "agentic_stream": ("._internal.agentic", "agentic_stream"),
 }
 
 
@@ -89,4 +92,5 @@ __all__ = [
     "resolve_provider",
     "render_tool_contract",
     "NO_PROVIDER_MSG",
+    "agentic_stream",
 ]

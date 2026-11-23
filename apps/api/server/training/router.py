@@ -67,6 +67,11 @@ from .live_stream import router as live_stream_router
 
 router.include_router(live_stream_router)
 
+# Include the subscribe-only job-state event stream (SSE, card 20261120_110356)
+from .job_events import router as job_events_router
+
+router.include_router(job_events_router)
+
 
 def _finetuned_dir() -> Path:
     """Absolute path to the HF fine-tuned models directory."""

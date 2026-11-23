@@ -60,7 +60,7 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 
 ```bash
 # Clone repository
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 
 # Project Python env: conda env `sloughgpt` is the default
@@ -603,7 +603,7 @@ Docs live flat in `docs/`. Auto-generated API docs at `http://localhost:8000/doc
 
 ```bash
 # Clone and set up
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 conda env list | grep -q sloughgpt || conda create -n sloughgpt python=3.12 -y
 conda activate sloughgpt        # or skip activation: ./scripts/python ...

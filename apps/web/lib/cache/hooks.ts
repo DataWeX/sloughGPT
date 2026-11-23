@@ -164,6 +164,11 @@ export function useQuery<T>(
   }, [sk, enabled, refreshVersion])
 
   const refetch = useCallback(async (): Promise<T> => {
+    // A manual refetch means "now": fetchQuery answers fresh entries from
+    // cache, which would silently swallow the models panel's Refresh button
+    // (card 20261119_110913) — invalidate first so freshness never
+    // short-circuits a user-invoked refresh.
+    invalidateQuery(key)
     return fetchQuery(key, () => fetcherRef.current(), optsRef.current)
   }, [key])
 

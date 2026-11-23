@@ -47,6 +47,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.contract import REGISTRY, RouteEntry
+from infrastructure.inference_metrics import count_tokens, record
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log
 
@@ -253,15 +254,6 @@ def _completion(
     return payload
 
 
-def _record_inference(model_id: str, tokens: int, elapsed_ms: float) -> None:
-    try:
-        from domain.infrastructure.server_state import get_server_state
-
-        get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=model_id)
-    except Exception as e:
-        logger.warning("Failed to record inference metrics: %s", e)
-
-
 # ── Handlers ────────────────────────────────────────────────────────────────
 
 
@@ -308,9 +300,10 @@ async def chat_completions(
         cached = cache.get(cache_key)
         if cached is not None:
             elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-            # tokens=0: the model ran zero tokens. Counting the replayed text
-            # would inflate the tokens/s window with work nobody did.
-            _record_inference(model_id, 0, elapsed_ms)
+            # Cache hit: the replayed text is counted honestly — PR 1's cached
+            # flag keeps it out of the tok/s window, so serve speed can never
+            # masquerade as generation speed.
+            record(count_tokens(cached, provider=provider), elapsed_ms, model_id, cached=True)
             logger.info("response cache: exact hit (%.1fms, %d chars)", elapsed_ms, len(cached))
             safe_audit_log(
                 "llm.chat.completions",
@@ -324,7 +317,7 @@ async def chat_completions(
     except Exception as e:
         classify_and_raise(e, source="llm.chat.completions")
     elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-    _record_inference(model_id, _estimate(result), elapsed_ms)
+    record(count_tokens(result, provider=provider), elapsed_ms, model_id)
     safe_audit_log(
         "llm.chat.completions",
         resource=model_id,

@@ -313,11 +313,16 @@ class TestMethodMismatch:
 
 
 class TestGradientGenerator:
-    """_generate_gradient_image keyword palette branches (real Pillow)."""
+    """gallery._generate_gradient_image keyword palette branches (real Pillow).
+
+    The generator moved verbatim from ImagesRouter to domain.multimodal.gallery
+    (card 20261116_090332) — same pixels, new owner.
+    """
 
     def _gen(self, prompt):
-        img = ImagesRouter()
-        return img._generate_gradient_image(prompt, width=24, height=24)
+        from domain.multimodal._internal.gallery import _generate_gradient_image
+
+        return _generate_gradient_image(prompt, width=24, height=24)
 
     def _first_color_pixel(self, png_bytes):
         import io
@@ -351,42 +356,50 @@ class TestGradientGenerator:
 
 
 class TestStyleGenerators:
-    """Each procedural style generator produces a valid PNG."""
-
-    @pytest.fixture(scope="class")
-    def img(self):
-        return ImagesRouter()
+    """Each procedural style generator produces a valid PNG (domain owns them now)."""
 
     def _valid_png(self, data):
         assert data.startswith(b"\x89PNG")
 
-    def test_cartoon(self, img):
-        self._valid_png(img._generate_cartoon_image("a cat", width=16, height=16))
+    def test_cartoon(self):
+        from domain.multimodal._internal.gallery import _generate_cartoon_image
 
-    def test_watercolor(self, img):
-        self._valid_png(img._generate_watercolor_image("flowers", width=16, height=16))
+        self._valid_png(_generate_cartoon_image("a cat", width=16, height=16))
 
-    def test_sketch(self, img):
-        self._valid_png(img._generate_sketch_image("house", width=16, height=16))
+    def test_watercolor(self):
+        from domain.multimodal._internal.gallery import _generate_watercolor_image
 
-    def test_fantasy(self, img):
-        self._valid_png(img._generate_fantasy_image("dragon", width=16, height=16))
+        self._valid_png(_generate_watercolor_image("flowers", width=16, height=16))
+
+    def test_sketch(self):
+        from domain.multimodal._internal.gallery import _generate_sketch_image
+
+        self._valid_png(_generate_sketch_image("house", width=16, height=16))
+
+    def test_fantasy(self):
+        from domain.multimodal._internal.gallery import _generate_fantasy_image
+
+        self._valid_png(_generate_fantasy_image("dragon", width=16, height=16))
 
 
 class TestDispatch:
-    """_generate_image style dispatch."""
+    """_generate_image style dispatch (router wrapper -> domain dispatcher)."""
 
     def test_known_style_uses_its_generator(self):
         img = ImagesRouter()
-        with patch.object(img, "_generate_cartoon_image", return_value=b"cartoon_bytes") as mock_c:
+        with patch(
+            "domain.multimodal._internal.gallery._generate_cartoon_image",
+            return_value=b"cartoon_bytes",
+        ) as mock_c:
             out = img._generate_image("x", "cartoon")
             assert out == b"cartoon_bytes"
             mock_c.assert_called_once_with("x")
 
     def test_unknown_style_falls_back_to_gradient(self):
         img = ImagesRouter()
-        with patch.object(
-            img, "_generate_gradient_image", return_value=b"gradient_bytes"
+        with patch(
+            "domain.multimodal._internal.gallery._generate_gradient_image",
+            return_value=b"gradient_bytes",
         ) as mock_g:
             out = img._generate_image("x", "bogus_style")
             assert out == b"gradient_bytes"

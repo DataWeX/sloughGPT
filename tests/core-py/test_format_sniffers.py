@@ -7,9 +7,9 @@ Two gates from the card:
      result either names a registered adapter or declares
      ``capabilities.unsupported`` (image/video never fake-success).
 
-Grandfathered formats (conversation/instruction/audio — their adapters are
-not registered yet) must still be owned by ``detect_dataset_type``'s
-if-chain: sniff returns None and the label comes from the legacy branch.
+Grandfathered formats (instruction/audio/.json-conversation — not yet
+migrated) must still be owned by ``detect_dataset_type``'s if-chain:
+sniff returns None and the label comes from the legacy branch.
 """
 
 from __future__ import annotations
@@ -80,15 +80,17 @@ SNIFFED_CASES = [
         "text-pretrain",
         False,
     ),
-]
-
-# Grandfathered formats — still the if-chain's business (sniff → None).
-GRANDFATHERED_CASES = [
     (
         "jsonl-conversation",
         lambda d: _jsonl(d, {"messages": [{"role": "user", "content": "hi"}]}),
         DatasetType.CONVERSATION,
+        "chat-sft",
+        False,
     ),
+]
+
+# Grandfathered formats — still the if-chain's business (sniff → None).
+GRANDFATHERED_CASES = [
     ("jsonl-instruction", lambda d: _jsonl(d, {"instruction": "do this"}), DatasetType.INSTRUCTION),
     (
         "jsonl-audio",
@@ -118,10 +120,12 @@ PRECEDENCE_CASES = [
         None,
     ),
     (
+        # conv is the earliest legacy elif key — it must still win over
+        # image, now claimed by the chat-sft sniffer instead of the if-chain.
         "conversation+image",
         lambda d: _jsonl(d, {"messages": [], "image": "p.jpg"}),
         DatasetType.CONVERSATION,
-        None,
+        "sniffed",
     ),
     (
         "image+video",

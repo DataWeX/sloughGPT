@@ -213,6 +213,46 @@ class TestEwcContinualLearner:
         assert stats["param_count"] > 0
         assert isinstance(stats["ewc_loss"], float)
 
+    def test_ewc_loss_is_arraywise_at_production_shape(self):
+        """The penalty must be array-wise, never a Python element loop.
+
+        Regression (found by the curriculum calibration run 2026-11-19):
+        ``fisher(ndarray) * diff**2(Tensor)`` put numpy on the left, so
+        numpy drained the Tensor through the sequence protocol — 895k
+        per-element ``__rmul__`` calls made ``ewc_loss()`` take ~69s per
+        training step, crawling persona/consolidation at 60s/step. Both
+        operands must be Tensors so one array-wise op does the work.
+        """
+        import time
+
+        from domain.models import SloughGPTModel
+
+        model = SloughGPTModel(vocab_size=142, n_embed=128, n_layer=4, n_head=4, block_size=128)
+        learner = EwcContinualLearner(model, EWCParameters(lambda_ewc=1000.0, num_samples=8))
+        names = [n for n, _ in model.named_parameters()]
+        learner.task_snapshots["stage"] = TaskSnapshot(
+            task_id="stage",
+            task_name="stage",
+            parameters={n: np.asarray(p.data).copy() for n, p in model.named_parameters()},
+            fisher_diagonal={
+                n: np.ones_like(np.asarray(p.data)) for n, p in model.named_parameters()
+            },
+            optimal_loss=1.0,
+            num_samples=8,
+        )
+        learner.current_task = "stage"
+
+        t0 = time.perf_counter()
+        loss, stats = learner.ewc_loss()
+        elapsed = time.perf_counter() - t0
+
+        assert elapsed < 5.0, (
+            f"ewc_loss took {elapsed:.1f}s at production shape — "
+            "penalty path is running per-element, not array-wise"
+        )
+        assert stats["param_count"] == len(names)
+        assert np.isfinite(_scalar(loss))
+
     def test_multi_task_ewc_loss_empty(self):
         model = _SimpleModel()
         learner = EwcContinualLearner(model)

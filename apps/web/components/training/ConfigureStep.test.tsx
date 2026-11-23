@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
-import { makeForm, makeDatasets } from './__test-helper'
+import { makeForm, makeDatasets, makeCheckpoints } from './__test-helper'
 
 vi.mock('@/components/training/TrainingPresets', () => ({
   TrainingPresets: () => <div data-testid="training-presets" />,
@@ -14,6 +14,21 @@ vi.mock('@sloughgpt/strui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@sloughgpt/strui')>()
   return {
     ...actual,
+    // The real Select is a popover; a native <select> keeps value +
+    // onValueChange observable (same contract as QuickTrainCard.test.tsx).
+    Select: ({ children, value, onValueChange }: any) => (
+      <select
+        value={value}
+        onChange={(e) => onValueChange?.((e.target as HTMLSelectElement).value)}
+      >
+        {children}
+      </select>
+    ),
+    SelectTrigger: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    SelectValue: ({ children }: any) => <span>{children}</span>,
+    // Fragment: <option> must be a direct child of <select> or select.value is ''
+    SelectContent: ({ children }: any) => <>{children}</>,
+    SelectItem: ({ children, value }: any) => <option value={value}>{children}</option>,
     FoldSection: ({
       heading,
       children,
@@ -35,6 +50,7 @@ vi.mock('@sloughgpt/strui', async (importOriginal) => {
 import { ConfigureStep } from './ConfigureStep'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
+import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 
 const datasets: UseTrainingDatasetsReturn = makeDatasets()
 
@@ -199,5 +215,145 @@ describe('ConfigureStep hyperparameter sanitization', () => {
     fireEvent.blur(epochs)
     expect(form.setTrainingEpochs).not.toHaveBeenCalled()
     expect(epochs.value).toBe('10')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Resume default (card 20261119_133132): one-shot latest-of-the-same-dataset
+// + a touched guard. Uses a harness that holds the value in real state — the
+// makeForm() setters are spies, so they cannot show what the select renders.
+// ---------------------------------------------------------------------------
+
+describe('ConfigureStep resume default', () => {
+  afterEach(cleanup)
+
+  function ResumeHarness({
+    form: initial,
+    datasets: datasetsProp,
+    checkpoints: checkpointsProp,
+  }: {
+    form: TrainingFormState
+    datasets: UseTrainingDatasetsReturn
+    checkpoints: UseTrainingCheckpointsReturn
+  }) {
+    const [resumeCheckpoint, setResumeCheckpoint] = React.useState(initial.resumeCheckpoint)
+    const form = { ...initial, resumeCheckpoint, setResumeCheckpoint }
+    return (
+      <ConfigureStep
+        form={form}
+        datasets={datasetsProp}
+        checkpoints={checkpointsProp}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />
+    )
+  }
+
+  // The base-model Select needs method=finetune + availableModels, so in this
+  // configuration the resume select is the only <select> on screen.
+  const resumeSelect = (container: HTMLElement) =>
+    container.querySelector('select') as HTMLSelectElement
+
+  const openAdvanced = () => fireEvent.click(screen.getByText('Show advanced options'))
+
+  const shakespeareCkpts = [
+    {
+      name: 'shakespeare_1700000100.soul',
+      soul: 'shakespeare',
+      created_at: '2026-11-01T00:00:00Z',
+    },
+    { name: 'other_1700000999.soul', soul: 'other', created_at: '2026-11-09T00:00:00Z' },
+    {
+      name: 'shakespeare_1700000200.soul',
+      soul: 'shakespeare',
+      created_at: '2026-11-05T00:00:00Z',
+    },
+    // training_dataset is a PATH while selectedDataset is an id: the match is
+    // the path component, not a raw === (train_pipeline writes data_path).
+    {
+      name: 'run_555.soul',
+      soul: 'run',
+      training_dataset: 'datasets/shakespeare/input.txt',
+      created_at: '2026-11-08T00:00:00Z',
+    },
+  ]
+
+  it('defaults to the latest checkpoint trained on the selected dataset', () => {
+    const { container } = render(
+      <ResumeHarness
+        form={makeForm()}
+        datasets={makeDatasets({ selectedDataset: 'shakespeare' })}
+        checkpoints={makeCheckpoints({ checkpoints: shakespeareCkpts })}
+      />,
+    )
+    openAdvanced()
+
+    // latest by created_at among the three same-dataset matches: run_555
+    // (2026-11-08) beats the two shakespeare_* filenames; other_1700000999 is
+    // newer still but belongs to another dataset.
+    expect(resumeSelect(container).value).toBe('run_555.soul')
+  })
+
+  it('stays on Start fresh when nothing was trained on the selected dataset', () => {
+    const { container } = render(
+      <ResumeHarness
+        form={makeForm()}
+        datasets={makeDatasets({ selectedDataset: 'shakespeare' })}
+        checkpoints={makeCheckpoints({
+          checkpoints: [
+            { name: 'other_1700000999.soul', soul: 'other' },
+            // field present and authoritative: the filename says shakespeare
+            // but the recorded corpus is another dataset -> not a match.
+            {
+              name: 'shakespeare_1700000300.soul',
+              soul: 'shakespeare',
+              training_dataset: 'datasets/other/input.txt',
+            },
+          ],
+        })}
+      />,
+    )
+    openAdvanced()
+
+    expect(resumeSelect(container).value).toBe('')
+  })
+
+  it('never steals the choice back after the user picks, including Start fresh', () => {
+    const datasetsProp = makeDatasets({ selectedDataset: 'shakespeare' })
+    const view = render(
+      <ResumeHarness
+        form={makeForm()}
+        datasets={datasetsProp}
+        checkpoints={makeCheckpoints({ checkpoints: shakespeareCkpts })}
+      />,
+    )
+    openAdvanced()
+    const select = resumeSelect(view.container)
+    expect(select.value).toBe('run_555.soul')
+
+    // user deliberately picks "Start fresh"
+    fireEvent.change(select, { target: { value: '' } })
+    expect(select.value).toBe('')
+
+    // a newer same-dataset checkpoint lands afterwards (fetch race): the
+    // one-shot default must not overwrite an explicit choice.
+    view.rerender(
+      <ResumeHarness
+        form={makeForm()}
+        datasets={datasetsProp}
+        checkpoints={makeCheckpoints({
+          checkpoints: [
+            ...shakespeareCkpts,
+            {
+              name: 'run_999.soul',
+              soul: 'run',
+              training_dataset: 'datasets/shakespeare/input.txt',
+              created_at: '2026-11-12T00:00:00Z',
+            },
+          ],
+        })}
+      />,
+    )
+    expect(resumeSelect(view.container).value).toBe('')
   })
 })

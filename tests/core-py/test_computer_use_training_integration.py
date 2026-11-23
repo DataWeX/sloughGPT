@@ -22,6 +22,11 @@ pytest.importorskip(
     reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
 )
 
+# Tree identity + browser guard (cards 20261104_085623, 20261119_144623):
+# a foreign/stale vite on :5173 must produce an honest skip, not content
+# reds attributed to this change.
+from tests.skip_gate_identity import environment_gate
+
 # vite :5173 (card e47e19ee retired the stale :3000 default); SLO_WEB_URL overrides.
 BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = "http://localhost:8000"
@@ -57,6 +62,10 @@ def ensure_servers_ready():
             "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
         )
     time.sleep(3)
+    # After the waits (a booting stack gets its chance to come up), verify
+    # identity: foreign/stale tree or missing chromium build → honest skip
+    # (card 20261119_144623 — a foreign tree must not own this suite's verdict).
+    environment_gate(BASE)
 
 
 def ok(name: str, passed: bool, detail: str = ""):

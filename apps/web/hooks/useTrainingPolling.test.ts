@@ -18,18 +18,44 @@ vi.mock('@/lib/app-shell', () => ({
   writeTraining: (...args: unknown[]) => mockWriteTraining(...args),
 }))
 
+let mockStreamLive = false
+const mockRegisterTick = vi.fn()
+const mockClearTick = vi.fn()
+vi.mock('./useLiveTraining', () => ({
+  registerImmediateTick: (...args: unknown[]) => mockRegisterTick(...args),
+  clearImmediateTick: (...args: unknown[]) => mockClearTick(...args),
+  isTrainingStreamLive: () => mockStreamLive,
+}))
+
 import { useTrainingPolling } from './useTrainingPolling'
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
+  mockStreamLive = false
   mockReadTraining.mockReturnValue({
-    phase: 'idle', jobId: null, lossHistory: [],
-    progress: 0, loss: null, epoch: 0, totalEpochs: 0,
-    globalStep: 0, totalSteps: 0, stepsPerSec: null, eta: null,
-    elapsedSeconds: null, checkpoint: null, finalLoss: null,
-    error: null, method: null, message: '', evalResult: null,
-    startTime: null, modelPath: null, avgQuality: null, dataQuality: null,
+    phase: 'idle',
+    jobId: null,
+    lossHistory: [],
+    progress: 0,
+    loss: null,
+    epoch: 0,
+    totalEpochs: 0,
+    globalStep: 0,
+    totalSteps: 0,
+    stepsPerSec: null,
+    eta: null,
+    elapsedSeconds: null,
+    checkpoint: null,
+    finalLoss: null,
+    error: null,
+    method: null,
+    message: '',
+    evalResult: null,
+    startTime: null,
+    modelPath: null,
+    avgQuality: null,
+    dataQuality: null,
   })
 })
 
@@ -59,9 +85,17 @@ describe('useTrainingPolling', () => {
 
     it('updates training state on running job', async () => {
       mockGetJob.mockResolvedValue({
-        status: 'running', progress: 50, loss: 0.3,
-        current_epoch: 2, epochs: 10, global_step: 100, total_steps: 1000,
-        steps_per_sec: 5.0, eta_s: 180, elapsed_s: 20, avg_quality: 0.8,
+        status: 'running',
+        progress: 50,
+        loss: 0.3,
+        current_epoch: 2,
+        epochs: 10,
+        global_step: 100,
+        total_steps: 1000,
+        steps_per_sec: 5.0,
+        eta_s: 180,
+        elapsed_s: 20,
+        avg_quality: 0.8,
       })
       const { result } = renderHook(() => useTrainingPolling())
 
@@ -75,7 +109,9 @@ describe('useTrainingPolling', () => {
 
     it('completes on completed job', async () => {
       mockGetJob.mockResolvedValue({
-        status: 'completed', checkpoint: 'cp1', loss: 0.1,
+        status: 'completed',
+        checkpoint: 'cp1',
+        loss: 0.1,
         avg_quality: 0.9,
       })
       const addToast = vi.fn()
@@ -131,9 +167,7 @@ describe('useTrainingPolling', () => {
       await vi.advanceTimersByTimeAsync(30000)
 
       expect(mockGetJob.mock.calls.length).toBeGreaterThanOrEqual(2)
-      expect(mockWriteTraining).toHaveBeenCalledWith(
-        expect.objectContaining({ progress: 60 }),
-      )
+      expect(mockWriteTraining).toHaveBeenCalledWith(expect.objectContaining({ progress: 60 }))
     })
 
     it('stops after MAX_POLL_RETRIES consecutive errors', async () => {
@@ -147,24 +181,38 @@ describe('useTrainingPolling', () => {
         await vi.advanceTimersByTimeAsync(60000)
       }
 
-      expect(addToast).toHaveBeenCalledWith(
-        expect.stringContaining('Lost connection'),
-        'error',
-      )
+      expect(addToast).toHaveBeenCalledWith(expect.stringContaining('Lost connection'), 'error')
     })
 
     it('accumulates loss history', async () => {
       mockReadTraining.mockReturnValue({
-        phase: 'TRAINING', jobId: 'j1',
+        phase: 'TRAINING',
+        jobId: 'j1',
         lossHistory: [{ step: 1, loss: 0.5 }],
-        progress: 0, loss: 0.5, epoch: 0, totalEpochs: 0,
-        globalStep: 0, totalSteps: 0, stepsPerSec: null, eta: null,
-        elapsedSeconds: null, checkpoint: null, finalLoss: null,
-        error: null, method: null, message: '', evalResult: null,
-        startTime: null, modelPath: null, avgQuality: null, dataQuality: null,
+        progress: 0,
+        loss: 0.5,
+        epoch: 0,
+        totalEpochs: 0,
+        globalStep: 0,
+        totalSteps: 0,
+        stepsPerSec: null,
+        eta: null,
+        elapsedSeconds: null,
+        checkpoint: null,
+        finalLoss: null,
+        error: null,
+        method: null,
+        message: '',
+        evalResult: null,
+        startTime: null,
+        modelPath: null,
+        avgQuality: null,
+        dataQuality: null,
       })
       mockGetJob.mockResolvedValue({
-        status: 'running', loss: 0.3, global_step: 2,
+        status: 'running',
+        loss: 0.3,
+        global_step: 2,
       })
       const { result } = renderHook(() => useTrainingPolling())
 
@@ -205,7 +253,11 @@ describe('useTrainingPolling', () => {
       await vi.advanceTimersByTimeAsync(3000)
 
       expect(mockWriteTraining).toHaveBeenCalledWith(
-        expect.objectContaining({ phase: 'complete', checkpoint: 'tcp1', modelPath: '/models/turbo/final.soul' }),
+        expect.objectContaining({
+          phase: 'complete',
+          checkpoint: 'tcp1',
+          modelPath: '/models/turbo/final.soul',
+        }),
       )
       expect(addToast).toHaveBeenCalledWith('Training complete!', 'success')
     })
@@ -230,9 +282,7 @@ describe('useTrainingPolling', () => {
       result.current.startTurboPoll()
       await vi.advanceTimersByTimeAsync(3000)
 
-      expect(mockWriteTraining).toHaveBeenCalledWith(
-        expect.objectContaining({ phase: 'idle' }),
-      )
+      expect(mockWriteTraining).toHaveBeenCalledWith(expect.objectContaining({ phase: 'idle' }))
     })
 
     it('stops after MAX_POLL_RETRIES', async () => {
@@ -245,10 +295,7 @@ describe('useTrainingPolling', () => {
         await vi.advanceTimersByTimeAsync(3000)
       }
 
-      expect(addToast).toHaveBeenCalledWith(
-        expect.stringContaining('Lost connection'),
-        'error',
-      )
+      expect(addToast).toHaveBeenCalledWith(expect.stringContaining('Lost connection'), 'error')
     })
   })
 
@@ -278,5 +325,60 @@ describe('useTrainingPolling', () => {
     const callsBefore = mockGetJob.mock.calls.length
     await vi.advanceTimersByTimeAsync(6000)
     expect(mockGetJob.mock.calls.length).toBe(callsBefore)
+  })
+
+  describe('stream-aware cadence + immediate tick', () => {
+    it('demotes the running cadence 3s → 15s while the stream is live', async () => {
+      mockStreamLive = true
+      mockGetJob.mockResolvedValue({ status: 'running', progress: 50 })
+      const { result } = renderHook(() => useTrainingPolling())
+
+      result.current.startStandardPoll('job1')
+      await vi.advanceTimersByTimeAsync(3000) // initial fetch is always 3s
+      expect(mockGetJob).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(12000) // t=15s: demoted, not due yet
+      expect(mockGetJob).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(3000) // t=18s: demoted interval lands
+      expect(mockGetJob).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps the 3s cadence when no stream is live', async () => {
+      mockGetJob.mockResolvedValue({ status: 'running', progress: 50 })
+      const { result } = renderHook(() => useTrainingPolling())
+
+      result.current.startStandardPoll('job1')
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(mockGetJob).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(mockGetJob).toHaveBeenCalledTimes(2)
+    })
+
+    it('registers an immediate tick that pulls the next poll right away', async () => {
+      mockStreamLive = true // stream live → post-tick reschedule is demoted to 15s
+      mockGetJob.mockResolvedValue({ status: 'running', progress: 50 })
+      const { result } = renderHook(() => useTrainingPolling())
+
+      result.current.startStandardPoll('job1')
+      expect(mockRegisterTick).toHaveBeenCalledWith('job1', expect.any(Function))
+
+      const tick = mockRegisterTick.mock.calls[0][1] as () => void
+      tick()
+      expect(mockGetJob).toHaveBeenCalledWith('job1') // no timer advance
+
+      // The tick also cancelled the pending scheduled fetch (its own
+      // reschedule is 15s away, so nothing lands within 3s).
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(mockGetJob).toHaveBeenCalledTimes(1)
+    })
+
+    it('clears the registered tick when polls clear', () => {
+      const { result, unmount } = renderHook(() => useTrainingPolling())
+      result.current.startStandardPoll('job1')
+      expect(mockClearTick).not.toHaveBeenCalled()
+      unmount()
+      expect(mockClearTick).toHaveBeenCalled()
+    })
   })
 })

@@ -187,3 +187,76 @@ class TestGet:
 
     def test_get_missing_returns_none(self, runtime):
         assert runtime.get("nope") is None
+
+
+class TestPublisher:
+    """The store is the single publisher of job-state changes (card 20261120_110356)."""
+
+    def test_subscribe_returns_init_snapshot_and_publishes_nothing(self, runtime):
+        runtime.register("j1", _job("j1"), None)
+        events: list[dict] = []
+        _token, jobs = runtime.subscribe(events.append)
+        assert events == []  # subscribe itself is not an event
+        assert len(jobs) == 1
+        assert jobs[0]["id"] == "j1"
+        assert jobs[0]["status"] == "running"
+
+    def test_register_publishes_started(self, runtime):
+        events: list[dict] = []
+        runtime.subscribe(events.append)
+        runtime.register("j2", _job("j2"), None)
+        assert [e["phase"] for e in events] == ["started"]
+        assert events[0]["job"]["id"] == "j2"
+
+    def test_sync_publishes_progress_with_detail_fields(self, runtime):
+        runtime.register("j1", _job("j1"), None)
+        events: list[dict] = []
+        runtime.subscribe(events.append)
+        runtime.get("j1").update(
+            {"progress": 42, "global_step": 7, "loss": 1.5, "eta_s": 12.5, "steps_per_sec": 30.0}
+        )
+        runtime.sync("j1")
+        assert [e["phase"] for e in events] == ["progress"]
+        job = events[0]["job"]
+        for key in ("progress", "global_step", "loss", "eta_s", "steps_per_sec"):
+            assert key in job
+        assert job["loss"] == 1.5
+
+    def test_terminal_sync_publishes_terminal_phase(self, runtime):
+        runtime.register("j1", _job("j1"), None)
+        events: list[dict] = []
+        runtime.subscribe(events.append)
+        runtime.get("j1")["status"] = "completed"
+        runtime.sync("j1")
+        assert [e["phase"] for e in events] == ["completed"]
+
+    def test_fanout_to_multiple_subscribers_and_unsubscribe(self, runtime):
+        a: list[dict] = []
+        b: list[dict] = []
+        token_a, _ = runtime.subscribe(a.append)
+        runtime.subscribe(b.append)
+        runtime.register("j1", _job("j1"), None)
+        runtime.unsubscribe(token_a)
+        runtime.register("j2", _job("j2"), None)
+
+        assert [e["job"]["id"] for e in a] == ["j1"]  # gone after unsubscribe
+        assert [e["job"]["id"] for e in b] == ["j1", "j2"]
+
+    def test_raising_subscriber_is_dropped_without_wedging(self, runtime):
+        def boom(_event):
+            raise RuntimeError("dead client")
+
+        runtime.subscribe(boom)
+        alive: list[dict] = []
+        runtime.subscribe(alive.append)
+        runtime.register("j1", _job("j1"), None)  # must not raise
+        runtime.register("j2", _job("j2"), None)  # boom already dropped
+
+        assert [e["job"]["id"] for e in alive] == ["j1", "j2"]
+        assert len(runtime._subscribers) == 1
+
+    def test_no_subscribers_is_a_cheap_noop(self, runtime):
+        runtime.register("j1", _job("j1"), None)
+        runtime.get("j1")["progress"] = 10
+        runtime.sync("j1")  # must not raise with zero subscribers
+        assert runtime._subscribers == {}

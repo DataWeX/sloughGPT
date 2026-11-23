@@ -17,6 +17,7 @@ import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
+import { TrainingModeChooser } from '@/components/training/TrainingModeChooser'
 import { LiveFeedStream } from '@/components/training/LiveFeedStream'
 import { QuickTrainCard } from '@/components/training/QuickTrainCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
@@ -51,12 +52,22 @@ export default function TrainingPage() {
   const visibilityRef = useRef<boolean>(true)
   const ready = useApiReady()
   const tickRef = useRef<() => void>(() => {})
+  // Checkpoints only change while a job is saving — so the tick polls them on
+  // the running cadence plus ONE tick after the last running tick (the final
+  // save can land just before the job flips out of 'running'). An idle page
+  // polls nothing: mount fetch + the Refresh shortcut + post-action fetches
+  // cover every other refresh need (card 20261119_110913 — the unconditional
+  // 10s poll was pure co-tenant noise: 26 checkpoint errors in the /training
+  // capture). Jobs keep their existing cadence (while running only).
+  const hadRunningRef = useRef(false)
   tickRef.current = () => {
-    if (visibilityRef.current) {
+    if (!visibilityRef.current) return
+    const hasRunning = form.allJobs.some((j) => j.status === 'running')
+    if (hasRunning || hadRunningRef.current) {
       void checkpoints.fetchCheckpoints()
-      const hasRunning = form.allJobs.some((j) => j.status === 'running')
       if (hasRunning) void checkpoints.fetchJobs()
     }
+    hadRunningRef.current = hasRunning
   }
   useEffect(() => {
     if (!ready) return
@@ -141,6 +152,15 @@ export default function TrainingPage() {
     form.allJobs.find((j) => j.status === 'running')
   const completedCount = form.allJobs.filter((j) => j.status === 'completed').length
   const runningCount = form.allJobs.filter((j) => j.status === 'running').length
+
+  // Chooser hand-off: scroll a card's target into view. Reduced-motion users
+  // get an instant jump — smooth scrolling is decoration, not information.
+  const scrollTo = (id: string) => {
+    const target = document.getElementById(id)
+    if (!target) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    target.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+  }
 
   // Hero status: the one thing the eye lands on.
   const liveTraining = session.turboRunning || runningJob != null
@@ -243,23 +263,49 @@ export default function TrainingPage() {
         <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />
       </KpiGrid>
 
-      {/* 3-step pipeline */}
-      <SectionHeader title="Guided setup" description="Data, configure, train, results." />
-      <TrainingPipeline
-        form={form}
-        datasets={datasets}
-        session={session}
-        checkpoints={checkpoints}
-        onTest={() => test.setTestDialogOpen(true)}
-        addToast={addToast}
-        step={pipelineStep}
-        onStepChange={setPipelineStep}
-        completedSteps={completedSteps}
-        onStepComplete={(id) => setCompletedSteps((prev) => new Set(prev).add(id))}
+      {/* Mode chooser — the other ways in, surfaced as an inline widget
+          (surface ladder: compose onto the journey page, no new page). */}
+      <TrainingModeChooser
+        inputMode={form.inputMode}
+        onPickDataset={() => {
+          form.setInputMode('dataset')
+          setPipelineStep('data')
+          scrollTo('guided-setup')
+        }}
+        onPickText={() => {
+          form.setInputMode('text')
+          // The paste box lives on Configure — mark Data done so the step
+          // indicator still lets the user walk back.
+          setCompletedSteps((prev) => new Set(prev).add('data'))
+          setPipelineStep('configure')
+          scrollTo('guided-setup')
+        }}
+        onPickQuick={() => {
+          const fold = document.getElementById('fast-train')
+          if (fold instanceof HTMLDetailsElement) fold.open = true
+          scrollTo('fast-train')
+        }}
       />
 
+      {/* 3-step pipeline */}
+      <div id="guided-setup" className="space-y-4 scroll-mt-6">
+        <SectionHeader title="Guided setup" description="Data, configure, train, results." />
+        <TrainingPipeline
+          form={form}
+          datasets={datasets}
+          session={session}
+          checkpoints={checkpoints}
+          onTest={() => test.setTestDialogOpen(true)}
+          addToast={addToast}
+          step={pipelineStep}
+          onStepChange={setPipelineStep}
+          completedSteps={completedSteps}
+          onStepComplete={(id) => setCompletedSteps((prev) => new Set(prev).add(id))}
+        />
+      </div>
+
       {/* Quick train alternative */}
-      <FoldSection heading="Fast train alternative">
+      <FoldSection id="fast-train" heading="Fast train alternative" className="scroll-mt-6">
         <QuickTrainCard datasets={datasets} session={session} addToast={addToast} />
       </FoldSection>
 

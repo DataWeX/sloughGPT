@@ -20,6 +20,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import type { TrainingJob } from '@/lib/training-controller'
 import { useTrainingPolling } from './useTrainingPolling'
 import { useTrainingStream } from './useTrainingStream'
+import { useLiveTraining } from './useLiveTraining'
 
 const _log = logger.child('training-session')
 
@@ -176,6 +177,9 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const training = useShellTraining()
   const { startStandardPoll, startTurboPoll, clearAllPolls } = useTrainingPolling()
   const { startSSETraining, closeStream } = useTrainingStream()
+  // Subscribe-only job-events stream: pushes job state so the polls above
+  // demote to fallback cadence (ref-counted singleton — safe to mount here).
+  useLiveTraining()
 
   const trainingRunning = isTrainingActive(training)
   const turboRunning = training.method === 'turbo' && trainingRunning

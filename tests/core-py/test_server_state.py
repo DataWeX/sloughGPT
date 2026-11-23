@@ -316,6 +316,36 @@ class TestInferenceMetrics:
         s = ServerState()
         assert s.get_model_metrics() == []
 
+    def test_record_inference_cached_keeps_lifetime_totals(self):
+        # A cache hit is still a real serve: lifetime totals keep it...
+        s = ServerState()
+        s.record_inference(tokens=100, elapsed_ms=10.0, model="gpt2", cached=True)
+        assert s.inference_count == 1
+        assert s.total_tokens == 100
+
+    def test_tokens_per_second_excludes_cached(self):
+        # ...but tok/s must not: a hit performs no decode work, so its
+        # apparent rate would report serve speed as generation speed.
+        s = ServerState()
+        s.record_inference(tokens=10000, elapsed_ms=1.0, cached=True)
+        s.record_inference(tokens=100, elapsed_ms=100.0)
+        # Only the real decode counts: 100 tokens / 0.1 s = 1000.0
+        assert s.get_tokens_per_second() == 1000.0
+
+    def test_tokens_per_second_window_excludes_cached(self):
+        s = ServerState()
+        for _ in range(3):
+            s.record_inference(tokens=100, elapsed_ms=100.0)
+        s.record_inference(tokens=10000, elapsed_ms=1.0, cached=True)
+        # 300 tokens / 0.3 s = 1000.0 — the cached hit must not dilute it
+        assert s.get_tokens_per_second() == 1000.0
+
+    def test_tokens_per_second_only_cached_is_zero(self):
+        # No decode records at all -> no generation rate, not a serve rate
+        s = ServerState()
+        s.record_inference(tokens=500, elapsed_ms=10.0, cached=True)
+        assert s.get_tokens_per_second() == 0.0
+
 
 # ---------------------------------------------------------------------------
 # Rate limiting

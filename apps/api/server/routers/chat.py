@@ -40,7 +40,7 @@ from schemas.chat import ChatRequest
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
-from domain.inference.engine import get_chat_engine
+from domain.inference.engine import TurnEvent, get_chat_engine
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +173,38 @@ class ChatRouter:
                             collected.append(item)
                             _token_count += 1
                             yield self._sse_token("chat", item)
+                    elif isinstance(item, TurnEvent):
+                        # Out-of-band tool event from the loop behind the
+                        # engine port (card 20261116_090332): project it as
+                        # a TOOL frame — the exact shape
+                        # stream-chat-response.ts reads (working → executing,
+                        # complete → success, error → error; data.tool
+                        # required). It is never a token and never enters the
+                        # cache: only prose does.
+                        d = item.data or {}
+                        tool = str(d.get("name") or d.get("tool") or "")
+                        if item.kind == "tool_call":
+                            yield self._sse_event(
+                                "chat",
+                                "TOOL",
+                                "working",
+                                data={"tool": tool, "args": d.get("args") or {}},
+                                message=f"Calling {tool}",
+                            )
+                        else:
+                            ok = bool(d.get("success"))
+                            yield self._sse_event(
+                                "chat",
+                                "TOOL",
+                                "complete" if ok else "error",
+                                data={
+                                    "tool": tool,
+                                    "output": d.get("output") or "",
+                                    "error": d.get("error") or "",
+                                    "success": ok,
+                                },
+                                message=f"{tool} {'succeeded' if ok else 'failed'}",
+                            )
                     else:
                         # Final TurnResult: close the stream. The engine computes
                         # usage/timing/finish on it, so surface them here — that

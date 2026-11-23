@@ -106,7 +106,15 @@ class TestSoulToSlnc:
         # Native key layout preserved — no HF remapping.
         assert "tok_emb.weight" in weights
         assert "blocks.0.attn.q_proj.weight" in weights
-        assert "lm_head.weight" in weights
+        # Tied head: either stored, or deduped at compile (byte-identical) and
+        # reconstructible from absence via build_load_plan's tie
+        # (card 20261122_085516 — compiler drops the duplicate copy).
+        if "lm_head.weight" not in weights:
+            assert config.get("tied_embeddings") is True
+            from domain.infrastructure._internal.weight_loader import build_load_plan
+
+            plan = build_load_plan(weights, n_layer=config.get("n_layer", 1), config=config)
+            assert ("lm_head.weight", "tok_emb.weight") in plan.tied_weights
         # Architecture flags for rebuild (explicit + HF-style keys)
         assert config.get("use_rope") is True
         assert config.get("norm_type") == "rms_norm"

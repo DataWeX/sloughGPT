@@ -346,6 +346,12 @@ class EwcContinualLearner:
         """Build the differentiable EWC penalty for one snapshot.
 
         Returns (penalty Tensor, number of matched parameters).
+
+        Both operands of the Fisher product must be Tensors: numpy on the
+        left (``ndarray * Tensor``) makes numpy drain the Tensor through
+        the sequence protocol — one Python-level op per element, ~69s per
+        step at production shape (895k params). ``param - old_param`` and
+        ``Tensor(fisher) * ...`` are array-wise Tensor ops.
         """
         penalty = Tensor(np.zeros(1))
         param_count = 0
@@ -354,7 +360,7 @@ class EwcContinualLearner:
                 old_param = np.asarray(snapshot.parameters[name])
                 fisher = np.asarray(snapshot.fisher_diagonal[name])
                 diff = param - old_param
-                penalty = penalty + (fisher * (diff**2)).sum()
+                penalty = penalty + (Tensor(fisher) * (diff**2)).sum()
                 param_count += 1
         return penalty, param_count
 

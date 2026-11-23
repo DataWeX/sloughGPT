@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -105,6 +106,55 @@ from .builds import router as builds_router
 router.include_router(builds_router)
 
 
+def _find_start_checkpoint(name: str) -> Path | None:
+    """Locate a named checkpoint over the roots the resume select lists.
+
+    Existence-only (no header parse) and confined to the checkpoint roots —
+    ``domain``'s ``find_checkpoint`` covers ``CHECKPOINTS_DIR`` + ``TURBO_DIR``
+    only, while ``list_checkpoints`` (the list the UI's resume select renders)
+    also scans ``LORA_DIR``, so a name the UI can offer must not 404 here. A
+    traversal attempt resolves outside the root and is rejected: the roots are
+    the boundary (card 20261120_124701).
+    """
+    from domain.training import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR
+
+    for base in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR):
+        root = base.resolve()
+        for candidate in (name, f"{name}.soul", f"{name}.slo"):
+            path = (base / candidate).resolve()
+            if path.is_file() and root in path.parents:
+                return path
+    return None
+
+
+def _resolve_start_resume(checkpoint_name: str | None) -> dict[str, Any] | None:
+    """Pre-load the checkpoint bundle a ``checkpoint_name`` start resumes from.
+
+    Resolved in the request handler, before any job exists: a name that
+    resolves to nothing is a 404 with no job row and no worker spin-up, an
+    unreadable/unsupported file is a 422 — the one sanctioned HTTP mapping for
+    resume failures (the recovery endpoint's contract, card 20261120_124701).
+    The bundle is handed to ``train(resume=True, resume_checkpoint=...)`` so
+    the worker thread never re-reads the file and never substitutes a
+    different checkpoint.
+    """
+    if not checkpoint_name:
+        return None
+
+    from domain.training.engine import get_training_engine
+
+    path = _find_start_checkpoint(checkpoint_name)
+    if path is None:
+        raise_error(f"Checkpoint not found: {checkpoint_name}", "E_NOT_FOUND")
+        return None  # unreachable: raise_error always raises
+    try:
+        _, bundle = get_training_engine().resolve_resume_checkpoint(str(path), str(path.parent))
+    except ValueError as exc:
+        raise_error(str(exc), "E_VAL_REQUEST", status_code=422)
+        return None  # unreachable: raise_error always raises
+    return bundle
+
+
 async def start_training(
     request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)
 ):
@@ -113,6 +163,10 @@ async def start_training(
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
+    # Resume first, before the corpus pre-flight and before any job exists:
+    # a bad checkpoint name must fail the request, not the job (card 20261120_124701).
+    resume_bundle = _resolve_start_resume(request.checkpoint_name)
+
     feed_spec = _feed_spec(request)
     if feed_spec is not None:
         data_path_str, out_stem, manifest_meta, source_kind = feed_spec
@@ -410,6 +464,8 @@ async def start_training(
                 experiment_tracker=tracker,
             )
             result = trainer.train(
+                resume=resume_bundle is not None,
+                resume_checkpoint=resume_bundle,
                 on_progress=on_progress,
                 cancel_event=cancel_event,
                 pause_event=pause_event,

@@ -43,7 +43,7 @@ export function Sidebar({
       isCollapsed ? 'justify-center px-2' : 'px-3',
       active
         ? 'bg-primary/[0.13] font-medium text-primary dark:bg-primary/[0.11]'
-        : 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
+        : 'text-foreground/80 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
     )
 
   const afterNav = onNavigate ? () => onNavigate() : undefined

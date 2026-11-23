@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "5c778a0efda59a7376d9cdab34cc570bf5641e6a",
+    "recorded_commit": "a90b8092154ef5566dcf9bdb3718785f73456be9",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -21,7 +21,7 @@
       "consumers": ["tests/", "apps/api/", "domain/shell/"],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "6986d33ee26859eed915333cd853f1024108bd5c"
+      "tree_hash": "97db0059798a915459567696be428ef6458fae3d"
     },
     "ai_personality": {
       "class": "feature",
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "b2071304181d381351988637423142a6b135c47f"
+      "tree_hash": "94abb5cc4f43e942a06dd6b61ccedad5563b8ec1"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "c99f36d28794c5d3882324df2e4e097289f7e2b4"
+      "tree_hash": "4d2254d66c9e5fb41eb70fa3826d45d2414135e3"
     },
     "knowledge": {
       "class": "core-capability",
@@ -223,7 +223,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "1a364e002c15fe7ffcc043784db1c2d85e4fa496"
+      "tree_hash": "eac9d056af24862e61cfa03abdd1b1b43cb54d9b"
     },
     "multimodal": {
       "class": "core-capability",
@@ -231,7 +231,7 @@
       "consumers": ["tests/", "scripts/", "domain/agents/", "domain/models/", "domain/core/"],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "5f54e51b86e650c89c641e706d2782693c856d11"
+      "tree_hash": "833104def118896989347afd225c2ceccb1e085d"
     },
     "ops": {
       "class": "core-capability",
@@ -285,7 +285,7 @@
       "consumers": ["tests/", "apps/cli/", "apps/api/", "scripts/"],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "b3e846dd281197627ac0523e2a77e622a85c001d"
+      "tree_hash": "2b7b24d8ef44e3d9e1e059c74689a3e17cbc8eb5"
     },
     "slolib": {
       "class": "core-capability",
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "c7ca61208e1f6a09cdc6985f173f13a47eb6f40d"
+      "tree_hash": "9f75e850b62456b087c8f18143c09f8974e78677"
     },
     "voice": {
       "class": "core-capability",

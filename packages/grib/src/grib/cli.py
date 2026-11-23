@@ -432,6 +432,101 @@ def _export(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── Ledger (docs/AGENT_SYNC.md — read-only; the doc stays the source) ────
+
+
+def _ledger_doc(args: argparse.Namespace) -> Path | None:
+    """``--doc`` override, else walk up from cwd. Prints the failure and
+    returns None (callers map that to exit 2) when no ledger is in scope."""
+    from grib.ledger import find_doc
+
+    if args.doc:
+        doc = Path(args.doc)
+        if doc.is_file():
+            return doc
+        print(f"ledger: {doc} not found")
+        return None
+    doc = find_doc()
+    if doc is None:
+        print("ledger: docs/AGENT_SYNC.md not found (no ledger above the cwd)")
+    return doc
+
+
+def _ledger_parse(args: argparse.Namespace) -> int:
+    from grib.ledger import dumps, parse
+
+    doc = _ledger_doc(args)
+    if doc is None:
+        return 2
+    print(dumps(parse(doc)))
+    return 0
+
+
+def _ledger_query(args: argparse.Namespace) -> int:
+    from grib.ledger import query
+
+    doc = _ledger_doc(args)
+    if doc is None:
+        return 2
+    hits = query(
+        doc,
+        card=args.card,
+        sha=args.sha,
+        lane=args.lane,
+        since=args.since,
+        grep=args.grep,
+    )
+    if not hits:
+        print("ledger: no matching entries")
+        return 0
+    for h in hits:
+        print(f"{h['line']:>5}  {h['date']}  {h['head'][:120]}")
+    return 0
+
+
+def _ledger_check(args: argparse.Namespace) -> int:
+    import json
+
+    from grib.ledger import check, fingerprint
+
+    doc = _ledger_doc(args)
+    if doc is None:
+        return 2
+    ok, violations = check(doc)
+
+    if args.baseline:
+        # Shrink-only ratchet (page-baseline precedent): known findings pass,
+        # unknown ones redden, and a fixed finding whose baseline line survives
+        # reddens too — the baseline may only shrink.
+        try:
+            with open(args.baseline, encoding="utf-8") as fh:
+                baseline = list(json.load(fh).get("violations", []))
+        except (OSError, ValueError, AttributeError) as exc:
+            print(f"ledger: baseline unreadable: {exc}")
+            return 2
+        known = set(baseline)
+        current = {fingerprint(v) for v in violations}
+        new = [v for v in violations if fingerprint(v) not in known]
+        stale = [b for b in baseline if b not in current]
+        for v in new:
+            print(f"ledger: NEW line {v['line']}: {v['kind']} — {v['msg']}")
+        for b in stale:
+            print(f"ledger: STALE baseline entry (no longer occurs — delete it): {b}")
+        if new or stale:
+            print(f"ledger: {len(new)} new, {len(stale)} stale (baseline must only shrink)")
+            return 1
+        print(f"ledger: ok — {len(violations)} known finding(s), baseline aligned: {doc}")
+        return 0
+
+    if ok:
+        print(f"ledger: ok — {doc}")
+        return 0
+    for v in violations:
+        print(f"ledger: line {v['line']}: {v['kind']} — {v['msg']}")
+    print(f"ledger: {len(violations)} violation(s)")
+    return 1
+
+
 def _gui(args: argparse.Namespace) -> int:
     from grib.gui import main as gui_main
 
@@ -646,6 +741,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_export_args(p)
 
+    # Ledger (docs/AGENT_SYNC.md — the session sync log; doc stays the source)
+    ledger = sub.add_parser(
+        "ledger",
+        help="Parse/query/check the session ledger (docs/AGENT_SYNC.md)",
+        description=(
+            "Read-only view of the session ledger. An entry is a bold-dated "
+            "line (**YYYY-MM-DD — …**), newest first at line 1. check gates "
+            "the prepend invariant: well-formed headers, dates non-increasing."
+        ),
+    )
+    ledger_sub = ledger.add_subparsers(dest="subcommand")
+    _doc_help = "Path to AGENT_SYNC.md (default: walk up from cwd)"
+    p = ledger_sub.add_parser("parse", help="JSON index of every entry")
+    p.add_argument("--doc", default=None, help=_doc_help)
+    p = ledger_sub.add_parser("query", help="Filter entries (all filters AND)")
+    p.add_argument("--doc", default=None, help=_doc_help)
+    p.add_argument("--card", default=None, help="Card id substring (short or long form)")
+    p.add_argument("--sha", default=None, help="Git sha substring (single or range side)")
+    p.add_argument("--lane", default=None, help="Lane substring, case-insensitive")
+    p.add_argument("--since", default=None, help="Only entries on/after this YYYY-MM-DD")
+    p.add_argument("--grep", default=None, help="Substring anywhere in the entry")
+    p = ledger_sub.add_parser(
+        "check",
+        help="Gate: well-formed headers + prepend order (exit 1 on violation)",
+    )
+    p.add_argument("--doc", default=None, help=_doc_help)
+    p.add_argument(
+        "--baseline",
+        default=None,
+        help=(
+            "JSON file pinning known findings (shrink-only): unknown "
+            "violations fail, stale baseline entries fail until deleted"
+        ),
+    )
+
     # GUI
     gui_p = sub.add_parser(
         "gui",
@@ -720,6 +850,9 @@ def main(argv: list[str] | None = None) -> int:
         ("export", None): _export,
         ("board", "export"): _export,
         ("kanban", "export"): _export,
+        ("ledger", "parse"): _ledger_parse,
+        ("ledger", "query"): _ledger_query,
+        ("ledger", "check"): _ledger_check,
         ("gui", None): _gui,
     }
 

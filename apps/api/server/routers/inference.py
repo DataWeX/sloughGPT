@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 from collections.abc import AsyncIterator, Collection
@@ -27,20 +28,20 @@ from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
 from infrastructure.contract import REGISTRY, RouteEntry
+from infrastructure.inference_metrics import count_tokens, record
 from infrastructure.sse_fallback import sse_error, sse_event, sse_token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents import ToolParam, ToolSpec, get_agent_system, get_tool_registry
+from domain.agents import ToolParam, ToolSpec, agentic_stream, get_agent_system, get_tool_registry
 from domain.cognition import get_rag_service
 from domain.feedback import SAFE_BAND, get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
-from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
 from domain.models import ConsciousnessProcessor, apply_processors, get_provider
@@ -405,11 +406,18 @@ from domain.inference.app_scope import (  # noqa: E402
     resolve_scope,
 )
 from domain.inference.engine import (  # noqa: E402
+    TurnEvent,
     TurnRequest,
     TurnResult,
     fold,
     register_chat_engine,
 )
+
+# The kernel-appended image markdown (agentic_stream's attachment append:
+# ``\n\n![alt](data:image/…;base64,…)``) rides the token stream so cache and
+# history keep the image. Memory/ingest must not see the blob, so the clean
+# pre-append text is this pattern stripped off the collected stream.
+_ATTACH_MD = re.compile(r"\n\n!\[[^\]]*\]\(data:image/[^)]*\)")
 
 # In-memory store for pending control requests per session
 _chat_control_store: dict[str, dict] = {}
@@ -516,22 +524,8 @@ class GenerateResponse(BaseModel):
 
 
 def _count_tokens(text: str, server_state) -> int:
-    """Count real tokens using the loaded tokenizer, falling back to word count.
-
-    Args:
-        text: generated text
-        server_state: module exposing ``tokenizer`` / ``model_type`` attributes
-
-    Returns:
-        token count (via tokenizer.encode when available, else len(text.split()))
-    """
-    try:
-        tokenizer = getattr(server_state, "tokenizer", None)
-        if tokenizer is not None and hasattr(tokenizer, "encode"):
-            return len(tokenizer.encode(text))
-    except Exception as e:
-        logger.debug("tokenizer encode fallback failed: %s", e)
-    return len(text.split())
+    """Count real tokens — thin delegate to the shared recording seam."""
+    return count_tokens(text, state=server_state)
 
 
 def _extract_user_message(messages: list[Message]) -> str | None:
@@ -880,7 +874,7 @@ def _run_post_gen_tasks(
     from domain.cognition import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
-    tokens = len(full_response.split())
+    tokens = count_tokens(full_response, state=_pgs_state)
 
     def _track(task_name):
         def _cb(fut):
@@ -948,15 +942,13 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("ResponseTracker.log failed: %s", e)
 
-    # Inference metrics
-    try:
-        get_server_state().record_inference(
-            tokens=tokens,
-            elapsed_ms=duration_ms,
-            model=_pgs_state.model_type or req.model,
-        )
-    except Exception as e:
-        logger.warning("Failed to record inference metrics: %s", e)
+    # Inference metrics — whole-turn clock: the chat handler does not plumb
+    # the decode window this far (clock rule, card 20261119_132133).
+    record(
+        tokens=tokens,
+        elapsed_ms=duration_ms,
+        model=_pgs_state.model_type or req.model,
+    )
 
     # ContextCore response
     if ctx_core and req.use_context_core:
@@ -1379,14 +1371,11 @@ class InferenceRouter:
             )
             tokens = _count_tokens(result, _gen_state)
             actual_model = _gen_state.model_type or req.model
-            try:
-                get_server_state().record_inference(
-                    tokens=tokens,
-                    elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
-                    model=actual_model,
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
+            record(
+                tokens=tokens,
+                elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+                model=actual_model,
+            )
             try:
                 capture(
                     req.prompt,
@@ -1496,6 +1485,7 @@ class InferenceRouter:
             _BATCH_MAX = 5
             _BATCH_INTERVAL_S = 0.005
             _token_count = 0
+            _decode_start: float | None = None
             gen_params = _apply_meta_weights(
                 temperature=req.temperature,
                 top_p=req.top_p,
@@ -1509,6 +1499,7 @@ class InferenceRouter:
             _coalesce_key = _coalescer.hash(
                 provider_messages, gen_params, req.max_new_tokens, _stream_state.model_type
             )
+            _cache_lookup_t0 = time.monotonic()
             existing = await _coalescer.start(_coalesce_key)
             if existing is not None:
                 await existing.event.wait()
@@ -1525,11 +1516,20 @@ class InferenceRouter:
                 for chunk in _chunk_replay(cached):
                     yield sse_token("generate", chunk)
                 _mgr.finish(_op_id)
+                _hit_tokens = count_tokens(cached, state=_stream_state)
+                # Cache hit: counted honestly, flagged cached so PR 1's window
+                # excludes it — a replay performs no decode work.
+                record(
+                    tokens=_hit_tokens,
+                    elapsed_ms=(time.monotonic() - _cache_lookup_t0) * 1000,
+                    model=_stream_state.model_type or req.model,
+                    cached=True,
+                )
                 yield sse_token(
                     "generate",
                     "",
                     done=True,
-                    meta={"tokens": len(cached.split()), "cached": True},
+                    meta={"tokens": _hit_tokens, "cached": True},
                 )
                 return
 
@@ -1549,6 +1549,7 @@ class InferenceRouter:
                         return
                     if token:
                         if _token_count == 0:
+                            _decode_start = time.monotonic()
                             _first_token_ms = (time.time() - _token_gen_start) * 1000
                             logger.info(
                                 "GEN_FIRST_TOKEN corr=%s after=%.1fms",
@@ -1624,14 +1625,14 @@ class InferenceRouter:
                 http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
                 yield sse_error("generate", "ERROR", str(e), code=err_code, http_status=http_status)
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
-            try:
-                get_server_state().record_inference(
-                    tokens=token_count,
-                    elapsed_ms=elapsed,
-                    model=_stream_state.model_type or req.model,
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
+            record(
+                tokens=count_tokens("".join(collected), state=_stream_state),
+                # Decode window: first token -> last (0 when nothing decoded).
+                elapsed_ms=(time.monotonic() - _decode_start) * 1000
+                if _decode_start is not None
+                else 0.0,
+                model=_stream_state.model_type or req.model,
+            )
             try:
                 capture(
                     req.prompt,
@@ -1821,6 +1822,7 @@ class InferenceRouter:
             )
 
             collected: list[str] = []
+            _ws_decode_start: float | None = None
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
@@ -1828,6 +1830,8 @@ class InferenceRouter:
                     **gen_params,
                 ):
                     if token:
+                        if _ws_decode_start is None:
+                            _ws_decode_start = time.monotonic()
                         collected.append(token)
                         try:
                             await websocket.send_json({"token": token})
@@ -1851,14 +1855,14 @@ class InferenceRouter:
 
                 token_count = _count_tokens(full_text, _ws_gen_state)
                 actual_model = _ws_gen_state.model_type or msg.get("model", "default")
-                try:
-                    get_server_state().record_inference(
-                        tokens=token_count,
-                        elapsed_ms=0,
-                        model=actual_model,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to record inference metrics: %s", e)
+                record(
+                    tokens=token_count,
+                    # Decode window: first token -> last (0 when nothing decoded).
+                    elapsed_ms=(time.monotonic() - _ws_decode_start) * 1000
+                    if _ws_decode_start is not None
+                    else 0.0,
+                    model=actual_model,
+                )
                 try:
                     capture(
                         prompt,
@@ -2297,27 +2301,47 @@ class InferenceRouter:
 
         model = _chat_state.model_type or req.model
 
-        collected: list[str] = []
-        try:
-            async for token in provider.chat_stream(
-                messages,
+        # ONE provider round, params bound right here: agentic_stream drives
+        # the loop (fenced tool protocol — model-driven intent routing, card
+        # 20261116_090332) and calls this closure once per round with the
+        # contract-injected messages. The turn's stop flag rides every round:
+        # minted by whoever owns the registry (chat's manager) and delivered
+        # with the request. The provider polls is_set() each token, so a
+        # cancel fired mid-stream stops generation here. None only when the
+        # caller has no registry.
+        def _round_stream(prepared: list) -> AsyncIterator[str]:
+            return provider.chat_stream(
+                prepared,
                 max_tokens=req.max_tokens,
-                # The turn's stop flag: minted by whoever owns the registry
-                # (chat's manager) and delivered with the request. The provider
-                # polls is_set() each token, so a cancel fired mid-stream stops
-                # generation here. None only when the caller has no registry.
                 cancel_event=req.cancel_event,
                 session_id=session_id,
                 **gen_params,
+            )
+
+        collected: list[str] = []
+        try:
+            async for item in agentic_stream(
+                messages, tools=get_tool_registry(), stream_fn=_round_stream
             ):
-                if token:
-                    collected.append(token)
-                    yield token
+                if isinstance(item, dict):
+                    # Loop tool events ride out-of-band BETWEEN tokens; edges
+                    # project them (chat maps them to phase: TOOL frames).
+                    # Never tokens — the raw fence stays in-process.
+                    yield TurnEvent(kind=str(item.get("kind", "tool")), data=item.get("data") or {})
+                elif item:
+                    collected.append(item)
+                    yield item
         except Exception as e:
             logger.error("chat stream failed: %s", e, exc_info=True)
             raise
 
-        text = "".join(collected)
+        # Augmented = tokens as streamed, INCLUDING the kernel-appended image
+        # markdown (chat's cache is built from these tokens and TurnResult.text
+        # is what history stores — a reload must keep the image). Clean =
+        # pre-append text, for token counting and memory ingest, which must
+        # never see the base64 blob.
+        text_augmented = "".join(collected)
+        text = _ATTACH_MD.sub("", text_augmented)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
             tokens = _count_tokens(text, _chat_state)
@@ -2334,7 +2358,7 @@ class InferenceRouter:
         _post_gen: dict[str, Any] = {}
         try:
             _post_gen = _run_post_gen_tasks(
-                text,
+                text_augmented,
                 user_msg or "",
                 session_id,
                 _chat_start_dt,
@@ -2409,7 +2433,7 @@ class InferenceRouter:
             )
 
         yield TurnResult(
-            text=text,
+            text=text_augmented,
             session_id=session_id,
             done=True,
             model=model,

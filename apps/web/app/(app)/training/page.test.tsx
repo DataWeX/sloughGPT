@@ -17,6 +17,7 @@ vi.mock('@sloughgpt/strui', () => {
     CardContent: passthrough,
     CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
+    CardDescription: ({ children }: any) => <p>{children}</p>,
     Label: ({ children }: any) => <label>{children}</label>,
     Input: ({ value, onChange, placeholder, type }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} type={type} />
@@ -195,10 +196,11 @@ vi.mock('@/components/training/TrainingHealthCard', () => ({ TrainingHealthCard:
 vi.mock('@/components/OutputCard', () => ({ OutputCard: () => null }))
 vi.mock('@/components/training/TestModelDialog', () => ({ TestModelDialog: () => null }))
 vi.mock('@/components/training/TrainingPipeline', () => ({
-  TrainingPipeline: ({ form, datasets, session, checkpoints, onTest }: any) => (
+  TrainingPipeline: ({ form, datasets, session, checkpoints, onTest, step }: any) => (
     <div data-testid="training-pipeline">
       <span>pipeline:{checkpoints.checkpoints.length}</span>
       <span>jobs:{form.allJobs.length}</span>
+      <span>step:{step}</span>
       {session.trainingRunning && <span>running</span>}
     </div>
   ),
@@ -217,6 +219,7 @@ import Page from './page'
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 beforeEach(() => {
   vi.clearAllMocks()
@@ -275,6 +278,63 @@ describe('TrainingPage', () => {
     })
     expect(mockCheckpoints.fetchCheckpoints).toHaveBeenCalled()
     expect(mockCheckpoints.fetchJobs).toHaveBeenCalled()
+  })
+
+  // Card 20261119_110913 (dedupe polling): checkpoints change while a job is
+  // saving (running) or on an explicit refresh — an idle page's 10s poll was
+  // pure co-tenant noise (26 checkpoint errors in the /training capture).
+  it('an idle page does not poll checkpoints on the 10s tick', async () => {
+    vi.useFakeTimers()
+    try {
+      render(<Page />)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      const mountCalls = mockCheckpoints.fetchCheckpoints.mock.calls.length
+      expect(mountCalls).toBeGreaterThan(0) // the mount fetch still happens
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000)
+        await vi.advanceTimersByTimeAsync(10_000)
+      })
+      expect(mockCheckpoints.fetchCheckpoints.mock.calls.length).toBe(mountCalls)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('polls checkpoints while a job runs, with one final fetch after it finishes', async () => {
+    mockForm.allJobs = [{ id: 'a', status: 'running' }]
+    vi.useFakeTimers()
+    try {
+      render(<Page />)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      const cpCalls = mockCheckpoints.fetchCheckpoints.mock.calls.length
+      const jobCalls = mockCheckpoints.fetchJobs.mock.calls.length
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000)
+      })
+      expect(mockCheckpoints.fetchCheckpoints.mock.calls.length).toBe(cpCalls + 1)
+      expect(mockCheckpoints.fetchJobs.mock.calls.length).toBe(jobCalls + 1)
+
+      // the job finishes — one last checkpoint fetch catches the final save,
+      // then the page goes quiet (the tick stops polling)
+      mockForm.allJobs = []
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000)
+      })
+      expect(mockCheckpoints.fetchCheckpoints.mock.calls.length).toBe(cpCalls + 2)
+      expect(mockCheckpoints.fetchJobs.mock.calls.length).toBe(jobCalls + 1)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000)
+      })
+      expect(mockCheckpoints.fetchCheckpoints.mock.calls.length).toBe(cpCalls + 2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('previews the selected dataset in dataset mode', async () => {
@@ -386,5 +446,22 @@ describe('TrainingPage', () => {
       fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     })
     expect(mockForm.startTraining).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the mode chooser and routes a card into the guided setup', async () => {
+    // Journey (card 20261119_130319): land on /training → see there is more
+    // than datasets → pick a way → the setup below is configured for it.
+    render(<Page />)
+    await waitFor(() => {
+      expect(screen.getByText('How do you want to train?')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Paste text/ }))
+    expect(mockForm.setInputMode).toHaveBeenCalledWith('text')
+    expect(screen.getByText('step:configure')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Train on a dataset/ }))
+    expect(mockForm.setInputMode).toHaveBeenCalledWith('dataset')
+    expect(screen.getByText('step:data')).toBeTruthy()
   })
 })
