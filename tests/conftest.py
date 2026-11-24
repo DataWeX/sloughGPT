@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from tests import shard_split
 
 
@@ -26,6 +27,7 @@ def pytest_collection_modifyitems(config, items):
         items[:] = shard_split.apply(items, spec)
     except ValueError as e:
         raise pytest.UsageError(str(e)) from e
+
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Add project sub-packages at high priority (position 0).

@@ -32,15 +32,14 @@ class TestApply:
 
     def test_shards_are_disjoint_and_complete(self):
         n = 4
-        shards = [
-            shard_split.apply(self.ITEMS, f"{k}/{n}") for k in range(1, n + 1)
-        ]
+        shards = [shard_split.apply(self.ITEMS, f"{k}/{n}") for k in range(1, n + 1)]
         merged = sorted(x for s in shards for x in s)
         assert merged == self.ITEMS  # union == full list, no dupes, no loss
 
     def test_round_robin_membership(self):
         assert shard_split.apply(self.ITEMS, "1/4") == [0, 4, 8]
-        assert shard_split.apply(self.ITEMS, "4/4") == [3, 7, 9]
+        # indices 3, 7 (11 is past the end); index 9 lands in group 2.
+        assert shard_split.apply(self.ITEMS, "4/4") == [3, 7]
 
     def test_single_shard_is_everything(self):
         assert shard_split.apply(self.ITEMS, "1/1") == self.ITEMS

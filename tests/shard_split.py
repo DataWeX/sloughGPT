@@ -26,8 +26,8 @@ instant, never silently run the whole suite in one shard.
 
 from __future__ import annotations
 
-import re
 import os
+import re
 
 _SPEC = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
 
@@ -39,16 +39,12 @@ def parse(spec: str) -> tuple[int, int]:
     """
     m = _SPEC.match(spec or "")
     if not m:
-        raise ValueError(
-            f"SLO_TEST_SHARD={spec!r} must look like 'k/n' (e.g. '2/4')"
-        )
+        raise ValueError(f"SLO_TEST_SHARD={spec!r} must look like 'k/n' (e.g. '2/4')")
     group, total = int(m.group(1)), int(m.group(2))
     if total < 1:
         raise ValueError(f"SLO_TEST_SHARD={spec!r}: total n must be >= 1")
     if group < 1 or group > total:
-        raise ValueError(
-            f"SLO_TEST_SHARD={spec!r}: group k must satisfy 1 <= k <= n"
-        )
+        raise ValueError(f"SLO_TEST_SHARD={spec!r}: group k must satisfy 1 <= k <= n")
     return group, total
 
 
