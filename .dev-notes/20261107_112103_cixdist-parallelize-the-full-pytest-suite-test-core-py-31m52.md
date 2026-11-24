@@ -43,3 +43,13 @@ gh: null
 **Measurements:** shard split over real collection = 5+5+4+4=18 disjoint; merge E2E green (bogus spec → exit 4; `coverage combine` "Combined 4 files", TOTAL 72% exit 0); 36 pins+new tests green; test-root closure **1944 passed** (2 pre-existing foreign-server 404s on :8000 — reproduce on pristine origin/main; they SKIP in CI, no server there). Expected wall 54–66m → **~21–26m (2.5–3x)**.
 
 **Gate remaining:** ×3 consecutive green CI runs on main.
+
+### Run 1 — `45361359978` on `12ed64882` (2026-11-24, attempt 1): red on flakes, sharding proven
+
+- **Scale proof:** pass-1 per shard = 10,722 / 10,723 / 10,724 / 10,722 collected = **42,891 ≈ full suite, disjoint+complete**; TestPersonas tests scattered across shards 2/4 = the round-robin hook fired in CI.
+- **Wall:** pass 1 = 7m36s–14m06s per shard, pass 2 ≈ 6m31s (shard 3) → **test-core-py ≈ 20–25m vs 54–66m pre-shard ≈ 2.5x** (contended morning, other runs queued).
+- **Shard 3 green both passes** with the exact new flags → flags/coverage config exonerated.
+- **5 failures across shards 1/2/4, pass 1 only** (failed step ⇒ pass 2 + uploads skipped ⇒ coverage/record-merge jobs skipped with it): `test_infra_thread_teardown::test_b_no_leaked_threads_after_teardown` (assert `_leaked_workflow` None — setup ran on another xdist worker, `--dist load` class-split), `test_pugqeep_engine::test_query_methods_survive_concurrent_spawns` (**120s CI timeout vs 5.3s local** — 2-CPU runner + coverage overhead), 3× `test_consciousness_router::TestPersonas` **404 == 200** (documented flake class — AGENT_SYNC 11-23 "2× consciousness (flake, passed on re-run)").
+- **Three-strike:** all 3 sites green locally on this branch (39 passed / 8 passed / 1 passed 5.3s); yesterday's pre-shard run `45204414933` (old config) failed on a DIFFERENT flake (`test_wgpu_backend::TestLayerNorm`, 42,777 passed) — these tests pass under the old config too; identical flags green on shard 3. **Conclusion: dynamic-distribution order/timing flakes (the card's predicted hazard), not split-logic defects.**
+- **Mitigation if reruns keep reddening (evidence-gated, not yet applied):** `--dist loadscope` (groups module → keeps `TestConftestTeardown::test_a/b` on one worker — the card's own suggestion).
+- Attempt 2 (`gh run rerun --failed`) re-runs shards 1/2/4 **and** gives `test-core-py-coverage` + `test-core-py-record-merge` their first CI exercise.
