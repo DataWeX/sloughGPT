@@ -174,6 +174,44 @@ Ordered startup/shutdown. Services register hooks with dependencies. `StartupOrc
 
 Async priority queue with worker pool. Pause/resume/cancel. Retries. SSE events. Foundation for training, feedback, RAG ingestion.
 
+### Prompt Assembly (layer contract)
+
+One funnel, many writers: **`stream_turn`** (`apps/api/server/routers/inference.py`) is the single composition point for every prompt the model sees. This subsection is the declared map — writers, placement, precedence, budgets, and the gate that proves each layer. Audited 2026-11-24.
+
+```
+TurnRequest (wire fields)
+  → _resolve_turn_scope      AppScope: conversation delta over global settings,
+                            once at the seam, before any transport read
+  → system head              wire system_prompt → + scope system_prompt (additive)
+                            → + agent instructions → + trait steering (system_extra)
+  → volatile tail            _append_volatile_context: knowledge + frame + RAG
+                            (+ consciousness reflection when use_consciousness)
+  → trim                     _trim_messages_to_budget(max_context_length, max_tokens)
+  → provider chat_stream     chat template renders; meta weights ride as generation
+                            params, never as prompt text
+```
+
+| Layer                | Writer                                        | Placement              | Precedence                                       | Budget / kill-switch                                              | Gate                                                                       |
+| -------------------- | --------------------------------------------- | ---------------------- | ------------------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Wire `system_prompt` | `TurnRequest`                                 | system head            | base layer                                       | —                                                                  | sequence test (below)                                                      |
+| AppScope scope       | `_resolve_turn_scope` (additive after wire)   | system head            | conversation-over-global, presence-based; `scope_applied` protects meta weights | session-scoped via `PUT /chat/sessions/{id}`; corrupt delta fails safe to inheritance | `tests/core-py/test_app_scope.py` + `apps/api/server/tests/test_app_scope.py` (35) |
+| Agent instructions   | `stream_turn` (`agent_id`)                    | system head, appended  | after scope                                      | agent missing → skipped, fail-open                                | —                                                                          |
+| Trait steering       | ContextCore managers → `frame.system_extra`   | system head, appended  | after agent                                      | weights clamped [0,1]; fail-open (never a precondition for inference); sampler nudge dark (`SLO_META_WEIGHT_NUDGE=0`) | `tests/test_inference_generate.py`                                         |
+| Consciousness reflection | `_apply_consciousness_reflection`         | volatile tail          | `use_consciousness` wire flag                    | off for bare probes (cards 20261112_140010, 20261114_092948)       | sequence test (below)                                                      |
+| Knowledge + frame    | `_enrich_knowledge` + `ContextCore` frame      | volatile tail           | merged: `knowledge_retrieved + frame_context + req.knowledge` | top 5 facts; frame skipped when memory empty                      | `tests/test_rag_context_budget.py`                                         |
+| RAG block            | `_build_rag_block`                            | volatile tail           | relevance-gated, `use_rag` flag                   | 2000 chars (`_RAG_CONTEXT_MAX_CHARS`)                              | `tests/test_rag_context_budget.py`                                         |
+| Context contract parts | `budget_parts` (`domain/inference/_internal/context_contract.py`) | volatile tail (knowledge block) | session 1.0 > request 0.9 > memory 0.8 > rag 0.7, then score desc | 512 (`DEFAULT_KNOWLEDGE_BUDGET`), whole-part drops + honest `omitted_count` | `tests/core-py/test_context_contract.py` (26)                             |
+| Chat template        | provider / tokenizer                          | wraps everything       | final render                                     | tokenizer template                                                | tokenizer tests                                                            |
+| Meta weights         | `_apply_meta_weights`                         | params, not text       | explicit (`model_fields_set` ∪ `scope_applied`) beats heuristic | sampler nudge dark (`SLO_META_WEIGHT_NUDGE=0`)                   | `tests/test_inference_generate.py`                                         |
+
+**Precedence rules.** Text precedence = placement order in the system head (wire → scope → agent → steering). Volatile context never touches the token prefix — per-turn context rides the last user turn so cross-turn KV reuse still matches (re-prefill fix, card 20261103_071231). Scope precedence is presence-based first-set-wins per field (an explicitly-set value is user intent and outranks a derived one).
+
+**Open ruling — user decision required before any code.** Does a scoped AppScope `system_prompt` *outrank* trait steering / injected RAG, or only order them? Today it is additive-only (scope appends after the wire prompt, steering after that, retrieved context in the tail). Observed 2026-11-24: a scoped persona was ignored by the 0.5B model under RAG noise — behavioral evidence, not a gate.
+
+**Verification — proven vs gap.** Stage *order* is pinned by `TestStreamTurnResponseSequence` / `TestStreamTurnBareProbeGates` (`tests/server/test_inference_router.py`); each layer's budget and precedence by its own suite (table). **Gap: no provider-boundary prompt-capture gate** — nothing asserts the final rendered string the model actually receives. Closing it = capture at the provider seam and assert against this map (future card).
+
+Related: memory-layer env (`docs/ENVIRONMENT.md`), steering diagram (`docs/NAVIGATION_AND_SOULS.md` §2.8), retrieved-context contract (`domain/inference/_internal/context_contract.py`).
+
 ---
 
 ## Data Flow Examples
