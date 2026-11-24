@@ -51,11 +51,11 @@ npm run dev
 
 Before pushing changes, run the same checks as CI: **`npm ci && npm run ci`** (from this directory — lint, typecheck, Vitest, then **`npm run build`**, i.e. the **Vite** production build into **`dist-vite/`**; same as job **`test-web`**, which installs once at the repository root with **`npm ci --ignore-scripts`** and then runs **`eslint`**, **`tsc --noEmit`**, **`vitest run`**, **`npm run build`** in this directory).
 
-**Talking to models:** set **`NEXT_PUBLIC_API_URL`** to your FastAPI base (default `http://localhost:8000`). Use **Models** to **`POST /models/load`** (`model_id` in JSON), then **Chat** sends message history to **`POST /chat`** (SSE — the endpoint's only state; a caller wanting a complete reply folds the stream itself). Older single-prompt paths **`/inference/generate/stream`** / **`/inference/generate`** remain available for other clients. The client **`api.loadModel`** matches that contract (not `/models/{id}/load`).
+**Talking to models:** the client is same-origin (`PUBLIC_API_URL = ''` in **`lib/config.ts`**) — no API base to set; dev relays through vite (**`SLO_API_URL`**, default `http://127.0.0.1:8000`), the served site through the gateway. Use **Models** to **`POST /models/load`** (`model_id` in JSON), then **Chat** sends message history to **`POST /chat`** (SSE — the endpoint's only state; a caller wanting a complete reply folds the stream itself). Older single-prompt paths **`/inference/generate/stream`** / **`/inference/generate`** remain available for other clients. The client **`api.loadModel`** matches that contract (not `/models/{id}/load`).
 
-**UI vs core engine:** this app is **only** HTML/CSS/TS and `fetch` to the API. It does **not** bundle or import Python (`domain/`, trainers, or inference kernels). Deploy the static Vite build on any static/hosted frontend; run the FastAPI process separately — the only link is **`NEXT_PUBLIC_API_URL`** and the JSON contracts in **`lib/api.ts`** (see also **`docs/STRUCTURE.md`**).
+**UI vs core engine:** this app is **only** HTML/CSS/TS and `fetch` to the API. It does **not** bundle or import Python (`domain/`, trainers, or inference kernels). Deploy the static Vite build on any static/hosted frontend; run the FastAPI process separately — the only link is same-origin HTTP (one origin: the gateway byte-relays the API) and the JSON contracts in **`lib/api.ts`** (see also **`docs/STRUCTURE.md`**).
 
-**Cypress E2E** (mocked FastAPI, no Python process): **`npm run e2e:vite`** starts the Vite dev server on **:5173** via `start-server-and-test` and runs Cypress headless against it. Or start `npm run dev` yourself and use **`npm run e2e`** / **`npm run e2e:open`** (baseUrl `http://localhost:5173`). **`npm run ci:e2e`** runs **`npm run build`** then **`e2e:vite`**. Intercepts target the API origin the client was built with — `cypress.config.ts` reads **`NEXT_PUBLIC_API_URL`** with the same `loadEnv()` call as `vite.config.ts`.
+**Cypress E2E** (mocked FastAPI, no Python process): **`npm run e2e:vite`** starts the Vite dev server on **:5173** via `start-server-and-test` and runs Cypress headless against it. Or start `npm run dev` yourself and use **`npm run e2e`** / **`npm run e2e:open`** (baseUrl `http://localhost:5173`). **`npm run ci:e2e`** runs **`npm run build`** then **`e2e:vite`**. Intercepts are root-relative to match the same-origin client — default base `''` in **`cypress/support/api-base.ts`**; override with `cypress run --env apiUrl=http://127.0.0.1:8001` only when driving against a real backend.
 
 ### Build for Production
 
@@ -74,9 +74,9 @@ sidecar. The shell therefore loads even while the API is down. Restart the
 gateway to pick up a fresh build.
 
 `npm run build` (plain `vite build`) and `npm run start` (`vite preview`) are the
-local production path; **`npm run build:vite`** is that same build with
-**`NEXT_PUBLIC_API_URL=`** forced empty, which is what a same-origin gateway
-deploy wants.
+local production path; **`npm run build:vite`** is an alias of that same build —
+the client is same-origin by contract (**`PUBLIC_API_URL = ''`**), so no API
+base is ever baked in.
 
 ### Docker image
 
@@ -90,9 +90,12 @@ docker build -f apps/web/Dockerfile -t sloughgpt/web:latest .
 
 ## API Configuration
 
-The web UI connects to the FastAPI backend. By default, it expects the API at `http://localhost:8000`.
+Same-origin by contract — see **`lib/config.ts`** (`PUBLIC_API_URL = ''`): the browser never names a backend port; the server owns it.
 
-To change the API URL, copy **`.env.example`** to **`.env.local`** (or edit **`.env`**) and set **`NEXT_PUBLIC_API_URL`** — see **`lib/config.ts`** (`http://localhost:8000` by default).
+- **dev** — vite relays API traffic to **`SLO_API_URL`** (default `http://127.0.0.1:8000`; set e.g. `SLO_API_URL=http://127.0.0.1:8001` when the API runs elsewhere) via **`vite/api-relay-plugin.ts`**, the gateway's kind-rule: navigation (`Accept: text/html`) → SPA shell, data/SSE/writes → Python.
+- **served** — the gateway serves `dist-vite/` as its document root and byte-relays everything else to the API — one origin, no CORS.
+
+`NEXT_PUBLIC_API_URL` is retired: user `define` keys never applied under vite 8 dev and reached the browser raw, killing the client at import.
 
 ## Available Scripts
 
@@ -102,7 +105,7 @@ To change the API URL, copy **`.env.example`** to **`.env.local`** (or edit **`.
 | `npm run dev:clean`        | **`npm run clean`** (remove **`dist-vite/`**) then `vite`                                                                                    |
 | `npm run dev:restart`      | Graft port **5173** via **`../../scripts/grab-port.sh`**, then `npm run dev`                                                                 |
 | `npm run build`            | **Vite** production build → **`dist-vite/`** (`MAN_STATIC_DIR` defaults there when present)                                                  |
-| `npm run build:vite`       | Same build with **`NEXT_PUBLIC_API_URL=`** forced empty — the same-origin variant the **Dockerfile** uses                                    |
+| `npm run build:vite`       | Alias of `npm run build` — same-origin (**`PUBLIC_API_URL = ''`**); used by the **Dockerfile**                                               |
 | `npm run start`            | **`vite preview`** — serve the production build                                                                                              |
 | `npm run lint`             | ESLint over the app (**`eslint . --max-warnings 900`**; build dirs excluded via **`.eslintignore`**)                                         |
 | `npm run typecheck`        | TypeScript `tsc --noEmit`                                                                                                                    |
@@ -137,7 +140,7 @@ apps/web/
 
 ## Connecting to Backend
 
-Set **`NEXT_PUBLIC_API_URL`** (see **`.env.example`**, copied to **`.env.local`** in dev) to your API base URL, usually `http://localhost:8000`.
+No base URL to set — the client is same-origin (**`PUBLIC_API_URL = ''`**). In dev, point vite's relay at your API with **`SLO_API_URL`** (default `http://127.0.0.1:8000`).
 
 Start the API from the repo root:
 
@@ -151,7 +154,7 @@ python3 apps/api/server/main.py
 1. **Node 20+** — match **`.nvmrc`**; run `node -v`.
 2. **Install & build** — from `apps/web`: `npm ci` (or `npm install`), then `npm run dev` or `npm run ci` to match CI.
 3. **Environment** — copy **`.env.example`** → **`.env.local`**. The live stack (vite on `:5173`, same-origin in production) authenticates via FastAPI **`/auth/login`** — it does not serve `/api/auth/*`. The **`NEXTAUTH_*`** values in the template are inert Next-runtime leftovers: nothing under Vite reads them, so they can stay untouched.
-4. **API must be up** — the UI calls **`NEXT_PUBLIC_API_URL`** (default `http://localhost:8000`). Login and most actions use the FastAPI backend; if the API is down, the home page shows **offline** and login will fail.
+4. **API must be up** — the UI calls same-origin API paths (dev: vite relays to **`SLO_API_URL`**; served: the gateway byte-relays). Login and most actions use the FastAPI backend; if the API is down, the home page shows **offline** and login will fail.
 5. **GitHub OAuth** — not available under Vite. `next-auth/react` resolves to the compatibility stub **`vite/next-compat/next-auth.tsx`**, whose `useSession` always reports `unauthenticated` and whose `signIn` is a no-op, so **`GITHUB_ID`** / **`GITHUB_SECRET`** are never consulted. Use the **`/login`** form (FastAPI `/auth/login`) for username/password. Vite's dev server serves only the `planner`/`calendar` handlers under `app/api`.
 
 ## Training console

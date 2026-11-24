@@ -218,7 +218,7 @@ If you don't want to run anything locally, these free tiers can host SloughGPT.
 
 ### Frontend — Cloudflare Pages
 - Free, unlimited bandwidth, global CDN.
-- Deploys from GitHub; sets `NEXT_PUBLIC_API_URL` in the dashboard.
+- Deploys from GitHub; the client is same-origin (`PUBLIC_API_URL = ''`) — front the static build and the API behind one origin (CDN/proxy rewrite). `NEXT_PUBLIC_API_URL` is retired.
 
 ### Backend — Render.com
 - Free web service with Docker.
