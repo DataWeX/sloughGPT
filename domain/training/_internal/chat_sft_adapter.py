@@ -67,6 +67,9 @@ class TrajectoryBatchArray:
     """
 
     def __init__(self, path: Path | str, *, split: str | None = "train") -> None:
+        # Declared provenance (ADR-002 §2): checkpoint names and soul metadata
+        # record THIS path — never the rendered records themselves.
+        self.source = Path(path)
         self._rendered: list[str] = []
         with open(path, encoding="utf-8") as handle:
             for number, line in enumerate(handle, start=1):

@@ -48,6 +48,8 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models al
 from domain.infrastructure._internal.pugqeep.singleton import spawn_loop
 from domain.shared._internal.feature_flags import is_enabled
 from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
+from domain.training._internal import adapter_registry
+from domain.training._internal.adapter_registry import BatchArray
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
     is_experience_source,
@@ -251,11 +253,23 @@ def _dataset_identity(data_path, data) -> tuple[str, str, str]:
     return fingerprint_array(np.asarray(data, dtype=np.int64)), "", recipe
 
 
+def _is_batch_array(data_path: Any) -> bool:
+    """True for an adapter-produced ``BatchArray``, never for a str/list.
+
+    The ``BatchArray`` Protocol is structural (``__len__``/``__getitem__``/
+    ``__iter__``), so ``isinstance`` alone also matches ``str`` and ``list`` —
+    the two doors the trainer already has. The spine must widen the door, not
+    swallow the existing ones (ADR-002 §2: one door for adapters).
+    """
+    return isinstance(data_path, BatchArray) and not isinstance(data_path, (str, list))
+
+
 def _spec_paths(data_path: Any) -> list[str]:
     """Corpus paths inside a trainer data spec.
 
-    The three shapes ``load_corpus_text`` accepts: a plain ``str``, a plain
-    list of names, and the curriculum's ``[(path, ratio), ...]`` mix. Used
+    The shapes ``load_corpus_text`` accepts: a plain ``str``, a plain
+    list of names, the curriculum's ``[(path, ratio), ...]`` mix, and an
+    adapter ``BatchArray`` (declared source, never its records). Used
     wherever a single path is needed from a spec that may be a blend —
     checkpoint naming and soul metadata (a mix must not leak into either
     as a python repr).
@@ -270,6 +284,12 @@ def _spec_paths(data_path: Any) -> list[str]:
         return []
     if isinstance(data_path, str):
         return [data_path]
+    if _is_batch_array(data_path):
+        # The adapter declares its source (a real file path, e.g. the seed);
+        # the array's ITEMS are corpus content and must never leak into
+        # checkpoint names or soul metadata (ADR-002 §2).
+        source = getattr(data_path, "source", None)
+        return [str(source)] if source else []
     paths: list[str] = []
     for item in data_path:
         p = item[0] if isinstance(item, (list, tuple)) and item else item
@@ -469,14 +489,30 @@ def load_corpus_text(data_path, block_size=128) -> str:
     Args:
         data_path: path to a text file, a dataset name (resolved against
             ``datasets/<name>/input.txt``), a list of dataset names, a list of
-            ``(name, ratio)`` tuples, or a training feed specification
-            (``feed:<source>`` / ``http(s)://...`` — see training_feed).
+            ``(name, ratio)`` tuples, a training feed specification
+            (``feed:<source>`` / ``http(s)://...`` — see training_feed), or an
+            adapter-produced ``BatchArray`` whose records render to text.
         block_size: context window (used by experience loading only).
 
     Returns:
         The corpus text.
     """
-    if isinstance(data_path, str) and is_experience_source(data_path):
+    if _is_batch_array(data_path):
+        # One door for adapters (ADR-002 §2): an adapter's records render to
+        # the SAME text stream the str/list doors resolve, so tokenize →
+        # split → gate → checkpoint downstream never forks per source shape.
+        # Items are normalized (trailing newlines stripped, one "\n" between
+        # records) so no adapter's render convention can double up or glue
+        # records together.
+        parts = [str(item).rstrip("\n") for item in data_path]
+        text = "\n".join(parts) + ("\n" if parts else "")
+        logger.info(
+            "Loaded BatchArray: %d records, %d chars",
+            len(parts),
+            len(text),
+            extra={"tag": "TRAIN"},
+        )
+    elif isinstance(data_path, str) and is_experience_source(data_path):
         corpus = None
         feedback = None
         if isinstance(data_path, str) and data_path.startswith("experience:"):
@@ -570,8 +606,9 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
     Args:
         data_path: path to a text file, a dataset name (resolved against
             ``datasets/<name>/input.txt``), a list of dataset names, a list of
-            ``(name, ratio)`` tuples, or a training feed specification
-            (``feed:<source>`` / ``http(s)://...`` — see training_feed).
+            ``(name, ratio)`` tuples, a training feed specification
+            (``feed:<source>`` / ``http(s)://...`` — see training_feed), or an
+            adapter-produced ``BatchArray`` whose records render to text.
         block_size: context window (used for logging only).
         tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
             TokenTree). When provided, the corpus is tokenized with it and the
@@ -1361,7 +1398,7 @@ class SloughGPTTrainer:
 
     def __init__(
         self,
-        data_path: str,
+        data_path: str | Sequence[str] | BatchArray,
         config: TrainerConfig | None = None,
         # Legacy parameters (for backward compatibility)
         vocab_size: int | None = None,
@@ -1470,6 +1507,11 @@ class SloughGPTTrainer:
             self.device,
             extra={"tag": "TRAIN"},
         )
+
+        # ADR-002 §4 — the trainer's real boot: import every adapter module
+        # once (module cache → idempotent) so a broken adapter dies here, at
+        # construction, never mid-epoch.
+        adapter_registry.boot()
 
         # Prepare data — prefer corpus-derived vocab unless caller sets ``vocab_size`` (legacy path)
         # or supplies a full ``TrainerConfig`` (advanced; caller must match data).
