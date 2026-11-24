@@ -167,7 +167,7 @@ jobs:
       # hang-diagnosis card or the Cypress -> domain/testing port series
       # (both filed from 20261121_152656) lands.
       - run: >-
-          npm exec -- start-server-and-test "vite" http://localhost:5173
+          npm exec -- start-server-and-test "./node_modules/.bin/vite" http://localhost:5173
           "cypress run --config excludeSpecPattern=**/chat-inference.cy.ts"
         if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
