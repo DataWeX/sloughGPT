@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -2194,6 +2195,83 @@ class TestLoadCorpusText:
         text = load_corpus_text(source)
         assert sorted(stoi) == sorted(set(text))
         assert len(data) == len(text)
+
+
+# =============================================================================
+# load_corpus_text — chat-sft prefix (card 20261101_052145 step 3)
+# =============================================================================
+
+
+class TestLoadCorpusTextChatSft:
+    SEED = "tests/fixtures/chat_sft_seed.jsonl"
+
+    def test_chat_sft_prefix_loads_rendered_trajectories(self):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        text = load_corpus_text(f"chat-sft:{self.SEED}")
+        assert isinstance(text, str)
+        assert len(text) > 0
+        assert "User: " in text
+        assert "Assistant: " in text
+        assert "Tool call: " in text
+
+    def test_chat_sft_prepare_data_tokenizes(self):
+        from domain.training._internal.train_pipeline import prepare_data
+
+        data, vocab_size, stoi, itos = prepare_data(
+            f"chat-sft:{self.SEED}", block_size=64
+        )
+        assert isinstance(data, np.ndarray)
+        assert data.dtype == np.int64
+        assert vocab_size > 0
+        assert len(stoi) == vocab_size
+        assert len(itos) == vocab_size
+        text = "".join(itos[int(i)] for i in data)
+        assert "User: " in text
+
+    def test_chat_sft_excludes_heldout_by_default(self):
+        import json
+        records = []
+        for line in Path(self.SEED).read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                records.append(json.loads(line))
+        heldout_n = sum(1 for r in records if r.get("split", "train") == "heldout")
+        train_n = len(records) - heldout_n
+
+        from domain.training._internal.chat_sft_adapter import build
+        train_arr = build(self.SEED)
+        heldout_arr = build(self.SEED, split="heldout")
+        assert len(train_arr) == train_n
+        assert len(heldout_arr) == heldout_n
+        assert heldout_n >= 1
+
+    def test_chat_sft_split_none_includes_all(self):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        text = load_corpus_text(f"chat-sft:{self.SEED}")
+        import json
+        records = []
+        for line in Path(self.SEED).read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                records.append(json.loads(line))
+        heldout = [r for r in records if r.get("split", "train") == "heldout"]
+        for record in heldout:
+            for msg in record["messages"]:
+                if msg.get("role") == "assistant" and msg.get("content"):
+                    assert msg["content"] not in text, f"heldout content leaked: {record.get('id')}"
+
+    def test_chat_sft_unknown_role_fails(self, tmp_path):
+        import json
+
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        bad = tmp_path / "bad.jsonl"
+        bad.write_text(
+            json.dumps({"messages": [{"role": "narrator", "content": "hi"}]}) + "\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="role"):
+            load_corpus_text(f"chat-sft:{bad}")
 
 
 # =============================================================================

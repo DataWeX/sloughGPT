@@ -48,6 +48,7 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models al
 from domain.infrastructure._internal.pugqeep.singleton import spawn_loop
 from domain.shared._internal.feature_flags import is_enabled
 from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
+from domain.training._internal.chat_sft_adapter import build as build_chat_sft
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
     is_experience_source,
@@ -496,6 +497,15 @@ def load_corpus_text(data_path, block_size=128) -> str:
         )
     elif isinstance(data_path, str) and is_feed_source(data_path):
         text = load_feed_text(data_path)
+    elif isinstance(data_path, str) and data_path.startswith("chat-sft:"):
+        source = data_path[len("chat-sft:"):]
+        arr = build_chat_sft(source)
+        text = "".join(arr)
+        logger.info(
+            "Loaded chat-sft trajectories: %d records, %d chars",
+            len(arr), len(text),
+            extra={"tag": "TRAIN"},
+        )
     elif isinstance(data_path, list) and data_path and isinstance(data_path[0], tuple):
         datasets_with_ratios = data_path
         all_texts = []
