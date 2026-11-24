@@ -1117,7 +1117,13 @@ class SloNetChatProvider:
                 # Char-level model — create a simple tokenizer from vocab
                 instance._tokenizer = _CharTokenizer(stoi, itos)
             else:
-                instance._tokenizer = None
+                # Fail fast at load: a soul with no vocab cannot run inference.
+                # Silently leaving _tokenizer=None deferred the crash to the
+                # first generate ("'NoneType' object has no attribute 'encode'").
+                raise ValueError(
+                    f"soul {soul_path} has no tokenizer (no token_tree metadata, "
+                    "no stoi/itos vocab) — not inference-ready"
+                )
 
         logger.info(
             "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d rope=%s norm=%s",
