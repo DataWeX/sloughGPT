@@ -2485,3 +2485,86 @@ class TestSaveEwcSnapshot:
         snap = t._ewc.task_snapshots["stage1"]
         assert snap.num_samples > 0
         assert np.isfinite(snap.optimal_loss)
+
+
+# =============================================================================
+# BatchArray spine — adapters enter SloughGPTTrainer (ADR-002 §2/§4)
+# =============================================================================
+
+
+class TestBatchArraySpine:
+    """The deferred spine (ADR-002 §4): the trainer's data door accepts a
+    ``BatchArray``, so the chat-sft seed trains through the ONE loader —
+    never a second data path beside the str/list doors (card 20261101_052145)."""
+
+    @pytest.fixture
+    def seed_array(self):
+        from pathlib import Path
+
+        from domain.training._internal.chat_sft_adapter import build
+
+        seed = Path(__file__).resolve().parents[1] / "fixtures" / "chat_sft_seed.jsonl"
+        return build(seed)
+
+    def test_load_corpus_text_renders_records_not_json(self, seed_array):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        text = load_corpus_text(seed_array)
+        assert "User:" in text and "Tool call:" in text
+        assert '{"id"' not in text  # never train on JSON syntax
+
+    def test_prepare_data_parity_for_batch_array(self, seed_array):
+        """Same parity invariant as the str/list doors: vocab == the text's chars."""
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        data, _n, stoi, _itos = prepare_data(seed_array, block_size=8)
+        text = load_corpus_text(seed_array)
+        assert sorted(stoi) == sorted(set(text))
+        assert len(data) == len(text)
+
+    def test_heldout_records_never_reach_the_trainer_text(self):
+        """build()'s default split holds at the trainer door: the held-out
+        marker (seed-064) is absent from train text, present in split=None."""
+        from pathlib import Path
+
+        from domain.training._internal.chat_sft_adapter import build
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        seed = Path(__file__).resolve().parents[1] / "fixtures" / "chat_sft_seed.jsonl"
+        marker = "power of 16"  # seed-064, split=heldout
+        assert marker not in load_corpus_text(build(seed))
+        assert marker in load_corpus_text(build(seed, split=None))
+
+    def test_trainer_constructs_and_steps_from_batch_array(self, seed_array, tmp_path):
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = SloughGPTTrainer(seed_array, config=cfg)
+        assert len(t.train_data) > 0
+        t.train()
+        assert t.global_step >= 1
+        assert t._last_train_loss is not None
+        # static array → content-addressed identity (not "live, no signature")
+        assert t.dataset_signature
+
+    def test_trainer_init_boots_adapter_registry(self, data_path, tmp_path, monkeypatch):
+        """ADR-002 §4: the trainer's real boot calls BOOT_MODULES — a broken
+        adapter dies at construction, never mid-epoch."""
+        import domain.training._internal.adapter_registry as ar
+
+        calls = []
+        monkeypatch.setattr(ar, "boot", lambda: calls.append("booted") or [])
+        make_trainer(data_path, tiny_config(tmp_path))
+        assert calls, "trainer construction must boot the adapter registry"
+
+    def test_spec_paths_declares_source_not_records(self, seed_array):
+        paths = tp._spec_paths(seed_array)
+        assert paths == [str(seed_array.source)]
+        assert not any("User:" in p for p in paths)  # never dump the corpus
+
+    def test_soul_metadata_records_source_path(self, seed_array, tmp_path):
+        from domain.inference._internal.slo_format import read_soul_identity
+
+        t = SloughGPTTrainer(seed_array, config=tiny_config(tmp_path))
+        out = str(tmp_path / "ck" / "model")
+        t.save(out)
+        identity = read_soul_identity(out + ".soul")
+        assert identity.get("training_dataset") == str(seed_array.source)
