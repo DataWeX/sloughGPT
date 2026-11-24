@@ -166,17 +166,18 @@ jobs:
       # log rather than hidden in package.json. Re-enable when either the
       # hang-diagnosis card or the Cypress -> domain/testing port series
       # (both filed from 20261121_152656) lands.
-      # QUARANTINE 2 (card 20261123_151623): compare-page.cy.ts hangs after
-      # test 1 on runners — run 45172537591 attempts 1 and 2 both printed
-      # "displays the benchmark page title" ok, then went totally silent
-      # (22 and 29 minutes) until the runner SIGTERMed the job at minutes
-      # 24 and 31. Locally 3/3 in 43s; with 15s/120s timeouts a stuck
-      # command would ERROR and print — 29-min silence = frozen renderer,
-      # not a cypress timeout. It is spec 2 of 21, so nothing behind it
-      # runs. Brace glob, NOT a comma list: cypress 14 rejects comma
-      # values in --config ("Cannot parse as valid JSON"); brace form
-      # verified locally to skip the spec and run the rest. Re-enable
-      # when the diagnosis card lands.
+      # WATCH, NOT QUARANTINED (card 20261123_151623): compare-page.cy.ts
+      # twice froze after test 1 on runners (run 45172537591 attempts 1+2:
+      # 22 and 29 minutes of total silence until the runner SIGTERMed the
+      # job — with 15s/120s timeouts a stuck command would ERROR and print,
+      # so silence means a frozen renderer, not a cypress timeout). Both
+      # freezes ran on the pre-20ddfd7fc base; after the same-origin/vite
+      # relay fix, PR 386's full-suite run passed the spec 3/3 in 45s
+      # (176/176, "All specs passed"), so it is deliberately NOT excluded
+      # — full coverage beats insurance against a likely-fixed freeze.
+      # Re-quarantine with the brace glob ('**/{a,b}.cy.ts'; comma lists
+      # are rejected by cypress 14) only if the freeze recurs on a
+      # post-20ddfd7fc base.
       # The server binary must be pinned: npm exec resolves start-server-and-test
       # from the ROOT .bin (workspace hoisting), so the spawned PATH finds the
       # root's transitive vite 7.3.6 first and shadows apps/web's 8.3.1 — 7.3.6
@@ -185,7 +186,7 @@ jobs:
       # 20261123_105722, measured + reproduced locally 2026-11-23).
       - run: >-
           npm exec -- start-server-and-test "./node_modules/.bin/vite" http://localhost:5173
-          "cypress run --config excludeSpecPattern='**/{chat-inference,compare-page}.cy.ts'"
+          "cypress run --config excludeSpecPattern=**/chat-inference.cy.ts"
         if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
 
