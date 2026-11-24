@@ -9,7 +9,7 @@ import asyncio
 import json
 
 import pytest
-from avion.ai.choice import propose_candidates
+from avion.ai.choice import propose_options
 from avion.ai.slo import build_prompt, flatten_tree_text
 from avion.backends.axtree import VOCABULARY
 from avion.backends.desktop import (
@@ -192,7 +192,7 @@ class TestDesktopTreeIsTheRealContract:
         }
 
     def test_choices_are_proposed_from_a_desktop_tree(self):
-        picks = propose_candidates(self.desktop_tree(), task="write hello")
+        picks = propose_options(self.desktop_tree(), task="write hello")
         labels = [c.label for c in picks]
         assert "click 'Add note'" in labels
         assert any(label.startswith("type ") for label in labels)

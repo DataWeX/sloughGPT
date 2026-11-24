@@ -1960,6 +1960,10 @@ class InferResponse(BaseModel):
     model: str
     tokens_generated: int = 0
     elapsed_ms: float = 0
+    # True when replayed from the exact response-cache tier (card
+    # 20261102_023531, /v1 parity): a replay is fast, not generated, and the
+    # consumer must be able to tell those apart.
+    cached: bool = False
 
 
 class EmbedRequest(BaseModel):
@@ -2030,6 +2034,43 @@ class InferInfoResponse(BaseModel):
     has_streaming: bool = True
     has_embedding: bool = False
     extra: dict = Field(default_factory=dict)
+
+
+def _infer_cache_key(req: InferRequest) -> tuple[str | None, str]:
+    """Exact-tier key for this /infer request, or ``None`` when it must generate.
+
+    /infer's projection of the ONE response-cache ladder — the decision lives
+    in ``routers.llm_v1._ladder`` and is never re-derived here (card
+    20261102_023531: /v1's ladder is 20261102_021851). This function only
+    declares the envelope facts and the key surface:
+
+      * the envelope is non-streaming (``infer_stream`` never reads the tier)
+        and tool-less, so those rungs evaluate false by construction;
+      * key completeness — every ``InferRequest`` field participates exactly
+        once: ``prompt`` -> messages, ``max_new_tokens`` -> max_tokens,
+        ``temperature`` -> the determinism rung, and ``model`` plus the
+        remaining sampling fields in ``extra``. A field missing from the key
+        would replay one request's text under another request's parameters —
+        a fluent wrong answer, invisible downstream.
+    """
+    # Function-level: llm_v1 delegates its info/embed routes back to
+    # InferRouter, so both sides keep this import off the module level.
+    from routers.llm_v1 import _ladder
+
+    return _ladder(
+        stream=False,  # infer() is the non-streaming envelope
+        tools=False,  # InferRequest carries no tools
+        temperature=req.temperature,
+        messages=[{"role": "user", "content": req.prompt}],
+        model_id=req.model or "",  # serving identity is covered by the generation token
+        max_tokens=req.max_new_tokens,
+        extra={
+            "top_p": req.top_p,
+            "top_k": req.top_k,  # keyed as sent: infer passes it to the provider unmapped
+            "repetition_penalty": req.repetition_penalty,
+            "response_format": req.response_format,
+        },
+    )
 
 
 class InferRouter:
@@ -2148,7 +2189,47 @@ class InferRouter:
                 "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
             )
         provider_messages = [{"role": "user", "content": prompt_text}]
+        model = self._get_model()
+        model_name = req.model or (
+            getattr(model, "model_id", None) or type(model).__name__ if model else "unknown"
+        )
         start = datetime.datetime.now()
+
+        # Response cache: /infer's projection of the ONE ladder
+        # (routers.llm_v1._ladder, card 20261102_023531). The engine gates
+        # above stay first: with no model loaded the generation token has
+        # already been bumped, so every entry is stale and a lookup would
+        # only add a miss (a request with nothing to serve from is not
+        # servable).
+        from domain.inference import get_response_cache
+
+        cache = get_response_cache()
+        cache_key, why = _infer_cache_key(req)
+        if cache_key is None:
+            if why == "stochastic":
+                cache.record_bypass_stochastic()
+        else:
+            replay = cache.get(cache_key)
+            if replay is not None:
+                elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
+                # Cache hit: the replayed text is counted honestly — the
+                # cached flag keeps it out of the tok/s window, so serve
+                # speed can never masquerade as generation speed.
+                tokens = count_tokens(replay, provider=provider)
+                record(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model, cached=True)
+                safe_audit_log(
+                    "infer.generate",
+                    resource=model_name,
+                    detail=f"elapsed={elapsed_ms:.0f}ms tokens={tokens} cached=1",
+                )
+                return InferResponse(
+                    text=replay,
+                    model=model_name,
+                    tokens_generated=tokens,
+                    elapsed_ms=round(elapsed_ms, 1),
+                    cached=True,
+                )
+
         try:
             result = await provider.chat(
                 provider_messages,
@@ -2161,15 +2242,16 @@ class InferRouter:
             elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
             tokens = count_tokens(result, provider=provider)
             record(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model)
-            model = self._get_model()
-            model_name = req.model or (
-                getattr(model, "model_id", None) or type(model).__name__ if model else "unknown"
-            )
             safe_audit_log(
                 "infer.generate",
                 resource=model_name,
                 detail=f"elapsed={elapsed_ms:.0f}ms tokens={tokens}",
             )
+            if cache_key is not None and result:
+                # Exact tier only, and never fed from a replay (llm_v1
+                # parity): a response served from elsewhere must not be
+                # re-stored under this prompt's key.
+                cache.put(key=cache_key, response=result, model=model_name)
             return InferResponse(
                 text=result,
                 model=model_name,

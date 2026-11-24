@@ -82,7 +82,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
       - NODE_ENV=production
     restart: unless-stopped
     healthcheck:
