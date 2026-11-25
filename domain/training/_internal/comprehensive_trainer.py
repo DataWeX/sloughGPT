@@ -272,7 +272,14 @@ class ComprehensiveTrainer:
                     method=config.method,
                 )
                 if rec.confidence > 0.6:
-                    final_config["learning_rate"] = rec.learning_rate
+                    # Contract guard at the application seam: a recommendation
+                    # must never zero the learning rate — PipelineConfig's
+                    # __post_init__ rejects lr <= 0 and the training phase
+                    # dies with ValueError. Defense in depth: recommend()
+                    # already drops default-lr sentinel records, so this only
+                    # fires if a producer violates the contract again.
+                    if rec.learning_rate > 0:
+                        final_config["learning_rate"] = rec.learning_rate
                     final_config["batch_size"] = rec.batch_size
                     final_config["epochs"] = rec.epochs
                     final_config["lora_rank"] = rec.lora_rank

@@ -68,7 +68,14 @@ class AdaptiveConfigEngine:
             available_models: List of available models
         """
         size_cat = self._size_category(dataset_size)
-        outcomes = self.tracker.load_outcomes()
+        # TrainingOutcome.learning_rate defaults to 0.0, so records written
+        # without an explicit lr are sentinels, not measurements: PipelineConfig
+        # rejects lr <= 0 outright, and averaging them yields a recommendation
+        # that cannot be applied (CI run 45612603707 — six run_full_cycle
+        # failures after default-lr records reached the shared history).
+        # Filter before matching; an all-sentinel history falls back to the
+        # heuristics below, which always carry lr > 0.
+        outcomes = [o for o in self.tracker.load_outcomes() if o.learning_rate > 0]
 
         # Find similar runs
         similar = [

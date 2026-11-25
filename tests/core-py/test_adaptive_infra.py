@@ -178,6 +178,34 @@ class TestAdaptiveConfigEngine:
         assert rec.learning_rate > 0
         assert rec.batch_size >= 2
 
+    def test_recommend_ignores_default_lr_sentinels(self, tmp_path):
+        """Records without an explicit lr are sentinels, not measurements.
+
+        TrainingOutcome.learning_rate defaults to 0.0; averaging such
+        records produced a recommendation of lr=0 that killed run_full_cycle
+        ("learning_rate must be > 0, got 0.0", CI run 45612603707). An
+        all-sentinel history must degrade to the heuristic fallback —
+        based_on_runs 0, lr > 0 — never an unappliable value.
+        """
+        tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
+        for i in range(5):
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"sentinel_{i}",
+                    dataset="test",
+                    dataset_size=5000,
+                    model="gpt2",
+                    method="finetune",
+                    final_loss=3.0,
+                    converged=True,
+                )
+            )
+        engine = AdaptiveConfigEngine(tracker)
+        rec = engine.recommend(5000, "gpt2", "finetune")
+        assert rec.based_on_runs == 0
+        assert rec.learning_rate > 0
+        assert rec.confidence == 0.3
+
     def test_recommend_no_history_fallback(self, tmp_path):
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
         engine = AdaptiveConfigEngine(tracker)

@@ -108,6 +108,33 @@ def _reset_log_correlation_context():
         log_mod.clear_log_context()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_training_history(tmp_path_factory):
+    """Point the shared training-history store at a per-worker tmp file.
+
+    TrainingOutcomeTracker's default path is
+    $HOME/.config/sloughgpt/training_history.jsonl — shared by every test,
+    xdist worker and run on the machine. Tests recording TrainingOutcome(...)
+    without an explicit learning_rate append the dataclass default 0.0 there;
+    under --dist loadfile the reader (ComprehensiveTrainer._configure →
+    AdaptiveConfigEngine, confidence > 0.6) then averages those sentinels
+    into a recommendation of lr=0 and run_full_cycle dies with
+    "learning_rate must be > 0, got 0.0" (CI run 45612603707: 6 failures,
+    shard 2 — the exact 6 reproduce under a fresh HOME, pass on a box with
+    diluted history). Isolate the store per worker session: record→read
+    chains within a session still share one file; nothing crosses workers,
+    runs, or the developer's real HOME.
+    """
+    from domain.training._internal import outcome_tracker
+
+    original = outcome_tracker.DEFAULT_HISTORY_PATH
+    outcome_tracker.DEFAULT_HISTORY_PATH = (
+        tmp_path_factory.mktemp("training-history") / "training_history.jsonl"
+    )
+    yield
+    outcome_tracker.DEFAULT_HISTORY_PATH = original
+
+
 def build_test_app(*routers):
     """Build a FastAPI app with exception handlers registered.
 
