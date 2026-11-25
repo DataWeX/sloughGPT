@@ -167,7 +167,12 @@ class LoRALinear(SloLayer):
         return out
 
     def forward(self, x):
-        x_t = _to_tensor(_to_np(x), requires_grad=True)
+        # Pass a Tensor through untouched. Re-wrapping the input (_to_np →
+        # fresh leaf) severed the graph at this layer's entry: upstream of
+        # every adapter (ff_norm, w1/w3 in the SwiGLU fan-out) received no
+        # gradient, and only w2's adapters learned by topology accident
+        # (card 20261101_052145 — TestLoRAEndToEnd).
+        x_t = x if isinstance(x, Tensor) else _to_tensor(x)
         w = self.weight
         b = self.bias
 
@@ -264,7 +269,9 @@ class LoRAEmbedding(SloLayer):
         return original + original @ lora_w.T
 
     def forward(self, x):
-        x_t = _to_tensor(_to_np(x), requires_grad=True)
+        # Same graph-severance fix as LoRALinear.forward — pass Tensors
+        # through, never re-wrap them as fresh leaves.
+        x_t = x if isinstance(x, Tensor) else _to_tensor(x)
         original = self.weight.forward(x_t)
         lora_contrib = _matmul(original, _matmul(self.lora_B, self.lora_A).T())
         return original + lora_contrib * (self.alpha / self.rank)
@@ -381,6 +388,8 @@ def apply_lora_to_model(
     rank: int = 8,
     alpha: float = 16.0,
     target_modules: list[str] | None = None,
+    *,
+    freeze_base: bool = True,
 ):
     """
     Apply LoRA to a model.
@@ -390,12 +399,20 @@ def apply_lora_to_model(
 
     For generic models: falls back to named_modules() traversal.
 
+    Frozen base is the permanent default (``freeze_base=True``): every
+    non-adapter parameter gets ``requires_grad=False`` at wrap time — one
+    walk, no per-step cost — so base weights stay byte-stable and adapters
+    are the only trainable delta. The escape hatch (``freeze_base=False``)
+    exists for full-dense experiments; ``requires_grad`` is runtime state
+    and is never persisted, so checkpoints load unchanged either way.
+
     Args:
         model: SloNet / SloTransformer or generic model with named_modules
         config: LoRAConfig (preferred)
         rank: LoRA rank (if no config)
         alpha: LoRA alpha (if no config)
         target_modules: Module names to apply LoRA
+        freeze_base: Freeze every non-adapter param after wrapping (default)
 
     Returns:
         Model with LoRA applied
@@ -405,6 +422,17 @@ def apply_lora_to_model(
     target_modules = config.target_modules or []
 
     applied = 0
+    # adapter tensors registered at wrap time — identity-precise for BOTH the
+    # SloNet walk and the generic named_modules path (get_lora_parameters
+    # needs named_parameters(), which duck-typed models don't have)
+    adapter_ids: set[int] = set()
+
+    def _register_adapters(module) -> None:
+        for attr in ("lora_A", "lora_B", "lora_s"):
+            tensor = getattr(module, attr, None)
+            if tensor is not None:
+                adapter_ids.add(id(tensor))
+
     is_slonet = hasattr(model, "layers") and isinstance(model.layers, list)
 
     if is_slonet:
@@ -441,6 +469,7 @@ def apply_lora_to_model(
                 )
 
             _set_nested(model, path.split("."), new_lora)
+            _register_adapters(new_lora)
             applied += 1
             logger.info("Applied LoRA to %s", path, extra={"tag": "TRAIN"})
     else:
@@ -475,10 +504,39 @@ def apply_lora_to_model(
             for part in parts[:-1]:
                 parent = getattr(parent, part)
             setattr(parent, parts[-1], new_lora)
+            _register_adapters(new_lora)
             applied += 1
             logger.info("Applied LoRA to %s", name, extra={"tag": "TRAIN"})
 
     model._has_lora = applied > 0
+    if freeze_base and applied > 0:
+        # Permanent default: base tensors are frozen the moment adapters are
+        # wrapped — one pass here, zero per-step cost. Identity-based against
+        # the wrap-time registry, so it covers both the SloNet walk and the
+        # generic named_modules path (which may not expose parameters()).
+        # Applied only when something actually wrapped: a no-match config
+        # must stay a true noop (nothing frozen, nothing changed).
+        if hasattr(model, "parameters"):
+            candidates = list(model.parameters())
+        else:
+            # duck-typed model: freeze tensor attrs found via named_modules
+            candidates = []
+            named = model.named_modules() if hasattr(model, "named_modules") else []
+            for _, module in named:
+                for value in vars(module).values():
+                    if hasattr(value, "requires_grad"):
+                        candidates.append(value)
+        frozen = 0
+        for p in candidates:
+            if id(p) not in adapter_ids:
+                p.requires_grad = False
+                frozen += 1
+        logger.info(
+            "LoRA base frozen: %d tensors (adapters trainable: %d)",
+            frozen,
+            len(adapter_ids),
+            extra={"tag": "TRAIN"},
+        )
     logger.info("LoRA applied: %d layers, rank=%s, alpha=%s", applied, config.rank, config.alpha)
     return model
 

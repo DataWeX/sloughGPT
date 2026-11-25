@@ -690,6 +690,9 @@ class TrainerConfig:
     use_lora: bool = False
     lora_rank: int = 8
     lora_alpha: int = 16
+    # frozen base is the permanent default; opt out only for dense-through-
+    # adapter experiments (the escape hatch — same spirit as freeze_base)
+    lora_freeze_base: bool = True
 
     # Logging / eval
     log_interval: int = 10
@@ -1670,9 +1673,15 @@ class SloughGPTTrainer:
             lora_config = LoRAConfig(
                 rank=self.config.lora_rank,
                 alpha=self.config.lora_alpha,
-                target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "w1", "w2", "w3"],
+                # SlonNet RUNTIME names (SloMultiHeadAttention.W_q…,
+                # SloFeedForward.w1…) — the checkpoint vocabulary (q_proj…)
+                # never matches _walk_slo_tree, so attention silently stayed
+                # dense under a "LoRA" run (card 20261101_052145).
+                target_modules=["W_q", "W_k", "W_v", "W_o", "w1", "w2", "w3"],
             )
-            self.model = apply_lora_to_model(self.model, config=lora_config)
+            self.model = apply_lora_to_model(
+                self.model, config=lora_config, freeze_base=self.config.lora_freeze_base
+            )
             lora_params = sum(p.numel() for n, p in self.model.named_parameters() if "lora_" in n)
             total = sum(p.numel() for p in self.model.parameters())
             logger.info(

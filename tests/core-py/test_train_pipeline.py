@@ -988,8 +988,16 @@ class TestTrainerInit:
         assert params
 
     def test_lora_no_target_modules_noop(self, data_path, tmp_path):
-        t = make_trainer(data_path, tiny_config(tmp_path, use_lora=True, lora_rank=4, lora_alpha=8))
-        assert all("lora_" not in n for n, _ in t.model.named_parameters())
+        # Intent: a target list matching nothing applies nothing (the old
+        # arrangement asserted absence on a WRAPPED model and only passed
+        # because the canonical enumeration hid adapter keys — the bug this
+        # class now pins the fix for).
+        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
+
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        model = apply_lora_to_model(t.model, LoRAConfig(target_modules=["does_not_match"]))
+        assert all("lora_" not in n for n, _ in model.named_parameters())
+        assert not any("lora" in k for k in model.state_dict())
 
     def test_torch_free_cpu_only(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
@@ -1010,6 +1018,151 @@ class TestTrainerInit:
         tracker = _RecordingTracker()
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), experiment_tracker=tracker)
         assert t._experiment_tracker is tracker
+
+
+class TestLoRAEndToEnd:
+    """LoRA must actually LoRA (card 20261101_052145 step 3).
+
+    Three pre-existing seams, each pinned here before its fix:
+    1. ``LoRALinear.forward`` detached its input — gradients died at every
+       adapter's entry, so ``w1``/``w3`` adapters and ``ff_norm`` never trained.
+    2. The trainer's target list used checkpoint-vocabulary names
+       (``q_proj``…) while the runtime tree is ``W_q``/``W_k``/``W_v``/``W_o``
+       — attention was never wrapped.
+    3. The canonical state dict omitted ``lora_A``/``lora_B`` — trained
+       adapter state could not survive save/load.
+    4. Non-adapter params (embeddings, lm_head, norms) trained dense under
+       ``use_lora`` — the frozen-base invariant now defaults at the choke
+       point (``freeze_base=True``), pinned here: permanent by test,
+       one walk at wrap time (no per-step cost), reversible via the flag.
+    """
+
+    def test_attention_projections_get_wrapped(self, data_path, tmp_path):
+        from domain.training._internal.lora import LoRALinear
+
+        t = make_trainer(data_path, tiny_config(tmp_path, use_lora=True, lora_rank=4, lora_alpha=8))
+        attn = t.model.blocks[0].attn
+        for proj in ("W_q", "W_k", "W_v", "W_o"):
+            assert isinstance(getattr(attn, proj), LoRALinear), f"{proj} not LoRA-wrapped"
+        ff = t.model.blocks[0].ff
+        for proj in ("w1", "w2", "w3"):
+            assert isinstance(getattr(ff, proj), LoRALinear), f"{proj} not LoRA-wrapped"
+
+    def test_adapters_and_upstream_receive_updates(self, data_path, tmp_path):
+        # escape hatch: the frozen-base default pins upstream byte-stability
+        # in test_freeze_base_*; this keeps the ORIGINAL pre-freeze pin —
+        # grads flow through adapters into upstream weights — reachable via
+        # lora_freeze_base=False (dense-through-adapter experiments).
+        cfg = tiny_config(
+            tmp_path,
+            use_lora=True,
+            lora_rank=4,
+            lora_alpha=8,
+            max_steps=5,
+            log_interval=1,
+            lora_freeze_base=False,
+        )
+        t = make_trainer(data_path, cfg)
+        w1 = t.model.blocks[0].ff.w1
+        before_a = np.array(w1.lora_A.data, copy=True)
+        before_b = np.array(w1.lora_B.data, copy=True)
+        before_norm = np.array(t.model.blocks[0].ff_norm.weight.data, copy=True)
+        t.train()
+        assert not np.array_equal(before_b, w1.lora_B.data), "w1.lora_B never updated"
+        assert not np.array_equal(before_a, w1.lora_A.data), "w1.lora_A never updated"
+        assert not np.array_equal(before_norm, t.model.blocks[0].ff_norm.weight.data), (
+            "ff_norm never updated — adapter input detach severs upstream grads"
+        )
+
+    def test_state_dict_carries_adapter_state(self, data_path, tmp_path):
+        t = make_trainer(data_path, tiny_config(tmp_path, use_lora=True, lora_rank=4, lora_alpha=8))
+        sd = t.model.state_dict()
+        assert "blocks.0.ff.w1.lora_A" in sd
+        assert "blocks.0.ff.w1.lora_B" in sd
+        assert "blocks.0.attn.W_q.lora_A" in sd
+        # round-trip: lora_A is random-init, so equality after load proves the
+        # adapter state actually flowed through the canonical state dict
+        # (SloughGPTModel.load_state_dict returns None by design — the
+        # invariant is the values, not the return)
+        t2 = make_trainer(
+            data_path, tiny_config(tmp_path, use_lora=True, lora_rank=4, lora_alpha=8)
+        )
+        t2.model.load_state_dict(dict(sd))
+        assert np.array_equal(
+            t2.model.blocks[0].ff.w1.lora_A.data, t.model.blocks[0].ff.w1.lora_A.data
+        )
+        assert np.array_equal(
+            t2.model.blocks[0].attn.W_q.lora_A.data, t.model.blocks[0].attn.W_q.lora_A.data
+        )
+
+    def test_plain_state_dict_has_no_adapter_keys(self, data_path, tmp_path):
+        # non-LoRA runs must keep byte-identical key sets (no adapter leak)
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        assert not any("lora" in k for k in t.model.state_dict())
+
+    def _adapter_ids(self, model) -> set[int]:
+        ids: set[int] = set()
+
+        def walk(node, seen: set[int]) -> None:
+            if id(node) in seen:
+                return
+            seen.add(id(node))
+            if hasattr(node, "__dict__"):
+                for attr in ("lora_A", "lora_B", "lora_s"):
+                    tensor = getattr(node, attr, None)
+                    if tensor is not None:
+                        ids.add(id(tensor))
+                for value in vars(node).values():
+                    if not str(getattr(value, "__name__", value)).startswith("_") or hasattr(
+                        value, "__dict__"
+                    ):
+                        if not isinstance(value, (str, bytes, int, float, bool, type)):
+                            walk(value, seen)
+            if isinstance(node, (list, tuple)):
+                for value in node:
+                    walk(value, seen)
+
+        walk(model, set())
+        return ids
+
+    def test_freeze_base_is_default_reversible_performant(self, data_path, tmp_path):
+        # permanent: every non-adapter param is frozen + byte-stable across
+        # training; performant: freeze is one wrap-time walk (asserted by
+        # construction — no per-step hook exists to test); reversible:
+        # freeze_base=False opts out at the choke point.
+        cfg = tiny_config(
+            tmp_path, use_lora=True, lora_rank=4, lora_alpha=8, max_steps=5, log_interval=1
+        )
+        t = make_trainer(data_path, cfg)
+        adapter_ids = self._adapter_ids(t.model)
+        assert adapter_ids, "no adapter tensors found — wrap broken"
+        params = list(t.model.parameters())
+        plain = [p for p in params if id(p) not in adapter_ids]
+        adapters = [p for p in params if id(p) in adapter_ids]
+        assert plain, "expected non-adapter params (embed/head/norms)"
+        for p in plain:
+            assert p.requires_grad is False, "non-adapter param must be frozen under LoRA"
+        for p in adapters:
+            assert p.requires_grad is True, "adapter param must stay trainable"
+
+        before_plain = [np.array(p.data, copy=True) for p in plain]
+        before_adapters = [np.array(p.data, copy=True) for p in adapters]
+        t.train()
+        for p, arr in zip(plain, before_plain, strict=True):
+            assert np.array_equal(p.data, arr), "frozen base tensor changed during training"
+        assert any(
+            not np.array_equal(p.data, arr)
+            for p, arr in zip(adapters, before_adapters, strict=True)
+        ), "adapters did not train"
+
+        # reversible: escape hatch leaves the base trainable
+        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
+
+        t2 = make_trainer(data_path, tiny_config(tmp_path))
+        model = apply_lora_to_model(
+            t2.model, LoRAConfig(target_modules=["w1", "w2", "w3"]), freeze_base=False
+        )
+        assert model.layers[0].weight.requires_grad is True
 
 
 class _RecordingTracker:

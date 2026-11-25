@@ -7846,6 +7846,24 @@ class SloTransformer(SloNet):
         pass
 
 
+def _lora_named(prefix: str, module) -> list[tuple[str, Tensor]]:
+    """Adapter tensors for a LoRA-wrapped leaf, else nothing.
+
+    Duck-typed on purpose: ``lora.py`` imports slonet, never the reverse, so
+    slonet cannot isinstance-check ``LoRALinear``/``LoRAEmbedding``. Without
+    these keys the canonical enumeration persisted only the frozen base —
+    trained adapters vanished on save and could never load back
+    (card 20261101_052145).
+    """
+    named: list[tuple[str, Tensor]] = []
+    if hasattr(module, "lora_A"):
+        named.append((f"{prefix}.lora_A", module.lora_A))
+        named.append((f"{prefix}.lora_B", module.lora_B))
+    if hasattr(module, "lora_s"):
+        named.append((f"{prefix}.lora_s", module.lora_s))
+    return named
+
+
 def _named_mha(prefix: str, mha: SloMultiHeadAttention) -> list[tuple[str, Tensor]]:
     named = [
         (f"{prefix}.q_proj.weight", mha.W_q.weight),
@@ -7861,6 +7879,8 @@ def _named_mha(prefix: str, mha: SloMultiHeadAttention) -> list[tuple[str, Tenso
         named.append((f"{prefix}.v_proj.bias", mha.W_v.bias))
     if mha.W_o.use_bias:
         named.append((f"{prefix}.o_proj.bias", mha.W_o.bias))
+    for attr in ("W_q", "W_k", "W_v", "W_o"):
+        named.extend(_lora_named(f"{prefix}.{attr}", getattr(mha, attr)))
     return named
 
 
@@ -7876,6 +7896,8 @@ def _named_ff(prefix: str, ff: SloFeedForward) -> list[tuple[str, Tensor]]:
         named.append((f"{prefix}.w2.bias", ff.w2.bias))
     if ff.w3.use_bias:
         named.append((f"{prefix}.w3.bias", ff.w3.bias))
+    for attr in ("w1", "w2", "w3"):
+        named.extend(_lora_named(f"{prefix}.{attr}", getattr(ff, attr)))
     return named
 
 
