@@ -74,3 +74,11 @@ gh: null
 - Untouched: router + teardown test files (fixed structurally, assertions intact); test-root untouched (green as-is); no workflow pins assert command flags (verified — 26 seam gates pass).
 - **Deferred (follow-up card):** the `_PM` wrong-target defect — a real latent test bug (12 tests pass for the wrong reason); fixing it changes 12 tests' behavior = separate test-correctness identity, after the gate.
 - Gates before push: ruff check+format ✓; YAML ✓; 26 seam gates (split + workflow pins) ✓; 4 local slices with the exact CI command → in progress.
+
+### Fix pushed — PR #387 (2026-11-25)
+
+- Commit `45b6ae63e` on `feat/ci-shard-core-py` (pushed after a stale `index.lock` from the 10:57 server restart was cleared — 0 bytes, no live git process).
+- **All 4 local slices × exact CI command green**: 10,876 / 10,538 / 10,533 / 10,850 passed. Slice 4's first attempt was killed at 97% by the restart; clean rerun exit=0.
+- Slice 2 rerun (started by another session, overlapped my slice 4 → 2× `-n auto` contention) failed `test_hf_lora_finetune::test_generate_numpy_lora_with_top_p`; passes standalone in 1.45s → contention flake, unrelated test, two-strike (original slice 2 green + standalone green).
+- Gates: ruff check+format ✓, YAML ✓, 29 seam-gate tests ✓.
+- **Remaining: ×3 consecutive green CI runs on main after merge.**
