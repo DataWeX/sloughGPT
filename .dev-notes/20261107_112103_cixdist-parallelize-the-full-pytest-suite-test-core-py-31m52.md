@@ -53,3 +53,24 @@ gh: null
 - **Three-strike:** all 3 sites green locally on this branch (39 passed / 8 passed / 1 passed 5.3s); yesterday's pre-shard run `45204414933` (old config) failed on a DIFFERENT flake (`test_wgpu_backend::TestLayerNorm`, 42,777 passed) — these tests pass under the old config too; identical flags green on shard 3. **Conclusion: dynamic-distribution order/timing flakes (the card's predicted hazard), not split-logic defects.**
 - **Mitigation if reruns keep reddening (evidence-gated, not yet applied):** `--dist loadscope` (groups module → keeps `TestConftestTeardown::test_a/b` on one worker — the card's own suggestion).
 - Attempt 2 (`gh run rerun --failed`) re-runs shards 1/2/4 **and** gives `test-core-py-coverage` + `test-core-py-record-merge` their first CI exercise.
+
+### Strike 2 — attempt 2 (2026-11-24): byte-identical → deterministic, not flake
+
+- Rerun reproduced the **same 5 tests, same shards, same counts** (`10695/10692/10691` passed both attempts) → deterministic given shard membership. The flake conclusion in Run 1 above was **wrong** — three-strike corrected it.
+- Local slice repro (old split): shard 2 fails `test_b` + pugqeep locally too; slice 3 green. Yesterday's old-config run failed a DIFFERENT test (`test_wgpu_backend`) → main has independent flake history; these 3 sites are placement-dependent, not time-dependent.
+
+### Root causes (code-level, 2026-11-25)
+
+1. **`TestPersonas` 404s — disk-chain coupling; the mock never worked.** `_PM` patches `...personality.PersonalityManager` (source module) but every handler does `from domain.cognition import PersonalityManager` (facade binding) → `@patch(_PM)` NEVER applied. Tests pass only because real `save` writes `data/consciousness/personas/test.json` and real `get/activate/delete` find it in collection order. Proof: worktree `personas/` is empty because `delete` ran last and cleaned up; slice 2 (save, 12:34) → slice 3 (get, 12:39) passed across processes on the SAME disk; CI = separate runners → deterministic 404.
+2. **`test_a/b` — item round-robin splits the deliberate handoff.** `test_a` sets `global _leaked_workflow`; `test_b` asserts it non-None (class docstring: "Order-dependent"). Consecutive items → different shards → different processes → guard fails. Within a shard, `--dist load` could still split them across workers (module globals are per-process).
+3. **pugqeep race test — contention, not deadlock.** 60k spawns: 5.3s alone; >120s in CI (2/2 attempts); locally the SAME slice measured >150s once and <10s once → bimodal, sibling-load-dependent. Old config was serial (`42777 passed in 36:32`, no workers) so it never contended. Its own `hammer_t.join(120)` would fail the asserts even with a bigger outer timeout → both must scale together.
+
+### Fix (one identity: the split respects file boundaries) — 2026-11-25
+
+- `tests/shard_split.py`: **file-grouped LPT** — group items by nodeid prefix, largest file first into the currently smallest shard, name tie-break. Contract now: disjoint + complete AND a file never straddles shards. Balance measured **10,472×4 exact over 41,888 items** (naive file-RR was 1.30x — rejected). Name tie-break makes placement independent of filesystem collection order → local slice runs predict CI placement exactly (round-robin did not).
+- `tests/test_shard_split.py`: nodeid-shaped items; new pins — file-never-straddles, placement-ignores-collection-order, LPT balance (20 pass).
+- `.github/workflows/ci_cd.yml`: `--dist loadfile` on BOTH test-core-py passes — one file = one worker in collection order; module globals AND the save→load disk chain need it (without it `get` could race ahead of `save` on the shared job disk).
+- `tests/core-py/test_pugqeep_engine.py`: `@pytest.mark.timeout(600)` + `hammer_t.join(120→480)` (reader join 60 stays; 480+60 < 600 outer). No assertion weakened. CI `--durations=25` reports the real number for an evidence-based bump if 600 ever proves tight.
+- Untouched: router + teardown test files (fixed structurally, assertions intact); test-root untouched (green as-is); no workflow pins assert command flags (verified — 26 seam gates pass).
+- **Deferred (follow-up card):** the `_PM` wrong-target defect — a real latent test bug (12 tests pass for the wrong reason); fixing it changes 12 tests' behavior = separate test-correctness identity, after the gate.
+- Gates before push: ruff check+format ✓; YAML ✓; 26 seam gates (split + workflow pins) ✓; 4 local slices with the exact CI command → in progress.
