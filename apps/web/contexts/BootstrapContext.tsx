@@ -66,6 +66,20 @@ export function BootstrapProvider({ children }: { children: ReactNode }) {
     try {
       const payload = await bootstrapController.get()
       if (!aliveRef.current) return
+
+      // A 200 with an empty/malformed body ({}) does not throw in apiGet —
+      // committing it poisons every consumer that reads payload.members
+      // (CommandPalette's effect crashed on exactly this → render loop,
+      // card 20261123_073036). Validate the contract before setData: keep
+      // data null, surface the error. No poll is scheduled for a malformed
+      // payload — the same no-retry stance as a dead server below.
+      if (!payload?.members) {
+        const raw = JSON.stringify(payload ?? null)
+        _log.warning('bootstrap payload malformed', { payload: raw })
+        setError(`bootstrap response malformed (missing members): ${raw.slice(0, 200)}`)
+        return
+      }
+
       setData(payload)
       setError(null)
 

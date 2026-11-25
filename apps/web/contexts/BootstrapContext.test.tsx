@@ -104,6 +104,25 @@ describe('BootstrapContext', () => {
     expect(mockGet).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects a malformed payload (no members): no commit, error surfaced, no poll', async () => {
+    // Card 20261123_073036: setData({}) committed BEFORE
+    // payload.members.startup_progress threw, poisoning every consumer
+    // (CommandPalette crashed → shell-level render loop).
+    vi.useFakeTimers()
+    mockGet.mockResolvedValue({})
+    const { result } = renderHook(() => useBootstrap(), { wrapper })
+    await act(async () => {})
+    expect(result.current.data).toBeNull()
+    expect(result.current.error).toContain('malformed')
+    expect(mockSetModelReadiness).not.toHaveBeenCalled()
+    // No poll scheduled for a malformed payload (same no-retry stance as a
+    // dead server — the SSE health stream owns recovery UX).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000)
+    })
+    expect(mockGet).toHaveBeenCalledTimes(1)
+  })
+
   it('refresh() re-fetches on demand', async () => {
     mockGet.mockResolvedValue(payload('ready'))
     const { result } = renderHook(() => useBootstrap(), { wrapper })

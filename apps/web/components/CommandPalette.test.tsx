@@ -137,6 +137,17 @@ describe('CommandPalette', () => {
     expect(screen.getByText('My Chat')).toBeDefined()
   })
 
+  it('tolerates a malformed bootstrap payload (no members) without crashing', () => {
+    // Card 20261123_073036: `const { sessions } = bootstrap.members` in the
+    // mount effect threw a TypeError on a 200 {} payload — the first link of
+    // the shell-level render loop.
+    bootstrapState.payload = {} as never
+    expect(() => render(<CommandPalette />)).not.toThrow()
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(screen.getByPlaceholderText('Search pages, models, actions...')).toBeDefined()
+    expect(screen.queryByText('My Chat')).toBeNull()
+  })
+
   it('queries system search with q and renders Data results', async () => {
     mockApiGet.mockResolvedValue({
       hits: [

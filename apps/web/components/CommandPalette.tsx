@@ -62,7 +62,12 @@ export function CommandPalette() {
   // surfaces); the palette is a boot-time snapshot by design.
   const { data: bootstrap } = useBootstrap()
   useEffect(() => {
-    if (!bootstrap) return
+    // Guard: a malformed /bootstrap payload (200 {}) reaches here without
+    // members, and destructuring it threw inside this effect — with no
+    // boundary above RouteDigestBoundary React recreated the tree forever
+    // (the render loop of card 20261123_073036). BootstrapContext rejects
+    // malformed payloads before commit; this guard covers any other path.
+    if (!bootstrap?.members) return
     const { sessions, souls } = bootstrap.members
     setRecentSessions(
       (sessions ?? []).slice(0, 5).map((s) => ({ id: s.id, name: s.name || 'Untitled' })),

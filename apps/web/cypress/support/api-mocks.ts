@@ -169,6 +169,17 @@ Cypress.Commands.add('mockApiFallback', () => {
   // handler so matching precedence between interceptors never comes into it.
   const kvStore: Record<string, unknown> = {}
   cy.intercept({ url: `${api}/**` }, (req) => {
+    // Document navigations (cy.visit's initial HTML request) must reach the
+    // dev server: with apiBase '' the /** pattern matches them too, and a
+    // JSON {} reply to the document kills the page before the app boots —
+    // the spec's command queue then dies and the test "passes" in <200ms
+    // without running a single assertion (zombie green, card 20261123_073036).
+    // Same kind-rule the gateway/vite relay use: Accept decides, not path.
+    const accept = req.headers['accept']
+    if (typeof accept === 'string' && accept.includes('text/html')) {
+      req.continue()
+      return
+    }
     const path = req.url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
     const kvPrefix = '/docstore/kv/'
     if (path.startsWith(kvPrefix)) {

@@ -156,16 +156,31 @@ jobs:
       # --ignore-scripts skips cypress's binary download; fetch it explicitly.
       - run: npx cypress install
         if: steps.fe.outputs.web == 'true'
-      # QUARANTINE (card 20261121_152656): chat-inference.cy.ts hangs in
-      # its beforeEach / first cy.visit('/chat') — run 44908497278 printed
-      # its describe header at 13:23:42 and produced nothing until the 45m
-      # timeout cancelled the job at 14:07:15 (spec 1/22 passed in 14s, so
-      # the hang alone is the entire budget burn; the other 20 specs never
-      # ran). Same command as `npm run e2e:vite`, minus the hanger. The
-      # explicit string lives here so the exclusion is visible in the job
-      # log rather than hidden in package.json. Re-enable when either the
-      # hang-diagnosis card or the Cypress -> domain/testing port series
-      # (both filed from 20261121_152656) lands.
+      # UNQUARANTINED (card 20261123_073036, branch fix/chat-render-loop):
+      # the hang was a render loop, not a stuck command — a 200 {} from
+      # GET /bootstrap committed before payload.members was read, crashed
+      # <CommandPalette>, and with RouteDigestBoundary returning null for
+      # non-digest errors React re-created the shell tree forever
+      # ("React will try to recreate this component tree" x2322 in
+      # cypress/evidence/logs/probe8.log). Fixed in 3 parts: malformed
+      # payload rejected before setData (BootstrapContext), members guard
+      # (CommandPalette), non-digest errors captured into a fallback
+      # (digest-boundary). Post-fix: 0 loop signatures, chat-inference
+      # 3/3 in 41s, full suite 33/33 with zero assertion failures
+      # (cypress/evidence/logs/postfix-chat1.log, postfix-probe{1,2}.log,
+      # fullsuite1.log, remaining3.log).
+      # CAVEAT: cypress pass-side integrity is NOT yet trustworthy —
+      # support/e2e.ts's 'fail' listener swallows every failure via
+      # Cypress 14.5.4's emitMap/rets.length bail (card 20261125_130530).
+      # What this unquarantine rests on is the hang being gone (the
+      # budget-burn failure mode), which is directly evidenced above.
+      # Prior QUARANTINE note (card 20261121_152656): chat-inference.cy.ts
+      # hung in its beforeEach / first cy.visit('/chat') — run 44908497278
+      # printed its describe header at 13:23:42 and produced nothing until
+      # the 45m timeout cancelled the job at 14:07:15 (spec 1/22 passed in
+      # 14s, so the hang alone was the entire budget burn; the other 20
+      # specs never ran). The explicit exclusion string lived here so it
+      # was visible in the job log rather than hidden in package.json.
       # WATCH, NOT QUARANTINED (card 20261123_151623): compare-page.cy.ts
       # twice froze after test 1 on runners (run 45172537591 attempts 1+2:
       # 22 and 29 minutes of total silence until the runner SIGTERMed the
@@ -186,7 +201,7 @@ jobs:
       # 20261123_105722, measured + reproduced locally 2026-11-23).
       - run: >-
           npm exec -- start-server-and-test "./node_modules/.bin/vite" http://localhost:5173
-          "cypress run --config excludeSpecPattern=**/chat-inference.cy.ts"
+          "cypress run"
         if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
 
