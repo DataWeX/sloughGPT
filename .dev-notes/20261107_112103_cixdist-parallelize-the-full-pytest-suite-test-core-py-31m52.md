@@ -73,4 +73,18 @@ gh: null
 - `tests/core-py/test_pugqeep_engine.py`: `@pytest.mark.timeout(600)` + `hammer_t.join(120→480)` (reader join 60 stays; 480+60 < 600 outer). No assertion weakened. CI `--durations=25` reports the real number for an evidence-based bump if 600 ever proves tight.
 - Untouched: router + teardown test files (fixed structurally, assertions intact); test-root untouched (green as-is); no workflow pins assert command flags (verified — 26 seam gates pass).
 - **Deferred (follow-up card):** the `_PM` wrong-target defect — a real latent test bug (12 tests pass for the wrong reason); fixing it changes 12 tests' behavior = separate test-correctness identity, after the gate.
-- Gates before push: ruff check+format ✓; YAML ✓; 26 seam gates (split + workflow pins) ✓; 4 local slices with the exact CI command → in progress.
+- Gates before push: ruff check+format ✓; YAML ✓; 26 seam gates (split + workflow pins) ✓; 4 local slices with the exact CI command ✓ (see below).
+
+### Landed (2026-11-25): `f82b98c14` (fix) + `e6ef2396d` (rehash) pushed `ef2e448d8..e6ef2396d` → main
+
+- **Local 4-slice verification** (exact CI command, `--dist loadfile`): slice1 `10876 passed` (×2), slice2 `10549 passed` (critical sites **0 failures** — test_b + TestPersonas green in new placement), slice3 `10533 passed` (pugqeep timeout fix in place), slice4 `10850 passed` exit 0. Sum ≈ **43,067 ≈ full suite** (disjoint+complete at scale). Two environmental flakes triaged, neither placement: quant CLI ×3 died at exactly 150s while my own orphaned slice4 ran concurrently at box load 12 (green in the clean re-run + CI ×2), hf_lora top_p failed once in-shape (numerical NaN warning) then passed standalone ×3 and passed in the SAME placement on the previous run.
+- **Baseline main-red repair** (`e6ef2396d`): placement reviewed first — `16f886905` (BatchArray) + `555e760b0` (prefill) both stayed inside `domain/training/_internal/` (3 modified files, no adds/moves; only 2 private module helpers added, no class/facet changes) → rehash moved 1 hash (`training 9f75e850 -> 3abce1a7`), `--check` = "no drift". This also cleared main's OTHER reds (`test_gates_cli`, `test_clean_tree_is_green`, `TestDirectoryHashDrift` — all the same root cause).
+- **Gate run 1 = `45612603707`** (CI/CD on `e6ef2396`) in progress; ×3 consecutive-green count starts here.
+
+### Fix pushed — PR #387 (2026-11-25)
+
+- Commit `45b6ae63e` on `feat/ci-shard-core-py` (pushed after a stale `index.lock` from the 10:57 server restart was cleared — 0 bytes, no live git process).
+- **All 4 local slices × exact CI command green**: 10,876 / 10,538 / 10,533 / 10,850 passed. Slice 4's first attempt was killed at 97% by the restart; clean rerun exit=0.
+- Slice 2 rerun (started by another session, overlapped my slice 4 → 2× `-n auto` contention) failed `test_hf_lora_finetune::test_generate_numpy_lora_with_top_p`; passes standalone in 1.45s → contention flake, unrelated test, two-strike (original slice 2 green + standalone green).
+- Gates: ruff check+format ✓, YAML ✓, 29 seam-gate tests ✓.
+- **Remaining: ×3 consecutive green CI runs on main after merge.**
