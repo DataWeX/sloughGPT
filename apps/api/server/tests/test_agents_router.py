@@ -512,9 +512,7 @@ class TestOrchestrateVocabulary:
 
         with patch("domain.agents.MultiAgentOrchestrator", _Orch):
             with patch("domain.agents.get_agent_run_store", lambda: _Store()):
-                with patch(
-                    "fastapi.Request.is_disconnected", new=AsyncMock(return_value=False)
-                ):
+                with patch("fastapi.Request.is_disconnected", new=AsyncMock(return_value=False)):
                     resp = self.client.post("/agents/orchestrate", json={"goal": "nope"})
         frames = _sse_frames(resp.text)
         assert [(f["phase"], f["status"]) for f in frames] == [
