@@ -1,12 +1,11 @@
 ---
-id: 20261125_150613_adaptive-lr-line-of-best-fit-per-model-trend-estimator
+title: adaptive-config: replace flat lr average with per-model line-of-best-fit (trend up/down)
+created: 2026-11-25T14:45:48.739943+00:00
+updated: 2026-11-25T14:45:48.739943+00:00
+tags: training, adaptive-config, area:domain
 status: todo
-board: 20261125_150613_adaptive-lr-line-of-best-fit-per-model-trend-estimator
-title: "adaptive-config: replace flat lr average with per-model line-of-best-fit (trend up/down)"
-tags: ["training", "adaptive-config", "area:domain"]
-sprint: ""
-gh: null
 ---
+
 
 # adaptive-config: per-model line-of-best-fit learning-rate estimator
 

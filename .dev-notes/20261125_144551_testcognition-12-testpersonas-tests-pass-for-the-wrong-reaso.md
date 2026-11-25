@@ -1,12 +1,11 @@
 ---
-id: 20261125_150614_pm-persona-tests-pass-for-the-wrong-reason
+title: test(cognition): 12 TestPersonas tests pass for the wrong reason — _PM patches the source module, handlers bind the facade
+created: 2026-11-25T14:45:51.506467+00:00
+updated: 2026-11-25T14:45:51.506467+00:00
+tags: testing, cognition, area:domain
 status: todo
-board: 20261125_150614_pm-persona-tests-pass-for-the-wrong-reason
-title: "test(cognition): 12 TestPersonas tests pass for the wrong reason — _PM patches the source module, handlers bind the facade"
-tags: ["testing", "cognition", "area:domain"]
-sprint: ""
-gh: null
 ---
+
 
 # TestPersonas mocks never worked — tests pass only via a save→load disk chain
 
