@@ -17,6 +17,8 @@ import json
 import time
 from pathlib import Path
 
+import numpy as np
+
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
@@ -107,6 +109,29 @@ def main() -> int:
     checkpoint = args.out / "model"
     trainer.save(str(checkpoint))
 
+    # Step 4 — adapter contribution: paired eval on IDENTICAL val batches
+    # (reseeded; disable_lora zeroes adapters, restores byte-perfect). With
+    # the frozen base both evaluations share byte-identical weights, so the
+    # delta is purely the adapter's contribution.
+    from domain.training._internal.lora import disable_lora
+
+    rng_state = np.random.get_state()
+    try:
+        np.random.seed(1337)
+        eval_with_adapters = trainer.evaluate()["eval_loss"]
+        np.random.seed(1337)
+        with disable_lora(trainer.model):
+            eval_base_only = trainer.evaluate()["eval_loss"]
+    finally:
+        np.random.set_state(rng_state)
+    adapter_delta = eval_with_adapters - eval_base_only
+    adapter_delta_pct = 100.0 * adapter_delta / eval_base_only
+    print(
+        f"adapter contribution: with={eval_with_adapters:.4f} "
+        f"base-only={eval_base_only:.4f} delta={adapter_delta:+.4f} "
+        f"({adapter_delta_pct:+.1f}%)"
+    )
+
     final_loss = result.get("train_loss") or result.get("best_eval_loss")
     summary = {
         "seed": str(args.seed),
@@ -120,6 +145,10 @@ def main() -> int:
         "lora_rank": args.lora_rank,
         "initial_loss": curve[0]["loss"] if curve else None,
         "final_loss": final_loss,
+        "eval_with_adapters": eval_with_adapters,
+        "eval_base_only": eval_base_only,
+        "adapter_delta": adapter_delta,
+        "adapter_delta_pct": adapter_delta_pct,
         "elapsed_sec": round(elapsed, 2),
         "checkpoint": str(checkpoint) + ".soul",
         "curve": curve,

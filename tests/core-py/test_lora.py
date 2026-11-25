@@ -11,6 +11,7 @@ from domain.training._internal.lora import (
     _to_tensor,
     apply_lora_to_model,
     count_lora_parameters,
+    disable_lora,
     get_lora_parameters,
 )
 from domain.training._internal.slonet import Tensor
@@ -264,6 +265,32 @@ class TestApplyLoRA:
         result = apply_lora_to_model(model, config=cfg)
         assert isinstance(result.linear, LoRALinear)
         assert result.linear.rank == 4
+
+    def test_disable_lora_suppresses_and_restores(self):
+        # eval-vs-baseline probe (HF disable_adapter precedent): adapter
+        # contribution is exactly zero inside the context and the tensors
+        # are byte-restored after — checkpoints never see the ablation.
+        model = apply_lora_to_model(self._make_simple_model(), target_modules=["linear"])
+        layer = model.linear
+        layer.eval()  # deterministic forward — mirrors evaluate()'s model.eval()
+        # lora_B is zero-init — fill so there IS a contribution to suppress
+        layer.lora_A.data[...] = 0.05
+        layer.lora_B.data[...] = 0.05
+        x = Tensor(np.ones((2, 64), dtype=np.float32), requires_grad=True)
+        out_on = np.array(layer.forward(x).data, copy=True)
+        a_before = np.array(layer.lora_A.data, copy=True)
+        b_before = np.array(layer.lora_B.data, copy=True)
+
+        with disable_lora(model):
+            assert not layer.lora_A.data.any(), "adapters must be zeroed inside"
+            assert not layer.lora_B.data.any(), "adapters must be zeroed inside"
+            out_off = np.array(layer.forward(x).data, copy=True)
+
+        assert not np.allclose(out_off, out_on), "adapters contributed nothing"
+        assert np.array_equal(layer.lora_A.data, a_before), "lora_A not restored"
+        assert np.array_equal(layer.lora_B.data, b_before), "lora_B not restored"
+        out_after = np.array(layer.forward(x).data, copy=True)
+        assert np.array_equal(out_after, out_on), "forward drifted after restore"
 
 
 # ── count_lora_parameters ──────────────────────────────────────────────────

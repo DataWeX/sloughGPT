@@ -1164,6 +1164,34 @@ class TestLoRAEndToEnd:
         )
         assert model.layers[0].weight.requires_grad is True
 
+    def test_disable_lora_pairs_trainer_evaluate(self, data_path, tmp_path):
+        # step-4 protocol: reseeded so both evaluations draw IDENTICAL val
+        # batches — the delta is then purely the adapter contribution on a
+        # byte-identical frozen base (RNG state restored for sibling tests).
+        from domain.training._internal.lora import disable_lora
+
+        t = make_trainer(data_path, tiny_config(tmp_path, use_lora=True, lora_rank=4, lora_alpha=8))
+        # lora_B is zero-init — fill so adapters measurably contribute
+        for name, p in t.model.named_parameters():
+            if "lora_" in name:
+                p.data[...] = 0.05
+
+        rng_state = np.random.get_state()
+        try:
+            np.random.seed(1337)
+            eval_on = t.evaluate(num_batches=4)["eval_loss"]
+            np.random.seed(1337)
+            with disable_lora(t.model):
+                eval_off = t.evaluate(num_batches=4)["eval_loss"]
+        finally:
+            np.random.set_state(rng_state)
+
+        assert np.isfinite(eval_on) and np.isfinite(eval_off)
+        assert not np.isclose(eval_on, eval_off), (
+            "paired evals identical — adapters contributed nothing, "
+            "or the reseed did not pin the batch draws"
+        )
+
 
 class _RecordingTracker:
     def __init__(self):

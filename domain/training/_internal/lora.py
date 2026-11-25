@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 
@@ -541,6 +542,40 @@ def apply_lora_to_model(
     return model
 
 
+@contextmanager
+def disable_lora(model):
+    """Temporarily suppress adapter contributions (HF ``disable_adapter`` precedent).
+
+    Zeros every ``lora_*`` tensor for the duration — the forward then computes
+    the frozen-base output exactly (``B·A·x = 0``). Values are restored
+    byte-for-byte on exit, so checkpoints and training state never see the
+    ablation. This is the eval-vs-baseline probe: with a frozen base the two
+    evaluations share identical weights, so their delta is purely the
+    adapter's contribution (card 20261101_052145 step 4).
+    """
+    saved: list[tuple[Tensor, np.ndarray]] = []
+    if hasattr(model, "named_parameters"):
+        adapters = [(n, p) for n, p in model.named_parameters() if "lora_" in str(n)]
+    else:
+        # duck-typed model: scan wrapped-module attrs (the same attrs the
+        # wrap-time registry in apply_lora_to_model collects)
+        adapters = []
+        named = model.named_modules() if hasattr(model, "named_modules") else []
+        for _, module in named:
+            for attr in ("lora_A", "lora_B", "lora_s"):
+                tensor = getattr(module, attr, None)
+                if tensor is not None:
+                    adapters.append((attr, tensor))
+    for _, tensor in adapters:
+        saved.append((tensor, np.array(tensor.data, copy=True)))
+        tensor.data[...] = 0
+    try:
+        yield
+    finally:
+        for tensor, buf in saved:
+            tensor.data[...] = buf
+
+
 def get_lora_parameters(model):
     """Get only LoRA parameters from a model."""
     params = {}
@@ -605,6 +640,7 @@ __all__ = [
     "LoRALinear",
     "LoRAEmbedding",
     "apply_lora_to_model",
+    "disable_lora",
     "get_lora_parameters",
     "count_lora_parameters",
     "print_lora_summary",
