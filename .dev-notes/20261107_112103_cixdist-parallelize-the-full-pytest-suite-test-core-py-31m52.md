@@ -109,3 +109,15 @@ gh: null
 - Taken over after confirmation: committed its fix as `42fd636ca` (ruff clean, 64-test closure green), rehash after it (`0caf4e793`, --check no drift, 16 gate tests green).
 - **PR 387 repurposed**: force-pushed (old head's content already on main), title/body now = the lr-sentinel fix (REST API — `gh pr edit` is broken repo-wide by the projectCards GraphQL deprecation).
 - **×3 green gate status: 0 of 3.** main is on a 6-run failure streak (lint, test-root baseline drift, test-core-py shards — exactly what this PR fixes). Gate starts once main goes green.
+
+
+
+### lr-sentinel fix rebased + pushed to main (2026-11-25, night)
+
+- Root cause of gate run #1 (45612603707) shard-2 red **proven by fresh-HOME repro**: `TrainingConfig.adaptive` defaults on -> `_configure` reads HOME-shared `~/.config/sloughgpt/training_history.jsonl` -> tests record `TrainingOutcome` with default `learning_rate=0.0` -> >=4 similar records => confidence>0.6 => lr overridden to 0 => `PipelineConfig.__post_init__` raises. Local passed by history dilution; CI fresh VM poisons mid-run.
+- Fix (one identity: training-history state must not leak): conftest session-autouse `_isolate_training_history` (per-worker tmp `DEFAULT_HISTORY_PATH`); `adaptive_config.recommend()` drops `lr<=0` sentinels; `comprehensive_trainer._configure` applies `rec.learning_rate` only if `>0`; regression test `test_recommend_ignores_default_lr_sentinels`.
+- Verified: fresh-HOME repro 6-failed -> **41 passed**; targeted closure 166 passed; ruff+format clean.
+- Rebased onto origin/main twice (kanban syncs, then origin's distill fix `2563e6101`), baseline rehashed for `domain/training` (`ca433a865`, `2d2a6b939`), pre-push gates green (baseline --check 0, ruff, 58 seam tests, 41 fresh-HOME).
+- **Pushed `2d2a6b939` to main.** Gate run #2 = CI/CD `45687529659`. Watcher `.ci-watch/watch-45687529659.sh`.
+- Local RUN_ALL fast phase: 46,948 passed / 17 failed — all 17 files pass in isolation (387 tests green); documented order-dependent pollution class (card `20261125_133509`), none in my closure.
+- **Gate: 0 of 3 green.**
