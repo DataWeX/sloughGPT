@@ -79,7 +79,20 @@ gh: null
 
 - **Local 4-slice verification** (exact CI command, `--dist loadfile`): slice1 `10876 passed` (×2), slice2 `10549 passed` (critical sites **0 failures** — test_b + TestPersonas green in new placement), slice3 `10533 passed` (pugqeep timeout fix in place), slice4 `10850 passed` exit 0. Sum ≈ **43,067 ≈ full suite** (disjoint+complete at scale). Two environmental flakes triaged, neither placement: quant CLI ×3 died at exactly 150s while my own orphaned slice4 ran concurrently at box load 12 (green in the clean re-run + CI ×2), hf_lora top_p failed once in-shape (numerical NaN warning) then passed standalone ×3 and passed in the SAME placement on the previous run.
 - **Baseline main-red repair** (`e6ef2396d`): placement reviewed first — `16f886905` (BatchArray) + `555e760b0` (prefill) both stayed inside `domain/training/_internal/` (3 modified files, no adds/moves; only 2 private module helpers added, no class/facet changes) → rehash moved 1 hash (`training 9f75e850 -> 3abce1a7`), `--check` = "no drift". This also cleared main's OTHER reds (`test_gates_cli`, `test_clean_tree_is_green`, `TestDirectoryHashDrift` — all the same root cause).
-- **Gate run 1 = `45612603707`** (CI/CD on `e6ef2396`) in progress; ×3 consecutive-green count starts here.
+- **Gate run 1 = `45612603707`** (CI/CD on `e6ef2396`) → **FAILED** (1 red job): shards 1/3/4 + all 8 other jobs green (incl. `test-root` → rehash repair verified), shard 2 red with 6 training failures.
+
+### Run-1 red: triaged to root cause + fixed (2026-11-25)
+
+- **Symptom:** shard 2 = `6 failed, 10700 passed` — `test_training_export_presets` ×2 + `test_training_robustness::TestConfigValidation` ×4, all `run_full_cycle → assert result.success` with `error='learning_rate must be > 0, got 0.0'` (all on gw0, shard took 1060s vs 171–248s siblings).
+- **Not the split's placement rules** (three-strike): passed standalone (41/41), passed full shard-2 exact-CI-command local repro (10641/10641) — because my box's `~/.config/sloughgpt/training_history.jsonl` has months of good entries diluting the average.
+- **Root cause (reproduced byte-identically):** fresh-HOME run of just the 2 files → **the same 6 failures**, 79 history lines written. Chain: `TrainingConfig.adaptive` defaults **on** → `_configure` reads the **HOME-shared** `training_history.jsonl` (common to all workers/runs on a machine) → tests record `TrainingOutcome(...)` with dataclass default `learning_rate=0.0` → once ≥4 "similar" records exist (confidence = (0.3+0.1n)×consistency > 0.6), the recommendation **overrides lr to 0** → `PipelineConfig.__post_init__` raises. CI's fresh VM starts empty (poison accumulates mid-run); local passes by dilution. `--dist loadfile` changed writer/reader ordering so it manifests deterministically.
+- **Fix (4 files, one identity: training-history state must not leak across tests/runs):**
+  1. `tests/core-py/conftest.py` — session autouse `_isolate_training_history`: points `outcome_tracker.DEFAULT_HISTORY_PATH` at a per-worker tmp file (same precedent as `_reset_log_correlation_context`).
+  2. `domain/training/_internal/adaptive_config.py` — `recommend()` drops `lr <= 0` sentinel records before matching (all-sentinel → heuristic fallback, always lr > 0).
+  3. `domain/training/_internal/comprehensive_trainer.py` — `_configure` applies `rec.learning_rate` only when `> 0` (contract guard at the application seam).
+  4. `tests/core-py/test_adaptive_infra.py` — regression test `test_recommend_ignores_default_lr_sentinels` (5 sentinel records → fallback, `based_on_runs == 0`, `lr > 0`, `confidence == 0.3`).
+- **Verified:** fresh-HOME repro 6-failed → **41 passed**; targeted closure **166 passed**; ruff+format clean; full affected closure (run_affected, full record) → running.
+- **Follow-ups carded:** `20261125_150613` per-model line-of-best-fit lr estimator (user proposal — trend up/down, total estimator); `20261125_150614` `_PM` wrong-target (12 persona tests pass for the wrong reason).
 
 ### Fix pushed — PR #387 (2026-11-25)
 
