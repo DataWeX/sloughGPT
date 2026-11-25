@@ -225,7 +225,8 @@ class MultiAgentOrchestrator:
     async def async_execute(self, goal: str, context: str = "") -> dict[str, Any]:
         """Async version of execute — uses asyncio.gather instead of ThreadPoolExecutor.
 
-        Non-blocking during inference calls via httpx.AsyncClient.
+        Inference calls cross the async seam via ``asyncio.to_thread`` (see
+        ``_async_generate``); no ``httpx.AsyncClient`` is involved.
         Tasks within a dependency level run concurrently via asyncio.gather.
         """
         tasks = await self._async_plan(goal, context)
@@ -425,8 +426,17 @@ class MultiAgentOrchestrator:
         return str(result)
 
     async def _async_generate(self, prompt: str, max_tokens: int = 200) -> str:
-        """Generate text via inference API (async — non-blocking)."""
-        result = await self._cmds.generate_async(prompt, max_tokens=max_tokens)
+        """Generate text via inference API (async — non-blocking).
+
+        Rides the ONE sync contract (``ShellCommands.generate``) across the
+        async seam with ``asyncio.to_thread`` — the pattern ``agents.py``
+        already uses for ``_inference_fn``. ``ShellCommands`` has no
+        ``generate_async``: adding one would be a second ladder for a single
+        call site, and in local mode ``_api_post`` dispatches in-process
+        anyway (``local_api.dispatch_post``), so this is a function call
+        crossing threads, not a transport crossing.
+        """
+        result = await asyncio.to_thread(self._cmds.generate, prompt, max_tokens=max_tokens)
         if isinstance(result, dict) and "text" in result:
             return result["text"]
         if isinstance(result, dict) and "error" in result:

@@ -396,3 +396,54 @@ class TestAsyncExecute:
             result = await orch.async_execute("goal")
             assert "response" in result
             assert len(result["tasks"]) == 1
+
+
+# ── _async_generate routing (the seam itself) ──────────────────────────────
+
+
+class TestAsyncGenerateSeam:
+    """The async seam must route to the SAME contract the sync path uses.
+
+    Every other async test in this file mocks ``_async_generate`` itself,
+    which places the mock exactly where the defect lived and let
+    ``AttributeError: ShellCommands has no attribute 'generate_async'``
+    ship green (card 20261125_122006). These patch the *sync target*
+    instead, so they fail if the routing is wrong.
+    """
+
+    @pytest.mark.asyncio
+    async def test_async_generate_routes_to_shell_commands_generate(self):
+        orch = MultiAgentOrchestrator()
+        with patch(
+            "domain.shell._internal.commands.ShellCommands.generate",
+            return_value={"text": "routed"},
+        ) as sync_generate:
+            result = await orch._async_generate("hello", max_tokens=7)
+
+        assert result == "routed"
+        sync_generate.assert_called_once_with("hello", max_tokens=7)
+
+    @pytest.mark.asyncio
+    async def test_async_generate_surfaces_error_payload_as_text(self):
+        orch = MultiAgentOrchestrator()
+        with patch(
+            "domain.shell._internal.commands.ShellCommands.generate",
+            return_value={"error": "No model loaded"},
+        ):
+            result = await orch._async_generate("hello")
+
+        assert result == "[LLM error: No model loaded]"
+
+    @pytest.mark.asyncio
+    async def test_async_generate_never_calls_generate_async(self):
+        """``generate_async`` does not exist on ShellCommands — assert it stays that way."""
+        from domain.shell._internal.commands import ShellCommands
+
+        orch = MultiAgentOrchestrator()
+        assert not hasattr(ShellCommands, "generate_async")
+
+        with patch(
+            "domain.shell._internal.commands.ShellCommands.generate",
+            return_value={"text": "ok"},
+        ):
+            assert await orch._async_generate("x") == "ok"
