@@ -101,3 +101,11 @@ gh: null
 - Slice 2 rerun (started by another session, overlapped my slice 4 → 2× `-n auto` contention) failed `test_hf_lora_finetune::test_generate_numpy_lora_with_top_p`; passes standalone in 1.45s → contention flake, unrelated test, two-strike (original slice 2 green + standalone green).
 - Gates: ruff check+format ✓, YAML ✓, 29 seam-gate tests ✓.
 - **Remaining: ×3 consecutive green CI runs on main after merge.**
+
+### Turn of events (2026-11-25, evening) — shard split landed on main via parallel session; PR 387 repurposed
+
+- A **parallel session took over `.wt-ci-shard`** mid-day: rebased my `45b6ae63e` onto main (→ `f82b98c14`), pushed **the shard split + --dist loadfile directly to main** (lane push), plus its own baseline rehash `e6ef2396d`. **The card's fix is therefore ON MAIN.**
+- It then wrote the `--dist loadfile` fallout fix (shared training-history lr=0 sentinels → 6 `run_full_cycle` failures, run 45612603707) but **died at the 16:05 restart with it uncommitted** (last activity 16:05, pytest killed).
+- Taken over after confirmation: committed its fix as `42fd636ca` (ruff clean, 64-test closure green), rehash after it (`0caf4e793`, --check no drift, 16 gate tests green).
+- **PR 387 repurposed**: force-pushed (old head's content already on main), title/body now = the lr-sentinel fix (REST API — `gh pr edit` is broken repo-wide by the projectCards GraphQL deprecation).
+- **×3 green gate status: 0 of 3.** main is on a 6-run failure streak (lint, test-root baseline drift, test-core-py shards — exactly what this PR fixes). Gate starts once main goes green.
