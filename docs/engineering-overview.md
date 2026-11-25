@@ -111,6 +111,8 @@ Component ← Zustand Store ← Controller ← Response
 
 **`http-client.ts`** is the single API layer. Interceptors, cache, circuit breaker, dedup, throttling. Never raw `fetch()`.
 
+**Run-stream state (agents floor)** — one write authority per data source: SSE frames fold through the pure `runReducer` (`app/(app)/agents/run-state.ts`), `GET /agents/runs` hydrates the same Zustand store (`use-run-stream-store.ts`), and while a stream is live the hydrator cannot clobber live stations — the two-writer "ghost activity" defect is structurally impossible. The orchestration card projects only stream-originated state; the Floor view (run history's third mode) reads everything. Event vocabulary + phase state machine: `docs/routers.md` → "Run-stream event vocabulary", pinned by `TestExecuteStreamVocabulary`/`TestOrchestrateVocabulary` (API) and `run-state.test.ts` (web).
+
 **40+ controllers** — one per domain (chat, model, training, dataset, knowledge, etc.). Controllers call http-client, transform data, update stores.
 
 **88 components** using `@sloughgpt/strui` library. Noir Violet design system, dark/light themes.

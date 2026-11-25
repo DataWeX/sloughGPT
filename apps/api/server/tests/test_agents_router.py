@@ -10,10 +10,15 @@ Covers all 8 endpoints:
   POST /agents/orchestrate        — orchestrate_agents (SSE)
   GET  /agents/runs               — list_runs
   GET  /agents/runs/{run_id}      — get_run
+
+Plus the two SSE vocabularies (agent visualization contract): the
+factory-floor reducer on the web side is derived from the phase tables
+pinned in ``TestExecuteStreamVocabulary`` / ``TestOrchestrateVocabulary``
+— a rename on either side must fail a test, not the floor view.
 """
 
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from test_support import get_test_client
@@ -351,3 +356,169 @@ class TestRunLoop:
             assert call["data"]["args"] == {"expression": "2+2"}
         finally:
             del reg._providers["slonet-native"]
+
+
+class TestExecuteStreamVocabulary:
+    """POST /agents/{agent_id}/execute/stream — event vocabulary pin.
+
+    The web factory-floor reducer maps these frames to station states, so
+    the ``event → (phase, status)`` table is a contract: pin it here.
+    """
+
+    def setup_method(self):
+        self.client = get_test_client()
+
+    @pytest.fixture
+    def _stream_system(self):
+        system = MagicMock()
+        events = [
+            {"event": "run_start", "agent_id": "a1"},
+            {"event": "tool_start", "tool": "web_search"},
+            {"event": "tool_result", "tool": "web_search", "ok": True},
+            {"event": "final", "text": "done"},
+            {"event": "run_end", "status": "completed"},
+        ]
+
+        async def _gen(**_kwargs):
+            for ev in events:
+                yield ev
+
+        system.execute_stream = MagicMock(return_value=_gen())
+        with patch("domain.agents.get_agent_system", return_value=system):
+            yield system
+
+    def test_event_vocabulary_is_pinned(self, _stream_system):
+        with patch("fastapi.Request.is_disconnected", new=AsyncMock(return_value=False)):
+            resp = self.client.post("/agents/a1/execute/stream", json={"request": "hi"})
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        frames = _sse_frames(resp.text)
+        assert [(f["stream"], f["phase"], f["status"]) for f in frames] == [
+            ("agent", "START", "working"),
+            ("agent", "TOOL_CALL", "working"),
+            ("agent", "TOOL_RESULT", "working"),
+            ("agent", "FINAL", "working"),
+            ("agent", "COMPLETE", "complete"),  # run_end
+            ("agent", "COMPLETE", "complete"),  # sse_complete tail
+        ]
+
+    def test_error_event_maps_to_error_phase(self):
+        system = MagicMock()
+
+        async def _gen(**_kwargs):
+            yield {"event": "error", "error": "boom"}
+
+        system.execute_stream = MagicMock(return_value=_gen())
+        with patch("domain.agents.get_agent_system", return_value=system):
+            with patch("fastapi.Request.is_disconnected", new=AsyncMock(return_value=False)):
+                resp = self.client.post("/agents/a1/execute/stream", json={"request": "hi"})
+        frames = _sse_frames(resp.text)
+        assert [(f["phase"], f["status"]) for f in frames] == [("ERROR", "error")]
+        assert frames[0]["data"]["error"] == "boom"
+
+
+class TestOrchestrateVocabulary:
+    """POST /agents/orchestrate — phase vocabulary pin (floor reducer source)."""
+
+    def setup_method(self):
+        self.client = get_test_client()
+
+    @pytest.fixture
+    def _fake_orchestrator(self):
+        class _Task:
+            def __init__(self, tid, desc):
+                self.id = tid
+                self.description = desc
+                self.assigned_agent = "worker"
+                self.status = "pending"
+                self.result = ""
+                self.error = ""
+
+            def to_dict(self):
+                return {
+                    "id": self.id,
+                    "description": self.description,
+                    "agent": self.assigned_agent,
+                    "status": self.status,
+                    "result_preview": self.result[:200],
+                    "depends_on": [],
+                }
+
+        class _Orch:
+            def __init__(self, **_kw):
+                self.agents = {}
+
+            async def _async_plan(self, _goal, _ctx):
+                return [_Task("t1", "do the thing")]
+
+            def _compute_levels(self, tasks):
+                return [[t.id for t in tasks]]
+
+            def _build_dep_context(self, _task, _task_map, _results):
+                return ""
+
+            async def _async_run_agent(self, _task, _goal, _dep):
+                return "ok"
+
+            async def _async_compose(self, _goal, _tasks):
+                return "final answer"
+
+        class _Store:
+            def start(self, _goal, _ctx):
+                return "run-1"
+
+            def set_tasks(self, _rid, _tasks):
+                return None
+
+            def complete(self, _rid, response, tasks):
+                return None
+
+            def fail(self, _rid, _err):
+                return None
+
+        with patch("domain.agents.MultiAgentOrchestrator", _Orch):
+            with patch("domain.agents.get_agent_run_store", lambda: _Store()):
+                yield
+
+    def test_phase_sequence_is_pinned(self, _fake_orchestrator):
+        with patch("fastapi.Request.is_disconnected", new=AsyncMock(return_value=False)):
+            resp = self.client.post("/agents/orchestrate", json={"goal": "test goal"})
+        assert resp.status_code == 200
+        frames = _sse_frames(resp.text)
+        assert [(f["stream"], f["phase"], f["status"]) for f in frames] == [
+            ("agent-orchestrate", "PLAN", "working"),
+            ("agent-orchestrate", "PLAN", "success"),
+            ("agent-orchestrate", "EXECUTE", "working"),  # starting execution
+            ("agent-orchestrate", "EXECUTE", "working"),  # level dispatch
+            ("agent-orchestrate", "EXECUTE", "success"),  # task done
+            ("agent-orchestrate", "COMPOSE", "working"),
+            ("agent-orchestrate", "COMPLETE", "complete"),
+        ]
+
+    def test_plan_failure_is_pinned(self):
+        class _Orch:
+            def __init__(self, **_kw):
+                self.agents = {}
+
+            async def _async_plan(self, _goal, _ctx):
+                return []
+
+        class _Store:
+            def start(self, _goal, _ctx):
+                return "run-1"
+
+            def fail(self, _rid, _err):
+                return None
+
+        with patch("domain.agents.MultiAgentOrchestrator", _Orch):
+            with patch("domain.agents.get_agent_run_store", lambda: _Store()):
+                with patch(
+                    "fastapi.Request.is_disconnected", new=AsyncMock(return_value=False)
+                ):
+                    resp = self.client.post("/agents/orchestrate", json={"goal": "nope"})
+        frames = _sse_frames(resp.text)
+        assert [(f["phase"], f["status"]) for f in frames] == [
+            ("PLAN", "working"),
+            ("PLAN", "error"),
+        ]
+        assert frames[-1]["data"]["error"] == "Could not plan this goal"

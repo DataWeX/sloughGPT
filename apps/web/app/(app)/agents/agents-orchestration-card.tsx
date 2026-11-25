@@ -27,11 +27,7 @@ export function OrchestrationCard({
   orchErrors,
   handleOrchestrate,
   setOrchErrors,
-  setOrchResponse,
-  setOrchError,
-  setOrchPhase,
-  setOrchTasks,
-  setOrchTaskStatuses,
+  clearOrchState,
 }: {
   agents: AgentsWorkbench['agents']
   orchGoal: AgentsWorkbench['orchGoal']
@@ -51,11 +47,7 @@ export function OrchestrationCard({
   orchErrors: AgentsWorkbench['orchErrors']
   handleOrchestrate: AgentsWorkbench['handleOrchestrate']
   setOrchErrors: AgentsWorkbench['setOrchErrors']
-  setOrchResponse: AgentsWorkbench['setOrchResponse']
-  setOrchError: AgentsWorkbench['setOrchError']
-  setOrchPhase: AgentsWorkbench['setOrchPhase']
-  setOrchTasks: AgentsWorkbench['setOrchTasks']
-  setOrchTaskStatuses: AgentsWorkbench['setOrchTaskStatuses']
+  clearOrchState: AgentsWorkbench['clearOrchState']
 }) {
   return (
     <SectionErrorBoundary sectionName="Orchestrator panel">
@@ -139,13 +131,7 @@ export function OrchestrationCard({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => {
-                  setOrchResponse(null)
-                  setOrchError(null)
-                  setOrchPhase('')
-                  setOrchTasks([])
-                  setOrchTaskStatuses({})
-                }}
+                onClick={clearOrchState}
                 className="h-6 text-xs"
               >
                 Clear

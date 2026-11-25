@@ -25,6 +25,7 @@ import {
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { formatElapsed } from '@/lib/formatDuration'
+import { RunFloor } from './agents-run-floor'
 
 export function RunHistoryCard({
   runs,
@@ -82,6 +83,18 @@ export function RunHistoryCard({
               >
                 Timeline
               </button>
+              <button
+                type="button"
+                onClick={() => setRunViewMode('floor')}
+                className={cn(
+                  'text-xs px-2 py-1 rounded transition-colors',
+                  runViewMode === 'floor'
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-muted-foreground hover:bg-muted/80',
+                )}
+              >
+                Floor
+              </button>
               <Button
                 size="sm"
                 variant="ghost"
@@ -96,7 +109,11 @@ export function RunHistoryCard({
           </div>
         </CardHeader>
         <CardContent className="px-2.5 pb-2.5 space-y-2">
-          {runsLoading ? (
+          {runViewMode === 'floor' ? (
+            /* Floor bypasses the runs-empty gate: a live stream can start
+             * before the first run record exists (single-writer store). */
+            <RunFloor runsLoading={runsLoading} />
+          ) : runsLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
                 <div

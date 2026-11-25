@@ -463,9 +463,56 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `PUT`    | `/agents/{agent_id}`         | Update an agent.              |
 | `DELETE` | `/agents/{agent_id}`         | Delete an agent.              |
 | `POST`   | `/agents/{agent_id}/execute` | Execute an agent.             |
+| `POST`   | `/agents/{agent_id}/execute/stream` | Execute one run, streamed as SSE (`stream="agent"`). |
+| `POST`   | `/agents/orchestrate`        | Orchestrate multi-agent task (SSE, `stream="agent-orchestrate"`). |
+| `POST`   | `/agents/loop`               | Drive the canonical AgentLoop (SSE, `stream="agent-loop"`). |
+| `GET`    | `/agents/routines/stream`    | Background routine status: snapshot + live run events (SSE, `stream="agent-routines"`, monotonic `seq` for resume). |
 | `GET`    | `/agents/runs`               | List agent runs.              |
 | `GET`    | `/agents/runs/{run_id}`      | Get a specific run.           |
-| `POST`   | `/agents/orchestrate`        | Orchestrate multi-agent task. |
+
+### Run-stream event vocabulary (agent visualization contract)
+
+The factory-floor UI (`/agents` → Floor view) is a projection of these
+frames — the reducer maps them to station states, so the tables below are
+contract, not implementation detail. Pinned by `TestExecuteStreamVocabulary`
+and `TestOrchestrateVocabulary` in `apps/api/server/tests/test_agents_router.py`.
+
+**`stream="agent"` and `stream="agent-routines"`** (same event kinds, two
+streams — `event` → `phase`/`status`):
+
+| `event`      | `phase`      | `status`   |
+| ------------ | ------------ | ---------- |
+| `run_start`  | `START`      | `working`  |
+| `tool_start` | `TOOL_CALL`  | `working`  |
+| `tool_result`| `TOOL_RESULT`| `working`  |
+| `final`      | `FINAL`      | `working`  |
+| `run_end`    | `COMPLETE`   | `complete` |
+| `error`      | `ERROR`      | `error`    |
+
+Unknown `event` kinds pass through as `(event.upper(), "working")` — a
+floor reducer must ignore phases it does not know rather than crash.
+
+**`stream="agent-orchestrate"`** (phase sequence per run):
+
+```
+PLAN(working) → PLAN(success | error)
+  → EXECUTE(working) ×2          # start + per-level dispatch (data.levels, data.level)
+  → EXECUTE(success | error)     # per task (data.task_id, data.agent, data.description)
+  → COMPOSE(working)
+  → COMPLETE(complete)           # or ERROR(error) at any point
+```
+
+Derived state machine (floor stations — see `docs/UX_FLOWS.md`
+"Watch the Factory"):
+
+```
+idle ──PLAN──▶ planning ──EXECUTE──▶ executing(level n/m) ──COMPOSE──▶ composing
+  ▲                                                          │
+  └──────────── COMPLETE → done · ERROR/PLAN-error → failed ◀─┘
+```
+
+Terminal states (`done`, `failed`) are sticky until the next `PLAN`;
+task-level states inside `executing` are `pending → live → completed|failed`.
 
 ## Multimodal Router (`/multimodal`)
 

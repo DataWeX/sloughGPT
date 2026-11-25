@@ -570,6 +570,42 @@ project: what's moving, what's blocked, what's next.
 - Silent failures — every rejected move produces visible feedback
 - A different board state after refresh than the one they just acted on
 
+### Watch the Factory — ux/agents
+
+**Persona:** operator (Maya/Jon-class) — "which agent is doing what, right
+now?" The live floor for runs already in motion. Composed onto the existing
+`/agents` workbench run history as a third view mode (list / timeline /
+**floor**) — surface ladder: compose first, no new route, no page-baseline
+growth.
+
+**What the user sees:**
+
+- One station per agent on the floor, each showing its live activity state:
+  idle, planning, executing (level n of m), composing, done, or failed
+- Live updates while an orchestration runs — a task completion lights its
+  station the moment it lands; no refresh, no polling lag
+- Completed and failed runs from history hydrate the same floor (same
+  stations, final states) — one view of past and present
+- Goal text and task descriptions only — never model names, token counts,
+  raw event names, or JSON payloads
+
+**User flow:**
+
+1. **Open Agents** (click 1) — land on the workbench, run history visible
+2. **Switch to Floor** (click 2) — stations by agent, active run state laid
+   out spatially (the clear-code factory view)
+3. **Watch a run move** (click 3) — start an orchestration or watch one
+   start: stations light up as tasks dispatch and complete, the run settles
+   into done or failed with a visible outcome
+
+**What they should NOT see:**
+
+- Raw SSE frames or internal event vocabulary (`run_start`, `EXECUTE`, …)
+- A floor that only updates on refresh — live means live (loading is an
+  explicit state, never inferred from an empty floor)
+- Ghost activity — a station still showing "working" after its run ended,
+  or two sources disagreeing about a run's state (one write authority)
+
 ---
 
 ## Mobile Journeys

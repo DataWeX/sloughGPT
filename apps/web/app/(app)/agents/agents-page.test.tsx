@@ -265,4 +265,38 @@ describe('AgentsPage Run History', () => {
       expect(mockListRuns).toHaveBeenCalledWith(20)
     })
   })
+
+  it('floor view hydrates stations from run history (third view mode)', async () => {
+    mockListRuns.mockResolvedValue({ runs: [RUN_FIXTURE], count: 1 })
+    render(<AgentsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Research transformers')).toBeTruthy()
+    })
+    screen.getByText('Floor').click()
+    await waitFor(() => {
+      expect(screen.getByTestId('run-floor')).toBeTruthy()
+    })
+    // One station per agent, status shown as text (never color alone)
+    expect(screen.getByText('researcher')).toBeTruthy()
+    expect(screen.getByText('writer')).toBeTruthy()
+    expect(screen.getAllByText('done')).toHaveLength(2)
+    // History result lands on the floor — and ONLY there: hydrated history
+    // must not leak into the composer (it used to duplicate every task row)
+    expect(screen.getByText('Here is the summary.')).toBeTruthy()
+    expect(screen.getAllByText('Write summary')).toHaveLength(1)
+    // Liveness is explicit, never inferred from content
+    expect(screen.getByText('IDLE')).toBeTruthy()
+    expect(screen.getByText('Run complete')).toBeTruthy()
+  })
+
+  it('floor view shows an explicit empty state when there are no runs', async () => {
+    render(<AgentsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Run History')).toBeTruthy()
+    })
+    screen.getByText('Floor').click()
+    await waitFor(() => {
+      expect(screen.getByText(/No runs on the floor/)).toBeTruthy()
+    })
+  })
 })

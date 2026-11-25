@@ -18,7 +18,6 @@ import { useRouter } from '@/vite/next-compat/navigation'
 import {
   agentsController,
   type Agent,
-  type OrchestrateTask,
   type AgentRun,
 } from '@/lib/agents-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -26,11 +25,17 @@ import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
 import { logger } from '@/lib/dev-log'
+import { useRunStreamStore } from './use-run-stream-store'
+import type { RunState } from './run-state'
 // Module scope: `addToast` must keep a stable identity — it sits in
 // useCallback/useEffect dependency arrays, and a per-render arrow would
 // re-fire those effects on every render.
 const addToast = (message: string, type?: string) =>
   notify.toast(message, { type: type as 'success' | 'error' | 'info' })
+
+/** Stable empty refs so gated selectors never churn re-renders. */
+const EMPTY_TASKS: RunState['tasks'] = []
+const EMPTY_STATUSES: RunState['taskStatuses'] = {}
 
 export function useAgentsWorkbench() {
   const router = useRouter()
@@ -60,22 +65,37 @@ export function useAgentsWorkbench() {
 
   const [orchGoal, setOrchGoal] = useState('')
   const [orchContext, setOrchContext] = useState('')
-  const [orchRunning, setOrchRunning] = useState(false)
-  const [orchPhase, setOrchPhase] = useState<string>('')
-  const [orchTasks, setOrchTasks] = useState<OrchestrateTask[]>([])
-  const [orchTaskStatuses, setOrchTaskStatuses] = useState<Record<string, string>>({})
-  const [orchLevel, setOrchLevel] = useState(0)
-  const [orchTotalLevels, setOrchTotalLevels] = useState(0)
-  const [orchResponse, setOrchResponse] = useState<string | null>(null)
-  const [orchError, setOrchError] = useState<string | null>(null)
   const [orchAgentIds, setOrchAgentIds] = useState<string[]>([])
+
+  // Run state is owned by the single-writer store (SSE frames → consume,
+  // GET /agents/runs → hydrate); these selectors project it for the
+  // orchestration card. The card is the composer: it shows only
+  // stream-originated state (live or frames seen) — hydrated history belongs
+  // to the floor view, not here (rendering both duplicated every task row).
+  // See use-run-stream-store.ts + run-state.ts (run-state.test.ts).
+  const orchRunning = useRunStreamStore((s) => s.live)
+  const orchPhase = useRunStreamStore((s) => (s.live || s.frameCount > 0 ? s.phase : ''))
+  const orchTasks = useRunStreamStore((s) =>
+    s.live || s.frameCount > 0 ? s.tasks : EMPTY_TASKS,
+  )
+  const orchTaskStatuses = useRunStreamStore((s) =>
+    s.live || s.frameCount > 0 ? s.taskStatuses : EMPTY_STATUSES,
+  )
+  const orchLevel = useRunStreamStore((s) => (s.live || s.frameCount > 0 ? s.level : 0))
+  const orchTotalLevels = useRunStreamStore((s) =>
+    s.live || s.frameCount > 0 ? s.totalLevels : 0,
+  )
+  const orchResponse = useRunStreamStore((s) =>
+    s.live || s.frameCount > 0 ? s.response : null,
+  )
+  const orchError = useRunStreamStore((s) => (s.live || s.frameCount > 0 ? s.error : null))
 
   const [runs, setRuns] = useState<AgentRun[]>([])
   const [runsLoading, setRunsLoading] = useState(false)
   const [expandedRun, setExpandedRun] = useState<string | null>(null)
   const [runStatusFilter, setRunStatusFilter] = useState<string | null>(null)
   const [runAgentFilter, setRunAgentFilter] = useState<string | null>(null)
-  const [runViewMode, setRunViewMode] = useState<'list' | 'timeline'>('list')
+  const [runViewMode, setRunViewMode] = useState<'list' | 'timeline' | 'floor'>('list')
 
   const [createErrors, setCreateErrors] = useState<{
     name?: string
@@ -111,7 +131,23 @@ export function useAgentsWorkbench() {
     setRunsLoading(true)
     try {
       const res = await agentsController.listRuns(20)
-      setRuns(res.runs || [])
+      const list = res.runs || []
+      setRuns(list)
+      // History writer: hydrate the store from the newest run — no-op while a
+      // stream is live (hydrateRun fences live stations/phase out).
+      const stream = useRunStreamStore.getState()
+      if (!stream.live && list.length > 0) {
+        const target = list[0]
+        stream.hydrate(
+          {
+            status: target.status,
+            response: target.response,
+            error: target.error,
+            tasks: target.tasks,
+          },
+          target.id,
+        )
+      }
     } catch {
       notify.toast('Could not load run history', { type: 'error' })
     }
@@ -121,6 +157,11 @@ export function useAgentsWorkbench() {
   useEffect(() => {
     fetchRuns()
   }, [fetchRuns])
+
+  // The store is module-scoped (it outlives this hook); clear it on unmount
+  // so a revisit starts from hydrated history, not a stale composer result —
+  // the semantics hook-local state used to give us for free.
+  useEffect(() => () => useRunStreamStore.getState().reset(), [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -410,49 +451,60 @@ export function useAgentsWorkbench() {
       return
     }
     setOrchErrors({})
-    setOrchRunning(true)
-    setOrchPhase('PLAN')
-    setOrchTasks([])
-    setOrchTaskStatuses({})
-    setOrchLevel(0)
-    setOrchTotalLevels(0)
-    setOrchResponse(null)
-    setOrchError(null)
+    // One writer: every callback folds a frame into the run-stream store.
+    useRunStreamStore.getState().beginStream()
 
     await agentsController.orchestrate(
       orchGoal,
       orchContext,
       {
         onPlan: (tasks) => {
-          setOrchTasks(tasks)
-          const statuses: Record<string, string> = {}
-          tasks.forEach((t) => {
-            statuses[t.id] = 'pending'
-          })
-          setOrchTaskStatuses(statuses)
-          setOrchPhase('EXECUTE')
+          const s = useRunStreamStore.getState()
+          s.consume({ stream: 'agent-orchestrate', phase: 'PLAN', status: 'success', data: { tasks } })
+          s.consume({ stream: 'agent-orchestrate', phase: 'EXECUTE', status: 'working' })
         },
         onLevelChange: (level, total) => {
-          setOrchLevel(level + 1)
-          setOrchTotalLevels(total)
+          useRunStreamStore.getState().consume({
+            stream: 'agent-orchestrate',
+            phase: 'EXECUTE',
+            status: 'working',
+            data: { level: level + 1, levels: total },
+          })
         },
         onTaskStatus: (taskId, status) => {
-          setOrchTaskStatuses((prev) => ({ ...prev, [taskId]: status }))
+          const frameStatus =
+            status === 'completed' ? 'success' : status === 'failed' ? 'error' : 'working'
+          useRunStreamStore.getState().consume({
+            stream: 'agent-orchestrate',
+            phase: 'EXECUTE',
+            status: frameStatus,
+            data: { task_id: taskId, status },
+          })
         },
         onCompose: () => {
-          setOrchPhase('COMPOSE')
+          useRunStreamStore.getState().consume({
+            stream: 'agent-orchestrate',
+            phase: 'COMPOSE',
+            status: 'working',
+          })
         },
         onComplete: (response) => {
-          setOrchResponse(response)
-          setOrchPhase('COMPLETE')
-          setOrchRunning(false)
+          const s = useRunStreamStore.getState()
+          s.consume({
+            stream: 'agent-orchestrate',
+            phase: 'COMPOSE',
+            status: 'success',
+            data: { response },
+          })
+          s.consume({ stream: 'agent-orchestrate', phase: 'COMPLETE', status: 'complete' })
+          s.endStream()
           notify.toast('Orchestration complete', { type: 'success' })
           fetchRuns()
         },
         onError: (error) => {
-          setOrchError(error)
-          setOrchPhase('ERROR')
-          setOrchRunning(false)
+          const s = useRunStreamStore.getState()
+          s.consume({ stream: 'agent-orchestrate', phase: 'ERROR', status: 'error', error })
+          s.endStream()
           notify.toast(error, { type: 'error' })
           fetchRuns()
         },
@@ -461,6 +513,9 @@ export function useAgentsWorkbench() {
       orchAgentIds.length > 0 ? orchAgentIds : undefined,
     )
   }
+
+  /** Clear button on the orchestration card: one store reset, not five setters. */
+  const clearOrchState = useCallback(() => useRunStreamStore.getState().reset(), [])
 
   const toolCount = agents.reduce((acc, a) => acc + (a.tools?.length ?? 0), 0)
 
@@ -555,11 +610,7 @@ export function useAgentsWorkbench() {
     setEditErrors,
     setExecErrors,
     setOrchErrors,
-    setOrchResponse,
-    setOrchError,
-    setOrchPhase,
-    setOrchTasks,
-    setOrchTaskStatuses,
+    clearOrchState,
     editErrors,
     execErrors,
     orchErrors,
