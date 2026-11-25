@@ -1866,6 +1866,11 @@ class TestEngineConcurrency:
     spawned processes were never dispatched again and any ThreadHandle join
     stranded until its timeout (test_learner_continual shutdown flake)."""
 
+    # 60k spawns need honest time on the contended 2-CPU CI runner: 5.3s
+    # alone, >120s with an xdist sibling on the box (run 45361359978, both
+    # attempts). The internal joins scale with the outer timeout — they
+    # would fail the asserts before pytest-timeout could fire.
+    @pytest.mark.timeout(600)
     def test_query_methods_survive_concurrent_spawns(self):
         engine = Engine("race-reads")
         n_procs = 60_000
@@ -1902,7 +1907,7 @@ class TestEngineConcurrency:
         reader_t = threading.Thread(target=reader, name="race-reader")
         reader_t.start()
         hammer_t.start()
-        hammer_t.join(timeout=120)
+        hammer_t.join(timeout=480)  # 600s outer minus reader join + asserts
         spawner_done.set()
         reader_t.join(timeout=60)
 

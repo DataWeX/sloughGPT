@@ -226,6 +226,10 @@ jobs:
           # inherited per shard — pytest_cov/plugin.py:270).
           # --durations=25: straggler profile per shard (the local box
           # can't instrument this run — shared with other sessions).
+          # --dist loadfile: one file = one xdist worker, in collection
+          # order — module-global handoffs and save→load disk chains (run
+          # 45361359978) need BOTH the file-grouped SLO_TEST_SHARD split
+          # and this worker split to stay intact.
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -237,7 +241,7 @@ jobs:
             --ignore=tests/core-py/test_slonet_provider.py \
             --ignore=tests/core-py/test_shell_repl.py \
             --cov=domain --cov-report= --cov-fail-under=0 \
-            -q --tb=short -n auto --durations=25
+            -q --tb=short -n auto --dist loadfile --durations=25
 
       - name: Record testmon DB (full suite, no coverage)
         if: github.event_name != 'pull_request'
@@ -255,6 +259,8 @@ jobs:
           # Sharded like pass 1 (SLO_TEST_SHARD): each runner records its
           # quarter into .testmondata, and test-core-py-record-merge below
           # recombines them into the ONE DB the PR restore step serves.
+          # --dist loadfile: same file/worker pairing as pass 1, so a
+          # re-recorded file re-runs in its own collection order.
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -266,7 +272,7 @@ jobs:
             --ignore=tests/core-py/test_slonet_provider.py \
             --ignore=tests/core-py/test_shell_repl.py \
             --testmon-noselect \
-            -q --tb=short -n auto
+            -q --tb=short -n auto --dist loadfile
 
       # Per-shard fragments leave as artifacts (the single-writer cache
       # save moved to test-core-py-record-merge — PRs restore ONE DB, so
