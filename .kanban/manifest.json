@@ -1,7 +1,7 @@
 {
-  "exported_at": "2026-11-25T13:06:25+00:00",
+  "exported_at": "2026-11-25T13:38:41+00:00",
   "note_count": 460,
-  "card_count": 1493,
-  "board_sha256": "741d0456b450b74e9239477b176494be3b6fd7305b248223a334110fc69561fd",
+  "card_count": 1494,
+  "board_sha256": "25d5ef34c2776740b7850c4ad4b2e01d95205789bee877f72d5e87bacdc8028b",
   "source": "/home/mana/.config/kanban"
 }
