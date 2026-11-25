@@ -340,6 +340,41 @@ class TestDistillationTrainer:
             if hasattr(p, "grad"):
                 assert p.grad is None
 
+    def test_step_moves_student_weights(self):
+        """A real step must change student weights (card 20261125_145836).
+
+        The old numpy-detach path returned correct loss values while the
+        optimizer stepped on None grads — a silent no-op trainer.
+        """
+        from domain.training._internal.slonet import SloTransformer
+
+        def build():
+            return SloTransformer(
+                vocab_size=16,
+                n_embed=16,
+                n_layer=1,
+                n_head=2,
+                block_size=8,
+                dropout=0.0,
+                tie_weights=False,
+            )
+
+        teacher = build()
+        student = build()
+        # Distinct weight sets (perturbed init) — identical weights would
+        # give KL=0 and nothing to learn.
+        for p_s, p_t in zip(student.parameters(), teacher.parameters()):
+            p_s.data[...] = p_t.data + 0.01
+        trainer = DistillationTrainer(teacher, student, DistillationConfig(alpha=0.5, beta=0.5))
+        inputs = np.random.randint(0, 16, size=(2, 8)).astype(np.int64)
+        labels = np.random.randint(0, 16, size=(2, 8)).astype(np.int64)
+        before = [p.data.copy() for p in student.parameters()]
+        trainer.step(inputs, labels)
+        delta = max(
+            float(np.mean(np.abs(p.data - w))) for p, w in zip(student.parameters(), before)
+        )
+        assert delta > 0.0, "student weights did not move — gradient path severed"
+
     def test_distill_logits_returns_loss(self):
         teacher = _MockModel(vocab_size=10)
         student = _MockModel(vocab_size=10)

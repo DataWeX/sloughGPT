@@ -188,6 +188,16 @@ class DistillationTrainer:
             )
 
         student_outputs = self.student(inputs)
+        # Keep the student's output Tensor so the loss below can stay on the
+        # autograd graph. Detaching here (the old numpy-only path) meant
+        # backward() never reached student params and SloAdam stepped on
+        # nothing — a silent no-op trainer (benchmark_logit_distill.py 4a:
+        # max mean |delta w| = 0 after a real step; 4b proves this path moves).
+        s_graph: Tensor | None = None
+        if isinstance(student_outputs, Tensor):
+            s_graph = student_outputs
+        elif isinstance(student_outputs, (list, tuple)) and isinstance(student_outputs[0], Tensor):
+            s_graph = student_outputs[0]
         s_logits = (
             student_outputs
             if isinstance(student_outputs, (Tensor, np.ndarray))
@@ -198,7 +208,12 @@ class DistillationTrainer:
             )
         )
 
+        # Alignment below rebinds s_logits; the graph path is only valid while
+        # the original student node feeds the loss untouched.
+        graph_ok = s_graph is not None
+
         if _size(t_logits, 1) != _size(s_logits, 1):
+            graph_ok = False
             min_len = min(_size(t_logits, 1), _size(s_logits, 1))
             t_logits = t_logits[:, :min_len]
             s_logits = s_logits[:, :min_len]
@@ -211,6 +226,7 @@ class DistillationTrainer:
         t_vocab = _size(t_logits, -1)
         s_vocab = _size(s_logits, -1)
         if t_vocab != s_vocab:
+            graph_ok = False
             max_vocab = max(t_vocab, s_vocab)
             if s_vocab < max_vocab:
                 s_np = _to_np(s_logits)
@@ -221,6 +237,11 @@ class DistillationTrainer:
                 pad = np.full(t_np.shape[:-1] + (max_vocab - t_vocab,), -1e9, dtype=t_np.dtype)
                 t_logits = np.concatenate([t_np, pad], axis=-1)
 
+        if graph_ok and s_graph is not None:
+            graph_losses = self._step_graph(s_graph, t_logits, labels)
+            if graph_losses is not None:
+                return graph_losses
+
         loss, losses_dict = self.loss_fn(s_logits, t_logits, labels)
         loss = _to_tensor(np.array(loss), requires_grad=True)
         loss.backward()
@@ -230,6 +251,44 @@ class DistillationTrainer:
                 p.grad = None
 
         return losses_dict
+
+    def _step_graph(self, s_graph: Tensor, t_logits, labels) -> dict[str, float] | None:
+        """One optimizer step with losses kept on the student's autograd graph.
+
+        The numpy path in step() computes correct loss *values* but detaches
+        them from the student's parameters, so backward() has nothing to
+        propagate and the student never trains (benchmark_logit_distill.py
+        sections 4a vs 4b). Taken whenever the student returned a Tensor and
+        no shape alignment rebound the logits; returns None when alpha=beta=0
+        so the caller can fall back to the value-only path.
+        """
+        cfg = self.config
+        temp = cfg.temperature
+        losses: dict[str, float] = {}
+        terms = []
+        if cfg.beta > 0:
+            s_logp = log_softmax(s_graph / temp, dim=-1)
+            t_prob = softmax(_to_tensor(_to_np(t_logits) / temp), dim=-1)
+            soft_t = kl_div_loss(s_logp, t_prob, reduction="batchmean") * (temp**2)
+            losses["soft_loss"] = float(_to_np(soft_t).reshape(-1)[0])
+            terms.append(soft_t * cfg.beta)
+        if cfg.alpha > 0 and labels is not None:
+            lbl = _to_np(labels).reshape(-1).astype(np.int64)
+            hard_t = cross_entropy(s_graph, _to_tensor(lbl))
+            losses["hard_loss"] = float(_to_np(hard_t).reshape(-1)[0])
+            terms.append(hard_t * cfg.alpha)
+        if not terms:
+            return None
+        total_t = terms[0]
+        for term in terms[1:]:
+            total_t = total_t + term
+        total_t.backward()
+        self.optimizer.step(self.student.parameters())
+        for p in self.student.parameters():
+            if hasattr(p, "grad"):
+                p.grad = None
+        losses["total_loss"] = float(_to_np(total_t).reshape(-1)[0])
+        return losses
 
     def distill_logits(self, student_logits, teacher_logits, temperature=4.0):
         s = _to_np(student_logits)
