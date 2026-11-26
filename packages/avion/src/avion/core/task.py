@@ -42,6 +42,9 @@ class TaskResult:
     steps_skipped: int = 0
     error: str = ""
     duration_ms: float = 0.0
+    #: Per-step trace [{name, status, duration_ms}] — the sequence a run
+    #: comparison diffs against the previous run (avion.recording.compare).
+    step_records: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,6 +55,7 @@ class TaskResult:
             "steps_skipped": self.steps_skipped,
             "error": self.error,
             "duration_ms": round(self.duration_ms, 2),
+            "steps": self.step_records,
         }
 
 
@@ -70,6 +74,10 @@ class Task:
     name: str
     description: str = ""
     steps: list[TaskStep] = field(default_factory=list)
+    #: Optional checkpoint hook: called (step_name, status) after every step.
+    #: Observational by contract — its failure never fails the journey; the
+    #: journey runner uses it to take per-step screenshots.
+    on_step: Callable[[str, str], Any] | None = None
 
     def add_step(self, step: TaskStep) -> Task:
         self.steps.append(step)
@@ -79,7 +87,26 @@ class Task:
         ctx = context if context is not None else {}
         result = TaskResult(task_name=self.name)
         start = time.perf_counter()
+
+        async def _checkpoint(step_name: str, status: str, t0: float) -> None:
+            result.step_records.append(
+                {
+                    "name": step_name,
+                    "status": status,
+                    "duration_ms": round((time.perf_counter() - t0) * 1000, 2),
+                }
+            )
+            if self.on_step is None:
+                return
+            try:
+                res = self.on_step(step_name, status)
+                if hasattr(res, "__await__"):
+                    await res
+            except Exception:
+                pass  # observational hook — never fails the journey
+
         for step in self.steps:
+            t0 = time.perf_counter()
             if step.precondition is not None:
                 try:
                     pre = step.precondition(ctx)
@@ -87,9 +114,11 @@ class Task:
                         pre = await pre
                     if not pre:
                         result.steps_skipped += 1
+                        await _checkpoint(step.name, "skipped", t0)
                         continue
                 except Exception as e:
                     result.steps_skipped += 1
+                    await _checkpoint(step.name, "skipped", t0)
                     if not step.optional:
                         result.status = TaskStatus.FAILED
                         result.error = f"precondition '{step.name}' failed: {e}"
@@ -98,8 +127,10 @@ class Task:
             try:
                 await step.action(ctx)
                 result.steps_passed += 1
+                await _checkpoint(step.name, "passed", t0)
             except Exception as e:
                 result.steps_failed += 1
+                await _checkpoint(step.name, "failed", t0)
                 if not step.optional:
                     result.status = TaskStatus.FAILED
                     result.error = f"step '{step.name}' failed: {e}"

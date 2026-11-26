@@ -90,3 +90,33 @@ scripts/python -m pytest tests/core-py/test_user_journeys.py::TestDatasetsImport
 ```
 
 Results are saved to `tests/core-py/test_results/user_journey_results.json`.
+
+## Recording Runs & Comparing Against the Previous Run
+
+`--record` runs the same journeys but writes each run as a **run directory**
+(per-step checkpoint screenshots + per-step trace), then diffs it against the
+previous recorded run and prints a concise summary:
+
+```bash
+# Record a run; automatically compares vs the previous run
+SLO_WEB_URL=http://localhost:5173 .venv/bin/python -m journeys --record
+
+# Compare any two runs by hand (exit 0 = identical, 1 = changed, 2 = error)
+.venv/bin/python -m avion compare <old-run-dir> <new-run-dir>
+.venv/bin/python -m avion compare <old-run-dir> <new-run-dir> --json   # full diff
+```
+
+- **Where runs live**: `~/.cache/slog-journeys/runs/<run-id>/` (override with
+  `SLO_JOURNEY_RUNS`). The newest **10** runs are kept; older ones are pruned
+  automatically — bounded history, no silent disk growth.
+- **What's in a run**: `run.json` (meta: git sha, browser, per-flow status),
+  `<flow>/result.json` (step trace: name/status/duration per step),
+  `<flow>/shots/NN-<step>.png` (checkpoint after every step), and — when a
+  previous run existed — `comparison.json` (the raw diff; the printed summary
+  is the one-line view of it).
+- **What the diff flags**: step sequences (added/removed/moved/status changes),
+  flow status transitions, flows added or removed, and screenshot pixel changes
+  above a threshold (per-channel noise tolerance `--pixel-tol`, default 8;
+  changed-pixel fraction `--changed-frac`, default 0.5%).
+- **Advisory, not a gate yet**: the comparison reports; it does not fail CI.
+  The `diff(1)`-style exit codes are already gate-ready for a later ratchet.
