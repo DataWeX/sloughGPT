@@ -131,8 +131,7 @@ def extract_trajectories(session_id: str, messages: list[dict]) -> list[dict]:
             {
                 "id": f"session-{session_id}-{turn_idx}",
                 "source": "session",
-                "messages": [{"role": "user", "content": _truncate(prompt, SYNTHESIS_MAX)}]
-                + body,
+                "messages": [{"role": "user", "content": _truncate(prompt, SYNTHESIS_MAX)}] + body,
             }
         )
         turn_idx += 1

@@ -104,7 +104,10 @@ class TestExtract:
                     },
                 ],
             },
-            {"type": "assistant", "content": [{"type": "text", "text": "Refactor landed, suite green."}]},
+            {
+                "type": "assistant",
+                "content": [{"type": "text", "text": "Refactor landed, suite green."}],
+            },
         ]
         (record,) = extract_trajectories("ses_x", messages)
         roles = [m["role"] for m in record["messages"]]
@@ -114,7 +117,10 @@ class TestExtract:
     def test_prose_turn_is_candidate_not_yet_filtered(self):
         messages = [
             {"type": "user", "text": "explain your architecture"},
-            {"type": "assistant", "content": [{"type": "text", "text": "I am a helpful assistant."}]},
+            {
+                "type": "assistant",
+                "content": [{"type": "text", "text": "I am a helpful assistant."}],
+            },
         ]
         (record,) = extract_trajectories("ses_p", messages)
         assert not any(m.get("tool_calls") for m in record["messages"])
@@ -139,7 +145,9 @@ class TestFilter:
         return {"id": f"session-{tag}", "source": "session", "messages": messages}
 
     def test_discipline_drops_each_poison_class(self):
-        good = self._candidate(extract_trajectories("ses_a", _turn_messages())[0]["messages"], "good")
+        good = self._candidate(
+            extract_trajectories("ses_a", _turn_messages())[0]["messages"], "good"
+        )
         prose = self._candidate(
             [
                 {"role": "user", "content": "hello"},
@@ -207,7 +215,9 @@ class TestApiSeam:
         repo = "/home/mana/Documents/Default Project/sloughGPT"
         assert is_repo_session({"location": {"directory": repo}}, repo)
         assert is_repo_session({"location": {"directory": repo + "/.wt-chatsft"}}, repo)
-        assert not is_repo_session({"location": {"directory": "/home/mana/Documents/Default Project/threoiss"}}, repo)
+        assert not is_repo_session(
+            {"location": {"directory": "/home/mana/Documents/Default Project/threoiss"}}, repo
+        )
         assert not is_repo_session({}, repo)
 
     def test_is_repo_session_accepts_checkout_family(self):
@@ -216,7 +226,9 @@ class TestApiSeam:
         family = [main, wt]
         assert is_repo_session({"location": {"directory": wt}}, family)
         assert is_repo_session({"location": {"directory": main}}, family)
-        assert not is_repo_session({"location": {"directory": "/home/mana/Documents/Default Project/threoiss"}}, family)
+        assert not is_repo_session(
+            {"location": {"directory": "/home/mana/Documents/Default Project/threoiss"}}, family
+        )
 
 
 class TestAdapterContract:
