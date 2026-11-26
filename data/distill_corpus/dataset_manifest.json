@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "distill_corpus",
+  "version": "0.1.0",
+  "domain": "mixed",
+  "display_name": "Distill corpus — our own conversations (api_conversations + agent_runs + response_logs)",
+  "description": "Logit-distillation corpus for training a student that mimics the current model's behavior. Honest inventory from 2026-11-25 recon: api_conversations is 69% Qwen self-play with degenerate short exchanges; agent_runs is EMPTY (declared for future population); response_logs is the largest real source but polluted with bench/gpt2/test models; docstore sessions are real but tiny; chat_sft_seed is the only hand-checked quality set. Build filters per source are declared below and enforced by the corpus adapter build step — frozen sources must match these counts/hashes exactly, growing sources must meet these counts as a minimum (append-only logs), or the build fails.",
+  "pii_policy": "may_contain_phi",
+  "sources": [
+    {
+      "type": "local_path",
+      "uri": "../../tests/fixtures/chat_sft_seed.jsonl",
+      "sha256_prefix": "461e58e985f701e0",
+      "format": "jsonl_messages",
+      "record_count": 75,
+      "stability": "frozen",
+      "quality_tier": "A",
+      "notes": "Hand-checked trajectory seed from the chat-sft lane (63 train / 12 heldout, 72/75 tool-use). Hand-checked = content filters bypassed; its existing split is RESPECTED (heldout forced into our held-out, train forced into train).",
+      "filters": ["respect_existing_split", "dedup_exact"]
+    },
+    {
+      "type": "local_path",
+      "uri": "../agent_runs/",
+      "sha256_prefix": null,
+      "format": "jsonl_runs",
+      "record_count": 0,
+      "stability": "empty_ok",
+      "quality_tier": "A_target",
+      "notes": "EMPTY as of 2026-11-25 recon (0 files, versions/ empty). This is the intended primary source — tool-use agent runs (plan/tool/observation/synthesis) — declared here so the spec covers the corpus we HAVE IN MIND; build tolerates absence until populated, then this manifest version-bumps to a real count.",
+      "filters": ["tolerate_empty_until_populated"]
+    },
+    {
+      "type": "local_path",
+      "uri": "../docstore/sessions.journal.jsonl",
+      "format": "journal_replay",
+      "record_count": 43,
+      "stability": "growing",
+      "quality_tier": "A",
+      "notes": "Replay journal (3223 insert / 3200 delete / 18 update → 43 live sessions, 397 messages as of 2026-11-25). Real user conversations; appends while the site runs, so count is a MINIMUM. Build replays journal to live state before reading.",
+      "filters": ["journal_replay_to_live_state", "dedup_exact"]
+    },
+    {
+      "type": "local_path",
+      "uri": "../response_logs/*.jsonl",
+      "sha256_prefix": "881638c9de8625c1",
+      "format": "jsonl_paired",
+      "record_count": 5323,
+      "stability": "growing",
+      "quality_tier": "B",
+      "notes": "Live-site user/assistant pairs but polluted: gpt2=1431, bench=1197, m=1175, test-model=6, llama=6, empty-model=17, empty=44, qwen-ish=1486 as of 2026-11-25. New daily logs append, so count is a MINIMUM. Build keeps only models on the qwen allowlist (teacher), drops empty pairs.",
+      "filters": ["model_allowlist", "drop_empty_pairs", "dedup_exact"]
+    },
+    {
+      "type": "local_path",
+      "uri": "../api_conversations/corpus.jsonl",
+      "sha256_prefix": "2bcfb5ad82f35e39",
+      "format": "jsonl_messages",
+      "record_count": 2656,
+      "stability": "frozen",
+      "quality_tier": "C",
+      "notes": "69% Qwen self-play (1826/2656), 51 records contain literal <|im_start|> template markers, avg content 107 chars (2026-11-25 recon). Kept as tier-C distillation targets of teacher behavior on degenerate prompts, never as quality exemplars; template contamination and sub-min-length records are dropped.",
+      "filters": ["drop_template_contamination", "min_content_len", "dedup_exact"]
+    },
+    {
+      "type": "local_path",
+      "uri": "../api_conversations/input.txt",
+      "sha256_prefix": "f2984afd13a57f06",
+      "format": "text_turns",
+      "record_count": 16161,
+      "stability": "frozen",
+      "quality_tier": "C",
+      "notes": "Derived text rendering of corpus.jsonl (same content, 102 contaminated lines). Declared for provenance only; NEVER read by the build — not an independent source, never double-counted.",
+      "filters": ["derived_source_excluded_from_build"]
+    }
+  ],
+  "transformations": [
+    { "name": "filter_degenerate", "version": "1.0.0", "config": { "min_content_len": 20, "drop_empty_pairs": true, "model_allowlist": ["qwen"], "drop_models": ["gpt2", "bench", "m", "t", "test-model", "llama"] } },
+    { "name": "drop_template_contamination", "version": "1.0.0", "config": { "markers": ["<|im_start|>", "<|im_end|>"] } },
+    { "name": "dedup_exact", "version": "1.0.0", "config": { "key": "normalized_turn_text", "keep": "highest_tier_first", "tier_order": ["A", "B", "C"] } },
+    { "name": "tier_assign", "version": "1.0.0", "config": { "tiers": { "A": "hand-checked or real-user", "B": "real logs, filtered", "C": "self-play / degenerate" }, "rule": "fixed per source, declared in sources[].quality_tier" } },
+    { "name": "split_heldout", "version": "1.0.0", "config": { "heldout_fraction": 0.1, "seed": 42, "rule": "chat_sft_seed records keep their declared split (forced both ways); all others hash normalized text with seed 42 — deterministic, no RNG order dependence" } }
+  ],
+  "splits": {
+    "train": "input.txt",
+    "test": "heldout.jsonl",
+    "split_hash": "a25f2c0f9240d826"
+  },
+  "lineage": {
+    "parent_manifests": [],
+    "created_at": "2026-11-25T20:50:00Z",
+    "created_by": "opencode (distill lane, card 20261125_203428)"
+  }
+}
