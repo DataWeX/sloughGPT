@@ -376,3 +376,92 @@ class TestDistillSlonetTeacher:
             if job_id:
                 training_jobs.pop(job_id, None)
             shutil.rmtree(ds_dir, ignore_errors=True)
+
+
+# ── Data size caps (card 20261126_093028) ──────────────────────────────
+
+
+class TestDataSizeCaps:
+    """``SLO_DISTILL_MAX_DATA_BYTES`` + full-text tokenization (no 100k-char slice).
+
+    Two stacked silent caps made the formalized distill corpus unusable:
+    a 200 KB file gate rejected it outright (495 KB), and a 100k-char slice
+    taken before tokenization would have ignored 80% of whatever fit.
+    """
+
+    def _make_client(self):
+        from fastapi.testclient import TestClient
+        from training.router import router
+
+        from tests.conftest import build_test_app
+
+        return TestClient(build_test_app(router), raise_server_exceptions=False)
+
+    @staticmethod
+    def _write_dataset(name: str, content: str):
+        ds_dir = _REPO_ROOT / "data" / name
+        ds_dir.mkdir(parents=True, exist_ok=True)
+        (ds_dir / "input.txt").write_text(content, encoding="utf-8")
+        return ds_dir
+
+    def test_low_env_cap_rejects_oversized_dataset(self, monkeypatch):
+        """The env cap is the ENFORCED number — the message proves which cap fired."""
+        import shutil
+
+        monkeypatch.setenv("SLO_DISTILL_MAX_DATA_BYTES", "100000")
+        ds_dir = self._write_dataset("_test_distill_cap_low", "Hello world " * 25_000)
+        try:
+            client = self._make_client()
+            resp = client.post(
+                "/training/distill",
+                json={"teacher_model": "gpt2", "dataset": "_test_distill_cap_low", "epochs": 1},
+            )
+            assert resp.status_code >= 400
+            assert "too large" in resp.text
+            assert "100000" in resp.text, "the env cap, not the old hardcoded 200000, must fire"
+        finally:
+            shutil.rmtree(ds_dir, ignore_errors=True)
+
+    def test_default_cap_fits_corpus_scale(self, monkeypatch):
+        """300 KB (corpus scale) must pass the size gate — the old 200 KB cap rejected it."""
+        import shutil
+
+        from training.router import training_jobs
+
+        monkeypatch.delenv("SLO_DISTILL_MAX_DATA_BYTES", raising=False)
+        ds_dir = self._write_dataset("_test_distill_cap_default", "Hello world " * 25_000)
+        job_id = None
+        try:
+            client = self._make_client()
+            resp = client.post(
+                "/training/distill",
+                json={"teacher_model": "gpt2", "dataset": "_test_distill_cap_default", "epochs": 1},
+            )
+            assert "too large" not in resp.text, "default cap must admit corpus-scale data"
+            assert resp.status_code == 200, resp.text
+            job_id = resp.json().get("job_id")
+        finally:
+            if job_id:
+                training_jobs.pop(job_id, None)
+            shutil.rmtree(ds_dir, ignore_errors=True)
+
+    def test_cap_env_fails_safe(self, monkeypatch):
+        """Malformed/non-positive env falls back to the default (SLO_PREFILL_MAX_TOKENS precedent)."""
+        from training.distill import _max_data_read_bytes
+
+        monkeypatch.delenv("SLO_DISTILL_MAX_DATA_BYTES", raising=False)
+        assert _max_data_read_bytes() == 4_000_000
+        monkeypatch.setenv("SLO_DISTILL_MAX_DATA_BYTES", "not-a-number")
+        assert _max_data_read_bytes() == 4_000_000
+        monkeypatch.setenv("SLO_DISTILL_MAX_DATA_BYTES", "-5")
+        assert _max_data_read_bytes() == 4_000_000
+        monkeypatch.setenv("SLO_DISTILL_MAX_DATA_BYTES", "12345")
+        assert _max_data_read_bytes() == 12345
+
+    def test_tokenizer_sees_full_text(self):
+        """No pre-tokenization slice — every char inside the byte cap reaches the tokenizer."""
+        from training.distill import _tokenize_training_text
+
+        text = "abcdefghij" * 15_000  # 150_000 chars — 1.5x the old 100k slice
+        tokens = _tokenize_training_text(text, teacher_tokenizer=None, slonet_provider=None)
+        assert len(tokens) == len(text)
