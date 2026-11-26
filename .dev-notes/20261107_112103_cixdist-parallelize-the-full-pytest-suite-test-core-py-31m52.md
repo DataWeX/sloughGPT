@@ -1,6 +1,6 @@
 ---
 id: 20261107_112103_cixdist-parallelize-the-full-pytest-suite-test-core-py-31m52
-status: wip
+status: done
 board: 20261107_112103_cixdist-parallelize-the-full-pytest-suite-test-core-py-31m52
 title: "ci(xdist): parallelize the full pytest suite — test-core-py 31m52s is the PR queue's bottleneck"
 tags: ["ci", "performance", "testing", "area:tooling"]
@@ -121,3 +121,9 @@ gh: null
 - **Pushed `2d2a6b939` to main.** Gate run #2 = CI/CD `45687529659`. Watcher `.ci-watch/watch-45687529659.sh`.
 - Local RUN_ALL fast phase: 46,948 passed / 17 failed — all 17 files pass in isolation (387 tests green); documented order-dependent pollution class (card `20261125_133509`), none in my closure.
 - **Gate: 0 of 3 green.**
+
+### GATE MET — card done (2026-11-26)
+
+- Pushed `2d2a6b939` to main (4 commits: lr-sentinel fix + 2 baseline rehashes + format fix).
+- **×3 consecutive green CI/CD runs on main:** `45687529659` (2d2a6b939), `45692374565` (e0f657f07), `45697989951` (77489b486) — all 17 jobs green incl. `test-core-py-coverage` (≥50% floor) and `test-core-py-record-merge`, both previously skipped.
+- AGENT_SYNC.md entry sealed `e3e60f4400086faf`, ledger gate exit 0.
