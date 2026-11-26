@@ -166,6 +166,7 @@ class TestCreateAgent:
             "instructions": "i",
             "tools": ["search"],
             "avatar": "a",
+            "voice": "alloy",
         }
         client.post(
             "/agents",
@@ -175,12 +176,14 @@ class TestCreateAgent:
                 "instructions": "i",
                 "tools": ["search"],
                 "avatar": "a",
+                "voice": "alloy",
             },
         )
         args, kwargs = sys.create.call_args
         assert kwargs["tools"] == ["search"]
         assert kwargs["avatar"] == "a"
         assert kwargs["instructions"] == "i"
+        assert kwargs["voice"] == "alloy"
 
     def test_empty_name_is_422(self, client):
         resp = client.post("/agents", json={"name": ""})
@@ -246,6 +249,7 @@ class TestUpdateAgent:
             "instructions": "i",
             "tools": ["web"],
             "avatar": "a",
+            "voice": "nova",
         }
         client.put(
             "/agents/helper",
@@ -255,6 +259,7 @@ class TestUpdateAgent:
                 "instructions": "i",
                 "tools": ["web"],
                 "avatar": "a",
+                "voice": "nova",
             },
         )
         args, kwargs = sys.update.call_args
@@ -262,6 +267,7 @@ class TestUpdateAgent:
         assert kwargs["instructions"] == "i"
         assert kwargs["tools"] == ["web"]
         assert kwargs["avatar"] == "a"
+        assert kwargs["voice"] == "nova"
 
     @patch("domain.agents.get_agent_system")
     def test_update_empty_body_keeps_all_none(self, mock_get_sys, client):

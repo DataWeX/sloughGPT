@@ -64,6 +64,22 @@ class TestAgentSystem:
         sys = AgentSystem()
         assert sys.update("nonexistent_xyz", name="x") is None
 
+    def test_voice_round_trip(self):
+        """voice threads create -> store -> get -> update (phase-1 passthrough)."""
+        sys = AgentSystem()
+        sys.create("test_agent_voice", "Voice Agent", "desc", voice="alloy")
+        fetched = sys.get("test_agent_voice")
+        assert fetched is not None
+        assert fetched["voice"] == "alloy"
+        updated = sys.update("test_agent_voice", voice="nova")
+        assert updated is not None
+        assert updated["voice"] == "nova"
+
+    def test_voice_defaults_to_empty(self):
+        sys = AgentSystem()
+        result = sys.create("test_agent_novoice", "No Voice", "desc")
+        assert result["voice"] == ""
+
     def test_delete(self):
         sys = AgentSystem()
         sys.create("test_agent_del", "Delete Me", "desc")

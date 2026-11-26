@@ -164,7 +164,11 @@ class VoiceEngine:
         """
         try:
             tts = self._get_tts()
-            waveform = tts.text_to_waveform(text)
+            # voice is a documented no-op conditioning hook (phase 1
+            # passthrough): the distilled checkpoint has no speaker axis, so
+            # the waveform is byte-identical whether or not it is set.
+            # Phase 2 (trained speaker embeddings) consumes it here.
+            waveform = tts.text_to_waveform(text, voice=voice)
             return VoiceResult(
                 success=True,
                 data=waveform,

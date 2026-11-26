@@ -30,6 +30,7 @@ class AgentOut(BaseModel):
     instructions: str = ""
     tools: list[str] = []
     avatar: str = ""
+    voice: str = ""
 
 
 class AgentCreate(BaseModel):
@@ -39,6 +40,7 @@ class AgentCreate(BaseModel):
     instructions: str = ""
     tools: list[str] = []
     avatar: str = ""
+    voice: str = Field(default="", max_length=100)
 
 
 class AgentUpdate(BaseModel):
@@ -47,6 +49,7 @@ class AgentUpdate(BaseModel):
     instructions: str | None = Field(default=None, max_length=50000)
     tools: list[str] | None = None
     avatar: str | None = Field(default=None, max_length=500)
+    voice: str | None = Field(default=None, max_length=100)
 
 
 class ExecuteRequest(BaseModel):
@@ -153,6 +156,7 @@ class AgentsRouter:
                 instructions=req.instructions,
                 tools=req.tools,
                 avatar=req.avatar,
+                voice=req.voice,
             )
             safe_audit_log(
                 "agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or [])
@@ -185,6 +189,7 @@ class AgentsRouter:
                 instructions=req.instructions,
                 tools=req.tools,
                 avatar=req.avatar,
+                voice=req.voice,
             )
             if result is None:
                 raise_error("Agent not found", "E_NOT_FOUND", status_code=404)

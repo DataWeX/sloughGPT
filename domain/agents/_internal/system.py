@@ -173,6 +173,7 @@ class AgentSystem:
         tools: builtins.list[str] | None = None,
         avatar: str = "",
         inference_tier: str = "main",
+        voice: str = "",
     ) -> dict:
         data = {
             "name": name,
@@ -181,6 +182,7 @@ class AgentSystem:
             "tools": tools or ["memory"],
             "avatar": avatar or name[0] if name else "A",
             "inference_tier": inference_tier if inference_tier in ("fast", "main") else "main",
+            "voice": voice,
         }
         _agent_repo.save(agent_id, data)
         logger.info("Created agent: %s", agent_id, extra={"tag": "MODEL"})
@@ -198,6 +200,7 @@ class AgentSystem:
                 "tools",
                 "avatar",
                 "inference_tier",
+                "voice",
             ):
                 if key == "inference_tier" and value not in ("fast", "main"):
                     continue
@@ -223,6 +226,7 @@ class AgentSystem:
             tools=tools,
             instructions=agent_data.get("instructions", ""),
             inference_tier=tier,
+            voice=agent_data.get("voice", ""),
         )
         inference_fn = self._agent._inference_fn
         # Tier is resolved HERE, once per construction: the run loop never
