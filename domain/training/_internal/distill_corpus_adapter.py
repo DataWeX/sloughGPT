@@ -224,12 +224,14 @@ def build(
         filters = src.get("filters", [])
         paths = _resolve_paths(base, uri)
 
-        # derived provenance-only sources: hash-check if frozen, never read for records
+        # derived provenance-only sources: hash-check if frozen, never read FOR RECORDS.
+        # Line count is still observed (provenance honesty) but never enters the record pool.
         if "derived_source_excluded_from_build" in filters:
             if not paths:
                 raise ManifestError(f"Declared source missing: {uri}")
             _check_hash(paths[0], src)
-            observed[uri] = int(src.get("record_count", 0))
+            with paths[0].open(encoding="utf-8", errors="replace") as fh:
+                observed[uri] = sum(1 for _ in fh)
             continue
 
         # empty_ok = file-count expectation (agent_runs: 0 files until populated)

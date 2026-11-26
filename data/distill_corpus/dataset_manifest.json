@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "dataset_id": "distill_corpus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "domain": "mixed",
   "display_name": "Distill corpus — our own conversations (api_conversations + agent_runs + response_logs)",
   "description": "Logit-distillation corpus for training a student that mimics the current model's behavior. Honest inventory from 2026-11-25 recon: api_conversations is 69% Qwen self-play with degenerate short exchanges; agent_runs is EMPTY (declared for future population); response_logs is the largest real source but polluted with bench/gpt2/test models; docstore sessions are real but tiny; chat_sft_seed is the only hand-checked quality set. Build filters per source are declared below and enforced by the corpus adapter build step — frozen sources must match these counts/hashes exactly, growing sources must meet these counts as a minimum (append-only logs), or the build fails.",
@@ -56,9 +56,9 @@
       "sha256_prefix": "2bcfb5ad82f35e39",
       "format": "jsonl_messages",
       "record_count": 2656,
-      "stability": "frozen",
+      "stability": "growing",
       "quality_tier": "C",
-      "notes": "69% Qwen self-play (1826/2656), 51 records contain literal <|im_start|> template markers, avg content 107 chars (2026-11-25 recon). Kept as tier-C distillation targets of teacher behavior on degenerate prompts, never as quality exemplars; template contamination and sub-min-length records are dropped.",
+      "notes": "69% Qwen self-play (1826/2656 at 2026-11-25 recon), 51 records contain literal <|im_start|> template markers, avg content 107 chars. APPEND-LIVE: a capture service wrote 11 new records within 12h of the original 0.1.0 spec (drift gate caught it 2026-11-26 — reclassified frozen→growing, count is a MINIMUM, sha is an as-of note never checked). Kept as tier-C distillation targets of teacher behavior on degenerate prompts, never as quality exemplars; template contamination and sub-min-length records are dropped.",
       "filters": ["drop_template_contamination", "min_content_len", "dedup_exact"]
     },
     {
@@ -67,9 +67,9 @@
       "sha256_prefix": "f2984afd13a57f06",
       "format": "text_turns",
       "record_count": 16161,
-      "stability": "frozen",
+      "stability": "growing",
       "quality_tier": "C",
-      "notes": "Derived text rendering of corpus.jsonl (same content, 102 contaminated lines). Declared for provenance only; NEVER read by the build — not an independent source, never double-counted.",
+      "notes": "Derived text rendering of corpus.jsonl (same content, 102 contaminated lines at recon) — rewritten together with corpus.jsonl by the same capture service (both mtimes identical). Declared for provenance only; NEVER read by the build — not an independent source, never double-counted.",
       "filters": ["derived_source_excluded_from_build"]
     }
   ],
