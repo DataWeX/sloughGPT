@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "9299b753ac38595e99d2fa84083ebdd2058bae83",
+    "recorded_commit": "192c18732be1a90de2643fae9683704bbc0fe6c5",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "c93381ba2e7e034c73fd2e03c741de497c7c1222"
+      "tree_hash": "f711657e49574d8985a1ff48299da7a91e92b56e"
     },
     "ai_personality": {
       "class": "feature",
@@ -567,7 +567,7 @@
       ],
       "note": "TTS/phoneme serving + phoneme training hooks",
       "debt": null,
-      "tree_hash": "3365f21630554404a10a149a98e460d7b0de549d"
+      "tree_hash": "a4c6f155a98bbaaffdeeab5dec5a19b906204f0d"
     }
   }
 }
