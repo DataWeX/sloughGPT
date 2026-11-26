@@ -86,9 +86,19 @@ def _state():
 
 
 def _current_provider():
-    """The loaded in-process provider (model ref first, then provider ref)."""
+    """The loaded in-process provider (provider ref first, then model ref).
+
+    The model slot is polymorphic: after materialization it holds the RAW
+    token-level model (startup's parent-preload writes ``provider._model``),
+    whose ``generate()`` takes ``input_ids`` — a str prompt dies in
+    ``np.array(..., dtype=int64)``. The provider slot is the prompt-level
+    handle (``generate(prompt)``, ``chat(messages)``) whenever weights are
+    resident, so it wins; the model slot remains the fallback for paths that
+    publish a provider there only. Health/export read ``st.model`` directly
+    and are unaffected by this preference.
+    """
     st = _state()
-    return (st.model.get() if st else None) or (st.provider.get() if st else None)
+    return (st.provider.get() if st else None) or (st.model.get() if st else None)
 
 
 def _publish_provider(provider: Any, model_id: str) -> None:
