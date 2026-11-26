@@ -667,6 +667,10 @@ class AgentConfig:
     # identical prompts from the response cache first so lightweight bots
     # do not always pay for the slow model.
     inference_tier: str = "main"
+    # Speaker preset this agent speaks with ("" = engine default). Phase 1
+    # threads the field end-to-end as a passthrough; phase 2 (separate card)
+    # turns it into a trained speaker embedding.
+    voice: str = ""
 
 
 class Agent:

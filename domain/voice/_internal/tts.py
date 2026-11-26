@@ -537,8 +537,22 @@ class TTSEngine:
         return self.decoder.generate(phoneme_ids, max_frames)
 
     def text_to_waveform(
-        self, text: str, max_frames: int = 200, speed: float = 1.0, pitch_shift: float = 0.0
+        self,
+        text: str,
+        max_frames: int = 200,
+        speed: float = 1.0,
+        pitch_shift: float = 0.0,
+        voice: str | None = None,
     ) -> np.ndarray:
+        """Render ``text`` to a waveform.
+
+        ``voice`` is a speaker-preset identifier threaded through from the
+        agent config / ``TTSRequest.voice``. It is a documented no-op
+        conditioning hook for now (phase 1 is passthrough): the distilled
+        checkpoint has no speaker axis to select on, so output is
+        byte-identical whether or not it is set. Phase 2 (trained speaker
+        embeddings) fills it in here.
+        """
         if not text or not text.strip():
             return np.zeros(self.sample_rate // 2, dtype=np.float32)
         phoneme_ids = self._phoneme_encoder.encode(text)
@@ -549,6 +563,7 @@ class TTSEngine:
             mel_spec = self._adjust_speed(mel_spec, speed)
         if pitch_shift != 0.0:
             mel_spec = self._shift_pitch(mel_spec, pitch_shift)
+        # voice is intentionally not consumed yet — see docstring.
         return self.vocoder.generate_waveform(mel_spec)
 
     def _adjust_speed(self, mel_spec: np.ndarray, speed: float) -> np.ndarray:
