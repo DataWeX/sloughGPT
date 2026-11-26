@@ -126,4 +126,4 @@ gh: null
 
 - Pushed `2d2a6b939` to main (4 commits: lr-sentinel fix + 2 baseline rehashes + format fix).
 - **×3 consecutive green CI/CD runs on main:** `45687529659` (2d2a6b939), `45692374565` (e0f657f07), `45697989951` (77489b486) — all 17 jobs green incl. `test-core-py-coverage` (≥50% floor) and `test-core-py-record-merge`, both previously skipped.
-- AGENT_SYNC.md entry sealed `e3e60f4400086faf`, ledger gate exit 0.
+- AGENT_SYNC.md entry sealed `a1bb769d4df1223e (re-sealed after rebase onto origin's new entries)`, ledger gate exit 0.
