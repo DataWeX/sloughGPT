@@ -24,6 +24,7 @@ Usage::
     avion record http://x/ --out rec/ --fps 3 --target element --selector "#app"
     avion stop rec/                    # recover a recording whose process died
     avion view rec/                    # one self-contained HTML player (scrubber + boxes)
+    avion compare runA runB            # diff two journey runs (steps + screenshots)
     avion export rec/ --mp4            # capability-gated: needs imageio-ffmpeg
 
 One invocation = one CDP session, but ``console``/``network`` keep history:
@@ -1173,6 +1174,32 @@ def _cmd_view(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_compare(args: argparse.Namespace) -> int:
+    """Diff two recorded journey runs — step traces + checkpoint screenshots.
+
+    Exit codes follow diff(1): 0 identical, 1 changed, 2 error — advisory
+    today, gate-ready tomorrow.
+    """
+    from avion.recording.compare import compare_runs, render_summary
+
+    try:
+        cmp = compare_runs(
+            args.old,
+            args.new,
+            pixel_tol=args.pixel_tol,
+            changed_frac=args.changed_frac,
+        )
+    except FileNotFoundError as e:
+        return _fail(str(e), 2)
+    except OSError as exc:
+        return _fail(f"compare: {exc}", 2)
+    if args.json:
+        print(json.dumps(cmp.to_dict(), indent=2))
+    else:
+        print(render_summary(cmp))
+    return 1 if cmp.changed else 0
+
+
 def _cmd_export(args: argparse.Namespace) -> int:
     """Capability-gated export: mp4 when the encoder exists, a stated reason
     when it doesn't — never a traceback, never a silent no-op."""
@@ -1371,6 +1398,28 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--out", default=None, help="output HTML (default: <dir>/viewer.html)")
 
     sp = sub.add_parser(
+        "compare",
+        help="diff two journey runs: step traces + screenshots (exit 0 same, 1 changed, 2 error)",
+    )
+    sp.add_argument("old", help="older run directory")
+    sp.add_argument("new", help="newer run directory")
+    sp.add_argument(
+        "--pixel-tol",
+        type=int,
+        default=8,
+        metavar="N",
+        help="per-channel delta (0-255) ignored as noise (default 8)",
+    )
+    sp.add_argument(
+        "--changed-frac",
+        type=float,
+        default=0.005,
+        metavar="F",
+        help="fraction of pixels that must differ to flag a shot (default 0.005)",
+    )
+    sp.add_argument("--json", action="store_true", help="print the full comparison as JSON")
+
+    sp = sub.add_parser(
         "export",
         help="export a recording (mp4 is capability-gated: needs imageio-ffmpeg)",
     )
@@ -1545,6 +1594,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_stop(args)
     if args.cmd == "view":
         return _cmd_view(args)
+    if args.cmd == "compare":
+        return _cmd_compare(args)
     if args.cmd == "export":
         return _cmd_export(args)
     if args.cmd == "launch":
