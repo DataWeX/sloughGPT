@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "67dbac91872a4c87e2d357433357807a7ba55665",
+    "recorded_commit": "07a8fc870ac768874b722ca436eecc61ee35f80e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "f711657e49574d8985a1ff48299da7a91e92b56e"
+      "tree_hash": "fa4e232065e2c37b8bdf4147ee42b3b56e2b32f5"
     },
     "ai_personality": {
       "class": "feature",
@@ -478,7 +478,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "2b7b24d8ef44e3d9e1e059c74689a3e17cbc8eb5"
+      "tree_hash": "1864d92283a933ceecc03229bcfab546be875ab4"
     },
     "slolib": {
       "class": "core-capability",
