@@ -9,6 +9,7 @@ invariant — dates strictly non-increasing top-to-bottom — is the check gate.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from grib.cli import main
@@ -404,3 +405,27 @@ def test_parse_and_query_do_not_leak_the_seal_token(tmp_path):
     hits = query(p, grep="short entry")
     assert len(hits) == 1
     assert _SEAL not in hits[0]["head"]
+
+
+# --- the ledger must never be reformatted ----------------------------------
+
+
+def test_repo_ledger_is_excluded_from_prettier():
+    """Seals hash each entry's exact bytes, so a markdown formatter corrupts them.
+
+    2026-11-27: lint-staged's ``*.{json,md}`` -> ``prettier --write`` escaped
+    underscores (``_x`` -> ``\\_x``) and rewrote emphasis (``**b**`` ->
+    ``_*b*_``) across 73 lines of the repo ledger, invalidating 11 seals.
+    docs/AGENT_SYNC.md must stay listed in .prettierignore.
+    """
+    repo = Path(__file__).resolve().parents[3]
+    ignore = (repo / ".prettierignore").read_text(encoding="utf-8")
+    patterns = {
+        line.strip()
+        for line in ignore.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    assert "docs/AGENT_SYNC.md" in patterns, (
+        "docs/AGENT_SYNC.md must be in .prettierignore — prettier rewrites "
+        "sealed entry bytes and breaks grib ledger seals"
+    )

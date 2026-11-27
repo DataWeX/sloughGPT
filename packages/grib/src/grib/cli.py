@@ -452,6 +452,79 @@ def _ledger_doc(args: argparse.Namespace) -> Path | None:
     return doc
 
 
+def _claims_dir(args: argparse.Namespace) -> Path:
+    if getattr(args, "board_dir", None):
+        return Path(args.board_dir)
+    return config.default_board_dir()
+
+
+def _claim_add(args: argparse.Namespace) -> int:
+    from grib.claims import DEFAULT_TTL_MIN, append_event, default_session, detect_git
+
+    session = args.session or default_session()
+    # A claim is presence, not a board mutation: it must never fail because
+    # the note->board sync hasn't created the card yet. An unknown id is
+    # reported, not rejected (the assignee fill below is conditional anyway).
+    store = _get_store(args) if args.card else None
+    card = store.get_card(args.card) if (store and args.card) else None
+    if args.card and card is None:
+        print(f"claim: note — card not on board yet: {args.card}")
+    worktree, branch = args.worktree, args.branch
+    if worktree is None or branch is None:
+        gw, gb = detect_git()
+        worktree = worktree if worktree is not None else gw
+        branch = branch if branch is not None else gb
+    ev = append_event(
+        _claims_dir(args),
+        event="claim",
+        session=session,
+        card_id=args.card,
+        worktree=worktree,
+        branch=branch,
+        ttl_min=args.ttl if args.ttl is not None else DEFAULT_TTL_MIN,
+    )
+    assignee_note = ""
+    if card is not None:
+        if not card.assignee:
+            store.update_card(args.card, assignee=session)
+            assignee_note = f" assignee={session}"
+        else:
+            assignee_note = f" assignee={card.assignee} (kept)"
+    where = f"worktree={ev['worktree'] or '-'} branch={ev['branch'] or '-'}"
+    print(
+        f"claim: active session={session} card={args.card or '-'} {where} "
+        f"ttl={ev['ttl_min']}m{assignee_note}"
+    )
+    return 0
+
+
+def _claim_list(args: argparse.Namespace) -> int:
+    from grib.claims import fold
+
+    claims = fold(_claims_dir(args))
+    if args.active:
+        claims = [c for c in claims if c["status"] == "active"]
+    if not claims:
+        print("no claims")
+        return 0
+    for c in claims:
+        print(
+            f"[{c['status']}] {c['session']}  card={c['card_id'] or '-'}  "
+            f"worktree={c['worktree'] or '-'}  branch={c['branch'] or '-'}  "
+            f"age={c['age_min']:.0f}m/ttl={c['ttl_min']}m"
+        )
+    return 0
+
+
+def _claim_release(args: argparse.Namespace) -> int:
+    from grib.claims import append_event, default_session
+
+    session = args.session or default_session()
+    append_event(_claims_dir(args), event="release", session=session)
+    print(f"claim: released {session}")
+    return 0
+
+
 def _ledger_entry(args: argparse.Namespace) -> int:
     from grib.ledger import prepend_entry
 
@@ -795,6 +868,44 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--text", required=True, help="Entry prose after the date")
     p.add_argument("--date", default=None, help="Entry date YYYY-MM-DD (default: today)")
 
+    # Claims (lane presence — which session owns which worktree/card right now)
+    from grib.claims import DEFAULT_TTL_MIN
+
+    claims = sub.add_parser(
+        "claim",
+        help="Lane claims: record/refresh which worktree+card a session owns",
+        description=(
+            "Append-only presence registry in the canonical store "
+            "(claims.jsonl). A session claims its worktree/card at start and "
+            "refreshes on queue reads, releases when done; stale heartbeats "
+            "expire after the TTL. Notification is read-time visibility — "
+            "there is no push bus."
+        ),
+    )
+    claims_sub = claims.add_subparsers(dest="subcommand")
+    p = claims_sub.add_parser(
+        "add",
+        help="Record or refresh this session's claim (sets card assignee when empty)",
+    )
+    p.add_argument("--card", default=None, help="Card id the session is working")
+    p.add_argument("--session", default=None, help="Session id (default: $OPENCODE_SESSION_ID)")
+    p.add_argument(
+        "--worktree",
+        default=None,
+        help="Worktree path (default: git toplevel of cwd)",
+    )
+    p.add_argument("--branch", default=None, help="Branch (default: current branch)")
+    p.add_argument(
+        "--ttl",
+        type=int,
+        default=DEFAULT_TTL_MIN,
+        help=f"Heartbeat expiry in minutes (default: {DEFAULT_TTL_MIN})",
+    )
+    p = claims_sub.add_parser("list", help="Show claims folded per session")
+    p.add_argument("--active", action="store_true", help="Only non-released, non-expired claims")
+    p = claims_sub.add_parser("release", help="Release this session's claim")
+    p.add_argument("--session", default=None, help="Session id (default: $OPENCODE_SESSION_ID)")
+
     # GUI
     gui_p = sub.add_parser(
         "gui",
@@ -873,6 +984,9 @@ def main(argv: list[str] | None = None) -> int:
         ("ledger", "query"): _ledger_query,
         ("ledger", "check"): _ledger_check,
         ("ledger", "entry"): _ledger_entry,
+        ("claim", "add"): _claim_add,
+        ("claim", "list"): _claim_list,
+        ("claim", "release"): _claim_release,
         ("gui", None): _gui,
     }
 

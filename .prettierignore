@@ -11,3 +11,11 @@
 apps/web/lib/protocol/contracts.gen.ts
 packages/sdk-ts/typescript-sdk/src/contracts.gen.ts
 apps/mobile/src/services/contracts.gen.ts
+
+# The agent ledger is a sealed append-only record: `grib ledger entry` stamps
+# each entry with a ⟨seal:…⟩ hash over its exact bytes, and `grib ledger check`
+# verifies them. Prettier's markdown printer escapes underscores (`\_x`) and
+# rewrites emphasis (`**bold**` -> `_*bold*_`), which mutates sealed entry text
+# and invalidates its seal — 11 seals broke on 2026-11-27 from exactly this.
+# Never format this file.
+docs/AGENT_SYNC.md

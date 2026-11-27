@@ -109,27 +109,33 @@ def docker_action(action, service=None, **kwargs):
 
 
 def show_welcome_banner(version_info=None):
-    """Show the welcome banner with version info."""
+    """Show the welcome banner with version info.
+
+    Projected from :mod:`core.tui` — one renderer for every CLI box, so the
+    frame stays square no matter how long the version string is, and it
+    shrinks to fit a narrow terminal instead of overflowing.
+    """
+    import os
+    import sys
+
+    from .tui import BOX_HEAVY, FG, art_rows, render_box, term_cols
     from .version import format_version_display
 
     if version_info is None:
         version_info = format_version_display()
 
-    echo(f"""
-{_BOLD}{_CYAN}╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║   {_YELLOW}██████╗ ██╗      ██████╗  ██████╗██╗  ██╗{_CYAN}                ║
-║   {_YELLOW}██╔══██╗██║     ██╔═══██╗██╔════╝██║ ██╔╝{_CYAN}                ║
-║   {_YELLOW}██████╔╝██║     ██║   ██║██║     █████╔╝{_CYAN}                 ║
-║   {_YELLOW}██╔══██╗██║     ██║   ██║██║     ██╔═██╗{_CYAN}                 ║
-║   {_YELLOW}██████╔╝███████╗╚██████╔╝╚██████╗██║  ██╗{_CYAN}                ║
-║   {_YELLOW}╚═════╝ ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝{_CYAN}                ║
-║                                                              ║
-║   {_DIM}The local AI platform{_RESET}                                      ║
-║   {_DIM}{version_info}{_RESET}                                          ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝{_RESET}
-""")
+    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    inner = min(62, max(20, term_cols() - 4))  # interior width between borders
+
+    lines: list[str | tuple[str, int]] = [""]
+    lines += [(row, FG.PRIMARY) for row in art_rows(inner)]
+    lines += [
+        "",
+        ("   The local AI platform", FG.DIM),
+        ("   " + version_info, FG.DIM),
+        "",
+    ]
+    echo("\n" + render_box(lines, inner, style=BOX_HEAVY, color=color))
 
 
 def show_server_status(host="localhost", port=8000):

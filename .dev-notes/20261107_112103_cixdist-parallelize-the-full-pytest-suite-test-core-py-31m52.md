@@ -127,3 +127,12 @@ gh: null
 - Pushed `2d2a6b939` to main (4 commits: lr-sentinel fix + 2 baseline rehashes + format fix).
 - **×3 consecutive green CI/CD runs on main:** `45687529659` (2d2a6b939), `45692374565` (e0f657f07), `45697989951` (77489b486) — all 17 jobs green incl. `test-core-py-coverage` (≥50% floor) and `test-core-py-record-merge`, both previously skipped.
 - AGENT_SYNC.md entry sealed `a1bb769d4df1223e (re-sealed after rebase onto origin's new entries)`, ledger gate exit 0.
+
+### Follow-up: PR-pass loadfile gap + main lint fix (2026-11-26)
+
+- **Gap found while triaging PR #387 run `45682075668`** (`test-core-py (1)` red, 43m): the card's `--dist loadfile` fix covered only the two main-push passes; the **PR path** (`run_affected.sh … -n auto`, ci_cd.yml line ~187) still used xdist's default `load`, re-splitting same-file tests across workers → deterministically failed the placement-sensitive set (warmth traits, RAG `%d`, `test_a`/`test_b` handoff, TestPersonas save→get, pugqeep spawner). Evidence: same tests green on main's loadfile shards (run `45630172556`), red on the PR's `load`; local 4-slice runs green with the identical CI command.
+- **Fix `b41a5c729`:** `--dist loadfile` added to the PR pass + comment. All 3 workflow pytest invocations now carry it (verified: count = 3).
+- **Main-side lint red, three-strike:** `c19a46de9` (session exporter) landed unformatted; main's own CI/CD `45744168758` failed the same `ruff format --check` gate. Fix `24e7d5ed5`: ruff format `session_exporter.py` + `test_session_exporter.py` (12 exporter tests green, full-repo format check green).
+- **PR #387 retitled/re-bodied** (REST `gh api -X PATCH` — `gh pr edit` still broken repo-wide by the GraphQL projectCards deprecation) to carry exactly these 2 commits: `ci(xdist): --dist loadfile on the PR run_affected pass too`.
+- **PR #387 MERGED 2026-11-26 ~10:28** (by the parallel session during a restart), all checks green incl. `test-core-py (1)`. Verified on main: loadfile count = 3, `session_exporter.py` ruff-clean.
+- Note: this card itself was sealed done earlier (`a1bb769d4df1223e`, gate ×3 green) — the two commits above are follow-ups on the same lane, not a reopening of the gate.

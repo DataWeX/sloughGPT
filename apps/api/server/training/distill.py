@@ -10,6 +10,7 @@ handler's ``{status, job_id, message}`` is served unwrapped
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -33,7 +34,59 @@ logger = logging.getLogger("slo")
 
 router = APIRouter(tags=["training-distill"])
 
-_MAX_DATA_READ_BYTES = 200_000  # 200 KB max for distillation data
+DEFAULT_MAX_DATA_READ_BYTES = (
+    4_000_000  # 4 MB default — the formalized distill corpus input.txt is ~495 KB
+)
+
+
+def _max_data_read_bytes() -> int:
+    """Effective distillation data byte cap — ``SLO_DISTILL_MAX_DATA_BYTES`` or default.
+
+    Env-tunable like ``SLO_PREFILL_MAX_TOKENS`` (the right cap depends on the
+    machine and corpus: the formalized distill corpus is ~495 KB, which the
+    old hardcoded 200 KB cap rejected outright). Fails SAFE on
+    malformed/non-positive input (the SLO_PREFILL_MAX_TOKENS precedent) — a
+    bad value in a unit file must not take the server down, and a
+    non-positive cap would reject every dataset.
+    """
+    raw = os.environ.get("SLO_DISTILL_MAX_DATA_BYTES", str(DEFAULT_MAX_DATA_READ_BYTES))
+    try:
+        cap = int(raw)
+    except ValueError:
+        logger.warning(
+            "SLO_DISTILL_MAX_DATA_BYTES=%r is not a number; using %d",
+            raw,
+            DEFAULT_MAX_DATA_READ_BYTES,
+        )
+        return DEFAULT_MAX_DATA_READ_BYTES
+    if cap <= 0:
+        logger.warning(
+            "SLO_DISTILL_MAX_DATA_BYTES=%d is not positive; using %d",
+            cap,
+            DEFAULT_MAX_DATA_READ_BYTES,
+        )
+        return DEFAULT_MAX_DATA_READ_BYTES
+    return cap
+
+
+def _tokenize_training_text(
+    text: str,
+    *,
+    teacher_tokenizer: Any,
+    slonet_provider: Any,
+) -> list[int]:
+    """Tokenize the FULL training text — no pre-tokenization slice.
+
+    (card 20261126_093028) A hard ``data_str[:100000]`` slice here silently
+    dropped 80% of the formalized corpus before training ever saw it. The
+    byte cap on file READ is the only size gate; every char inside it
+    reaches the tokenizer.
+    """
+    if teacher_tokenizer is not None:
+        if slonet_provider is not None:
+            return teacher_tokenizer(text)
+        return teacher_tokenizer.encode(text)
+    return [ord(c) for c in text]
 
 
 async def start_distillation(
@@ -65,9 +118,11 @@ async def start_distillation(
         )
 
     file_size = Path(input_file).stat().st_size
-    if file_size > _MAX_DATA_READ_BYTES:
+    max_data_bytes = _max_data_read_bytes()
+    if file_size > max_data_bytes:
         raise_error(
-            f"Dataset too large for distillation ({file_size} bytes). Max {_MAX_DATA_READ_BYTES} bytes.",
+            f"Dataset too large for distillation ({file_size} bytes). "
+            f"Max {max_data_bytes} bytes (SLO_DISTILL_MAX_DATA_BYTES).",
             "E_BAD_REQUEST",
             status_code=400,
         )
@@ -80,7 +135,10 @@ async def start_distillation(
     try:
         from domain.training.engine import get_training_engine
 
-        quality = get_training_engine().compute_data_quality(data_str[:200_000])
+        # Full text: compute_data_quality SAMPLES 20 chunks, so cost is
+        # independent of length — and a full-text sample is representative
+        # instead of biased to the head of the file.
+        quality = get_training_engine().compute_data_quality(data_str)
         avg_q = quality.get("avg_quality", 0)
         tox_r = quality.get("toxicity_rate", 0)
 
@@ -182,14 +240,18 @@ async def start_distillation(
                 _finish_job(job_id, "failed", f"Teacher model '{request.teacher_model}' not loaded")
                 return
 
-            # Tokenize training data
-            if teacher_tokenizer is not None:
-                if slonet_provider is not None:
-                    tokens = teacher_tokenizer(data_str[:100000])
-                else:
-                    tokens = teacher_tokenizer.encode(data_str[:100000])
-            else:
-                tokens = [ord(c) for c in data_str[:100000]]
+            # Tokenize training data — FULL text, no pre-tokenization slice
+            tokens = _tokenize_training_text(
+                data_str,
+                teacher_tokenizer=teacher_tokenizer,
+                slonet_provider=slonet_provider,
+            )
+            logger.info(
+                "distill data: %d chars -> %d tokens (dataset=%s)",
+                len(data_str),
+                len(tokens),
+                request.dataset,
+            )
 
             # Build vocab from teacher or data
             vocab = sorted(set(tokens))

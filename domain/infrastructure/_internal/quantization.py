@@ -1196,16 +1196,19 @@ def quantize_activation(
 # falls back to the numpy implementation below.
 
 _nb_kv_kernels = None
-_nb_kv_built = False
 
 
 def _get_nb_kv_kernels():
     """Return (quantize_fn, dequantize_fn) or (None, None) when numba is
-    unavailable. Failures degrade to the numpy path, never raise."""
-    global _nb_kv_kernels, _nb_kv_built
-    if _nb_kv_built:
+    unavailable. Failures degrade to the numpy path, never raise.
+
+    The value IS the ready-test (``is not None``) — a separate built-flag
+    would be published before the value exists, and concurrent callers
+    would unpack None (card 20261125_123719). ``(None, None)`` is non-None,
+    so a numba failure stays cached instead of rebuilding per call."""
+    global _nb_kv_kernels
+    if _nb_kv_kernels is not None:
         return _nb_kv_kernels
-    _nb_kv_built = True
     try:
         from numba import njit
 
