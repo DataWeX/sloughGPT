@@ -133,9 +133,20 @@ Thumbs.db
 logs/
 *.log
 _console_*.log
+audit.log.*
+*.log.[0-9]*
 
 # Accidental home-directory literal in root
 ~/
+
+# Nested worktrees — `git worktree list` is the source of truth for liveness,
+# so a worktree directory is never content. Root-anchored: a worktree inside
+# another worktree's tree otherwise shows as untracked forever.
+/.wt-*/
+
+# Local tool caches (regenerable)
+.turbo/
+.qoder/
 
 # Data — runtime state (keep regenerable artifacts)
 data/*.db
