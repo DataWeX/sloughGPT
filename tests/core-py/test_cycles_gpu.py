@@ -6,7 +6,7 @@ render() and host-fed calls always hand back numpy — cupy never leaks
 across the engine boundary.
 
 Run: PYTHONPATH=packages/downcraft:packages/core-py scripts/python \
-    -m pytest packages/core-py/tests/test_cycles_gpu.py -q
+    -m pytest tests/core-py/test_cycles_gpu.py -q
 """
 
 from __future__ import annotations

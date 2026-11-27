@@ -147,23 +147,32 @@ describe('MyComponent', () => {
 
 ### Canonical test roots
 
-Four test roots are canonical on `main` (do not invent others):
+**One test root: `tests/`** (card `20261127_083246`; `pytest.ini`
+`testpaths = tests`, matching `pyproject.toml`). New tests go here, grouped by
+the surface they gate:
 
-| Root                      | Contents                                                                   |
-| ------------------------- | -------------------------------------------------------------------------- |
-| `tests/`                  | flat root — `tests/server/`, `tests/contract/`, and other root-level tests |
-| `packages/core-py/tests/` | core-py unit tests (in-tree `pytest.ini` applies there)                    |
-| `apps/api/server/tests/`  | API-server tests                                                           |
-| `apps/cli/tests`          | CLI tests                                                                  |
+| Root              | Contents                                                    |
+| ----------------- | ----------------------------------------------------------- |
+| `tests/`          | flat root — API, SDK, training, inference, security, gates  |
+| `tests/core-py/`  | core-py unit tests (moved 2026-10-25)                       |
+| `tests/cli/`      | CLI tests (moved 2026-11-27 from `apps/cli/tests`)          |
+| `tests/wire-py/`  | wire tests (moved 2026-11-27 from `packages/wire-py/tests`) |
+| `tests/server/`   | HTTP/API coverage                                           |
+| `tests/contract/` | endpoint/contract gates                                     |
 
-- Root `pytest.ini` declares the first three: `testpaths = packages/core-py/tests tests apps/cli/tests`;
-  CI jobs run pytest from their own working directory.
-- Every gate command and every piece of test evidence must **name the tree it was
-  measured in** (e.g. `tests/server/…` is the flat root), so baselines are never
-  compared across layouts.
-- The four-root consolidation commit (`dcb2a5eaf`) is 392 commits behind `main`
-  and sits on 76 off-main refs (both measured 2026-10-12) — it is **not
-  landing**; `main`'s layout is canonical.
+Legacy roots still outside `tests/` — **out of scope for this card**, each
+carded separately: `apps/api/server/tests/` (107 files, runs in its own
+cwd-based CI job), `packages/grib/tests/` + `packages/planner/tests/` (23,
+explicit CI path), `packages/mogdb/tests/` (4), plus ~83 files in
+`packages/{avion,downcraft,chargectl,bawl,aml,infra-lib,sdk-py}` that CI has
+never run.
+
+- Every gate command and every piece of test evidence must **name the tree it
+  was measured in** (e.g. `tests/server/…` is the flat root), so baselines are
+  never compared across layouts.
+- CI jobs that do not use `testpaths` pass an explicit path
+  (`packages/grib/tests packages/planner/tests` etc.) and run from their own
+  working directory — location and execution stay decoupled by design.
 
 ### Running Tests
 

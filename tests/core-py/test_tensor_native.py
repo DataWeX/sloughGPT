@@ -17,7 +17,7 @@ test:
 
 Run:
     PYTHONPATH=packages/downcraft:packages/core-py scripts/python \
-        -m pytest packages/core-py/tests/test_tensor_native.py -q
+        -m pytest tests/core-py/test_tensor_native.py -q
 """
 
 from __future__ import annotations

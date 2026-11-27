@@ -23,7 +23,7 @@ import pytest
 from click.testing import CliRunner
 
 # Add CLI src to path (mirrors other CLI tests)
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "cli" / "src"))
 
 from commands import logs as logs_mod
 from commands.logs import (

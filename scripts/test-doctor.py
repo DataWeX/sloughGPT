@@ -241,8 +241,8 @@ def _history() -> list[dict]:
 
 def cmd_health(quiet: bool = False, summary: bool = False, verbose: bool = False) -> int:
     areas = [
-        ("CLI framework", "apps/cli/tests/test_slo_cli.py"),
-        ("CLI commands", "apps/cli/tests/"),
+        ("CLI framework", "tests/cli/test_slo_cli.py"),
+        ("CLI commands", "tests/cli/"),
         ("Core Python", "tests/core-py/"),
         ("Root tests", "tests/"),
     ]

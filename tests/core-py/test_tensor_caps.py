@@ -8,7 +8,7 @@ runtime DeviceManager's registered ``"tensor"`` — and every face reaches
 CAPS through the same ``ioctl()``/``call()`` path.
 
 Run:
-    python -m pytest packages/core-py/tests/test_tensor_caps.py -q
+    python -m pytest tests/core-py/test_tensor_caps.py -q
 """
 
 from __future__ import annotations

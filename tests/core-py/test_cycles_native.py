@@ -8,7 +8,7 @@ oracle must produce the SAME radiance, deterministically per seed, with a
 clean None-fallback to the numpy oracle when no engine compiled.
 
 Run: PYTHONPATH=packages/downcraft:packages/core-py scripts/python \
-    -m pytest packages/core-py/tests/test_cycles_native.py -q
+    -m pytest tests/core-py/test_cycles_native.py -q
 """
 
 from __future__ import annotations

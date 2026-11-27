@@ -9,7 +9,7 @@ not merely "renders the same". When no engine compiled, or
 SLO_CYCLES_NATIVE=0, the Python path runs unchanged.
 
 Run: PYTHONPATH=packages/downcraft:packages/core-py scripts/python \
-    -m pytest packages/core-py/tests/test_scene_build_native.py -q
+    -m pytest tests/core-py/test_scene_build_native.py -q
 """
 
 from __future__ import annotations

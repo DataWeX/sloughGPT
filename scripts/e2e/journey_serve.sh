@@ -42,7 +42,7 @@ CLEAN=$LOG_DIR/journey_serve.clean
 # leaking uvicorn) went away with the Next build step: `serve --web` no longer
 # builds anything, so there is no build to fail. The leak invariant it guarded
 # still has owners — journey_serve_api.sh phaseA (API orphan when startup
-# aborts) and the _cleanup unit contract in apps/cli/tests/test_dev_commands.py.
+# aborts) and the _cleanup unit contract in tests/cli/test_dev_commands.py.
 if [ "${1:-success}" != "success" ]; then
   echo "journey_serve.sh: mode '$1' retired — serve --web no longer runs a Node build" >&2
   exit 2
