@@ -46,6 +46,7 @@ export function useAgentsWorkbench() {
   const [newDesc, setNewDesc] = useState('')
   const [newInstructions, setNewInstructions] = useState('')
   const [newTools, setNewTools] = useState<string[]>([])
+  const [newVoice, setNewVoice] = useState('')
   const [creating, setCreating] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -53,6 +54,7 @@ export function useAgentsWorkbench() {
   const [editDesc, setEditDesc] = useState('')
   const [editInstructions, setEditInstructions] = useState('')
   const [editTools, setEditTools] = useState<string[]>([])
+  const [editVoice, setEditVoice] = useState('')
 
   const [execAgentId, setExecAgentId] = useState<string | null>(null)
   const [execPrompt, setExecPrompt] = useState('')
@@ -261,18 +263,21 @@ export function useAgentsWorkbench() {
       instructions: trimmedInstructions,
       tools: newTools,
       avatar: '',
+      voice: newVoice,
     }
     setAgents((prev) => [optimistic, ...prev])
     setNewName('')
     setNewDesc('')
     setNewInstructions('')
     setNewTools([])
+    setNewVoice('')
     try {
       const created = await agentsController.create({
         name: trimmedName,
         description: trimmedDesc,
         instructions: trimmedInstructions,
         tools: newTools,
+        voice: newVoice,
       })
       setAgents((prev) => prev.map((a) => (a.id === tempId ? created : a)))
       notify.toast('Agent created', { type: 'success' })
@@ -289,6 +294,7 @@ export function useAgentsWorkbench() {
     setEditDesc(a.description)
     setEditInstructions(a.instructions)
     setEditTools(a.tools)
+    setEditVoice(a.voice ?? '')
   }
 
   const cancelEdit = () => {
@@ -297,6 +303,7 @@ export function useAgentsWorkbench() {
     setEditDesc('')
     setEditInstructions('')
     setEditTools([])
+    setEditVoice('')
   }
 
   const handleUpdate = async (id: string) => {
@@ -330,6 +337,7 @@ export function useAgentsWorkbench() {
               description: trimmedDesc,
               instructions: trimmedInstructions,
               tools: editTools,
+              voice: editVoice,
             }
           : a,
       ),
@@ -341,6 +349,7 @@ export function useAgentsWorkbench() {
         description: trimmedDesc,
         instructions: trimmedInstructions,
         tools: editTools,
+        voice: editVoice,
       })
       notify.toast('Agent updated', { type: 'success' })
     } catch {
@@ -534,6 +543,7 @@ export function useAgentsWorkbench() {
         description: agent.description,
         instructions: agent.instructions,
         tools: [...agent.tools],
+        voice: agent.voice,
       })
       notify.toast(`Cloned "${agent.name}"`, { type: 'success' })
       await fetchAgents()
@@ -554,6 +564,8 @@ export function useAgentsWorkbench() {
     setNewInstructions,
     newTools,
     setNewTools,
+    newVoice,
+    setNewVoice,
     creating,
     editingId,
     setEditingId,
@@ -565,6 +577,8 @@ export function useAgentsWorkbench() {
     setEditInstructions,
     editTools,
     setEditTools,
+    editVoice,
+    setEditVoice,
     execAgentId,
     setExecAgentId,
     execPrompt,

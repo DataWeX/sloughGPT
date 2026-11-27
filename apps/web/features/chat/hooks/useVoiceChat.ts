@@ -19,6 +19,15 @@ export interface VoiceExchange {
 export interface VoiceChatCallbacks {
   onMessage: (text: string) => void
   onExchange?: (exchange: VoiceExchange) => void
+  /**
+   * Speaker preset of the agent this session is talking to (phase-1
+   * passthrough). Threaded into `POST /voice/tts {text, voice}` so the
+   * request already carries the right id the moment speaker training lands;
+   * the engine ignores it today and audio is byte-identical. `''`/absent
+   * omits the field entirely, keeping the body identical to pre-agent-voice
+   * traffic.
+   */
+  voice?: string
 }
 
 // ── Speech Recognition Types ───────────────────────────────────────────
@@ -217,7 +226,7 @@ function createAudioLevelMonitor(): {
 
 // ── Hook ───────────────────────────────────────────────────────────────
 
-export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
+export function useVoiceChat({ onMessage, onExchange, voice }: VoiceChatCallbacks) {
   const [state, setState] = useState<VoiceState>('idle')
   const [interimText, setInterimText] = useState('')
   const [finalText, setFinalText] = useState('')
@@ -247,6 +256,8 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   const stateRef = useRef<VoiceState>('idle')
   const onMessageRef = useRef(onMessage)
   const onExchangeRef = useRef(onExchange)
+  /** Latest agent speaker preset — read at speak time, not captured per render. */
+  const voiceRef = useRef(voice)
   const conversationRef = useRef<VoiceExchange[]>([])
   const abortControllerRef = useRef<AbortController | null>(null)
   const speakingRef = useRef(false)
@@ -272,6 +283,9 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   useEffect(() => {
     onExchangeRef.current = onExchange
   }, [onExchange])
+  useEffect(() => {
+    voiceRef.current = voice
+  }, [voice])
   useEffect(() => {
     stateRef.current = state
   }, [state])
@@ -418,8 +432,8 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
       startInterruptDetection()
 
       try {
-        // Try server-side TTS first
-        const result = await voiceController.tts(text)
+        // Try server-side TTS first, carrying the agent's speaker preset.
+        const result = await voiceController.tts(text, voiceRef.current)
         if (result.audio && result.backend !== 'browser-fallback') {
           await voiceController.playAudio(result.audio, result.sample_rate)
           speakingRef.current = false

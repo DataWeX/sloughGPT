@@ -17,6 +17,7 @@ import {
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { agentsController, type Agent, type AgentRun } from '@/lib/agents-controller'
+import { VOICE_PRESETS, voiceLabel } from '../agents-constants'
 import {
   ArrowLeft,
   Bot,
@@ -55,6 +56,7 @@ export default function AgentDetailPage() {
   const [editDesc, setEditDesc] = useState('')
   const [editInstructions, setEditInstructions] = useState('')
   const [editTools, setEditTools] = useState<string[]>([])
+  const [editVoice, setEditVoice] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Execute state
@@ -96,6 +98,7 @@ export default function AgentDetailPage() {
         description: editDesc,
         instructions: editInstructions,
         tools: editTools,
+        voice: editVoice,
       })
       setAgent({
         ...agent,
@@ -103,6 +106,7 @@ export default function AgentDetailPage() {
         description: editDesc,
         instructions: editInstructions,
         tools: editTools,
+        voice: editVoice,
       })
       setEditing(false)
       notify.toast('Updated', { type: 'success' })
@@ -201,6 +205,7 @@ export default function AgentDetailPage() {
                         setEditDesc(agent.description)
                         setEditInstructions(agent.instructions)
                         setEditTools([...agent.tools])
+                        setEditVoice(agent.voice ?? '')
                       }}
                     >
                       <Edit className="h-3 w-3 mr-1" /> Edit
@@ -230,6 +235,29 @@ export default function AgentDetailPage() {
                     placeholder="Instructions"
                     className="w-full h-24 p-2 text-sm border rounded-md resize-none bg-background"
                   />
+                  <div className="space-y-1">
+                    <label
+                      htmlFor="edit-agent-voice"
+                      className="block text-xs font-medium text-muted-foreground"
+                    >
+                      Voice
+                    </label>
+                    <select
+                      id="edit-agent-voice"
+                      value={editVoice}
+                      onChange={(e) => setEditVoice(e.target.value)}
+                      className="w-full h-8 px-2 text-sm border rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {VOICE_PRESETS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-muted-foreground">
+                      Passthrough for now — audio is identical until speaker training lands.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -240,6 +268,10 @@ export default function AgentDetailPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Description</span>
                     <span className="font-medium">{agent.description || '—'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Voice</span>
+                    <span className="font-medium">{voiceLabel(agent.voice)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">ID</span>

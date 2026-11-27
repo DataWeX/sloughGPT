@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { renderHook, act, cleanup } from '@testing-library/react'
 import { useVoiceChat, VoiceSettings } from './useVoiceChat'
+import { voiceController } from '@/lib/voice-controller'
 
 // Mock the controllers
 vi.mock('@/lib/chat-controller', () => ({
@@ -214,6 +215,37 @@ describe('useVoiceChat', () => {
       await vi.advanceTimersByTimeAsync(100)
     })
     expect(result.current.state).toBe('idle')
+  })
+
+  it('threads the agent voice preset into server TTS', async () => {
+    // Resolve (not reject) so the server TTS branch runs and we can inspect
+    // the call args; the default mock rejects to exercise the browser fallback.
+    vi.mocked(voiceController.tts).mockResolvedValue({
+      audio: 'AAAA',
+      duration_ms: 100,
+      backend: 'server',
+      sample_rate: 24000,
+    })
+    const { result } = renderHook(() => useVoiceChat({ onMessage: vi.fn(), voice: 'nova' }))
+
+    await act(async () => {
+      result.current.startListening()
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    // Final transcript → silence timeout submits → AI streams → speak.
+    act(() => {
+      mockRec.handlers.result?.({
+        resultIndex: 0,
+        results: [{ isFinal: true, 0: { transcript: 'hello', confidence: 0.9 }, length: 1 }],
+      } as any)
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(2500)
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    expect(voiceController.tts).toHaveBeenCalledWith('test response', 'nova')
   })
 
   it('stopListening resets to idle', async () => {
