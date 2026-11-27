@@ -133,6 +133,31 @@ class TestHelpHeaderBanner:
         assert "sloughGPT" in out
 
 
+class TestTreeStamp:
+    """Which checkout answers — the banner must say it without overflowing."""
+
+    def test_banner_names_the_running_tree(self, capsys, monkeypatch):
+        from apps.cli.src.cli import _show_welcome_banner
+
+        monkeypatch.setattr(tui, "_scrn", lambda: (80, 40))
+        _show_welcome_banner()
+        out = ANSI.sub("", capsys.readouterr().out)
+        line = next((ln for ln in out.splitlines() if ln.strip().startswith("tree")), "")
+        assert line, "banner is missing the tree stamp"
+        assert "current" in line or "behind" in line
+
+    @pytest.mark.parametrize("cols", [60, 80, 120])
+    def test_tree_stamp_never_wraps(self, capsys, monkeypatch, cols):
+        """A wrapped status line reads as a broken banner."""
+        from apps.cli.src.cli import _show_welcome_banner
+
+        monkeypatch.setattr(tui, "_scrn", lambda: (cols, 40))
+        _show_welcome_banner()
+        out = ANSI.sub("", capsys.readouterr().out)
+        line = next(ln for ln in out.splitlines() if ln.strip().startswith("tree"))
+        assert len(line) <= cols
+
+
 class TestWelcomeBanner:
     def test_rows_are_uniform_and_wordmark_is_the_product(self, capsys):
         show_welcome_banner("sloughgpt v0.1.0 (Linux x86_64, Python 3.12.14)")
