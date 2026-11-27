@@ -149,11 +149,13 @@ def _show_welcome_banner():
     from core.tui import BOX_LIGHT, FG, art_rows, render_box, term_cols
 
     _color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
-    _inner = min(38, max(20, term_cols() - 8))
+    # Wide enough for the 53-column product wordmark, indented by 4; narrower
+    # terminals fall back to the plain product name inside the same square box.
+    _inner = min(55, max(20, term_cols() - 8))
 
     _line()
     _box = render_box(
-        [""] + [(row, FG.PRIMARY) for row in art_rows(_inner, indent=4)] + [""],
+        [""] + [(row, FG.PRIMARY) for row in art_rows(_inner)] + [""],
         _inner,
         style=BOX_LIGHT,
         color=_color,

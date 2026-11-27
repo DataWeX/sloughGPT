@@ -226,18 +226,51 @@ class Box:
 
 # ── wordmark + box renderer ───────────────────────────────────────
 
-# ANSI-Regular glyphs for the SLO wordmark, one string per row.
-_GLYPH_S = ("███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝")
-_GLYPH_L = ("██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝")
-_GLYPH_O = (" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ ")
+#: The product name. SLO is a brand we build, not the product: the banner is
+#: sloughGPT's own CLI, so it draws what the user is running.
+WORDMARK = "sloughGPT"
 
-#: The SLO wordmark (six rows, trailing whitespace trimmed).
-SLO_ART: tuple[str, ...] = tuple(
-    (s + l + o).rstrip() for s, l, o in zip(_GLYPH_S, _GLYPH_L, _GLYPH_O)
-)
+#: 5x8 solid-block font, one string per row, ``#`` = filled block.
+#:
+#: Mixed case on one baseline: capitals and ascenders occupy rows 0-6, the
+#: x-height letters rows 2-6, and ``g`` hangs one row below the baseline.
+#: Five columns per glyph plus a one-column gap gives the whole word 53
+#: columns — it fits the 62-column interactive box, and every narrower box
+#: falls back to plain text.
+_FONT: dict[str, tuple[str, ...]] = {
+    "s": ("     ", "     ", " ### ", "#    ", " ### ", "    #", "#### ", "     "),
+    "l": ("#    ", "#    ", "#    ", "#    ", "#    ", "#    ", "###  ", "     "),
+    "o": ("     ", "     ", " ### ", "#   #", "#   #", "#   #", " ### ", "     "),
+    "u": ("     ", "     ", "#   #", "#   #", "#   #", "#   #", " ### ", "     "),
+    "g": ("     ", "     ", " ### ", "#   #", "#   #", " ### ", "    #", "#### "),
+    "h": ("#    ", "#    ", "#### ", "#   #", "#   #", "#   #", "#   #", "     "),
+    "G": (" ### ", "#   #", "#    ", "# ###", "#   #", "#   #", " ### ", "     "),
+    "P": ("#### ", "#   #", "#   #", "#### ", "#    ", "#    ", "#    ", "     "),
+    "T": ("#####", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "     "),
+}
 
-#: One-line fallback used when the terminal is narrower than the wordmark.
-SLO_TEXT = "SLO"
+
+_GLYPH_ROWS = 8
+_FILLED = "█"
+
+
+def _compose(word: str) -> tuple[str, ...]:
+    """Lay ``word`` out in the block font, one glyph per column group.
+
+    The font table spells filled cells as ``#`` so the shapes stay legible in
+    source; the terminal gets the block character.
+    """
+    return tuple(
+        " ".join(_FONT[ch][row] for ch in word).rstrip().replace("#", _FILLED)
+        for row in range(_GLYPH_ROWS)
+    )
+
+
+#: The wordmark art (eight rows, trailing whitespace trimmed).
+WORDMARK_ART: tuple[str, ...] = _compose(WORDMARK)
+
+#: One-line fallback used when the box is narrower than the wordmark.
+WORDMARK_TEXT = WORDMARK
 
 #: Light (single-line) and heavy (double-line) box styles.
 BOX_LIGHT = ("┌", "┐", "└", "┘", "─", "│")
@@ -263,13 +296,13 @@ def fit_visible(text: str, width: int) -> str:
 
 
 def art_rows(inner: int, *, indent: int | None = None) -> list[str]:
-    """The SLO wordmark centred in ``inner``, or ``SLO`` when too narrow."""
-    block = max(len(row) for row in SLO_ART)
+    """The wordmark centred in ``inner``, or the product name when too narrow."""
+    block = max(len(row) for row in WORDMARK_ART)
     if inner < block:
-        pad = max(0, (inner - len(SLO_TEXT)) // 2)
-        return [" " * pad + SLO_TEXT]
+        pad = max(0, (inner - len(WORDMARK_TEXT)) // 2)
+        return [" " * pad + WORDMARK_TEXT]
     pad = indent if indent is not None else max(0, (inner - block) // 2)
-    return [" " * pad + row for row in SLO_ART]
+    return [" " * pad + row for row in WORDMARK_ART]
 
 
 def render_box(
