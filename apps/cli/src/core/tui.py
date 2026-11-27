@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 # ── ANSI helpers ──────────────────────────────────────────────────
@@ -222,6 +222,84 @@ class Box:
     BLOCK4 = "░"
     STAR = "✦"
     TRI_R = "▶"
+
+
+# ── wordmark + box renderer ───────────────────────────────────────
+
+# ANSI-Regular glyphs for the SLO wordmark, one string per row.
+_GLYPH_S = ("███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝")
+_GLYPH_L = ("██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝")
+_GLYPH_O = (" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ ")
+
+#: The SLO wordmark (six rows, trailing whitespace trimmed).
+SLO_ART: tuple[str, ...] = tuple(
+    (s + l + o).rstrip() for s, l, o in zip(_GLYPH_S, _GLYPH_L, _GLYPH_O)
+)
+
+#: One-line fallback used when the terminal is narrower than the wordmark.
+SLO_TEXT = "SLO"
+
+#: Light (single-line) and heavy (double-line) box styles.
+BOX_LIGHT = ("┌", "┐", "└", "┘", "─", "│")
+BOX_HEAVY = ("╔", "╗", "╚", "╝", "═", "║")
+
+
+def term_cols() -> int:
+    """Current terminal width in columns."""
+    return _scrn()[0]
+
+
+def visible_width(text: str) -> int:
+    """Width the terminal actually draws (ANSI escapes are zero-width)."""
+    return len(_strip_ansi(text))
+
+
+def fit_visible(text: str, width: int) -> str:
+    """Pad or truncate ``text`` to exactly ``width`` visible columns."""
+    vis = visible_width(text)
+    if vis <= width:
+        return text + " " * (width - vis)
+    return _truncate_visible(text, width)
+
+
+def art_rows(inner: int, *, indent: int | None = None) -> list[str]:
+    """The SLO wordmark centred in ``inner``, or ``SLO`` when too narrow."""
+    block = max(len(row) for row in SLO_ART)
+    if inner < block:
+        pad = max(0, (inner - len(SLO_TEXT)) // 2)
+        return [" " * pad + SLO_TEXT]
+    pad = indent if indent is not None else max(0, (inner - block) // 2)
+    return [" " * pad + row for row in SLO_ART]
+
+
+def render_box(
+    lines: Sequence[str | tuple[str, int]],
+    inner: int,
+    *,
+    style: tuple[str, str, str, str, str, str] | None = None,
+    border_fg: int = FG.BORDER,
+    color: bool = True,
+) -> str:
+    """Render a square box of interior width ``inner`` around ``lines``.
+
+    Each item is either plain text or ``(text, fg_code)``; width is computed
+    on the visible text so colour never affects geometry, and over-long items
+    are truncated rather than pushing the border out. With ``color=False`` the
+    frame degrades to plain text of identical geometry (pipes, NO_COLOR).
+    """
+    tl, tr, bl, br, h, v = style or (Box.TL, Box.TR, Box.BL, Box.BR, Box.H, Box.V)
+    b_open = _fg(border_fg) if color else ""
+    b_close = _RESET if color else ""
+
+    out = [f"{b_open}{tl}{h * inner}{tr}{b_close}"]
+    for item in lines:
+        text, fg = (item, None) if isinstance(item, str) else item
+        body = fit_visible(text, inner)
+        if color and fg is not None:
+            body = f"{_fg(fg)}{body}{_RESET}{b_open}"
+        out.append(f"{b_open}{v}{body}{v}{b_close}")
+    out.append(f"{b_open}{bl}{h * inner}{br}{b_close}")
+    return "\n".join(out)
 
 
 # ── spinner frames ────────────────────────────────────────────────

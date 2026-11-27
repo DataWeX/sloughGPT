@@ -145,37 +145,24 @@ def _show_welcome_banner():
         _write(text + "\n")
         _flush()
 
-    # ── ASCII art header ──────────────────────────────────
+    # ── ASCII art header (projected from core.tui) ─────────
+    from core.tui import BOX_LIGHT, FG, art_rows, render_box, term_cols
+
+    _color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    _inner = min(38, max(20, term_cols() - 8))
+
     _line()
-    _line(f"  {_c('  ┌──────────────────────────────────────┐', _DIM)}")
-    _line(
-        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    _box = render_box(
+        [""] + [(row, FG.PRIMARY) for row in art_rows(_inner, indent=4)] + [""],
+        _inner,
+        style=BOX_LIGHT,
+        color=_color,
     )
-    _line(
-        f"  {_c('  │', _DIM)}{_c('    ███████╗██╗      ██████╗          ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
-    )
-    _line(
-        f"  {_c('  │', _DIM)}{_c('    ██╔════╝██║     ██╔═══██╗         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
-    )
-    _line(
-        f"  {_c('  │', _DIM)}{_c('    ███████╗██║     ██║   ██║         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
-    )
-    _line(
-        f"  {_c('  │', _DIM)}{_c('    ╚════██║██║     ██║   ██║         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
-    )
-    _line(
-        f"  {_c('  │', _DIM)}{_c('    ███████║███████╗╚██████╔╝         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
-    )
-    _line(
-        f"  {_c('  │', _DIM)}{_c('    ╚══════╝╚══════╝ ╚═════╝          ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
-    )
-    _line(
-        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
-    )
-    _line(f"  {_c('  └──────────────────────────────────────┘', _DIM)}")
+    for _row in _box.splitlines():
+        _line("    " + _row)
     _line()
     _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
-    _line(f"  {_c('  ────────────────────────────────────────', _DIM)}")
+    _line(f"  {_c('  ' + '─' * (_inner + 2), _DIM)}")
     _line()
 
     # Quick start commands
