@@ -298,6 +298,67 @@ class TestStatusBlock:
         assert len(screen.visible()[0]) <= 39
 
 
+class TestStatusBlockPinnedRegion:
+    """Foreign output between redraws must not leave a second copy behind.
+
+    The reported screen was: status block, Vite config warnings, then the whole
+    block again. The cursor sat below the interleaved text, so the redraw's
+    cursor-up cleared the wrong rows.
+    """
+
+    @staticmethod
+    def _real_logger(screen):
+        from domain.logging import CLILogger
+
+        return CLILogger("slo.dev", stream=screen, colors=False)
+
+    def test_foreign_output_lands_above_the_block(self):
+        from commands.dev import StatusBlock
+
+        screen = _Screen()
+        logger = self._real_logger(screen)
+        block = StatusBlock(logger)
+
+        block.update("  SloughGPT", "  API: starting", "  Web: waiting")
+        logger.info("(!) Your Vite config uses features unsupported by configLoader")
+        block.update("  SloughGPT", "  API: ok", "  Web: ok")
+
+        visible = screen.visible()
+        assert visible.count("  SloughGPT") == 1, "block duplicated:\n" + "\n".join(visible)
+        assert any("Vite config" in line for line in visible)
+        assert visible[-2:] == ["  API: ok", "  Web: ok"]
+
+    def test_many_interleaved_writes_keep_exactly_one_block(self):
+        from commands.dev import StatusBlock
+
+        screen = _Screen()
+        logger = self._real_logger(screen)
+        block = StatusBlock(logger)
+
+        for i in range(5):
+            block.update("  SloughGPT", f"  API: phase-{i}")
+            logger.info(f"warning {i}")
+        block.update("  SloughGPT", "  API: ok")
+
+        visible = screen.visible()
+        assert visible.count("  SloughGPT") == 1
+        assert visible[-1] == "  API: ok"
+        assert sum(line.startswith("warning") or "warning" in line for line in visible) >= 1
+
+    def test_detach_restores_the_real_stream(self):
+        from commands.dev import StatusBlock
+
+        screen = _Screen()
+        logger = self._real_logger(screen)
+        raw = logger._stream
+        block = StatusBlock(logger)
+        assert logger._stream is not raw
+
+        block.detach()
+
+        assert logger._stream is raw
+
+
 class TestPortHelpers:
     """Tests for port utility functions."""
 

@@ -34,16 +34,67 @@ _LOG_BUF = 500  # max lines kept per panel
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
+class _PinnedStream:
+    """Stream wrapper that keeps a :class:`StatusBlock` pinned to the bottom.
+
+    A status block redraws by moving the cursor up N rows — correct only while
+    nothing else writes in between. Child-process output (the Vite config
+    warnings) and log records do exactly that, so the redraw cleared the wrong
+    rows and left a second copy of the block behind. Erasing the block around
+    every foreign write turns it into a pinned region: foreign text appears
+    above it, the block stays at the bottom, exactly one copy.
+
+    Only ``write`` is intercepted — everything else forwards to the real
+    stream (``isatty`` so callers still see a TTY, ``fileno`` for subprocesses).
+    """
+
+    def __init__(self, stream, block):
+        self._stream = stream
+        self._block = block
+        self._busy = False
+
+    def write(self, text):
+        if self._busy or not text:
+            return self._stream.write(text)
+        self._busy = True
+        try:
+            self._block.erase()
+            self._stream.write(text)
+            self._block.draw()
+        finally:
+            self._busy = False
+
+    def flush(self):
+        try:
+            self._stream.flush()
+        except (OSError, ValueError):
+            pass
+
+    def isatty(self):
+        return bool(getattr(self._stream, "isatty", lambda: False)())
+
+    def fileno(self):
+        return self._stream.fileno()
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
 class StatusBlock:
-    """A status block that redraws in place — it never scrolls.
+    """A status block that redraws in place — it never scrolls, and never duplicates.
 
     Status lines go straight to the logger's stream, not through ``log.info``.
-    That indirection was the bug: the human formatter emits *two* physical
+    That indirection was the first bug: the human formatter emits *two* physical
     lines per record whenever a logger name is present (the message, then a
     dim ``slo`` meta line), while this block counted one line per update — so
     each redraw cleared half of itself and the rest scrolled down, reprinting
     the whole block on every poll ("looping down" in ``sloughgpt dev``).
-    Counting exactly what is written is the fix.
+
+    The second bug was interleaving: anything written between two redraws (a
+    Vite warning, an engine log line) left the cursor below the block, so the
+    next redraw cleared the wrong rows and a copy stayed on screen. The logger's
+    stream is therefore wrapped in :class:`_PinnedStream` for the block's
+    lifetime: foreign writes erase the block, print, and redraw it underneath.
 
     TTY: redraw over the previous block (no timestamps, no log levels — a
     status block is not a log record). Unchanged content writes nothing.
@@ -54,11 +105,29 @@ class StatusBlock:
         self._log = logger
         self._lines: list[str] = []
         self._rendered = 0
-        self._stream = getattr(logger, "_stream", None)
+        self._raw = getattr(logger, "_stream", None)
         self._is_tty = bool(
-            self._stream is not None and hasattr(self._stream, "isatty") and self._stream.isatty()
+            self._raw is not None and hasattr(self._raw, "isatty") and self._raw.isatty()
         )
         self._printed = False
+        self._pin = None
+        if self._is_tty:
+            self._pin = _PinnedStream(self._raw, self)
+            try:
+                logger._stream = self._pin
+            except AttributeError:  # a logger without a mutable stream
+                self._pin = None
+
+    def detach(self) -> None:
+        """Release the pin — usually when a full-screen TUI takes the terminal."""
+        if self._pin is None:
+            return
+        try:
+            if getattr(self._log, "_stream", None) is self._pin:
+                self._log._stream = self._raw
+        except AttributeError:
+            pass
+        self._pin = None
 
     @staticmethod
     def _fit(text: str, width: int) -> str:
@@ -80,15 +149,32 @@ class StatusBlock:
             i += 1
         return "".join(out) + "\033[0m"
 
-    def _write(self, text: str) -> None:
-        lock = getattr(self._log, "_lock", None)
-        if lock is None:
-            self._stream.write(text)
-            self._stream.flush()
+    def _raw_write(self, text: str) -> None:
+        """Write to the real stream. Callers own the logger lock."""
+        try:
+            self._raw.write(text)
+            self._raw.flush()
+        except (OSError, ValueError):
+            pass
+
+    def erase(self) -> None:
+        """Clear the rendered rows and leave the cursor at the top of them."""
+        if not self._rendered:
             return
-        with lock:
-            self._stream.write(text)
-            self._stream.flush()
+        chunks = [f"\033[{self._rendered}A"]
+        chunks.extend("\033[2K\n" for _ in range(self._rendered))
+        chunks.append(f"\033[{self._rendered}A")
+        self._raw_write("".join(chunks))
+        self._rendered = 0
+
+    def draw(self) -> None:
+        """Draw the block at the cursor and remember how many rows it occupies."""
+        width = max(20, shutil.get_terminal_size().columns - 1)
+        body = [self._fit(line, width) for line in self._lines]
+        if not body:
+            return
+        self._raw_write("".join(line + "\n" for line in body))
+        self._rendered = len(body)
 
     def update(self, *lines: str) -> None:
         """Redraw the block. No-op when the content did not change."""
@@ -96,28 +182,23 @@ class StatusBlock:
         if new == tuple(self._lines):
             return
         self._lines = list(new)
-        if self._stream is None:
+        if self._raw is None:
             return
 
         if not self._is_tty:
             if not self._printed:
-                self._write("\n".join(new) + "\n")
+                self._raw_write("\n".join(new) + "\n")
                 self._printed = True
             return
 
-        width = max(20, shutil.get_terminal_size().columns - 1)
-        body = [self._fit(line, width) for line in new]
-        chunks: list[str] = []
-        if self._rendered:
-            # Cursor sits at the start of the line after the block: go up,
-            # clear each rendered row, come back to the top, then redraw.
-            chunks.append(f"\033[{self._rendered}A")
-            for _ in range(self._rendered):
-                chunks.append("\033[2K\n")
-            chunks.append(f"\033[{self._rendered}A")
-        chunks.extend(line + "\n" for line in body)
-        self._write("".join(chunks))
-        self._rendered = len(body)
+        lock = getattr(self._log, "_lock", None)
+        if lock is None:
+            self.erase()
+            self.draw()
+            return
+        with lock:
+            self.erase()
+            self.draw()
 
 
 def _kill_port(port: int):
@@ -772,6 +853,10 @@ def cmd_dev(args):
 
     poll_thread = threading.Thread(target=_poll_services, daemon=True)
     poll_thread.start()
+
+    # The dashboard owns the whole terminal from here: release the pinned
+    # status block, or its redraws would fight the dashboard's frame.
+    status_block.detach()
 
     # ── TUI Dashboard ────────────────────────────────────
     from core.tui import DevDashboard, TabConfig
