@@ -7,7 +7,7 @@ import re
 import signal
 import sys
 import threading
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -403,11 +403,6 @@ class TestPortHelpers:
         finally:
             sock.close()
 
-    def test_check_web_ready_nonexistent(self):
-        from commands.dev import _check_web_ready
-
-        assert _check_web_ready(49997) is False
-
 
 class TestResolveDevPorts:
     """`slo dev` resolves both ports once, up front: free stays, busy shifts.
@@ -561,7 +556,7 @@ class TestCleanup:
 class TestCmdApiAndWebMonitorLoop:
     """Tests for _cmd_api_and_web monitor loop handling web_proc=None."""
 
-    def test_monitor_loop_web_proc_none_no_crash(self, mock_log, monkeypatch):
+    def test_monitor_loop_web_proc_none_no_crash(self, mock_log, monkeypatch, tmp_path):
         """Monitor loop should not crash when web_proc is None (web reused)."""
         from commands.dev import _cmd_api_and_web
 
@@ -572,19 +567,18 @@ class TestCmdApiAndWebMonitorLoop:
 
         with (
             patch("commands.dev._check_api_ready", return_value=True),
-            patch("commands.dev._check_web_ready", return_value=True),
+            patch("commands.dev._check_our_web", return_value=True),
             patch("commands.dev._check_port", return_value=True),
-            patch("commands.dev._repo_root") as mock_root,
+            patch("commands.dev._repo_root", return_value=tmp_path),
             patch("commands.dev._cleanup"),
             patch("commands.dev.signal"),
             patch("commands.dev.webbrowser"),
             patch("commands.dev.time") as mock_time,
         ):
-            mock_root.return_value = MagicMock()
             mock_time.sleep.side_effect = [None, None, KeyboardInterrupt]
 
-            # Simulate web_reused=True by making _check_web_ready return True
-            # This means web_proc stays None
+            # web_reused=True only when the responder is OUR tree's Vite
+            # (_check_our_web), which means web_proc stays None.
             _cmd_api_and_web(args)
 
             # Should not raise AttributeError: 'NoneType' object has no attribute 'poll'
@@ -1298,3 +1292,154 @@ class TestEnsureWebNodeModules:
         _ensure_web_node_modules(wt)
         assert dangling.is_symlink()
         assert dangling.resolve() == (main / "apps" / "web" / "node_modules").resolve()
+
+
+@contextmanager
+def _serve(*, status: int = 200, headers: dict[str, str] | None = None, seen: list | None = None):
+    """A local HTTP server answering with fixed status/headers (ephemeral port)."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    headers = headers or {}
+    seen = seen if seen is not None else []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append(dict(self.headers))
+            self.send_response(status)
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *args):
+            pass
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{httpd.server_address[1]}", httpd.server_address[1], seen
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+class TestWebIdentity:
+    """`X-Slo-Web-Tree`, mirrored from apps/web/vite.config.ts."""
+
+    def test_id_is_sha256_of_the_real_web_dir(self, tmp_path):
+        """The recipe the dev server stamps and the CLI must recompute."""
+        import hashlib
+
+        from core.tree import web_tree_id
+
+        root = tmp_path / "checkout"
+        (root / "apps" / "web").mkdir(parents=True)
+        expected = hashlib.sha256(str((root / "apps" / "web").resolve()).encode()).hexdigest()[:16]
+        assert web_tree_id(root) == expected
+
+    def test_this_tree_id_is_the_package_tree(self):
+        from core import tree
+
+        assert tree.web_tree_id() == tree.web_tree_id(tree.package_tree())
+        assert len(tree.web_tree_id()) == 16
+
+    def test_two_checkouts_get_different_ids(self, tmp_path):
+        from core.tree import web_tree_id
+
+        a, b = tmp_path / "a", tmp_path / "b"
+        for root in (a, b):
+            (root / "apps" / "web").mkdir(parents=True)
+        assert web_tree_id(a) != web_tree_id(b)
+
+
+class TestCheckOurWeb:
+    """Port-open is not readiness: a foreign listener must not read as ours."""
+
+    def test_our_web_is_ready(self):
+        from commands.dev import _check_our_web
+        from core.tree import web_tree_id
+
+        with _serve(headers={"X-Slo-Web-Tree": web_tree_id()}) as (_url, port, _seen):
+            assert _check_our_web(port, web_tree_id()) is True
+
+    def test_foreign_tree_is_not_ready(self):
+        from commands.dev import _check_our_web
+
+        with _serve(headers={"X-Slo-Web-Tree": "deadbeefdeadbeef"}) as (_url, port, _seen):
+            assert _check_our_web(port, "0123456789abcdef") is False
+
+    def test_listener_without_the_header_is_not_ready(self):
+        """The relay answers data requests 200 with no header — not our SPA."""
+        from commands.dev import _check_our_web
+
+        with _serve() as (_url, port, _seen):
+            assert _check_our_web(port, "0123456789abcdef") is False
+
+    def test_nothing_listening_is_not_ready(self):
+        import socket
+
+        from commands.dev import _check_our_web
+
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        assert _check_our_web(port, "0123456789abcdef") is False
+
+    def test_probe_asks_for_the_spa_shell(self):
+        """Without `Accept: text/html` the relay answers data and sends no header."""
+        from commands.dev import _check_our_web
+
+        with _serve(headers={"X-Slo-Web-Tree": "abc123abc123abc1"}, seen=[]) as (
+            _url,
+            port,
+            seen,
+        ):
+            _check_our_web(port, "abc123abc123abc1")
+        assert seen and "text/html" in seen[0].get("Accept", "")
+
+
+class TestBringUpWeb:
+    """The verdict returned is the verdict shown — no upgrade to "ok"."""
+
+    def test_never_ready_is_timeout_not_ok(self):
+        import socket
+
+        from commands.dev import _bring_up_web
+
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        seen: list[str] = []
+        verdict = _bring_up_web(
+            port, "0123456789abcdef", attempts=2, sleep=lambda _s: None, on_status=seen.append
+        )
+        assert verdict == "timeout"
+        assert "ok" not in seen
+
+    def test_our_web_is_ok(self):
+        from commands.dev import _bring_up_web
+        from core.tree import web_tree_id
+
+        with _serve(headers={"X-Slo-Web-Tree": web_tree_id()}) as (_url, port, _seen):
+            seen: list[str] = []
+            verdict = _bring_up_web(
+                port, web_tree_id(), attempts=1, sleep=lambda _s: None, on_status=seen.append
+            )
+        assert verdict == "ok"
+        assert seen == ["waiting...", "ok"]
+
+    def test_dead_process_is_an_error(self):
+        from commands.dev import _bring_up_web
+
+        seen: list[str] = []
+        verdict = _bring_up_web(
+            1,
+            "0123456789abcdef",
+            attempts=5,
+            sleep=lambda _s: None,
+            alive=lambda: False,
+            on_status=seen.append,
+        )
+        assert verdict == "error"
+        assert "ok" not in seen
