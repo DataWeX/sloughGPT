@@ -110,6 +110,7 @@ function makeController(overrides?: Partial<ChatPageController>): ChatPageContro
       startDownloadFlowRef: { current: vi.fn() },
     },
     health: null,
+    agents: { currentAgent: null },
     suggestions: [],
     refreshHealth: vi.fn(),
     showToast: vi.fn(),

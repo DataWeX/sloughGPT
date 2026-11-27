@@ -287,7 +287,7 @@ export function AgentsListCard({
                       <div>
                         <label
                           htmlFor="edit-agent-voice"
-                          className="block text-[10px] font-medium text-muted-foreground mb-1"
+                          className="block text-[11px] font-medium text-muted-foreground mb-1"
                         >
                           Voice
                         </label>

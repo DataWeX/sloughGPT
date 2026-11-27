@@ -139,7 +139,7 @@ export function NewAgentCard({
                 </option>
               ))}
             </select>
-            <p id="create-agent-voice-hint" className="text-[10px] text-muted-foreground mt-1">
+            <p id="create-agent-voice-hint" className="text-[11px] text-muted-foreground mt-1">
               Passthrough for now — audio is identical until speaker training lands.
             </p>
           </div>

@@ -254,7 +254,7 @@ export default function AgentDetailPage() {
                         </option>
                       ))}
                     </select>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground">
                       Passthrough for now — audio is identical until speaker training lands.
                     </p>
                   </div>
