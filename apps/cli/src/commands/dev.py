@@ -111,6 +111,7 @@ class StatusBlock:
         )
         self._printed = False
         self._pin = None
+        self._detached = False
         if self._is_tty:
             self._pin = _PinnedStream(self._raw, self)
             try:
@@ -119,7 +120,12 @@ class StatusBlock:
                 self._pin = None
 
     def detach(self) -> None:
-        """Release the pin — usually when a full-screen TUI takes the terminal."""
+        """Release the pin — usually when a full-screen TUI takes the terminal.
+
+        After this the block stops drawing entirely: the dashboard renders the
+        same state, and a redraw from the poll thread would paint over its frame.
+        """
+        self._detached = True
         if self._pin is None:
             return
         try:
@@ -178,6 +184,8 @@ class StatusBlock:
 
     def update(self, *lines: str) -> None:
         """Redraw the block. No-op when the content did not change."""
+        if self._detached:
+            return
         new = tuple(lines)
         if new == tuple(self._lines):
             return

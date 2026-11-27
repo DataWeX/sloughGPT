@@ -358,6 +358,20 @@ class TestStatusBlockPinnedRegion:
 
         assert logger._stream is raw
 
+    def test_detach_stops_redrawing_over_the_dashboard(self):
+        from commands.dev import StatusBlock
+
+        screen = _Screen()
+        logger = self._real_logger(screen)
+        block = StatusBlock(logger)
+        block.update("  SloughGPT", "  API: starting")
+        block.detach()
+        before = screen.visible()
+
+        block.update("  SloughGPT", "  API: ok")
+
+        assert screen.visible() == before
+
 
 class TestPortHelpers:
     """Tests for port utility functions."""
