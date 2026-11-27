@@ -3,8 +3,10 @@
 import io
 import json
 import os
+import re
 import signal
 import sys
+import threading
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -133,131 +135,167 @@ class TestCmdApiTest:
         mock_log.header.assert_called_with("API Endpoint Tests")
 
 
+class _Screen:
+    """Minimal terminal model: interprets ``\\n``, ``\\x1b[nA`` (up) and ``\\x1b[2K``.
+
+    Lets a test assert what the user actually sees after N redraws, instead of
+    asserting which logger methods were called.
+    """
+
+    def __init__(self):
+        self.lines = [""]
+        self.row = 0
+        self.col = 0
+        self.writes = 0
+
+    def isatty(self):
+        return True
+
+    def flush(self):
+        pass
+
+    def write(self, text):
+        self.writes += 1
+        i = 0
+        while i < len(text):
+            if text.startswith("\x1b[", i):
+                m = re.match(r"\x1b\[(\d*)([A-Za-z])", text[i:])
+                if not m:
+                    i += 1
+                    continue
+                num = int(m.group(1) or 1)
+                cmd = m.group(2)
+                if cmd == "A":
+                    self.row = max(0, self.row - num)
+                    self.col = 0
+                elif cmd == "K":
+                    self.lines[self.row] = ""
+                i += m.end()
+                continue
+            ch = text[i]
+            if ch == "\n":
+                self.row += 1
+                self.col = 0
+                while len(self.lines) <= self.row:
+                    self.lines.append("")
+            else:
+                row = self.lines[self.row]
+                if self.col < len(row):
+                    row = row[: self.col] + ch + row[self.col + 1 :]
+                else:
+                    row = row + " " * (self.col - len(row)) + ch
+                self.lines[self.row] = row
+                self.col += 1
+            i += 1
+
+    def visible(self):
+        return [ln.rstrip() for ln in self.lines if ln.strip()]
+
+
+def _logger(stream):
+    logger = MagicMock()
+    logger._lock = threading.Lock()
+    logger._colors = False
+    logger._stream = stream
+    return logger
+
+
 class TestStatusBlock:
-    """Tests for the StatusBlock in-place update class."""
+    """The status block redraws in place — it must never scroll."""
 
-    def test_update_writes_to_tty(self):
+    def test_redraw_does_not_scroll(self):
+        """The 2026-11-27 defect: every poll reprinted the whole block.
 
+        Status lines used to go through ``log.info``, whose human formatter
+        emits two physical lines per record (message + dim logger-name meta)
+        while the block counted one — so each redraw cleared half of itself
+        and the rest scrolled down.
+        """
         from commands.dev import StatusBlock
 
-        logger = MagicMock()
-        logger._lock = __import__("threading").Lock()
-        logger._colors = False
-        logger.cursor_up = MagicMock()
-        logger.clear_line = MagicMock()
+        screen = _Screen()
+        block = StatusBlock(_logger(screen))
 
-        stream = MagicMock()
-        stream.isatty.return_value = True
-        logger._stream = stream
+        for _ in range(6):
+            block.update(
+                "  SloughGPT",
+                "  API: http://localhost:8000  ok",
+                "  Web: http://localhost:3000  waiting...",
+            )
 
-        block = StatusBlock(logger)
-        assert block._is_tty is True
+        assert screen.visible() == [
+            "  SloughGPT",
+            "  API: http://localhost:8000  ok",
+            "  Web: http://localhost:3000  waiting...",
+        ]
 
-        block.update("  SloughGPT", "  API: starting")
-
-        assert logger.info.call_count == 2
-        calls = [c[0][0] for c in logger.info.call_args_list]
-        assert "  SloughGPT" in calls
-        assert "  API: starting" in calls
-
-    def test_update_clears_previous_on_tty(self):
+    def test_state_transitions_overwrite_the_same_rows(self):
         from commands.dev import StatusBlock
 
-        logger = MagicMock()
-        logger._lock = __import__("threading").Lock()
-        logger._colors = False
-        logger.cursor_up = MagicMock()
-        logger.clear_line = MagicMock()
+        screen = _Screen()
+        block = StatusBlock(_logger(screen))
 
-        stream = MagicMock()
-        stream.isatty.return_value = True
-        logger._stream = stream
+        block.update("  SloughGPT", "  API: starting", "  Web: starting")
+        block.update("  SloughGPT", "  API: waiting... loading", "  Web: starting")
+        block.update("  SloughGPT", "  API: ready", "  Web: ready")
 
-        block = StatusBlock(logger)
-        block.update("  Line 1", "  Line 2")
-        assert len(block._lines) == 2
+        assert screen.visible() == ["  SloughGPT", "  API: ready", "  Web: ready"]
 
-        block.update("  New Line 1")
-
-        # Should have called cursor_up and clear_line to clear previous lines
-        assert logger.cursor_up.called
-        assert logger.clear_line.called
-        assert len(block._lines) == 1
-
-    def test_first_update_no_clear(self):
+    def test_shrinking_block_leaves_no_orphan_rows(self):
         from commands.dev import StatusBlock
 
-        logger = MagicMock()
-        logger._lock = __import__("threading").Lock()
-        logger._colors = False
-        logger.cursor_up = MagicMock()
-        logger.clear_line = MagicMock()
+        screen = _Screen()
+        block = StatusBlock(_logger(screen))
 
-        stream = MagicMock()
-        stream.isatty.return_value = True
-        logger._stream = stream
+        block.update("  a", "  b", "  c")
+        block.update("  only")
 
-        block = StatusBlock(logger)
-        block.update("  Only line")
+        assert screen.visible() == ["  only"]
 
-        # First update should not call cursor_up or clear_line
-        assert not logger.cursor_up.called
-        assert not logger.clear_line.called
-        assert len(block._lines) == 1
-
-    def test_non_tty_uses_info(self):
-        import threading
-
+    def test_unchanged_update_writes_nothing(self):
         from commands.dev import StatusBlock
 
-        logger = MagicMock()
-        logger._stream = MagicMock()
-        logger._stream.isatty.return_value = False
-        logger._lock = threading.Lock()
-        logger._colors = False
+        screen = _Screen()
+        block = StatusBlock(_logger(screen))
+        block.update("  a", "  b")
+        writes = screen.writes
 
+        block.update("  a", "  b")
+
+        assert screen.writes == writes
+
+    def test_status_lines_never_go_through_the_log_formatter(self):
+        """No INF prefix, no second meta line — a status block is not a record."""
+        from commands.dev import StatusBlock
+
+        logger = _logger(_Screen())
         block = StatusBlock(logger)
-        assert block._is_tty is False
+        block.update("  a", "  b")
+
+        assert logger.info.call_count == 0
+
+    def test_non_tty_prints_once(self):
+        from commands.dev import StatusBlock
+
+        stream = io.StringIO()  # isatty() is False
+        block = StatusBlock(_logger(stream))
 
         block.update("  Line 1", "  Line 2")
-        assert logger.info.call_count == 2
+        block.update("  Line 3")
 
-    def test_non_tty_prints_only_once(self):
+        assert stream.getvalue() == "  Line 1\n  Line 2\n"
+
+    def test_long_lines_are_truncated_to_the_terminal_width(self, monkeypatch):
         from commands.dev import StatusBlock
 
-        logger = MagicMock()
-        logger._stream = MagicMock()
-        logger._stream.isatty.return_value = False
-        logger._lock = __import__("threading").Lock()
-        logger._colors = False
+        monkeypatch.setattr(
+            "commands.dev.shutil.get_terminal_size", lambda *a, **k: os.terminal_size((40, 24))
+        )
+        screen = _Screen()
+        block = StatusBlock(_logger(screen))
+        block.update("x" * 200)
 
-        block = StatusBlock(logger)
-        block.update("  Line 1")
-        assert logger.info.call_count == 1
-
-        # Second update should NOT print again
-        block.update("  Line 2")
-        assert logger.info.call_count == 1
-
-    def test_line_count_tracking(self):
-        import threading
-
-        from commands.dev import StatusBlock
-
-        logger = MagicMock()
-        stream = MagicMock()
-        stream.isatty.return_value = True
-        logger._stream = stream
-        logger._lock = threading.Lock()
-        logger._colors = False
-        logger.cursor_up = MagicMock()
-        logger.clear_line = MagicMock()
-
-        block = StatusBlock(logger)
-        block.update("a", "b", "c")
-        assert len(block._lines) == 3
-        block.update("x")
-        assert len(block._lines) == 1
+        assert len(screen.visible()[0]) <= 39
 
 
 class TestPortHelpers:

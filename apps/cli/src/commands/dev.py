@@ -31,45 +31,93 @@ mobile_log = log.child("mobile")
 _LOG_BUF = 500  # max lines kept per panel
 
 
-class StatusBlock:
-    """Manages in-place updating of a block of status lines.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
-    Uses the logger's cursor methods (CLILogger) for TTY-aware cursor manipulation
-    only when the output stream is actually a TTY. Falls back to simple logging otherwise.
+
+class StatusBlock:
+    """A status block that redraws in place — it never scrolls.
+
+    Status lines go straight to the logger's stream, not through ``log.info``.
+    That indirection was the bug: the human formatter emits *two* physical
+    lines per record whenever a logger name is present (the message, then a
+    dim ``slo`` meta line), while this block counted one line per update — so
+    each redraw cleared half of itself and the rest scrolled down, reprinting
+    the whole block on every poll ("looping down" in ``sloughgpt dev``).
+    Counting exactly what is written is the fix.
+
+    TTY: redraw over the previous block (no timestamps, no log levels — a
+    status block is not a log record). Unchanged content writes nothing.
+    Non-TTY: print once, then stay quiet.
     """
 
     def __init__(self, logger):
         self._log = logger
         self._lines: list[str] = []
-        # Check if logger has cursor methods AND the stream is actually a TTY
-        stream = getattr(logger, "_stream", None)
-        self._is_tty = (
-            hasattr(logger, "cursor_up")
-            and hasattr(logger, "clear_line")
-            and stream is not None
-            and hasattr(stream, "isatty")
-            and stream.isatty()
+        self._rendered = 0
+        self._stream = getattr(logger, "_stream", None)
+        self._is_tty = bool(
+            self._stream is not None and hasattr(self._stream, "isatty") and self._stream.isatty()
         )
         self._printed = False
 
+    @staticmethod
+    def _fit(text: str, width: int) -> str:
+        """Truncate on visible width so a long line never wraps into an extra
+        physical row the cursor arithmetic does not know about."""
+        if len(_ANSI_RE.sub("", text)) <= width:
+            return text
+        out: list[str] = []
+        seen = 0
+        i = 0
+        while i < len(text) and seen < width:
+            m = _ANSI_RE.match(text, i)
+            if m:
+                out.append(m.group(0))
+                i = m.end()
+                continue
+            out.append(text[i])
+            seen += 1
+            i += 1
+        return "".join(out) + "\033[0m"
+
+    def _write(self, text: str) -> None:
+        lock = getattr(self._log, "_lock", None)
+        if lock is None:
+            self._stream.write(text)
+            self._stream.flush()
+            return
+        with lock:
+            self._stream.write(text)
+            self._stream.flush()
+
     def update(self, *lines: str) -> None:
-        """Update the block with new lines, clearing previous output if TTY."""
-        if self._is_tty and self._lines:
-            # Clear previous lines using logger's cursor methods
-            n = len(self._lines)
-            for _ in range(n):
-                self._log.cursor_up(1)
-                self._log.clear_line()
-            self._lines = list(lines)
-            for line in lines:
-                self._log.info(line)
-        elif not self._printed:
-            # First time: print the block
-            self._lines = list(lines)
-            for line in lines:
-                self._log.info(line)
-            self._printed = True
-        # If already printed and not TTY, don't print again to avoid double output
+        """Redraw the block. No-op when the content did not change."""
+        new = tuple(lines)
+        if new == tuple(self._lines):
+            return
+        self._lines = list(new)
+        if self._stream is None:
+            return
+
+        if not self._is_tty:
+            if not self._printed:
+                self._write("\n".join(new) + "\n")
+                self._printed = True
+            return
+
+        width = max(20, shutil.get_terminal_size().columns - 1)
+        body = [self._fit(line, width) for line in new]
+        chunks: list[str] = []
+        if self._rendered:
+            # Cursor sits at the start of the line after the block: go up,
+            # clear each rendered row, come back to the top, then redraw.
+            chunks.append(f"\033[{self._rendered}A")
+            for _ in range(self._rendered):
+                chunks.append("\033[2K\n")
+            chunks.append(f"\033[{self._rendered}A")
+        chunks.extend(line + "\n" for line in body)
+        self._write("".join(chunks))
+        self._rendered = len(body)
 
 
 def _kill_port(port: int):
