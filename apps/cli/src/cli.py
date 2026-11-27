@@ -174,9 +174,11 @@ def _show_welcome_banner():
         _tree = ""
     if _tree:
         # One line, never wrapped: a wrapped status line makes the box look
-        # broken even though the border is intact.
-        _tree = _tree[: max(20, term_cols() - 6)]
-        _line(f"  {_c('  tree', _DIM)}  {_c(_tree, _DIM)}")
+        # broken even though the border is intact. Budget the visible width —
+        # two leading spaces, the label, two separating spaces, then the text.
+        _label = "  tree"
+        _tree = _tree[: max(10, term_cols() - 2 - len(_label) - 2)]
+        _line(f"  {_c(_label, _DIM)}  {_c(_tree, _DIM)}")
     _line(f"  {_c('  ' + '─' * (_inner + 2), _DIM)}")
     _line()
 

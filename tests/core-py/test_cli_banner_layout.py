@@ -28,6 +28,22 @@ from apps.cli.src.core import tui
 from apps.cli.src.core.helpers import show_welcome_banner
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def set_terminal(monkeypatch, cols, rows=40):
+    """Pin the terminal size for *both* tui module objects.
+
+    ``apps.cli.src.core.tui`` (imported here) and ``core.tui`` (imported by
+    ``apps/cli/src/cli.py`` off ``sys.path``) are distinct module objects, so
+    patching ``_scrn`` on one leaves the banner reading the real terminal — the
+    width assertions then pass on the runner's own width, not the width they
+    asked for. ``shutil.get_terminal_size()`` honours COLUMNS/LINES in both.
+    """
+    monkeypatch.setenv("COLUMNS", str(cols))
+    monkeypatch.setenv("LINES", str(rows))
+    monkeypatch.setattr(tui, "_scrn", lambda: (cols, rows))
+
+
 BOX_CHARS = "╔╗╚╝║═┌┐└┘│─"
 
 #: The rendered product wordmark, pinned literally.
@@ -117,7 +133,7 @@ class TestHelpHeaderBanner:
     def test_wide_terminal_draws_the_block_wordmark(self, capsys, monkeypatch):
         from apps.cli.src.cli import _show_welcome_banner
 
-        monkeypatch.setattr(tui, "_scrn", lambda: (80, 40))
+        set_terminal(monkeypatch, 80, 40)
         _show_welcome_banner()
         out = ANSI.sub("", capsys.readouterr().out)
         for row in EXPECTED_ART:
@@ -126,7 +142,7 @@ class TestHelpHeaderBanner:
     def test_narrow_terminal_still_names_the_product(self, capsys, monkeypatch):
         from apps.cli.src.cli import _show_welcome_banner
 
-        monkeypatch.setattr(tui, "_scrn", lambda: (60, 40))
+        set_terminal(monkeypatch, 60, 40)
         _show_welcome_banner()
         out = ANSI.sub("", capsys.readouterr().out)
         _assert_square(_box_rows(out))
@@ -139,7 +155,7 @@ class TestTreeStamp:
     def test_banner_names_the_running_tree(self, capsys, monkeypatch):
         from apps.cli.src.cli import _show_welcome_banner
 
-        monkeypatch.setattr(tui, "_scrn", lambda: (80, 40))
+        set_terminal(monkeypatch, 80, 40)
         _show_welcome_banner()
         out = ANSI.sub("", capsys.readouterr().out)
         line = next((ln for ln in out.splitlines() if ln.strip().startswith("tree")), "")
@@ -151,7 +167,7 @@ class TestTreeStamp:
         """A wrapped status line reads as a broken banner."""
         from apps.cli.src.cli import _show_welcome_banner
 
-        monkeypatch.setattr(tui, "_scrn", lambda: (cols, 40))
+        set_terminal(monkeypatch, cols, 40)
         _show_welcome_banner()
         out = ANSI.sub("", capsys.readouterr().out)
         line = next(ln for ln in out.splitlines() if ln.strip().startswith("tree"))
@@ -187,7 +203,7 @@ class TestWelcomeBanner:
 
     @pytest.mark.parametrize("cols", [40, 60, 80, 120])
     def test_box_fits_the_terminal(self, capsys, monkeypatch, cols):
-        monkeypatch.setattr(tui, "_scrn", lambda: (cols, 24))
+        set_terminal(monkeypatch, cols, 24)
         show_welcome_banner("sloughgpt v0.1.0")
         rows = _box_rows(capsys.readouterr().out)
         _assert_square(rows)
