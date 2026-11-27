@@ -182,6 +182,23 @@ const TEXT_FLOOR_RE = /\btext-\[(?:[1-9]|10)px\]/g
 const INLINE_FLOOR_RE =
   /\bfontSize: *'?([1-9]|10)(?:px)?'?(?=[,}\s])|\bfontSize=\{([1-9]|10)\}|\bfontSize=(?:"(?:[1-9]|10)"|'(?:[1-9]|10)')/g
 
+/**
+ * The BAND'S LOWER BOUND — sizes 1–8px, which no file may use, exempt or not.
+ *
+ * The two regexes above express the 11px content floor and the 9–10px chrome
+ * band, but the floor test skips `TEXT_FLOOR_EXEMPT` files wholesale. A
+ * whole-file skip cannot say "this file may use 9 and 10, never 8": the
+ * exemption grants the band while being blind to anything below it, and the
+ * StatusBar unseen-count pill shipped `text-[8px]` under a green gate for
+ * ~3 months (card 20261127_121127). These regexes are deliberately narrow —
+ * they only look below 9 — so the band, the 11px floor and the exempt
+ * ceiling keep their own calibrated tests.
+ */
+const BELOW_BAND_TEXT_RE = /\btext-\[([1-8])px\]/g
+
+const BELOW_BAND_INLINE_RE =
+  /\bfontSize: *'?([1-8])(?:px)?'?(?=[,}\s]|$)|\bfontSize=\{([1-8])\}|\bfontSize=(?:"([1-8])"|'([1-8])')/g
+
 const TEXT_FLOOR_EXEMPT = [
   'components/StatusBar.tsx',
   'app/(app)/magazine/magazine-accents.tsx',
@@ -509,6 +526,42 @@ describe('Design criteria — Noir Violet ratchets', () => {
       `Floor-exempt debt grew past ${TEXT_FLOOR_EXEMPT_CEILING} instances — fix the ` +
         `file, delete its row, and lower the ceiling. Never raise it.`,
     ).toBeLessThanOrEqual(TEXT_FLOOR_EXEMPT_CEILING)
+  })
+
+  it('no source file renders text below the 9px chrome band (exempt files included)', () => {
+    const offenders: Record<string, number> = {}
+    const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
+    for (const rel of files) {
+      const src = stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))
+      const n =
+        (src.match(BELOW_BAND_TEXT_RE)?.length ?? 0) +
+        (src.match(BELOW_BAND_INLINE_RE)?.length ?? 0)
+      if (n) offenders[rel] = n
+    }
+    expect(
+      Object.keys(offenders),
+      `Text below the 9px chrome band (DESIGN_SYSTEM.md §Minimum Size Floor) — the ` +
+        `floor-exempt files may use 9–10px chrome, never anything smaller. ` +
+        `Offenders: ${Object.entries(offenders)
+          .map(([f, n]) => `${f}(${n})`)
+          .join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('below-band regexes catch the class they exist for (fixture guard)', () => {
+    // The tree is clean today, so assert the regexes themselves against the
+    // exact shapes that slipped through: a fixture keeps this gate honest.
+    expect('text-[8px]'.match(BELOW_BAND_TEXT_RE)).toHaveLength(1)
+    expect('fontSize: 8'.match(BELOW_BAND_INLINE_RE)).toHaveLength(1)
+    expect("fontSize: '8px'".match(BELOW_BAND_INLINE_RE)).toHaveLength(1)
+    expect('fontSize={8}'.match(BELOW_BAND_INLINE_RE)).toHaveLength(1)
+    expect('fontSize="8"'.match(BELOW_BAND_INLINE_RE)).toHaveLength(1)
+    // The band and above are allowed and must not be flagged.
+    expect('text-[9px]'.match(BELOW_BAND_TEXT_RE)).toBeNull()
+    expect('text-[10px]'.match(BELOW_BAND_TEXT_RE)).toBeNull()
+    expect('text-[11px]'.match(BELOW_BAND_TEXT_RE)).toBeNull()
+    expect('fontSize: 9'.match(BELOW_BAND_INLINE_RE)).toBeNull()
+    expect('fontSize={11}'.match(BELOW_BAND_INLINE_RE)).toBeNull()
   })
 
   it('sanity: the catalogue of pages exists (fixture guard)', () => {
