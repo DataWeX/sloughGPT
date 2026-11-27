@@ -17,7 +17,7 @@
   },
   "scripts": {
     "clean": "rm -rf dist-vite",
-    "dev": "vite",
+    "dev": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vite",
     "dev:clean": "npm run clean && vite",
     "dev:restart": "../../scripts/grab-port.sh 5173 && npm run dev",
     "build": "vite build",
