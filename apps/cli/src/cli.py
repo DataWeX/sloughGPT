@@ -152,22 +152,22 @@ def _show_welcome_banner():
         f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
     )
     _line(
-        f"  {_c('  │', _DIM)}{_c('   ████████╗██╗     ██████╗            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+        f"  {_c('  │', _DIM)}{_c('    ███████╗██╗      ██████╗          ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
     )
     _line(
-        f"  {_c('  │', _DIM)}{_c('   ╚══██╔══╝██║     ██╔═══██╗           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+        f"  {_c('  │', _DIM)}{_c('    ██╔════╝██║     ██╔═══██╗         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
     )
     _line(
-        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+        f"  {_c('  │', _DIM)}{_c('    ███████╗██║     ██║   ██║         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
     )
     _line(
-        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+        f"  {_c('  │', _DIM)}{_c('    ╚════██║██║     ██║   ██║         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
     )
     _line(
-        f"  {_c('  │', _DIM)}{_c('      ██║   ███████╗╚██████╔╝           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+        f"  {_c('  │', _DIM)}{_c('    ███████║███████╗╚██████╔╝         ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
     )
     _line(
-        f"  {_c('  │', _DIM)}{_c('      ╚═╝   ╚══════╝ ╚═════╝            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+        f"  {_c('  │', _DIM)}{_c('    ╚══════╝╚══════╝ ╚═════╝          ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
     )
     _line(
         f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
@@ -175,7 +175,7 @@ def _show_welcome_banner():
     _line(f"  {_c('  └──────────────────────────────────────┘', _DIM)}")
     _line()
     _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
-    _line(f"  {_c('  ─────────────────────────────────────────', _DIM)}")
+    _line(f"  {_c('  ────────────────────────────────────────', _DIM)}")
     _line()
 
     # Quick start commands

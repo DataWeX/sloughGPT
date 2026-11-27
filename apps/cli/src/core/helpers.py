@@ -109,27 +109,47 @@ def docker_action(action, service=None, **kwargs):
 
 
 def show_welcome_banner(version_info=None):
-    """Show the welcome banner with version info."""
+    """Show the welcome banner with version info.
+
+    Every row is padded to the box's interior width programmatically, so a
+    longer version string (or a new Python/OS tag) can never push the right
+    border out of alignment. The wordmark is the same SLO art the ``--help``
+    header uses — one identity across both banners.
+    """
     from .version import format_version_display
 
     if version_info is None:
         version_info = format_version_display()
 
-    echo(f"""
-{_BOLD}{_CYAN}╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║   {_YELLOW}██████╗ ██╗      ██████╗  ██████╗██╗  ██╗{_CYAN}                ║
-║   {_YELLOW}██╔══██╗██║     ██╔═══██╗██╔════╝██║ ██╔╝{_CYAN}                ║
-║   {_YELLOW}██████╔╝██║     ██║   ██║██║     █████╔╝{_CYAN}                 ║
-║   {_YELLOW}██╔══██╗██║     ██║   ██║██║     ██╔═██╗{_CYAN}                 ║
-║   {_YELLOW}██████╔╝███████╗╚██████╔╝╚██████╗██║  ██╗{_CYAN}                ║
-║   {_YELLOW}╚═════╝ ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝{_CYAN}                ║
-║                                                              ║
-║   {_DIM}The local AI platform{_RESET}                                      ║
-║   {_DIM}{version_info}{_RESET}                                          ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝{_RESET}
-""")
+    inner = 62  # interior width between the ║ … ║ borders
+
+    _S = ("███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝")
+    _L = ("██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝")
+    _O = (" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ ")
+    _art = [(" " + s + l + o).rstrip() for s, l, o in zip(_S, _L, _O)]
+    _pad = max(0, (inner - max(len(a) for a in _art)) // 2)
+    art = tuple(" " * _pad + a for a in _art)
+
+    def _fit(text: str, indent: str = "   ") -> str:
+        avail = inner - len(indent)
+        return indent + (text if len(text) <= avail else text[:avail])
+
+    def _row(text: str = "", color: str = "") -> str:
+        padded = text.ljust(inner)
+        if color:
+            padded = color + padded + _RESET + _CYAN
+        return "║" + padded + "║"
+
+    lines = ["╔" + "═" * inner + "╗", _row()]
+    lines += [_row(a, _YELLOW) for a in art]
+    lines += [
+        _row(),
+        _row(_fit("The local AI platform"), _DIM),
+        _row(_fit(version_info), _DIM),
+        _row(),
+        "╚" + "═" * inner + "╝",
+    ]
+    echo("\n" + _BOLD + _CYAN + "\n".join(lines) + _RESET)
 
 
 def show_server_status(host="localhost", port=8000):
