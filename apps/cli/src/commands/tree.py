@@ -3,9 +3,14 @@
 `sloughgpt tree` is the CLI's answer to the incident in `core/tree.py`'s
 docstring: the launcher is tree-bound, so whatever it points at is the code
 being run, and that is invisible from the command line. This command makes it
-visible (`--resolve` for scripts, `--check`/`--list` for humans) and switchable
-(`--set latest`, `--set PATH`) behind the checks that stop it from stealing a
-checkout another session owns.
+visible (`--resolve` for scripts, the default check / `--list` for humans) and
+switchable (`--set latest`, `--set PATH`) behind the checks that stop it from
+stealing a checkout another session owns.
+
+The default check also answers the 2026-11-27 question — *is this worktree
+older than its own HEAD?* — because a rolled-back tree looks merely "dirty"
+and a commit there silently reverts landed work. `--list` deliberately skips
+that walk: it costs up to `ROLLBACK_WINDOW` git calls per worktree.
 """
 
 from pathlib import Path
@@ -28,6 +33,10 @@ def _print_check(info: tree_mod.TreeInfo) -> None:
     owner = tree_mod.active_claims().get(info.path)
     if owner:
         log.status("Claimed", owner, "warn")
+    rollback = info.rollback_reason()
+    if rollback:
+        log.warning(rollback)
+        log.info("Back up first, then: git restore --source=HEAD --worktree -- .")
     reason = info.stale_reason()
     if reason:
         log.warning(reason)
@@ -100,4 +109,4 @@ def cmd_tree(args):
         _print_list()
         return
 
-    _print_check(tree_mod.tree_info(tree_mod.resolve_tree(), dirty=True))
+    _print_check(tree_mod.tree_info(tree_mod.resolve_tree(), dirty=True, rollback=True))

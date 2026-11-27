@@ -156,6 +156,98 @@ class TestTreeInfo:
         assert tree.tree_info(root, dirty=True).dirty is True
 
 
+class TestRollbackDetection:
+    """A worktree holding files older than its own HEAD (2026-11-27 incident).
+
+    ``git status`` calls that state "dirty", which is indistinguishable from
+    ordinary editing — and a session that commits there silently reverts landed
+    work. These tests pin the two cheap signals that separate the two.
+    """
+
+    def test_clean_tree_is_not_rolled_back(self, tmp_path):
+        from core import tree
+
+        assert tree.detect_rollback(make_checkout(tmp_path / "clean", commits=3)) is None
+
+    def test_a_normal_edit_is_not_rolled_back(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "edit", commits=3)
+        (root / "file.txt").write_text("brand new work\n", encoding="utf-8")
+        assert tree.detect_rollback(root) is None
+
+    def test_several_normal_edits_are_not_a_rollback(self, tmp_path):
+        """Regression: >1 unrelated edit must not read as "matches an ancestor".
+
+        The first cut appended ``-z`` after ``--``, so git treated it as a path,
+        the output stayed newline-separated, and every dirty file looked stale.
+        """
+        from core import tree
+
+        root = make_checkout(tmp_path / "multi", commits=3)
+        (root / "file.txt").write_text("new file work\n", encoding="utf-8")
+        (root / "cli.py").write_text("# new launcher work\n", encoding="utf-8")
+        assert tree.detect_rollback(root) is None
+
+    def test_content_matching_an_ancestor_is_detected(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "rolled")
+        for i in range(3):
+            (root / "a.txt").write_text(f"a{i}\n", encoding="utf-8")
+            (root / "b.txt").write_text(f"b{i}\n", encoding="utf-8")
+            _git(root, "add", "-A")
+            _git(root, "commit", "-q", "-m", f"c{i}")
+        # HEAD holds a2/b2; put the a0/b0 generation back on disk.
+        (root / "a.txt").write_text("a0\n", encoding="utf-8")
+        (root / "b.txt").write_text("b0\n", encoding="utf-8")
+
+        found = tree.detect_rollback(root)
+        assert found is not None
+        assert set(found.stale) == {"a.txt", "b.txt"}
+        assert found.missing == ()
+
+    def test_files_missing_from_disk_are_detected(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "missing", commits=2)
+        (root / "file.txt").unlink()
+        (root / "cli.py").unlink()
+
+        found = tree.detect_rollback(root)
+        assert found is not None
+        assert set(found.missing) == {"cli.py", "file.txt"}
+        assert found.stale == ()
+
+    def test_one_reverted_file_is_ordinary_editing(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "one", commits=2)
+        (root / "file.txt").write_text("0\n", encoding="utf-8")  # == HEAD~1
+        assert tree.detect_rollback(root) is None
+
+    def test_rollback_is_not_computed_unless_asked(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "lazy", commits=2)
+        (root / "file.txt").unlink()
+        (root / "cli.py").unlink()
+        assert tree.tree_info(root, dirty=True).rollback is None
+        assert tree.tree_info(root, dirty=True, rollback=True).rollback is not None
+
+    def test_reason_names_the_counts_and_the_fix(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "explain", commits=2)
+        (root / "file.txt").unlink()
+        (root / "cli.py").unlink()
+        info = tree.tree_info(root, dirty=True, rollback=True)
+
+        reason = info.rollback_reason()
+        assert reason and "2 file(s)" in reason and "missing on disk" in reason
+        assert "rolled back" in tree.summary_line(info)
+
+
 class TestSummaryAndNotice:
     def test_summary_line_says_where_what_and_how_far(self, tmp_path):
         from core import tree

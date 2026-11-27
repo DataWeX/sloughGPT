@@ -17,6 +17,11 @@ Rules, and why:
   tree somebody else may be using.
 * **A branch name is not staleness.** Lane branches are legitimately ahead;
   being *behind* ``origin/main`` is the signal.
+* **Staleness is two questions.** Is ``HEAD`` behind ``origin/main`` (a stale
+  branch), and is the *worktree* older than its own ``HEAD`` (a rolled-back
+  tree)? The second is the 2026-11-27 incident: ``git status`` called it
+  "dirty", indistinguishable from ordinary editing, and a commit there
+  silently reverted landed work.
 
 The counter is exposed as ``sloughgpt tree`` (plus one line on stderr at
 startup), so the honest answer to "which code am I running" is one command,
@@ -34,6 +39,12 @@ from pathlib import Path
 
 GIT_TIMEOUT = 5
 MAIN_BRANCHES = ("main", "master")
+
+#: How far back a stale file may match an ancestor before it counts as "new work".
+ROLLBACK_WINDOW = 10
+
+#: Below this many signals a dirty tree is ordinary editing, not a rollback.
+ROLLBACK_MIN_SIGNALS = 2
 
 #: Printed at most once per process — ``main()`` and the welcome banner both ask.
 _notice_cache: dict[str, str | None] = {}
@@ -117,6 +128,35 @@ def web_tree_id(root: Path | str | None = None) -> str:
 
 
 @dataclass(frozen=True)
+class Rollback:
+    """A worktree holding tracked files older than its own ``HEAD``.
+
+    The incident (2026-11-27, twice in one day): the primary checkout's tree was
+    restored from an old snapshot while ``HEAD`` stayed on main's ancestry.
+    ``git status`` called that "dirty", so nothing separated it from ordinary
+    editing — and a session that committed there silently reverted landed work
+    (the tree resolver, the web-readiness fix, avion's environment model).
+    """
+
+    #: Modified paths whose content equals some ``HEAD~k``.
+    stale: tuple[str, ...]
+    #: Paths in ``HEAD`` that are absent on disk.
+    missing: tuple[str, ...]
+
+    @property
+    def count(self) -> int:
+        return len(self.stale) + len(self.missing)
+
+    def reason(self, name: str) -> str:
+        bits: list[str] = []
+        if self.missing:
+            bits.append(f"{len(self.missing)} file(s) in HEAD are missing on disk")
+        if self.stale:
+            bits.append(f"{len(self.stale)} file(s) match an older commit")
+        return f"{name} looks rolled back behind its own HEAD — " + " and ".join(bits)
+
+
+@dataclass(frozen=True)
 class TreeInfo:
     """What a checkout is, right now, from local refs."""
 
@@ -128,6 +168,9 @@ class TreeInfo:
     #: ``None`` when not checked — the startup path skips ``git status``
     #: (96 ms on this repo) because it only needs the ref arithmetic.
     dirty: bool | None = None
+    #: ``None`` unless ``rollback=True`` was requested: detection walks up to
+    #: ``ROLLBACK_WINDOW`` ancestors, which is too slow for every launch.
+    rollback: Rollback | None = None
 
     @property
     def name(self) -> str:
@@ -154,9 +197,19 @@ class TreeInfo:
             return None
         return f"{self.name} is {self.behind} commit(s) behind origin/main ({self.where()})"
 
+    def rollback_reason(self) -> str | None:
+        """One line when the worktree is older than ``HEAD``, or ``None``."""
+        return self.rollback.reason(self.name) if self.rollback else None
 
-def tree_info(path: Path | str, *, dirty: bool = False) -> TreeInfo:
-    """Describe ``path`` using local refs only — never fetches."""
+
+def tree_info(path: Path | str, *, dirty: bool = False, rollback: bool = False) -> TreeInfo:
+    """Describe ``path`` using local refs only — never fetches.
+
+    ``rollback=True`` additionally checks whether the worktree is older than its
+    own ``HEAD`` (:func:`detect_rollback`). It is opt-in because it walks up to
+    ``ROLLBACK_WINDOW`` ancestors — fine for ``tree --check``, too slow for a
+    launch.
+    """
     path = Path(path).expanduser()
     # Two calls on purpose: `rev-parse --short --abbrev-ref HEAD` prints only
     # the branch, so a combined call silently reports the branch as the hash.
@@ -171,9 +224,80 @@ def tree_info(path: Path | str, *, dirty: bool = False) -> TreeInfo:
             behind, ahead = _count(parts[0]), _count(parts[1])
 
     is_dirty = bool(_git(path, "status", "--porcelain")) if dirty else None
+    detected = detect_rollback(path) if rollback else None
     return TreeInfo(
-        path=path.resolve(), branch=branch, head=head, behind=behind, ahead=ahead, dirty=is_dirty
+        path=path.resolve(),
+        branch=branch,
+        head=head,
+        behind=behind,
+        ahead=ahead,
+        dirty=is_dirty,
+        rollback=detected,
     )
+
+
+def _z_paths(tree: Path, *args: str) -> list[str] | None:
+    """``git <args>`` as NUL-separated paths; ``None`` when git or the command fails.
+
+    ``-z`` is inserted *before* ``--`` when a pathspec is present: after it, git
+    reads ``-z`` as another path and the output stays newline-separated.
+    """
+    argv = list(args)
+    try:
+        argv.insert(argv.index("--"), "-z")
+    except ValueError:
+        argv.append("-z")
+    out = _git(tree, *argv)
+    if out is None:
+        return None
+    return [p for p in out.split("\0") if p]
+
+
+def detect_rollback(
+    path: Path | str,
+    *,
+    window: int = ROLLBACK_WINDOW,
+    min_signals: int = ROLLBACK_MIN_SIGNALS,
+) -> Rollback | None:
+    """Does this worktree hold files older than its own ``HEAD``?
+
+    Two cheap signals, no per-file history walk:
+
+    * **missing** — tracked in ``HEAD``, absent on disk (``git ls-files --deleted``);
+    * **stale** — modified, and identical to some ``HEAD~k`` (``k <= window``).
+
+    Fewer than ``min_signals`` of them is ordinary editing: reverting one file
+    by hand is normal, reverting twenty at once is the 2026-11-27 incident.
+    """
+    path = Path(path).expanduser()
+    missing = _z_paths(path, "ls-files", "--deleted")
+    changed = _z_paths(path, "diff", "--name-only", "HEAD")
+    if missing is None or changed is None:
+        return None
+    missing_set = set(missing)
+    modified = [p for p in changed if p not in missing_set]
+    stale = _stale_paths(path, modified, window)
+    if len(stale) + len(missing) < min_signals:
+        return None
+    return Rollback(stale=tuple(sorted(stale)), missing=tuple(sorted(missing)))
+
+
+def _stale_paths(tree: Path, paths: list[str], window: int) -> list[str]:
+    """Paths whose content equals some ``HEAD~k`` for ``k`` in ``1..window``."""
+    stale: list[str] = []
+    remaining = list(paths)
+    for k in range(1, window + 1):
+        if not remaining:
+            break
+        changed = _z_paths(tree, "diff", "--name-only", f"HEAD~{k}", "--", *remaining)
+        if changed is None:
+            break  # no such ancestor (shallow history or first commit)
+        changed_set = set(changed)
+        for p in list(remaining):
+            if p not in changed_set:
+                stale.append(p)
+                remaining.remove(p)
+    return stale
 
 
 @dataclass(frozen=True)
@@ -281,6 +405,8 @@ def summary_line(info: TreeInfo, *, path: bool = True) -> str:
         trend += f", {info.ahead} ahead"
     if info.dirty:
         trend += ", dirty"
+    if info.rollback:
+        trend += f", rolled back ({info.rollback.count} files)"
     where = str(info.path) if path else info.name
     return f"{where}  {info.where()}  ({trend})"
 
