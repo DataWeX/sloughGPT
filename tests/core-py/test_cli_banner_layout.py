@@ -36,14 +36,10 @@ BOX_CHARS = "╔╗╚╝║═┌┐└┘│─"
 #: output is what makes "SLO" (or "TLO"/"BLOCH") a test failure rather than a
 #: matter of taste. ``#`` is a filled block; rows are trailing-stripped.
 EXPECTED_ART = (
-    "      █                       █      ███  ████  █████",
-    "      █                       █     █   █ █   █   █",
-    " ███  █      ███  █   █  ███  ████  █     █   █   █",
-    "█     █     █   █ █   █ █   █ █   █ █ ███ ████    █",
-    " ███  █     █   █ █   █ █   █ █   █ █   █ █       █",
-    "    █ █     █   █ █   █  ███  █   █ █   █ █       █",
-    "████  ███    ███   ███      █ █   █  ███  █       █",
-    "                        ████",
+    "      █                       █     ▄▀▀▀▄ █▀▀▀▄ ▀▀█▀▀",
+    "▄▀▀▀  █     ▄▀▀▀▄ █   █ ▄▀▀▀▄ █▀▀▀▄ █ ▄▄▄ █▄▄▄▀   █",
+    " ▀▀▀▄ █     █   █ █   █ ▀▄▄▄▀ █   █ █   █ █       █",
+    "▀▀▀▀  ▀▀▀    ▀▀▀   ▀▀▀  ▄▄▄▄▀ ▀   ▀  ▀▀▀  ▀       ▀",
 )
 
 
@@ -98,6 +94,14 @@ class TestWordmark:
 
     def test_art_fits_the_interactive_box_interior(self):
         assert max(len(r) for r in tui.art_rows(62)) <= 62
+
+    def test_art_packs_two_pixel_rows_per_terminal_row(self):
+        """Terminal cells are ~1:2, so one character per pixel doubles the
+        height and the letters break into slivers (the 'unreadable' report)."""
+        assert all(set(row) <= set(" ▀▄█") for row in tui.WORDMARK_ART), (
+            "art must be drawn with half/full blocks"
+        )
+        assert len(tui.WORDMARK_ART) * 2 == tui._GLYPH_ROWS
 
 
 class TestHelpHeaderBanner:

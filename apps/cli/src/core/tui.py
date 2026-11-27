@@ -251,22 +251,37 @@ _FONT: dict[str, tuple[str, ...]] = {
 
 
 _GLYPH_ROWS = 8
-_FILLED = "█"
+_UPPER, _LOWER, _FULL = "▀", "▄", "█"
 
 
 def _compose(word: str) -> tuple[str, ...]:
-    """Lay ``word`` out in the block font, one glyph per column group.
+    """Lay ``word`` out in the block font, two pixel rows per terminal row.
 
-    The font table spells filled cells as ``#`` so the shapes stay legible in
-    source; the terminal gets the block character.
+    Terminal cells are about twice as tall as they are wide, so drawing one
+    character per pixel stretches the wordmark to twice its intended height —
+    letters become disconnected slivers ("some fonts or something unreadable").
+    Half-block glyphs (▀ ▄ █) pack two pixel rows into each cell, restoring the
+    proportions the font was drawn at. The font table spells filled cells as
+    ``#`` so the shapes stay legible in source.
     """
-    return tuple(
-        " ".join(_FONT[ch][row] for ch in word).rstrip().replace("#", _FILLED)
+    grid = [
+        [cell == "#" for cell in " ".join(_FONT[ch][row] for ch in word)]
         for row in range(_GLYPH_ROWS)
-    )
+    ]
+    out: list[str] = []
+    for row in range(0, _GLYPH_ROWS, 2):
+        top = grid[row]
+        bottom = grid[row + 1] if row + 1 < _GLYPH_ROWS else [False] * len(top)
+        out.append(
+            "".join(
+                _FULL if t and b else _UPPER if t else _LOWER if b else " "
+                for t, b in zip(top, bottom)
+            ).rstrip()
+        )
+    return tuple(out)
 
 
-#: The wordmark art (eight rows, trailing whitespace trimmed).
+#: The wordmark art (four rows, trailing whitespace trimmed).
 WORDMARK_ART: tuple[str, ...] = _compose(WORDMARK)
 
 #: One-line fallback used when the box is narrower than the wordmark.
