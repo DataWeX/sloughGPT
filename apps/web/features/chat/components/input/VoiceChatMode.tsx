@@ -13,9 +13,15 @@ import { VoiceTranscript } from './VoiceTranscript'
 interface VoiceChatModeProps {
   onMessage: (text: string) => void
   onClose: () => void
+  /**
+   * Speaker preset of the active agent. Empty/absent = engine default, and
+   * the TTS request body then omits `voice` entirely (byte-identical to
+   * pre-agent-voice traffic).
+   */
+  voice?: string
 }
 
-export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
+export function VoiceChatMode({ onMessage, onClose, voice }: VoiceChatModeProps) {
   const {
     state,
     interimText,
@@ -31,7 +37,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
     updateSettings,
     handleToggle,
     startListening,
-  } = useVoiceChat({ onMessage })
+  } = useVoiceChat({ onMessage, voice })
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showTranscript, setShowTranscript] = useState(false)
@@ -148,31 +154,31 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               on the orb's own rAF loop), so this tree only re-renders on
               discrete state changes. */}
           <VoiceOrb state={state} micLevel={micLevel} levelRef={micLevelRef}>
-          <button
-            type="button"
-            onClick={handleToggle}
-            disabled={isProcessing}
-            className={cn(
-              'relative z-10 w-full h-full rounded-full flex items-center justify-center transition-all duration-200',
-              'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              'active:scale-[0.98]',
-              isListening
-                ? 'bg-primary text-primary-foreground hover:opacity-90'
-                : isProcessing
-                  ? 'bg-muted text-muted-foreground cursor-wait'
-                  : 'bg-primary/10 text-primary hover:bg-primary/20',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-            )}
-            aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
-          >
-            {isProcessing ? (
-              <Spinner className="h-10 w-10" />
-            ) : isSpeaking ? (
-              <IconSpeaker className="h-12 w-12" />
-            ) : (
-              <IconMicFilled className="h-12 w-12" />
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={handleToggle}
+              disabled={isProcessing}
+              className={cn(
+                'relative z-10 w-full h-full rounded-full flex items-center justify-center transition-all duration-200',
+                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                'active:scale-[0.98]',
+                isListening
+                  ? 'bg-primary text-primary-foreground hover:opacity-90'
+                  : isProcessing
+                    ? 'bg-muted text-muted-foreground cursor-wait'
+                    : 'bg-primary/10 text-primary hover:bg-primary/20',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              )}
+              aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
+            >
+              {isProcessing ? (
+                <Spinner className="h-10 w-10" />
+              ) : isSpeaking ? (
+                <IconSpeaker className="h-12 w-12" />
+              ) : (
+                <IconMicFilled className="h-12 w-12" />
+              )}
+            </button>
           </VoiceOrb>
         </div>
 

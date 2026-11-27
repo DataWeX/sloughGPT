@@ -13,6 +13,33 @@ export const AVAILABLE_TOOLS = [
   'citation',
 ]
 
+/**
+ * Speaker presets offered on the agent create/edit forms.
+ *
+ * Phase 1 is passthrough: the TTS engine records the id and ignores it — the
+ * distilled checkpoint has no speaker axis, so audio is byte-identical
+ * whichever preset is chosen. `''` is the engine default and must stay first.
+ *
+ * Phase 2 turns these into trained speaker embeddings, so the ids are a
+ * contract: rename or reorder freely (they are display metadata), but never
+ * change what an existing id means once agents are stored with it.
+ */
+export const VOICE_PRESETS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Default' },
+  { value: 'alloy', label: 'Alloy' },
+  { value: 'echo', label: 'Echo' },
+  { value: 'fable', label: 'Fable' },
+  { value: 'onyx', label: 'Onyx' },
+  { value: 'nova', label: 'Nova' },
+  { value: 'shimmer', label: 'Shimmer' },
+]
+
+/** Human label for a stored voice id, falling back to the raw id. */
+export function voiceLabel(voice: string | undefined): string {
+  if (!voice) return 'Default'
+  return VOICE_PRESETS.find((p) => p.value === voice)?.label ?? voice
+}
+
 export const AGENT_TEMPLATES = [
   {
     name: 'Researcher',

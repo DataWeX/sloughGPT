@@ -4,7 +4,7 @@
  * Agent roster: search, bulk actions, inline edit and per-agent execute.
  */
 import type { AgentsWorkbench } from './useAgentsWorkbench'
-import { AVAILABLE_TOOLS } from './agents-constants'
+import { AVAILABLE_TOOLS, VOICE_PRESETS } from './agents-constants'
 import {
   Button,
   Card,
@@ -34,6 +34,8 @@ export function AgentsListCard({
   setEditInstructions,
   editTools,
   setEditTools,
+  editVoice,
+  setEditVoice,
   execAgentId,
   setExecAgentId,
   execPrompt,
@@ -75,6 +77,8 @@ export function AgentsListCard({
   setEditInstructions: AgentsWorkbench['setEditInstructions']
   editTools: AgentsWorkbench['editTools']
   setEditTools: AgentsWorkbench['setEditTools']
+  editVoice: AgentsWorkbench['editVoice']
+  setEditVoice: AgentsWorkbench['setEditVoice']
   execAgentId: AgentsWorkbench['execAgentId']
   setExecAgentId: AgentsWorkbench['setExecAgentId']
   execPrompt: AgentsWorkbench['execPrompt']
@@ -279,6 +283,29 @@ export function AgentsListCard({
                             {t.replace(/_/g, ' ')}
                           </button>
                         ))}
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="edit-agent-voice"
+                          className="block text-[11px] font-medium text-muted-foreground mb-1"
+                        >
+                          Voice
+                        </label>
+                        <select
+                          id="edit-agent-voice"
+                          value={editVoice}
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                            setEditVoice(e.target.value)
+                          }
+                          aria-label="Agent voice"
+                          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {VOICE_PRESETS.map((p) => (
+                            <option key={p.value} value={p.value}>
+                              {p.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="flex gap-2">
                         <Button

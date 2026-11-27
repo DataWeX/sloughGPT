@@ -4,7 +4,7 @@
  * Creator card: the new-agent form with template shortcuts and validation.
  */
 import type { AgentsWorkbench } from './useAgentsWorkbench'
-import { AGENT_TEMPLATES, AVAILABLE_TOOLS } from './agents-constants'
+import { AGENT_TEMPLATES, AVAILABLE_TOOLS, VOICE_PRESETS } from './agents-constants'
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, cn } from '@sloughgpt/strui'
 import { IconPlus } from '@/components/icons/NavIcons'
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
@@ -18,6 +18,8 @@ export function NewAgentCard({
   setNewInstructions,
   newTools,
   setNewTools,
+  newVoice,
+  setNewVoice,
   creating,
   createErrors,
   toggleTool,
@@ -32,6 +34,8 @@ export function NewAgentCard({
   setNewInstructions: AgentsWorkbench['setNewInstructions']
   newTools: AgentsWorkbench['newTools']
   setNewTools: AgentsWorkbench['setNewTools']
+  newVoice: AgentsWorkbench['newVoice']
+  setNewVoice: AgentsWorkbench['setNewVoice']
   creating: AgentsWorkbench['creating']
   createErrors: AgentsWorkbench['createErrors']
   toggleTool: AgentsWorkbench['toggleTool']
@@ -114,6 +118,30 @@ export function NewAgentCard({
                 {t.replace(/_/g, ' ')}
               </button>
             ))}
+          </div>
+          <div>
+            <label
+              htmlFor="create-agent-voice"
+              className="block text-xs font-medium text-muted-foreground mb-1.5"
+            >
+              Voice
+            </label>
+            <select
+              id="create-agent-voice"
+              value={newVoice}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewVoice(e.target.value)}
+              aria-describedby="create-agent-voice-hint"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {VOICE_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <p id="create-agent-voice-hint" className="text-[11px] text-muted-foreground mt-1">
+              Passthrough for now — audio is identical until speaker training lands.
+            </p>
           </div>
           <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
             <IconPlus className="h-4 w-4 mr-1" />

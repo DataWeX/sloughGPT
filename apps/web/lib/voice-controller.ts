@@ -29,8 +29,16 @@ class VoiceController {
     return apiGet<VoiceStatus>('/voice/status')
   }
 
-  async tts(text: string): Promise<TTSResult> {
-    return apiPost('/voice/tts', { text })
+  /**
+   * Server-side TTS.
+   *
+   * `voice` is the agent's speaker preset — passed through to
+   * `POST /voice/tts {text, voice}`. Omitted entirely when empty so the
+   * request body stays byte-identical to pre-agent-voice traffic (the
+   * engine ignores it today; phase 2 gives it meaning).
+   */
+  async tts(text: string, voice?: string): Promise<TTSResult> {
+    return apiPost('/voice/tts', voice ? { text, voice } : { text })
   }
 
   /**

@@ -569,6 +569,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
 
       {ui.voiceMode && (
         <VoiceChatMode
+          voice={controller.agents.currentAgent?.voice}
           onMessage={async (text) => {
             chat.setInput(text)
             await chat.sendMessage(text)

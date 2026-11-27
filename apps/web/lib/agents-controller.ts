@@ -11,6 +11,13 @@ export interface Agent {
   instructions: string
   tools: string[]
   avatar: string
+  /**
+   * Speaker preset this agent speaks with. Phase 1 is passthrough only — the
+   * TTS engine records it and ignores it (no speaker axis in the distilled
+   * checkpoint), so output is identical whether or not it is set. Phase 2
+   * turns it into a trained speaker embedding. `''` = engine default.
+   */
+  voice?: string
 }
 
 export interface OrchestrateTask {
@@ -39,7 +46,13 @@ export interface AgentRun {
 
 export interface OrchestrateCallbacks {
   onPlan?: (tasks: OrchestrateTask[]) => void
-  onTaskStatus?: (taskId: string, status: string, agent: string, description: string, resultPreview?: string) => void
+  onTaskStatus?: (
+    taskId: string,
+    status: string,
+    agent: string,
+    description: string,
+    resultPreview?: string,
+  ) => void
   onTaskComplete?: (taskId: string, result: string) => void
   onLevelChange?: (level: number, totalLevels: number, taskIds: string[]) => void
   onCompose?: () => void
@@ -52,11 +65,28 @@ export const agentsController = {
     return apiGet<Agent[]>('/agents')
   },
 
-  async create(data: { name: string; description?: string; instructions?: string; tools?: string[]; avatar?: string }): Promise<Agent> {
+  async create(data: {
+    name: string
+    description?: string
+    instructions?: string
+    tools?: string[]
+    avatar?: string
+    voice?: string
+  }): Promise<Agent> {
     return apiPost<Agent>('/agents', data)
   },
 
-  async update(id: string, data: { name?: string; description?: string; instructions?: string; tools?: string[]; avatar?: string }): Promise<Agent> {
+  async update(
+    id: string,
+    data: {
+      name?: string
+      description?: string
+      instructions?: string
+      tools?: string[]
+      avatar?: string
+      voice?: string
+    },
+  ): Promise<Agent> {
     return apiPut<Agent>(`/agents/${encodeURIComponent(id)}`, data)
   },
 
@@ -64,8 +94,15 @@ export const agentsController = {
     await apiDelete(`/agents/${encodeURIComponent(id)}`)
   },
 
-  async execute(id: string, request: string, sessionId?: string): Promise<{ response: string; tools_used: Array<{ tool: string; result: unknown }> }> {
-    return apiPost<{ response: string; tools_used: Array<{ tool: string; result: unknown }> }>(`/agents/${encodeURIComponent(id)}/execute`, { request, session_id: sessionId || '' })
+  async execute(
+    id: string,
+    request: string,
+    sessionId?: string,
+  ): Promise<{ response: string; tools_used: Array<{ tool: string; result: unknown }> }> {
+    return apiPost<{ response: string; tools_used: Array<{ tool: string; result: unknown }> }>(
+      `/agents/${encodeURIComponent(id)}/execute`,
+      { request, session_id: sessionId || '' },
+    )
   },
 
   async listRuns(limit = 20): Promise<{ runs: AgentRun[]; count: number }> {
@@ -76,11 +113,22 @@ export const agentsController = {
     return apiGet<AgentRun>(`/agents/runs/${encodeURIComponent(runId)}`)
   },
 
-  async orchestrate(goal: string, context: string, callbacks: OrchestrateCallbacks, signal?: AbortSignal, agentIds?: string[]): Promise<void> {
+  async orchestrate(
+    goal: string,
+    context: string,
+    callbacks: OrchestrateCallbacks,
+    signal?: AbortSignal,
+    agentIds?: string[],
+  ): Promise<void> {
     try {
-      for await (const event of streamSSE('/agents/orchestrate', { body: { goal, context, agent_ids: agentIds ?? [] }, signal })) {
+      for await (const event of streamSSE('/agents/orchestrate', {
+        body: { goal, context, agent_ids: agentIds ?? [] },
+        signal,
+      })) {
         if (event.status === 'error') {
-          callbacks.onError(event.message || (event.data?.error as string) || 'Could not orchestration')
+          callbacks.onError(
+            event.message || (event.data?.error as string) || 'Could not orchestration',
+          )
           return
         }
 
@@ -94,7 +142,11 @@ export const agentsController = {
 
         if (phase === 'EXECUTE' && event.status === 'working') {
           if (d.level !== undefined) {
-            callbacks.onLevelChange?.(d.level as number, (d.levels as number) ?? 1, (d.tasks as string[]) ?? [])
+            callbacks.onLevelChange?.(
+              d.level as number,
+              (d.levels as number) ?? 1,
+              (d.tasks as string[]) ?? [],
+            )
           }
           continue
         }

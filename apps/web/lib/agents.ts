@@ -12,6 +12,8 @@ export interface AgentDef {
   instructions: string
   icon?: string
   capabilities?: string[]
+  /** Speaker preset; passthrough to TTS (see agents-controller Agent.voice). */
+  voice?: string
 }
 
 export const AGENTS: Record<string, AgentDef> = {
@@ -27,7 +29,8 @@ export const AGENTS: Record<string, AgentDef> = {
     id: 'coder',
     name: 'Coder',
     description: 'Expert programmer for code review and development',
-    instructions: 'You are an expert programmer. Write clean, well-documented code. Explain your reasoning. Follow best practices for the language.',
+    instructions:
+      'You are an expert programmer. Write clean, well-documented code. Explain your reasoning. Follow best practices for the language.',
     icon: '💻',
     capabilities: ['code-generation', 'debugging', 'code-review', 'architecture'],
   },
@@ -35,7 +38,8 @@ export const AGENTS: Record<string, AgentDef> = {
     id: 'writer',
     name: 'Writer',
     description: 'Creative writing and content creation',
-    instructions: 'You are a creative writing assistant. Help with storytelling, editing, and content creation. Be imaginative and engaging.',
+    instructions:
+      'You are a creative writing assistant. Help with storytelling, editing, and content creation. Be imaginative and engaging.',
     icon: '✍️',
     capabilities: ['creative-writing', 'editing', 'storytelling', 'content-strategy'],
   },
@@ -43,7 +47,8 @@ export const AGENTS: Record<string, AgentDef> = {
     id: 'researcher',
     name: 'Researcher',
     description: 'Thorough analysis and fact-based responses',
-    instructions: 'You are a research assistant. Be thorough, cite sources when available, distinguish facts from opinions, and acknowledge uncertainty.',
+    instructions:
+      'You are a research assistant. Be thorough, cite sources when available, distinguish facts from opinions, and acknowledge uncertainty.',
     icon: '🔬',
     capabilities: ['analysis', 'fact-checking', 'summarization', 'citation'],
   },
@@ -51,7 +56,8 @@ export const AGENTS: Record<string, AgentDef> = {
     id: 'analyst',
     name: 'Analyst',
     description: 'Data analysis and structured thinking',
-    instructions: 'You are a data analyst. Break down complex problems, use structured reasoning, and present findings clearly with supporting evidence.',
+    instructions:
+      'You are a data analyst. Break down complex problems, use structured reasoning, and present findings clearly with supporting evidence.',
     icon: '📊',
     capabilities: ['data-analysis', 'structured-reasoning', 'visualization', 'reporting'],
   },
