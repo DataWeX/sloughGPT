@@ -204,6 +204,46 @@ jobs:
           "cypress run"
         if: steps.fe.outputs.web == 'true'
         working-directory: apps/web
+      # Fail-suppression gate (card 20261125_130530). Specs under
+      # cypress/e2e/expected-failure/ are DESIGNED to fail; excludeSpecPattern
+      # keeps them out of the `cypress run` above. Cypress 14.5.4's cy:fail
+      # path bails on `rets.length`, not on the returned value — emitMap
+      # yields one entry per listener — so merely REGISTERING
+      # Cypress.on('fail') swallows EVERY failure in the suite. It did:
+      # 31 real failures reported green for weeks. This step inverts the exit
+      # code, so it is GREEN only when cypress exits NON-zero. If the controls
+      # ever pass, suppression has returned and this job goes red.
+      - name: Fail-suppression gate (must FAIL)
+        if: steps.fe.outputs.web == 'true'
+        working-directory: apps/web
+        shell: bash
+        run: |
+          # Cypress 14.5.4's cy:fail path bails on `rets.length`, not on the
+          # returned value, and emitMap yields one entry per listener — so
+          # merely REGISTERING Cypress.on('fail') swallows EVERY failure. It
+          # did: 31 real failures reported green for weeks. The specs under
+          # cypress/e2e/gate/ are designed to fail; this step is GREEN only
+          # when cypress exits NON-zero (card 20261125_130530).
+          set +e
+          npm exec -- start-server-and-test "./node_modules/.bin/vite" http://localhost:5173 \
+            "cypress run --config-file cypress.gate.config.ts" > "$RUNNER_TEMP/gate.log" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/gate.log"
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::Expected-failure controls PASSED - failure suppression has returned. See card 20261125_130530 (cy:fail bails on rets.length, so registering any 'fail' listener swallows every failure)."
+            exit 1
+          fi
+          # A non-zero exit alone is not proof: a spec that is moved or
+          # excluded also makes cypress exit non-zero ("no spec files were
+          # found"). Require each control to have surfaced its own failure.
+          for sentinel in PLAIN_FAILURE_SENTINEL ASSERTION_FAILURE_SENTINEL definitely-not-here-xyz; do
+            if ! grep -q "$sentinel" "$RUNNER_TEMP/gate.log"; then
+              echo "::error::Expected-failure control '$sentinel' did not run - the gate is not measuring what it claims (spec excluded or moved?). See card 20261125_130530."
+              exit 1
+            fi
+          done
+          echo "OK: all three controls surfaced their failure (cypress exit $rc)."
 
   python-checks:
     name: Python

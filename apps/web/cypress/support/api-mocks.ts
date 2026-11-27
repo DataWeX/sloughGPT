@@ -7,6 +7,12 @@ import { apiBase } from './api-base'
 
 const api = apiBase
 
+// The API-vs-navigation kind-rule lives in ./api-kind.ts (pure module — this
+// file has module-level side effects, so it can't be imported from a spec).
+// Any GET intercept whose path can also be a page route must go through
+// apiGet(), or cy.visit() to that route gets JSON instead of the SPA shell.
+import { apiGet } from './api-kind'
+
 Cypress.Commands.add('mockHealth', (overrides = {}) => {
   cy.intercept('GET', `${api}/health`, {
     statusCode: 200,
@@ -20,17 +26,11 @@ Cypress.Commands.add('mockHealth', (overrides = {}) => {
 })
 
 Cypress.Commands.add('mockModels', () => {
-  cy.intercept('GET', `${api}/models`, {
-    statusCode: 200,
-    body: { models: [] },
-  }).as('models')
+  apiGet(`${api}/models`, 200, { models: [] }).as('models')
 })
 
 Cypress.Commands.add('mockDatasets', () => {
-  cy.intercept('GET', `${api}/datasets`, {
-    statusCode: 200,
-    body: { datasets: [] },
-  }).as('datasets')
+  apiGet(`${api}/datasets`, 200, { datasets: [] }).as('datasets')
 })
 
 Cypress.Commands.add('mockSystem', () => {
@@ -125,10 +125,7 @@ Cypress.Commands.add('mockKnowledge', (items: string[] = []) => {
     score: 1,
     created_at: new Date().toISOString(),
   }))
-  cy.intercept('GET', `${api}/knowledge`, {
-    statusCode: 200,
-    body: knowledgeItems,
-  }).as('mockKnowledgeList')
+  apiGet(`${api}/knowledge`, 200, knowledgeItems).as('mockKnowledgeList')
   cy.intercept('POST', `${api}/knowledge`, {
     statusCode: 200,
     body: {
@@ -169,12 +166,27 @@ Cypress.Commands.add('mockApiFallback', () => {
   // handler so matching precedence between interceptors never comes into it.
   const kvStore: Record<string, unknown> = {}
   cy.intercept({ url: `${api}/**` }, (req) => {
-    // Document navigations (cy.visit's initial HTML request) must reach the
-    // dev server: with apiBase '' the /** pattern matches them too, and a
-    // JSON {} reply to the document kills the page before the app boots —
-    // the spec's command queue then dies and the test "passes" in <200ms
-    // without running a single assertion (zombie green, card 20261123_073036).
-    // Same kind-rule the gateway/vite relay use: Accept decides, not path.
+    // Kind-rule: decide by WHAT the request is, not where it points.
+    //
+    // With apiBase '' the root-relative /** pattern matches the document,
+    // its module scripts, styles and images as well as the API. Replying
+    // JSON {} to any of them is fatal-but-silent — {} is VALID empty JS,
+    // so the entry never executes: rootChildren 0, no console output, no
+    // errors anywhere (zombie green, card 20261123_073036; sequence note
+    // on card 20261125_130530: this must accompany the fail-suppression
+    // fix or every catch-all spec fails for real the moment suppression
+    // is removed).
+    //
+    // sec-fetch-dest is the browser's own classification: 'empty' for
+    // fetch()/XHR (the only true API traffic), 'script'/'style'/'image'/
+    // 'font'/'document' for everything else. Only 'empty' gets mocked.
+    const dest = req.headers['sec-fetch-dest']
+    if (typeof dest === 'string' && dest !== '' && dest !== 'empty') {
+      req.continue()
+      return
+    }
+    // Belt-and-braces for the document itself: same kind-rule the
+    // gateway/vite relay use — Accept decides, not path.
     const accept = req.headers['accept']
     if (typeof accept === 'string' && accept.includes('text/html')) {
       req.continue()
@@ -405,7 +417,7 @@ Cypress.Commands.add('mockAgents', (overrides: any[] = []) => {
     },
   ]
   const agents = overrides.length > 0 ? overrides : defaultAgents
-  cy.intercept('GET', `${api}/agents`, { statusCode: 200, body: agents }).as('agentsList')
+  apiGet(`${api}/agents`, 200, agents).as('agentsList')
   cy.intercept('POST', `${api}/agents`, { statusCode: 201, body: agents[0] }).as('agentsCreate')
   cy.intercept('PUT', `${api}/agents/*`, { statusCode: 200, body: agents[0] }).as('agentsUpdate')
   cy.intercept('DELETE', `${api}/agents/*`, { statusCode: 200, body: { status: 'deleted' } }).as(
