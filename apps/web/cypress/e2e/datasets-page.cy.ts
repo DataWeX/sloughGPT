@@ -1,4 +1,5 @@
 import { apiBase } from '../support/api-base'
+import { apiGet } from '../support/api-kind'
 /**
  * Datasets page - import, list, export, delete datasets
  */
@@ -189,28 +190,27 @@ describe('Dataset Import Modal - layout', () => {
 describe('Dataset cards', () => {
   beforeEach(() => {
     cy.mockAll()
-    cy.intercept('GET', `${API}/datasets`, {
-      statusCode: 200,
-      body: {
-        datasets: [
-          {
-            id: 'ds1',
-            name: 'shakespeare',
-            source: 'local',
-            size: 1048576,
-            samples: 500,
-            created_at: '2026-08-01T00:00:00Z',
-          },
-          {
-            id: 'ds2',
-            name: 'tinyshakespeare',
-            source: 'huggingface',
-            size: 2097152,
-            samples: 1200,
-            created_at: '2026-08-02T00:00:00Z',
-          },
-        ],
-      },
+    // apiGet: this path is also the /datasets page route, and cy.visit below
+    // must receive the SPA shell, not this JSON (kind-rule in ../support/api-kind).
+    apiGet(`${API}/datasets`, 200, {
+      datasets: [
+        {
+          id: 'ds1',
+          name: 'shakespeare',
+          source: 'local',
+          size: 1048576,
+          samples: 500,
+          created_at: '2026-08-01T00:00:00Z',
+        },
+        {
+          id: 'ds2',
+          name: 'tinyshakespeare',
+          source: 'huggingface',
+          size: 2097152,
+          samples: 1200,
+          created_at: '2026-08-02T00:00:00Z',
+        },
+      ],
     }).as('datasetsList')
     cy.intercept('GET', `${API}/datasets/*/versions`, {
       statusCode: 200,
