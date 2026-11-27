@@ -22,6 +22,14 @@ const envDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd()
 export default defineConfig({
   e2e: {
     baseUrl: 'http://localhost:5173',
+    // Specs that are DESIGNED to fail live in cypress/e2e/gate/ and are run
+    // only by the dedicated CI gate, which asserts exit != 0 (card
+    // 20261125_130530). NOTE: this exclusion filters an explicit `--spec`
+    // too — pointing `--spec` at an excluded spec yields "no spec files were
+    // found" + exit 1, which an inverted gate would misread as success. That
+    // is why the gate has its own config (cypress.gate.config.ts) instead of
+    // a `--spec` override.
+    excludeSpecPattern: ['**/gate/**'],
     video: false,
     screenshotOnRunFailure: true,
     defaultCommandTimeout: 15_000,
