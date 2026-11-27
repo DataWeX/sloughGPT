@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -290,18 +292,48 @@ class TestDashboardStreamStallVisibility:
         build can finish during a cycle whose wait timed out, and without
         consuming that result the next cycle would discard it and start again,
         stalling forever while re-spawning a thread.
+
+        Deterministic on purpose. The previous shape raced the clock —
+        ``time.sleep(0.15)`` against a 0.1 s stall bound — and under CI load the
+        delay between ``create_task(to_thread(...))`` and ``await
+        wait_for(...)`` can exceed the wedge, so the task is already done when
+        awaited and no STALL frame is ever emitted (observed: six DASHBOARD
+        frames, job 140494865346). Here the wedged build blocks a pool thread on
+        an Event, and the Event is set from the router's own stall warning —
+        the signal that the STALL frame is being emitted. No clock is involved.
+
+        The release cannot be driven by reading frames: ``TestClient`` buffers
+        the response body until the stream ends, so ``iter_lines()`` sees
+        nothing while the generator is still running.
         """
         _app, _inst = fast_stream
+        release = threading.Event()
         state = {"first": True}
 
         def wedges_once():
             if state["first"]:
                 state["first"] = False
-                time.sleep(0.15)  # one cycle's worth past the bound
+                # A pool thread, not the event loop: the stream still has to
+                # notice the timeout and emit STALL while this is held.
+                assert release.wait(timeout=5.0), "the test never released the wedged build"
             return {"stream": "dashboard", "phase": "DASHBOARD", "status": "working", "data": {}}
 
-        with patch("routers.dashboard._build_snapshot", side_effect=wedges_once):
-            frames = self._frames(_app, 6)
+        class ReleaseOnStall(logging.Handler):
+            """Unblock the wedged build the moment the router reports the stall."""
+
+            def emit(self, record: logging.LogRecord) -> None:
+                if record.levelno >= logging.WARNING and "stalled" in record.getMessage():
+                    release.set()
+
+        handler = ReleaseOnStall()
+        stall_logger = logging.getLogger("slo.dashboard")
+        stall_logger.addHandler(handler)
+        try:
+            with patch("routers.dashboard._build_snapshot", side_effect=wedges_once):
+                frames = self._frames(_app, 6)
+        finally:
+            release.set()
+            stall_logger.removeHandler(handler)
 
         phases = [f["phase"] for f in frames]
         assert "STALL" in phases, f"expected a stall first: {phases}"
