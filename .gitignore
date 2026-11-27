@@ -170,6 +170,23 @@ data/sample.jsonl
 /runs/
 /out/
 
+# Runtime data stores in nested app/package locations (never source).
+# apps/data/api_keys_json/api_keys.json holds LIVE API KEYS — untracked and
+# unignored until now, so a single `git add -A` would have committed them.
+/apps/data/
+/apps/api/server/data/
+/tests/core-py/data/
+/tests/server/data/
+/packages/data/
+
+# Legacy pre-rename tree (domains/ -> domain/): coverage artifacts plus its own
+# runtime stores. Superseded by domain/ and tests/core-py/; nothing tracked here.
+/packages/core-py/
+
+# Generated dashboards — two identical copies, unreferenced by any code.
+/test_dashboard.html
+/apps/web/public/test_dashboard.html
+
 # Cache directories
 .cache/
 .mypy_cache/
