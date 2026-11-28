@@ -79,7 +79,53 @@ class TestStatus:
             assert "learning" in data
             assert "batch" in data
             assert "dpo" in data
-            assert "video_training" in data
+            assert "video" in data
+            # Arrays the UI renders directly must exist even when degraded.
+            assert data["learning"]["caption_history"] == []
+            assert data["learning"]["accuracy_history"] == []
+            assert data["batch"]["progress_pct"] == 0
+
+    def test_not_initialized_matches_initialized_shape(self):
+        """Both branches project ONE contract.
+
+        The page types this payload and renders ``caption_history.length``; a
+        degraded response missing that key crashed /multimodal for every user
+        whose manager had not initialised (card 20261124_094239). Shape parity
+        is the invariant, so assert it structurally rather than key by key.
+        """
+
+        def shape(value):
+            if isinstance(value, dict):
+                return {key: shape(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return "list"
+            return "scalar"
+
+        def status_for(initialized: bool) -> dict:
+            with patch("routers.multimodal.get_multimodal_manager") as mock_get:
+                mock_mgr = MagicMock()
+                mock_mgr._initialized = initialized
+                if initialized:
+                    caps = MagicMock()
+                    caps.speech_to_text = True
+                    caps.image_caption = True
+                    caps.vqa = True
+                    caps.speech_model = "whisper"
+                    caps.vision_model = "slonet"
+                    mock_mgr.capabilities = caps
+                    mock_mgr._multimodal_engine = MagicMock()
+                    mock_mgr._multimodal_engine._trained = True
+                    mock_mgr._multimodal_engine.text = MagicMock()
+                    mock_mgr._multimodal_engine.text.vocab_size = 1000
+                    mock_mgr._learning_count = 5
+                    mock_mgr._replay_buffer = MagicMock()
+                    mock_mgr._replay_buffer.size = 3
+                    mock_mgr._caption_history = ["cap1"]
+                    mock_mgr._accuracy_history = [0.8]
+                mock_get.return_value = mock_mgr
+                return _d(client.get("/multimodal/status"))
+
+        assert shape(status_for(False)) == shape(status_for(True))
 
 
 # ── Phoneme Endpoints ─────────────────────────────────────────────

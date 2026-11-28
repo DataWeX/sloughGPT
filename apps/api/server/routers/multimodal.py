@@ -179,24 +179,60 @@ class MultimodalRouter:
         """status."""
         mgr = self._get_initialized_manager()
         if mgr is None:
+            # Same shape as the initialized branch, with empty values. The UI
+            # types this payload and renders arrays directly (TrainingCard
+            # reads caption_history.length), so a degraded response missing a
+            # key does not degrade the page — it crashes it. The shape-parity
+            # test in test_multimodal_router.py keeps the two branches honest.
             return success_response(
                 data={
-                    "engine": {"status": "not_initialized"},
-                    "learning": {"images_learned": 0},
+                    "engine": {
+                        "speech_to_text": False,
+                        "image_caption": False,
+                        "vqa": False,
+                        "speech_model": None,
+                        "vision_model": None,
+                        "status": "not_initialized",
+                    },
+                    "learning": {
+                        "images_learned": 0,
+                        "trained": False,
+                        "vocab_size": 0,
+                        "replay_buffer_size": 0,
+                        "learning_method": "contrastive + self-training",
+                        "caption_history": [],
+                        "unique_captions": 0,
+                        "diversity_ratio": 0.0,
+                        "accuracy_history": [],
+                        "mean_accuracy": 0.0,
+                        "last_accuracy": 0.0,
+                    },
                     "batch": {
                         "running": False,
                         "job_id": None,
                         "total": 0,
                         "completed": 0,
                         "errors": 0,
+                        "progress_pct": 0,
+                        "current_caption": "",
+                        "current_image": "",
                     },
-                    "video_training": {},
                     "dpo": {
                         "status": "idle",
                         "accepted_count": 0,
                         "rejected_count": 0,
                         "last_run": None,
                         "result": None,
+                    },
+                    "video": {
+                        "status": "idle",
+                        "job_id": None,
+                        "current_epoch": 0,
+                        "current_step": 0,
+                        "total_steps": 0,
+                        "current_loss": None,
+                        "result": None,
+                        "error": None,
                     },
                 }
             )
