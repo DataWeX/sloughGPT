@@ -169,3 +169,38 @@ def test_nested_verify_exposes_same_flags_as_top_level():
         nested.repo,
         nested.board_file,
     )
+
+
+def test_note_update_accepts_an_id_prefix(tmp_path):
+    """A prefix that resolves uniquely must work for update, not only show."""
+    from grib.store import PlannerStore
+
+    _seed(tmp_path, "Prefixed update")
+    store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+    note_id = store.list_notes()[0].id
+
+    code, out = _run(tmp_path, "note", "update", note_id[:19], "--status", "done")
+
+    assert code == 0, out
+    assert store.get_note(note_id).status == "done"
+
+
+def test_note_delete_accepts_an_id_prefix(tmp_path):
+    from grib.store import PlannerStore
+
+    _seed(tmp_path, "Prefixed delete")
+    store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+    note_id = store.list_notes()[0].id
+
+    code, out = _run(tmp_path, "note", "delete", note_id[:19])
+
+    assert code == 0, out
+    assert store.get_note(note_id) is None
+
+
+def test_note_update_still_fails_cleanly_on_a_miss(tmp_path):
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        code, _ = _run(tmp_path, "note", "update", "no-such-note", "--status", "done")
+    assert code == 1
+    assert "Note not found" in err.getvalue()
