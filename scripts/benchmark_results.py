@@ -45,6 +45,14 @@ RESULTS_DIR = Path(
 )
 
 REGRESSION_THRESHOLDS = {
+    "web_ui": {
+        # dist-vite bundle baseline (scripts/benchmark_web_ui.py): lower is
+        # better everywhere — entry/first-load gzip and total asset bytes
+        # blowing past these limits = a fat import crept into the shell graph.
+        "entry_gzip": (10.0, "rel"),
+        "first_load_gzip": (10.0, "rel"),
+        "asset_bytes": (15.0, "rel"),
+    },
     "stability": {
         # higher-is-better metrics (drop = regression) use absolute thresholds
         "overall": 5.0,
@@ -129,6 +137,7 @@ KINDS = (
     "effects",
     "bootstrap",
     "inference",
+    "web_ui",
 )
 
 
