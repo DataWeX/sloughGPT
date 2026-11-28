@@ -736,6 +736,12 @@ def resolve_and_run(
 def run_group(
     group: Group, ctx: Context, args: list[str], full_path: str = ""
 ) -> tuple[str, list[str]] | None:
+    # A group's own --help must not be read as a command name (the first
+    # subcommand group, `wt`, surfaced this: `sloughgpt wt --help` printed
+    # "Unknown command: --help").
+    if args and args[0] in ("--help", "-h"):
+        format_group_help(group, ctx)
+        return None
     if group.invoke_without_command:
         cb = group.callback if hasattr(group, "callback") else None
         if cb:

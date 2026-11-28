@@ -524,6 +524,68 @@ def tree(resolve, list_, set):  # noqa: A002 — the flag name is the CLI vocabu
     cmd_tree(args)
 
 
+@cli.group(name="wt", help="Worktree lifecycle: create a lane, list lanes, reap finished ones")
+def wt():
+    """Worktree lifecycle — one lane per card, reaped when the card closes.
+
+    `sloughgpt tree` says which tree is running; `sloughgpt wt` says which
+    trees exist, who owns them, and which ones are finished. Creation claims;
+    reaping releases. A tree with no card is a leak, not a workspace.
+    """
+
+
+@wt.command(name="new", help="Create the lane worktree for a card and claim it")
+@click.option("--card", default=None, help="Card id the lane belongs to")
+@click.option("--title", default=None, help="Lane title (default: the card's own title)")
+@click.option("--base", default=None, help="Base ref to branch from (default: origin/main)")
+@click.option("--root", default=None, help="Repository root (default: this checkout)")
+def wt_new(card, title, base, root):
+    """Create the worktree for a card, claim it, and print where it is.
+
+    \b
+    Examples:
+      sloughgpt wt new 20261128_103632
+      sloughgpt wt new --title "shared node_modules" --base main
+    """
+    from commands.worktree import cmd_wt
+
+    args = _ns(subcommand="new", card=card, title=title, base=base, root=root)
+    raise SystemExit(cmd_wt(args))
+
+
+@wt.command(name="ls", help="List every worktree with its lifecycle state")
+@click.option("--root", default=None, help="Repository root (default: this checkout)")
+def wt_ls(root):
+    """List live, dead and idle worktrees, and why each is not reapable."""
+    from commands.worktree import cmd_wt
+
+    args = _ns(subcommand="ls", root=root)
+    raise SystemExit(cmd_wt(args))
+
+
+@wt.command(name="done", help="Reap a finished lane (card done, branch merged, clean)")
+@click.argument("path", required=False)
+@click.option("--all", "all_", is_flag=True, help="Reap every provably dead lane")
+@click.option("--force", is_flag=True, help="Override the gates (says so in the output)")
+@click.option("--root", default=None, help="Repository root (default: this checkout)")
+def wt_done(path, all_, force, root):
+    """Remove the lane's worktree, delete its branch, release its claim.
+
+    Refuses unless the card is done, the branch is merged into origin/main,
+    the tree is clean, and no other live session claims it.
+
+    \b
+    Examples:
+      sloughgpt wt done              # this lane
+      sloughgpt wt done --all        # every provably dead lane
+      sloughgpt wt done .wt-x --force
+    """
+    from commands.worktree import cmd_wt
+
+    args = _ns(subcommand="done", path=path, all=all_, force=force, root=root)
+    raise SystemExit(cmd_wt(args))
+
+
 @cli.command(help="Start API + Web dev servers")
 @click.option("--model", default=None, help="Model path")
 @click.option("--web-port", default=3000, type=int, help="Web dev server port")
