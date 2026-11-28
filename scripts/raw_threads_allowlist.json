@@ -7,7 +7,7 @@
       "deferred": "charter ruling: migrate when the site is next touched",
       "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
     },
-    "site_count": 241
+    "site_count": 242
   },
   "entries": {
     "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
@@ -799,6 +799,11 @@
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 2
+    },
+    "domain/agents/_internal/multi.py::MultiAgentOrchestrator._async_generate": {
+      "reason": "stage-4 async escape: rides the ONE sync ShellCommands.generate across the async seam with asyncio.to_thread (AGENTS.md execution philosophy — a one-off blocking call at an explicit boundary, not a second ladder); landed with e60f7dd71 without an entry",
+      "kind": "grandfathered",
+      "count": 1
     },
     "domain/core/_internal/soul.py::SloEngine.generate_async": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
