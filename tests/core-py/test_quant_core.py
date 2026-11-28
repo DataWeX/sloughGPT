@@ -229,10 +229,7 @@ class TestPoolReentrancy:
                 done[t].set()
 
         # Daemon threads: a regression must fail the test, not hang pytest.
-        workers = [
-            threading.Thread(target=work, args=(t,), daemon=True)
-            for t in range(nthreads)
-        ]
+        workers = [threading.Thread(target=work, args=(t,), daemon=True) for t in range(nthreads)]
         for w in workers:
             w.start()
         for t, ev in enumerate(done):
