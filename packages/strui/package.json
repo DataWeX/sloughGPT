@@ -45,7 +45,7 @@
     "@sloughgpt/eslint-config": "file:../eslint-config",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.6.7",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
