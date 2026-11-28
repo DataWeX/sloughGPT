@@ -282,6 +282,42 @@ class TestReap:
         assert "(forced)" in message
 
 
+class TestClaimSeam:
+    """The claim seam runs for real here — the ``repo`` fixture stubs it out.
+
+    Regression (found by dogfooding ``wt done --all`` on the real repo, not by
+    a test): ``_claim_event`` did not accept ``board_dir`` while both callers
+    passed it, so ``wt new`` and ``wt done`` raised ``TypeError`` on their first
+    real run. Every unit test monkeypatched the seam, so the claim half of the
+    feature had never executed. These two tests pin the signature and the
+    passthrough that the stubs hid.
+    """
+
+    def test_claim_event_writes_to_the_board_dir_it_is_given(self, tmp_path: Path):
+        from core import worktree as wt_mod
+
+        wt_mod._claim_event(
+            "claim",
+            card_id="card-1",
+            path=tmp_path / "tree",
+            branch="feat/x",
+            session="sess",
+            board_dir=tmp_path,
+        )
+        lines = (tmp_path / "claims.jsonl").read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1
+        assert '"card_id": "card-1"' in lines[0]
+        assert '"event": "claim"' in lines[0]
+
+    def test_create_passes_the_board_dir_through(self, repo: Path, tmp_path: Path, monkeypatch):
+        from core import worktree as wt_mod
+
+        seen: dict = {}
+        monkeypatch.setattr(wt_mod, "_claim_event", lambda event, **kw: seen.update(kw))
+        wt_mod.create("card-1", "Claim seam", root=repo, board_dir=tmp_path)
+        assert seen["board_dir"] == tmp_path
+
+
 class TestCommands:
     def test_wt_ls_lists_every_tree(self, repo: Path, monkeypatch):
         from commands import worktree as wt_cmd

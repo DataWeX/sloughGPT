@@ -145,12 +145,26 @@ def slug_for(title: str) -> str:
     return "-".join(part for part in cleaned.split("-") if part)[:40] or "card"
 
 
-def _claim_event(event: str, *, card_id: str | None, path: Path, branch: str, session: str) -> None:
+def _claim_event(
+    event: str,
+    *,
+    card_id: str | None,
+    path: Path,
+    branch: str,
+    session: str,
+    board_dir: Path | str | None = None,
+) -> None:
     """Append a claim/release event through grib's own fold.
 
     In-process by design (same process -> function call): the claims store is a
     file both sides read, so an endpoint would be the expensive rung for a
     single append. A missing grib means "no claim", never "refuse the action".
+
+    ``board_dir`` is threaded from the caller so tests and non-default stores
+    write where they say they do. It used to be ignored here while both
+    callers passed it, which made every create/reap die with a TypeError the
+    moment the real function ran — the unit tests monkeypatched this seam, so
+    the claim half of the feature had never executed.
     """
     try:
         from grib.claims import append_event
@@ -159,7 +173,7 @@ def _claim_event(event: str, *, card_id: str | None, path: Path, branch: str, se
         return
     try:
         append_event(
-            default_board_dir(),
+            Path(board_dir) if board_dir is not None else default_board_dir(),
             event=event,
             session=session,
             card_id=card_id,
