@@ -17,9 +17,20 @@ if _server_dir not in sys.path:
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-_PM = "domain.cognition._internal.consciousness.personality.PersonalityManager"
-_PP = "domain.cognition._internal.consciousness.personality.PersonalityProfile"
-_CE = "domain.cognition._internal.consciousness.evaluation.ConsciousnessEvaluator"
+# Patch the point where the name is READ, not where it is DEFINED.
+#
+# Every handler does `from domain.cognition import X` at call time, but the
+# facade (domain/cognition/__init__.py) bound these names eagerly at import
+# from _internal.consciousness. Patching the _internal source module swaps
+# that module's attribute while the facade keeps its original reference, so
+# the mock never reaches the handler: the tests passed only through an
+# accidental data/consciousness/personas disk chain (save writes the file,
+# get reads it, delete wipes it last — which is why the dir reads empty).
+# Measured: patching _internal leaves the facade id unchanged; patching the
+# facade attribute swaps it. _GO already followed this read-point pattern.
+_PM = "domain.cognition.PersonalityManager"
+_PP = "domain.cognition.PersonalityProfile"
+_CE = "domain.cognition.ConsciousnessEvaluator"
 _GO = "domain.cognition.get_consciousness"
 
 
