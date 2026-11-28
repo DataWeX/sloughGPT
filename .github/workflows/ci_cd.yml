@@ -155,7 +155,7 @@ jobs:
       # the always-on step above (in-job — the env is already set up).
       - name: Restore testmon DB (PR selection basis)
         if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .testmondata
           key: testmon-v1-${{ github.sha }}
@@ -373,7 +373,7 @@ jobs:
       - name: "Save testmon DB (single writer: main only)"
         if: github.ref == 'refs/heads/main'
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .testmondata
           key: testmon-v1-${{ github.sha }}
