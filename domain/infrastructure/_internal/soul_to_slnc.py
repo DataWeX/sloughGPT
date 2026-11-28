@@ -136,12 +136,38 @@ def soul_to_slnc(
     if not state_dict:
         raise ValueError(f"Empty .soul (no weights): {soul_path}")
 
+    # Fold LoRA/IA3 adapters into the base weights. The .slnc layout has no
+    # slot for adapters, so compiling without this merge produced a file that
+    # was byte-smaller than the fine-tune it claimed to be: the base model
+    # with the trained delta silently gone. Merging makes the artifact the
+    # model (the checkpoint keeps the separable adapter form).
+    from domain.training._internal.lora import merge_lora_state_dict
+
+    lora_meta = getattr(soul, "metadata", None) or {}
+    lora_meta = lora_meta.get("lora") or {}
+    state_dict, lora_info = merge_lora_state_dict(
+        state_dict, rank=lora_meta.get("rank"), alpha=lora_meta.get("alpha")
+    )
+    if lora_info["merged"]:
+        logger.info(
+            "soul_to_slnc: merged %d LoRA adapter(s) into base weights (rank=%s alpha=%s)",
+            lora_info["merged"],
+            lora_info["rank"],
+            lora_info["alpha"],
+            extra={"tag": "INFRA"},
+        )
+
     # Ensure lm_head exists for native layout ordering (tied weights)
     if "lm_head.weight" not in state_dict and "tok_emb.weight" in state_dict:
         state_dict = dict(state_dict)
         state_dict["lm_head.weight"] = state_dict["tok_emb.weight"]
 
     config = build_slnc_config_from_soul(soul, state_dict)
+    if lora_info["merged"]:
+        # Provenance: the .slnc carries merged weights, not a pristine base.
+        config["lora_merged"] = lora_info["merged"]
+        config["lora_rank"] = lora_info["rank"]
+        config["lora_alpha"] = lora_info["alpha"]
     slnc_path.parent.mkdir(parents=True, exist_ok=True)
 
     out = SLNCCompiler().compile_from_dict(config, state_dict, str(slnc_path), quantize=quantize)

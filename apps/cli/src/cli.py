@@ -164,6 +164,21 @@ def _show_welcome_banner():
         _line("    " + _row)
     _line()
     _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
+    # Which checkout is answering: the launcher is tree-bound, so a stale
+    # symlink silently runs old code (see core/tree.py).
+    try:
+        from core.tree import resolve_tree, summary_line, tree_info
+
+        _tree = summary_line(tree_info(resolve_tree()), path=False)
+    except Exception:
+        _tree = ""
+    if _tree:
+        # One line, never wrapped: a wrapped status line makes the box look
+        # broken even though the border is intact. Budget the visible width —
+        # two leading spaces, the label, two separating spaces, then the text.
+        _label = "  tree"
+        _tree = _tree[: max(10, term_cols() - 2 - len(_label) - 2)]
+        _line(f"  {_c(_label, _DIM)}  {_c(_tree, _DIM)}")
     _line(f"  {_c('  ' + '─' * (_inner + 2), _DIM)}")
     _line()
 
@@ -483,6 +498,30 @@ def generate(ctx, prompt, model, max_tokens, temperature):
         port=ctx.obj["port"],
     )
     cmd_generate(args)
+
+
+@cli.command(help="Show or switch which checkout the launcher runs")
+@click.option("--set", metavar="TARGET", default=None, help="Adopt a tree: 'latest' or a path")
+@click.option("--list", "list_", is_flag=True, help="List every worktree and its staleness")
+@click.option("--resolve", is_flag=True, help="Print the tree path only (for scripts)")
+def tree(resolve, list_, set):  # noqa: A002 — the flag name is the CLI vocabulary
+    """Which checkout is running, and how far behind it is.
+
+    The launcher is tree-bound: `sloughgpt` runs `$TREE/cli.py`, so its symlink
+    target is the code in effect. A stale target runs month-old code silently,
+    which is what `--check`, `--list` and `--set` exist to surface and fix.
+
+    \b
+    Examples:
+      sloughgpt tree                 # this tree, its branch, commits behind
+      sloughgpt tree --resolve       # just the path
+      sloughgpt tree --list          # every worktree
+      sloughgpt tree --set latest    # adopt the best clean, current tree
+    """
+    from commands.tree import cmd_tree
+
+    args = _ns(resolve=resolve, list=list_, set=set)
+    cmd_tree(args)
 
 
 @cli.command(help="Start API + Web dev servers")
@@ -1132,6 +1171,29 @@ _register_feeds(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def _warn_if_stale_tree(argv: list[str]) -> None:
+    """One stderr line when the launcher runs stale code.
+
+    The incident this prevents: a symlink pointing at a checkout parked on a
+    months-old branch, so every command ran old code and nothing said so. It
+    goes to *stderr* (piped stdout stays clean for `--json`), and is skipped
+    for commands that report the tree themselves or that never run work.
+    """
+    if any(a in ("--json", "-q", "--quiet", "--help", "-h", "--version") for a in argv):
+        return
+    if argv and argv[0] == "tree":
+        return
+    try:
+        from core.tree import rollback_notice, stale_notice
+
+        notices = (stale_notice(), rollback_notice())
+    except Exception:  # a warning must never be the reason a command fails
+        return
+    for notice in notices:
+        if notice:
+            print(notice, file=sys.stderr)
+
+
 def main():
     # Parse command path for post-execution suggestions
     _argv = sys.argv[1:]
@@ -1144,6 +1206,7 @@ def main():
 
     _exit_code = 0
     try:
+        _warn_if_stale_tree(_argv)
         cli(obj={})
     except SystemExit as e:
         if e.code is None:

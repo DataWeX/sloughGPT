@@ -193,7 +193,7 @@ class TestSecurityBoundary:
 
 class TestToolCapability:
     def test_all_members(self):
-        assert len(ToolCapability) == 8
+        assert len(ToolCapability) == 10
 
     def test_values(self):
         assert ToolCapability.CODE_EXECUTION.value == "code_execution"
@@ -208,6 +208,8 @@ class TestToolCapability:
         assert "KNOWLEDGE_RETRIEVAL" in names
         assert "IMAGE_ANALYSIS" in names
         assert "DATA_ANALYSIS" in names
+        assert "WORKSPACE_SCAFFOLD" in names
+        assert "WORKSPACE_WRITE" in names
         assert "CITATION" in names
 
     def test_member_values_are_strings(self):

@@ -327,6 +327,63 @@ class TestCLI:
         assert code == 0
         assert "Column:      wip" in out
 
+    def test_board_show_prints_the_ticket_id_and_its_notes(self, tmp_dir):
+        """The card is the durable ticket; show must name it and its notes.
+
+        Reverse lookup used to be a manual grep of the journal (flow-friction
+        card). It rides the existing command — no new route.
+        """
+        # _run passes --notes-dir board_dir, so the fixture must match it.
+        store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir)
+        first = store.create_note("Ticket with history", status="wip")
+        second = store.create_note("Ticket with history", status="done")
+        store.sync()
+        card = store.list_cards()[0]
+
+        code, out = _run(tmp_dir, "board", "show", card.id)
+
+        assert code == 0
+        assert f"ID:          {card.id}" in out
+        assert first.id in out and second.id in out
+
+    def test_board_edit_updates_the_linked_note(self, tmp_dir):
+        """Editing a card edits its note — the note is the truth, sync projects."""
+        store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir)
+        note = store.create_note("Old title", status="todo")
+        store.sync()
+        card = store.list_cards()[0]
+
+        code, out = _run(tmp_dir, "board", "edit", card.id, "--title", "New title")
+
+        assert code == 0, out
+        assert store.get_note(note.id).title == "New title"
+        assert store.list_cards()[0].title == "New title", "card did not follow the note"
+
+    def test_board_edit_targets_the_latest_note_of_a_ticket(self, tmp_dir):
+        store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir)
+        store.create_note("Twin", status="todo")
+        newest = store.create_note("Twin", status="todo")
+        store.sync()
+        card = store.list_cards()[0]
+
+        code, _ = _run(tmp_dir, "board", "edit", card.id, "--description", "new body")
+
+        assert code == 0
+        assert store.get_note(newest.id).body == "new body"
+
+    def test_board_edit_works_on_a_hand_added_card(self, tmp_dir):
+        store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir)
+        card = store.add_card("Hand added", column="todo")
+
+        code, _ = _run(tmp_dir, "board", "edit", card.id, "--title", "Renamed")
+
+        assert code == 0
+        assert store.get_card(card.id).title == "Renamed"
+
+    def test_board_edit_unknown_card_fails(self, tmp_dir):
+        code, _ = _run(tmp_dir, "board", "edit", "no-such-card", "--title", "X")
+        assert code == 1
+
     def test_board_delete(self, tmp_dir):
         store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir / "notes")
         card = store.add_card("Doomed")

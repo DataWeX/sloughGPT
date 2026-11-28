@@ -1,14 +1,16 @@
 """
 grib.verify — three-way diff: journal note <-> board card <-> git.
 
-The note card (markdown + YAML frontmatter) is the source of truth for a
-task's metadata. `verify` reports any drift between:
+The journal note (``notes.journal.jsonl``) is the live source of truth for a
+task's metadata; markdown frontmatter is the legacy layer and only supplies
+the keys the Note model does not carry (``landed:``). `verify` reports any
+drift between:
 
-  1. ``status:`` in the note frontmatter  <->  ``column`` of its board card
+  1. the note's ``status``  <->  ``column`` of its board card
      (via ``config.STATUS_TO_COLUMN``);
-  2. the ``board:`` frontmatter uuid      <->  a card id in ``board.jsonl``
+  2. the note's ``card_id`` <->  a card id in ``board.jsonl``
      (falls back to matching the card by the note's title);
-  3. the ``landed:`` frontmatter shas     <->  real commits in a git repo —
+  3. the ``landed:`` frontmatter shas <-> real commits in a git repo —
      each sha must exist and be an **ancestor of HEAD** (i.e. actually
      landed on the checked-out line), otherwise the note claims a landing
      that the repo does not have.
@@ -125,17 +127,55 @@ def _load_cards(board_file: Path) -> list[dict]:
     return cards
 
 
+def find_md_by_title(title: str, dirs: list[Path]) -> Path | None:
+    """The md note whose frontmatter ``title:`` equals *title*, if any.
+
+    md filenames are ``YYYY-MM-DD-slug.md`` while journal ids are
+    ``YYYYMMDD_HHMMSS_slug``, so the title is the only stable join key between
+    the two layers. Returns the first match in *dirs* order.
+    """
+    want = (title or "").strip()
+    if not want:
+        return None
+    seen: set[Path] = set()
+    for d in dirs:
+        d = Path(d)
+        if d in seen:
+            continue
+        seen.add(d)
+        if not d.is_dir():
+            continue
+        for p in sorted(d.glob("*.md")):
+            if (parse_frontmatter(p).get("title") or "").strip() == want:
+                return p
+    return None
+
+
 def verify_note(note_path: Path, board_file: Path, repo: Path | None = None) -> list[Finding]:
     """Diff *note_path* against its board card and (if ``landed:`` is set)
-    against the git history of *repo* (default: current directory)."""
+    against the git history of *repo* (default: current directory).
+
+    Legacy/md-only entry point. Callers with a journal store should resolve
+    the note there and call :func:`verify_meta` — the journal is live while
+    md frontmatter freezes at the backend flip (card 20261119_105234)."""
     note_path = Path(note_path)
+    meta = parse_frontmatter(note_path)
+    meta.setdefault("title", note_path.stem)
+    return verify_meta(meta, board_file, repo)
+
+
+def verify_meta(meta: dict[str, str], board_file: Path, repo: Path | None = None) -> list[Finding]:
+    """Diff a resolved note *meta* against its board card and git.
+
+    ``meta`` needs ``title``/``status`` and, when known, ``board`` (the card
+    id — journal ``card_id``) and ``landed`` (shas). This is the store-aware
+    seam: callers merge journal fields over md frontmatter first."""
     board_file = Path(board_file)
     repo = Path(repo) if repo else Path.cwd()
 
-    meta = parse_frontmatter(note_path)
     status = (meta.get("status") or "").lower()
-    title = meta.get("title") or note_path.stem
-    board_uuid = meta.get("board", "").strip()
+    title = meta.get("title") or ""
+    board_uuid = (meta.get("board") or "").strip()
     landed = meta.get("landed", "")
     cards = _load_cards(board_file)
 

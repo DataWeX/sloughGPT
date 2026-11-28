@@ -38,6 +38,13 @@ from .ids import make_readable_id
 
 logger = logging.getLogger("grib.store")
 
+# Journal schema this code writes and can safely rewrite. A line may carry
+# ``schema`` (absent = v1, pre-``card_id``); ``_write_notes`` refuses to rewrite
+# a store written by a newer grib, because every write serializes ALL notes —
+# a model that predates a field would silently truncate it from every line
+# (measured 2026-11-28: a stale installed grib erased all 383 card_id links).
+SCHEMA_VERSION = 2
+
 # ── Data Models ──────────────────────────────────────────────────────────
 
 
@@ -113,12 +120,35 @@ class Note:
     assignee: str = ""
     created_at: str = ""
     updated_at: str = ""
+    # The ticket this note belongs to. Written once by sync, then never
+    # re-derived: the note id may churn when the note is edited, the card id
+    # must not (user ruling 2026-11-27 — the card is the durable record).
+    card_id: str = ""
+    # Keys this model does not know about, kept verbatim so a round-trip never
+    # truncates a field written by a newer grib. The schema guard in
+    # ``_write_notes`` refuses to rewrite a store newer than this code, so
+    # these survive only when the version is supported.
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d.pop("extra", None)
+        # Fields a newer writer added ride along untouched.
+        d.update(self.extra)
+        # Same contract as ``_card_line``: a link that has never been made is
+        # absent, not "" — so legacy journal lines stay byte-identical and
+        # linking one note does not rewrite the other 400.
+        if not d.get("card_id"):
+            d.pop("card_id", None)
+        else:
+            # Only a line that uses v2 features declares v2, so untouched
+            # legacy lines never grow a key they did not have.
+            d["schema"] = SCHEMA_VERSION
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Note:
+        known = {f for f in cls.__dataclass_fields__ if f != "extra"}
         return cls(
             id=d.get("id", ""),
             title=d.get("title", ""),
@@ -130,6 +160,8 @@ class Note:
             assignee=d.get("assignee", ""),
             created_at=d.get("created_at", ""),
             updated_at=d.get("updated_at", ""),
+            card_id=d.get("card_id", ""),
+            extra={k: v for k, v in d.items() if k not in known},
         )
 
 
@@ -570,12 +602,16 @@ class PlannerStore:
         sprint: str = "",
         gh: str = "",
         card_type: str = "",
+        id: str = "",
     ) -> Card:
         self.validate_column(column)
         now = datetime.now(UTC).isoformat()
         board = self.load_board()
+        taken = {c.id for c in board.cards}
+        if id and id in taken:
+            raise ValueError(f"card id already exists: {id}")
         card = Card(
-            id=make_readable_id(title, (c.id for c in board.cards)),
+            id=id or make_readable_id(title, taken),
             title=title,
             description=description,
             column=column,
@@ -747,6 +783,18 @@ class PlannerStore:
     def _write_notes(self, notes: list[Note], expect: str | None = None) -> None:
         """Atomic + guarded notes write (was a bare write_text — the notes
         journal had BOTH lost-update and torn-file exposure)."""
+        for n in notes:
+            try:
+                found = int(n.extra.get("schema", 1))
+            except (TypeError, ValueError):
+                found = 1
+            if found > SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"notes.journal.jsonl contains schema v{found}; this grib "
+                    f"writes v{SCHEMA_VERSION}. Upgrade this checkout instead of "
+                    "rewriting the store (a stale writer would drop every field "
+                    "it does not model)."
+                )
         lines = [json.dumps(n.to_dict(), ensure_ascii=False) for n in notes]
         text = "\n".join(lines) + "\n" if lines else ""
         token = expect if expect is not None else _current_token(self._notes_file)
@@ -820,6 +868,15 @@ class PlannerStore:
         return self._occ(attempt)
 
     def update_note(self, note_id: str, **kwargs: Any) -> Note | None:
+        """Update fields on a note.
+
+        ``touch=False`` marks a bookkeeping write (sync linking ``card_id``):
+        it must not bump ``updated_at``, because that timestamp is what picks
+        the winning note when a ticket has several — linking would otherwise
+        make the last-linked note look like the latest human edit and flip the
+        card's column on every sync.
+        """
+        touch = kwargs.pop("touch", True)
 
         def attempt() -> Note | None:
             notes, token = self._read_notes_with_token()
@@ -828,7 +885,8 @@ class PlannerStore:
                     for key, value in kwargs.items():
                         if hasattr(note, key):
                             setattr(note, key, value)
-                    note.updated_at = datetime.now(UTC).isoformat()
+                    if touch:
+                        note.updated_at = datetime.now(UTC).isoformat()
                     notes[i] = note
                     self._write_notes(notes, expect=token)
                     return note
@@ -1035,40 +1093,92 @@ class PlannerStore:
         stays put, because hand-added cards have no note either and deleting
         one is a data-loss path. ``prune=True`` opts into removing orphans.
         """
-        from .sync import canonical_notes
-
-        notes = canonical_notes(self.list_notes(limit=9999))
+        all_notes = self.list_notes(limit=9999)
         board = self.load_board()
-        existing = {c.title: c for c in board.cards}
+        by_id = {c.id: c for c in board.cards}
+        by_title = {c.title: c for c in board.cards}
         added = 0
         updated = 0
 
-        for note in notes:
-            col = config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
-            title = note.title or "(untitled)"
-            card = existing.get(title)
+        # One ticket, many notes (user ruling 2026-11-28). A note that already
+        # links belongs to its card, full stop — the title is display data and
+        # a rename must never move a note onto another ticket. Only UNLINKED
+        # notes are grouped by title, and they all attach to one card: the
+        # notes are the ticket's history, not competing tickets. Only the
+        # column decision needs a single winner — the most recently updated
+        # note — so a settled board stays net-zero instead of re-applying
+        # conflicting statuses on every run.
+        linked: dict[str, list[Note]] = {}
+        unlinked: dict[str, list[Note]] = {}
+        for note in all_notes:
+            card = by_id.get(note.card_id) if note.card_id else None
+            if card is not None:
+                linked.setdefault(card.id, []).append(note)
+            else:
+                unlinked.setdefault(note.title or "(untitled)", []).append(note)
 
-            if card is None:
-                card = self.add_card(
-                    title=title,
-                    column=col,
-                    tags=list(note.tags or []),
-                    description=note.body or "",
-                    assignee=note.assignee or "",
-                    sprint=note.sprint or "",
-                    gh=note.gh or "",
+        def rank(note: Note) -> tuple[str, str, str]:
+            return (note.updated_at or "", note.created_at or "", note.id or "")
+
+        def apply(card: Card, group: list[Note], title: str) -> None:
+            """Link every note to *card*; the latest note decides its state."""
+            nonlocal updated
+            winner = max(group, key=rank)
+            col = config.STATUS_TO_COLUMN.get((winner.status or "").lower(), "todo")
+
+            by_id[card.id] = card
+            by_title.setdefault(title, card)
+            for note in group:
+                if note.card_id != card.id:
+                    self.update_note(note.id, card_id=card.id, touch=False)
+
+            if len(group) > 1:
+                logger.warning(
+                    "Notes %s share the title %r — %d notes on one card %s; "
+                    "column follows %s (latest update)",
+                    ", ".join(sorted(n.id for n in group)),
+                    title,
+                    len(group),
+                    card.id,
+                    winner.id,
                 )
-                existing[title] = card
-                added += 1
-                continue
+
+            # The card is a projection: its title follows the winning note,
+            # while the card id stays the durable ticket id.
+            if winner.title and card.title != winner.title:
+                self.update_card(card.id, title=winner.title)
+                card = by_id[card.id] = self.get_card(card.id) or card
+                updated += 1
 
             if card.column != col:
                 self.move_card(card.id, col)
                 updated += 1
-
-            if note.assignee and card.assignee != note.assignee:
-                self.update_card(card.id, assignee=note.assignee)
+            if winner.assignee and card.assignee != winner.assignee:
+                self.update_card(card.id, assignee=winner.assignee)
                 updated += 1
+
+        for card_id, group in sorted(linked.items()):
+            apply(by_id[card_id], group, group[0].title or "(untitled)")
+
+        for title, group in sorted(unlinked.items()):
+            winner = max(group, key=rank)
+            card = by_title.get(title)
+            if card is None:
+                # Name the ticket after its earliest note: the card keeps that
+                # id forever, even when the note id churns later.
+                origin = min(group, key=lambda n: (n.created_at or "", n.id or ""))
+                card = self.add_card(
+                    title=title,
+                    column=config.STATUS_TO_COLUMN.get((winner.status or "").lower(), "todo"),
+                    tags=list(winner.tags or []),
+                    description=winner.body or "",
+                    assignee=winner.assignee or "",
+                    sprint=winner.sprint or "",
+                    gh=winner.gh or "",
+                    id=origin.id,
+                )
+                added += 1
+            apply(card, group, title)
 
         # Opt-in only: drop cards left behind by a deleted note, then reseal.
         # Computed after the loop so freshly added cards are never candidates.

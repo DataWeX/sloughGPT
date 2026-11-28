@@ -273,6 +273,18 @@ class NotesController:
             return self.store.get_note(note_id)
         return self.store.get(note_id)
 
+    def resolve_id(self, note_id: str) -> str:
+        """The full id a caller meant: exact, else the unique prefix.
+
+        ``show`` has always accepted prefixes; ``update``/``delete`` took the
+        raw string, so a short id failed as "Note not found" with no hint
+        (kanban flow-friction card). One resolver, both dialects. A miss
+        returns the input unchanged so the store still reports it missing.
+        """
+        note_id = _require_id(note_id)
+        note = self.get(note_id)
+        return getattr(note, "id", None) or note_id
+
     def tags(self) -> dict[str, int]:
         """Tag → count across every note (the board's tag chip source)."""
         counts: dict[str, int] = {}
@@ -378,7 +390,7 @@ class NotesController:
                 f"field(s) {', '.join(sorted(unknown))} are not storable by the "
                 f"{self._dialect} store"
             )
-        note_id = _require_id(note_id)
+        note_id = self.resolve_id(note_id)
         if self._dialect == "planner":
             return self._mutate(lambda: self.store.update_note(note_id, **payload))
         return self._mutate(lambda: self.store.update(note_id, **payload))
@@ -401,7 +413,7 @@ class NotesController:
         projection (``notes rm``, a future planner interface) tell the user
         something false, so the seam checks instead of trusting.
         """
-        note_id = _require_id(note_id)
+        note_id = self.resolve_id(note_id)
         if self._dialect == "planner":
             deleted = self._mutate(lambda: self.store.delete_note(note_id))
         else:

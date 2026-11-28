@@ -14,6 +14,7 @@ import webbrowser
 from collections import deque
 from pathlib import Path
 
+from core.tree import web_tree_id
 from utils.formatting import format_time
 
 from domain.infrastructure._internal.pugqeep.singleton import get_engine
@@ -393,15 +394,69 @@ def _check_api_ready(port: int) -> bool:
         return False
 
 
-def _check_web_ready(port: int) -> bool:
-    """Check if web frontend is responding."""
-    try:
-        import urllib.request
+def _served_web_tree(port: int, timeout: float = 1.0) -> str | None:
+    """The ``X-Slo-Web-Tree`` of whatever answers on *port*, or ``None``.
 
-        urllib.request.urlopen(f"http://localhost:{port}/", timeout=3)
-        return True
-    except (urllib.error.URLError, OSError):
-        return False
+    ``Accept: text/html`` is load-bearing: the Vite relay in
+    ``apps/web/vite/api-relay-plugin.ts`` answers the SPA shell only for
+    document requests, and the tree header rides the dev server's own
+    response. A data request is forwarded to the Python API and comes back
+    with no header at all — which would look like "not our web" forever.
+    """
+    import urllib.request
+
+    from core.tree import WEB_TREE_HEADER
+
+    request = urllib.request.Request(f"http://localhost:{port}/", headers={"Accept": "text/html"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            return resp.headers.get(WEB_TREE_HEADER)
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def _check_our_web(port: int, tree_id: str) -> bool:
+    """True only when *our* Vite answers on *port*.
+
+    A plain port probe said "ok" for any listener. Port 3000 is this command's
+    default web port and the box runs many sessions, so a foreign Vite (or any
+    server) on it made `dev` report a healthy web UI while this tree's Vite had
+    never started. The header is the identity; its absence is a no.
+    """
+    return _served_web_tree(port) == tree_id
+
+
+def _bring_up_web(
+    port: int,
+    tree_id: str,
+    *,
+    alive=None,
+    attempts: int = 60,
+    sleep=time.sleep,
+    on_status=None,
+) -> str:
+    """Wait for our web dev server and return the verdict: ok | timeout | error.
+
+    The verdict is returned once and shown as-is. The bug this replaces set
+    ``web_status = "ok"`` unconditionally after the wait loop, so a web server
+    that never answered was reported healthy — the screen said "ok" while the
+    page was blank.
+    """
+    if on_status is not None:
+        on_status("waiting...")
+    for _ in range(attempts):
+        if _check_our_web(port, tree_id):
+            if on_status is not None:
+                on_status("ok")
+            return "ok"
+        if alive is not None and not alive():
+            if on_status is not None:
+                on_status("error")
+            return "error"
+        sleep(1)
+    if on_status is not None:
+        on_status("timeout")
+    return "timeout"
 
 
 def _is_port_bound(port: int) -> bool:
@@ -818,7 +873,7 @@ def cmd_dev(args):
                 status["api_ready"] = True
                 status["api"] = "ready"
                 _update_startup_status()
-            if not status["web_ready"] and _check_port(web_port):
+            if not status["web_ready"] and _check_our_web(web_port, web_tree_id(root)):
                 status["web_ready"] = True
                 status["web"] = "ready"
                 _update_startup_status()
@@ -857,6 +912,15 @@ def cmd_dev(args):
                 _update_startup_status()
                 log.error(f"API did not become ready within {API_STARTUP_TIMEOUT}s")
                 for line in _extract_error_lines(api_lines):
+                    log.info(f"  | {line}")
+            if not status["web_ready"] and not shutdown[0]:
+                status["web"] = "error"
+                _update_startup_status()
+                log.error(
+                    f"Web did not answer on http://localhost:{web_port} within "
+                    f"{API_STARTUP_TIMEOUT}s (API is up; the UI is not)"
+                )
+                for line in _extract_error_lines(web_lines):
                     log.info(f"  | {line}")
 
     poll_thread = threading.Thread(target=_poll_services, daemon=True)
@@ -1465,7 +1529,7 @@ def _cmd_api_and_web(args):
     elif _is_port_bound(api_port):
         api_port = _find_free_port(api_port + 1)
 
-    if _check_web_ready(web_port):
+    if _check_our_web(web_port, web_tree_id(root)):
         web_reused = True
     elif _is_port_bound(web_port):
         web_port = _find_free_port(web_port + 1)
@@ -1601,40 +1665,37 @@ def _cmd_api_and_web(args):
     _update_status()
 
     # ── Wait for web readiness ────────────────────────────────────
-    web_status = "waiting..."
-    _update_status()
-    for _ in range(60):
-        if shutdown[0]:
-            return
-        if _check_port(web_port):
-            web_status = "ok"
-            _update_status()
-            break
-        # Check if web process died
-        if web_proc is not None and web_proc.poll() is not None:
-            if _is_eaddrinuse(web_lines):
-                _handle_eaddrinuse(web_port, "web")
-            else:
-                web_status = "error"
-                _update_status()
-                web_log.info("Relevant web output:")
-                for line in _extract_error_lines(web_lines):
-                    web_log.info(f"  | {line}")
-            stop_event.set()
-            _cleanup(api_proc, web_proc, api_port, web_port)
-            return
-        time.sleep(1)
-    else:
-        web_status = "timeout"
+    def _set_web_status(value: str) -> None:
+        nonlocal web_status
+        web_status = value
         _update_status()
 
+    web_status = _bring_up_web(
+        web_port,
+        web_tree_id(root),
+        alive=lambda: not shutdown[0] and (web_proc is None or web_proc.poll() is None),
+        on_status=_set_web_status,
+    )
     if shutdown[0]:
+        return
+    if web_status == "error":
+        if _is_eaddrinuse(web_lines):
+            _handle_eaddrinuse(web_port, "web")
+        else:
+            web_log.info("Relevant web output:")
+            for line in _extract_error_lines(web_lines):
+                web_log.info(f"  | {line}")
+        stop_event.set()
+        _cleanup(api_proc, web_proc, api_port, web_port)
         return
 
     # ── Ready ────────────────────────────────────────────────────
     web_url = f"http://localhost:{web_port}"
     api_status = "ok"
-    web_status = "ok"
+    if web_status != "ok":
+        # The API is usable; the web UI is not. Say so — this screen used to
+        # print "ok" here unconditionally, after the wait had already timed out.
+        log.warning(f"Web is not answering on {web_url} — API is up, web is not")
     _update_status()
 
     # ── Auto-open browser ────────────────────────────────────────

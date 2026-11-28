@@ -152,6 +152,54 @@ def _note_search(args: argparse.Namespace) -> int:
 # ── Board subcommands ────────────────────────────────────────────────────
 
 
+def _board_edit(args: argparse.Namespace) -> int:
+    """Edit a card by editing the note that backs it.
+
+    Notes are the source of truth; the card is a projection. So an edit lands
+    on the ticket's latest linked note and sync projects it back — no
+    two-tool dance, no temp file. A hand-added card has no note, and only then
+    is the card edited directly.
+    """
+    store = _get_store(args)
+    card = store.get_card(args.id)
+    if not card:
+        print(f"Card not found: {args.id}", file=sys.stderr)
+        return 1
+
+    fields: dict = {}
+    if args.title is not None:
+        fields["title"] = args.title
+    if args.description is not None:
+        fields["body"] = args.description
+    if args.assignee is not None:
+        fields["assignee"] = args.assignee
+    if args.tags is not None:
+        fields["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
+    if not fields:
+        print("board edit: nothing to change (--title/--description/--assignee/--tags)")
+        return 1
+
+    linked = [n for n in store.list_notes(limit=99999) if n.card_id == card.id]
+    if linked:
+        target = max(linked, key=lambda n: (n.updated_at or "", n.created_at or "", n.id))
+        store.update_note(target.id, **fields)
+        _auto_sync(store)
+        print(f"Updated note {display_id(target.id)} -> card {card.id}")
+        return 0
+
+    # Hand-added card: no note to own the change.
+    if "title" in fields:
+        store.update_card(card.id, title=fields["title"])
+    if "body" in fields:
+        store.update_card(card.id, description=fields["body"])
+    if "assignee" in fields:
+        store.update_card(card.id, assignee=fields["assignee"])
+    if "tags" in fields:
+        store.update_card(card.id, tags=fields["tags"])
+    print(f"Updated card {card.id} (no linked note)")
+    return 0
+
+
 def _board_show(args: argparse.Namespace) -> int:
     store = _get_store(args)
     card_id = getattr(args, "id", None)
@@ -160,6 +208,8 @@ def _board_show(args: argparse.Namespace) -> int:
         if not card:
             print(f"Card not found: {card_id}", file=sys.stderr)
             return 1
+        # The card id is the durable ticket id — the one that never changes.
+        print(f"ID:          {card.id}")
         print(f"Title:       {card.title}")
         print(f"Column:      {card.column}")
         print(f"Priority:    {card.priority}")
@@ -171,6 +221,15 @@ def _board_show(args: argparse.Namespace) -> int:
         print(f"Description: {card.description or '-'}")
         print(f"Sprint:      {card.sprint or '-'}")
         print(f"GitHub:      {card.gh or '-'}")
+        # Reverse lookup rides this command: one ticket, many notes, oldest
+        # first so the card reads as its own history (no new subcommand).
+        linked = sorted(
+            (n for n in store.list_notes(limit=99999) if n.card_id == card.id),
+            key=lambda n: (n.created_at or "", n.id or ""),
+        )
+        print(f"Notes:       {len(linked) if linked else 'none'}")
+        for note in linked:
+            print(f"  {note.id}  [{note.status}]")
         return 0
     board = store.load_board()
     col_widths: dict[str, int] = {}
@@ -298,35 +357,74 @@ def _board_query(args: argparse.Namespace) -> int:
 
 
 def _verify(args: argparse.Namespace) -> int:
-    from grib.verify import format_report, verify_note
+    from grib.verify import find_md_by_title, format_report, parse_frontmatter, verify_meta
 
+    store = _get_store(args)
     note_path = Path(args.note)
-    if not note_path.exists():
-        # resolve by title substring across journal markdown notes: the
-        # project notes dir first, then the user fallback (~/.config/dev-notes)
-        search_dirs = [config.default_notes_dir()]
-        if config.NOTES_FALLBACK not in search_dirs:
-            search_dirs.append(config.NOTES_FALLBACK)
-        matches = [
-            p
-            for d in search_dirs
-            for p in sorted(Path(d).glob("*.md"))
-            if args.note.lower() in p.stem.lower()
-        ]
-        matches = sorted(set(matches))
-        if len(matches) == 1:
-            note_path = matches[0]
-        elif not matches:
-            print(f"verify: no note matching '{args.note}'")
+    note = None
+
+    if note_path.exists():
+        note = store.get_note(note_path.stem)
+    else:
+        # Resolve through the journal first: it is the live store. md-only
+        # notes (pre-backend-flip) still fall through to the path scan below.
+        q = args.note.lower()
+        notes = store.list_notes(limit=99999)
+        hits = [n for n in notes if n.id.lower() == q]
+        if not hits:
+            hits = [n for n in notes if n.id.lower().startswith(q)]
+        if not hits:
+            hits = [n for n in notes if q in (n.title or "").lower()]
+        if len(hits) > 1:
+            print(f"verify: '{args.note}' matches {len(hits)} notes — use a longer id:")
+            for n in hits[:8]:
+                print(f"  {n.id}  [{n.status}]  {(n.title or '')[:60]}")
             return 1
-        else:
-            print(f"verify: '{args.note}' matches {len(matches)} notes — give a path or more text")
-            return 1
+        if hits:
+            note = hits[0]
+
+    if note is not None:
+        meta: dict[str, str] = {}
+        # md still supplies what the Note model does not carry (landed:).
+        # Join by title — md filenames (YYYY-MM-DD-slug) are not note ids.
+        md = find_md_by_title(note.title, [config.default_notes_dir(), config.NOTES_FALLBACK])
+        if md is not None:
+            meta.update(parse_frontmatter(md))
+        # Journal wins on everything it models — md frontmatter froze at the
+        # backend flip, so trusting it here is the 20261119_105234 bug.
+        meta["title"] = note.title
+        meta["status"] = note.status
+        meta["board"] = note.card_id
+    else:
+        # Legacy md-only note: use the given path, else resolve one by name.
+        if not note_path.exists():
+            search_dirs = [config.default_notes_dir()]
+            if config.NOTES_FALLBACK not in search_dirs:
+                search_dirs.append(config.NOTES_FALLBACK)
+            matches = [
+                p
+                for d in search_dirs
+                for p in sorted(Path(d).glob("*.md"))
+                if args.note.lower() in p.stem.lower()
+            ]
+            matches = sorted(set(matches))
+            if len(matches) == 1:
+                note_path = matches[0]
+            elif not matches:
+                print(f"verify: no note matching '{args.note}'")
+                return 1
+            else:
+                print(
+                    f"verify: '{args.note}' matches {len(matches)} notes — give a path or more text"
+                )
+                return 1
+        meta = parse_frontmatter(note_path)
+        meta.setdefault("title", note_path.stem)
 
     board_file = (
         Path(args.board_file) if args.board_file else config.default_board_dir() / "board.jsonl"
     )
-    findings = verify_note(note_path, board_file, Path(args.repo))
+    findings = verify_meta(meta, board_file, Path(args.repo))
     print(format_report(findings))
     return 0 if all(f.ok for f in findings) else 1
 
@@ -717,6 +815,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("id")
     p.add_argument("column")
 
+    p = board_sub.add_parser("edit", help="Edit a card (via the note that backs it)")
+    p.add_argument("id")
+    p.add_argument("--title", default=None)
+    p.add_argument("--description", default=None)
+    p.add_argument("--assignee", default=None)
+    p.add_argument("--tags", default=None)
+
     p = board_sub.add_parser("delete", aliases=["rm"], help="Delete a card")
     p.add_argument("id")
 
@@ -951,6 +1056,7 @@ def main(argv: list[str] | None = None) -> int:
         ("board", "ls"): _board_show,
         ("board", "add"): _board_add,
         ("board", "move"): _board_move,
+        ("board", "edit"): _board_edit,
         ("board", "delete"): _board_delete,
         ("board", "rm"): _board_delete,
         ("board", "tags"): _board_tags,
@@ -961,6 +1067,7 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "ls"): _board_show,
         ("kanban", "add"): _board_add,
         ("kanban", "move"): _board_move,
+        ("kanban", "edit"): _board_edit,
         ("kanban", "delete"): _board_delete,
         ("kanban", "rm"): _board_delete,
         ("kanban", "tags"): _board_tags,

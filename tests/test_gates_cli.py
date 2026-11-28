@@ -12,7 +12,7 @@ Pins the projection contract:
 4. parity with the pytest surface: the CLI exit code agrees with
    `run_gates()` on the same tree (one contract, two projections).
 
-Invocation follows `apps/cli/tests/test_cli_main.py`: `main()` dispatches
+Invocation follows `tests/cli/test_cli_main.py`: `main()` dispatches
 off `sys.argv` through the project's own framework (`core.framework`, not
 pypi click — CliRunner cannot drive it).
 """

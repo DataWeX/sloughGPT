@@ -331,7 +331,7 @@ export function StatusBar() {
               <path d="M8 5v3l2 1" />
             </svg>
             {unseenCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[8px] font-medium leading-none">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium leading-none">
                 {unseenCount > 9 ? '9+' : unseenCount}
               </span>
             )}

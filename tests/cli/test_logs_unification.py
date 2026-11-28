@@ -29,7 +29,7 @@ from click.testing import CliRunner
 from commands import logs as logs_mod
 from commands.logs import _format_line, _read_logs, _render_dashboard, logs
 
-SRC = Path(__file__).resolve().parents[1] / "src"
+SRC = Path(__file__).resolve().parents[2] / "apps" / "cli" / "src"
 
 
 # ── monitor retirement ───────────────────────────────────────────────────────

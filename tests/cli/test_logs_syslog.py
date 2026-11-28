@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 # Add CLI src to path (mirrors other CLI tests)
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "cli" / "src"))
 
 from commands.logs import (
     _format_line,

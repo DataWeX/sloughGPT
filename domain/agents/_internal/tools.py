@@ -315,6 +315,72 @@ class ToolRegistry:
                 execute=self._run_file_qa,
             )
         )
+        # ── Build capability (card 20261128_054926) ───────────────────────
+        # Writes real artifacts under data/agent-projects/. The description
+        # deliberately says "writes the files, does not describe them" — the
+        # failure this replaces was the model answering a build request with
+        # a tutorial.
+        self.register(
+            ToolSpec(
+                name="workspace_scaffold",
+                description=(
+                    "Create a project on disk from a template (static site, vite-react "
+                    "app, or fastapi service). This WRITES the files — it does not "
+                    "describe them. Use it for any build/create-a-website request."
+                ),
+                parameters=[
+                    ToolParam(
+                        "name",
+                        "string",
+                        "Project slug: lowercase letters, digits, dashes (e.g. 'portfolio')",
+                        required=True,
+                        aliases=("project", "project_name"),
+                    ),
+                    ToolParam(
+                        "template",
+                        "string",
+                        "One of: static, vite-react, fastapi",
+                        required=True,
+                        aliases=("type", "kind"),
+                    ),
+                    ToolParam("title", "string", "Human title shown on the page", required=False),
+                    ToolParam("tagline", "string", "One-line subtitle", required=False),
+                    ToolParam(
+                        "sections",
+                        "string",
+                        "Comma-separated section headings (default: Overview, Features, Contact)",
+                        required=False,
+                    ),
+                ],
+                execute=self._run_workspace_scaffold,
+            )
+        )
+        self.register(
+            ToolSpec(
+                name="workspace_write",
+                description=(
+                    "Write or replace one file inside an existing project created by "
+                    "workspace_scaffold. Path is relative to the project root."
+                ),
+                parameters=[
+                    ToolParam(
+                        "project",
+                        "string",
+                        "Project slug returned by workspace_scaffold",
+                        required=True,
+                        aliases=("name", "project_name"),
+                    ),
+                    ToolParam(
+                        "path",
+                        "string",
+                        "Relative file path (e.g. 'src/App.jsx')",
+                        required=True,
+                    ),
+                    ToolParam("content", "string", "Full file content", required=True),
+                ],
+                execute=self._run_workspace_write,
+            )
+        )
 
     def register(self, spec: ToolSpec) -> None:
         self._tools[spec.name] = spec
@@ -810,6 +876,35 @@ class ToolRegistry:
             },
             "style": style,
         }
+
+    # ── Build capability (card 20261128_054926) ───────────────────────────
+
+    async def _run_workspace_scaffold(
+        self,
+        name: str,
+        template: str,
+        title: str = "",
+        tagline: str = "",
+        sections: str = "",
+    ) -> dict[str, Any]:
+        """Create a project on disk (shared workspace module, same as ToolRunner)."""
+        from domain.agents._internal.workspace import WorkspaceError, scaffold
+
+        try:
+            return scaffold(
+                template=template, name=name, title=title, tagline=tagline, sections=sections
+            )
+        except WorkspaceError as e:
+            return {"output": "", "error": str(e)}
+
+    async def _run_workspace_write(self, project: str, path: str, content: str) -> dict[str, Any]:
+        """Write one file inside an existing project (path-guarded)."""
+        from domain.agents._internal.workspace import WorkspaceError, write_file
+
+        try:
+            return write_file(project=project, path=path, content=content)
+        except WorkspaceError as e:
+            return {"output": "", "error": str(e)}
 
     async def _run_file_qa(self, query: str, path: str = "") -> dict[str, Any]:
         """Question answering over a specific file (excerpts), else knowledge search.

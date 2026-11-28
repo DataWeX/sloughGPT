@@ -437,6 +437,7 @@ typedef struct {
     int             done_seq;
     int             target;      /* workers [0, target) execute this job */
     int             nworkers;
+    int             busy;        /* one dispatcher owns the pool at a time */
     pid_t           pid;
     gemm_worker_arg arg;
     int             next_slice;
@@ -445,7 +446,7 @@ typedef struct {
 
 static gemm_pool g_pool = {
     PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, PTHREAD_COND_INITIALIZER,
-    0, 0, 0, 0, -1, {0}, 0, {0},
+    0, 0, 0, 0, 0, -1, {0}, 0, {0},
 };
 
 static void *_pool_worker(void *p) {
@@ -481,7 +482,16 @@ static void *_pool_worker(void *p) {
 }
 
 /** Run one threaded GEMM via the pool. Returns 1 on success, 0 when no
- *  worker could be created (caller falls back to per-call spawn). */
+ *  worker could be created or another dispatcher already owns the pool
+ *  (caller falls back to per-call spawn, which shares no globals).
+ *
+ *  Reentrancy: the pool has ONE job slot (arg/next_slice/done_seq) and
+ *  signals done on the single `++done_seq == nworkers` transition. Two
+ *  concurrent dispatchers would reset each other's counters (lost wakeup ->
+ *  deadlock) and free buffers a worker is still writing (UAF). `busy` is
+ *  published under the mutex so only one caller drives the slot; everyone
+ *  else takes the per-call fallback instead of corrupting it.
+ */
 static int _pool_run(const int8_t *A, const int8_t *B, const int32_t *B_rowsum,
                      int32_t *C, int M, int N, int K, int nblk, int jblock,
                      int nthreads) {
@@ -495,7 +505,12 @@ static int _pool_run(const int8_t *A, const int8_t *B, const int32_t *B_rowsum,
         g_pool.job_seq = 0;
         g_pool.done_seq = 0;
         g_pool.target = 0;
+        g_pool.busy = 0;
         g_pool.pid = me;
+    }
+    if (g_pool.busy) {                          /* another dispatcher owns it */
+        pthread_mutex_unlock(&g_pool.mtx);
+        return 0;
     }
     while (g_pool.nworkers < target) {          /* grow on demand */
         if (pthread_create(&g_pool.th[g_pool.nworkers], NULL, _pool_worker,
@@ -507,6 +522,7 @@ static int _pool_run(const int8_t *A, const int8_t *B, const int32_t *B_rowsum,
         pthread_mutex_unlock(&g_pool.mtx);
         return 0;
     }
+    g_pool.busy = 1;                            /* claim the slot before publishing */
     g_pool.arg = (gemm_worker_arg){A, B, B_rowsum, C, M, N, K, 0, nblk, jblock};
     g_pool.target = target;
     g_pool.next_slice = 0;
@@ -529,6 +545,7 @@ static int _pool_run(const int8_t *A, const int8_t *B, const int32_t *B_rowsum,
     pthread_mutex_lock(&g_pool.mtx);
     while (g_pool.done_seq < g_pool.nworkers)
         pthread_cond_wait(&g_pool.done_cv, &g_pool.mtx);
+    g_pool.busy = 0;                            /* release the slot */
     pthread_mutex_unlock(&g_pool.mtx);
     return 1;
 }

@@ -330,7 +330,7 @@ def test_slow_paths_txt_entries_exist_and_stay_in_testpaths() -> None:
     assert entries, "the shipped slow list must not be empty"
     missing = [e for e in entries if not (REPO_ROOT / e).exists()]
     assert not missing, f"slow_paths.txt entries do not exist: {missing}"
-    testpaths = ("tests/", "apps/cli/tests/", "packages/grib/tests/", "packages/planner/tests/")
+    testpaths = ("tests/",)
     outside = [e for e in entries if not e.startswith(testpaths)]
     assert not outside, f"slow_paths.txt entries are outside pytest testpaths: {outside}"
 
