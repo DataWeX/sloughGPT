@@ -181,6 +181,71 @@ class TestMatmulInt8F32:
             assert np.all(np.isfinite(result))
 
 
+class TestPoolReentrancy:
+    """The C GEMM pool has ONE job slot; concurrent dispatchers must not
+    reset each other's counters (lost wakeup -> deadlock) nor return while a
+    worker still writes their buffers (UAF). Regression for the `_pool_run`
+    missing reentrancy guard: pre-fix this deadlocks on the first round at
+    these shapes; post-fix every dispatcher either owns the slot or takes the
+    per-call fallback, and all results stay bit-identical.
+    """
+
+    @staticmethod
+    def _shapes():
+        # jblock = clamp(262144 / K); K=512 -> 512, so N=4096 gives nblk=8
+        # (>= 2 slices) and the threaded pool path is actually taken.
+        return 8, 4096, 512
+
+    def test_concurrent_dispatch_no_deadlock_bit_identical(self, monkeypatch):
+        if not HAS_AVX2:
+            pytest.skip("threaded pool is compiled only under __AVX2__")
+        import threading
+
+        monkeypatch.setenv("MAN_GEMM_THREADS", "4")  # force pool path on any host
+
+        M, N, K = self._shapes()
+        rng = np.random.default_rng(7)
+        A = rng.standard_normal((M, K)).astype(np.float32)
+        B = rng.integers(-127, 128, (N, K), dtype=np.int8)
+        B_scale = rng.random(N).astype(np.float32) * 0.01 + 0.001
+        bias = rng.standard_normal(N).astype(np.float32)
+
+        ref = matmul_int8_f32_c(A, B, B_scale, bias)
+        if ref is None:
+            pytest.skip("C library unavailable")
+
+        nthreads, calls = 4, 6
+        errors: list[str] = []
+        out: list[np.ndarray | None] = [None] * nthreads
+        done = [threading.Event() for _ in range(nthreads)]
+
+        def work(t: int) -> None:
+            try:
+                for _ in range(calls):
+                    out[t] = matmul_int8_f32_c(A, B, B_scale, bias)
+            except BaseException as exc:  # noqa: BLE001 - surfaced in errors
+                errors.append(f"thread {t}: {type(exc).__name__}: {exc}")
+            finally:
+                done[t].set()
+
+        # Daemon threads: a regression must fail the test, not hang pytest.
+        workers = [
+            threading.Thread(target=work, args=(t,), daemon=True)
+            for t in range(nthreads)
+        ]
+        for w in workers:
+            w.start()
+        for t, ev in enumerate(done):
+            assert ev.wait(60), f"thread {t} deadlocked in the GEMM pool"
+        for w in workers:
+            w.join(5)
+
+        assert not errors, errors
+        for t in range(nthreads):
+            assert out[t] is not None, f"thread {t} produced no result"
+            np.testing.assert_array_equal(out[t], ref)
+
+
 # ── HAS_AVX2 flag ────────────────────────────────────────────────────
 
 
