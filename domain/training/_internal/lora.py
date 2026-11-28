@@ -633,6 +633,153 @@ def print_lora_summary(model):
 
 
 # =============================================================================
+# State-dict merge (checkpoint boundary)
+# =============================================================================
+
+# Attribute path -> canonical state-dict prefix. The trainer names adapters by
+# the module attribute (`blocks.0.attn.W_q.lora_A`) while the base weight is
+# saved under the canonical projection name (`blocks.0.attn.q_proj.weight`,
+# see ``SloMultiHeadAttention._named_mha``). A merge that used the adapter
+# prefix verbatim would look for a tensor that does not exist and silently
+# keep the base weight — the exact defect this function exists to fix.
+_LORA_BASE_PREFIXES = (
+    (".attn.W_q", ".attn.q_proj"),
+    (".attn.W_k", ".attn.k_proj"),
+    (".attn.W_v", ".attn.v_proj"),
+    (".attn.W_o", ".attn.o_proj"),
+)
+
+
+def _lora_base_key(prefix: str, state_dict: dict) -> str:
+    """Resolve an adapter prefix to the base weight key it modifies."""
+    for attr, canonical in _LORA_BASE_PREFIXES:
+        if prefix.endswith(attr):
+            candidate = prefix[: -len(attr)] + canonical + ".weight"
+            if candidate in state_dict:
+                return candidate
+    candidate = prefix + ".weight"
+    if candidate in state_dict:
+        return candidate
+    raise ValueError(
+        f"LoRA adapter prefix {prefix!r} has no base weight: tried "
+        f"{[prefix[: -len(a)] + c + '.weight' for a, c in _LORA_BASE_PREFIXES if prefix.endswith(a)] + [candidate]}"
+    )
+
+
+def merge_lora_state_dict(
+    state_dict: dict,
+    *,
+    rank: int | None = None,
+    alpha: float | None = None,
+) -> tuple[dict, dict]:
+    """Fold LoRA/IA3 adapters into the base weights of a saved state dict.
+
+    A ``.soul`` checkpoint stores adapters as siblings of the frozen base
+    (``<prefix>.lora_A`` / ``.lora_B``, or ``.lora_s`` for IA3). Neither the
+    compiler nor ``from_soul`` rebuilds LoRA modules, so loading such a
+    checkpoint without this merge silently serves the base model — the
+    fine-tune disappears at the format boundary. Merging is the documented
+    semantics (``LoRALinear.merge_weights``): ``W + (alpha / rank) * (B @ A)``,
+    or ``W * lora_s`` for IA3.
+
+    Args:
+        state_dict: Tensors as saved (numpy arrays keyed by canonical name).
+        rank: Adapter rank. Inferred from ``lora_A`` when omitted.
+        alpha: LoRA alpha. Defaults to ``LoRAConfig().alpha`` when omitted
+            (16.0) — callers should pass the checkpoint's recorded value.
+
+    Returns:
+        ``(merged_state_dict, info)``. ``info`` carries ``merged`` (adapter
+        count), ``rank``, ``alpha``, ``scale`` and ``ia3`` (IA3 count). A dict
+        with no adapters is returned unchanged with ``merged == 0``.
+
+    Raises:
+        ValueError: On unpaired adapters, inconsistent ranks, or a shape that
+            cannot fold into its base weight. Failing loud is deliberate: a
+            partial merge is worse than a refused one.
+    """
+    out = dict(state_dict)
+    a_keys = sorted(k for k in out if k.endswith(".lora_A"))
+    b_keys = sorted(k for k in out if k.endswith(".lora_B"))
+    s_keys = sorted(k for k in out if k.endswith(".lora_s"))
+    if not (a_keys or b_keys or s_keys):
+        return out, {"merged": 0, "rank": None, "alpha": None, "scale": None, "ia3": 0}
+
+    a_prefixes = {k[: -len(".lora_A")] for k in a_keys}
+    b_prefixes = {k[: -len(".lora_B")] for k in b_keys}
+    if a_prefixes != b_prefixes:
+        raise ValueError(
+            "unpaired LoRA adapters: A without B "
+            f"{sorted(a_prefixes - b_prefixes)}, B without A {sorted(b_prefixes - a_prefixes)}"
+        )
+
+    # IA3-only checkpoints have no A/B pair and therefore no rank or alpha;
+    # their scale lives entirely in lora_s.
+    scale = None
+    if a_prefixes:
+        inferred_ranks = {int(out[p + ".lora_A"].shape[0]) for p in a_prefixes}
+        if rank is None:
+            if len(inferred_ranks) != 1:
+                raise ValueError(f"cannot infer one LoRA rank from {sorted(inferred_ranks)}")
+            rank = inferred_ranks.pop()
+        elif inferred_ranks and inferred_ranks != {rank}:
+            raise ValueError(
+                f"declared LoRA rank {rank} contradicts checkpoint {sorted(inferred_ranks)}"
+            )
+        rank = int(rank)
+
+        if alpha is None:
+            alpha = float(LoRAConfig().alpha)
+            logger.warning(
+                "merge_lora_state_dict: checkpoint records no LoRA alpha; assuming %.1f "
+                "(rank %d) — re-save with metadata.lora to pin it",
+                alpha,
+                rank,
+                extra={"tag": "TRAIN"},
+            )
+        alpha = float(alpha)
+        scale = alpha / rank
+
+    merged = 0
+    for prefix in sorted(a_prefixes):
+        a = _to_np(out[prefix + ".lora_A"]).astype(np.float32)
+        b = _to_np(out[prefix + ".lora_B"]).astype(np.float32)
+        base_key = _lora_base_key(prefix, out)
+        base = _to_np(out[base_key]).astype(np.float32)
+        delta = (b @ a) * scale
+        if delta.shape != base.shape:
+            raise ValueError(
+                f"LoRA delta for {base_key} is {delta.shape}, base is {base.shape} "
+                f"(A {a.shape}, B {b.shape}, rank {rank})"
+            )
+        out[base_key] = (base + delta).astype(np.asarray(out[base_key]).dtype)
+        del out[prefix + ".lora_A"]
+        del out[prefix + ".lora_B"]
+        merged += 1
+
+    for key in sorted(s_keys):
+        prefix = key[: -len(".lora_s")]
+        base_key = _lora_base_key(prefix, out)
+        base = _to_np(out[base_key]).astype(np.float32)
+        s = _to_np(out[prefix + ".lora_s"]).astype(np.float32).reshape(-1)
+        if s.shape[0] != base.shape[0]:
+            raise ValueError(
+                f"IA3 scale for {base_key} has {s.shape[0]} rows, base has {base.shape[0]}"
+            )
+        out[base_key] = (base * s[:, np.newaxis]).astype(np.asarray(out[base_key]).dtype)
+        del out[prefix + ".lora_s"]
+        merged += 1
+
+    return out, {
+        "merged": merged,
+        "rank": rank,
+        "alpha": alpha,
+        "scale": scale,
+        "ia3": len(s_keys),
+    }
+
+
+# =============================================================================
 
 __all__ = [
     "LoRAType",
@@ -644,4 +791,5 @@ __all__ = [
     "get_lora_parameters",
     "count_lora_parameters",
     "print_lora_summary",
+    "merge_lora_state_dict",
 ]

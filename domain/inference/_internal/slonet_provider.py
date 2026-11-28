@@ -1034,6 +1034,26 @@ class SloNetChatProvider:
         weights = {k: v for k, v in state_dict.items() if hasattr(v, "shape")}
         cfg = soul.metadata.get("config") or {}
 
+        # A LoRA fine-tune is stored as adapters beside the frozen base. This
+        # loader builds the base architecture only, so adapters that are not
+        # folded in are dropped by load_state_dict and inference silently
+        # serves the un-finetuned model. Merge them here, using the rank/alpha
+        # the trainer recorded in metadata.
+        if any(k.endswith((".lora_A", ".lora_B", ".lora_s")) for k in weights):
+            from domain.training._internal.lora import merge_lora_state_dict
+
+            lora_meta = soul.metadata.get("lora") or {}
+            weights, lora_info = merge_lora_state_dict(
+                weights, rank=lora_meta.get("rank"), alpha=lora_meta.get("alpha")
+            )
+            logger.info(
+                "from_soul: merged %d LoRA adapter(s) into base weights (rank=%s alpha=%s)",
+                lora_info["merged"],
+                lora_info["rank"],
+                lora_info["alpha"],
+                extra={"tag": "INF"},
+            )
+
         # Infer intermediate_size from native w1 when not stored in config.
         intermediate_size = cfg.get("intermediate_size")
         if not intermediate_size:
@@ -1079,7 +1099,17 @@ class SloNetChatProvider:
             build_cfg["rms_norm_eps"] = cfg.get("rms_norm_eps", 1e-5)
 
         model = build_model_from_config(build_cfg, _lazy=True)
-        model.load_state_dict(weights)
+        missing = model.load_state_dict(weights)
+        if missing:
+            # load_state_dict drops keys the architecture does not have. After
+            # the adapter merge above this can only be a genuine mismatch, and
+            # silence here is how a fine-tune or a vocab change disappears.
+            logger.warning(
+                "from_soul: %d tensor(s) not applied (%s)",
+                len(missing),
+                ", ".join(missing[:8]) + (" …" if len(missing) > 8 else ""),
+                extra={"tag": "INF"},
+            )
 
         # Create instance (bypass __init__)
         instance = cls.__new__(cls)

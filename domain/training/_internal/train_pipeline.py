@@ -3314,6 +3314,19 @@ class SloughGPTTrainer:
         }
         if _intermediate:
             soul.metadata["config"]["intermediate_size"] = int(_intermediate)
+
+        # Persist the adapter recipe. The weights are saved in separable form
+        # (frozen base + lora_A/lora_B siblings), and folding them back needs
+        # alpha — without this, a reader can infer rank from the shapes but not
+        # the scale, and has to guess. merged=False records that the tensors on
+        # disk are still separable (compile/from_soul merge on read).
+        if getattr(self.config, "use_lora", False):
+            soul.metadata["lora"] = {
+                "rank": int(getattr(self.config, "lora_rank", 8)),
+                "alpha": float(getattr(self.config, "lora_alpha", 16)),
+                "merged": False,
+            }
+
         if training_duration is not None:
             soul.metadata["training_duration_s"] = training_duration
         if avg_quality is not None:

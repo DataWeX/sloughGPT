@@ -110,8 +110,17 @@ def main() -> int:
     metrics["bridge_s"] = round(time.perf_counter() - t0, 4)
     metrics["slnc_bytes"] = slnc_path.stat().st_size
 
-    # 3) Weight identity
-    _, sd = load_soul(str(soul_path))
+    # 3) Weight identity. A LoRA checkpoint stores adapters beside the frozen
+    # base; the .slnc stores the merged weights, so the comparison must be
+    # against the effective (merged) state dict, not the raw one.
+    soul_profile, sd = load_soul(str(soul_path))
+    from domain.training._internal.lora import merge_lora_state_dict
+
+    lora_meta = (getattr(soul_profile, "metadata", None) or {}).get("lora") or {}
+    sd, lora_info = merge_lora_state_dict(
+        sd, rank=lora_meta.get("rank"), alpha=lora_meta.get("alpha")
+    )
+    metrics["lora"] = lora_info
     from domain.inference._internal.slonet_provider import SloNetChatProvider
 
     t0 = time.perf_counter()
@@ -139,6 +148,21 @@ def main() -> int:
     metrics["first_token_soul_ms"] = round(_first_token_ms(p_soul), 3)
     metrics["first_token_slnc_ms"] = round(_first_token_ms(p_slnc), 3)
 
+    # 4b) Greedy equivalence — weight identity is necessary but not sufficient:
+    # the artifact must also *behave* like the checkpoint. Greedy decoding
+    # (temperature 0) makes the comparison deterministic.
+    def _greedy(provider, max_tokens: int = 8) -> str:
+        try:
+            return provider.generate("Hi", max_tokens=max_tokens, temperature=0.0)
+        except Exception as exc:  # a load that cannot generate is a failure, not a skip
+            return f"<error: {exc}>"
+
+    greedy_soul = _greedy(p_soul)
+    greedy_slnc = _greedy(p_slnc)
+    metrics["greedy_soul"] = greedy_soul
+    metrics["greedy_slnc"] = greedy_slnc
+    metrics["greedy_identical"] = greedy_soul == greedy_slnc
+
     # 5) Peak memory during bridge+loads (approx)
     tracemalloc.start()
     soul_to_slnc(soul_path, tmp / "owned2.slnc")
@@ -146,7 +170,7 @@ def main() -> int:
     tracemalloc.stop()
     metrics["bridge_peak_mb"] = round(peak / (1024 * 1024), 2)
 
-    passed = metrics["weight_identity_pass"]
+    passed = metrics["weight_identity_pass"] and metrics["greedy_identical"]
     metrics["passed"] = passed
 
     print(json.dumps(metrics, indent=2, default=str))

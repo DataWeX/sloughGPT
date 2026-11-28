@@ -315,6 +315,25 @@ class SLNCCompiler:
             # Informational marker so tooling can tell "tied" from "lost".
             config = {**config, "tied_embeddings": True}
 
+        # Nothing may vanish between input and file. _order_tensors emits only
+        # keys its fixed layout knows, so anything else (LoRA adapters, new
+        # buffers, a renamed projection) was silently absent from the .slnc —
+        # a compiled model that is quietly not the model that was trained.
+        # The tied head is the one deliberate omission, and only when the byte
+        # comparison above proved it is a duplicate.
+        written = {name for name, _ in tensor_list}
+        dropped = [k for k in weights if k not in written]
+        if config.get("tied_embeddings"):
+            dropped = [k for k in dropped if k not in ("lm_head.weight", "model.lm_head.weight")]
+        if dropped:
+            logger.warning(
+                "%d tensor(s) not in the layout were dropped from %s: %s",
+                len(dropped),
+                output,
+                ", ".join(sorted(dropped)[:10]) + (" …" if len(dropped) > 10 else ""),
+                extra={"tag": "INFRA"},
+            )
+
         # Validate ndim for all tensors
         for name, tensor in tensor_list:
             if len(tensor.shape) > MAX_NDIM:
