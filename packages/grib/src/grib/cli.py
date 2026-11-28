@@ -298,35 +298,74 @@ def _board_query(args: argparse.Namespace) -> int:
 
 
 def _verify(args: argparse.Namespace) -> int:
-    from grib.verify import format_report, verify_note
+    from grib.verify import find_md_by_title, format_report, parse_frontmatter, verify_meta
 
+    store = _get_store(args)
     note_path = Path(args.note)
-    if not note_path.exists():
-        # resolve by title substring across journal markdown notes: the
-        # project notes dir first, then the user fallback (~/.config/dev-notes)
-        search_dirs = [config.default_notes_dir()]
-        if config.NOTES_FALLBACK not in search_dirs:
-            search_dirs.append(config.NOTES_FALLBACK)
-        matches = [
-            p
-            for d in search_dirs
-            for p in sorted(Path(d).glob("*.md"))
-            if args.note.lower() in p.stem.lower()
-        ]
-        matches = sorted(set(matches))
-        if len(matches) == 1:
-            note_path = matches[0]
-        elif not matches:
-            print(f"verify: no note matching '{args.note}'")
+    note = None
+
+    if note_path.exists():
+        note = store.get_note(note_path.stem)
+    else:
+        # Resolve through the journal first: it is the live store. md-only
+        # notes (pre-backend-flip) still fall through to the path scan below.
+        q = args.note.lower()
+        notes = store.list_notes(limit=99999)
+        hits = [n for n in notes if n.id.lower() == q]
+        if not hits:
+            hits = [n for n in notes if n.id.lower().startswith(q)]
+        if not hits:
+            hits = [n for n in notes if q in (n.title or "").lower()]
+        if len(hits) > 1:
+            print(f"verify: '{args.note}' matches {len(hits)} notes — use a longer id:")
+            for n in hits[:8]:
+                print(f"  {n.id}  [{n.status}]  {(n.title or '')[:60]}")
             return 1
-        else:
-            print(f"verify: '{args.note}' matches {len(matches)} notes — give a path or more text")
-            return 1
+        if hits:
+            note = hits[0]
+
+    if note is not None:
+        meta: dict[str, str] = {}
+        # md still supplies what the Note model does not carry (landed:).
+        # Join by title — md filenames (YYYY-MM-DD-slug) are not note ids.
+        md = find_md_by_title(note.title, [config.default_notes_dir(), config.NOTES_FALLBACK])
+        if md is not None:
+            meta.update(parse_frontmatter(md))
+        # Journal wins on everything it models — md frontmatter froze at the
+        # backend flip, so trusting it here is the 20261119_105234 bug.
+        meta["title"] = note.title
+        meta["status"] = note.status
+        meta["board"] = note.card_id
+    else:
+        # Legacy md-only note: use the given path, else resolve one by name.
+        if not note_path.exists():
+            search_dirs = [config.default_notes_dir()]
+            if config.NOTES_FALLBACK not in search_dirs:
+                search_dirs.append(config.NOTES_FALLBACK)
+            matches = [
+                p
+                for d in search_dirs
+                for p in sorted(Path(d).glob("*.md"))
+                if args.note.lower() in p.stem.lower()
+            ]
+            matches = sorted(set(matches))
+            if len(matches) == 1:
+                note_path = matches[0]
+            elif not matches:
+                print(f"verify: no note matching '{args.note}'")
+                return 1
+            else:
+                print(
+                    f"verify: '{args.note}' matches {len(matches)} notes — give a path or more text"
+                )
+                return 1
+        meta = parse_frontmatter(note_path)
+        meta.setdefault("title", note_path.stem)
 
     board_file = (
         Path(args.board_file) if args.board_file else config.default_board_dir() / "board.jsonl"
     )
-    findings = verify_note(note_path, board_file, Path(args.repo))
+    findings = verify_meta(meta, board_file, Path(args.repo))
     print(format_report(findings))
     return 0 if all(f.ok for f in findings) else 1
 

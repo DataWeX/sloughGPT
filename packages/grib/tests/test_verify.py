@@ -6,6 +6,8 @@ truth; verify reports any drift against the board card and against the
 commits actually present/landed in a git repo.
 """
 
+import contextlib
+import io
 import json
 import subprocess
 from pathlib import Path
@@ -216,3 +218,97 @@ def test_cli_resolves_title_in_user_fallback_notes_dir(tmp_path, git_repo, monke
 
     rc = main(["verify", "card094", "--repo", str(repo)])
     assert rc == 0
+
+
+# ── Journal precedence: the journal is the live store, md is legacy ──────
+
+
+def test_verify_meta_accepts_resolved_journal_meta(board):
+    """The diff itself operates on a resolved meta dict, not a file."""
+    from grib.verify import verify_meta
+
+    findings = verify_meta(
+        {"title": "Card X", "status": "done", "board": "uuid-1"}, board, Path(".")
+    )
+    assert all(f.ok for f in findings), [f for f in findings if not f.ok]
+
+
+def test_verify_meta_flags_status_drift_without_a_file(board):
+    from grib.verify import verify_meta
+
+    _write_board(board, [_card("uuid-1", "Card X", "todo")])
+    findings = verify_meta(
+        {"title": "Card X", "status": "done", "board": "uuid-1"}, board, Path(".")
+    )
+    bad = [f for f in findings if f.kind == "status" and not f.ok]
+    assert bad, f"status drift not detected: {findings}"
+
+
+def test_cli_verify_reads_journal_not_stale_md(tmp_path, monkeypatch):
+    """Regression (card 20261119_105234): a card closed through the journal
+    backend reported a false status diff because verify read md frontmatter.
+
+    Journal says done, the card is done, the md mirror is frozen at todo —
+    verify must agree with the journal (and the board), exit 0.
+    """
+    from grib.cli import main
+    from grib.store import PlannerStore, reset_store
+
+    notes = tmp_path / "notes"
+    board_dir = tmp_path / "boarddir"
+    notes.mkdir()
+    board_dir.mkdir()
+    _write_board(board_dir / "board.jsonl", [_card("card-9", "Card X", "done")])
+
+    reset_store()
+    s = PlannerStore(board_dir=board_dir, notes_dir=notes)
+    note = s.create_note("Card X", status="done")
+    s.update_note(note.id, card_id="card-9")
+
+    # stale md mirror: journal-only fields won, so this must be ignored
+    _write_note(notes / f"{note.id}.md", status="todo", board="stale-uuid")
+
+    monkeypatch.setenv("GRIB_NOTES_DIR", str(notes))
+    monkeypatch.setenv("GRIB_BOARD_DIR", str(board_dir))
+    reset_store()
+    try:
+        rc = main(["verify", note.id, "--repo", str(tmp_path)])
+    finally:
+        reset_store()
+    assert rc == 0, "journal status/card_id must win over stale md frontmatter"
+
+
+def test_cli_verify_landed_still_comes_from_md(tmp_path, monkeypatch, git_repo):
+    """The journal does not model `landed:`, so md remains its source."""
+    from grib.cli import main
+    from grib.store import PlannerStore, reset_store
+
+    repo, sha = git_repo
+    notes = tmp_path / "notes"
+    board_dir = tmp_path / "boarddir"
+    notes.mkdir()
+    board_dir.mkdir()
+    _write_board(board_dir / "board.jsonl", [_card("card-9", "Card X", "done")])
+
+    reset_store()
+    s = PlannerStore(board_dir=board_dir, notes_dir=notes)
+    note = s.create_note("Card X", status="done")
+    s.update_note(note.id, card_id="card-9")
+    # Real md filenames are YYYY-MM-DD-slug.md — never the journal note id.
+    # Joining the layers by filename would silently drop `landed:` here.
+    _write_note(notes / "2026-11-19-card-x.md", status="todo", board="stale-uuid", landed=sha)
+
+    monkeypatch.setenv("GRIB_NOTES_DIR", str(notes))
+    monkeypatch.setenv("GRIB_BOARD_DIR", str(board_dir))
+    reset_store()
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            rc = main(["verify", note.id, "--repo", str(repo)])
+    finally:
+        reset_store()
+    out = buf.getvalue()
+    assert rc == 0, out
+    # rc==0 alone would also pass if landed were dropped entirely: assert
+    # the sha was actually checked and reported as landed.
+    assert "[git]" in out and sha[:7] in out and "landed" in out, out
