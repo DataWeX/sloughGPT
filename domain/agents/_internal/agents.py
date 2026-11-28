@@ -101,6 +101,8 @@ class ToolCapability(Enum):
     IMAGE_ANALYSIS = "image_analysis"
     DATA_ANALYSIS = "data_analysis"
     CITATION = "citation"
+    WORKSPACE_SCAFFOLD = "workspace_scaffold"
+    WORKSPACE_WRITE = "workspace_write"
 
 
 @dataclass
@@ -164,6 +166,10 @@ class ToolRunner:
             return await self._run_image_analysis(args, context)
         elif tool_name == ToolCapability.DATA_ANALYSIS.value:
             return await self._run_data_analysis(args, context)
+        elif tool_name == ToolCapability.WORKSPACE_SCAFFOLD.value:
+            return await self._run_workspace_scaffold(args, context)
+        elif tool_name == ToolCapability.WORKSPACE_WRITE.value:
+            return await self._run_workspace_write(args, context)
         else:
             return {"error": f"Unknown tool: {tool_name}", "success": False}
 
@@ -638,6 +644,44 @@ class ToolRunner:
         except Exception as e:
             return {"error": str(e), "success": False}
 
+    async def _run_workspace_scaffold(
+        self,
+        args: dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> dict[str, Any]:
+        """Create a project on disk (shared workspace module)."""
+        from domain.agents._internal.workspace import WorkspaceError, scaffold
+
+        try:
+            result = scaffold(
+                template=args.get("template", "static"),
+                name=args.get("name", ""),
+                title=args.get("title", ""),
+                tagline=args.get("tagline", ""),
+                sections=args.get("sections", ""),
+            )
+        except WorkspaceError as e:
+            return {"error": str(e), "success": False}
+        return {"success": True, **result}
+
+    async def _run_workspace_write(
+        self,
+        args: dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> dict[str, Any]:
+        """Write one file inside an existing project (path-guarded)."""
+        from domain.agents._internal.workspace import WorkspaceError, write_file
+
+        try:
+            result = write_file(
+                project=args.get("project", ""),
+                path=args.get("path", ""),
+                content=args.get("content", ""),
+            )
+        except WorkspaceError as e:
+            return {"error": str(e), "success": False}
+        return {"success": True, **result}
+
 
 # ============ Agent ============
 
@@ -825,7 +869,19 @@ class Agent:
         keyword matcher — conservative patterns only (quoted searches,
         code blocks) — until SFT tool-use training lands.
         """
+        # A build is terminal: the artifact report is the answer, so the loop
+        # must not re-plan (or ask the model for the next step) after files
+        # were written.
+        if any(o.get("tool") in _BUILD_TOOLS for o in observations):
+            return []
         if self._inference_fn:
+            # Explicit build requests are deterministic and outrank the model
+            # plan: the 0.5B answers "Build a web" with [] (or an unrelated
+            # search), and either way the user asked for files, not research.
+            if not observations and self._can_build():
+                build = _build_plan(request)
+                if build:
+                    return build
             plan = await self._plan_with_llm(request, observations)
             if plan:
                 return plan
@@ -882,6 +938,15 @@ class Agent:
         """
         return await self._plan_next(request, context, [])
 
+    def _can_build(self) -> bool:
+        """May this agent write project artifacts?
+
+        ``code_execution`` already lets a run write files via ``open()``, so
+        the build tools add no privilege beyond what the agent was granted.
+        """
+        allowed = set(self.config.tools)
+        return bool(allowed & {ToolCapability.WORKSPACE_SCAFFOLD, ToolCapability.CODE_EXECUTION})
+
     def _plan_with_keywords(
         self,
         request: str,
@@ -889,6 +954,16 @@ class Agent:
         """Plan tools using simple keyword matching."""
         plan = []
         lower = request.lower()
+
+        # Build intent is deterministic, not a model decision: the 0.5B plans
+        # [] for explicit tool requests (0/5 live), so "Build a web" used to
+        # fall through to plain chat and answer with a tutorial. A build verb
+        # + an artifact noun is enough to scaffold — the capability writes the
+        # files; the model only names the project.
+        if self._can_build():
+            build = _build_plan(request)
+            if build:
+                return build
 
         if "code" in lower or "execute" in lower or "run" in lower:
             code_match = re.search(r"```(\w+)?\n(.+?)```", request, re.DOTALL)
@@ -1046,6 +1121,12 @@ class Agent:
         tool_results: list[dict[str, Any]],
     ) -> str:
         """Produce the final answer: model reads observations, compose is fallback."""
+        # A run that wrote artifacts reports the manifest, never a model
+        # synthesis: the 0.5B turned "Build a web" into a tutorial even after
+        # the files existed. Deterministic composition is the honest answer.
+        report = _compose_artifact_report(tool_results)
+        if report:
+            return report
         if self._inference_fn:
             try:
                 if observations:
@@ -1106,13 +1187,76 @@ class Agent:
 # ============ Singleton Instances ============
 
 
+#: Tools whose success is a terminal state for the run (the artifact report
+#: is the answer; re-planning after files exist only invites a lecture).
+_BUILD_TOOLS = {
+    ToolCapability.WORKSPACE_SCAFFOLD.value,
+    ToolCapability.WORKSPACE_WRITE.value,
+}
+
+#: build verb + artifact noun, same clause. Deliberately excludes "make"
+#: ("make the app faster" is an edit, not a build) and "write" (a blog post
+#: is not a project).
+_BUILD_RE = re.compile(
+    r"\b(?:build|create|scaffold|generate|code)\b[^.?!\n]*?"
+    r"\b(?:website|web\s*site|web\s*app|web\s*page|web|landing\s*page|site|app|"
+    r"application|dashboard|api|service|portfolio|blog|frontend|front-end|"
+    r"backend|back-end)\b",
+    re.IGNORECASE,
+)
+
+_VITE_RE = re.compile(r"\b(?:react|vite|frontend|front-end|spa|next\.?js)\b", re.IGNORECASE)
+_API_RE = re.compile(
+    r"\b(?:api|backend|back-end|server|fastapi|flask|django|service|endpoint)\b", re.IGNORECASE
+)
+
+
+def _build_template(request: str) -> str:
+    """Pick a template from the request's stack words (default: static)."""
+    if _VITE_RE.search(request):
+        return "vite-react"
+    if _API_RE.search(request):
+        return "fastapi"
+    return "static"
+
+
+def _build_plan(request: str) -> list[tuple[str, dict[str, Any]]]:
+    """Deterministic build plan for "build/create ... a site/app/api"."""
+    if not _BUILD_RE.search(request):
+        return []
+    from domain.agents._internal.workspace import slugify, titleize
+
+    return [
+        (
+            ToolCapability.WORKSPACE_SCAFFOLD.value,
+            {
+                "name": slugify(titleize(request)),
+                "template": _build_template(request),
+                "title": titleize(request),
+            },
+        )
+    ]
+
+
+def _compose_artifact_report(tool_results: list[dict[str, Any]]) -> str:
+    """The manifest report for a run that wrote artifacts ("" otherwise)."""
+    reports = [
+        str(tr["result"]["output"])
+        for tr in tool_results
+        if isinstance(tr.get("result"), dict)
+        and tr["result"].get("artifact")
+        and tr["result"].get("output")
+    ]
+    return "\n".join(reports)
+
+
 def _result_summary(result: Any) -> str:
     """One-line human/model summary of a tool result (loop observation)."""
     if not isinstance(result, dict):
         return str(result)[:300]
     if not result.get("success", True):
         return f"error: {result.get('error', 'unknown')}"
-    for key in ("stdout", "answer", "text", "results", "files", "citations"):
+    for key in ("output", "stdout", "answer", "text", "results", "files", "citations"):
         if key in result:
             value = result[key]
             if isinstance(value, str):

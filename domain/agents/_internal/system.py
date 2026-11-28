@@ -39,7 +39,13 @@ DEFAULT_AGENTS: dict[str, dict[str, Any]] = {
         "name": "Coder",
         "description": "Programming and code execution",
         "instructions": "You are an expert programmer. Write clean, well-documented code.",
-        "tools": ["code_execution", "file_search", "terminal"],
+        "tools": [
+            "code_execution",
+            "file_search",
+            "terminal",
+            "workspace_scaffold",
+            "workspace_write",
+        ],
         "avatar": "C",
     },
     "researcher": {
@@ -218,7 +224,19 @@ class AgentSystem:
         if agent_data is None:
             return None
         tool_names = agent_data.get("tools", [])
-        tools = [ToolCapability(t) for t in tool_names if t in [c.value for c in ToolCapability]]
+        known = {c.value for c in ToolCapability}
+        tools = [ToolCapability(t) for t in tool_names if t in known]
+        # A dropped name used to vanish without a trace (default agents carry
+        # "memory"/"terminal", which are not capabilities yet) — say so once
+        # per construction instead of silently shrinking the agent's powers.
+        dropped = [t for t in tool_names if t not in known]
+        if dropped:
+            logger.warning(
+                "Agent %s declares unknown tools (dropped): %s",
+                agent_id,
+                ", ".join(dropped),
+                extra={"tag": "AGENT"},
+            )
         tier = agent_data.get("inference_tier", "main")
         if tier not in ("fast", "main"):
             tier = "main"

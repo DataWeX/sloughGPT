@@ -168,6 +168,8 @@ data/sample.jsonl
 # Data directories (repo root only — do not ignore web/app/(app)/datasets)
 /datasets/
 /runs/
+# Agent-built projects (regenerable artifacts, never source)
+data/agent-projects/
 /out/
 
 # Runtime data stores in nested app/package locations (never source).

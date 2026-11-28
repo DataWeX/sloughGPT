@@ -262,7 +262,7 @@ class TestSecurityBoundary:
 
 class TestToolCapability:
     def test_all_members(self):
-        assert len(ToolCapability) == 8
+        assert len(ToolCapability) == 10
 
     def test_values(self):
         assert ToolCapability.CODE_EXECUTION.value == "code_execution"
@@ -273,6 +273,8 @@ class TestToolCapability:
         assert ToolCapability.IMAGE_ANALYSIS.value == "image_analysis"
         assert ToolCapability.DATA_ANALYSIS.value == "data_analysis"
         assert ToolCapability.CITATION.value == "citation"
+        assert ToolCapability.WORKSPACE_SCAFFOLD.value == "workspace_scaffold"
+        assert ToolCapability.WORKSPACE_WRITE.value == "workspace_write"
 
     def test_member_names(self):
         names = [m.name for m in ToolCapability]
@@ -292,7 +294,7 @@ class TestToolCapability:
         count = 0
         for _cap in ToolCapability:
             count += 1
-        assert count == 8
+        assert count == 10
 
     def test_membership(self):
         assert ToolCapability.CODE_EXECUTION in ToolCapability
@@ -555,7 +557,7 @@ class TestAgentConfig:
 
     def test_all_tool_capabilities(self):
         ac = AgentConfig(tools=list(ToolCapability))
-        assert len(ac.tools) == 8
+        assert len(ac.tools) == 10
 
     def test_tools_is_list(self):
         ac = AgentConfig()
