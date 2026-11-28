@@ -359,6 +359,16 @@ class TestEstimateParams:
             ("qwen-0.5b", 500000000),
             ("tiny-125m", 125000000),
             ("unknown", 0),
+            # Sizes the old fixed ladder never enumerated returned 0, so the
+            # UI showed "unknown parameters" for real, common models.
+            ("Qwen/Qwen2.5-14B-Instruct", 14000000000),
+            ("Qwen/Qwen3-0.6B", 600000000),
+            ("meta-llama/Llama-3.2-4B-Instruct", 4000000000),
+            ("meta-llama/Llama-3.3-70B-Instruct", 70000000000),
+            ("google/gemma-2-2.6b", 2600000000),
+            ("pythia-2.8b", 2800000000),
+            ("llama-7b-instruct", 7000000000),
+            ("some-4e1t-model", 0),
         ],
     )
     def test_estimates(self, ctrl, mid, expected):

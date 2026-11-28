@@ -4,6 +4,7 @@ Models Controller - Business logic for model management
 
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime
@@ -1028,27 +1029,23 @@ class ModelsController:
 
     @staticmethod
     def _estimate_params(model_id: str) -> int:
-        """Estimate parameter count from model ID string."""
-        m = model_id.lower()
-        if any(x in m for x in ("13b", "12b")):
-            return 13000000000
-        if "7b" in m:
-            return 7000000000
-        if "3b" in m:
-            return 3000000000
-        if any(x in m for x in ("2.7b", "2b8")):
-            return 2700000000
-        if "1.5b" in m:
-            return 1500000000
-        if "1b" in m:
-            return 1000000000
-        if any(x in m for x in ("0.5b", "500m")):
-            return 500000000
-        if "350m" in m:
-            return 350000000
-        if "125m" in m:
-            return 125000000
-        return 0
+        """Estimate parameter count from the size token in a model ID.
+
+        Reads any ``<number>b`` / ``<number>m`` token (14b, 0.6b, 4b, 70b,
+        350m) instead of a fixed ladder: the ladder silently returned 0 for
+        every size it had not enumerated (14b, 0.6b, 4b), which the UI
+        rendered as unknown parameters. A token glued to another digit
+        (``4e1t``) or letter is not a size.
+        """
+        match = re.search(
+            r"(?<![\d.])(\d+(?:\.\d+)?)\s*([bm])(?![a-z0-9])",
+            model_id.lower(),
+        )
+        if not match:
+            return 0
+        value = float(match.group(1))
+        scale = 1_000_000_000 if match.group(2) == "b" else 1_000_000
+        return int(value * scale)
 
 
 _models_controller: ModelsController | None = None
