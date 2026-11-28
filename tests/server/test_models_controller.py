@@ -359,6 +359,14 @@ class TestEstimateParams:
             ("qwen-0.5b", 500000000),
             ("tiny-125m", 125000000),
             ("unknown", 0),
+            # Regression: these three reported 0 because the old chain only
+            # knew a fixed list of sizes.
+            ("Qwen/Qwen3-14B", 14000000000),
+            ("Qwen/Qwen3-0.6B", 600000000),
+            ("Qwen/Qwen3-4B-Instruct-2507", 4000000000),
+            ("Qwen/Qwen2.5-7B-Instruct", 7000000000),
+            ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", 1100000000),
+            ("deepseek-ai/DeepSeek-V3.2", 0),
         ],
     )
     def test_estimates(self, ctrl, mid, expected):

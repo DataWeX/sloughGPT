@@ -10,6 +10,7 @@ from domain.infrastructure._internal.hf_hub import (
     _match_repo_file,
     _matches_ignore,
     _strip_incomplete_suffix,
+    is_cache_dir_complete,
 )
 
 # ── IGNORED_PATTERNS ────────────────────────────────────────────────────────
@@ -481,3 +482,55 @@ class TestListModelFilesBinSkip:
         assert by_path["model-00001-of-00002.safetensors"].is_ignored is False
         # metadata jsons stay downloadable either way
         assert by_path["pytorch_model.bin.index.json"].is_ignored is False
+
+
+# ── is_cache_dir_complete ───────────────────────────────────────────────────
+
+
+class TestIsCacheDirComplete:
+    """The single completeness predicate, applied to one concrete dir.
+
+    Split out of ``is_download_complete`` so directory scans (catalog sync)
+    judge *the dir they hold* instead of whichever candidate the id
+    resolves to first — the bug that let a refs-only stub hide a real
+    download in the project-local mirror.
+    """
+
+    def _snapshot(self, root: Path, weights: bytes = b"w" * 2048, commit: str = "abc123") -> Path:
+        model_dir = root / "models--org--model"
+        snap = model_dir / "snapshots" / commit
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_bytes(weights)
+        (model_dir / "refs").mkdir()
+        (model_dir / "refs" / "main").write_text(commit)
+        return model_dir
+
+    def test_complete_snapshot(self, tmp_path):
+        assert is_cache_dir_complete(self._snapshot(tmp_path), "org/model") is True
+
+    def test_refs_only_stub_is_incomplete(self, tmp_path):
+        model_dir = tmp_path / "models--org--model"
+        (model_dir / "refs").mkdir(parents=True)
+        (model_dir / "refs" / "main").write_text("abc123")
+        assert is_cache_dir_complete(model_dir, "org/model") is False
+
+    def test_incomplete_marker_blocks(self, tmp_path):
+        model_dir = self._snapshot(tmp_path)
+        (model_dir / "snapshots" / "abc123" / "model.safetensors.incomplete").write_bytes(b"")
+        assert is_cache_dir_complete(model_dir, "org/model") is False
+
+    def test_live_lock_blocks(self, tmp_path):
+        model_dir = self._snapshot(tmp_path)
+        (model_dir / "snapshots" / "abc123" / "model.safetensors.lock").write_bytes(b"")
+        assert is_cache_dir_complete(model_dir, "org/model") is False
+
+    def test_flat_layout_needs_config(self, tmp_path):
+        flat = tmp_path / "flat-model"
+        flat.mkdir()
+        (flat / "model.safetensors").write_bytes(b"w" * 2048)
+        assert is_cache_dir_complete(flat, "org/flat") is False
+        (flat / "config.json").write_text("{}")
+        assert is_cache_dir_complete(flat, "org/flat") is True
+
+    def test_missing_dir(self, tmp_path):
+        assert is_cache_dir_complete(tmp_path / "nope", "org/model") is False

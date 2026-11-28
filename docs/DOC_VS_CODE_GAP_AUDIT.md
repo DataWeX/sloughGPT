@@ -67,6 +67,10 @@ measured code disagrees with any value, the script exits 1.
 # 20261104_053224, +79/-28 in controllers/health.py — model_state holder
 # surfaced on /health) moved the code in the same branch that owns this
 # refresh; no other controllers_* value moved.
+# Re-measured 2026-11-28: controllers_lines 2969->2966. Cause confirmed by
+# diff: model registry truth (fix/model-registry-truth) removed the fixed
+# size table in controllers/models.py::_estimate_params in favour of one
+# <n>b/<n>m regex; controllers_defs unchanged (96).
 # Once in sync these act
 # as a DOWNWARD ratchet: the router/controller conformance work (card
 # b22e878a) lowers them as it lands, and any climb shows up as an alarm.
@@ -82,7 +86,7 @@ routers_internal_files=0
 routers_internal_stmts=0
 routers_internal_in_scope_files=0
 controllers_files=5
-controllers_lines=2969
+controllers_lines=2966
 controllers_defs=96
 controllers_internal_files=0
 controllers_internal_stmts=0
