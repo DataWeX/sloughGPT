@@ -1143,6 +1143,13 @@ class PlannerStore:
                     winner.id,
                 )
 
+            # The card is a projection: its title follows the winning note,
+            # while the card id stays the durable ticket id.
+            if winner.title and card.title != winner.title:
+                self.update_card(card.id, title=winner.title)
+                card = by_id[card.id] = self.get_card(card.id) or card
+                updated += 1
+
             if card.column != col:
                 self.move_card(card.id, col)
                 updated += 1

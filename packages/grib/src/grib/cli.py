@@ -152,6 +152,54 @@ def _note_search(args: argparse.Namespace) -> int:
 # ── Board subcommands ────────────────────────────────────────────────────
 
 
+def _board_edit(args: argparse.Namespace) -> int:
+    """Edit a card by editing the note that backs it.
+
+    Notes are the source of truth; the card is a projection. So an edit lands
+    on the ticket's latest linked note and sync projects it back — no
+    two-tool dance, no temp file. A hand-added card has no note, and only then
+    is the card edited directly.
+    """
+    store = _get_store(args)
+    card = store.get_card(args.id)
+    if not card:
+        print(f"Card not found: {args.id}", file=sys.stderr)
+        return 1
+
+    fields: dict = {}
+    if args.title is not None:
+        fields["title"] = args.title
+    if args.description is not None:
+        fields["body"] = args.description
+    if args.assignee is not None:
+        fields["assignee"] = args.assignee
+    if args.tags is not None:
+        fields["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
+    if not fields:
+        print("board edit: nothing to change (--title/--description/--assignee/--tags)")
+        return 1
+
+    linked = [n for n in store.list_notes(limit=99999) if n.card_id == card.id]
+    if linked:
+        target = max(linked, key=lambda n: (n.updated_at or "", n.created_at or "", n.id))
+        store.update_note(target.id, **fields)
+        _auto_sync(store)
+        print(f"Updated note {display_id(target.id)} -> card {card.id}")
+        return 0
+
+    # Hand-added card: no note to own the change.
+    if "title" in fields:
+        store.update_card(card.id, title=fields["title"])
+    if "body" in fields:
+        store.update_card(card.id, description=fields["body"])
+    if "assignee" in fields:
+        store.update_card(card.id, assignee=fields["assignee"])
+    if "tags" in fields:
+        store.update_card(card.id, tags=fields["tags"])
+    print(f"Updated card {card.id} (no linked note)")
+    return 0
+
+
 def _board_show(args: argparse.Namespace) -> int:
     store = _get_store(args)
     card_id = getattr(args, "id", None)
@@ -767,6 +815,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("id")
     p.add_argument("column")
 
+    p = board_sub.add_parser("edit", help="Edit a card (via the note that backs it)")
+    p.add_argument("id")
+    p.add_argument("--title", default=None)
+    p.add_argument("--description", default=None)
+    p.add_argument("--assignee", default=None)
+    p.add_argument("--tags", default=None)
+
     p = board_sub.add_parser("delete", aliases=["rm"], help="Delete a card")
     p.add_argument("id")
 
@@ -1001,6 +1056,7 @@ def main(argv: list[str] | None = None) -> int:
         ("board", "ls"): _board_show,
         ("board", "add"): _board_add,
         ("board", "move"): _board_move,
+        ("board", "edit"): _board_edit,
         ("board", "delete"): _board_delete,
         ("board", "rm"): _board_delete,
         ("board", "tags"): _board_tags,
@@ -1011,6 +1067,7 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "ls"): _board_show,
         ("kanban", "add"): _board_add,
         ("kanban", "move"): _board_move,
+        ("kanban", "edit"): _board_edit,
         ("kanban", "delete"): _board_delete,
         ("kanban", "rm"): _board_delete,
         ("kanban", "tags"): _board_tags,
