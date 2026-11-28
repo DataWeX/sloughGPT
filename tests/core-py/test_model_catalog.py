@@ -12,6 +12,16 @@ def catalog(tmp_path):
     return mc.ModelCatalog(db_path=str(tmp_path / "catalog.db"))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_hf_cache(tmp_path, monkeypatch):
+    """Never let a test see the machine's real HF cache.
+
+    ``sync_from_disk`` walks ``Path.home()``; on a dev box that already has a
+    downloaded model the custom-dir counts became environment-dependent.
+    """
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+
+
 class TestModelCatalogLifecycle:
     def test_add_returns_model_id(self, catalog):
         assert catalog.add("gpt2") == "gpt2"
@@ -229,6 +239,95 @@ class TestModelCatalogSync:
 
     def test_sync_missing_dir(self, catalog, tmp_path):
         assert catalog.sync_from_disk(cache_dirs=[tmp_path / "nope"]) == 0
+
+
+class TestModelCatalogSafetensorsSync:
+    """A plain HF safetensors download must be visible to the registry.
+
+    ``sync_from_disk`` used to scan only ``model.slnc``, so a fully
+    downloaded Hub model was invisible to ``GET /models/catalog``
+    (total=0) — card 20261127_091932.
+    """
+
+    @staticmethod
+    def _hf_cache(tmp_path):
+        return tmp_path / "home" / ".cache" / "huggingface" / "hub"
+
+    @staticmethod
+    def _complete_download(hf_cache, model_id="org/model", commit="abc123"):
+        model_dir = hf_cache / f"models--{model_id.replace('/', '--')}"
+        (model_dir / "refs").mkdir(parents=True)
+        (model_dir / "refs" / "main").write_text(commit)
+        snap = model_dir / "snapshots" / commit
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_bytes(b"x" * 2048)
+        (snap / "config.json").write_text(
+            '{"vocab_size": 151936, "hidden_size": 896,'
+            ' "num_hidden_layers": 24, "intermediate_size": 4864}'
+        )
+        return model_dir, snap
+
+    def test_complete_safetensors_download_is_cataloged(self, catalog, tmp_path):
+        hf_cache = self._hf_cache(tmp_path)
+        _, snap = self._complete_download(hf_cache)
+
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/model")
+        assert doc is not None
+        assert doc["source"] == "huggingface"
+        assert doc["format"] == "safetensors"
+        assert doc["path"] == str(snap)
+        assert doc["vocab_size"] == 151936
+        assert doc["parameters"] > 0
+
+    def test_flat_complete_download_is_cataloged(self, catalog, tmp_path):
+        """HF local-dir layout (files at the model dir root) is complete too."""
+        hf_cache = self._hf_cache(tmp_path)
+        model_dir = hf_cache / "models--org--flat"
+        model_dir.mkdir(parents=True)
+        (model_dir / "model.safetensors").write_bytes(b"x" * 2048)
+        (model_dir / "config.json").write_text('{"vocab_size": 32000, "hidden_size": 512}')
+
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/flat")
+        assert doc is not None
+        assert doc["format"] == "safetensors"
+        assert doc["path"] == str(model_dir)
+
+    def test_incomplete_download_is_not_cataloged(self, catalog, tmp_path):
+        hf_cache = self._hf_cache(tmp_path)
+        model_dir = hf_cache / "models--org--stub"
+        (model_dir / "snapshots" / "main").mkdir(parents=True)
+        (model_dir / "snapshots" / "main" / "model.safetensors").write_bytes(b"x" * 2048)
+
+        assert catalog.sync_from_disk() == 0
+
+    def test_incomplete_marker_blocks_cataloging(self, catalog, tmp_path):
+        hf_cache = self._hf_cache(tmp_path)
+        _, snap = self._complete_download(hf_cache)
+        (snap / "model.safetensors.incomplete").write_bytes(b"partial")
+
+        assert catalog.sync_from_disk() == 0
+
+    def test_slnc_wins_over_safetensors(self, catalog, tmp_path):
+        hf_cache = self._hf_cache(tmp_path)
+        _, snap = self._complete_download(hf_cache)
+        (snap / "model.slnc").write_bytes(b"SLNC")
+
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/model")
+        assert doc["format"] == "slnc"
+        assert doc["path"].endswith("model.slnc")
+
+    def test_existing_entry_is_not_overwritten(self, catalog, tmp_path):
+        hf_cache = self._hf_cache(tmp_path)
+        self._complete_download(hf_cache)
+        catalog.add("org/model", source="local", format="soul", parameters=42)
+
+        assert catalog.sync_from_disk() == 0
+        doc = catalog.get("org/model")
+        assert doc["format"] == "soul"
+        assert doc["parameters"] == 42
 
 
 class TestModelCatalogSingleton:

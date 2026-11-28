@@ -8,6 +8,7 @@ so the server knows what's available without re-scanning on every request.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -17,6 +18,42 @@ from typing import Any
 logger = logging.getLogger("slo.infrastructure.model_catalog")
 
 _DEFAULT_DB_PATH = "data/model_catalog"
+
+
+def _params_from_config(weights_dir: Path) -> tuple[int, int]:
+    """Approximate ``(parameters, vocab_size)`` from a HF ``config.json``.
+
+    Estimate only: the catalog records what the config implies, never a
+    weight-by-weight count.  Per layer: 4·h² attention (q, k, v, o) +
+    3·h·intermediate MLP, plus token embedding and lm_head.  Counting both
+    embedding tables over-estimates tied models — the safe direction: the
+    catalog never claims fewer parameters than the model can have.
+    """
+    try:
+        cfg = json.loads((weights_dir / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0, 0
+    if not isinstance(cfg, dict):
+        return 0, 0
+
+    def _int(*keys: str) -> int:
+        for key in keys:
+            try:
+                value = int(cfg.get(key) or 0)
+            except (TypeError, ValueError):
+                continue
+            if value:
+                return value
+        return 0
+
+    vocab = _int("vocab_size")
+    hidden = _int("hidden_size", "n_embed", "d_model")
+    layers = _int("num_hidden_layers", "n_layer")
+    intermediate = _int("intermediate_size", "n_inner") or hidden * 4
+    if not hidden or not layers:
+        return 0, vocab
+    per_layer = 4 * hidden * hidden + 3 * hidden * intermediate
+    return 2 * vocab * hidden + layers * per_layer, vocab
 
 
 class ModelCatalog:
@@ -303,10 +340,21 @@ class ModelCatalog:
             }
 
     def sync_from_disk(self, cache_dirs: list[str | Path] | None = None) -> int:
-        """Scan cache directories and catalog any .slnc files found.
+        """Scan cache directories and catalog downloaded models.
+
+        Recognizes both ``model.slnc`` (our compiled artifact) and a complete
+        plain HuggingFace download (safetensors/bin + config).  The latter
+        used to be invisible: a fully downloaded Hub model never appeared in
+        ``GET /models/catalog`` because only ``.slnc`` was scanned.
+
+        "Complete" is the same predicate the downloader and size estimator
+        use (:func:`is_download_complete`) — never a bare file-exists check,
+        so a stub directory or an interrupted download is not cataloged.
 
         Returns the number of new models added.
         """
+
+        from .hf_hub import _snapshot_dir, find_cached_model_dir, is_download_complete
 
         added = 0
         # Scan HuggingFace cache
@@ -317,6 +365,8 @@ class ModelCatalog:
                     continue
                 # HF cache dirs are like models--gpt2
                 model_id = model_dir.name.replace("models--", "").replace("--", "/")
+                if self.get(model_id):
+                    continue
                 slnc_path = model_dir / "snapshots" / "main" / "model.slnc"
                 if not slnc_path.exists():
                     # Check parent dirs
@@ -327,15 +377,32 @@ class ModelCatalog:
                             break
 
                 if slnc_path.exists():
-                    existing = self.get(model_id)
-                    if not existing:
-                        self.add(
-                            model_id=model_id,
-                            source="huggingface",
-                            format="slnc",
-                            path=str(slnc_path),
-                        )
-                        added += 1
+                    self.add(
+                        model_id=model_id,
+                        source="huggingface",
+                        format="slnc",
+                        path=str(slnc_path),
+                    )
+                    added += 1
+                    continue
+
+                # A plain HF download: catalog it only when the download is
+                # complete. ``hf_home`` is the directory being scanned, not
+                # the process-wide default, so the predicate judges the same
+                # tree this loop walked.
+                if is_download_complete(model_id, hf_home=str(hf_cache)):
+                    cache_dir = find_cached_model_dir(model_id, hf_home=str(hf_cache)) or model_dir
+                    weights_dir = _snapshot_dir(cache_dir) or cache_dir
+                    parameters, vocab_size = _params_from_config(weights_dir)
+                    self.add(
+                        model_id=model_id,
+                        source="huggingface",
+                        format="safetensors",
+                        path=str(weights_dir),
+                        parameters=parameters,
+                        vocab_size=vocab_size,
+                    )
+                    added += 1
 
         # Scan custom cache dirs
         if cache_dirs:
