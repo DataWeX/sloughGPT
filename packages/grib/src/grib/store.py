@@ -113,9 +113,19 @@ class Note:
     assignee: str = ""
     created_at: str = ""
     updated_at: str = ""
+    # The ticket this note belongs to. Written once by sync, then never
+    # re-derived: the note id may churn when the note is edited, the card id
+    # must not (user ruling 2026-11-27 — the card is the durable record).
+    card_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        # Same contract as ``_card_line``: a link that has never been made is
+        # absent, not "" — so legacy journal lines stay byte-identical and
+        # linking one note does not rewrite the other 400.
+        if not d.get("card_id"):
+            d.pop("card_id", None)
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Note:
@@ -130,6 +140,7 @@ class Note:
             assignee=d.get("assignee", ""),
             created_at=d.get("created_at", ""),
             updated_at=d.get("updated_at", ""),
+            card_id=d.get("card_id", ""),
         )
 
 
@@ -570,12 +581,16 @@ class PlannerStore:
         sprint: str = "",
         gh: str = "",
         card_type: str = "",
+        id: str = "",
     ) -> Card:
         self.validate_column(column)
         now = datetime.now(UTC).isoformat()
         board = self.load_board()
+        taken = {c.id for c in board.cards}
+        if id and id in taken:
+            raise ValueError(f"card id already exists: {id}")
         card = Card(
-            id=make_readable_id(title, (c.id for c in board.cards)),
+            id=id or make_readable_id(title, taken),
             title=title,
             description=description,
             column=column,
@@ -1037,18 +1052,45 @@ class PlannerStore:
         """
         from .sync import canonical_notes
 
-        notes = canonical_notes(self.list_notes(limit=9999))
+        all_notes = self.list_notes(limit=9999)
+        # Surface shadowed twins before collapsing. ``canonical_notes`` keeps one
+        # winner per title (so sync stays net-zero instead of re-applying two
+        # conflicting statuses forever), which means the loser is invisible
+        # everywhere else — including to the card_id link. Only a human can
+        # merge them, so say it out loud on every sync until they do.
+        twins: dict[str, list[str]] = {}
+        for note in all_notes:
+            twins.setdefault(note.title or "(untitled)", []).append(note.id)
+        for title, ids in sorted(twins.items()):
+            if len(ids) > 1:
+                logger.warning(
+                    "Notes %s share the title %r — one ticket, several notes: "
+                    "merge them by hand (only %s drives the card)",
+                    ", ".join(sorted(ids)),
+                    title,
+                    max(ids),
+                )
+
+        notes = canonical_notes(all_notes)
         board = self.load_board()
-        existing = {c.title: c for c in board.cards}
+        by_id = {c.id: c for c in board.cards}
+        by_title = {c.title: c for c in board.cards}
         added = 0
         updated = 0
 
         for note in notes:
             col = config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
             title = note.title or "(untitled)"
-            card = existing.get(title)
+
+            card = by_id.get(note.card_id) if note.card_id else by_id.get(note.id)
+            if card is None:
+                # Legacy bootstrap: the note predates card_id, so its exact
+                # title is the only evidence of which ticket it means.
+                card = by_title.get(title)
 
             if card is None:
+                # Name the ticket after the note it came from: the card keeps
+                # that id forever, even when the note id churns later.
                 card = self.add_card(
                     title=title,
                     column=col,
@@ -1057,10 +1099,15 @@ class PlannerStore:
                     assignee=note.assignee or "",
                     sprint=note.sprint or "",
                     gh=note.gh or "",
+                    id=note.id,
                 )
-                existing[title] = card
                 added += 1
-                continue
+
+            by_id[card.id] = card
+            by_title.setdefault(title, card)
+
+            if note.card_id != card.id:
+                self.update_note(note.id, card_id=card.id)
 
             if card.column != col:
                 self.move_card(card.id, col)
