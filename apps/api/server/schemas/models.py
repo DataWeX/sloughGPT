@@ -37,6 +37,11 @@ class ModelInfo(BaseModel):
     vocab_size: int = 0
     loaded_at: str | None = None
     description: str = ""
+    # Weights present on disk (verified, not assumed). False means the id is
+    # only a known Hub repo — selecting it starts a download, it does not
+    # load. Without this the list read "available" for models that were
+    # never downloaded, which is exactly the lie this flag removes.
+    downloaded: bool = False
 
 
 class ModelListResponse(BaseModel):

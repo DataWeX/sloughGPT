@@ -357,6 +357,8 @@ class ModelsRouter:
                         vocab_size=vocab,
                         loaded_at=current.get("loaded_at"),
                         description=self._describe_model(current["model_id"], params, loaded=True),
+                        # Loaded implies present: it is in memory right now.
+                        downloaded=True,
                     )
                 )
             loaded_ids = {m.model_id for m in models}
@@ -375,6 +377,10 @@ class ModelsRouter:
                             vocab_size=vocab,
                             loaded_at=None,
                             description=self._describe_model(model_id, params, loaded=False),
+                            # The list mixes Hub catalog with local cache;
+                            # only this check tells them apart. Cached 5 min
+                            # in model_size, and the quick check is offline.
+                            downloaded=is_model_cached(model_id),
                         )
                     )
             return [m.model_dump() for m in models]

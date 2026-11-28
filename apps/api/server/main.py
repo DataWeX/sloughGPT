@@ -48,14 +48,21 @@ for _ancestor in (_HERE, *_HERE.parents):
             sys.path.insert(0, str(_ancestor))
         break
 
-from domain.shared import find_repo_root  # noqa: E402  (resolvable now)
+from domain.shared import find_repo_root, find_shared_root  # noqa: E402  (resolvable now)
 
 _REPO_ROOT = find_repo_root(_HERE)
+# Model weights are machine-local and heavy — they live in the MAIN checkout
+# and are shared by every linked worktree, never copied per worktree. Using
+# the worktree's own root here pointed HF_HOME at an empty
+# ``<worktree>/models/hf-cache``, so a worktree saw no models at all (the
+# loader failed in ~2 ms with "No .slnc or .soul file found" while 3.8 GB of
+# weights sat in the main checkout).
+_SHARED_ROOT = find_shared_root(_HERE)
 _SERVER_ROOT = _HERE.parent
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 _CHARGECTL_ROOT = _REPO_ROOT / "packages" / "chargectl" / "src"
 
-_HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
+_HF_CACHE = _SHARED_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
 

@@ -4,6 +4,7 @@ Models Controller - Business logic for model management
 
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime
@@ -1026,28 +1027,24 @@ class ModelsController:
                 _hf_cache_timestamp = time.monotonic()
         return result
 
-    @staticmethod
-    def _estimate_params(model_id: str) -> int:
-        """Estimate parameter count from model ID string."""
-        m = model_id.lower()
-        if any(x in m for x in ("13b", "12b")):
-            return 13000000000
-        if "7b" in m:
-            return 7000000000
-        if "3b" in m:
-            return 3000000000
-        if any(x in m for x in ("2.7b", "2b8")):
-            return 2700000000
-        if "1.5b" in m:
-            return 1500000000
-        if "1b" in m:
-            return 1000000000
-        if any(x in m for x in ("0.5b", "500m")):
-            return 500000000
-        if "350m" in m:
-            return 350000000
-        if "125m" in m:
-            return 125000000
+    # ``14b`` / ``0.6b`` / ``4b`` are what the old hand-written chain missed.
+    _PARAM_SIZE_RE = re.compile(
+        r"(?<![a-z0-9])(\d+(?:\.\d+)?)\s*([bm])(?![a-z0-9])",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _estimate_params(cls, model_id: str) -> int:
+        """Estimate parameter count from the size token in a model id.
+
+        Reads ``<n>b`` / ``<n>m`` generically instead of matching a fixed
+        list of sizes, so ``Qwen3-14B`` (1.4e10) and ``Qwen3-0.6B`` (6e8)
+        stop reporting 0. Ids with no size token (``gpt2``,
+        ``DeepSeek-V3.2``) stay 0 — unknown, never guessed.
+        """
+        for size, unit in cls._PARAM_SIZE_RE.findall(model_id):
+            scale = 1_000_000_000 if unit.lower() == "b" else 1_000_000
+            return int(float(size) * scale)
         return 0
 
 

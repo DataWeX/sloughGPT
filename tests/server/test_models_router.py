@@ -84,6 +84,50 @@ class TestListModels:
         assert resp.json()["data"] == []
 
     @patch("apps.api.server.routers.models.get_models_controller")
+    @patch("apps.api.server.routers.models.is_model_cached")
+    def test_list_models_reports_downloaded_per_entry(self, mock_cached, mock_get_ctrl, client):
+        """Hub catalog entries must say whether the weights are actually here.
+
+        Regression: every Hub row came back ``status="available"`` — which
+        reads as "ready to use" — for models that were never downloaded.
+        ``downloaded`` is the honest bit; ``is_model_cached`` decides it.
+        """
+        mock_cached.side_effect = lambda mid: mid == "org/on-disk"
+        ctrl = MagicMock()
+        ctrl.get_current_model.return_value = None
+        ctrl.list_hf_models.return_value = [
+            {"model_id": "org/on-disk", "parameters": 500_000_000, "vocab_size": 100},
+            {"model_id": "org/hub-only", "parameters": 7_000_000_000, "vocab_size": 100},
+        ]
+        mock_get_ctrl.return_value = ctrl
+
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        by_id = {m["model_id"]: m for m in resp.json()["data"]}
+        assert by_id["org/on-disk"]["downloaded"] is True
+        assert by_id["org/hub-only"]["downloaded"] is False
+
+    @patch("apps.api.server.routers.models.get_models_controller")
+    @patch("apps.api.server.routers.models.is_model_cached")
+    def test_loaded_model_is_downloaded(self, mock_cached, mock_get_ctrl, client):
+        """A loaded model is in memory — present by definition, no disk probe."""
+        ctrl = MagicMock()
+        ctrl.get_current_model.return_value = {
+            "model_id": "gpt2",
+            "device": "cpu",
+            "parameters": 124000000,
+            "vocab_size": 50257,
+            "loaded_at": "2026-01-01T00:00:00",
+        }
+        ctrl.list_hf_models.return_value = []
+        mock_get_ctrl.return_value = ctrl
+
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        assert resp.json()["data"][0]["downloaded"] is True
+        mock_cached.assert_not_called()
+
+    @patch("apps.api.server.routers.models.get_models_controller")
     def test_list_models_adopted_guard_reports_device(self, mock_get_ctrl, client, tmp_path):
         """Regression: after adopting an autoloaded ProcessGuard, GET /models
         must return 200 with a real device on the loaded entry. Previously the
