@@ -53,7 +53,7 @@
 
 ## Architecture
 
-- **Notes** (`~/.config/dev-notes/*.md`) are the user's journal — source of truth for task metadata (sprint, gh, status, body).
+- **Notes** are the source of truth for tasks (sprint, gh, status, body) — the storage is an implementation detail (journal today, md is the legacy mirror). A card can have many notes; the board is a view of them, not a second record.
 - **Board** (canonical: `~/.config/kanban/board.jsonl`) is the kanban view derived from notes via sync. Canonical-state since 2026-10-28: mutable planner state never lives inside code checkouts (git worktrees fork it per checkout — the 149-commit local fork took 48 kanban/notes commits). Repo `.kanban/` holds versioned snapshots (`grib snapshot`); legacy repo-local data imports once via `grib migrate`; repo-local mode is opt-in (`GRIB_REPO_LOCAL=1`).
 - Sync is bidirectional: note status ↔ card column.
 - **Agent sync** (`docs/AGENT_SYNC.md`) — read it first: what has landed across sessions, what is in flight, how to push your own changes; update it when you push. Local `main` must equal `origin/main` (enforced by `scripts/check-main-sync.sh`).

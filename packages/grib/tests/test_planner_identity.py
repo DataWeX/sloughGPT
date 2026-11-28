@@ -95,11 +95,12 @@ class TestEditsKeepTheLink:
         assert len(_cards(store)) == 2, "title collision merged two tickets"
         assert stores_note(store, a.id).card_id != stores_note(store, b.id).card_id
 
-    def test_legacy_notes_sharing_a_title_share_one_card(self, store: PlannerStore, caplog):
-        """Never split a ticket in two to resolve an ambiguity — say so instead.
+    def test_notes_sharing_a_title_share_one_card_and_all_link(self, store: PlannerStore, caplog):
+        """One ticket, many notes (user ruling 2026-11-28).
 
-        Two unlinked notes with one title are one task whose note was renamed;
-        forking a second card would divide the work between two records.
+        Never split a ticket in two to resolve an ambiguity, and never hide the
+        extra notes: they are the ticket's history. Every note links to the one
+        card; the most recently updated note decides the column.
         """
         a = store.create_note(title="Same title")
         b = store.create_note(title="Same title")
@@ -108,11 +109,35 @@ class TestEditsKeepTheLink:
         with caplog.at_level("WARNING"):
             store.sync()
 
-        assert len(_cards(store)) == 1, "ambiguity forked a second ticket"
-        linked = [n for n in (a, b) if stores_note(store, n.id).card_id]
-        assert len(linked) == 1, "exactly one note drives the card"
-        assert stores_note(store, linked[0].id).card_id == _cards(store)[0].id
-        assert any("merge them by hand" in r.getMessage() for r in caplog.records)
+        cards = _cards(store)
+        assert len(cards) == 1, "ambiguity forked a second ticket"
+        for note in (a, b):
+            assert stores_note(store, note.id).card_id == cards[0].id, (
+                f"{note.id} did not link to the ticket"
+            )
+        assert any("one card" in r.getMessage() for r in caplog.records)
+
+    def test_twin_notes_column_follows_the_latest_update(self, store: PlannerStore):
+        a = store.create_note(title="Twin", status="todo")
+        b = store.create_note(title="Twin", status="todo")
+        store.sync()
+        assert _cards(store)[0].column == "todo"
+
+        store.update_note(b.id, status="done")
+        store.sync()
+        assert _cards(store)[0].column == "done", "latest human intent must win"
+        assert stores_note(store, a.id).card_id == _cards(store)[0].id
+
+    def test_twins_do_not_flip_the_column_on_every_sync(self, store: PlannerStore):
+        """The old collapse existed to keep syncs net-zero; keep that property."""
+        store.create_note(title="Twin", status="todo")
+        store.create_note(title="Twin", status="done")
+        store.sync()
+        first = _cards(store)[0].column
+
+        added, updated, _ = store.sync()
+        assert added == 0 and updated == 0, "a settled board must not churn"
+        assert _cards(store)[0].column == first
 
 
 class TestLegacyBootstrap:

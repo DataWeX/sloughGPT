@@ -835,6 +835,15 @@ class PlannerStore:
         return self._occ(attempt)
 
     def update_note(self, note_id: str, **kwargs: Any) -> Note | None:
+        """Update fields on a note.
+
+        ``touch=False`` marks a bookkeeping write (sync linking ``card_id``):
+        it must not bump ``updated_at``, because that timestamp is what picks
+        the winning note when a ticket has several — linking would otherwise
+        make the last-linked note look like the latest human edit and flip the
+        card's column on every sync.
+        """
+        touch = kwargs.pop("touch", True)
 
         def attempt() -> Note | None:
             notes, token = self._read_notes_with_token()
@@ -843,7 +852,8 @@ class PlannerStore:
                     for key, value in kwargs.items():
                         if hasattr(note, key):
                             setattr(note, key, value)
-                    note.updated_at = datetime.now(UTC).isoformat()
+                    if touch:
+                        note.updated_at = datetime.now(UTC).isoformat()
                     notes[i] = note
                     self._write_notes(notes, expect=token)
                     return note
@@ -1050,72 +1060,85 @@ class PlannerStore:
         stays put, because hand-added cards have no note either and deleting
         one is a data-loss path. ``prune=True`` opts into removing orphans.
         """
-        from .sync import canonical_notes
-
         all_notes = self.list_notes(limit=9999)
-        # Surface shadowed twins before collapsing. ``canonical_notes`` keeps one
-        # winner per title (so sync stays net-zero instead of re-applying two
-        # conflicting statuses forever), which means the loser is invisible
-        # everywhere else — including to the card_id link. Only a human can
-        # merge them, so say it out loud on every sync until they do.
-        twins: dict[str, list[str]] = {}
-        for note in all_notes:
-            twins.setdefault(note.title or "(untitled)", []).append(note.id)
-        for title, ids in sorted(twins.items()):
-            if len(ids) > 1:
-                logger.warning(
-                    "Notes %s share the title %r — one ticket, several notes: "
-                    "merge them by hand (only %s drives the card)",
-                    ", ".join(sorted(ids)),
-                    title,
-                    max(ids),
-                )
-
-        notes = canonical_notes(all_notes)
         board = self.load_board()
         by_id = {c.id: c for c in board.cards}
         by_title = {c.title: c for c in board.cards}
         added = 0
         updated = 0
 
-        for note in notes:
-            col = config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
-            title = note.title or "(untitled)"
+        # One ticket, many notes (user ruling 2026-11-28). A note that already
+        # links belongs to its card, full stop — the title is display data and
+        # a rename must never move a note onto another ticket. Only UNLINKED
+        # notes are grouped by title, and they all attach to one card: the
+        # notes are the ticket's history, not competing tickets. Only the
+        # column decision needs a single winner — the most recently updated
+        # note — so a settled board stays net-zero instead of re-applying
+        # conflicting statuses on every run.
+        linked: dict[str, list[Note]] = {}
+        unlinked: dict[str, list[Note]] = {}
+        for note in all_notes:
+            card = by_id.get(note.card_id) if note.card_id else None
+            if card is not None:
+                linked.setdefault(card.id, []).append(note)
+            else:
+                unlinked.setdefault(note.title or "(untitled)", []).append(note)
 
-            card = by_id.get(note.card_id) if note.card_id else by_id.get(note.id)
-            if card is None:
-                # Legacy bootstrap: the note predates card_id, so its exact
-                # title is the only evidence of which ticket it means.
-                card = by_title.get(title)
+        def rank(note: Note) -> tuple[str, str, str]:
+            return (note.updated_at or "", note.created_at or "", note.id or "")
 
-            if card is None:
-                # Name the ticket after the note it came from: the card keeps
-                # that id forever, even when the note id churns later.
-                card = self.add_card(
-                    title=title,
-                    column=col,
-                    tags=list(note.tags or []),
-                    description=note.body or "",
-                    assignee=note.assignee or "",
-                    sprint=note.sprint or "",
-                    gh=note.gh or "",
-                    id=note.id,
-                )
-                added += 1
+        def apply(card: Card, group: list[Note], title: str) -> None:
+            """Link every note to *card*; the latest note decides its state."""
+            nonlocal updated
+            winner = max(group, key=rank)
+            col = config.STATUS_TO_COLUMN.get((winner.status or "").lower(), "todo")
 
             by_id[card.id] = card
             by_title.setdefault(title, card)
+            for note in group:
+                if note.card_id != card.id:
+                    self.update_note(note.id, card_id=card.id, touch=False)
 
-            if note.card_id != card.id:
-                self.update_note(note.id, card_id=card.id)
+            if len(group) > 1:
+                logger.warning(
+                    "Notes %s share the title %r — %d notes on one card %s; "
+                    "column follows %s (latest update)",
+                    ", ".join(sorted(n.id for n in group)),
+                    title,
+                    len(group),
+                    card.id,
+                    winner.id,
+                )
 
             if card.column != col:
                 self.move_card(card.id, col)
                 updated += 1
-
-            if note.assignee and card.assignee != note.assignee:
-                self.update_card(card.id, assignee=note.assignee)
+            if winner.assignee and card.assignee != winner.assignee:
+                self.update_card(card.id, assignee=winner.assignee)
                 updated += 1
+
+        for card_id, group in sorted(linked.items()):
+            apply(by_id[card_id], group, group[0].title or "(untitled)")
+
+        for title, group in sorted(unlinked.items()):
+            winner = max(group, key=rank)
+            card = by_title.get(title)
+            if card is None:
+                # Name the ticket after its earliest note: the card keeps that
+                # id forever, even when the note id churns later.
+                origin = min(group, key=lambda n: (n.created_at or "", n.id or ""))
+                card = self.add_card(
+                    title=title,
+                    column=config.STATUS_TO_COLUMN.get((winner.status or "").lower(), "todo"),
+                    tags=list(winner.tags or []),
+                    description=winner.body or "",
+                    assignee=winner.assignee or "",
+                    sprint=winner.sprint or "",
+                    gh=winner.gh or "",
+                    id=origin.id,
+                )
+                added += 1
+            apply(card, group, title)
 
         # Opt-in only: drop cards left behind by a deleted note, then reseal.
         # Computed after the loop so freshly added cards are never candidates.
