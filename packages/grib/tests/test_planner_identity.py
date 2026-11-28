@@ -13,6 +13,7 @@ is edited. So the link between them must be STORED on the note and never derived
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -188,3 +189,47 @@ def stores_note(store: PlannerStore, note_id: str):
     note = store.get_note(note_id)
     assert note is not None
     return note
+
+
+class TestStoreOwnsItsSchema:
+    """A stale writer must fail loudly, never truncate the store.
+
+    ``_write_notes`` serializes EVERY note, so a model that predates a field
+    silently drops it from all 400 lines (measured 2026-11-28: a stale
+    ~/.local/bin/grib erased all 383 card_id links on one note write).
+    """
+
+    def test_unknown_fields_survive_a_rewrite(self, store: PlannerStore):
+        note = store.create_note(title="Forward compatible")
+        # Simulate a line written by a NEWER grib: an extra key this code does
+        # not model must round-trip through an unrelated write untouched.
+        raw = {
+            "id": note.id,
+            "title": note.title,
+            "status": note.status,
+            "future_field": {"keep": "me"},
+        }
+        store._notes_file.write_text(json.dumps(raw) + "\n")
+
+        store.update_note(note.id, status="done")
+
+        line = json.loads(store._notes_file.read_text().splitlines()[0])
+        assert line["future_field"] == {"keep": "me"}, "unknown field was truncated"
+        assert line["status"] == "done"
+
+    def test_a_newer_schema_is_refused_not_rewritten(self, store: PlannerStore):
+        note = store.create_note(title="From the future")
+        store._notes_file.write_text(
+            json.dumps({"id": note.id, "title": note.title, "schema": 99}) + "\n"
+        )
+
+        with pytest.raises(RuntimeError, match="schema"):
+            store.update_note(note.id, status="done")
+
+        assert '"schema": 99' in store._notes_file.read_text(), "store was truncated"
+
+    def test_legacy_lines_stay_writable_and_do_not_grow_a_schema_key(self, store: PlannerStore):
+        note = store.create_note(title="Legacy")
+        store.update_note(note.id, card_id="", touch=False)
+
+        assert "schema" not in store._notes_file.read_text()

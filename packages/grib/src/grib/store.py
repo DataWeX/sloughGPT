@@ -38,6 +38,13 @@ from .ids import make_readable_id
 
 logger = logging.getLogger("grib.store")
 
+# Journal schema this code writes and can safely rewrite. A line may carry
+# ``schema`` (absent = v1, pre-``card_id``); ``_write_notes`` refuses to rewrite
+# a store written by a newer grib, because every write serializes ALL notes —
+# a model that predates a field would silently truncate it from every line
+# (measured 2026-11-28: a stale installed grib erased all 383 card_id links).
+SCHEMA_VERSION = 2
+
 # ── Data Models ──────────────────────────────────────────────────────────
 
 
@@ -117,18 +124,31 @@ class Note:
     # re-derived: the note id may churn when the note is edited, the card id
     # must not (user ruling 2026-11-27 — the card is the durable record).
     card_id: str = ""
+    # Keys this model does not know about, kept verbatim so a round-trip never
+    # truncates a field written by a newer grib. The schema guard in
+    # ``_write_notes`` refuses to rewrite a store newer than this code, so
+    # these survive only when the version is supported.
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
+        d.pop("extra", None)
+        # Fields a newer writer added ride along untouched.
+        d.update(self.extra)
         # Same contract as ``_card_line``: a link that has never been made is
         # absent, not "" — so legacy journal lines stay byte-identical and
         # linking one note does not rewrite the other 400.
         if not d.get("card_id"):
             d.pop("card_id", None)
+        else:
+            # Only a line that uses v2 features declares v2, so untouched
+            # legacy lines never grow a key they did not have.
+            d["schema"] = SCHEMA_VERSION
         return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Note:
+        known = {f for f in cls.__dataclass_fields__ if f != "extra"}
         return cls(
             id=d.get("id", ""),
             title=d.get("title", ""),
@@ -141,6 +161,7 @@ class Note:
             created_at=d.get("created_at", ""),
             updated_at=d.get("updated_at", ""),
             card_id=d.get("card_id", ""),
+            extra={k: v for k, v in d.items() if k not in known},
         )
 
 
@@ -762,6 +783,18 @@ class PlannerStore:
     def _write_notes(self, notes: list[Note], expect: str | None = None) -> None:
         """Atomic + guarded notes write (was a bare write_text — the notes
         journal had BOTH lost-update and torn-file exposure)."""
+        for n in notes:
+            try:
+                found = int(n.extra.get("schema", 1))
+            except (TypeError, ValueError):
+                found = 1
+            if found > SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"notes.journal.jsonl contains schema v{found}; this grib "
+                    f"writes v{SCHEMA_VERSION}. Upgrade this checkout instead of "
+                    "rewriting the store (a stale writer would drop every field "
+                    "it does not model)."
+                )
         lines = [json.dumps(n.to_dict(), ensure_ascii=False) for n in notes]
         text = "\n".join(lines) + "\n" if lines else ""
         token = expect if expect is not None else _current_token(self._notes_file)
