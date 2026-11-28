@@ -219,8 +219,25 @@ class TestReap:
         from core import worktree as wt_mod
 
         lane = make_lane(repo, "fbdrv")  # -> .wt-fbdrv, the AGENTS.md user-data tree
-        with pytest.raises(wt_mod.WorktreeError, match="holds user data"):
+        with pytest.raises(wt_mod.WorktreeError, match="is protected"):
             wt_mod.reap(lane, root=repo)
+
+    def test_refuses_the_machine_managed_sync_worktree(self, repo: Path):
+        """kanban-sync-wt is clean, detached and merged — and still not ours.
+
+        It is the mirror worktree ``scripts/kanban_sync.sh`` pushes from, so
+        the generic "merged + clean" rule calls it dead. Dogfooding ``wt ls``
+        on the real repo listed it as reapable; this pins the correction.
+        """
+        from core import worktree as wt_mod
+
+        # The real shape: detached, clean, at a commit already on origin/main.
+        sync = repo / "kanban-sync-wt"
+        _git(repo, "worktree", "add", "-q", "--detach", str(sync), "origin/main")
+        assert sync.name in wt_mod.PROTECTED_NAMES
+        with pytest.raises(wt_mod.WorktreeError, match="machine-managed"):
+            wt_mod.reap(sync, root=repo)
+        assert sync.exists()
 
     def test_refuses_while_the_card_is_still_open(self, repo: Path, monkeypatch):
         """The card gate: a merged, clean lane is still not reapable until closed."""

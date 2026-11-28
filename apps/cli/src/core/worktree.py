@@ -33,10 +33,19 @@ from pathlib import Path
 
 from core import tree as tree_mod
 
-#: Worktrees that hold real user data and are never reaped by a rule
-#: (AGENTS.md: ``.wt-fbdrv`` feedback/uploads/gallery journals, ``.wt-voice``
-#: pre-Next-removal agent workspace). A human decides about these.
-PROTECTED_NAMES = (".wt-fbdrv", ".wt-voice")
+#: Worktrees a rule must never reap. Two classes, one gate:
+#:
+#: * **user data** — ``.wt-fbdrv`` (feedback/uploads/gallery journals) and
+#:   ``.wt-voice`` (pre-Next-removal agent workspace), both held by AGENTS.md;
+#: * **machine-managed infrastructure** — ``kanban-sync-wt`` is the single
+#:   detached mirror worktree ``scripts/kanban_sync.sh`` exports and pushes
+#:   from. It is clean, detached and merged, so every other rule calls it
+#:   dead; reaping it breaks the board producer until it is recreated. Found
+#:   by running ``wt ls`` on the real repo, not by a test.
+#:
+#: ``KANBAN_SYNC_WT`` can point the sync script at another path; that path is
+#: not protected by name, so it must never be a lane-shaped ``feat/`` tree.
+PROTECTED_NAMES = (".wt-fbdrv", ".wt-voice", "kanban-sync-wt")
 
 #: Branch prefix a created lane gets; reaping refuses to delete anything else.
 LANE_PREFIX = "feat/"
@@ -84,7 +93,7 @@ class Lifecycle:
         if self.info.on_main:
             return "on main"
         if self.protected:
-            return "protected (user data)"
+            return "protected (never reaped by a rule)"
         if self.claim:
             return f"claimed by {self.claim}"
         if self.info.dirty:
@@ -268,7 +277,8 @@ def reap(
         raise WorktreeError(f"{target} is the tree you are running from — cd elsewhere first")
     if target.name in PROTECTED_NAMES and not force:
         raise WorktreeError(
-            f"{target.name} holds user data (AGENTS.md) — pass --force only if you mean it"
+            f"{target.name} is protected — user data or machine-managed "
+            "(AGENTS.md); pass --force only if you mean it"
         )
 
     known = {wt.path.resolve() for wt in tree_mod.worktrees(root)}
