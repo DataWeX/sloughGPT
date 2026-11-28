@@ -153,14 +153,31 @@ class TestTreeStamp:
     """Which checkout answers — the banner must say it without overflowing."""
 
     def test_banner_names_the_running_tree(self, capsys, monkeypatch):
+        """The stamp names this checkout and its honest status.
+
+        CI checks out the PR merge ref **detached, with no ``origin/main``
+        remote-tracking ref**, so the truthful stamp there is
+        ``(no origin/main)``. The old assertion demanded "current" or "behind"
+        and was red on every PR for that reason alone (run 45997743001). Assert
+        the status the resolver actually reports instead of a fixed pair.
+        """
         from apps.cli.src.cli import _show_welcome_banner
+        from apps.cli.src.core.tree import resolve_tree, tree_info
 
         set_terminal(monkeypatch, 80, 40)
         _show_welcome_banner()
         out = ANSI.sub("", capsys.readouterr().out)
         line = next((ln for ln in out.splitlines() if ln.strip().startswith("tree")), "")
         assert line, "banner is missing the tree stamp"
-        assert "current" in line or "behind" in line
+
+        info = tree_info(resolve_tree())
+        assert info.name in line, f"stamp does not name the running tree: {line!r}"
+        if info.behind is None:
+            assert "no origin/main" in line, line
+        elif info.behind == 0:
+            assert "current" in line, line
+        else:
+            assert f"{info.behind} behind" in line, line
 
     @pytest.mark.parametrize("cols", [60, 80, 120])
     def test_tree_stamp_never_wraps(self, capsys, monkeypatch, cols):
