@@ -71,8 +71,10 @@ def _clear_notice_cache():
     from core import tree
 
     tree._notice_cache.clear()
+    tree._rollback_cache.clear()
     yield
     tree._notice_cache.clear()
+    tree._rollback_cache.clear()
 
 
 class TestRepositoryRoot:
@@ -331,6 +333,83 @@ class TestDescribeAll:
         assert all(info.dirty is None for info in infos)
 
 
+class TestRollbackDetection:
+    """A worktree older than its own HEAD — the silent-revert signature.
+
+    The incidents (2026-11-27/28): a concurrent session bulk-copied a stale
+    checkout over the primary worktree, so every dirty file was an *ancestor*
+    version of itself. ``git status`` calls that dirt; only comparing the
+    on-disk blob to the path's own history can tell it apart from an edit.
+    """
+
+    def test_clean_tree_has_no_findings(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "clean", commits=3)
+
+        assert tree.rollback_files(root) == []
+
+    def test_file_restored_to_an_older_commit_is_flagged(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "rolled", commits=3)  # disk holds commit 2
+        (root / "file.txt").write_text("0\n", encoding="utf-8")  # commit 0's blob
+
+        findings = tree.rollback_files(root)
+
+        assert [f.path for f in findings] == ["file.txt"]
+        assert findings[0].blob
+
+    def test_new_uncommitted_content_is_not_a_rollback(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "edited", commits=3)
+        (root / "file.txt").write_text("content no commit ever held\n", encoding="utf-8")
+
+        assert tree.rollback_files(root) == []
+
+    def test_tree_info_carries_findings_only_when_asked(self, tmp_path):
+        from core import tree
+
+        root = make_checkout(tmp_path / "info", commits=3)
+        (root / "file.txt").write_text("0\n", encoding="utf-8")
+
+        assert tree.tree_info(root).rolled_back == ()
+        loud = tree.tree_info(root, dirty=True, rollback=True)
+        assert [f.path for f in loud.rolled_back] == ["file.txt"]
+        assert "OLDER than HEAD" in loud.rollback_reason()
+
+    def test_notice_names_the_tree_the_file_and_the_fix(self, tmp_path, monkeypatch):
+        from core import tree
+
+        root = make_checkout(tmp_path / "notice", commits=3)
+        (root / "file.txt").write_text("0\n", encoding="utf-8")
+        monkeypatch.setattr(tree, "resolve_tree", lambda *a, **k: root)
+
+        notice = tree.rollback_notice({"SLO_TREE": "", "SLO_NO_TREE_WARN": ""})
+
+        assert "OLDER than HEAD" in notice
+        assert "file.txt" in notice
+        assert "git restore --source=HEAD --worktree" in notice
+
+    def test_notice_is_silent_on_a_clean_tree(self, tmp_path, monkeypatch):
+        from core import tree
+
+        root = make_checkout(tmp_path / "silent", commits=2)
+        monkeypatch.setattr(tree, "resolve_tree", lambda *a, **k: root)
+
+        assert tree.rollback_notice({"SLO_TREE": "", "SLO_NO_TREE_WARN": ""}) is None
+
+    def test_env_switch_silences_the_notice(self, tmp_path, monkeypatch):
+        from core import tree
+
+        root = make_checkout(tmp_path / "mute", commits=3)
+        (root / "file.txt").write_text("0\n", encoding="utf-8")
+        monkeypatch.setattr(tree, "resolve_tree", lambda *a, **k: root)
+
+        assert tree.rollback_notice({"SLO_NO_TREE_WARN": "1"}) is None
+
+
 class TestCliWiring:
     """The resolver is only useful if the command that reports it exists."""
 
@@ -349,6 +428,45 @@ class TestCliWiring:
         names = {name for opt in cmd.options for name in opt.names}
         assert {"--resolve", "--list", "--set"} <= names
 
+    def test_check_asks_the_resolver_for_a_rollback_scan(self, cli_mod, monkeypatch):
+        """`sloughgpt tree` must report a worktree older than HEAD, not just staleness."""
+        from commands import tree as tree_cmd
+        from core import tree
+
+        seen: dict = {}
+
+        def fake_info(path, **kwargs):
+            seen.update(kwargs)
+            return tree.TreeInfo(
+                path=Path("/x"), branch="main", head="abc", behind=0, ahead=0, dirty=True
+            )
+
+        monkeypatch.setattr(tree_cmd.tree_mod, "tree_info", fake_info)
+        monkeypatch.setattr(tree_cmd.tree_mod, "resolve_tree", lambda *a, **k: Path("/x"))
+
+        class Args:
+            resolve = False
+            list = False
+            set = None
+
+        tree_cmd.cmd_tree(Args())
+
+        assert seen.get("rollback") is True
+
+    def test_list_asks_the_resolver_for_a_rollback_scan(self, monkeypatch):
+        from commands import tree as tree_cmd
+
+        seen: dict = {}
+
+        def fake_describe(**kwargs):
+            seen.update(kwargs)
+            return []
+
+        monkeypatch.setattr(tree_cmd.tree_mod, "describe_all", fake_describe)
+        tree_cmd._print_list()
+
+        assert seen.get("rollback") is True
+
     def test_resolve_prints_the_tree_for_scripts(self, cli_mod, capsys):
         from core import tree
         from core.framework import parse_args
@@ -364,10 +482,22 @@ class TestCliWiring:
         from core import tree
 
         monkeypatch.setattr(tree, "stale_notice", lambda *a, **k: "! stale tree")
+        monkeypatch.setattr(tree, "rollback_notice", lambda *a, **k: None)
         cli_mod._warn_if_stale_tree([])
         captured = capsys.readouterr()
         assert captured.out == ""
         assert "stale tree" in captured.err
+
+    def test_rollback_warning_goes_to_stderr_and_never_stdout(self, cli_mod, monkeypatch, capsys):
+        """The silent-revert warning rides the same stderr-only channel."""
+        from core import tree
+
+        monkeypatch.setattr(tree, "stale_notice", lambda *a, **k: None)
+        monkeypatch.setattr(tree, "rollback_notice", lambda *a, **k: "! rolled back")
+        cli_mod._warn_if_stale_tree([])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "rolled back" in captured.err
 
     @pytest.mark.parametrize(
         "argv",

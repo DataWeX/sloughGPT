@@ -1184,13 +1184,14 @@ def _warn_if_stale_tree(argv: list[str]) -> None:
     if argv and argv[0] == "tree":
         return
     try:
-        from core.tree import stale_notice
+        from core.tree import rollback_notice, stale_notice
 
-        notice = stale_notice()
+        notices = (stale_notice(), rollback_notice())
     except Exception:  # a warning must never be the reason a command fails
         return
-    if notice:
-        print(notice, file=sys.stderr)
+    for notice in notices:
+        if notice:
+            print(notice, file=sys.stderr)
 
 
 def main():

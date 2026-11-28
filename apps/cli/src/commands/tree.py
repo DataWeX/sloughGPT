@@ -34,16 +34,25 @@ def _print_check(info: tree_mod.TreeInfo) -> None:
         log.info("Switch with: sloughgpt tree --set latest")
     else:
         log.info("This is the code the launcher runs (SLO_TREE overrides it).")
+    if info.rolled_back:
+        log.warning(info.rollback_reason())
+        for finding in info.rolled_back[:10]:
+            log.info(f"  {finding.path}")
+        if len(info.rolled_back) > 10:
+            log.info(f"  … and {len(info.rolled_back) - 10} more")
+        log.info("Back up local work, then: git restore --source=HEAD --worktree")
 
 
 def _print_list() -> None:
     log.header("Worktrees")
     claims = tree_mod.active_claims()
-    infos = tree_mod.describe_all()
+    infos = tree_mod.describe_all(rollback=True)
     for info in sorted(infos, key=lambda i: (not i.current, i.name)):
         trend = "current" if info.current else f"{info.behind} behind"
         if info.dirty:
             trend += ", dirty"
+        if info.rolled_back:
+            trend += f", rolled back ({len(info.rolled_back)})"
         owner = claims.get(info.path)
         if owner:
             trend += f", claimed {owner}"
@@ -100,4 +109,4 @@ def cmd_tree(args):
         _print_list()
         return
 
-    _print_check(tree_mod.tree_info(tree_mod.resolve_tree(), dirty=True))
+    _print_check(tree_mod.tree_info(tree_mod.resolve_tree(), dirty=True, rollback=True))

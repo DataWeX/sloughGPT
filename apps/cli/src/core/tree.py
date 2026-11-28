@@ -37,6 +37,7 @@ MAIN_BRANCHES = ("main", "master")
 
 #: Printed at most once per process — ``main()`` and the welcome banner both ask.
 _notice_cache: dict[str, str | None] = {}
+_rollback_cache: dict[str, str | None] = {}
 
 
 def _git(tree: Path, *args: str) -> str | None:
@@ -117,6 +118,143 @@ def web_tree_id(root: Path | str | None = None) -> str:
 
 
 @dataclass(frozen=True)
+class RollbackFinding:
+    """A tracked file whose on-disk content is an OLDER version than HEAD.
+
+    This is the signature of the 2026-11-27/28 incidents: a concurrent session
+    bulk-copied a stale checkout over the worktree, so every dirty file was an
+    ancestor version of itself. ``git status`` calls that "modified"; the
+    difference matters because restoring it silently discards landed work.
+    """
+
+    path: str
+    #: Blob of the on-disk content — a version ``path`` held in an earlier commit.
+    blob: str
+
+
+#: How many dirty paths to ancestry-check. A rolled-back tree trips on the
+#: first few; a giant legitimate dirty set should not make startup walk every
+#: path's history.
+ROLLBACK_PATH_LIMIT = 50
+#: Commits of history searched for a matching blob. Rollbacks copy a stale
+#: tree from the same day, so this is generous, and it bounds the startup cost.
+ROLLBACK_HISTORY_DEPTH = 400
+
+
+def _git_nul(tree: Path, *args: str, input: str | None = None) -> str | None:
+    """Run git and return ``-z`` plumbing output verbatim.
+
+    :func:`_git` strips, which is right for human-readable fields and wrong
+    for ``--raw -z``: trailing NULs are record boundaries, not whitespace.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(tree), *args],
+            capture_output=True,
+            text=True,
+            input=input,
+            timeout=GIT_TIMEOUT,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def _raw_entries(out: str) -> list[tuple[str, str, str]]:
+    """``(old_blob, new_blob, path)`` from ``git diff/log --raw -z --no-renames``."""
+    tokens = out.split("\0")
+    entries: list[tuple[str, str, str]] = []
+    i = 0
+    while i < len(tokens):
+        header = tokens[i]
+        if not header.startswith(":"):
+            i += 1
+            continue
+        parts = header[1:].split(" ")
+        path = tokens[i + 1] if i + 1 < len(tokens) else ""
+        if len(parts) >= 4 and path:
+            entries.append((parts[2], parts[3], path))
+        i += 2
+    return entries
+
+
+def rollback_files(
+    path: Path | str,
+    *,
+    limit: int = ROLLBACK_PATH_LIMIT,
+    depth: int = ROLLBACK_HISTORY_DEPTH,
+) -> list[RollbackFinding]:
+    """Tracked files in ``path`` whose content is an older version than HEAD.
+
+    One ``diff --raw`` finds the dirty tracked files and their on-disk blobs;
+    one bounded ``log --raw`` collects every blob those paths held in recent
+    history. A dirty blob that appears in that set is a rollback, not an edit:
+    nobody commits "new" content that is byte-identical to an old commit and
+    then leaves it uncommitted. Both calls are local and never fetch.
+
+    Advisory, never destructive: an intentional revert looks the same, so the
+    caller reports it and leaves the fix to a human.
+    """
+    path = Path(path).expanduser()
+    diff = _git_nul(path, "diff", "--raw", "-z", "--no-abbrev", "--no-renames", "HEAD", "--")
+    if not diff:
+        return []
+    # `diff --raw` does not hash the worktree side (new blob is zeros), so the
+    # on-disk blobs come from hash-object in one batch. Paths are newline-
+    # separated because this git build has no `-z` for --stdin-paths; a path
+    # containing a newline is pathological and simply yields no finding.
+    dirty_paths = [rel for _old, _new, rel in _raw_entries(diff) if rel][:limit]
+    if not dirty_paths:
+        return []
+    hashed = _git_nul(
+        path,
+        "hash-object",
+        "--stdin-paths",
+        input="\n".join(dirty_paths) + "\n",
+    )
+    if not hashed:
+        return []
+    disk_blobs = [blob for blob in hashed.splitlines() if blob]
+    if len(disk_blobs) != len(dirty_paths):
+        return []
+
+    head_blobs = {rel: old for old, _new, rel in _raw_entries(diff)}
+    dirty = [
+        (head_blobs[rel], blob, rel)
+        for blob, rel in zip(disk_blobs, dirty_paths)
+        if blob != head_blobs[rel]
+    ]
+    if not dirty:
+        return []
+
+    history = _git_nul(
+        path,
+        "log",
+        "--format=",
+        "--raw",
+        "-z",
+        "--no-abbrev",
+        "--no-renames",
+        "-n",
+        str(depth),
+        "HEAD",
+        "--",
+        *(rel for _, _, rel in dirty),
+    )
+    seen: dict[str, set[str]] = {}
+    for old, new, rel in _raw_entries(history or ""):
+        seen.setdefault(rel, set()).update((old, new))
+
+    return [
+        RollbackFinding(path=rel, blob=new)
+        for old, new, rel in dirty
+        if new != old and new in seen.get(rel, set())
+    ]
+
+
+@dataclass(frozen=True)
 class TreeInfo:
     """What a checkout is, right now, from local refs."""
 
@@ -128,6 +266,8 @@ class TreeInfo:
     #: ``None`` when not checked — the startup path skips ``git status``
     #: (96 ms on this repo) because it only needs the ref arithmetic.
     dirty: bool | None = None
+    #: Tracked files older than HEAD — empty unless ``rollback=True`` was asked.
+    rolled_back: tuple[RollbackFinding, ...] = ()
 
     @property
     def name(self) -> str:
@@ -154,8 +294,20 @@ class TreeInfo:
             return None
         return f"{self.name} is {self.behind} commit(s) behind origin/main ({self.where()})"
 
+    def rollback_reason(self) -> str | None:
+        """One line naming files that are OLDER than HEAD, or ``None``."""
+        if not self.rolled_back:
+            return None
+        shown = ", ".join(f.path for f in self.rolled_back[:5])
+        more = len(self.rolled_back) - 5
+        suffix = f" (+{more} more)" if more > 0 else ""
+        return (
+            f"{self.name}: {len(self.rolled_back)} tracked file(s) are OLDER than HEAD — "
+            f"the worktree was rolled back: {shown}{suffix}"
+        )
 
-def tree_info(path: Path | str, *, dirty: bool = False) -> TreeInfo:
+
+def tree_info(path: Path | str, *, dirty: bool = False, rollback: bool = False) -> TreeInfo:
     """Describe ``path`` using local refs only — never fetches."""
     path = Path(path).expanduser()
     # Two calls on purpose: `rev-parse --short --abbrev-ref HEAD` prints only
@@ -171,8 +323,15 @@ def tree_info(path: Path | str, *, dirty: bool = False) -> TreeInfo:
             behind, ahead = _count(parts[0]), _count(parts[1])
 
     is_dirty = bool(_git(path, "status", "--porcelain")) if dirty else None
+    rolled_back = tuple(rollback_files(path)) if rollback else ()
     return TreeInfo(
-        path=path.resolve(), branch=branch, head=head, behind=behind, ahead=ahead, dirty=is_dirty
+        path=path.resolve(),
+        branch=branch,
+        head=head,
+        behind=behind,
+        ahead=ahead,
+        dirty=is_dirty,
+        rolled_back=rolled_back,
     )
 
 
@@ -209,7 +368,11 @@ def worktrees(start: Path | str | None = None) -> list[Worktree]:
 
 
 def describe_all(
-    paths: list[Path] | None = None, *, dirty: bool = True, workers: int = 8
+    paths: list[Path] | None = None,
+    *,
+    dirty: bool = True,
+    rollback: bool = False,
+    workers: int = 8,
 ) -> list[TreeInfo]:
     """``tree_info`` for many worktrees at once.
 
@@ -224,9 +387,9 @@ def describe_all(
     if not targets:
         return []
     if len(targets) == 1:
-        return [tree_info(targets[0], dirty=dirty)]
+        return [tree_info(targets[0], dirty=dirty, rollback=rollback)]
     with ThreadPoolExecutor(max_workers=min(workers, len(targets))) as pool:
-        return list(pool.map(lambda p: tree_info(p, dirty=dirty), targets))
+        return list(pool.map(lambda p: tree_info(p, dirty=dirty, rollback=rollback), targets))
 
 
 def main_checkout(start: Path | str | None = None) -> Path | None:
@@ -302,6 +465,35 @@ def stale_notice(info: TreeInfo | None = None, env: dict[str, str] | None = None
     reason = info.stale_reason()
     notice = f"! {reason} — run `sloughgpt tree --set latest` to switch" if reason else None
     _notice_cache[key] = notice
+    return notice
+
+
+def rollback_notice(env: dict[str, str] | None = None) -> str | None:
+    """The startup warning for a worktree that is OLDER than its own HEAD.
+
+    Separate from :func:`stale_notice` on purpose: staleness is ref arithmetic
+    (cheap, always worth printing), while this compares the worktree to HEAD
+    and only says something when a tracked file matches an earlier commit.
+    That is the silent-revert shape — ``git status`` shows it as ordinary
+    dirt — so it earns one stderr line next to the staleness warning.
+
+    Cached per process like ``stale_notice``; ``SLO_NO_TREE_WARN=1`` silences
+    both.
+    """
+    env = os.environ if env is None else env
+    key = (env.get("SLO_TREE") or "") + "|" + (env.get("SLO_NO_TREE_WARN") or "")
+    if key in _rollback_cache:
+        return _rollback_cache[key]
+    if env.get("SLO_NO_TREE_WARN") == "1":
+        _rollback_cache[key] = None
+        return None
+    reason = tree_info(resolve_tree(env), rollback=True).rollback_reason()
+    notice = (
+        f"! {reason} — back up local work, then: git restore --source=HEAD --worktree"
+        if reason
+        else None
+    )
+    _rollback_cache[key] = notice
     return notice
 
 
