@@ -16,6 +16,15 @@ class TestModelCatalogLifecycle:
     def test_add_returns_model_id(self, catalog):
         assert catalog.add("gpt2") == "gpt2"
 
+    def test_add_defaults_to_not_downloaded(self, catalog):
+        """Known id != present on disk; only a disk scan may claim otherwise."""
+        catalog.add("some/known-repo")
+        assert catalog.get("some/known-repo")["downloaded"] is False
+
+    def test_add_records_downloaded_flag(self, catalog):
+        catalog.add("some/local-model", path="/tmp/m.safetensors", downloaded=True)
+        assert catalog.get("some/local-model")["downloaded"] is True
+
     def test_add_stores_metadata(self, catalog):
         catalog.add("qwen-0.5b", source="huggingface", format="safetensors", parameters=500_000_000)
         doc = catalog.get("qwen-0.5b")
@@ -160,6 +169,35 @@ class TestModelCatalogQueries:
 
 
 class TestModelCatalogSync:
+    @pytest.fixture(autouse=True)
+    def _empty_home(self, tmp_path, monkeypatch):
+        """Never scan the developer's real HF cache.
+
+        The scan is home-rooted, so without this a machine with a 3.8 GB
+        model in ``~/.cache`` changes these tests' results — the suite must
+        not depend on whose laptop runs it.
+        """
+        home = tmp_path / "home"
+        (home / ".cache" / "huggingface" / "hub").mkdir(parents=True)
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+        # The scan honours HF_HOME (same view as the loader), so an inherited
+        # HF_HOME would bypass the isolated home and hit the real cache.
+        monkeypatch.delenv("HF_HOME", raising=False)
+        return home
+
+    @pytest.fixture(autouse=True)
+    def _isolated_home(self, tmp_path, monkeypatch):
+        """Never read the developer's real ``~/.cache`` — each test owns a home.
+
+        Without this the HF scan walks the machine's actual cache, so
+        results depend on what the developer has downloaded (and the
+        assertion counts drift).
+        """
+        home = tmp_path / "home"
+        (home / ".cache" / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+        return home
+
     def test_sync_from_hf_cache(self, catalog, tmp_path, monkeypatch):
         hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
         model_dir = hf_cache / "models--org--cool-model"
@@ -175,7 +213,131 @@ class TestModelCatalogSync:
         assert doc["format"] == "slnc"
         assert doc["path"].endswith("model.slnc")
 
-    def test_sync_from_hf_cache_no_slnc(self, catalog, tmp_path, monkeypatch):
+    def test_sync_catalogs_complete_safetensors_download(self, catalog, tmp_path, monkeypatch):
+        """A finished plain-HF download is a loadable model.
+
+        Regression: sync_from_disk only globbed for ``model.slnc``, so a
+        stock ``huggingface-cli download`` left the registry empty
+        (``GET /models/catalog`` -> total 0) with the weights sitting on
+        disk. Completeness, not file extension, decides.
+        """
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--safetensors-only"
+        snap = model_dir / "snapshots" / "abc123"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_bytes(b"w" * 2048)
+        (snap / "config.json").write_text("{}")
+        (model_dir / "refs").mkdir()
+        (model_dir / "refs" / "main").write_text("abc123")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/safetensors-only")
+        assert doc is not None
+        assert doc["source"] == "huggingface"
+        assert doc["format"] == "safetensors"
+        assert doc["downloaded"] is True
+        assert doc["path"].endswith("model.safetensors")
+
+    def test_sync_prefers_safetensors_over_bin(self, catalog, tmp_path, monkeypatch):
+        """Dual-format repo: safetensors wins even when the .bin is larger."""
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--dual-format"
+        snap = model_dir / "snapshots" / "abc123"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_bytes(b"s" * 2048)
+        (snap / "pytorch_model.bin").write_bytes(b"b" * 8192)
+        (model_dir / "refs").mkdir()
+        (model_dir / "refs" / "main").write_text("abc123")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/dual-format")
+        assert doc is not None
+        assert doc["format"] == "safetensors"
+        assert doc["path"].endswith("model.safetensors")
+
+    def test_sync_skips_incomplete_download(self, catalog, tmp_path, monkeypatch):
+        """An interrupted download has a directory but is not a model."""
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--half-downloaded"
+        snap = model_dir / "snapshots" / "abc123"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_bytes(b"w" * 2048)
+        (snap / "model.safetensors.incomplete").write_bytes(b"")
+        (model_dir / "refs").mkdir()
+        (model_dir / "refs" / "main").write_text("abc123")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 0
+        assert catalog.get("org/half-downloaded") is None
+
+    def test_sync_skips_refs_only_stub(self, catalog, tmp_path, monkeypatch):
+        """Disk-reclaim stub: refs/ kept, snapshots/ deleted. Not loadable.
+
+        The backup dir on this machine
+        (``models--Qwen--Qwen2.5-0.5B-Instruct.refs-only-stub.bak-20261027``)
+        has exactly this shape: refs but no weights. Cataloguing it would
+        report a model that cannot be loaded.
+        """
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--stub"
+        (model_dir / "refs").mkdir(parents=True)
+        (model_dir / "refs" / "main").write_text("abc123")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 0
+        assert catalog.get("org/stub") is None
+
+    def test_sync_finds_flat_layout_slnc(self, catalog, tmp_path, monkeypatch):
+        """The project-local mirror keeps ``model.slnc`` at the dir root.
+
+        This is the real shape on this machine:
+        ``models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/model.slnc``
+        (2.5 GB, no ``snapshots/`` dir at all), symlinked from ``~/.cache``.
+        The old scan only looked under ``snapshots/``, so a 3.8 GB model
+        catalogued as nothing while the loader happily loaded it.
+        """
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--flat"
+        model_dir.mkdir(parents=True)
+        (model_dir / "model.slnc").write_bytes(b"SLNC")
+        (model_dir / "model.safetensors").write_bytes(b"w" * 2048)
+        (model_dir / "config.json").write_text("{}")
+        (model_dir / "refs").mkdir()
+        (model_dir / "refs" / "main").write_text("abc123")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/flat")
+        assert doc is not None
+        assert doc["format"] == "slnc"
+        assert doc["path"].endswith("model.slnc")
+        assert doc["downloaded"] is True
+
+    def test_sync_honours_hf_home(self, catalog, tmp_path, monkeypatch):
+        """Scan the cache the *loader* uses, not a hardcoded home path.
+
+        ``main.py`` points HF_HOME at the shared checkout's mirror, so the
+        registry must look there — otherwise the catalog reports zero models
+        while the loader happily loads one.
+        """
+        hf_home = tmp_path / "hf-home"
+        model_dir = hf_home / "hub" / "models--org--mirrored"
+        model_dir.mkdir(parents=True)
+        (model_dir / "model.slnc").write_bytes(b"SLNC")
+        (model_dir / "refs").mkdir()
+        (model_dir / "refs" / "main").write_text("abc123")
+
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/mirrored")
+        assert doc is not None
+        assert doc["format"] == "slnc"
+        assert doc["downloaded"] is True
+
+    def test_sync_skips_sub_kilobyte_weights(self, catalog, tmp_path, monkeypatch):
+        """A 1-byte placeholder is not a weight file."""
         hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
         model_dir = hf_cache / "models--org--safetensors-only"
         (model_dir / "snapshots" / "main").mkdir(parents=True)
@@ -208,7 +370,11 @@ class TestModelCatalogSync:
         assert doc is not None
         assert doc["path"].endswith("model.slnc")
 
-    def test_sync_from_custom_dirs(self, catalog, tmp_path):
+    def test_sync_from_custom_dirs(self, catalog, tmp_path, monkeypatch):
+        # Isolate from the developer's real HF cache: the scan now catalogues
+        # any complete download it finds, so an unpatched home makes this
+        # assertion depend on whose machine runs it.
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "empty-home"))
         cache = tmp_path / "models"
         (cache / "sub").mkdir(parents=True)
         (cache / "my-model.slnc").write_bytes(b"SLNC")
@@ -219,7 +385,8 @@ class TestModelCatalogSync:
         assert catalog.get("my-model") is not None
         assert catalog.get("other") is not None
 
-    def test_sync_skips_duplicates(self, catalog, tmp_path):
+    def test_sync_skips_duplicates(self, catalog, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "empty-home"))
         cache = tmp_path / "models"
         cache.mkdir()
         (cache / "dup.slnc").write_bytes(b"SLNC")
@@ -227,8 +394,35 @@ class TestModelCatalogSync:
         assert catalog.sync_from_disk(cache_dirs=[cache]) == 0
         assert catalog.count() == 1
 
-    def test_sync_missing_dir(self, catalog, tmp_path):
+    def test_sync_missing_dir(self, catalog, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "empty-home"))
         assert catalog.sync_from_disk(cache_dirs=[tmp_path / "nope"]) == 0
+
+    def test_sync_catalogs_flat_layout_slnc(self, catalog, tmp_path, monkeypatch):
+        """Project-local mirror shape: model.slnc at the dir root.
+
+        This is the layout actually on disk here —
+        ``models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/model.slnc``
+        (2.52 GB) — with no ``snapshots/`` at all. The old scan only looked
+        under ``snapshots/``, so a 3.8 GB model catalogued as nothing
+        (``GET /models/catalog`` -> total 0).
+        """
+        hf_cache = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        model_dir = hf_cache / "models--org--flat-model"
+        model_dir.mkdir(parents=True)
+        (model_dir / "model.slnc").write_bytes(b"SLNC")
+        (model_dir / "model.safetensors").write_bytes(b"w" * 2048)
+        (model_dir / "config.json").write_text("{}")
+        (model_dir / "refs").mkdir()
+        (model_dir / "refs" / "main").write_text("abc123")
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+        assert catalog.sync_from_disk() == 1
+        doc = catalog.get("org/flat-model")
+        assert doc is not None
+        assert doc["format"] == "slnc"
+        assert doc["downloaded"] is True
+        assert doc["path"].endswith("model.slnc")
 
 
 class TestModelCatalogSingleton:

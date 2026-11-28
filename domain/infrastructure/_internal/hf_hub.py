@@ -400,6 +400,40 @@ def _is_flat_model_complete(
     return True
 
 
+def is_cache_dir_complete(
+    cache_dir: Path,
+    model_id: str,
+    deep_check: bool = False,
+) -> bool:
+    """Check whether one concrete cache directory holds a complete download.
+
+    The single completeness predicate.  Callers that already hold a cache
+    directory (directory scans, catalog syncs) use this directly so the
+    verdict is about *that* directory, not about whichever candidate the
+    id happens to resolve to first.
+
+    Recognizes both layouts:
+      - standard HF snapshot layout (``refs/main`` + ``snapshots/<commit>``)
+      - flat layout (weights + ``config.json`` at the dir root)
+
+    Quick check (no network): at least one weight file > 1 KB, no
+    ``*.incomplete``/``*.sgpart`` markers, no live download locks.
+    Deep check (network, optional): verifies every weight file against the
+    Hub API file list.
+    """
+    if not cache_dir.is_dir():
+        return False
+    snapshot = _snapshot_dir(cache_dir)
+    if snapshot is not None and _is_snapshot_complete(
+        cache_dir,
+        snapshot,
+        model_id,
+        deep_check,
+    ):
+        return True
+    return _is_flat_model_complete(cache_dir, model_id, deep_check)
+
+
 def is_download_complete(
     model_id: str,
     hf_home: str | None = None,
@@ -420,17 +454,7 @@ def is_download_complete(
     Use for verification workflows; skip for batch listing.
     """
     for cache_dir in _model_cache_candidates(model_id, hf_home):
-        if not cache_dir.is_dir():
-            continue
-        snapshot = _snapshot_dir(cache_dir)
-        if snapshot is not None and _is_snapshot_complete(
-            cache_dir,
-            snapshot,
-            model_id,
-            deep_check,
-        ):
-            return True
-        if _is_flat_model_complete(cache_dir, model_id, deep_check):
+        if is_cache_dir_complete(cache_dir, model_id, deep_check):
             return True
     return False
 

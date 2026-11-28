@@ -9,6 +9,7 @@ so the server knows what's available without re-scanning on every request.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ class ModelCatalog:
       - source: "huggingface" | "local" | "soul"
       - format: "slnc" | "safetensors" | "soul"
       - path: filesystem path to weights (if local)
+      - downloaded: whether weights are present on disk (loadable now)
       - status: "loaded" | "available" | "error"
       - parameters: parameter count
       - vocab_size: vocabulary size
@@ -70,6 +72,7 @@ class ModelCatalog:
         n_embed: int = 0,
         n_head: int = 0,
         max_seq_len: int = 0,
+        downloaded: bool = False,
         tags: list[str] | None = None,
         description: str = "",
         **extra: Any,
@@ -78,6 +81,11 @@ class ModelCatalog:
 
         If model_id already exists, updates the fields provided.
         Returns the document ID.
+
+        ``downloaded`` is the honesty flag: it says weights for this model
+        were found on disk, not merely that the id is a known Hub repo. A
+        model can be catalogued (known, tagged, sized) without being
+        downloaded; only ``downloaded`` entries are loadable right now.
         """
         now = time.time()
         existing = self._models.find_one({"model_id": model_id})
@@ -87,6 +95,7 @@ class ModelCatalog:
             "source": source,
             "format": format,
             "path": path,
+            "downloaded": bool(downloaded),
             "status": "available",
             "parameters": parameters,
             "vocab_size": vocab_size,
@@ -302,18 +311,63 @@ class ModelCatalog:
                 "sources": list({m.get("source", "unknown") for m in all_models}),
             }
 
+    @staticmethod
+    def _largest_weight_file(model_dir: Path) -> Path | None:
+        """Largest weight file (>1 KB) under a cache dir, or ``None``.
+
+        ``safetensors`` outranks ``bin`` regardless of size: dual-format
+        repos ship the same weights twice and the downloader fetches the
+        safetensors copy when it exists (same rule as
+        ``model_size._get_hub_file_size_gb``).
+        """
+        best: Path | None = None
+        best_rank: tuple[int, int] = (2, 0)
+        for suffix in (".safetensors", ".bin"):
+            for candidate in model_dir.rglob(f"*{suffix}"):
+                try:
+                    size = candidate.stat().st_size
+                except OSError:
+                    continue  # broken symlink: blob gone, not a model
+                if size <= 1_000:
+                    continue
+                rank = (0 if suffix == ".safetensors" else 1, -size)
+                if rank < best_rank:
+                    best, best_rank = candidate, rank
+        return best
+
     def sync_from_disk(self, cache_dirs: list[str | Path] | None = None) -> int:
-        """Scan cache directories and catalog any .slnc files found.
+        """Scan cache directories and catalog models whose weights are on disk.
 
         Returns the number of new models added.
+
+        Two on-disk shapes are recognized in the HuggingFace cache:
+
+        * ``model.slnc`` — this project's own serialized format, in any
+          snapshot (``snapshots/<commit>/``) *or* flat at the dir root (the
+          project-local mirror's shape), catalogued as ``format="slnc"``.
+        * standard HF weights (``*.safetensors`` / ``*.bin``) — catalogued
+          only when :func:`hf_hub.is_cache_dir_complete` says the download
+          finished, as ``format="safetensors"`` / ``"bin"``.
+
+        The completeness gate is the whole point: a refs-only stub (refs
+        kept, ``snapshots/`` deleted) or an interrupted download has a
+        directory but no loadable model, and listing it would recreate the
+        "available but not actually here" lie this registry exists to
+        prevent. Nothing is ever deleted here — the scan only reads.
+
+        Custom ``cache_dirs`` are scanned for ``*.slnc`` only; they are
+        our own model directories, not HF repo layouts.
         """
 
         added = 0
         # Scan HuggingFace cache
-        hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+        hf_home = os.environ.get("HF_HOME")
+        hf_cache = (Path(hf_home) if hf_home else Path.home() / ".cache" / "huggingface") / "hub"
         if hf_cache.exists():
+            from .hf_hub import is_cache_dir_complete
+
             for model_dir in hf_cache.iterdir():
-                if not model_dir.is_dir():
+                if not model_dir.is_dir() or not model_dir.name.startswith("models--"):
                     continue
                 # HF cache dirs are like models--gpt2
                 model_id = model_dir.name.replace("models--", "").replace("--", "/")
@@ -325,17 +379,41 @@ class ModelCatalog:
                         if candidate.exists():
                             slnc_path = candidate
                             break
+                if not slnc_path.exists():
+                    # Flat layout: the project-local mirror keeps model.slnc at
+                    # the dir root (``models/hf-cache/hub/models--<id>/model.slnc``),
+                    # which is exactly what the loader reads. Without this the
+                    # 3.8 GB Qwen model on this machine catalogued as nothing.
+                    flat_slnc = model_dir / "model.slnc"
+                    if flat_slnc.exists():
+                        slnc_path = flat_slnc
 
                 if slnc_path.exists():
-                    existing = self.get(model_id)
-                    if not existing:
+                    if not self.get(model_id):
                         self.add(
                             model_id=model_id,
                             source="huggingface",
                             format="slnc",
                             path=str(slnc_path),
+                            downloaded=True,
                         )
                         added += 1
+                    continue
+
+                # Standard HF weights — only a complete download is a model.
+                if not is_cache_dir_complete(model_dir, model_id):
+                    continue
+                weight = self._largest_weight_file(model_dir)
+                if weight is None or self.get(model_id):
+                    continue
+                self.add(
+                    model_id=model_id,
+                    source="huggingface",
+                    format=weight.suffix.lstrip("."),
+                    path=str(weight),
+                    downloaded=True,
+                )
+                added += 1
 
         # Scan custom cache dirs
         if cache_dirs:

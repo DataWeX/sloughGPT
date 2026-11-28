@@ -3,10 +3,47 @@
 from __future__ import annotations
 
 import os as _os
+import subprocess as _subprocess
 import sys as _sys
 from pathlib import Path
 
-__all__ = ["find_repo_root", "find_server_python"]
+__all__ = ["find_repo_root", "find_server_python", "find_shared_root"]
+
+
+def find_shared_root(start: Path | str = "") -> Path:
+    """Root of the *main* checkout, shared by every linked worktree.
+
+    A linked worktree has its own root and its own tracked files, but the
+    machine-local heavy trees (``models/``, the HF cache) live in the main
+    checkout — a worktree is not a second copy of 3.8 GB of weights. Use
+    this for anything that must be shared rather than re-created per
+    worktree.
+
+    Resolution: ``git rev-parse --git-common-dir`` points at
+    ``<main>/.git`` from both the main checkout and any linked worktree, so
+    its parent is the main root. Falls back to :func:`find_repo_root` when
+    git is unavailable, the path is not a repo, or the call fails — the
+    caller always gets a usable root.
+    """
+    root = find_repo_root(start)
+    try:
+        proc = _subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return root
+        common = Path(proc.stdout.strip())
+        if not common.is_absolute():
+            common = (root / common).resolve()
+        # ``<main>/.git`` (normal) and ``<bare>.git`` (bare) both mean
+        # "parent of the git dir is the checkout".
+        return common.parent
+    except (OSError, _subprocess.SubprocessError):
+        return root
 
 
 def find_repo_root(start: Path | str = "") -> Path:
