@@ -327,6 +327,25 @@ class TestCLI:
         assert code == 0
         assert "Column:      wip" in out
 
+    def test_board_show_prints_the_ticket_id_and_its_notes(self, tmp_dir):
+        """The card is the durable ticket; show must name it and its notes.
+
+        Reverse lookup used to be a manual grep of the journal (flow-friction
+        card). It rides the existing command — no new route.
+        """
+        # _run passes --notes-dir board_dir, so the fixture must match it.
+        store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir)
+        first = store.create_note("Ticket with history", status="wip")
+        second = store.create_note("Ticket with history", status="done")
+        store.sync()
+        card = store.list_cards()[0]
+
+        code, out = _run(tmp_dir, "board", "show", card.id)
+
+        assert code == 0
+        assert f"ID:          {card.id}" in out
+        assert first.id in out and second.id in out
+
     def test_board_delete(self, tmp_dir):
         store = PlannerStore(board_dir=tmp_dir, notes_dir=tmp_dir / "notes")
         card = store.add_card("Doomed")

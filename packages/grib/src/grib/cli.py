@@ -160,6 +160,8 @@ def _board_show(args: argparse.Namespace) -> int:
         if not card:
             print(f"Card not found: {card_id}", file=sys.stderr)
             return 1
+        # The card id is the durable ticket id — the one that never changes.
+        print(f"ID:          {card.id}")
         print(f"Title:       {card.title}")
         print(f"Column:      {card.column}")
         print(f"Priority:    {card.priority}")
@@ -171,6 +173,15 @@ def _board_show(args: argparse.Namespace) -> int:
         print(f"Description: {card.description or '-'}")
         print(f"Sprint:      {card.sprint or '-'}")
         print(f"GitHub:      {card.gh or '-'}")
+        # Reverse lookup rides this command: one ticket, many notes, oldest
+        # first so the card reads as its own history (no new subcommand).
+        linked = sorted(
+            (n for n in store.list_notes(limit=99999) if n.card_id == card.id),
+            key=lambda n: (n.created_at or "", n.id or ""),
+        )
+        print(f"Notes:       {len(linked) if linked else 'none'}")
+        for note in linked:
+            print(f"  {note.id}  [{note.status}]")
         return 0
     board = store.load_board()
     col_widths: dict[str, int] = {}
